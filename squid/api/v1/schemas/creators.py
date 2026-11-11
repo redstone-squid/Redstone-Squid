@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
-from squid.accounts.domain import CreditedAlias, IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity
+from squid.accounts.domain import CreditedAlias, IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile
 from squid.accounts.models import CreatorAlias
 
 
@@ -50,7 +50,7 @@ class PublicIdentityDetail(BaseModel):
     display_name: str | None
 
     @classmethod
-    def from_domain(cls, identity: PublicIdentity) -> PublicIdentityDetail:
+    def from_domain(cls, identity: IdentityDetails) -> PublicIdentityDetail:
         return cls(provider=identity.provider, subject=identity.subject, display_name=identity.display_name)
 
 

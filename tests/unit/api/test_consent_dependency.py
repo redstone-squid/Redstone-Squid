@@ -8,7 +8,7 @@ import pytest
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import Caller, current_browser_account_id
-from squid.api.v1.submissions import _submission_actor
+from squid.api.v1.submissions import _submission_origin
 from squid.core.errors import AuthenticationError
 from tests.unit.api.fakes import credential_nodes
 
@@ -27,7 +27,7 @@ def account(*, consent_pending: bool) -> Caller:
 
 GATES: list[tuple[str, Callable[[Caller], object]]] = [
     ("security", Caller.require_consented_account),
-    ("submissions", _submission_actor),
+    ("submissions", _submission_origin),
     ("browser_auth", current_browser_account_id),
 ]
 """Both dependency and direct-call forms must report the same consent refusal."""

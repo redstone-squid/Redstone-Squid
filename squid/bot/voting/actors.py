@@ -1,5 +1,6 @@
 """Translate Discord members into vote actors and localize vote refusals."""
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import discord
@@ -54,10 +55,4 @@ async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member
         subject,
         (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),
     )
-    return Actor(
-        account_id=account_id,
-        discord_user_id=member.id,
-        guild_id=member.guild.id,
-        discord_role_ids=frozenset(role.id for role in member.roles),
-        capabilities=capabilities,
-    )
+    return replace(subject, account_id=account_id, capabilities=capabilities)

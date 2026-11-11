@@ -21,13 +21,13 @@ from squid.api.v1.schemas.submissions import (
     SubmissionAttemptResponse,
 )
 from squid.api.v1.submissions import (
-    AuthenticatedSubmissionActor,
     SubmissionDraftCommands,
     SubmissionFinalizationCommands,
     SubmissionFormReader,
     SubmissionFormRevisionNotFoundError,
+    _submission_origin,
     authenticated_account,
-    authenticated_submission_actor,
+    authenticated_submission_caller,
     get_submission_drafts,
     get_submission_finalization,
     get_submission_forms,
@@ -369,9 +369,6 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     async def account_dependency() -> int:
         return ACCOUNT_ID
 
-    async def actor_dependency() -> AuthenticatedSubmissionActor:
-        return AuthenticatedSubmissionActor(ACCOUNT_ID, SubmissionOrigin.WEB)
-
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
@@ -379,7 +376,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     app.dependency_overrides[get_submission_drafts] = draft_dependency
     app.dependency_overrides[get_submission_finalization] = finalization_dependency
     app.dependency_overrides[authenticated_account] = account_dependency
-    app.dependency_overrides[authenticated_submission_actor] = actor_dependency
+    app.dependency_overrides[authenticated_submission_caller] = caller_dependency
     app.dependency_overrides[current_caller] = caller_dependency
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -536,15 +533,10 @@ async def test_player_grant_derives_minecraft_origin() -> None:
         grant_id=GRANT_ID,
     )
 
-    actor = await authenticated_submission_actor(caller)
+    actor = await authenticated_submission_caller(caller)
 
-    assert actor == AuthenticatedSubmissionActor(
-        42,
-        SubmissionOrigin.PAPER,
-        java_uuid=JAVA_UUID,
-        installation_id=INSTALLATION_ID,
-        grant_id=GRANT_ID,
-    )
+    assert actor is caller
+    assert _submission_origin(actor) is SubmissionOrigin.PAPER
 
 
 async def test_cli_session_derives_distinct_submission_origin() -> None:
@@ -558,9 +550,10 @@ async def test_cli_session_derives_distinct_submission_origin() -> None:
         cli_session_id=session_id,
     )
 
-    actor = await authenticated_submission_actor(caller)
+    actor = await authenticated_submission_caller(caller)
 
-    assert actor == AuthenticatedSubmissionActor(42, SubmissionOrigin.CLI)
+    assert actor is caller
+    assert _submission_origin(actor) is SubmissionOrigin.CLI
 
 
 def test_finalization_response_does_not_expose_worker_or_target_internals() -> None:
@@ -588,3 +581,32 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
     assert "last_error" not in payload
     assert "target_key" not in payload
     assert "provenance" not in payload
+
+
+@pytest.mark.parametrize(
+    "caller",
+    [
+        Caller(kind="cli", subject="cli-session:missing", account_id=42),
+        Caller(kind="minecraft_player", subject="minecraft-grant:missing", account_id=42, minecraft_origin="fabric"),
+        Caller(
+            kind="minecraft_player",
+            subject="minecraft-grant:paper",
+            account_id=42,
+            minecraft_origin="paper",
+            java_uuid=JAVA_UUID,
+            grant_id=GRANT_ID,
+        ),
+        Caller(
+            kind="minecraft_player",
+            subject="minecraft-grant:fabric",
+            account_id=42,
+            minecraft_origin="fabric",
+            java_uuid=JAVA_UUID,
+            grant_id=GRANT_ID,
+            installation_id=INSTALLATION_ID,
+        ),
+    ],
+)
+async def test_submission_caller_rejects_incomplete_or_inconsistent_provenance(caller: Caller) -> None:
+    with pytest.raises(AuthenticationError):
+        await authenticated_submission_caller(caller)

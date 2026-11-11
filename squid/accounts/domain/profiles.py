@@ -13,7 +13,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.accounts.domain.models import IdentityProvider
+from squid.accounts.domain.models import IdentityDetails, IdentityProvider
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.core.sentinel import UNSET
@@ -206,15 +206,6 @@ class CreditedAlias:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicIdentity:
-    """Public provider identity details, without verification times or internal row IDs."""
-
-    provider: IdentityProvider
-    subject: str
-    display_name: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class CreatorProfileRecord:
     """A creator's profile, identities, and credits before visibility is applied.
 
@@ -244,7 +235,7 @@ class PublicCreatorProfile:
     links: tuple[ProfileLink, ...] = ()
     avatar_url: str | None = None
     joined_at: Instant | None = None
-    identities: tuple[PublicIdentity, ...] = ()
+    identities: tuple[IdentityDetails, ...] = ()
 
     @property
     def was_redirected(self) -> bool:
@@ -301,7 +292,7 @@ def present_public_profile(record: CreatorProfileRecord) -> PublicCreatorProfile
         avatar_url=avatar_url,
         joined_at=record.joined_at,
         identities=tuple(
-            PublicIdentity(provider=identity.provider, subject=identity.subject, display_name=identity.display_name)
+            IdentityDetails(provider=identity.provider, subject=identity.subject, display_name=identity.display_name)
             for identity in visible
         ),
     )

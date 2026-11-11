@@ -6,8 +6,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from squid.accounts.domain import IdentityProvider
-from squid.auth.domain.oauth import ExternalIdentity
+from squid.accounts.domain import IdentityDetails, IdentityProvider
 from squid.config import OAuthClientCredentials, UpstreamHttpConfig
 from squid.core.errors import ServiceUnavailableError
 
@@ -24,7 +23,7 @@ class OAuthProvider(Protocol):
         """The URL to send the browser to, carrying this provider's own scopes."""
         ...
 
-    async def fetch_identity(self, *, code: str, code_verifier: str) -> ExternalIdentity:
+    async def fetch_identity(self, *, code: str, code_verifier: str) -> IdentityDetails:
         """Redeem an authorization code and return the verified provider subject.
 
         The adapter keeps the provider access token private. It uses the token to
@@ -67,7 +66,7 @@ class DiscordOAuthProvider:
         )
         return f"{self._authorize_url}?{query}"
 
-    async def fetch_identity(self, *, code: str, code_verifier: str) -> ExternalIdentity:
+    async def fetch_identity(self, *, code: str, code_verifier: str) -> IdentityDetails:
         try:
             token_response = await self._client.post(
                 f"{self._api_url}/oauth2/token",
@@ -89,7 +88,7 @@ class DiscordOAuthProvider:
             if identity_response.status_code != 200:
                 raise _unavailable()
             payload = identity_response.json()
-            return ExternalIdentity(self.provider, str(int(payload["id"])), payload.get("username"))
+            return IdentityDetails(self.provider, str(int(payload["id"])), payload.get("username"))
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             raise _unavailable() from error
 

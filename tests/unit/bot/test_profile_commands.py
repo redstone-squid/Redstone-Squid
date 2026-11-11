@@ -3,7 +3,7 @@
 from dataclasses import replace
 from uuid import UUID
 
-from squid.accounts.domain import CreditedAlias, IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity
+from squid.accounts.domain import CreditedAlias, IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile
 from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.bot.profile_render import own_profile_avatar, own_profile_fields, public_profile_fields
 from squid_ui.text import source_text
@@ -73,7 +73,7 @@ class TestPublicProfile:
         profile = PublicCreatorProfile(
             public_id=UUID(int=1),
             hidden=False,
-            identities=(PublicIdentity(IdentityProvider.DISCORD, "7", "squidder"),),
+            identities=(IdentityDetails(IdentityProvider.DISCORD, "7", "squidder"),),
         )
 
         listed = _fields_named(public_profile_fields(profile), "Linked accounts")

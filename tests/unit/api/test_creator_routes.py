@@ -9,10 +9,10 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CreditedAlias,
+    IdentityDetails,
     IdentityProvider,
     ProfileLink,
     PublicCreatorProfile,
-    PublicIdentity,
 )
 from squid.accounts.errors import CreatorNotFoundError
 from squid.api.v1.creators import get_creator_profile
@@ -46,7 +46,7 @@ async def test_a_visible_profile_serves_everything_it_publishes() -> None:
         links=(ProfileLink("Site", "https://example.com"),),
         avatar_url="https://mc-heads.net/avatar/x",
         joined_at=JOINED,
-        identities=(PublicIdentity(IdentityProvider.JAVA, "x", "Notch"),),
+        identities=(IdentityDetails(IdentityProvider.JAVA, "x", "Notch"),),
     )
 
     response = await get_creator_profile(CREATOR_ID, _accounts(profile))

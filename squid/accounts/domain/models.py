@@ -77,6 +77,15 @@ class AccountMerge:
     redirected_public_creator_id: UUID
 
 
+@dataclass(frozen=True, slots=True)
+class IdentityDetails:
+    """Provider identity details, without stored verification or private account data."""
+
+    provider: IdentityProvider
+    subject: str
+    display_name: str | None = None
+
+
 class ClaimMethod(StrEnum):
     """How an alias came to be attached to an account."""
 

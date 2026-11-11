@@ -5,7 +5,7 @@ rendering can include the caller's hidden identities and avatar.
 """
 
 from squid.accounts.application.presentation import claimant_label
-from squid.accounts.domain import IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity, avatar_url_for
+from squid.accounts.domain import IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile, avatar_url_for
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
 from squid_ui.text import Message
@@ -92,7 +92,7 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
     return fields
 
 
-def _public_identity_label(identity: PublicIdentity) -> Message:
+def _public_identity_label(identity: IdentityDetails) -> Message:
     provider = provider_label(identity.provider)
     name = identity.display_name or identity.subject
     return tr(t"bot-profile-render-value = {provider} — {name}")

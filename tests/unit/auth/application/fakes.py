@@ -10,9 +10,8 @@ from typing import override
 from whenever import Instant
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import AccountConsent, IdentityProvider
+from squid.accounts.domain import AccountConsent, IdentityDetails, IdentityProvider
 from squid.accounts.models import Account
-from squid.auth.domain.oauth import ExternalIdentity
 from squid.auth.domain.sessions import WebSessionIdentity
 from squid.auth.models.sessions import OAuthState
 
@@ -96,6 +95,6 @@ class FakeXboxOAuthProvider:
     def authorize_url(self, *, state: str, code_challenge: str) -> str:
         return f"https://xbox.example/authorize?state={state}&code_challenge={code_challenge}"
 
-    async def fetch_identity(self, *, code: str, code_verifier: str) -> ExternalIdentity:
+    async def fetch_identity(self, *, code: str, code_verifier: str) -> IdentityDetails:
         self.exchanges.append((code, code_verifier))
-        return ExternalIdentity(self.provider, self._subject, "Gamertag")
+        return IdentityDetails(self.provider, self._subject, "Gamertag")

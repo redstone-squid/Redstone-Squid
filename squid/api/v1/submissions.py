@@ -7,7 +7,6 @@ reports required corrections or processing waits, or starts a durable
 finalization attempt that produces a build.
 """
 
-from dataclasses import dataclass
 from typing import Annotated, Protocol, cast
 from uuid import UUID
 
@@ -183,29 +182,20 @@ async def authenticated_account(
     caller: Annotated[Caller, Depends(current_caller)],
 ) -> int:
     """Require a current human or player-bound account for draft access."""
-    return _submission_actor(caller).account_id
+    _submission_origin(caller)
+    return caller.require_consented_account()
 
 
-@dataclass(frozen=True, slots=True)
-class AuthenticatedSubmissionActor:
-    """Server-derived account and renderer origin for one submission request."""
-
-    account_id: int
-    origin: SubmissionOrigin
-    java_uuid: UUID | None = None
-    installation_id: UUID | None = None
-    grant_id: UUID | None = None
-
-
-async def authenticated_submission_actor(
+async def authenticated_submission_caller(
     caller: Annotated[Caller, Depends(current_caller)],
-) -> AuthenticatedSubmissionActor:
+) -> Caller:
     """Resolve submission provenance without trusting a request-body origin."""
-    return _submission_actor(caller)
+    _submission_origin(caller)
+    return caller
 
 
-def _submission_actor(caller: Caller) -> AuthenticatedSubmissionActor:
-    """Build submission identity from authenticated credentials and check consent.
+def _submission_origin(caller: Caller) -> SubmissionOrigin:
+    """Derive submission origin from authenticated credentials and check consent.
 
     Only browser, CLI, and Minecraft player credentials may submit. CLI and
     Minecraft identities must include the identifiers required for their origin;
@@ -229,20 +219,14 @@ def _submission_actor(caller: Caller) -> AuthenticatedSubmissionActor:
             raise AuthenticationError
         if (origin is SubmissionOrigin.PAPER) != (caller.installation_id is not None):
             raise AuthenticationError
-    return AuthenticatedSubmissionActor(
-        caller.account_id,
-        origin,
-        java_uuid=caller.java_uuid,
-        installation_id=caller.installation_id,
-        grant_id=caller.grant_id,
-    )
+    return origin
 
 
 Forms = Annotated[SubmissionFormReader, Depends(get_submission_forms)]
 Drafts = Annotated[SubmissionDraftCommands, Depends(get_submission_drafts)]
 Finalization = Annotated[SubmissionFinalizationCommands, Depends(get_submission_finalization)]
 AccountId = Annotated[int, Depends(authenticated_account)]
-SubmissionActor = Annotated[AuthenticatedSubmissionActor, Depends(authenticated_submission_actor)]
+SubmissionCaller = Annotated[Caller, Depends(authenticated_submission_caller)]
 OptionSource = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 Category = Annotated[str, Query(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 SchemaId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_.-]{0,95}$")]
@@ -399,18 +383,19 @@ async def create_draft(
     payload: DraftCreateRequest,
     request: Request,
     drafts: Drafts,
-    actor: SubmissionActor,
+    caller: SubmissionCaller,
 ) -> StoredDraftResponse:
     """Create an empty draft owned by the signed-in account."""
-    if payload.origin is not actor.origin:
+    origin = _submission_origin(caller)
+    if payload.origin is not origin:
         raise AuthorizationError
     draft = await drafts.create(
-        owner_account_id=actor.account_id,
+        owner_account_id=caller.require_consented_account(),
         category=payload.category,
-        origin=actor.origin,
+        origin=origin,
         client_capabilities=frozenset(payload.client_capabilities),
         locale=locale_for_request(request),
-        source_installation_id=actor.installation_id,
+        source_installation_id=caller.installation_id,
     )
     return StoredDraftResponse.from_domain(draft)
 
