@@ -39,7 +39,8 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 ## Documentation
 
 We have littered too much into documentations. Try to write clear understandable English for engineers.
-Read @docs/code-documentation-style.md
+- Read @docs/code-documentation-style.md
+- Do NOT try to slap on everything that is added into docstrings. Having too much information makes it worse.
 
 ## Validation
 
