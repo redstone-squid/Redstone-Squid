@@ -135,12 +135,10 @@ def test_duplicate_keys_are_rejected_across_nested_containers() -> None:
         render_component_tree(parent)
 
 
-@pytest.mark.parametrize("explicit", [False, True])
-def test_one_instance_cannot_appear_twice(explicit: bool) -> None:
+def test_repeated_direct_children_need_explicit_placement_keys() -> None:
     child = Counter()
-    parent = Parent(child.keyed("first"), child.keyed("second")) if explicit else Parent(child, child)
-    with pytest.raises(ui.LayoutInvariantError, match=r"already embedded|duplicate Boundary key"):
-        render_component_tree(parent)
+    with pytest.raises(ui.LayoutInvariantError, match="duplicate Boundary key"):
+        render_component_tree(Parent(child, child))
 
 
 def test_direct_cycles_are_rejected() -> None:
@@ -159,3 +157,110 @@ def test_component_can_return_a_child_without_a_container() -> None:
             return child
 
     assert texts(render_component_tree(Wrapper()).nodes) == ["0"]
+
+
+def test_shared_placements_update_together_and_mount_once() -> None:
+    child = Counter()
+    parent = Parent(child.keyed("first"), child.keyed("second"))
+    runtime = ComponentRuntime(parent)
+    _commit(runtime)
+    assert child.events == ["mount"]
+    child.value = 5
+    assert texts(runtime.render(reuse_committed=True).nodes) == ["5", "5"]
+    _commit(runtime)
+
+    parent.children = (child.keyed("second"),)
+    _commit(runtime)
+    assert child.events == ["mount"]
+    child.value = 6
+    assert texts(runtime.render(reuse_committed=True).nodes) == ["6"]
+    _commit(runtime)
+    runtime.finish()
+    assert child.events == ["mount", "unmount"]
+    assert child._runtime is None
+
+
+def test_shared_placements_render_and_cache_their_own_contexts() -> None:
+    label = ui.ContextKey[str]("label")
+
+    class Reader(Counter):
+        @override
+        def render(self) -> ui.LayoutNode:
+            return ui.paragraph(f"{self.inject(label)}:{self.value}")
+
+    class Provider(Parent):
+        caption: str = ui.state("")
+
+        def __init__(self, caption: str, child: ui.Component) -> None:
+            super().__init__(child)
+            self.caption = caption
+
+        @override
+        def render(self) -> ui.LayoutNode:
+            self.provide(label, self.caption)
+            return super().render()
+
+    reader = Reader()
+    branch = Parent(reader)
+    first, second = Provider("one", branch), Provider("two", branch)
+    runtime = ComponentRuntime(Parent(first, second))
+    _commit(runtime)
+    assert reader.events == ["mount"]
+    reader.value = 3
+    assert texts(runtime.render(reuse_committed=True).nodes) == ["one:3", "two:3"]
+    _commit(runtime)
+    first.caption = "changed"
+    assert texts(runtime.render(reuse_committed=True).nodes) == ["changed:3", "two:3"]
+    _commit(runtime)
+    reader.invalidate()
+    assert texts(runtime.render(reuse_committed=True).nodes) == ["changed:3", "two:3"]
+    runtime.finish()
+    assert reader.events == ["mount", "unmount"]
+
+
+def test_discarding_a_placement_removal_keeps_the_instance_mounted() -> None:
+    child = Counter()
+    parent = Parent(child.keyed("one"), child.keyed("two"))
+    runtime = ComponentRuntime(parent)
+    _commit(runtime)
+    parent.children = ()
+    runtime.render(reuse_committed=True)
+    runtime.discard()
+    assert child._runtime is runtime
+    assert child.events == ["mount"]
+    runtime.finish()
+    assert child.events == ["mount", "unmount"]
+
+
+def test_instances_cannot_be_claimed_by_two_runtimes() -> None:
+    child = Counter()
+    first = ComponentRuntime(Parent(child))
+    second = ComponentRuntime(Parent(child))
+    first.render()
+    with pytest.raises(ui.LayoutInvariantError, match="multiple runtimes"):
+        second.render()
+    assert child._runtime is first
+    first.discard()
+    _commit(second)
+    assert child._runtime is second
+    second.finish()
+    first.finish()
+
+
+def test_adding_and_removing_alias_placements_does_not_restart_lifecycle() -> None:
+    child = Counter()
+    branch = Parent(child.keyed("one"))
+    runtime = ComponentRuntime(Parent(branch))
+    _commit(runtime)
+    branch.children = (child.keyed("two"),)
+    _commit(runtime)
+    branch.children = (child.keyed("two"), child.keyed("three"))
+    _commit(runtime)
+    assert child.events == ["mount"]
+    child.value = 8
+    assert texts(runtime.render(reuse_committed=True).nodes) == ["8", "8"]
+    _commit(runtime)
+    branch.children = ()
+    _commit(runtime)
+    assert child.events == ["mount", "unmount"]
+    assert child._runtime is None

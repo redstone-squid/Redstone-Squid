@@ -852,7 +852,7 @@ def test_duplicate_sibling_embed_keys_are_rejected() -> None:
         commit_render(MessageRoot(Duplicate(), access=Everyone(), timeout=None))
 
 
-def test_one_component_instance_cannot_occupy_two_paths() -> None:
+def test_one_component_instance_can_occupy_two_paths() -> None:
     child = Counter("nested")
 
     class Duplicate(Component[sl.ComponentsV2Target]):
@@ -860,8 +860,12 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
         def render(self):
             return [self.boundary(child, key="one"), self.boundary(child, key="two")]
 
-    with pytest.raises(LayoutInvariantError, match="already embedded"):
-        commit_render(MessageRoot(Duplicate(), access=Everyone(), timeout=None))
+    message_root = MessageRoot(Duplicate(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    assert message_root.runtime.components["one"] is child
+    assert message_root.runtime.components["two"] is child
+    assert set(message_root.snapshot().handler_keys) == {"one.help", "one.inc", "two.help", "two.inc"}
+    message_root.runtime.finish()
 
 
 def test_component_embedding_cycles_are_rejected() -> None:

@@ -50,10 +50,15 @@ class RenderCandidate[RenderTargetT: RenderTarget = RenderTarget]:
 
     def discard(self) -> None:
         """Release prospective reads while retaining the delivered tree's reads."""
+        self._discard(release=True)
+
+    def _discard(self, *, release: bool) -> None:
         self._require_pending()
         self.settled = True
         self._runtime._staged = None
         self._runtime.subscriptions.discard()
+        if release:
+            self._runtime._release_unused_claims(set(self._runtime.components.values()))
         if self._runtime._cached_tree is self.tree:
             self._runtime._cached_tree = None
 
@@ -92,7 +97,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.root = root
         self._services = _ServiceLifecycle(execution_host, on_service_error)
         self._hook_errors: list[Exception] = []
-        root._runtime = self
+        self._claimed: set[AnyComponent] = set()
+        self.claim(root)
         self.presentation = presentation if presentation is not None else PresentationState()
         self.on_invalidate = on_invalidate
         self.on_reactive_invalidate = on_reactive_invalidate
@@ -118,6 +124,22 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if self.on_reactive_invalidate is not None:
             self.on_reactive_invalidate(address)
 
+    def claim(self, component: AnyComponent) -> None:
+        """Associate a discovered instance with this runtime until its last use ends."""
+        if component._runtime is not None and component._runtime is not self:
+            message = "a component instance cannot belong to multiple runtimes"
+            raise LayoutInvariantError(message)
+        component._runtime = self
+        self._claimed.add(component)
+
+    def _release_unused_claims(self, retained: set[AnyComponent]) -> None:
+        retained.add(self.root)
+        for component in self._claimed - retained:
+            if component._runtime is self:
+                component._runtime = None
+                component._parent = None
+        self._claimed.intersection_update(retained)
+
     def stage(self, tree: ComponentTree[RenderTargetT]) -> RenderCandidate[RenderTargetT]:
         """Return the candidate for this tree, replacing any earlier prospective tree.
 
@@ -128,7 +150,10 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if self._staged is not None:
             if self._staged.tree is tree:
                 return self._staged
-            self._staged.discard()
+            self._staged._discard(release=False)
+        for component in (*tree.components.values(), *tree.deferred):
+            self.claim(component)
+        self._release_unused_claims(set(self.components.values()) | set(tree.components.values()) | set(tree.deferred))
         self.subscriptions.stage(tree.observations)
         self._staged = RenderCandidate(self, tree, self.revision)
         return self._staged
@@ -231,13 +256,21 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 self._validate_execution_host(committed)
                 self.stage(committed)
             return committed
-        tree = render_component_tree(
-            self.root,
-            runtime=self,
-            context=self.context,
-            defer=defer,
-            incremental=self._cache.expansion(),
-        )
+        try:
+            tree = render_component_tree(
+                self.root,
+                runtime=self,
+                context=self.context,
+                defer=defer,
+                incremental=self._cache.expansion(),
+            )
+        except BaseException:
+            retained = set(self.components.values())
+            if self._staged is not None:
+                retained.update(self._staged.tree.components.values())
+                retained.update(self._staged.tree.deferred)
+            self._release_unused_claims(retained)
+            raise
         if not terminal:
             self._validate_execution_host(tree)
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
@@ -296,7 +329,16 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self.dirty = self.revision != rendered_revision
             return
 
-        if self._committed_tree is not None and tree._topology_base is self._committed_tree._topology:
+        if (
+            self._committed_tree is not None
+            and tree._topology_base is self._committed_tree._topology
+            and len(set(self.components.values())) == len(self.components)
+            and len(set(tree.components.values())) == len(tree.components)
+            and not (
+                {component for _, component in tree._removed_components}
+                & {component for _, component in tree._added_components}
+            )
+        ):
             for path, component in sorted(
                 tree._removed_components,
                 key=lambda item: depth(item[0]),
@@ -314,6 +356,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 self._cache.add_path(component, path)
                 self._mount(component, path)
             self._cache.discard_removed(tree._removed_components)
+            self._release_unused_claims(set(tree.components.values()))
             self._committed_tree = tree
             if self.revision == rendered_revision:
                 self._cached_tree = tree
@@ -322,23 +365,21 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self._raise_hook_errors()
             return
 
-        removed = [
-            (path, component)
-            for path, component in self.components.items()
-            if tree.components.get(path) is not component
-        ]
-        added = [
-            (path, component)
-            for path, component in tree.components.items()
-            if self.components.get(path) is not component
-        ]
-        for path, component in sorted(removed, key=lambda item: depth(item[0]), reverse=True):
-            self._unmount(component)
-            component._runtime = None
-            if path != "$":
-                component._parent = None
+        old_instances = set(self.components.values())
+        new_instances = set(tree.components.values())
+        removed = [(path, component) for path, component in self.components.items() if component not in new_instances]
+        added = [(path, component) for path, component in tree.components.items() if component not in old_instances]
+        visited: set[AnyComponent] = set()
+        for _path, component in sorted(removed, key=lambda item: depth(item[0]), reverse=True):
+            if component not in visited:
+                visited.add(component)
+                self._unmount(component)
+        visited.clear()
         for path, component in sorted(added, key=lambda item: depth(item[0])):
-            self._mount(component, path)
+            if component not in visited:
+                visited.add(component)
+                self._mount(component, path)
+        self._release_unused_claims(new_instances)
         self.components = dict(tree.components)
         self._committed_tree = tree
         if self.revision == rendered_revision:
@@ -349,6 +390,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._raise_hook_errors()
 
     def _mount(self, component: AnyComponent, path: str) -> None:
+        self.claim(component)
         owner = component._owned_services
         try:
             if owner is not None:
@@ -412,14 +454,20 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         """
         self.discard()
         self.subscriptions.clear()
+        visited: set[AnyComponent] = set()
         for _path, component in sorted(
             self.components.items(),
             key=lambda item: 0 if item[0] == "$" else item[0].count(".") + 1,
             reverse=True,
         ):
-            self._unmount(component)
-            component._runtime = None
-            component._parent = None
+            if component not in visited:
+                visited.add(component)
+                self._unmount(component)
+        for component in self._claimed:
+            if component._runtime is self:
+                component._runtime = None
+                component._parent = None
+        self._claimed.clear()
         self.components.clear()
         self._cache.clear()
         self._cached_tree = None

@@ -19,12 +19,12 @@ class RenderCache[RenderTargetT: RenderTarget]:
     """Retain reusable tree work until reconciliation removes it or the owner finishes."""
 
     def __init__(self) -> None:
-        self._renders: dict[AnyComponent, _ComponentRender[RenderTargetT]] = {}
+        self._renders: dict[tuple[AnyComponent, str], _ComponentRender[RenderTargetT]] = {}
         self._subtrees: dict[str, _ExpandedSubtree[RenderTargetT]] = {}
         self._dirty: set[AnyComponent] = set()
         self._forced: set[AnyComponent] = set()
         self._dirty_paths: set[str] = set()
-        self._paths: dict[AnyComponent, str] = {}
+        self._paths: dict[AnyComponent, set[str]] = {}
         self._force_all = True
 
     def expansion(self) -> IncrementalRender[RenderTargetT]:
@@ -48,7 +48,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
         """Find affected snapshots and whether they account for every address."""
         matched: set[AnyComponent] = set()
         covered: set[Address] = set()
-        for component, snapshot in self._renders.items():
+        for (component, _path), snapshot in self._renders.items():
             observed = addresses.intersection(snapshot.observation.addresses())
             if observed:
                 matched.add(component)
@@ -74,14 +74,15 @@ class RenderCache[RenderTargetT: RenderTarget]:
             self._dirty.add(component)
             if not check_dependencies:
                 self._forced.add(component)
-            path = self._paths.get(component)
-            if path is None:
+            paths = self._paths.get(component)
+            if not paths:
                 self._force_all = True
             else:
-                self._dirty_paths.add(path)
-                while path != "$":
-                    path = "$" if "." not in path else path.rsplit(".", 1)[0]
+                for path in paths:
                     self._dirty_paths.add(path)
+                    while path != "$":
+                        path = "$" if "." not in path else path.rsplit(".", 1)[0]
+                        self._dirty_paths.add(path)
 
     def require_full_render(self) -> None:
         """Ignore reuse when the host explicitly samples nonreactive inputs."""
@@ -92,14 +93,18 @@ class RenderCache[RenderTargetT: RenderTarget]:
         if self._force_all or self._forced or not self._dirty:
             return False
         for component in self._dirty:
-            cached = self._renders.get(component)
-            if (
-                cached is None
-                or cached.revision != component.__dict__.get("_state_revision", 0)
-                or not cached.observation.current()
-                or cached.observation.addresses() != cached.addresses
-            ):
+            paths = self._paths.get(component)
+            if not paths:
                 return False
+            for path in paths:
+                cached = self._renders.get((component, path))
+                if (
+                    cached is None
+                    or cached.revision != component.__dict__.get("_state_revision", 0)
+                    or not cached.observation.current()
+                    or cached.observation.addresses() != cached.addresses
+                ):
+                    return False
         return True
 
     def pending_atomic_resources(self) -> tuple[AsyncBinding, ...]:
@@ -112,7 +117,12 @@ class RenderCache[RenderTargetT: RenderTarget]:
         if self._force_all or not self._dirty:
             return ()
 
-        dirty_paths = {component: path for component in self._dirty if (path := self._paths.get(component)) is not None}
+        # Shared placements may observe different contexts. Let normal expansion settle them.
+        if any(len(paths) > 1 for paths in self._paths.values()):
+            return ()
+        dirty_paths = {
+            component: next(iter(paths)) for component in self._dirty if (paths := self._paths.get(component))
+        }
         if len(dirty_paths) != len(self._dirty):
             return ()
 
@@ -126,7 +136,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
                 for ancestor, ancestor_path in dirty_paths.items()
             ):
                 continue
-            cached = self._renders.get(component)
+            cached = self._renders.get((component, path))
             if cached is None or cached.revision != component.__dict__.get("_state_revision", 0):
                 continue
             atomic = {
@@ -162,13 +172,15 @@ class RenderCache[RenderTargetT: RenderTarget]:
 
     def add_path(self, component: AnyComponent, path: str) -> None:
         """Index an incrementally added component before its mount hook runs."""
-        self._paths[component] = path
+        self._paths.setdefault(component, set()).add(path)
 
     def discard_removed(self, removed: Iterable[tuple[str, AnyComponent]]) -> None:
         """Drop removed snapshots without disturbing replacements or hook invalidations."""
         for path, component in removed:
             if component not in self._paths:
-                self._renders.pop(component, None)
+                for placement in tuple(self._renders):
+                    if placement[0] is component:
+                        self._renders.pop(placement)
             cached = self._subtrees.get(path)
             if cached is not None and cached.component is component:
                 self._subtrees.pop(path)
@@ -179,12 +191,21 @@ class RenderCache[RenderTargetT: RenderTarget]:
         Dirty causes deliberately survive: hooks can change state after the candidate
         was rendered, and the next render must observe those writes.
         """
-        self._paths = {component: path for path, component in components.items()}
+        self._paths = {}
+        for path, component in components.items():
+            self._paths.setdefault(component, set()).add(path)
         live = set(components.values())
-        self._renders = {component: snapshot for component, snapshot in self._renders.items() if component in live}
+        self._renders = {
+            (component, path): snapshot
+            for (component, path), snapshot in self._renders.items()
+            if component in live and components.get(path) is component
+        }
         self._subtrees = {
             path: snapshot for path, snapshot in self._subtrees.items() if components.get(path) is snapshot.component
         }
+
+        # Hooks can invalidate a shared instance while the old placement index is still active.
+        self.invalidate(tuple(self._dirty), force_all=False, check_dependencies=True)
 
     def clear(self) -> None:
         """Release every snapshot and path when the component runtime finishes."""

@@ -30,6 +30,8 @@ same spirit as `AnyTarget`.
 
 
 class RuntimeOwner(Protocol):
+    def claim(self, component: AnyComponent) -> None: ...
+
     def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None: ...
 
 
@@ -72,6 +74,8 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
     same parent. Use child.keyed("name") for a namespace stable across new instances or
     process restarts. Keys identify placements; they never recover another instance's state.
     Both forms prefix control and presentation keys so children can share local names.
+    An instance may have several placements in one runtime, sharing state and lifecycle
+    while each placement renders in its own context and keeps its own presentation state.
 
     A mounted frontend calls on_load before the first render. Once delivery
     succeeds, ComponentRuntime mounts added components and unmounts removed ones;
@@ -114,8 +118,8 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
 
         Return an immutable reference without modifying or cloning the component.
         Keys must be nonempty, contain no dots, and be unique within the parent's
-        render. One instance may appear only once in the expanded tree, even with
-        different keys. Replacing an instance at a key mounts the replacement;
+        render. Use distinct keys to place the same instance twice under one parent.
+        Replacing an instance at a key mounts the replacement;
         its state is not copied from the previous component.
         """
         return Boundary(self, str(key))
@@ -142,10 +146,10 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
         """
 
     def on_mount(self) -> None:
-        """Run when this component enters the successfully delivered tree."""
+        """Run when the first placement of this instance enters the delivered tree."""
 
     def on_unmount(self) -> None:
-        """Run when this component leaves the delivered tree or the frontend finishes."""
+        """Run when the last placement leaves the delivered tree or the frontend finishes."""
 
     def own[ServiceT: ManagedService](self, service: ServiceT) -> ServiceT:
         """Give this component a service to run while it's mounted.

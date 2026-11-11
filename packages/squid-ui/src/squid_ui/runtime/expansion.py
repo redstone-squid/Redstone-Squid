@@ -88,7 +88,6 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.components: dict[str, AnyComponent] = {}
         self.assets: list[Asset] = []
         self.document_key: str | None = None
-        self.identities: dict[int, str] = {}
         self.active: set[int] = set()
         self.deferred: list[AnyComponent] = []
         self.observed_addresses: list[Address] = []
@@ -124,7 +123,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
             self.components,
             tuple(self.assets),
             self.document_key,
-            tuple(self.deferred),
+            tuple(dict.fromkeys(self.deferred)),
             unique_async_bindings(self.observed_bindings),
             tuple(dict.fromkeys(self.observed_addresses)),
             root_subtree.topology if root_subtree is not None else object(),
@@ -134,7 +133,6 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         """Drop everything a failed splice attempt accumulated, in place."""
         self.components.clear()
         self.assets.clear()
-        self.identities.clear()
         self.active.clear()
         self.deferred.clear()
         self.observed_addresses.clear()
@@ -145,12 +143,13 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         """The tree a successful splice describes: the reused subtree plus what moved."""
         subtree = spliced.subtree
         for held in subtree.components.values():
-            held._runtime = self.runtime
+            if self.runtime is not None:
+                self.runtime.claim(held)
         return ComponentTree(
             subtree.nodes,
             subtree.components,
             subtree.assets,
-            self.incremental.render_cache[self.root].document_key,
+            self.incremental.render_cache[(self.root, "$")].document_key,
             (),
             subtree.async_bindings,
             subtree.observations,
@@ -172,7 +171,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
             owner.seal()
         incremental = self.incremental
         render_cache = incremental.render_cache
-        cached = render_cache.get(component)
+        cached = render_cache.get((component, path))
         revision = vars(component).get("_state_revision", 0)
         dependency_check = component in incremental.dirty and component not in incremental.forced
         if (
@@ -214,7 +213,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.observed_addresses.extend(snapshot.addresses)
         self.observed_bindings.extend(snapshot.async_bindings)
         self.assets.extend(own_assets)
-        render_cache[component] = snapshot
+        render_cache[(component, path)] = snapshot
         return snapshot
 
     def _reuse_subtree(
@@ -247,9 +246,6 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         if identity in self.active:
             message = f"{path}: component embedding cycle"
             raise LayoutInvariantError(message)
-        if previous := self.identities.get(identity):
-            message = f"{path}: component instance is already embedded at {previous}"
-            raise LayoutInvariantError(message)
         cached_subtree = self._reuse_subtree(path, component, inherited_context)
         if cached_subtree is not None:
             return self._adopt(cached_subtree)
@@ -259,9 +255,9 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         binding_start = len(self.observed_bindings)
         observation_start = len(self.observed_addresses)
         deferred_start = len(self.deferred)
-        self.identities[identity] = path
         self.components[path] = component
-        component._runtime = self.runtime
+        if self.runtime is not None:
+            self.runtime.claim(component)
         self.active.add(identity)
         embed_keys: set[str] = set()
         child_splices: dict[str, _NodeSplice] = {}
@@ -285,6 +281,8 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
                 # its parent when its on_load writes state.
                 child_component = item.component
                 child_component._parent = component
+                if self.runtime is not None:
+                    self.runtime.claim(child_component)
                 if self.defer is not None and self.defer(child_component):
                     self.deferred.append(child_component)
                     return []
@@ -326,12 +324,12 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         """Take a reused subtree's components and observations into this render."""
         for cached_path, cached_component in cached.components.items():
             cached_identity = id(cached_component)
-            if previous := self.identities.get(cached_identity):
-                message = f"{cached_path}: component instance is already embedded at {previous}"
+            if cached_identity in self.active:
+                message = f"{cached_path}: component embedding cycle"
                 raise LayoutInvariantError(message)
-            self.identities[cached_identity] = cached_path
             self.components[cached_path] = cached_component
-            cached_component._runtime = self.runtime
+            if self.runtime is not None:
+                self.runtime.claim(cached_component)
         self.assets.extend(cached.assets)
         self.observed_bindings.extend(cached.async_bindings)
         self.observed_addresses.extend(cached.observations)
@@ -381,10 +379,9 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](
     when a full expansion is needed; attempted records work already rendered.
     """
     dirty = incremental.dirty
-    component_paths = incremental.component_paths
     render_cache = incremental.render_cache
     subtree_cache = incremental.subtree_cache
-    if incremental.force_all or not dirty or root not in render_cache:
+    if incremental.force_all or not dirty or (root, "$") not in render_cache:
         return None
     root_subtree = subtree_cache.get("$")
     if root_subtree is None:
@@ -392,11 +389,16 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](
     base_topology = root_subtree.topology
     removed_components: list[tuple[str, AnyComponent]] = []
     added_components: list[tuple[str, AnyComponent]] = []
-    selected_paths = (
-        {component: path for component in dirty if (path := component_paths.get(component)) is not None}
-        if component_paths is not None
-        else {snapshot.component: path for path, snapshot in subtree_cache.items() if snapshot.component in dirty}
-    )
+    # Splicing indexes one location per instance. Shared trees still reuse per-placement
+    # render and subtree caches, but expand their topology to visit every dirty placement.
+    paths_by_component: dict[AnyComponent, set[str]] = {}
+    for path, held in root_subtree.components.items():
+        paths_by_component.setdefault(held, set()).add(path)
+    if any(len(paths) > 1 for paths in paths_by_component.values()):
+        return None
+    selected_paths = {
+        component: next(iter(paths)) for component in dirty if (paths := paths_by_component.get(component))
+    }
     if len(selected_paths) != len(dirty) or "$" in selected_paths.values():
         return None
     # Expand the highest dirty ancestor once; its expansion also visits dirty descendants.
@@ -414,7 +416,7 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](
         attempted.update(
             candidate
             for candidate in dirty
-            if candidate in render_cache
+            if (candidate, selected_paths.get(candidate)) in render_cache
             and (candidate_path := selected_paths.get(candidate)) is not None
             and (candidate_path == path or candidate_path.startswith(f"{path}."))
         )
@@ -444,7 +446,7 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](
             parent = subtree_cache.get(parent_path)
             if (
                 parent is None
-                or parent.component not in render_cache
+                or (parent.component, parent_path) not in render_cache
                 or (splice := parent.child_splices.get(child_path)) is None
             ):
                 return None

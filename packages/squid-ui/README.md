@@ -85,9 +85,13 @@ survives reordering under the same parent. For a namespace stable across new ins
 process restarts, use `child.keyed("editor")` (integer keys are also accepted).
 
 `keyed()` returns an immutable placement reference; it neither modifies the child nor copies
-its state. Keys are unique within a parent's render, and one instance can appear only once
-in the expanded tree. Replacing a child at the same key mounts the new instance with its own
-state. `parent.boundary(child, key="editor")` remains available for compatibility.
+its state. Keys are unique within a parent's render. To place the same instance twice under
+one parent, use distinct keys: `sl.stack(editor.keyed("left"), editor.keyed("right"))`.
+These placements share component state, loading, and services. Each renders in its own
+context with separate control and presentation keys. Mounting happens at the first delivered
+placement, and unmounting at the last removal. An instance can belong to only one runtime
+at a time; cycles remain invalid. Replacing a child at the same key mounts the new instance
+with its own state. `parent.boundary(child, key="editor")` remains available for compatibility.
 
 Keep dynamic children by an application key and update the collection in an action. The runtime
 mounts and unmounts children when the delivered tree changes. Reusing a cached render therefore

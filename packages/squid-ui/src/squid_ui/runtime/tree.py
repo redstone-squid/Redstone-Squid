@@ -108,13 +108,15 @@ class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget, ContextT = o
     can also construct an independent view.
     """
 
-    render_cache: dict[AnyComponent, _ComponentRender[RenderTargetT, ContextT]] = field(default_factory=dict)
-    """Each component's last render snapshot, keyed by instance."""
+    render_cache: dict[tuple[AnyComponent, str], _ComponentRender[RenderTargetT, ContextT]] = field(
+        default_factory=dict
+    )
+    """Each placement's last render snapshot, keyed by instance and path."""
     dirty: set[AnyComponent] = field(default_factory=set)
     forced: set[AnyComponent] = field(default_factory=set)
     """Dirty components whose dependencies must not be consulted -- re-render regardless."""
     force_all: bool = False
     subtree_cache: dict[str, _ExpandedSubtree[RenderTargetT, ContextT]] = field(default_factory=dict)
     dirty_paths: set[str] = field(default_factory=set)
-    component_paths: dict[AnyComponent, str] | None = None
+    component_paths: dict[AnyComponent, set[str]] | None = None
     """Where each component sat last time, for locating a splice. None disables splicing."""
