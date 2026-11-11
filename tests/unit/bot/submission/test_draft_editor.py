@@ -10,6 +10,7 @@ from typing import Any, override
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from whenever import Instant
 
@@ -550,3 +551,44 @@ async def test_pressing_edit_on_a_catalogue_section_opens_a_second_message() -> 
         harness.response.edit_message.assert_not_awaited()
         assert any("**Name and creators**" in text for text in ui.texts())
         assert any("**Patterns**" in text for text in ui.texts())
+
+
+async def test_changes_made_elsewhere_redraw_the_panel_message() -> None:
+    # Editor messages and the finalization worker change the draft without touching the panel,
+    # so the panel must be scheduled to redraw rather than wait for its next interaction.
+    services, drafts = setup("door")
+    editor = await open_editor(services, drafts)
+    async with sd.testing.stage(editor, owner=object()) as ui:
+        await editor.workspace.save_values({"display_name": "Changed elsewhere"})
+        assert isinstance(ui.root.scheduler, sd.MessageRootScheduler)
+        with anyio.fail_after(2):
+            await ui.root.scheduler.wait_idle()
+
+        ui.interaction.edit_original_response.assert_awaited_once()
+        assert any("Build name: Changed elsewhere" in text for text in ui.texts())
+
+
+async def test_opening_another_editor_closes_the_first() -> None:
+    services, drafts = setup("door")
+    editor = await open_editor(services, drafts)
+    async with sd.testing.stage(editor, owner=object()) as ui:
+        await ui.press("edit_patterns")
+        (first,) = editor._screen_flow.children
+        await ui.press("edit_taxonomy")
+
+        with anyio.fail_after(2):
+            await first.wait()
+        (second,) = editor._screen_flow.children
+        assert isinstance(second, SectionEditorScreen)
+        assert second.section_id == "taxonomy"
+        assert rendered_text(first) == "Changes saved. You can dismiss this message."
+
+
+async def test_an_expired_panel_offers_to_reopen_the_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    services, drafts = setup("door")
+    editor = await open_editor(services, drafts)
+    monkeypatch.setattr(DraftEditorScreen, "expired", property(lambda self: True))
+
+    assert rendered_text(editor) == "This panel has closed. Your answers are saved."
+    (reopen,) = find_all(editor.render(), sl.semantic.RoutedActionControl)
+    assert reopen.route_id == f"r:builds:draft:{drafts.current.snapshot.id}:reopen"

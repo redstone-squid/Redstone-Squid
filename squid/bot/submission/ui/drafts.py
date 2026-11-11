@@ -388,7 +388,9 @@ class DraftEditorScreen(BuildEditorScreen[None]):
     read-only summary, ending with a link to edit the created build.
     """
 
-    policy = sd.ResponseSpec(audience="personal", timeout=600)
+    # live_updates redraws the panel for changes made elsewhere: editor messages, or finalization
+    # through the draft's topic. retain_routed_on_timeout keeps Reopen usable after it expires.
+    policy = sd.ResponseSpec(audience="personal", timeout=600, live_updates=True, retain_routed_on_timeout=True)
 
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace
@@ -396,6 +398,19 @@ class DraftEditorScreen(BuildEditorScreen[None]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         ws = self.workspace
+        if self.expired:
+            # The message can no longer be edited, so replace progress that would go stale.
+            return (
+                sl.status(tr(t"draft-editor-expired = This panel has closed. Your answers are saved.")),
+                sl.action_controls(
+                    sl.routed_action_control(
+                        tr(t"draft-editor-reopen = Reopen draft"),
+                        build_controls.reopen_draft.id(draft_id=str(ws.draft.snapshot.id)),
+                        key="reopen",
+                    ),
+                    key="draft-reopen",
+                ),
+            )
         if not ws.loaded:
             return (sl.status(tr(t"draft-editor-loading = Loading your draft…")),)
         phase = ws.phase
@@ -525,7 +540,7 @@ class DraftEditorScreen(BuildEditorScreen[None]):
 
 
 _DETAIL_SESSION = sd.SessionSpec("draft-detail")
-"""Section and file editors share one session, so opening another replaces the previous message."""
+"""Section and file editors share one session, so opening one closes the editor message already open."""
 
 
 class SectionEditorScreen(sd.Screen[None]):
@@ -535,7 +550,7 @@ class SectionEditorScreen(sd.Screen[None]):
     Choices save immediately; Done only closes this message.
     """
 
-    policy = sd.ResponseSpec(audience="personal", timeout=600, session=_DETAIL_SESSION)
+    policy = sd.ResponseSpec(audience="personal", timeout=600, live_updates=True, session=_DETAIL_SESSION)
     picker_pages: Mapping[str, int] = sl.state({})
     """The page each catalogue field's select menu shows, keyed by field ID."""
 
@@ -674,7 +689,7 @@ class SectionEditorScreen(sd.Screen[None]):
 class FilesEditorScreen(sd.Screen[None]):
     """A private message for adding, replacing, and removing the draft's files."""
 
-    policy = sd.ResponseSpec(audience="personal", timeout=600, session=_DETAIL_SESSION)
+    policy = sd.ResponseSpec(audience="personal", timeout=600, live_updates=True, session=_DETAIL_SESSION)
     selected_file: str | None = sl.state(None)
 
     def __init__(self, workspace: DraftWorkspace) -> None:
@@ -791,7 +806,9 @@ class BuildPreviewScreen(sd.Screen[None]):
     only when it is created.
     """
 
-    policy = sd.ResponseSpec(audience="personal", timeout=600, session=sd.SessionSpec("draft-preview"))
+    policy = sd.ResponseSpec(
+        audience="personal", timeout=600, live_updates=True, session=sd.SessionSpec("draft-preview")
+    )
 
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace
@@ -885,7 +902,10 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
                 t"Fix the problems below, then press **Submit** again."
             )
         case Phase.CREATING:
-            status = tr(t"draft-editor-status-creating = ⏳ Creating your build. This message updates when it is done.")
+            status = tr(
+                t"draft-editor-status-creating = ⏳ Creating your build. "
+                t"This usually takes under a minute; this message updates when it is done."
+            )
         case Phase.DONE:
             result = ws.result.result if ws.result is not None else None
             status = (
