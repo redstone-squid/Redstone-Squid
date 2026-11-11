@@ -2,7 +2,6 @@
 
 import logging
 from typing import override
-from uuid import UUID
 
 import anyio
 from anyio.abc import TaskStatus
@@ -18,13 +17,13 @@ class EditHistoryRetention(ManagedService):
     def __init__(self, controller: EditController, service: EditRetentionService) -> None:
         self._controller = controller
         self._service = service
-        self._retained: frozenset[UUID] = frozenset()
 
     async def sync(self) -> None:
         retained = self._controller.retained_operations()
-        if retained or self._retained:
-            await self._service.sync(retained, self._retained - retained)
-        self._retained = retained
+        released = self._controller.owned_resource_operations - retained
+        if retained or released:
+            await self._service.sync(retained, released)
+            self._controller.retention_released(released)
 
     @override
     async def run(self, *, task_status: TaskStatus[None]) -> None:
@@ -36,9 +35,11 @@ class EditHistoryRetention(ManagedService):
                 except Exception:
                     # An outage must not keep the parent alive or renew leases forever.
                     logger.warning("Unable to renew editor attachment retention", exc_info=True)
-                await anyio.sleep(30)
+                with anyio.move_on_after(30):
+                    await self._controller.wait_retention_change()
         finally:
-            released = self._retained | self._controller.retained_operations()
+            released = self._controller.owned_resource_operations
             if released:
                 with anyio.move_on_after(10, shield=True):
                     await self._service.sync(frozenset(), released)
+                    self._controller.retention_released(released)

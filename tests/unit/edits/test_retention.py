@@ -59,3 +59,17 @@ async def test_retention_follows_undo_redo_branch_discard_and_parent_close() -> 
         await tasks.start(retention.run)
         tasks.cancel_scope.cancel()
     assert recorder.calls[-1] == (frozenset(), final)
+
+
+async def test_close_releases_an_entry_evicted_before_the_first_renewal() -> None:
+    state = CommittedState(Store())
+    controller = EditController(EditExecutor(partial(Work, state), {"example": ResourceHandler()}), actor, refresh)
+    recorder = RetentionRecorder()
+    retention = EditHistoryRetention(controller, recorder)
+    result = await controller.execute(command(), "Edit")
+    controller.history.clear()
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(retention.run)
+        tasks.cancel_scope.cancel()
+    assert any(result.outcome.operation_id in released for _, released in recorder.calls)
+    assert not controller.owned_resource_operations

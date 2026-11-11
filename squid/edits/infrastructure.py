@@ -61,6 +61,7 @@ class PostgresEditStore:
         await self._session().flush()
 
     async def purge_expired(self, *, now: Instant) -> int:
+        await self._session().execute(delete(EditResourceLease).where(EditResourceLease.expires_at <= now))
         removed = await self._session().scalars(
             delete(EditOperation).where(EditOperation.expires_at <= now).returning(EditOperation.id)
         )

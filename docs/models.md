@@ -61,6 +61,24 @@ The editing-scope migration preserves existing history and requires all writers 
 Retain history indefinitely.
 Disabling the append-only guards is an explicit maintenance operation, not an application write path.
 
+Persisted editor changes use `EditCommand` and `EditExecutor` in `squid/edits`. A command carries the revisions the
+caller read. Its handler checks current authority and captures the values needed to reverse it before writing.
+`FieldCommand` supplies the common projection, validation, and write flow from an explicit Pydantic value schema;
+`Aggregate` supplies the domain's locking and revision policy. Override those steps for domain rules, rather than
+adding history callbacks to each UI. Permission edits use the permission epoch as one shared graph revision.
+
+Discord's `EditController` retains inverse receipts in the live workspace. Bind forms with `controller.bind()` when
+they open so refreshing the screen cannot silently rebase a stale modal. Undo and redo execute ordinary authorized
+commands against the controller's last committed revisions. Final commands discard history only for their targets.
+The database retains operation identity and result metadata for 24 hours to resolve uncertain commits; it does not
+persist the session's inverse values. HTTP mutations using these commands share the executor's operation identity.
+
+Attachment uploads stage hidden references before a membership command accepts them. Removal keeps shared source IDs
+and processing results available for undo. A mounted parent renews resource leases every 30 seconds; leases expire
+after 120 seconds without renewal. History eviction, branching, finalization, and closure release those leases.
+Cleanup reclaims resources only after both draft references and history leases cease to retain them. Processing an
+already-declared file does not advance the draft revision; changing its membership does.
+
 Architecture tests cover entity equality, explicit relationship loading, model dependencies, and transaction ownership.
 Repository integration tests check detached access, round trips, revision guards, preview isolation, and transaction behavior.
 
