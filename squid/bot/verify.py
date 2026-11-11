@@ -13,7 +13,7 @@ from squid.accounts.models import Account
 from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
-from squid.bot.i18n import command_text
+from squid.bot.i18n import to_locale_str
 from squid.bot.profile_render import (
     public_profile_fields,
 )
@@ -40,7 +40,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
 
     @sd.command(name="account", description="Manage your account or view a creator page")
     @app_commands.describe(
-        user=command_text(
+        user=to_locale_str(
             tr(t"verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.")
         )
     )

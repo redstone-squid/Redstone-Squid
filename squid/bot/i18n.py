@@ -53,7 +53,7 @@ async def localization_resolver(source: LocalizationSource) -> Localization:
     return localization_for(locale)
 
 
-def command_text(message: Message) -> app_commands.locale_str:
+def to_locale_str(message: Message) -> app_commands.locale_str:
     """Attach a parameter-free Fluent declaration to Discord command metadata."""
     if message.declaration is None or message.bindings:
         detail = "Discord command metadata requires a parameter-free Fluent declaration"
@@ -68,7 +68,7 @@ def bind_command_messages(
 
     New or changed automatic metadata needs a declaration in command_texts.py. This
     check runs after extensions load, before any command tree can be synchronized.
-    Explicit command_text() declarations already carry their message.
+    Explicit to_locale_str() declarations already carry their message.
     """
 
     def bind(kind: str, value: str | app_commands.locale_str | None) -> None:

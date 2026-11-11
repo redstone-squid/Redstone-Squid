@@ -18,7 +18,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
-from squid.bot.i18n import command_text
+from squid.bot.i18n import to_locale_str
 from squid.bot.submission.draft_intake import receive_attachments
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
@@ -80,28 +80,28 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     )
     @BuildCommandGroup.build_group.command(name="submit", defer="private")
     @app_commands.describe(
-        door_size=command_text(
+        door_size=to_locale_str(
             tr(t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.")
         ),
-        door_type=command_text(tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.")),
-        build_size=command_text(
+        door_type=to_locale_str(tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.")),
+        build_size=to_locale_str(
             tr(t"bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.")
         ),
-        creators=command_text(tr(t"submit-creator-ign-prompt = In-game names of the creators, comma separated.")),
-        versions=command_text(
+        creators=to_locale_str(tr(t"submit-creator-ign-prompt = In-game names of the creators, comma separated.")),
+        versions=to_locale_str(
             tr(t"submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.")
         ),
-        patterns=command_text(
+        patterns=to_locale_str(
             tr(t"submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.")
         ),
-        restrictions=command_text(
+        restrictions=to_locale_str(
             tr(t"submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.")
         ),
-        description=command_text(tr(t"submit-staff-notes-prompt = A short description of the build.")),
-        file=command_text(tr(t"submit-attachment-types-help = Your schematic, an image, or a video.")),
-        file_2=command_text(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
-        file_3=command_text(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
-        file_4=command_text(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
+        description=to_locale_str(tr(t"submit-staff-notes-prompt = A short description of the build.")),
+        file=to_locale_str(tr(t"submit-attachment-types-help = Your schematic, an image, or a video.")),
+        file_2=to_locale_str(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
+        file_3=to_locale_str(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
+        file_4=to_locale_str(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
     )
     async def submit_form(
         self,
@@ -210,7 +210,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
 
     @BuildCommandGroup.build_group.command(name="drafts", defer="private")
     @app_commands.describe(
-        inbox=command_text(
+        inbox=to_locale_str(
             tr(t"command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.")
         )
     )

@@ -11,7 +11,7 @@ from discord.ext.commands import Cog, Command, Group
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import command_text
+from squid.bot.i18n import to_locale_str
 from squid.bot.ui import card_node, error_node, render_payload, tr
 from squid.config import BuildConfig
 from squid.suggestions.application import Candidate, rank
@@ -157,7 +157,9 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     # /help [command]
     @sd.command()
-    @app_commands.describe(command=command_text(tr(t"help-the-command-to-get-help-for = The command to get help for.")))
+    @app_commands.describe(
+        command=to_locale_str(tr(t"help-the-command-to-get-help-for = The command to get help for."))
+    )
     async def help(self, request: sd.Request[Self], command: str | None) -> HelpScreen:
         """Show a grouped command directory or focused command details."""
         return HelpScreen(self.bot, self._all_commands(), command)

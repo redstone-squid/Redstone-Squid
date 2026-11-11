@@ -2775,7 +2775,7 @@
       }
     ],
     "locations": [
-      "squid/bot/help.py:225"
+      "squid/bot/help.py:227"
     ]
   },
   "bot-help-usable-subcommands": {
@@ -2800,7 +2800,7 @@
       }
     ],
     "locations": [
-      "squid/bot/help.py:283"
+      "squid/bot/help.py:285"
     ]
   },
   "bot-help-usable-subcommands-2": {
@@ -2825,7 +2825,7 @@
       }
     ],
     "locations": [
-      "squid/bot/help.py:305"
+      "squid/bot/help.py:307"
     ]
   },
   "bot-notifications-a-credited-build-gained-record": {
@@ -11296,7 +11296,7 @@
       }
     ],
     "locations": [
-      "squid/bot/help.py:251"
+      "squid/bot/help.py:253"
     ]
   },
   "help-command-help-2": {
@@ -11305,8 +11305,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/help.py:292",
-      "squid/bot/help.py:314"
+      "squid/bot/help.py:294",
+      "squid/bot/help.py:316"
     ]
   },
   "help-command-lookup-failed": {
@@ -11321,7 +11321,7 @@
       }
     ],
     "locations": [
-      "squid/bot/help.py:321"
+      "squid/bot/help.py:323"
     ]
   },
   "help-command-not-found": {
@@ -11390,7 +11390,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/help.py:329"
+      "squid/bot/help.py:331"
     ]
   },
   "help-help": {
@@ -11399,7 +11399,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/help.py:241"
+      "squid/bot/help.py:243"
     ]
   },
   "help-information": {
@@ -11436,8 +11436,8 @@
     "arguments": [],
     "locations": [
       "squid/bot/help.py:148",
-      "squid/bot/help.py:252",
-      "squid/bot/help.py:261",
+      "squid/bot/help.py:254",
+      "squid/bot/help.py:263",
       "squid/bot/help.py:95"
     ]
   },
@@ -11447,8 +11447,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/help.py:281",
-      "squid/bot/help.py:303"
+      "squid/bot/help.py:283",
+      "squid/bot/help.py:305"
     ]
   },
   "help-redstone-squid-help": {
@@ -11493,7 +11493,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/help.py:160"
+      "squid/bot/help.py:161"
     ]
   },
   "idempotency-active-idempotency-encryption": {

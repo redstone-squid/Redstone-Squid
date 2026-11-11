@@ -10,7 +10,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, when_mentioned
 
 import squid_ui_discord as sd
-from squid.bot.i18n import command_text
+from squid.bot.i18n import to_locale_str
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
@@ -118,15 +118,15 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
     @autocompletes(sort="search_sorts", query="search_query")
     @sd.command(name="search", description="Search builds, records, and taxonomy metadata", defer="public")
     @app_commands.describe(
-        query=command_text(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
-        scope=command_text(
+        query=to_locale_str(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
+        scope=to_locale_str(
             tr(
                 t"build-search-target-types-help = What to look through: "
                 t"records, builds, patterns, restrictions, or all."
             )
         ),
-        sort=command_text(tr(t"build-search-sort-help = Order results by a field, ascending or descending.")),
-        mode=command_text(
+        sort=to_locale_str(tr(t"build-search-sort-help = Order results by a field, ascending or descending.")),
+        mode=to_locale_str(
             tr(t"build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.")
         ),
     )
@@ -170,7 +170,7 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
     @BuildCommandGroup.build_group.command(name="browse")
     @app_commands.rename(build_id="id")
     @app_commands.describe(
-        build_id=command_text(tr(t"bot-submission-search-open-this-build-directly = Open this build directly."))
+        build_id=to_locale_str(tr(t"bot-submission-search-open-this-build-directly = Open this build directly."))
     )
     async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
         """Browse searchable build details, review actions, and schematic tools."""

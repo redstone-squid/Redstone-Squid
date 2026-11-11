@@ -832,7 +832,7 @@ bot-consent-value =
     { "*" }*{ $username }**
     `{ $uuid }`
 
-# squid/bot/help.py:225
+# squid/bot/help.py:227
 bot-help-commands =
     { $description }
 
@@ -840,7 +840,7 @@ bot-help-commands =
 
     { $more_information }{ "\u000A" }
 
-# squid/bot/help.py:283
+# squid/bot/help.py:285
 bot-help-usable-subcommands =
     { $description }
 
@@ -848,7 +848,7 @@ bot-help-usable-subcommands =
 
     { $more_information }
 
-# squid/bot/help.py:305
+# squid/bot/help.py:307
 bot-help-usable-subcommands-2 =
     { $description }
 
@@ -3460,13 +3460,13 @@ help-administration-setup = Administration & setup
 # squid/bot/help.py:28
 help-build = Build
 
-# squid/bot/help.py:251
+# squid/bot/help.py:253
 help-command-help = Command Help - `{ $name }`
 
-# squid/bot/help.py:292, squid/bot/help.py:314
+# squid/bot/help.py:294, squid/bot/help.py:316
 help-command-help-2 = Command Help
 
-# squid/bot/help.py:321
+# squid/bot/help.py:323
 help-command-lookup-failed = Unable to find command `{ $name }`. Use /help to get a list of available commands.
 
 # squid/bot/help.py:116
@@ -3487,10 +3487,10 @@ help-discover = Discover
 # squid/bot/help.py:127
 help-documentation = Documentation
 
-# squid/bot/help.py:329
+# squid/bot/help.py:331
 help-error = Error.
 
-# squid/bot/help.py:241
+# squid/bot/help.py:243
 help-help = Help
 
 # squid/bot/help.py:38
@@ -3502,10 +3502,10 @@ help-invite = Invite
 # squid/bot/help.py:79
 help-no-commands-are-available = No commands are available.
 
-# squid/bot/help.py:148, squid/bot/help.py:252, squid/bot/help.py:261, squid/bot/help.py:95
+# squid/bot/help.py:148, squid/bot/help.py:254, squid/bot/help.py:263, squid/bot/help.py:95
 help-no-details-provided = No details provided
 
-# squid/bot/help.py:281, squid/bot/help.py:303
+# squid/bot/help.py:283, squid/bot/help.py:305
 help-none = None
 
 # squid/bot/help.py:78
@@ -3520,7 +3520,7 @@ help-source = Source
 # squid/bot/help.py:126
 help-submission-form = Submission form
 
-# squid/bot/help.py:160
+# squid/bot/help.py:161
 help-the-command-to-get-help-for = The command to get help for.
 
 # squid/idempotency/infrastructure/crypto.py:61

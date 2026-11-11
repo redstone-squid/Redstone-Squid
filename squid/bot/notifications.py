@@ -7,7 +7,7 @@ import discord
 
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
-from squid.bot.i18n import command_text
+from squid.bot.i18n import to_locale_str
 from squid.bot.notifications_view import NotificationScreen
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
@@ -47,7 +47,7 @@ class NotificationCog(sd.Cog[Any]):
 
     @sd.command(
         name="notifications",
-        description=command_text(
+        description=to_locale_str(
             tr(t"notifications-channel-preferences = Manage notification channels and subscriptions")
         ),
     )
