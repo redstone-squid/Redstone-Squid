@@ -1400,3 +1400,51 @@ async def test_parent_service_outlives_child_cleanup(fail_child: bool) -> None:
             await runtime.wait_services()
         assert parent.stopped.is_set()
         assert child.service.stopped.is_set()
+
+
+async def test_shared_placements_keep_one_service_until_the_last_removal() -> None:
+    async with running_host() as host:
+        child = OwnedPanel(Recorder())
+
+        class Shared(Component[ComponentsV2Target]):
+            placements: tuple[str, ...] = state(("left", "right"))
+
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                return tuple(child.keyed(key) for key in self.placements)
+
+        root = Shared()
+        runtime = ComponentRuntime(root, execution_host=host)
+        runtime.render()
+        runtime.discard()
+        assert child.service.events == []
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        root.placements = ("right",)
+        runtime.commit(runtime.render())
+        await runtime.wait_services()
+        assert child.service.events == ["activate", "work"]
+        root.placements = ()
+        runtime.render()
+        runtime.discard()
+        assert not child.service.stopped.is_set()
+        runtime.commit(runtime.render())
+        await runtime.wait_services()
+        assert child.service.events == ["activate", "work", "cancel", "cleanup", "unsubscribe"]
+        runtime.finish()
+        await runtime.wait_services()
+
+
+def test_failed_host_validation_releases_discovered_component_claims() -> None:
+    child = OwnedPanel(Recorder())
+
+    class Root(Component[ComponentsV2Target]):
+        @override
+        def render(self) -> DocumentLike[ComponentsV2Target]:
+            return child.keyed("left"), child.keyed("right")
+
+    runtime = ComponentRuntime(Root())
+    with pytest.raises(RuntimeError, match="UIExecutionHost"):
+        runtime.render()
+    assert child._runtime is None
+    runtime.finish()

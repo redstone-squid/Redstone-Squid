@@ -214,6 +214,9 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.observed_bindings.extend(snapshot.async_bindings)
         self.assets.extend(own_assets)
         render_cache[(component, path)] = snapshot
+        # State can move again before delivery. Invalidate speculative placements too.
+        if incremental.component_paths is not None:
+            incremental.component_paths.setdefault(component, set()).add(path)
         return snapshot
 
     def _reuse_subtree(

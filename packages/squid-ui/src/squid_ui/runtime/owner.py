@@ -147,12 +147,17 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         revision. Loading can replace discovery trees while the delivered tree's
         dependencies remain subscribed throughout.
         """
+        if self._staged is not None and self._staged.tree is tree:
+            return self._staged
+        previous_claims = set(self._claimed)
+        try:
+            for component in (*tree.components.values(), *tree.deferred):
+                self.claim(component)
+        except BaseException:
+            self._release_unused_claims(previous_claims)
+            raise
         if self._staged is not None:
-            if self._staged.tree is tree:
-                return self._staged
             self._staged._discard(release=False)
-        for component in (*tree.components.values(), *tree.deferred):
-            self.claim(component)
         self._release_unused_claims(set(self.components.values()) | set(tree.components.values()) | set(tree.deferred))
         self.subscriptions.stage(tree.observations)
         self._staged = RenderCandidate(self, tree, self.revision)
@@ -264,6 +269,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 defer=defer,
                 incremental=self._cache.expansion(),
             )
+            if not terminal:
+                self._validate_execution_host(tree)
         except BaseException:
             retained = set(self.components.values())
             if self._staged is not None:
@@ -271,8 +278,6 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 retained.update(self._staged.tree.deferred)
             self._release_unused_claims(retained)
             raise
-        if not terminal:
-            self._validate_execution_host(tree)
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
         self._cache.rendered()

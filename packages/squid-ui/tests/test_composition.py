@@ -264,3 +264,54 @@ def test_adding_and_removing_alias_placements_does_not_restart_lifecycle() -> No
     _commit(runtime)
     assert child.events == ["mount", "unmount"]
     assert child._runtime is None
+
+
+def test_new_placement_observes_shared_state_written_by_a_mount_hook() -> None:
+    child = Counter()
+    parent = Parent(child.keyed("first"))
+    runtime = ComponentRuntime(parent)
+    _commit(runtime)
+
+    class Writer(Parent):
+        @override
+        def on_mount(self) -> None:
+            child.value = 9
+
+    parent.children = (child.keyed("first"), child.keyed("second"), Writer())
+    _commit(runtime)
+    assert runtime.dirty
+    updated = runtime.render(reuse_committed=True)
+    assert texts(updated.nodes) == ["9", "9"]
+    runtime.commit(updated)
+    runtime.finish()
+
+
+def test_state_changes_reach_placements_in_a_superseded_candidate() -> None:
+    child = Counter()
+    parent = Parent(child.keyed("one"))
+    runtime = ComponentRuntime(parent)
+    _commit(runtime)
+    parent.children = (child.keyed("one"), child.keyed("two"))
+    runtime.render(reuse_committed=True)
+    child.value = 4
+    replacement = runtime.render(reuse_committed=True)
+    assert texts(replacement.nodes) == ["4", "4"]
+    runtime.commit(replacement)
+    runtime.finish()
+
+
+def test_failed_stage_preserves_previous_candidate_and_releases_new_claims() -> None:
+    existing, available, foreign = Counter(), Counter(), Counter()
+    runtime = ComponentRuntime(Parent(existing))
+    candidate = runtime.stage(runtime.render())
+    other = ComponentRuntime(Parent(foreign))
+    _commit(other)
+    prospective = render_component_tree(Parent(available, foreign))
+    with pytest.raises(ui.LayoutInvariantError, match="multiple runtimes"):
+        runtime.stage(prospective)
+    assert available._runtime is None
+    assert foreign._runtime is other
+    candidate.commit()
+    assert existing.events == ["mount"]
+    runtime.finish()
+    other.finish()
