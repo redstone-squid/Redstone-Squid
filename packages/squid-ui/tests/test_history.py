@@ -692,3 +692,45 @@ def test_readonly_action_cannot_record_history() -> None:
     with readonly_transaction(), pytest.raises(ReactiveWriteError, match="nothing to record"):
         subject.history.record("read")
     assert not subject.history.entries
+
+
+async def test_saved_operation_redoes_actual_inverse_without_restoring_ui_state() -> None:
+    values = [2]
+
+    class Operation:
+        def __init__(self, target: int) -> None:
+            self.target = target
+
+        async def reverse(self) -> Operation:
+            previous = values[0]
+            values[0] = self.target
+            return Operation(previous)
+
+    subject, _ = panel()
+    with transaction():
+        subject.page = 3
+        subject.history.record_operation("Save", Operation(1))
+    assert (await subject.history.undo()).applied
+    assert values == [1]
+    assert subject.page == 3
+    assert (await subject.history.redo()).applied
+    assert values == [2]
+    assert (await subject.history.undo()).applied
+    assert values == [1]
+
+
+async def test_uncertain_saved_operation_is_not_retried() -> None:
+    calls = []
+
+    class Operation:
+        async def reverse(self) -> Operation:
+            calls.append("committed")
+            raise RuntimeError("connection lost after commit")
+
+    stack = History()
+    with transaction():
+        stack.record_operation("Save", Operation())
+    result = await stack.undo()
+    assert result.status is HistoryResultStatus.NEEDS_RECONCILIATION
+    assert await stack.undo() is result
+    assert calls == ["committed"]

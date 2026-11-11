@@ -68,6 +68,17 @@ from squid_ui.text import TextLike, source_text
 logger = logging.getLogger(__name__)
 
 
+class ReversibleOperation(Protocol):
+    """A committed external change that can reverse itself.
+
+    Implementations authorize and conditionally write in one domain transaction.
+    Return the inverse of the actual committed reversal. Raise ReactiveConflictError
+    only when no write occurred; other exceptions leave the outcome uncertain.
+    """
+
+    async def reverse(self) -> ReversibleOperation: ...
+
+
 class HistoryError(SquidUiError, RuntimeError):
     """A history operation could not be honoured or was already reserved by this action."""
 
@@ -445,6 +456,7 @@ class HistoryEntry:
     original_commit: ActionCommit | None = None
     compensation_execution: CompensationExecution | None = None
     retentions: tuple[object, ...] = ()
+    operation: ReversibleOperation | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -514,6 +526,7 @@ class History:
             message = "a history needs room for at least one entry"
             raise ValueError(message)
         self._signal = Signal()
+        self._operation_lock = asyncio.Lock()
         self.limit = limit
         self._undone: list[HistoryEntry] = []
         self._redoable: list[HistoryEntry] = []
@@ -586,7 +599,55 @@ class History:
 
         self._reserve(committed)
 
+    def record_operation(self, label: TextLike, operation: ReversibleOperation) -> None:
+        """Record a saved change without capturing incidental UI state.
+
+        Call in the action that successfully saved the change. The operation owns
+        authorization, concurrency checks, and its inverse receipt.
+        """
+        self._reserve(
+            lambda commit: self._push(HistoryEntry(label, commit.context.action_id, UndoPlan(()), operation=operation))
+        )
+
+    async def _reverse_operation(self, entry: HistoryEntry, *, redo: bool) -> HistoryResult:
+        assert entry.operation is not None
+        if entry.state is HistoryEntryState.NEEDS_RECONCILIATION:
+            assert entry.last_result is not None
+            return entry.last_result
+        entry.state = HistoryEntryState.REAPPLYING if redo else HistoryEntryState.REVERSING
+        try:
+            inverse = await entry.operation.reverse()
+        except ReactiveConflictError as error:
+            entry.state = HistoryEntryState.CONFLICTED
+            result = HistoryResult(HistoryResultStatus.CONFLICT, entry, conflict=error.detail, error=error)
+        except BaseException as error:
+            # An external commit may have succeeded before transport failure or cancellation.
+            # Retain the receipt but forbid automatic retries until reconciled by the caller.
+            entry.state = HistoryEntryState.NEEDS_RECONCILIATION
+            entry.last_result = HistoryResult(
+                HistoryResultStatus.NEEDS_RECONCILIATION, entry, error=error if isinstance(error, Exception) else None
+            )
+            self._signal.notify()
+            if not isinstance(error, Exception):
+                raise
+            return entry.last_result
+        else:
+            entry.operation = inverse
+            source, destination = (self._redoable, self._undone) if redo else (self._undone, self._redoable)
+            self._remove_identity(source, entry)
+            destination.append(entry)
+            entry.state = HistoryEntryState.READY if redo else HistoryEntryState.UNDONE
+            result = HistoryResult(HistoryResultStatus.APPLIED, entry)
+        entry.last_result = result
+        self._signal.notify()
+        return result
+
     async def undo(self, action_id: ActionId | None = None) -> UndoResult:
+        """Serialize reversals, including asynchronous external operations."""
+        async with self._operation_lock:
+            return await self._undo(action_id)
+
+    async def _undo(self, action_id: ActionId | None = None) -> UndoResult:
         """Reverse the latest retained action, or the one with the supplied original action ID.
 
         Return EMPTY when absent. Conflicts leave transactional state unchanged; compensation
@@ -597,6 +658,8 @@ class History:
             return HistoryResult(HistoryResultStatus.EMPTY)
         if entry.state is HistoryEntryState.NEEDS_RECONCILIATION and entry.last_result is not None:
             return entry.last_result
+        if entry.operation is not None:
+            return await self._reverse_operation(entry, redo=False)
         if entry.compensation is not None:
             return await self._compensate(entry)
         return self._undo_state(entry)
@@ -807,12 +870,19 @@ class History:
         return result
 
     async def redo(self) -> RedoResult:
+        """Serialize redo with other reversals on this stack."""
+        async with self._operation_lock:
+            return await self._redo()
+
+    async def _redo(self) -> RedoResult:
         """Restore the latest undone action by reversing the changes made by its undo.
 
         The redo plan uses versions captured during undo, so it checks changes made
         since then rather than comparing against the original action's old versions.
         """
         entry = self._select(self._redoable, None)
+        if entry is not None and entry.operation is not None:
+            return await self._reverse_operation(entry, redo=True)
         if entry is None or entry.redo_plan is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
         previous = entry.state
@@ -1048,6 +1118,7 @@ __all__ = [
     "HistorySnapshot",
     "MemoryCompensationOutbox",
     "RedoResult",
+    "ReversibleOperation",
     "TransactionalCompensationOutbox",
     "UndoPlan",
     "UndoResult",
