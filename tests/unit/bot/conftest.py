@@ -1,6 +1,7 @@
 """Application UI tests run standalone panels under a supervised service host."""
 
 import inspect
+from collections.abc import Iterator
 from functools import wraps
 from typing import Any
 
@@ -45,3 +46,20 @@ def _host_standalone_roots(request: pytest.FixtureRequest, monkeypatch: pytest.M
 
     monkeypatch.setattr(MessageRoot, "__init__", initialize)
     monkeypatch.setattr(request.node, "obj", hosted)
+
+
+@pytest.fixture(autouse=True)
+def _fail_on_missed_redraws(caplog: pytest.LogCaptureFixture) -> Iterator[None]:
+    """Fail a test in which a message changed from outside but could not redraw.
+
+    MessageRoot logs this when a screen without live_updates is invalidated by anything but its
+    own interactions; in production the change would stay invisible until the next press.
+    """
+    yield
+    missed = [
+        record.getMessage()
+        for phase in ("setup", "call")
+        for record in caplog.get_records(phase)
+        if getattr(record, "squid_unscheduled_change", False)
+    ]
+    assert not missed, "\n".join(missed)
