@@ -23,8 +23,9 @@ from squid.notifications.application import NotificationEditorSnapshot
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.domain import Subject
-from squid_ui.testing import RecordingResponder, choose, labels, press, submit
+from squid_ui.testing import RecordingResponder, choose, labels, press, render_tree, submit
 from squid_ui_discord import SessionSpec
+from squid_ui_discord.testing import stage
 from tests.support.notification_edits import NotificationEditRecorder
 
 
@@ -151,7 +152,7 @@ async def test_screen_offers_all_follow_workflows() -> None:
     screen = make_screen().screen
     await screen.on_load()
 
-    rendered = screen.render()
+    rendered = render_tree(screen)
 
     assert isinstance(NotificationScreen.__response_spec__.session, SessionSpec)
     assert NotificationScreen.__response_spec__.session.name == "notifications"
@@ -167,7 +168,7 @@ async def test_following_a_creator_refreshes_the_subscription_browser() -> None:
     responder = RecordingResponder()
 
     with sl.runtime.transaction():
-        await submit(screen, "follow-creator", {"creator": str(creator)}, responder=responder)
+        await submit(screen, "subscriptions.follow-creator", {"creator": str(creator)}, responder=responder)
 
     assert harness.notifications.subscribe_calls == [SubscribeCall(7, SubscriptionKind.CREATOR, creator, None)]
     assert harness.notifications.subscription_reads == 2
@@ -183,7 +184,7 @@ async def test_following_a_record_filter_uses_typed_tag_input() -> None:
     with sl.runtime.transaction():
         await submit(
             screen,
-            "follow-filter",
+            "subscriptions.follow-filter",
             {
                 "build_kind": "door",
                 "base_title": None,
@@ -213,7 +214,7 @@ async def test_empty_record_filter_does_not_call_the_service() -> None:
     with sl.runtime.transaction():
         await submit(
             screen,
-            "follow-filter",
+            "subscriptions.follow-filter",
             {
                 "build_kind": None,
                 "base_title": None,
@@ -234,12 +235,12 @@ async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() ->
     screen = harness.screen
     await screen.on_load()
 
-    await choose(screen, "inbox", "3")
+    await choose(screen, "inbox.inbox", "3")
     with sl.runtime.transaction():
-        await press(screen, "mark_selected_read")
-    await choose(screen, "inbox", "3")
+        await press(screen, "inbox.mark_selected_read")
+    await choose(screen, "inbox.inbox", "3")
     with sl.runtime.transaction():
-        await press(screen, "mark_selected_unread")
+        await press(screen, "inbox.mark_selected_unread")
 
     assert harness.notifications.inbox_reads == [visibility, visibility, visibility]
     assert harness.notifications.read_changes == [(7, 3, True, visibility), (7, 3, False, visibility)]
@@ -258,8 +259,23 @@ async def test_inbox_refresh_rechecks_staff_visibility() -> None:
     screen = harness.screen
     await screen.on_load()
 
-    await choose(screen, "inbox", "3")
+    await choose(screen, "inbox.inbox", "3")
     with sl.runtime.transaction():
-        await press(screen, "mark_selected_read")
+        await press(screen, "inbox.mark_selected_read")
 
     assert harness.notifications.inbox_reads[-1] == refreshed
+
+
+async def test_mounted_inbox_updates_summary_and_uses_shared_undo() -> None:
+    harness = make_screen()
+    async with stage(harness.screen, owner=object()) as ui:
+        await ui.select("inbox.inbox", ["3"])
+        await ui.press("inbox.mark_selected_read")
+        assert harness.screen.inbox.unread_count == 0
+        assert harness.screen.inbox.selected_inbox_ids == ("3",)
+        assert harness.screen.subscriptions.selected_ids == ()
+
+        await ui.press("edit-undo")
+        assert harness.screen.inbox.unread_count == 1
+        ui.control("subscriptions.follow-creator")
+        ui.control("preferences.web")

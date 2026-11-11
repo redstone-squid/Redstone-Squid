@@ -51,20 +51,10 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
 
 
 class NotificationScreen(sd.Screen):
-    """A notification workspace that ends when replaced or timed out."""
+    """Compose notification workflows with one revision-aware edit history."""
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("notifications"))
-
     history: sl.runtime.History = sl.runtime.history(limit=20)
-
-    _visibility: InboxVisibility = sl.state(DEFAULT_INBOX_VISIBILITY, persist=False)
-
-    selected_ids: tuple[str, ...] = sl.state(())
-    selected_inbox_ids: tuple[str, ...] = sl.state(())
-    # Reload service data on mount instead of restoring it from a snapshot.
-    _preferences: NotificationPreferences | None = sl.state(None, persist=False)
-    _subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
-    _inbox: tuple[InboxNotification, ...] = sl.state((), persist=False)
 
     def __init__(
         self,
@@ -77,78 +67,156 @@ class NotificationScreen(sd.Screen):
         visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
         visibility_resolver: VisibilityResolver | None = None,
     ) -> None:
-        self._notifications = notifications
-        self._account_id = account_id
-        self._author_id = author_id
-        self._visibility = visibility
-        self._visibility_resolver = visibility_resolver
+        self.settings = NotificationSettings(notifications, account_id)
         self.edits = EditController(edits, actor, self._refresh, history=self.history)
+        self.preferences = NotificationPreferencesControls(self.settings, self.edits)
+        self.subscriptions = NotificationSubscriptions(self.settings, self.edits)
+        self.inbox = NotificationInbox(notifications, account_id, self.edits, visibility, visibility_resolver)
 
     @override
     async def on_load(self) -> None:
         await self._refresh()
 
-    async def _refresh(self, event: sd.ActionEvent | None = None) -> None:
-        """Reload preferences, subscriptions, and the first visible inbox page.
-
-        Recheck inbox visibility and remove selections no longer displayed.
-        """
-        await self._resolve_visibility()
-        snapshot = await self._notifications.editor_snapshot(self._account_id)
-        self._preferences = snapshot.preferences
-        self._subscriptions = snapshot.subscriptions
-        self._inbox = tuple(
-            (
-                await self._notifications.inbox(
-                    self._account_id,
-                    page_size=MAX_LISTED,
-                    visibility=self._visibility,
-                )
-            ).items
-        )
-        self.selected_ids = tuple(
-            selected for selected in self.selected_ids if any(str(item.id) == selected for item in self.subscriptions)
-        )
-        self.selected_inbox_ids = tuple(
-            selected for selected in self.selected_inbox_ids if any(str(item.id) == selected for item in self._inbox)
-        )
-
-    @property
-    def web_enabled(self) -> bool:
-        return self._preferences is not None and self._preferences.web_enabled
-
-    @property
-    def dm_enabled(self) -> bool:
-        return self._preferences is not None and self._preferences.dm_enabled
-
-    @property
-    def subscriptions(self) -> tuple[NotificationSubscription, ...]:
-        return self._subscriptions[:MAX_LISTED]
+    async def _refresh(self) -> None:
+        # Preferences and subscriptions share a revision; undo and redo refresh both.
+        await self.settings.refresh()
+        self.subscriptions.reconcile_selection()
+        await self.inbox.refresh()
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         on, off = tr(t"bot-notifications-view-on = On"), tr(t"bot-notifications-view-off = Off")
         fields = (
-            sl.field(tr(t"bot-notifications-view-web-inbox = Web inbox"), on if self.web_enabled else off),
-            sl.field(tr(t"bot-notifications-view-discord-dms = Discord DMs"), on if self.dm_enabled else off),
-            sl.field(tr(t"bot-notifications-view-following = Following"), self._subscription_list()),
+            sl.field(tr(t"bot-notifications-view-web-inbox = Web inbox"), on if self.preferences.web_enabled else off),
             sl.field(
-                tr(t"bot-notifications-view-unread = Unread"), str(sum(item.read_at is None for item in self._inbox))
+                tr(t"bot-notifications-view-discord-dms = Discord DMs"), on if self.preferences.dm_enabled else off
             ),
+            sl.field(tr(t"bot-notifications-view-following = Following"), self.subscriptions.summary()),
+            sl.field(tr(t"bot-notifications-view-unread = Unread"), str(self.inbox.unread_count)),
         )
         description = tr(
             t"notifications-channel-and-follow-help = Toggle where "
             t"notifications arrive, and unfollow what you no longer want."
         )
-        suspension_note = self._suspension_note()
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+        suspension_note = self.preferences.suspension_note()
+        return (
             sl.section(
                 sl.heading(tr(t"bot-notifications-view-notifications = Notifications")),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(*fields),
                 suspension_note and sl.note(suspension_note),
+            ),
+            self.boundary(self.preferences, key="preferences"),
+            self.boundary(self.subscriptions, key="subscriptions"),
+            self.boundary(self.inbox, key="inbox"),
+            *self.edits.controls(),
+        )
+
+
+class NotificationSettings(sl.Reactive):
+    """The preferences and subscriptions snapshot sharing one persisted revision."""
+
+    preferences: NotificationPreferences | None = sl.state(None, persist=False)
+    subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
+
+    def __init__(self, notifications: NotificationService, account_id: int) -> None:
+        self._notifications = notifications
+        self._account_id = account_id
+
+    async def refresh(self) -> None:
+        snapshot = await self._notifications.editor_snapshot(self._account_id)
+        self.preferences = snapshot.preferences
+        self.subscriptions = snapshot.subscriptions
+
+    async def save(self, edits: EditController, kind: str, values: EditValues, label: sl.TextLike) -> None:
+        revision = 0 if self.preferences is None else self.preferences.revision
+        await edits.execute(
+            EditCommand(kind, (Revision(notification_target(self._account_id), revision),), values), label
+        )
+
+
+class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    """Edit delivery preferences using the shared settings revision."""
+
+    def __init__(self, settings: NotificationSettings, edits: EditController) -> None:
+        self._settings = settings
+        self.edits = edits
+
+    @property
+    def web_enabled(self) -> bool:
+        return self._settings.preferences is not None and self._settings.preferences.web_enabled
+
+    @property
+    def dm_enabled(self) -> bool:
+        return self._settings.preferences is not None and self._settings.preferences.dm_enabled
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        nodes.extend(
+            (
+                sl.toggle(
+                    tr(t"bot-notifications-view-web-inbox = Web inbox"),
+                    key="web",
+                    on=sl.controlled(self.web_enabled, self._toggle_web),
+                    tone=sl.Tone.SUCCESS if self.web_enabled else sl.Tone.NEUTRAL,
+                ),
+                sl.toggle(
+                    tr(t"bot-notifications-view-discord-dms = Discord DMs"),
+                    key="dm",
+                    on=sl.controlled(self.dm_enabled, self._toggle_dm),
+                    tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
+                ),
             )
-        ]
+        )
+        return tuple(nodes)
+
+    async def _toggle_web(self, event: sd.ToggleEvent) -> None:
+        await event.acknowledge()
+        await self._save_preferences((event.value, self.dm_enabled))
+
+    async def _toggle_dm(self, event: sd.ToggleEvent) -> None:
+        await event.acknowledge()
+        await self._save_preferences((self.web_enabled, event.value))
+
+    async def _save_preferences(self, after: tuple[bool, bool]) -> None:
+        await self._settings.save(
+            self.edits,
+            PREFERENCES_EDIT,
+            EditValues.of({"web_enabled": after[0], "dm_enabled": after[1]}),
+            tr(t"notification-history-preferences = Change notification preferences"),
+        )
+
+    def suspension_note(self) -> sl.TextLike | None:
+        if self._settings.preferences is None or self._settings.preferences.dm_suspended_at is None:
+            return None
+        return tr(
+            t"notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are "
+            t"suspended until you re-enable them."
+        )
+
+
+class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    """Own follow forms and the selection of subscriptions to remove."""
+
+    selected_ids: tuple[str, ...] = sl.state(())
+
+    def __init__(self, settings: NotificationSettings, edits: EditController) -> None:
+        self._settings = settings
+        self.edits = edits
+
+    def reconcile_selection(self) -> None:
+        self.selected_ids = tuple(
+            selected for selected in self.selected_ids if any(str(item.id) == selected for item in self.subscriptions)
+        )
+
+    @property
+    def subscriptions(self) -> tuple[NotificationSubscription, ...]:
+        return self._settings.subscriptions[:MAX_LISTED]
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self.subscriptions:
             nodes.append(
                 sl.choices(
@@ -166,41 +234,6 @@ class NotificationScreen(sd.Screen):
                     maximum=len(self.subscriptions),
                 )
             )
-        if self._inbox:
-            nodes.append(
-                sl.choices(
-                    *(
-                        sl.choice(
-                            self._inbox_label(notification),
-                            key=str(notification.id),
-                            description=tr(t"bot-notifications-view-unread = Unread")
-                            if notification.read_at is None
-                            else tr(t"bot-notifications-view-read = Read"),
-                        )
-                        for notification in self._inbox
-                    ),
-                    key="inbox",
-                    selection=sl.controlled(self.selected_inbox_ids, self._inbox_selection_changed),
-                    minimum=0,
-                    maximum=len(self._inbox),
-                )
-            )
-        nodes.extend(
-            (
-                sl.toggle(
-                    tr(t"bot-notifications-view-web-inbox = Web inbox"),
-                    key="web",
-                    on=sl.controlled(self.web_enabled, self._toggle_web),
-                    tone=sl.Tone.SUCCESS if self.web_enabled else sl.Tone.NEUTRAL,
-                ),
-                sl.toggle(
-                    tr(t"bot-notifications-view-discord-dms = Discord DMs"),
-                    key="dm",
-                    on=sl.controlled(self.dm_enabled, self._toggle_dm),
-                    tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
-                ),
-            )
-        )
         nodes.extend(
             (
                 sl.form(
@@ -250,75 +283,19 @@ class NotificationScreen(sd.Screen):
                     tone=sl.Tone.DANGER,
                     available=bool(self.selected_ids),
                 ),
-                sl.action_control(
-                    tr(t"bot-notifications-view-mark-selected-read = Mark selected read"),
-                    self._mark_selected_read,
-                    key="mark_selected_read",
-                    available=bool(self.selected_inbox_ids),
-                ),
-                sl.action_control(
-                    tr(t"bot-notifications-view-mark-selected-unread = Mark selected unread"),
-                    self._mark_selected_unread,
-                    key="mark_selected_unread",
-                    available=bool(self.selected_inbox_ids),
-                ),
-                key="notification-actions",
+                key="subscription-actions",
             )
         )
-        nodes.extend(self.edits.controls())
         return tuple(nodes)
 
     async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
         self.selected_ids = event.selected
 
-    async def _inbox_selection_changed(self, event: sd.ChoiceEvent) -> None:
-        self.selected_inbox_ids = event.selected
-
-    async def _mark_selected_read(self, event: sd.PressEvent) -> None:
-        await self._set_selected_read_state(event, read=True)
-
-    async def _mark_selected_unread(self, event: sd.PressEvent) -> None:
-        await self._set_selected_read_state(event, read=False)
-
-    async def _set_selected_read_state(self, event: sd.PressEvent, *, read: bool) -> None:
-        await event.acknowledge()
-        rows = tuple(row for row in self._inbox if str(row.id) in self.selected_inbox_ids)
-        if not rows:
-            return
-        await self.edits.execute(
-            EditCommand(
-                INBOX_EDIT,
-                tuple(Revision(inbox_target(row.id), row.revision) for row in rows),
-                EditValues.of({"states": {str(row.id): read for row in rows}}),
-            ),
-            tr(t"notification-history-read = Change read state"),
-        )
-
-    async def _save_settings(self, kind: str, values: EditValues, label: sl.TextLike) -> None:
-        revision = 0 if self._preferences is None else self._preferences.revision
-        await self.edits.execute(
-            EditCommand(kind, (Revision(notification_target(self._account_id), revision),), values), label
-        )
-
-    async def _toggle_web(self, event: sd.ToggleEvent) -> None:
-        await event.acknowledge()
-        await self._save_preferences((event.value, self.dm_enabled))
-
-    async def _toggle_dm(self, event: sd.ToggleEvent) -> None:
-        await event.acknowledge()
-        await self._save_preferences((self.web_enabled, event.value))
-
-    async def _save_preferences(self, after: tuple[bool, bool]) -> None:
-        await self._save_settings(
-            PREFERENCES_EDIT,
-            EditValues.of({"web_enabled": after[0], "dm_enabled": after[1]}),
-            tr(t"notification-history-preferences = Change notification preferences"),
-        )
-
     async def _unfollow(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
         if self.selected_ids:
-            await self._save_settings(
+            await self._settings.save(
+                self.edits,
                 SUBSCRIPTIONS_EDIT,
                 EditValues.of({"states": {key: False for key in self.selected_ids}}),
                 tr(t"notification-history-unfollow = Unfollow"),
@@ -331,7 +308,8 @@ class NotificationScreen(sd.Screen):
         subject_id: UUID | None = None,
         record_filter: RecordSubscriptionFilter | None = None,
     ) -> None:
-        await self._save_settings(
+        await self._settings.save(
+            self.edits,
             SUBSCRIPTIONS_EDIT,
             EditValues.of(
                 {
@@ -399,11 +377,6 @@ class NotificationScreen(sd.Screen):
     async def _followed(self, event: sd.SubmitEvent, notice: sl.TextLike) -> None:
         await event.notice(notice)
 
-    async def _resolve_visibility(self) -> InboxVisibility:
-        if self._visibility_resolver is not None:
-            self._visibility = await self._visibility_resolver()
-        return self._visibility
-
     @staticmethod
     def _uuid(value: object) -> UUID | None:
         try:
@@ -454,8 +427,8 @@ class NotificationScreen(sd.Screen):
             ),
         )
 
-    def _subscription_list(self) -> sl.TextLike:
-        if not self._subscriptions:
+    def summary(self) -> sl.TextLike:
+        if not self._settings.subscriptions:
             return tr(t"bot-notifications-view-nothing-yet = _Nothing yet._")
         lines: list[sl.TextLike] = [
             tr(t"""
@@ -465,10 +438,128 @@ class NotificationScreen(sd.Screen):
                 """)  # noqa: F841 - captured Fluent binding
             for subscription in self.subscriptions
         ]
-        hidden = len(self._subscriptions) - len(self.subscriptions)
+        hidden = len(self._settings.subscriptions) - len(self.subscriptions)
         if hidden > 0:
             lines.append(tr(t"bot-notifications-remainder = …and {hidden} more."))
         return sl.text.Message.join("\n", lines)
+
+    def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
+        return _kind_label(subscription.kind)
+
+    def detail(self, subscription: NotificationSubscription) -> str:
+        if subscription.record_filter is not None:
+            return _filter_text(subscription.record_filter)
+        return f"\x60{subscription.subject_id}\x60"
+
+
+class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    """Own visible inbox items, selection, and read-state changes."""
+
+    _visibility: InboxVisibility = sl.state(DEFAULT_INBOX_VISIBILITY, persist=False)
+    selected_inbox_ids: tuple[str, ...] = sl.state(())
+    _inbox: tuple[InboxNotification, ...] = sl.state((), persist=False)
+
+    def __init__(
+        self,
+        notifications: NotificationService,
+        account_id: int,
+        edits: EditController,
+        visibility: InboxVisibility,
+        visibility_resolver: VisibilityResolver | None,
+    ) -> None:
+        self._notifications = notifications
+        self._account_id = account_id
+        self.edits = edits
+        self._visibility = visibility
+        self._visibility_resolver = visibility_resolver
+
+    @property
+    def unread_count(self) -> int:
+        return sum(item.read_at is None for item in self._inbox)
+
+    async def refresh(self) -> None:
+        await self._resolve_visibility()
+        self._inbox = tuple(
+            (
+                await self._notifications.inbox(
+                    self._account_id,
+                    page_size=MAX_LISTED,
+                    visibility=self._visibility,
+                )
+            ).items
+        )
+        self.selected_inbox_ids = tuple(
+            selected for selected in self.selected_inbox_ids if any(str(item.id) == selected for item in self._inbox)
+        )
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        if self._inbox:
+            nodes.append(
+                sl.choices(
+                    *(
+                        sl.choice(
+                            self._inbox_label(notification),
+                            key=str(notification.id),
+                            description=tr(t"bot-notifications-view-unread = Unread")
+                            if notification.read_at is None
+                            else tr(t"bot-notifications-view-read = Read"),
+                        )
+                        for notification in self._inbox
+                    ),
+                    key="inbox",
+                    selection=sl.controlled(self.selected_inbox_ids, self._inbox_selection_changed),
+                    minimum=0,
+                    maximum=len(self._inbox),
+                )
+            )
+        nodes.append(
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"bot-notifications-view-mark-selected-read = Mark selected read"),
+                    self._mark_selected_read,
+                    key="mark_selected_read",
+                    available=bool(self.selected_inbox_ids),
+                ),
+                sl.action_control(
+                    tr(t"bot-notifications-view-mark-selected-unread = Mark selected unread"),
+                    self._mark_selected_unread,
+                    key="mark_selected_unread",
+                    available=bool(self.selected_inbox_ids),
+                ),
+                key="inbox-actions",
+            )
+        )
+        return tuple(nodes)
+
+    async def _inbox_selection_changed(self, event: sd.ChoiceEvent) -> None:
+        self.selected_inbox_ids = event.selected
+
+    async def _mark_selected_read(self, event: sd.PressEvent) -> None:
+        await self._set_selected_read_state(event, read=True)
+
+    async def _mark_selected_unread(self, event: sd.PressEvent) -> None:
+        await self._set_selected_read_state(event, read=False)
+
+    async def _set_selected_read_state(self, event: sd.PressEvent, *, read: bool) -> None:
+        await event.acknowledge()
+        rows = tuple(row for row in self._inbox if str(row.id) in self.selected_inbox_ids)
+        if not rows:
+            return
+        await self.edits.execute(
+            EditCommand(
+                INBOX_EDIT,
+                tuple(Revision(inbox_target(row.id), row.revision) for row in rows),
+                EditValues.of({"states": {str(row.id): read for row in rows}}),
+            ),
+            tr(t"notification-history-read = Change read state"),
+        )
+
+    async def _resolve_visibility(self) -> InboxVisibility:
+        if self._visibility_resolver is not None:
+            self._visibility = await self._visibility_resolver()
+        return self._visibility
 
     @staticmethod
     def _inbox_label(notification: InboxNotification) -> sl.TextLike:
@@ -487,22 +578,6 @@ class NotificationScreen(sd.Screen):
             # kind added to the enum later renders as instead of falling off the end.
             case _:  # pyright: ignore[reportUnnecessaryComparison]
                 return tr(t"bot-notifications-view-build-notification = Build notification")
-
-    def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
-        return _kind_label(subscription.kind)
-
-    def detail(self, subscription: NotificationSubscription) -> str:
-        if subscription.record_filter is not None:
-            return _filter_text(subscription.record_filter)
-        return f"\x60{subscription.subject_id}\x60"
-
-    def _suspension_note(self) -> sl.TextLike | None:
-        if self._preferences is None or self._preferences.dm_suspended_at is None:
-            return None
-        return tr(
-            t"notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are "
-            t"suspended until you re-enable them."
-        )
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:
