@@ -22,16 +22,26 @@ class _Execution[StatusT]:
 
     The owner supplies the final status even when loading is interrupted. It may
     cancel completion explicitly when cancellation is a terminal outcome.
+    Observers can wait before an owner calls run; waiting never starts work.
     """
 
     def __init__(self) -> None:
         self.completion: Completion[StatusT] = Completion()
         self._started = False
 
+    @property
+    def done(self) -> bool:
+        """Whether execution and its cleanup have finished."""
+        return self.completion.done
+
+    async def wait(self) -> StatusT:
+        """Observe completion without starting work or owning its cancellation."""
+        return await self.completion.wait()
+
     async def run(self, loader: Callable[[], Awaitable[StatusT]], status: Callable[[], StatusT]) -> StatusT:
         if self._started:
-            if not self.completion.done:
-                await self.completion.wait()
+            if not self.done:
+                await self.wait()
             return status()
         self._started = True
         try:
