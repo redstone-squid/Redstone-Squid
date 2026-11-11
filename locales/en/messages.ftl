@@ -2348,6 +2348,24 @@ command-build-name = build
 # squid/bot/command_texts.py:41
 command-build-submit-build-size-name = build_size
 
+# squid/bot/command_texts.py:47
+command-build-submit-category-name = category
+
+# squid/bot/command_texts.py:34
+command-build-submit-choice-category-door = Door
+
+# squid/bot/command_texts.py:35
+command-build-submit-choice-category-entrance = Entrance
+
+# squid/bot/command_texts.py:36
+command-build-submit-choice-category-extender = Extender
+
+# squid/bot/command_texts.py:37
+command-build-submit-choice-category-other = Other
+
+# squid/bot/command_texts.py:38
+command-build-submit-choice-category-utility = Utility
+
 # squid/bot/command_texts.py:34
 command-build-submit-choice-door-type-door = Door
 
@@ -2386,6 +2404,9 @@ command-build-submit-help = Submit a build. Every option is optional; fill in th
 
 # squid/bot/command_texts.py:40
 command-build-submit-name = submit
+
+# squid/bot/command_texts.py:56
+command-build-submit-name-name = name
 
 # squid/bot/command_texts.py:50
 command-build-submit-patterns-name = patterns
@@ -2728,6 +2749,12 @@ command-runtime-settings-help = View or change global runtime settings
 
 # squid/bot/command_texts.py:206
 command-runtime-settings-name = runtime-settings
+
+# squid/bot/command_texts.py:214
+command-runtime-settings-revision-help = …
+
+# squid/bot/command_texts.py:215
+command-runtime-settings-revision-name = revision
 
 # squid/bot/command_texts.py:207
 command-runtime-settings-setting-help = …
