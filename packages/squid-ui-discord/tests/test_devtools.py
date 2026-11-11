@@ -56,6 +56,7 @@ class FakeBot:
 class DevContext(ContextHarness):
     def __init__(self, *, bot: FakeBot | None = None) -> None:
         super().__init__(message=message_harness(), bot=FakeBot() if bot is None else bot, user_id=1)
+        squid_ui_discord.install(cast(Any, self.bot))
         self.send_help = AsyncCallRecorder()
 
 
@@ -72,7 +73,7 @@ class TestGate:
     async def test_owner_only_is_the_default(self) -> None:
         allowed = make_context(bot=FakeBot(owner=True))
         refused = make_context(bot=FakeBot(owner=False))
-        cog = DevTools()
+        cog = DevTools(allowed.bot)
 
         assert await cog.cog_check(allowed)
         assert not await cog.cog_check(refused)
@@ -81,7 +82,7 @@ class TestGate:
         check = AsyncCallRecorder(result=True)
         ctx = make_context()
 
-        assert await DevTools(check).cog_check(ctx)
+        assert await DevTools(ctx.bot, check).cog_check(ctx)
         check.assert_awaited_once_with(ctx)
 
 
@@ -100,7 +101,7 @@ class TestMountCommands:
 
     async def test_list_opens_an_inspector_owned_by_the_caller(self) -> None:
         ctx = make_context()
-        cog = DevTools()
+        cog = DevTools(ctx.bot)
 
         await run(cog.list_roots, cog, ctx)
 
@@ -112,7 +113,7 @@ class TestMountCommands:
         subject = MessageRoot(Subject(), access=Everyone())
         await subject.send(delivered_to(message_harness()))
         ctx = make_context()
-        cog = DevTools()
+        cog = DevTools(ctx.bot)
 
         await run(getattr(cog, command), cog, ctx, subject.id)
 
@@ -123,7 +124,7 @@ class TestMountCommands:
         subject = MessageRoot(Subject(), access=Everyone())
         await subject.send(delivered_to(message_harness()))
         ctx = make_context()
-        cog = DevTools()
+        cog = DevTools(ctx.bot)
 
         await run(cog.dump_scene, cog, ctx, subject.id)
 
@@ -133,7 +134,7 @@ class TestMountCommands:
 
     async def test_an_unknown_message_root_is_explained(self) -> None:
         ctx = make_context()
-        cog = DevTools()
+        cog = DevTools(ctx.bot)
 
         await run(cog.dump_metrics, cog, ctx, "missing")
 
@@ -145,7 +146,7 @@ class TestMountCommands:
             with transaction():
                 pass
             ctx = make_context()
-            cog = DevTools(action_ledger=ledger)
+            cog = DevTools(ctx.bot, action_ledger=ledger)
 
             await run(cog.inspect_actions, cog, ctx)
 
@@ -157,7 +158,7 @@ class TestMountCommands:
         ledger = EventLedger()
         ledger.accept(OperationEventSnapshot("execution-1", None, None, "publish", "succeeded", datetime.now(UTC)))
         ctx = make_context()
-        cog = DevTools(action_ledger=ledger)
+        cog = DevTools(ctx.bot, action_ledger=ledger)
 
         await run(cog.inspect_actions, cog, ctx)
 
@@ -176,7 +177,7 @@ class TestRoutes:
         router.add("panel:close", close)
         router.register(bot)  # type: ignore[arg-type]
         ctx = make_context(bot=bot)
-        cog = DevTools()
+        cog = DevTools(ctx.bot)
 
         await run(cog.list_routes, cog, ctx)
 
@@ -188,7 +189,7 @@ class TestRoutes:
 class TestProfiles:
     async def test_profile_health_is_explicit(self) -> None:
         ctx = make_context()
-        cog = DevTools(profiler=MemoryProfiler())
+        cog = DevTools(ctx.bot, profiler=MemoryProfiler())
 
         await run(cog.inspect_profile, cog, ctx)
 
@@ -200,7 +201,7 @@ class TestProfiles:
         with profiler.operation(OperationKind.DISPATCH, name="save"):
             pass
         ctx = make_context()
-        cog = DevTools(profiler=profiler)
+        cog = DevTools(ctx.bot, profiler=profiler)
 
         await run(cog.inspect_profile, cog, ctx)
 
@@ -218,7 +219,7 @@ class TestProfiles:
             "planner.states_explored",
         }
         ctx = make_context()
-        cog = DevTools(profiler=profiler)
+        cog = DevTools(ctx.bot, profiler=profiler)
 
         await run(cog.inspect_profile, cog, ctx, subject.id)
 
@@ -236,7 +237,7 @@ class TestProfiles:
         await first.dispatch("bump", interaction_harness(user_id=11))
         await second.dispatch("bump", interaction_harness(user_id=22))
         ctx = make_context()
-        cog = DevTools(profiler=profiler)
+        cog = DevTools(ctx.bot, profiler=profiler)
 
         await run(cog.inspect_timeline, cog, ctx)
 
@@ -255,7 +256,7 @@ class TestProfiles:
         await message_root.dispatch("bump", interaction_harness(user_id=11))
         await message_root.dispatch("bump", interaction_harness(user_id=22))
         ctx = make_context()
-        cog = DevTools(profiler=profiler)
+        cog = DevTools(ctx.bot, profiler=profiler)
 
         await run(cog.inspect_timeline, cog, ctx, 20, "actor:11")
 
@@ -265,7 +266,7 @@ class TestProfiles:
 
     async def test_timeline_refuses_an_unreadable_filter(self) -> None:
         ctx = make_context()
-        cog = DevTools(profiler=MemoryProfiler())
+        cog = DevTools(ctx.bot, profiler=MemoryProfiler())
 
         await run(cog.inspect_timeline, cog, ctx, 20, "user=11")
 
@@ -283,7 +284,7 @@ class TestProfiles:
         bus.subscribe(sl.runtime.Topic("build", "devtools"), refresh)
         bus.publish(sl.runtime.Topic("build", "devtools"))
         ctx = make_context()
-        cog = DevTools(scheduler=scheduler)
+        cog = DevTools(ctx.bot, scheduler=scheduler)
 
         await run(cog.inspect_queues, cog, ctx)
 
@@ -302,7 +303,7 @@ class TestProfiles:
         with profiler.operation(OperationKind.SEND, name="panel"):
             pass
         ctx = make_context()
-        cog = DevTools(profiler=profiler)
+        cog = DevTools(ctx.bot, profiler=profiler)
 
         await run(cog.export_ui, cog, ctx)
 

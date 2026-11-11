@@ -32,6 +32,9 @@ from squid_ui.profiling import AttributeValue, OperationAggregate, OperationKind
 from squid_ui.runtime.histories import HistorySnapshot
 from squid_ui.semantic import LayoutNode
 from squid_ui_discord import delivery
+from squid_ui_discord.access import Owner
+from squid_ui_discord.cog import Cog
+from squid_ui_discord.contracts import ResponseSource
 from squid_ui_discord.devtools_presentation import recovery_summary, scheduler_summary, topic_summary
 from squid_ui_discord.devtools_runtime import (
     ActionDisabled,
@@ -48,9 +51,11 @@ from squid_ui_discord.devtools_view import (
     scene_attachment,
 )
 from squid_ui_discord.live import find
-from squid_ui_discord.message_root import MessageRoot, owner_message_root
+from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootSnapshot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
+from squid_ui_discord.request import request
+from squid_ui_discord.response import Presented
 from squid_ui_discord.routing import routers
 from squid_ui_discord.sessions import SessionManager
 
@@ -65,7 +70,7 @@ async def _owner_only[BotT: commands.Bot](ctx: Context[BotT]) -> bool:
 
 
 async def open_devtools(
-    source: delivery.Replyable,
+    source: ResponseSource,
     *,
     runtime: DevToolsRuntime,
     action_ledger: EventLedger | None = None,
@@ -76,15 +81,12 @@ async def open_devtools(
 ) -> MessageRoot:
     """Open a caller-owned dashboard until it closes, times out, or its host stops.
 
-    The host command authorizes the caller before opening; the runtime policy
-    controls which operations the dashboard may execute.
+    The source must belong to an installed UI runtime. Its request scope owns the
+    dashboard. The host command authorizes the caller before opening; the devtools
+    runtime policy controls which operations the dashboard may execute.
     """
-    actor = getattr(source, "author", getattr(source, "user", None))
-    actor_id = getattr(actor, "id", None)
-    if not isinstance(actor_id, int):
-        message = "devtools source names no Discord user"
-        raise TypeError(message)
-    client = getattr(source, "bot", getattr(source, "client", None))
+    current = await request(source)
+    client = current.client
     inspector = OperationalInspector(
         runtime,
         client=client if isinstance(client, discord.Client) else None,
@@ -93,20 +95,30 @@ async def open_devtools(
     inspector.section = focus.value if isinstance(focus, DevToolsSection) else focus
     inspector.message_root_id = message_root_id
     inspector.session_id = session_id
-    message_root = owner_message_root(inspector, actor_id, timeout=timeout)
-    await message_root.send(delivery.reply_to(source, ephemeral=getattr(source, "interaction", None) is not None))
-    return message_root
+    result = await current.respond(
+        inspector,
+        timeout=timeout,
+        audience="personal" if current.interaction is not None else "public",
+        access=Owner(current.user.id),
+        session=None,
+    )
+    if not isinstance(result, Presented):
+        message = "devtools dashboard delivery was abandoned"
+        raise RuntimeError(message)  # noqa: TRY004 - Delivery failed; the caller supplied valid content.
+    return result.root
 
 
-class DevTools[BotT: commands.Bot](commands.Cog):
+class DevTools[BotT: commands.Bot](Cog[BotT]):
     """The unified ``!dev ui`` operational control plane.
 
+    Pass a bot with an installed UI runtime; unloading the cog closes its dashboards.
     Supply an EventLedger observed by the host's observe_events scope to show
     action and background-work diagnostics. Creating this cog starts no observers.
     """
 
     def __init__(
         self,
+        bot: BotT,
         check: DevToolsCheck[BotT] = _owner_only,
         manager: SessionManager | None = None,
         *,
@@ -116,6 +128,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         runtime: DevToolsRuntime | None = None,
         action_ledger: EventLedger | None = None,
     ) -> None:
+        super().__init__(bot)
         self._check = check
         self._runtime = runtime or DevToolsRuntime(
             sessions=manager,

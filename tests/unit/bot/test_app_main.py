@@ -8,6 +8,7 @@ import anyio
 import discord
 import pytest
 from discord.ext.commands import Bot, Context
+from discord.ext.commands.view import StringView
 from pydantic import SecretStr
 from pytest_mock import MockerFixture
 
@@ -17,6 +18,7 @@ from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, Di
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
 from squid_reactivity import EventLedger, transaction
 from squid_ui.text import Localization, current_localization
+from squid_ui_discord.devtools import DevTools
 from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
 from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services
@@ -139,6 +141,59 @@ async def test_failed_prefix_command_marks_its_invocation_span(mocker: MockerFix
 
     assert trace.call_args.args[0] == "discord.command admin sync"
     span.set_error.assert_called_once_with()
+
+
+@pytest.mark.parametrize("replace", [False, True])
+async def test_devtools_dispatch_and_dashboard_lifetime(replace: bool) -> None:
+    bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
+    Bot.__init__(bot, command_prefix="!", intents=discord.Intents.none())
+    await bot._async_setup_hook()
+    bot._reaction_subscriptions = {}
+    bot.ui = sd.install(bot)
+    check = AsyncCallRecorder(result=True)
+    cog = DevTools(bot, check=check)
+    await bot.add_cog(cog)
+    message = cast(Any, MessageHarness())
+    message._state = bot._connection
+    message.author = ContextHarness(user_id=7).author
+    message.guild = None
+    message.attachments = []
+    context = Context(
+        message=message,
+        bot=bot,
+        view=StringView(""),
+        prefix="!",
+        command=cog.list_roots,
+        invoked_with="roots",
+    )
+    send = AsyncCallRecorder(result=message)
+    context.send = cast(Any, send)
+
+    try:
+        await bot.invoke(context)
+        assert not context.command_failed
+        check.assert_awaited_once_with(context)
+        send.assert_awaited_once()
+        request = await sd.request(context)
+        assert request.scope is cog.ui
+        roots = [root for root in sd.live.message_roots() if bot.ui.scope_of_root(root) is cog.ui]
+        assert len(roots) == 1
+        assert roots[0].snapshot().access == sd.Owner(7)
+
+        if replace:
+            replacement = DevTools(bot, check=check)
+            await bot.add_cog(replacement, override=True)
+            assert not replacement.ui.closed
+        else:
+            assert await bot.remove_cog(cog.qualified_name) is cog
+        assert cog.ui.closed
+        assert roots[0].finished
+        with pytest.raises(RuntimeError, match="no live UI scope"):
+            await sd.request(context)
+    finally:
+        await bot.remove_cog(cog.qualified_name)
+        await bot.ui.close()
+        await Bot.close(bot)
 
 
 async def _localization(locale: str) -> Localization:

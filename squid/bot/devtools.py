@@ -15,6 +15,7 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Add the package-owned devtools with this process's policy and session manager."""
     await bot.add_cog(
         sd.devtools.DevTools(
+            bot,
             check=_authorized,
             manager=bot.sessions,
             scheduler=bot.ui.scheduler,
