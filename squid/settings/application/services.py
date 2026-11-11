@@ -3,18 +3,12 @@
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import cast
 
-from squid.settings.application.ports import SettingsUnitOfWork
+from squid.settings.application.edits import guild_snapshot
+from squid.settings.application.ports import GuildSettingsUnitOfWork
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
+from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.unit_of_work import UnitOfWorkFactory
-
-_CHANNEL_FIELDS: dict[Setting, str] = {
-    "Smallest": "smallest_channel_id",
-    "Fastest": "fastest_channel_id",
-    "First": "first_channel_id",
-    "Builds": "builds_channel_id",
-    "Vote": "voting_channel_id",
-}
 
 
 class SettingsService:
@@ -23,7 +17,7 @@ class SettingsService:
     def __init__(
         self,
         *,
-        uow_factory: UnitOfWorkFactory[SettingsUnitOfWork],
+        uow_factory: UnitOfWorkFactory[GuildSettingsUnitOfWork],
         runtime_defaults: RuntimeSettings | None = None,
     ) -> None:
         self._uow_factory = uow_factory
@@ -61,6 +55,12 @@ class SettingsService:
             await uow.commit()
             return after
 
+    async def guild_snapshot(self, guild_id: int) -> tuple[GuildSettings, int]:
+        async with self._uow_factory() as uow:
+            result = await guild_snapshot(uow, guild_id)
+            await uow.commit()
+            return result
+
     async def guild_joined(self, server_id: int) -> None:
         """Mark the bot as present, creating settings if this is its first visit."""
         async with self._uow_factory() as uow:
@@ -97,7 +97,7 @@ class SettingsService:
             if row is None:
                 return frozenset()
             return frozenset(
-                channel_id for column in _CHANNEL_FIELDS.values() if (channel_id := getattr(row, column)) is not None
+                channel_id for column in CHANNEL_FIELDS.values() if (channel_id := getattr(row, column)) is not None
             )
 
     async def forget_channels(self, server_id: int, channel_ids: Collection[int]) -> tuple[Setting, ...]:
@@ -111,10 +111,10 @@ class SettingsService:
             if row is None:
                 return ()
             cleared = tuple(
-                setting for setting, column in _CHANNEL_FIELDS.items() if getattr(row, column) in channel_ids
+                setting for setting, column in CHANNEL_FIELDS.items() if getattr(row, column) in channel_ids
             )
             for setting in cleared:
-                setattr(row, _CHANNEL_FIELDS[setting], None)
+                setattr(row, CHANNEL_FIELDS[setting], None)
             await uow.commit()
             return cleared
 
@@ -122,13 +122,13 @@ class SettingsService:
         """Return the requested channel setting, omitting servers without settings."""
         async with self._uow_factory() as uow:
             rows = await uow.settings.get_many(server_ids)
-            return {row.server_id: cast(int | None, getattr(row, _CHANNEL_FIELDS[setting])) for row in rows}
+            return {row.server_id: cast(int | None, getattr(row, CHANNEL_FIELDS[setting])) for row in rows}
 
     async def get(self, server_id: int, setting: Setting) -> int | None:
         """Return a channel ID, or None if the setting or server is missing."""
         async with self._uow_factory() as uow:
             row = await uow.settings.get(server_id)
-            return None if row is None else cast(int | None, getattr(row, _CHANNEL_FIELDS[setting]))
+            return None if row is None else cast(int | None, getattr(row, CHANNEL_FIELDS[setting]))
 
     async def get_all(self, server_id: int) -> SettingOptions:
         """Return every channel setting, or an empty mapping for an unknown server."""
@@ -136,7 +136,7 @@ class SettingsService:
             row = await uow.settings.get(server_id)
             if row is None:
                 return {}
-            return SettingOptions(**{setting: getattr(row, column) for setting, column in _CHANNEL_FIELDS.items()})
+            return SettingOptions(**{setting: getattr(row, column) for setting, column in CHANNEL_FIELDS.items()})
 
     async def set_channel(self, server_id: int, setting: ScalarChannelSetting, channel_id: int) -> None:
         """Save a channel ID; the caller must check that it is usable in this server."""
@@ -159,31 +159,8 @@ class SettingsService:
             settings.locale = locale
             await uow.commit()
 
-    async def replace_channel(
-        self, server_id: int, setting: ScalarChannelSetting, *, expected: int | None, replacement: int | None
-    ) -> bool:
-        """Replace a channel only if its current value still matches the saved edit."""
-        async with self._uow_factory() as uow:
-            row = await uow.settings.get_or_create_for_update(server_id)
-            column = _CHANNEL_FIELDS[setting]
-            if getattr(row, column) != expected:
-                return False
-            setattr(row, column, replacement)
-            await uow.commit()
-            return True
-
-    async def replace_locale(self, server_id: int, *, expected: str | None, replacement: str | None) -> bool:
-        """Replace the locale override atomically, preserving other server settings."""
-        async with self._uow_factory() as uow:
-            row = await uow.settings.get_or_create_for_update(server_id)
-            if row.locale != expected:
-                return False
-            row.locale = replacement
-            await uow.commit()
-            return True
-
     async def _set(self, server_id: int, setting: Setting, value: int | None) -> None:
         async with self._uow_factory() as uow:
             settings = await uow.settings.get_or_create_for_update(server_id)
-            setattr(settings, _CHANNEL_FIELDS[setting], value)
+            setattr(settings, CHANNEL_FIELDS[setting], value)
             await uow.commit()

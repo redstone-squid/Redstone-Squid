@@ -63,6 +63,9 @@ class SettingsRepository:
     async def flush_runtime_revision(self, row: RuntimeSetting, expected: Revision) -> Revision:
         return await flush_revision(self._session(), row, expected)
 
+    async def flush_guild_revision(self, row: ServerSetting, expected: Revision) -> Revision:
+        return await flush_revision(self._session(), row, expected)
+
     async def record_runtime_change(
         self, actor_account_id: int, before: RuntimeSettings, after: RuntimeSettings
     ) -> None:
@@ -108,7 +111,7 @@ class SettingsRepository:
             await session.execute(
                 update(ServerSetting)
                 .where(ServerSetting.in_server.is_distinct_from(present))
-                .values(in_server=present)
+                .values(in_server=present, revision=ServerSetting.revision + 1)
                 .returning(ServerSetting.server_id, ServerSetting.in_server)
             )
         ).all()

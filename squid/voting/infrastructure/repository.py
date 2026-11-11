@@ -476,6 +476,19 @@ class VoteRepository:
         await ensure_server_settings(session, (guild_id,))
         await session.scalar(select(ServerSetting).where(ServerSetting.server_id == guild_id).with_for_update())
 
+    async def _touch_configuration(self, guild_id: int) -> None:
+        # Direct child SQL does not invoke the parent's ORM version mapper.
+        row = await self._session().scalar(select(ServerSetting).where(ServerSetting.server_id == guild_id))
+        assert row is not None
+        row.revision += 1
+        await self._session().execute(
+            select(
+                func.public.publish_domain_event(
+                    "guild.voting_changed", 1, "guild", guild_id, func.jsonb_build_object()
+                )
+            )
+        )
+
     async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
         session = self._session()
         rows = (
@@ -505,6 +518,7 @@ class VoteRepository:
 
     async def set_emoji_preset(self, preset: EmojiPreset) -> None:
         await self.lock_configuration(preset.guild_id)
+        await self._touch_configuration(preset.guild_id)
         session = self._session()
         await ensure_server_settings(session, (preset.guild_id,))
         await session.execute(
@@ -539,6 +553,7 @@ class VoteRepository:
 
     async def set_role_weight(self, weight: RoleWeight) -> None:
         await self.lock_configuration(weight.guild_id)
+        await self._touch_configuration(weight.guild_id)
         session = self._session()
         await ensure_server_settings(session, (weight.guild_id,))
         await session.execute(
@@ -561,6 +576,7 @@ class VoteRepository:
 
     async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
         await self.lock_configuration(guild_id)
+        await self._touch_configuration(guild_id)
         session = self._session()
         await session.execute(
             delete(GuildVoteRoleWeight).where(
@@ -572,6 +588,7 @@ class VoteRepository:
 
     async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
         await self.lock_configuration(guild_id)
+        await self._touch_configuration(guild_id)
         session = self._session()
         emoji = delete(GuildVoteEmoji).where(GuildVoteEmoji.guild_id == guild_id)
         weights = delete(GuildVoteRoleWeight).where(GuildVoteRoleWeight.guild_id == guild_id)

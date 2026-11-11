@@ -422,27 +422,6 @@ class VoteService:
             await uow.commit()
             return result
 
-    async def replace_configuration(
-        self, guild_id: int, kind: VoteKind, *, expected: VoteConfiguration, replacement: VoteConfiguration
-    ) -> bool:
-        """Restore stored configuration only when no intervening configuration edit would be lost."""
-        async with self._uow_factory() as uow:
-            await uow.votes.lock_configuration(guild_id)
-            current = VoteConfiguration(
-                await uow.votes.get_emoji_preset(guild_id, kind),
-                tuple(sorted(await uow.votes.get_role_weights(guild_id, kind), key=lambda weight: weight.role_id)),
-            )
-            if current != expected:
-                return False
-            await uow.votes.reset_configuration(guild_id, kind)
-            if replacement.preset is not None:
-                await uow.votes.set_emoji_preset(replacement.preset)
-            for weight in replacement.weights:
-                await uow.votes.set_role_weight(weight)
-            await uow.commit()
-        await self._refresh_kind(guild_id, kind)
-        return True
-
     async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
         async with self._uow_factory() as uow:
             preset = await uow.votes.get_emoji_preset(guild_id, kind)
@@ -495,6 +474,11 @@ class VoteService:
             await uow.commit()
         for current_kind in (kind,) if kind is not None else tuple(VoteKind):
             await self._refresh_kind(guild_id, current_kind)
+
+    async def refresh_configuration(self, guild_id: int) -> None:
+        """Refresh ballots after a durable guild-configuration event, including retries."""
+        for kind in VoteKind:
+            await self._refresh_kind(guild_id, kind)
 
     async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
         """Refresh open sessions whose owner guild supplies the changed role weights."""

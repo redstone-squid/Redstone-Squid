@@ -6,6 +6,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
+import squid_ui as sl
+import squid_ui_discord as sd
+from squid.bot.edit_history import history_controls
 from squid.core.errors import AuthorizationError, ConflictError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.edits.application import EditRunner
@@ -22,6 +25,7 @@ from squid.edits.domain import (
 )
 from squid_reactivity.actions import ConflictDetail
 from squid_reactivity.errors import ReactiveConflictError
+from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_ui.runtime import History, ReversibleOperation
 from squid_ui.text import TextLike
 
@@ -79,16 +83,27 @@ class EditController:
         self._heads: dict[EditTarget, int] = {}
         self._pending: dict[UUID, PendingEdit] = {}
         self._lock = asyncio.Lock()
-        self.refresh_failed = False
+        self._refresh_failed = False
+        self._signal = Signal()
+
+    @property
+    def refresh_failed(self) -> bool:
+        self._signal.track()
+        return self._refresh_failed
 
     @property
     def pending(self) -> tuple[PendingEdit, ...]:
+        self._signal.track()
         return tuple(self._pending.values())
 
     async def execute(self, command: EditCommand, label: TextLike) -> EditResult:
         return await self._run(command, label)
 
     async def _run(self, command: EditCommand, label: TextLike, *, original_entry_id: UUID | None = None) -> EditResult:
+        current = CURRENT_TRANSACTION.get()
+        if current is not None and current.readonly:
+            message = "An edit requires a writable UI action"
+            raise sl.runtime.ReactiveWriteError(message)
         async with self._lock:
             targets = {v.target for v in command.expected}
             if any(targets.intersection(v.target for v in pending.command.expected) for pending in self.pending):
@@ -108,11 +123,13 @@ class EditController:
             except BaseException:
                 if pending.attempt.receipt is not None:
                     self._pending[command.operation_id] = pending
+                    self._signal.notify()
                 raise
             try:
                 self._accept(result, pending)
             except BaseException:
                 self._pending[command.operation_id] = pending
+                self._signal.notify()
                 raise
             await self.refresh()
             return result
@@ -132,6 +149,7 @@ class EditController:
                     targets=receipt.targets,
                 )
         self._pending.pop(pending.command.operation_id, None)
+        self._signal.notify()
 
     async def reconcile(self, operation_id: UUID) -> EditResult:
         async with self._lock:
@@ -147,6 +165,7 @@ class EditController:
                     if pending.original_entry_id is not None:
                         self.history.settle_reversal(pending.original_entry_id, inverse=None)
                     self._pending.pop(operation_id, None)
+                    self._signal.notify()
                     raise
             if pending.original_entry_id is not None:
                 assert result.receipt is not None
@@ -162,10 +181,11 @@ class EditController:
         try:
             await self._refresh()
         except Exception:
-            self.refresh_failed = True
+            self._refresh_failed = True
             logger.warning("Committed edit retained; editor refresh failed", exc_info=True)
         else:
-            self.refresh_failed = False
+            self._refresh_failed = False
+        self._signal.notify()
 
     async def discard(self, targets: frozenset[str]) -> None:
         async with self._lock:
@@ -178,3 +198,52 @@ class EditController:
             self.history.discard_targets(targets)
             self._heads = {target: version for target, version in self._heads.items() if target.identity not in targets}
         await self.refresh()
+
+    def controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        """Offer recovery and explicit history discard alongside ordinary undo and redo."""
+        nodes = []
+        pending = self.pending
+        if not pending:
+            nodes.extend(history_controls(self.history))
+        for item in pending:
+
+            async def check(event: sl.PressEvent, operation_id: UUID = item.command.operation_id) -> None:
+                await self.reconcile(operation_id)
+                await event.notice(tr(t"edits-result-checked = The saved result has been checked."))
+
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"edits-check-result = Check saved result"), check, key=f"check-{item.command.operation_id}"
+                    ),
+                    key=f"edit-result-{item.command.operation_id}",
+                )
+            )
+        if self.refresh_failed:
+
+            async def refresh(event: sl.PressEvent) -> None:
+                await self.refresh()
+
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(tr(t"edits-refresh = Refresh saved values"), refresh, key="refresh-saved"),
+                    key="edit-refresh",
+                )
+            )
+        if not pending and (self.history.entries or self.history.redoable):
+
+            async def discard(event: sl.PressEvent) -> None:
+                targets = frozenset(
+                    target for entry in (*self.history.entries, *self.history.redoable) for target in entry.targets
+                )
+                await self.discard(targets)
+
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"edits-discard-reload = Discard history and reload"), discard, key="discard-history"
+                    ),
+                    key="edit-reload",
+                )
+            )
+        return tuple(nodes)

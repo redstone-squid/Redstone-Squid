@@ -23,7 +23,12 @@ from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, en
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.topics import open_topic_bridge
-from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
+from squid.worker.events import (
+    ApplyBuildVoteOutcomeHandler,
+    CoreDomainEventRunner,
+    MaterializeNotificationHandler,
+    RefreshGuildVotingHandler,
+)
 from squid.worker.rendering import SchematicPreviewWorker
 from squid_reactivity import LocalTopicBus
 
@@ -79,6 +84,7 @@ class DatabaseWorker:
                 "build.denied": (notification_handler,),
                 "record_run.activated": (notification_handler,),
                 "vote_session.closed": (outcome_handler,),
+                "guild.voting_changed": (RefreshGuildVotingHandler(services.votes),),
             },
         )
         self._job_specs = self._build_job_specs()

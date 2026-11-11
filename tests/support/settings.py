@@ -7,6 +7,7 @@ from typing import override
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.models import RuntimeSetting, ServerSetting
+from squid.voting.application.ports import VoteRepository
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
@@ -53,6 +54,10 @@ def _copy_settings(rows: dict[int, ServerSetting]) -> dict[int, ServerSetting]:
 
 
 class FakeSettingsUnitOfWork(FakeUnitOfWork[dict[int, ServerSetting]]):
+    @property
+    def votes(self) -> VoteRepository:
+        raise NotImplementedError
+
     @property
     def settings(self) -> FakeSettingsRepository:
         return FakeSettingsRepository(self.state)

@@ -6,6 +6,7 @@ from typing import Protocol
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.models import RuntimeSetting, ServerSetting
 from squid.unit_of_work import UnitOfWork
+from squid.voting.application.ports import VoteRepository
 
 
 class SettingsStore(Protocol):
@@ -31,3 +32,8 @@ class SettingsUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def settings(self) -> SettingsStore: ...
+
+
+class GuildSettingsUnitOfWork(SettingsUnitOfWork, Protocol):
+    @property
+    def votes(self) -> VoteRepository: ...

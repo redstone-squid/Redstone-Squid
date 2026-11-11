@@ -7,6 +7,7 @@ from squid.builds.history import BuildEditActor, HistoryOperation
 from squid.diagnostics.log_capture import work_lost
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.notifications import NotificationService
+from squid.voting.application.services import VoteService
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,18 @@ class ApplyBuildVoteOutcomeHandler:
                 correlation_kind="domain_event",
                 correlation_id=str(event.id),
             )
+
+
+class RefreshGuildVotingHandler:
+    """Refresh from current settings, so delayed or repeated events are safe."""
+
+    def __init__(self, votes: VoteService) -> None:
+        self._votes = votes
+
+    async def handle(self, event: DomainEvent) -> None:
+        if event.schema_version != 1:
+            raise UnsupportedEventVersionError
+        await self._votes.refresh_configuration(event.aggregate_id)
 
 
 class MaterializeNotificationHandler:

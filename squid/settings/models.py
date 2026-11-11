@@ -21,10 +21,11 @@ from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC
 
 
-class ServerSetting(Base):
+class ServerSetting(Revisioned, Base):
     """Settings for a Discord server."""
 
     __tablename__ = "server_settings"
+    __table_args__ = (CheckConstraint("revision > 0", name="server_settings_revision_positive"),)
     # Discord assigns guild IDs. Disable autoincrement so SQLAlchemy does not
     # create a sequence for this integer primary key.
     server_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)

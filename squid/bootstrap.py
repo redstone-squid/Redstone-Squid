@@ -85,7 +85,7 @@ from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.search.application import SearchEmbeddingService, SearchService
 from squid.search.application.projection import SearchProjectionService
 from squid.settings.application import SettingsService
-from squid.settings.application.edits import RUNTIME_EDIT, RuntimeSettingsEdit
+from squid.settings.application.edits import GUILD_EDIT, RUNTIME_EDIT, GuildSettingsEdit, RuntimeSettingsEdit
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.starboard.application import StarboardService
 from squid.submissions.application import (
@@ -314,7 +314,13 @@ class _ServiceGraph:
             **self.config.community.model_dump(),
             notification_retention_days=self.config.notifications.retention_days,
         )
-        return EditExecutor(self.uow_factory, {RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults)})
+        return EditExecutor(
+            self.uow_factory,
+            {
+                RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
+                GUILD_EDIT: GuildSettingsEdit(self.permissions),
+            },
+        )
 
     @cached_property
     def notifications(self) -> NotificationService:

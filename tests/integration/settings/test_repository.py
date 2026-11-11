@@ -370,15 +370,3 @@ async def test_deleting_actor_preserves_settings_audit(
         audit = (await session.scalars(select(RuntimeSettingChange))).one()
         assert audit.actor_account_id is None
         assert audit.after["welcome_enabled"] is False
-
-
-async def test_conditional_settings_preserve_other_values_and_refuse_stale_history(service: SettingsService) -> None:
-    await service.set_channel(123, "Vote", 100)
-    await service.set_channel(123, "Builds", 200)
-    assert await service.replace_channel(123, "Vote", expected=100, replacement=300)
-    assert not await service.replace_channel(123, "Vote", expected=100, replacement=None)
-    assert await service.get(123, "Vote") == 300
-    assert await service.get(123, "Builds") == 200
-    assert await service.replace_locale(123, expected=None, replacement="fr")
-    assert not await service.replace_locale(123, expected=None, replacement="en")
-    assert await service.get_locale(123) == "fr"

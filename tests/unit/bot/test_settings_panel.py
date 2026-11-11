@@ -2,7 +2,9 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, cast, override
+from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -12,8 +14,23 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_history import apply_history
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
+from squid.core.errors import AuthorizationError
+from squid.edits.domain import (
+    EditActor,
+    EditAttempt,
+    EditCommand,
+    EditOutcome,
+    EditReceipt,
+    EditResult,
+    EditValues,
+    Revision,
+    RevisionConflictError,
+)
+from squid.permissions.domain import Subject
+from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT
 from squid.settings.application import SettingsService
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
+from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.voting.application import VoteService
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid.voting.domain.models import VoteConfiguration
@@ -61,27 +78,20 @@ class FakeSettingsService(SettingsService):
     def __init__(self, stored: dict[str, int | None] | None = None) -> None:
         self.stored = dict(stored or {})
         self.locale: str | None = None
+        self.revision = 1
+        self.votes = FakeVoteService()
         self.channel_writes: list[tuple[int, ScalarChannelSetting, int]] = []
         self.clears: list[tuple[int, Setting]] = []
 
     @override
-    async def replace_channel(
-        self, server_id: int, setting: ScalarChannelSetting, *, expected: int | None, replacement: int | None
-    ) -> bool:
-        if self.stored.get(setting) != expected:
-            return False
-        if replacement is None:
-            await self.clear(server_id, setting)
-        else:
-            await self.set_channel(server_id, setting, replacement)
-        return True
-
-    @override
-    async def replace_locale(self, server_id: int, *, expected: str | None, replacement: str | None) -> bool:
-        if self.locale != expected:
-            return False
-        await self.set_locale(server_id, replacement)
-        return True
+    async def guild_snapshot(self, guild_id: int) -> tuple[GuildSettings, int]:
+        voting = {}
+        for kind in VoteKind:
+            weights = await self.votes.get_role_weights(guild_id, kind)
+            voting[kind] = VoteConfiguration(None, tuple(weight for weight in weights if weight.kind == kind))
+        return GuildSettings(
+            **{name: self.stored.get(key) for key, name in CHANNEL_FIELDS.items()}, locale=self.locale, voting=voting
+        ), self.revision
 
     @override
     async def get_all(self, server_id: int) -> SettingOptions:
@@ -117,15 +127,6 @@ class FakeVoteService(VoteService):
     @override
     async def configuration(self, guild_id: int, kind: VoteKind) -> VoteConfiguration:
         return VoteConfiguration(None, self.role_weights)
-
-    @override
-    async def replace_configuration(
-        self, guild_id: int, kind: VoteKind, *, expected: VoteConfiguration, replacement: VoteConfiguration
-    ) -> bool:
-        if await self.configuration(guild_id, kind) != expected:
-            return False
-        self.role_weights = replacement.weights
-        return True
 
     @override
     async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
@@ -174,14 +175,51 @@ def make_component_panel(
 ) -> tuple[SettingsPanel, FakeSettingsService, sd.MessageRoot]:
     """The mounted panel and the settings service behind it."""
     settings = FakeSettingsService(stored)
-    votes = FakeVoteService()
+    votes = settings.votes
 
     async def authorize(_node: object) -> bool:
         return True
 
+    async def actor() -> EditActor:
+        return EditActor(Subject(account_id=1, guild_id=GUILD_ID))
+
+    async def execute(command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None) -> EditResult:
+        if not await panel._authorize(SETTINGS_SERVER_EDIT):
+            raise AuthorizationError
+        if command.expected[0].value != settings.revision:
+            raise RevisionConflictError(command.expected[0], settings.revision)
+        current, _ = await settings.guild_snapshot(GUILD_ID)
+        before = EditValues.of(current.model_dump(mode="json"))
+        after = before.patch(command.values)
+        values = after.unpack()
+        for key, name in CHANNEL_FIELDS.items():
+            if values[name] == getattr(current, name):
+                continue
+            channel = cast(int | None, values[name])
+            if channel is None:
+                await settings.clear(GUILD_ID, key)
+            else:
+                await settings.set_channel(GUILD_ID, key, channel)
+        settings.locale = cast(str | None, values["locale"])
+        voting = GuildSettings.model_validate(values).voting
+        votes.role_weights = tuple(weight for configuration in voting.values() for weight in configuration.weights)
+        settings.revision += int(before != after)
+        versions = (Revision(command.expected[0].target, settings.revision),)
+        receipt = EditReceipt(command, before, after, versions)
+        if attempt is not None:
+            attempt.receipt = receipt
+        return EditResult(
+            EditOutcome(
+                command.operation_id, actor.key, command.fingerprint, versions, changed=before != after, final=False
+            ),
+            receipt,
+        )
+
     panel = SettingsPanel(
         settings=settings,
         votes=votes,
+        edits=cast(Any, SimpleNamespace(execute=execute, reconcile=AsyncMock())),
+        actor=actor,
         guild=make_guild(channels=channels if channels is not None else {12: "general"}),
         capabilities=EVERYTHING,
         authorize=authorize,
@@ -254,7 +292,7 @@ async def test_changing_language_relocalizes_the_live_root(monkeypatch: pytest.M
     )
 
     with sl.runtime.transaction():
-        await panel.set_locale("fr", message_root=message_root)
+        await panel.set_locale("zh-CN", message_root=message_root)
     view = commit_render(message_root)
 
     text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
@@ -301,7 +339,7 @@ async def test_a_saved_channel_change_can_be_redone() -> None:
     assert len(settings.clears) == 2
 
 
-async def test_a_failed_action_records_no_history() -> None:
+async def test_a_failed_render_retains_the_committed_edit() -> None:
     panel, _, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
@@ -313,7 +351,10 @@ async def test_a_failed_action_records_no_history() -> None:
     with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.runtime.transaction():
         await save_the_channel_then_fail()
 
-    assert panel.history.entries == ()
+    assert len(panel.history.entries) == 1
+    with sl.runtime.transaction():
+        assert (await panel.history.undo()).applied
+    assert panel.channel_id("Vote") == 3
 
 
 async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -> None:
@@ -430,6 +471,7 @@ async def test_channel_history_refuses_to_overwrite_another_writer() -> None:
     with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
     settings.stored["Vote"] = 42
+    settings.revision += 1
     with sl.runtime.transaction():
         result = await panel.history.undo()
     assert result.status is sl.runtime.HistoryResultStatus.CONFLICT

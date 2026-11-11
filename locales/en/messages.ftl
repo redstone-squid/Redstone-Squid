@@ -1046,106 +1046,106 @@ bot-recount-that-vote-is-already-closed = That vote is already closed.
 # squid/bot/recount.py:88
 bot-recount-votes-recounted = Votes recounted.
 
-# squid/bot/settings_view.py:537
+# squid/bot/settings_view.py:523
 bot-settings-role-multiplier = { $role } — { $multiplier }x
 
-# squid/bot/settings_view.py:276
+# squid/bot/settings_view.py:301
 bot-settings-view-back = Back
 
-# squid/bot/settings_view.py:519
+# squid/bot/settings_view.py:505
 bot-settings-view-bot-language = Bot language
 
-# squid/bot/settings_view.py:56
+# squid/bot/settings_view.py:60
 bot-settings-view-build-reviews = Build reviews
 
-# squid/bot/settings_view.py:51
+# squid/bot/settings_view.py:55
 bot-settings-view-builds-awaiting-review = Builds awaiting review
 
-# squid/bot/settings_view.py:172
+# squid/bot/settings_view.py:197
 bot-settings-view-change-as-many-as-you-like-an = Change as many as you like; an emptied picker clears that setting.
 
-# squid/bot/settings_view.py:429
+# squid/bot/settings_view.py:450
 bot-settings-view-changed = Changed { $setting_label }
 
-# squid/bot/settings_view.py:450
+# squid/bot/settings_view.py:459
 bot-settings-view-changed-the-bot-language = Changed the bot language
 
-# squid/bot/settings_view.py:252
+# squid/bot/settings_view.py:277
 bot-settings-view-choose-a-role = Choose a role
 
-# squid/bot/settings_view.py:266
+# squid/bot/settings_view.py:291
 bot-settings-view-confirm-reset = Confirm reset
 
-# squid/bot/settings_view.py:50
+# squid/bot/settings_view.py:54
 bot-settings-view-confirmed-builds = Confirmed builds
 
-# squid/bot/settings_view.py:551
+# squid/bot/settings_view.py:537
 bot-settings-view-deleted-role = _Deleted role_ ({ $role_id_text })
 
-# squid/bot/settings_view.py:57
+# squid/bot/settings_view.py:61
 bot-settings-view-deletion-votes = Deletion votes
 
-# squid/bot/settings_view.py:260
+# squid/bot/settings_view.py:285
 bot-settings-view-edit-emojis = Edit emojis
 
-# squid/bot/settings_view.py:544
+# squid/bot/settings_view.py:530
 bot-settings-view-emojis = Emojis
 
-# squid/bot/settings_view.py:48
+# squid/bot/settings_view.py:52
 bot-settings-view-fastest-record-builds = Fastest-record builds
 
-# squid/bot/settings_view.py:49
+# squid/bot/settings_view.py:53
 bot-settings-view-first-of-a-kind-builds = First-of-a-kind builds
 
-# squid/bot/settings_view.py:213
+# squid/bot/settings_view.py:238
 bot-settings-view-follow-discord = Follow Discord
 
-# squid/bot/settings_view.py:368
+# squid/bot/settings_view.py:393
 bot-settings-view-is-not-a-vote-choice = `{ $choice_text }` is not a vote choice.
 
-# squid/bot/settings_view.py:534, squid/bot/settings_view.py:542
+# squid/bot/settings_view.py:520, squid/bot/settings_view.py:528
 bot-settings-view-none = _None_
 
-# squid/bot/settings_view.py:526
+# squid/bot/settings_view.py:512
 bot-settings-view-not-found = _Not found_ ({ $channel_id_text })
 
-# squid/bot/settings_view.py:524
+# squid/bot/settings_view.py:510
 bot-settings-view-not-set = _Not set_
 
-# squid/bot/settings_view.py:574
+# squid/bot/settings_view.py:560
 bot-settings-view-one-choice-emoji-per-line = One `choice | emoji` per line
 
-# squid/bot/settings_view.py:58
+# squid/bot/settings_view.py:62
 bot-settings-view-polls = Polls
 
-# squid/bot/settings_view.py:268
+# squid/bot/settings_view.py:293
 bot-settings-view-reset = Reset
 
-# squid/bot/settings_view.py:545
+# squid/bot/settings_view.py:531
 bot-settings-view-role-multipliers = Role multipliers
 
-# squid/bot/settings_view.py:181
+# squid/bot/settings_view.py:206
 bot-settings-view-server-settings = Server settings
 
-# squid/bot/settings_view.py:47
+# squid/bot/settings_view.py:51
 bot-settings-view-smallest-record-builds = Smallest-record builds
 
-# squid/bot/settings_view.py:314
+# squid/bot/settings_view.py:339
 bot-settings-view-that-role-has-been-deleted = That role has been deleted.
 
-# squid/bot/settings_view.py:309
+# squid/bot/settings_view.py:334
 bot-settings-view-that-role-selection-is-invalid = That role selection is invalid.
 
-# squid/bot/settings_view.py:334
+# squid/bot/settings_view.py:359
 bot-settings-view-vote-emojis = { $kind } vote emojis
 
-# squid/bot/settings_view.py:322
+# squid/bot/settings_view.py:347
 bot-settings-view-vote-weight-for = Vote weight for { $role_name }
 
-# squid/bot/settings_view.py:224
+# squid/bot/settings_view.py:249
 bot-settings-view-voting = Voting
 
-# squid/bot/settings_view.py:234
+# squid/bot/settings_view.py:259
 bot-settings-view-voting-2 = Voting — { $kind_label }
 
 # squid/bot/starboard/render.py:28
@@ -3371,11 +3371,17 @@ edit-history-uncertain = The saved result needs checking. Refresh before editing
 # squid/bot/edit_history.py:123
 edit-history-undo = Undo
 
+# squid/bot/edit_controller.py:217
+edits-check-result = Check saved result
+
 # squid/edits/domain.py:187
 edits-commit-uncertain = The saved result needs checking before this item can be edited again.
 
 # squid/edits/domain.py:201
 edits-concurrent-write = Another edit committed first. Reload this item before trying again.
+
+# squid/bot/edit_controller.py:244
+edits-discard-reload = Discard history and reload
 
 # squid/edits/application.py:98
 edits-fields-not-editable = This edit contains fields that cannot be changed.
@@ -3392,11 +3398,17 @@ edits-operation-expired = This edit has expired. Reload the item before editing 
 # squid/edits/domain.py:183
 edits-operation-reused = This operation identifier was already used for another edit.
 
-# squid/bot/edit_controller.py:96
+# squid/bot/edit_controller.py:111
 edits-pending = Check the previous saved result before editing this item.
 
-# squid/bot/edit_controller.py:176
+# squid/bot/edit_controller.py:196
 edits-pending-discard = Check the saved result before discarding its history.
+
+# squid/bot/edit_controller.py:229
+edits-refresh = Refresh saved values
+
+# squid/bot/edit_controller.py:212
+edits-result-checked = The saved result has been checked.
 
 # squid/edits/domain.py:174
 edits-revision-conflict = This item changed elsewhere. Reload it before editing.
@@ -4714,31 +4726,31 @@ search-search-results-sorted = Search results cannot be sorted by { $field_name 
 # squid/search/application/ranking.py:86
 search-weight-negative = weight for { $branch_name } cannot be negative
 
-# squid/bot/settings_view.py:411
+# squid/bot/settings_view.py:436
 settings-change-permission-denied = You are no longer allowed to change this.
 
-# squid/bot/settings_view.py:286
+# squid/bot/settings_view.py:311
 settings-channel-invalid = That channel selection is invalid.
 
-# squid/bot/settings_view.py:376
+# squid/bot/settings_view.py:401
 settings-custom-emoji-unavailable = The custom emoji { $emoji } is inaccessible.
 
-# squid/bot/settings_view.py:361
+# squid/bot/settings_view.py:386
 settings-emoji-format-error = Each line must read `choice | emoji`.
 
-# squid/bot/settings_view.py:517
+# squid/bot/settings_view.py:503
 settings-follow-server-language = Following this server's Discord language
 
-# squid/bot/settings_view.py:557
+# squid/bot/settings_view.py:543
 settings-review-weighting-explained = Build reviews are weighted by the network's own server, so these multipliers do not apply here.
 
-# squid/bot/settings_view.py:565
+# squid/bot/settings_view.py:551
 settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight
 
 # squid/settings/domain/runtime.py:41
 settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bit integers
 
-# squid/bot/settings_view.py:349
+# squid/bot/settings_view.py:374
 settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.
 
 # squid/bot/starboard/cog.py:222

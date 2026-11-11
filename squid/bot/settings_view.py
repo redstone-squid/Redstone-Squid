@@ -2,19 +2,23 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, override
 
 import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.edit_history import history_controls, save_edit
+from squid.bot.edit_controller import EditController
 from squid.bot.i18n import localization_for
 from squid.bot.ui import CardField, tr
 from squid.core.i18n import SUPPORTED_LOCALES
+from squid.edits.application import EditRunner
+from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
+from squid.settings.application.edits import GUILD_EDIT, guild_target
 from squid.settings.domain import ScalarChannelSetting
+from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
 from squid.voting.domain.models import VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
@@ -75,6 +79,13 @@ class SettingsCapabilities:
 type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
+@dataclass(slots=True)
+class _SettingsLocalization:
+    # Keep the mounted root binding even when a later render rolls back UI values.
+    root: sd.MessageRoot | None = None
+    fallback: str | None = None
+
+
 class SettingsPanel(sd.Screen):
     """Edit a guild's publication channels, language, voting emojis, and role weights.
 
@@ -97,11 +108,16 @@ class SettingsPanel(sd.Screen):
     _preset: EmojiPreset | None = sl.state(None, persist=False)
     _weights: tuple[RoleWeight, ...] = sl.state((), persist=False)
 
+    _snapshot: GuildSettings | None = sl.state(None, persist=False)
+    _revision: int = sl.state(0, persist=False)
+
     def __init__(
         self,
         *,
         settings: SettingsService,
         votes: VoteService,
+        edits: EditRunner,
+        actor: Callable[[], Awaitable[EditActor]],
         guild: discord.Guild,
         capabilities: SettingsCapabilities,
         authorize: SettingsAuthorizer,
@@ -113,6 +129,8 @@ class SettingsPanel(sd.Screen):
         self._capabilities = capabilities
         self._authorize = authorize
         self._owner_guild_id = owner_guild_id
+        self._localization = _SettingsLocalization()
+        self.edits = EditController(edits, actor, self._refresh_settings, history=self.history)
 
     @property
     def shows_server(self) -> bool:
@@ -147,17 +165,24 @@ class SettingsPanel(sd.Screen):
         else:
             await self.open_voting()
 
+    async def _refresh_settings(self) -> None:
+        self._snapshot, self._revision = await self._settings.guild_snapshot(self._guild.id)
+        self._channels = {key: getattr(self._snapshot, name) for key, name in CHANNEL_FIELDS.items()}
+        self._locale_override = self._snapshot.locale
+        configuration = self._snapshot.voting[self.kind]
+        self._preset = configuration.preset
+        self._weights = configuration.weights
+        if self._localization.root is not None:
+            self._localization.root.localize(localization_for(self._locale_override or self._localization.fallback))
+
     async def open_server(self) -> None:
-        stored = cast(Mapping[str, int | None], await self._settings.get_all(self._guild.id))
-        self._channels = {setting: stored.get(setting) for setting in CHANNEL_SETTINGS}
-        self._locale_override = await self._settings.get_locale(self._guild.id)
+        await self._refresh_settings()
         self.page = "server"
 
     async def open_voting(self, kind: VoteKind | None = None) -> None:
         if kind is not None:
             self.kind = kind
-        self._preset = await self._votes.emoji_preset(self._guild.id, self.kind)
-        self._weights = tuple(await self._votes.get_role_weights(self._guild.id, self.kind))
+        await self._refresh_settings()
         self.confirming_reset = False
         self.page = "voting"
 
@@ -223,7 +248,7 @@ class SettingsPanel(sd.Screen):
         if self.shows_voting:
             actions.append(sl.action_control(tr(t"bot-settings-view-voting = Voting"), self._show_voting, key="voting"))
         children.append(sl.action_controls(*actions, key="server-actions"))
-        children.extend(history_controls(self.history))
+        children.extend(self.edits.controls())
         return children
 
     def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
@@ -275,7 +300,7 @@ class SettingsPanel(sd.Screen):
         if self.shows_server:
             actions.append(sl.action_control(tr(t"bot-settings-view-back = Back"), self._show_server, key="server"))
         children.append(sl.action_controls(*actions, key="voting-actions"))
-        children.extend(history_controls(self.history))
+        children.extend(self.edits.controls())
         return children
 
     async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:
@@ -411,100 +436,61 @@ class SettingsPanel(sd.Screen):
         await event.notice(tr(t"settings-change-permission-denied = You are no longer allowed to change this."))
         return False
 
-    async def _refresh_channels(self) -> None:
-        stored = await self._settings.get_all(self._guild.id)
-        self._channels = {key: stored.get(key) for key in CHANNEL_SETTINGS}
+    async def _save(self, values: EditValues, label: sl.TextLike) -> None:
+        if self._snapshot is None:
+            await self._refresh_settings()
+        await self.edits.execute(
+            EditCommand(GUILD_EDIT, (Revision(guild_target(self._guild.id), self._revision),), values), label
+        )
 
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
-        """Save a channel selection as one conditional, reversible edit."""
-
-        async def replace_channel(expected: int | None, replacement: int | None) -> bool:
-            return await self._settings.replace_channel(
-                self._guild.id, setting, expected=expected, replacement=replacement
-            )
-
         setting_label = SETTING_LABELS[setting]
-        await save_edit(
-            self.history,
+        await self._save(
+            EditValues.of({CHANNEL_FIELDS[setting]: channel_id}),
             tr(t"bot-settings-view-changed = Changed {setting_label}"),
-            self._channels[setting],
-            channel_id,
-            target=f"settings:{self._guild.id}:{setting}",
-            authorize=lambda: self._authorize(SETTINGS_SERVER_EDIT),
-            replace=replace_channel,
-            refresh=self._refresh_channels,
         )
 
     async def set_locale(self, locale: str | None, *, message_root: sd.MessageRoot) -> None:
-        fallback = message_root.localization.locale
-
-        async def replace_locale(expected: str | None, replacement: str | None) -> bool:
-            return await self._settings.replace_locale(self._guild.id, expected=expected, replacement=replacement)
-
-        async def refresh() -> None:
-            self._locale_override = await self._settings.get_locale(self._guild.id)
-            message_root.localize(localization_for(self._locale_override or fallback))
-
-        await save_edit(
-            self.history,
+        if self._localization.root is None:
+            self._localization.fallback = message_root.localization.locale
+        self._localization.root = message_root
+        await self._save(
+            EditValues.of({"locale": locale}),
             tr(t"bot-settings-view-changed-the-bot-language = Changed the bot language"),
-            self._locale_override,
-            locale,
-            target=f"settings:{self._guild.id}:locale",
-            authorize=lambda: self._authorize(SETTINGS_SERVER_EDIT),
-            replace=replace_locale,
-            refresh=refresh,
         )
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
-        """Set or remove a role multiplier for the selected vote kind, then reload the page.
-
-        None removes the override. The caller must authorize the operation.
-        """
-        before = await self._votes.configuration(self._guild.id, self.kind)
+        if self._snapshot is None:
+            await self._refresh_settings()
+        assert self._snapshot is not None
+        before = self._snapshot.voting[self.kind]
         weights = tuple(weight for weight in before.weights if weight.role_id != role_id)
         if multiplier is not None:
             weights += (RoleWeight(self._guild.id, self.kind, role_id, multiplier),)
-        after = replace(before, weights=tuple(sorted(weights, key=lambda weight: weight.role_id)))
-        await self._save_voting(before, after)
+        await self._save_voting(replace(before, weights=tuple(sorted(weights, key=lambda weight: weight.role_id))))
 
     async def set_emojis(self, options: Sequence[VoteOption]) -> None:
-        before = await self._votes.configuration(self._guild.id, self.kind)
-        after = replace(
-            before, preset=EmojiPreset(self._guild.id, self.kind, normalize_vote_options(options, kind=self.kind))
-        )
-        await self._save_voting(before, after)
-
-    async def _save_voting(self, before: VoteConfiguration, after: VoteConfiguration) -> None:
-        kind = self.kind
-
-        async def replace_configuration(expected: VoteConfiguration, replacement: VoteConfiguration) -> bool:
-            return await self._votes.replace_configuration(
-                self._guild.id, kind, expected=expected, replacement=replacement
+        if self._snapshot is None:
+            await self._refresh_settings()
+        assert self._snapshot is not None
+        before = self._snapshot.voting[self.kind]
+        await self._save_voting(
+            replace(
+                before, preset=EmojiPreset(self._guild.id, self.kind, normalize_vote_options(options, kind=self.kind))
             )
-
-        async def refresh() -> None:
-            self._preset = await self._votes.emoji_preset(self._guild.id, self.kind)
-            self._weights = tuple(await self._votes.get_role_weights(self._guild.id, self.kind))
-
-        await save_edit(
-            self.history,
-            KIND_LABELS[kind],
-            before,
-            after,
-            target=f"voting:{self._guild.id}:{kind}",
-            authorize=lambda: self._authorize(SETTINGS_VOTING_EDIT),
-            replace=replace_configuration,
-            refresh=refresh,
         )
+
+    async def _save_voting(self, after: VoteConfiguration) -> None:
+        assert self._snapshot is not None
+        value = self._snapshot.model_copy(update={"voting": self._snapshot.voting | {self.kind: after}})
+        await self._save(EditValues.of({"voting": value.model_dump(mode="json")["voting"]}), KIND_LABELS[self.kind])
         self.confirming_reset = False
 
     def arm_reset(self) -> None:
         self.confirming_reset = True
 
     async def reset_voting(self) -> None:
-        before = await self._votes.configuration(self._guild.id, self.kind)
-        await self._save_voting(before, VoteConfiguration(None, ()))
+        await self._save_voting(VoteConfiguration(None, ()))
 
     def _server_fields(self) -> list[CardField]:
         fields = [
