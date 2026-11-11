@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.mixins import CreatedAtMixin, SlugMixin
 from squid.persistence.types import InstantUTC
 
 _EFFECT_VALUES = "effect IN (1, -1, -2)"
@@ -42,7 +43,7 @@ _ROLE_SUBJECT_STAYS_HOME = "subject_role_id IS NULL OR scope_guild_id IS NULL OR
 """Prevent a Discord role from receiving a grant scoped to a different guild."""
 
 
-class PermissionRole(Base, kw_only=True):
+class PermissionRole(SlugMixin, CreatedAtMixin, Base, kw_only=True):
     """A named bundle of permission patterns and management settings.
 
     Built-in pattern lists live in code. Stored patterns supplement those lists,
@@ -61,7 +62,7 @@ class PermissionRole(Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True, default=None)
-    slug: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str]
     """Stable handle used in commands, unique within the owning guild."""
     name: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """Display name."""
@@ -79,9 +80,6 @@ class PermissionRole(Base, kw_only=True):
         ForeignKey("accounts.id", name="permission_roles_created_by_fkey", ondelete="SET NULL"),
         nullable=True,
         default=None,
-    )
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     includes: tuple[str, ...] = ()

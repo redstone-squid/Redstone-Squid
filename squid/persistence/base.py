@@ -4,7 +4,7 @@ import inspect
 from typing import Any, ClassVar
 
 from advanced_alchemy.base import BasicAttributes
-from sqlalchemy import Column, MetaData
+from sqlalchemy import Column, MetaData, Table
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
 from sqlalchemy.orm.properties import MappedColumn
@@ -48,10 +48,12 @@ class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase, eq=F
         # for the mapper instead is not an option either -- Mapper.column_attrs forces every
         # mapper in the registry to configure, mid-class-body, before the module has finished
         # defining the classes its relationship() strings name.
+        attribute_docstrings = {}
         if "__tablename__" in cls.__dict__:  # Anything else is a mixin or an abstract base.
+            attribute_docstrings = extract_attribute_docstrings(cls)
             if cls.__doc__ is not None:
                 _document_table(cls, inspect.cleandoc(cls.__doc__))
-            for attribute, docstring in extract_attribute_docstrings(cls).items():
+            for attribute, docstring in attribute_docstrings.items():
                 # __dict__ rather than getattr: an inherited name resolves to the parent's
                 # already-instrumented attribute, whose column belongs to the parent's table.
                 declaration = cls.__dict__.get(attribute)
@@ -63,6 +65,15 @@ class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase, eq=F
 
         kwargs.setdefault("eq", False)
         super().__init_subclass__(**kwargs)
+
+        # Mixin columns are copied onto this table during declarative setup. A model
+        # can annotate one without assigning it to document its local meaning.
+        table = cls.__dict__.get("__table__")
+        if isinstance(table, Table):
+            for attribute, docstring in attribute_docstrings.items():
+                column = table.c.get(attribute)
+                if column is not None and column.comment is None:
+                    column.comment = docstring
 
 
 def _document_table(cls: type[Base], comment: str) -> None:

@@ -1,10 +1,13 @@
 """Exercise constructor defaults and writes that bypass the ORM."""
 
-from sqlalchemy import Integer, create_engine, text
+import pytest
+from sqlalchemy import CheckConstraint, Integer, UniqueConstraint, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from whenever import Instant
 
+from squid.permissions.models import PermissionRole
 from squid.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
+from tests.support.schema import model_table
 
 
 class MixinTestBase(DeclarativeBase):
@@ -66,3 +69,20 @@ def test_database_defaults_and_explicit_update_ownership() -> None:
             assert record.updated_at == explicit
     finally:
         engine.dispose()
+
+
+def test_role_slugs_remain_explicit_and_scoped_to_the_guild() -> None:
+    with pytest.raises(TypeError, match="slug"):
+        PermissionRole(name="Builders")  # type: ignore[missing-argument]
+
+    role = PermissionRole(slug="builders", name="Builders")
+    role.name = "Redstone builders"
+    assert role.slug == "builders"
+    assert isinstance(role.created_at, Instant)
+    constraints = model_table(PermissionRole).constraints
+    unique_scopes = {tuple(c.columns.keys()) for c in constraints if isinstance(c, UniqueConstraint)}
+    assert ("guild_id", "slug") in unique_scopes
+    assert ("slug",) not in unique_scopes
+    slug_constraint = next(c for c in constraints if c.name == "permission_roles_guild_slug_key")
+    assert slug_constraint.dialect_options["postgresql"]["nulls_not_distinct"] is True
+    assert any(isinstance(c, CheckConstraint) and c.name == "permission_roles_slug_format" for c in constraints)

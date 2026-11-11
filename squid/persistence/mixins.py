@@ -1,6 +1,6 @@
 """Opt-in columns for common persistence metadata."""
 
-from sqlalchemy import func
+from sqlalchemy import Text, func
 from sqlalchemy.orm import Mapped, MappedAsDataclass, mapped_column
 from whenever import Instant
 
@@ -25,3 +25,12 @@ class AuditTimestampsMixin(CreatedAtMixin):
     updated_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+
+
+class SlugMixin(MappedAsDataclass, kw_only=True, eq=False):
+    """An explicit readable handle; each model owns format and uniqueness constraints.
+
+    Writers supply the slug. Renaming a display name does not change it.
+    """
+
+    slug: Mapped[str] = mapped_column(Text, nullable=False)

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 import squid.persistence.model_registry  # noqa: F401  # imported for its model registration side effect
 from squid.persistence.base import Base
 from squid.persistence.docs import extract_attribute_docstrings
+from squid.persistence.mixins import SlugMixin
 from tests.support.schema import model_table
 
 
@@ -100,3 +101,24 @@ def test_every_attribute_docstring_in_the_schema_reached_its_column() -> None:
 
     assert undocumented == [], f"these documented attributes lost their comment: {undocumented}"
     assert documented > 50, "the registry sweep found almost no attribute docstrings, so it proves nothing"
+
+
+def test_models_can_document_inherited_columns_without_sharing_comments() -> None:
+    class GuildHandle(SlugMixin, SandboxBase, kw_only=True):
+        __tablename__ = "doc_guild_handles"
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        slug: Mapped[str]
+        """A handle within a guild."""
+
+    class PublicHandle(SlugMixin, SandboxBase, kw_only=True):
+        __tablename__ = "doc_public_handles"
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        slug: Mapped[str]
+        """A public handle."""
+
+    assert model_table(GuildHandle).c.slug.comment == "A handle within a guild."
+    assert model_table(PublicHandle).c.slug.comment == "A public handle."
+    assert SlugMixin.slug.column.comment is None
+    assert GuildHandle(id=1, slug="builders").slug == "builders"
