@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, MappedAsDataclass, declared_attr, mapped_column
 from sqlalchemy.orm.exc import StaleDataError
 
-from squid.edits.domain import ConcurrentEditError, Revision, RevisionConflictError
+from squid.edits.domain import ConcurrentEditError, LatestRevision, Revision, RevisionConflictError
 
 
 class Revisioned(MappedAsDataclass, eq=False):
@@ -20,9 +20,10 @@ class Revisioned(MappedAsDataclass, eq=False):
         return {"version_id_col": cls.revision}
 
 
-def require_revision(expected: Revision, current: int) -> None:
-    if expected.value != current:
+def require_revision(expected: Revision | LatestRevision, current: int) -> Revision:
+    if isinstance(expected, Revision) and expected.value != current:
         raise RevisionConflictError(expected, current)
+    return Revision(expected.target, current)
 
 
 async def flush_revision(session: AsyncSession, row: Revisioned, expected: Revision) -> Revision:

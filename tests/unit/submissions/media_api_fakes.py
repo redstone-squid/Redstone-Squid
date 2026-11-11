@@ -184,7 +184,7 @@ class MediaEditRecorder(EditRunner):
         self.media = media
 
     async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
-        version = command.expected[0]
+        version = command.checked_revisions[0]
         draft_id = UUID(version.target.key)
         await self.drafts.get_accessible(draft_id, actor.require_account_id())
         values = AttachmentValues.model_validate_json(command.values.encoded)

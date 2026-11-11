@@ -38,7 +38,7 @@ async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_hist
     actor = Actor(account_id=1)
 
     async def execute(command: EditCommand, _actor: Actor, **_kwargs: object) -> EditResult:
-        revisions = (Revision(PERMISSION_GRAPH, command.expected[0].value + 1),)
+        revisions = (Revision(PERMISSION_GRAPH, command.checked_revisions[0].value + 1),)
         final = command.kind == ROLE_DELETE
         receipt = EditReceipt(command, EditValues.of({"effect": None}), command.values, revisions, final=final)
         admin.revision.return_value = revisions[0].value

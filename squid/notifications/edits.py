@@ -79,10 +79,9 @@ class NotificationSettingsEdit:
             raise ValueError(message)
         return int(command.expected[0].target.key)
 
-    async def lock(self, uow: NotificationEditUnitOfWork, command: EditCommand) -> int:
+    async def lock(self, uow: NotificationEditUnitOfWork, command: EditCommand) -> Revision:
         account_id = self.account_id(command)
-        require_revision(command.expected[0], await uow.notifications.lock_settings(account_id))
-        return account_id
+        return require_revision(command.expected[0], await uow.notifications.lock_settings(account_id))
 
 
 class PreferencesValues(BaseModel):
@@ -198,7 +197,8 @@ class StatesValues(BaseModel):
 
 class NotificationSubscriptionsEdit(NotificationSettingsEdit):
     async def prepare(self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
-        account_id = await self.lock(uow, command)
+        revision = await self.lock(uow, command)
+        account_id = self.account_id(command)
         await authorize(uow, self._permissions, actor, account_id)
         values = command.values.unpack()
         before: list[SubscriptionValues] = []
@@ -264,6 +264,7 @@ class NotificationSubscriptionsEdit(NotificationSettingsEdit):
         return PreparedEdit(
             SubscriptionsValues(subscriptions=tuple(before)).values(),
             SubscriptionsValues(subscriptions=tuple(after)).values(),
+            revisions=(revision,),
         )
 
     async def apply(
@@ -321,7 +322,11 @@ class InboxReadEdit:
         rows = await self.rows(uow, actor, command)
         before = StatesValues(states={row.id: row.read_at is not None for row in rows})
         after = StatesValues.model_validate(command.values.unpack())
-        return PreparedEdit(EditValues.of(before.model_dump(mode="json")), EditValues.of(after.model_dump(mode="json")))
+        return PreparedEdit(
+            EditValues.of(before.model_dump(mode="json")),
+            EditValues.of(after.model_dump(mode="json")),
+            revisions=tuple(Revision(inbox_target(row.id), row.revision) for row in rows),
+        )
 
     async def apply(
         self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit

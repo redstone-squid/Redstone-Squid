@@ -79,7 +79,7 @@ def answer_change(command: EditCommand) -> DraftChange:
         FieldOperation(patch.operation_ids.get(key, uuid4()), key, FieldOperationKind.UNSET) for key in patch.unset
     )
     return DraftChange(
-        command.expected[0].value,
+        command.checked_revisions[0].value,
         patch.client_instance_id,
         DraftChangeKey(patch.change_key or str(command.operation_id)),
         operations,
@@ -105,7 +105,7 @@ class DraftAnswersEdit:
     async def prepare(self, uow: DraftEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedAnswers:
         if len(command.expected) != 1 or command.expected[0].target.kind != "draft":
             raise ValidationError
-        expected = command.expected[0]
+        expected = command.checked_revisions[0]
         current = await self._drafts.get_accessible_in(uow, UUID(expected.target.key), actor)
         if current.snapshot.revision != expected.value:
             raise RevisionConflictError(expected, current.snapshot.revision)

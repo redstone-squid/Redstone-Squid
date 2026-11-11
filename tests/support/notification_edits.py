@@ -50,7 +50,10 @@ class NotificationEditRecorder:
                     await method(account_id, key, visibility=self.visibility)
             case _:
                 raise AssertionError(command.kind)
-        revisions = tuple(Revision(version.target, version.value + 1) for version in command.expected)
+        revisions = tuple(
+            Revision(version.target, (version.value if version.value is not None else 1) + 1)
+            for version in command.expected
+        )
         receipt = EditReceipt(command, before, after, revisions)
         if attempt is not None:
             attempt.receipt = receipt

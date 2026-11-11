@@ -9,9 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.edits.application import EditStore, EditUnitOfWork
-from squid.edits.domain import EditCommand, EditValues, PreparedEdit, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditValues, PreparedEdit, Revision
 from squid.edits.retention import EditRetentionStore
 from squid.media.domain import MediaLimits
+from squid.persistence.revisions import require_revision
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 
 DRAFT_ATTACHMENTS = "draft.attachments"
@@ -79,8 +80,7 @@ class DraftAttachmentsEdit:
             raise ValidationError
         # The repository locks the draft before inspecting processor references.
         before = await uow.attachment_edits.read(draft, values.files)
-        if draft.snapshot.revision != expected.value:
-            raise RevisionConflictError(expected, draft.snapshot.revision)
+        revision = require_revision(expected, draft.snapshot.revision)
         files = tuple(
             item.model_copy(update={"present": requested.present})
             for item, requested in zip(before.files, values.files, strict=True)
@@ -97,7 +97,12 @@ class DraftAttachmentsEdit:
         if before != after:
             await uow.edits.retain(command.operation_id, resources)
         return PreparedAttachments(
-            before.edit_values(), after.edit_values(), resources=resources, draft=draft, values=after
+            before.edit_values(),
+            after.edit_values(),
+            resources=resources,
+            draft=draft,
+            values=after,
+            revisions=(revision,),
         )
 
     async def apply(

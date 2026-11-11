@@ -107,24 +107,24 @@ class TagEditRecorder(EditRunner):
             )
             before = proposal.model_copy(update={"present": not proposal.present}).edit_values()
             self.tags.proposal.withdrawn = not proposal.present
-            revision = command.expected[0].value + 1
+            revision = command.checked_revisions[0].value + 1
             self.tags.proposal.revision = revision
         elif command.kind == MODERATION_EDIT:
             moderation = ModerationValues.model_validate_json(command.values.encoded)
             before = ModerationValues(status=self.tags.proposal.moderation_status).edit_values()
             self.tags.proposal.moderation_status = moderation.status
             self.tags.approvals.append(self.tags.proposal.id)
-            revision = command.expected[0].value + 1
+            revision = command.checked_revisions[0].value + 1
             self.tags.proposal.revision = revision
         else:
             values = ShowcaseValues.model_validate_json(command.values.encoded)
             self.tags.assignments.append(
-                (int(command.expected[0].target.key), values.tag_id, values.value, actor.require_account_id())
+                (int(command.checked_revisions[0].target.key), values.tag_id, values.value, actor.require_account_id())
             )
             self.tags.revision += 1
             revision = self.tags.revision
             before = ShowcaseValues(tag_id=values.tag_id, assigned=False).edit_values()
-        revisions = (Revision(command.expected[0].target, revision),)
+        revisions = (Revision(command.checked_revisions[0].target, revision),)
         receipt = EditReceipt(command, before, command.values, revisions, final=command.kind == MODERATION_EDIT)
         if attempt is not None:
             attempt.receipt = receipt

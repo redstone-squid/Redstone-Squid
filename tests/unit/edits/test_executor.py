@@ -20,6 +20,7 @@ from squid.edits.domain import (
     EditOutcome,
     EditTarget,
     EditValues,
+    LatestRevision,
     OperationReuseError,
     Revision,
     RevisionConflictError,
@@ -192,3 +193,31 @@ async def test_acknowledged_commit_survives_transaction_cleanup_failure() -> Non
     replay = await executor.execute(edit, ACTOR)
     assert replay.replayed
     assert state.value.revision == 2
+
+
+async def test_unconditional_edits_capture_latest_state_and_replay_without_reapplying() -> None:
+    state = CommittedState(Store())
+    executor = EditExecutor(partial(Work, state), {"example": Handler()})
+    await executor.execute(command("First"), ACTOR)
+    edit = EditCommand("example", (LatestRevision(TARGET),), EditValues.of({"enabled": False}))
+    result = await executor.execute(edit, ACTOR)
+    assert result.receipt is not None
+    assert result.receipt.before.unpack()["name"] == "First"
+    assert result.receipt.after.unpack() == {"name": "First", "enabled": False}
+    assert result.outcome.revisions == (Revision(TARGET, 3),)
+    replay = await executor.execute(edit, ACTOR)
+    assert replay.replayed
+    assert state.value.revision == 3
+    noop = await executor.execute(
+        EditCommand("example", (LatestRevision(TARGET),), EditValues.of({"enabled": False})), ACTOR
+    )
+    assert not noop.outcome.changed
+    assert noop.outcome.revisions == (Revision(TARGET, 3),)
+    await executor.execute(command("Later", revision=3), ACTOR)
+    with pytest.raises(RevisionConflictError):
+        await executor.execute(result.receipt.inverse(result.receipt.revisions), ACTOR)
+
+
+def test_unconditional_undo_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        EditCommand("example", (LatestRevision(TARGET),), EditValues.of({}), purpose="undo")

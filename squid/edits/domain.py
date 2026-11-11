@@ -31,6 +31,14 @@ class Revision:
 
 
 @dataclass(frozen=True, slots=True)
+class LatestRevision:
+    """Apply to the current state, resolved while the handler holds the target lock."""
+
+    target: EditTarget
+    value: None = field(default=None, init=False)
+
+
+@dataclass(frozen=True, slots=True)
 class EditValues:
     """A JSON value projection with no mutable objects shared with the caller."""
 
@@ -57,7 +65,7 @@ class EditValues:
 @dataclass(frozen=True, slots=True)
 class EditCommand:
     kind: str
-    expected: tuple[Revision, ...]
+    expected: tuple[Revision | LatestRevision, ...]
     values: EditValues
     operation_id: UUID = field(default_factory=uuid4)
     purpose: Literal["edit", "undo", "redo"] = "edit"
@@ -69,9 +77,21 @@ class EditCommand:
         if not targets or len(set(targets)) != len(targets):
             message = "An edit requires distinct versioned targets"
             raise ValidationError(message)
-        if any(version.value < 0 for version in self.expected):
+        if any(version.value is not None and version.value < 0 for version in self.expected):
             message = "An expected revision cannot be negative"
             raise ValidationError(message)
+
+        if self.purpose != "edit" and any(isinstance(version, LatestRevision) for version in self.expected):
+            message = "Undo and redo require explicit revisions"
+            raise ValidationError(message)
+
+    @property
+    def checked_revisions(self) -> tuple[Revision, ...]:
+        """Return concrete preconditions after preparation has resolved current versions."""
+        if any(not isinstance(version, Revision) for version in self.expected):
+            message = "The handler must resolve every unconditional target under its lock"
+            raise InvalidStateError(message)
+        return tuple(version for version in self.expected if isinstance(version, Revision))
 
     @property
     def fingerprint(self) -> bytes:
@@ -97,6 +117,7 @@ class PreparedEdit:
     after: EditValues
     final: bool = False
     resources: tuple[str, ...] = ()
+    revisions: tuple[Revision, ...] = field(default=(), kw_only=True)
 
     @property
     def changed(self) -> bool:

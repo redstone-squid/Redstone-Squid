@@ -248,7 +248,7 @@ class StarboardCreation(StarboardOperations):
                 await uow.starboards.set_role_multiplier(row.id, role_id, weight)
         else:
             row.archived = not after.present
-        return (await uow.starboards.flush_revision(row, command.expected[0]),)
+        return (await uow.starboards.flush_revision(row, command.checked_revisions[0]),)
 
 
 class StarboardDeletion(StarboardOperations):
@@ -265,4 +265,4 @@ class StarboardDeletion(StarboardOperations):
         row = await self.row(uow, command)
         assert row is not None
         row.archived = True
-        return (await uow.starboards.flush_revision(row, command.expected[0]),)
+        return (await uow.starboards.flush_revision(row, command.checked_revisions[0]),)

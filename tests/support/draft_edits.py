@@ -32,9 +32,9 @@ class DraftEditRecorder(EditRunner):
         self.drafts = drafts
 
     async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
-        draft_id = UUID(command.expected[0].target.key)
+        draft_id = UUID(command.checked_revisions[0].target.key)
         current = await self.drafts.get_accessible(draft_id, actor)
-        expected = command.expected[0]
+        expected = command.checked_revisions[0]
         if expected.value != current.snapshot.revision:
             raise RevisionConflictError(expected, current.snapshot.revision)
         change = answer_change(command)

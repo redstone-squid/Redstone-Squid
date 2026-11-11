@@ -185,8 +185,8 @@ def make_component_panel(
     async def execute(command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
         if not await panel.settings.authorize(SETTINGS_SERVER_EDIT):
             raise AuthorizationError
-        if command.expected[0].value != settings.revision:
-            raise RevisionConflictError(command.expected[0], settings.revision)
+        if command.checked_revisions[0].value != settings.revision:
+            raise RevisionConflictError(command.checked_revisions[0], settings.revision)
         current, _ = await settings.guild_snapshot(GUILD_ID)
         before = EditValues.of(current.model_dump(mode="json"))
         after = before.patch(command.values)
@@ -203,7 +203,7 @@ def make_component_panel(
         voting = GuildSettings.model_validate(values).voting
         votes.role_weights = tuple(weight for configuration in voting.values() for weight in configuration.weights)
         settings.revision += int(before != after)
-        versions = (Revision(command.expected[0].target, settings.revision),)
+        versions = (Revision(command.checked_revisions[0].target, settings.revision),)
         receipt = EditReceipt(command, before, after, versions)
         if attempt is not None:
             attempt.receipt = receipt

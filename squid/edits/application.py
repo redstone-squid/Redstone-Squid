@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
@@ -114,13 +115,15 @@ class EditExecutor[UowT: EditUnitOfWork]:
             prepared = await handler.prepare(uow, actor, command)
         except SchemaValidationError as error:
             raise ValidationError(str(error)) from error
-        versions = (await handler.apply(uow, actor, command, prepared)) if prepared.changed else command.expected
+        resolved = replace(command, expected=prepared.revisions or command.expected)
+        base = resolved.checked_revisions
+        versions = (await handler.apply(uow, actor, resolved, prepared)) if prepared.changed else base
         if len(versions) != len(command.expected) or {v.target for v in versions} != {
             v.target for v in command.expected
         }:
             message = "An edit must return every guarded target's resulting revision"
             raise InvalidStateError(message)
-        expected = {v.target: v.value for v in command.expected}
+        expected = {v.target: v.value for v in base}
         if any(v.value < expected[v.target] for v in versions) or (
             prepared.changed and not any(v.value > expected[v.target] for v in versions)
         ):

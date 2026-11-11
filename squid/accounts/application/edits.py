@@ -152,6 +152,7 @@ class AccountUnlinkEdit(AccountEdits):
             EditValues.of({"identity_id": identity_id, "present": True}),
             EditValues.of({"identity_id": identity_id, "present": False}),
             final=True,
+            revisions=(Revision(command.expected[0].target, account.revision),),
         )
 
     async def apply(
@@ -161,4 +162,4 @@ class AccountUnlinkEdit(AccountEdits):
         identity_id = prepared.before.unpack()["identity_id"]
         assert isinstance(identity_id, int)
         await uow.accounts.unlink_identity(account.id, identity_id)
-        return (await uow.accounts.flush_edit_revision(account, command.expected[0]),)
+        return (await uow.accounts.flush_edit_revision(account, command.checked_revisions[0]),)

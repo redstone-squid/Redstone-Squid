@@ -59,7 +59,10 @@ class AccountEditRecorder:
                 await self.accounts.unlink_identity(account_id, values["identity_id"])
             case _:
                 raise AssertionError(command.kind)
-        revisions = tuple(Revision(version.target, version.value + 1) for version in command.expected)
+        revisions = tuple(
+            Revision(version.target, (version.value if version.value is not None else 1) + 1)
+            for version in command.expected
+        )
         receipt = EditReceipt(command, before, command.values, revisions, final=command.kind == UNLINK_EDIT)
         if attempt is not None:
             attempt.receipt = receipt

@@ -22,6 +22,7 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, RevisionConflictError
+from squid.persistence.revisions import require_revision
 
 BUILD_EDIT = "build.fields"
 
@@ -104,6 +105,10 @@ class BuildFieldsEdit:
         values = command.values.unpack()
         unresolved = values.pop("unresolved_taxonomy", None)
         patch = BuildPatch.from_patch(BuildEditPatch.from_attributes(values))
+        current = await uow.builds.get_for_update(build_id)
+        if current is None:
+            raise BuildNotFoundError(build_id)
+        expected = require_revision(expected, current.revision)
         build = await self._builds.get(build_id)
         if build is None:
             raise BuildNotFoundError(build_id)
@@ -125,13 +130,8 @@ class BuildFieldsEdit:
             attributes["door_type"] = [*cast(list[str], attributes.get("door_type", [])), *retained.patterns]
         editor = BuildEditor(actor, source="versioned_editor")
         await self._builds.prepare_edit(editor, build, BuildEditPatch.from_attributes(attributes))
-        current = await uow.builds.get_for_update(build_id)
-        if current is None:
-            raise BuildNotFoundError(build_id)
-        if current.revision != expected.value:
-            raise RevisionConflictError(expected, current.revision)
         await self._builds.authorize_edit_in(uow, editor, current)
-        return PreparedBuildEdit(before, build_values(build), build=build)
+        return PreparedBuildEdit(before, build_values(build), build=build, revisions=(expected,))
 
     async def apply(
         self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit

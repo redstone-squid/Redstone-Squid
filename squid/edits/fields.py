@@ -12,7 +12,8 @@ from pydantic import BaseModel
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.persistence.revisions import require_revision
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,8 +32,7 @@ class Aggregate[UowT: EditUnitOfWork, RootT]:
         root = await self.load(uow, command)
         expected = command.expected[0]
         current = self.revision(root)
-        if current != expected.value:
-            raise RevisionConflictError(expected, current)
+        require_revision(expected, current)
         return root
 
 
@@ -87,6 +87,7 @@ class FieldCommand[UowT: EditUnitOfWork, RootT, ValuesT: BaseModel]:
         return PreparedFields(
             EditValues.of(previous.model_dump(mode="json")),
             EditValues.of(desired.model_dump(mode="json")),
+            revisions=(Revision(command.expected[0].target, self.aggregate.revision(root)),),
             root=root,
             previous=previous,
             desired=desired,
@@ -99,4 +100,4 @@ class FieldCommand[UowT: EditUnitOfWork, RootT, ValuesT: BaseModel]:
         await self.write(uow, prepared.root, prepared.previous, prepared.desired)
         if self.audit is not None:
             await self.audit(uow, actor, prepared.previous, prepared.desired)
-        return (await self.aggregate.flush(uow, prepared.root, command.expected[0]),)
+        return (await self.aggregate.flush(uow, prepared.root, command.checked_revisions[0]),)

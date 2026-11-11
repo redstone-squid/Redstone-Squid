@@ -181,7 +181,7 @@ class EditController:
             retained = frozenset(
                 target for entry in (*self.history.entries, *self.history.redoable) for target in entry.targets
             )
-            for version in command.expected:
+            for version in command.checked_revisions:
                 known = self._heads.get(version.target)
                 if known is not None and known != version.value and version.target.identity in retained:
                     raise RevisionConflictError(Revision(version.target, known), version.value)

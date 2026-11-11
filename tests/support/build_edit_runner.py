@@ -11,8 +11,8 @@ from squid.edits.domain import (
     EditReceipt,
     EditResult,
     Revision,
-    RevisionConflictError,
 )
+from squid.persistence.revisions import require_revision
 
 
 async def build_edit_actor() -> Actor:
@@ -32,8 +32,7 @@ class BuildEditRecorder:
         if self.error is not None:
             raise self.error
         expected = command.expected[0]
-        if self.build.revision != expected.value:
-            raise RevisionConflictError(expected, self.build.revision)
+        require_revision(expected, self.build.revision)
         before = build_values(self.build)
         values = command.values.unpack()
         values.pop("unresolved_taxonomy", None)
