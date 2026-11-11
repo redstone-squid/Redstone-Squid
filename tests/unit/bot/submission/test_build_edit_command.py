@@ -10,6 +10,8 @@ import discord
 
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
+from squid.accounts.domain import IdentityProvider
+from squid.accounts.models import Account
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.controls import recover_build_editor
 from squid.bot.submission.ui.opening import prepare_build_editor
@@ -72,8 +74,12 @@ class SettingsRecorder(SettingsService):
 
 
 class AccountRecorder(AccountService):
-    def __init__(self) -> None:
-        pass
+    def __init__(self, account_id: int | None) -> None:
+        self.account_id = account_id
+
+    @override
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        return None if self.account_id is None else Account(id=self.account_id)
 
 
 class PermissionRecorder(PermissionService):
@@ -104,7 +110,7 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
     cog.builds = builds
     doubles: dict[str, object] = {
         "settings": SettingsRecorder(),
-        "accounts": AccountRecorder(),
+        "accounts": AccountRecorder(account_id),
         "permissions": PermissionRecorder(allowed),
         "builds": builds,
     }

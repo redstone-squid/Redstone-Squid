@@ -11,7 +11,7 @@ from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, EditValues, Revision
+from squid.edits.domain import EditValues
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -216,9 +216,8 @@ class StarboardScreen(sd.Screen):
             ),
         )
         values = BoardPresence(**BoardValues.capture(StarboardSnapshot.capture(created, {})).model_dump(), present=True)
-        await self.edits.execute(
-            EditCommand(STARBOARD_CREATE, (Revision(starboard_target(identity), 0),), values.values()),
-            tr(t"starboard-history-create = Create starboard"),
+        await self.edits.bind(STARBOARD_CREATE, starboard_target(identity), 0).save(
+            values.values(), tr(t"starboard-history-create = Create starboard")
         )
         created_name = created.name
         await event.notice(tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
@@ -244,13 +243,8 @@ class StarboardScreen(sd.Screen):
             await self._save(before, after)
 
     async def _save(self, before: StarboardSnapshot, after: StarboardSnapshot) -> None:
-        await self.edits.execute(
-            EditCommand(
-                STARBOARD_EDIT,
-                (Revision(starboard_target(before.id), before.revision),),
-                BoardValues.capture(after).values(),
-            ),
-            tr(t"starboard-history-edit = Edit starboard"),
+        await self.edits.bind(STARBOARD_EDIT, starboard_target(before.id), before.revision).save(
+            BoardValues.capture(after).values(), tr(t"starboard-history-edit = Edit starboard")
         )
 
     async def _edit_emoji(self, event: sl.SubmitEvent) -> None:
@@ -322,11 +316,8 @@ class StarboardScreen(sd.Screen):
         snapshot = self._snapshots.get(name.casefold())
         deleted = snapshot is not None
         if snapshot is not None:
-            await self.edits.execute(
-                EditCommand(
-                    STARBOARD_DELETE, (Revision(starboard_target(snapshot.id), snapshot.revision),), EditValues.of({})
-                ),
-                tr(t"bot-starboard-screen-delete-starboard = Delete starboard"),
+            await self.edits.bind(STARBOARD_DELETE, starboard_target(snapshot.id), snapshot.revision).save(
+                EditValues.of({}), tr(t"bot-starboard-screen-delete-starboard = Delete starboard")
             )
         self._deleting = None
         self._decision = None

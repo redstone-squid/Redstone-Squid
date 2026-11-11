@@ -12,7 +12,7 @@ from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, EditValues, Revision
+from squid.edits.domain import EditValues, Revision
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
@@ -131,9 +131,7 @@ class NotificationSettings(sl.Reactive):
 
     async def save(self, edits: EditController, kind: str, values: EditValues, label: sl.TextLike) -> None:
         revision = 0 if self.preferences is None else self.preferences.revision
-        await edits.execute(
-            EditCommand(kind, (Revision(notification_target(self._account_id), revision),), values), label
-        )
+        await edits.bind(kind, notification_target(self._account_id), revision).save(values, label)
 
 
 class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
@@ -548,12 +546,10 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):
         rows = tuple(row for row in self._inbox if str(row.id) in self.selected_inbox_ids)
         if not rows:
             return
-        await self.edits.execute(
-            EditCommand(
-                INBOX_EDIT,
-                tuple(Revision(inbox_target(row.id), row.revision) for row in rows),
-                EditValues.of({"states": {str(row.id): read for row in rows}}),
-            ),
+        await self.edits.bind_many(
+            INBOX_EDIT, tuple(Revision(inbox_target(row.id), row.revision) for row in rows)
+        ).save(
+            EditValues.of({"states": {str(row.id): read for row in rows}}),
             tr(t"notification-history-read = Change read state"),
         )
 

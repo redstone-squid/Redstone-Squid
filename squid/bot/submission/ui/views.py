@@ -38,7 +38,7 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import DEFAULT
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, Revision, RevisionConflictError
+from squid.edits.domain import RevisionConflictError
 from squid_reactivity import TopicHandle
 from squid_ui.text import Message, md
 
@@ -876,13 +876,8 @@ class BuildEditScreen(BuildEditorScreen[int]):
         build = self.build
         if build.id is not None:
             try:
-                await self.controller.execute(
-                    EditCommand(
-                        BUILD_EDIT,
-                        (Revision(build_target(build.id), self._base_revision),),
-                        patch_values(patch),
-                    ),
-                    tr(t"build-edit-history-save = Save build changes"),
+                await self.controller.bind(BUILD_EDIT, build_target(build.id), self._base_revision).save(
+                    patch_values(patch), tr(t"build-edit-history-save = Save build changes")
                 )
                 self.saved = True
             except RevisionConflictError:
@@ -924,6 +919,7 @@ class BuildEditScreen(BuildEditorScreen[int]):
             self.cancel(event)
 
     async def _reload(self, event: sl.PressEvent) -> None:
+        await self.projection.reload()
         if not await self._may_event(event):
             return
         await event.acknowledge()

@@ -14,7 +14,7 @@ from squid.bot.ui import CardField, tr
 from squid.core.actors import Actor
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, EditValues, Revision
+from squid.edits.domain import EditValues
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
 from squid.settings.application.edits import GUILD_EDIT, guild_target
@@ -190,9 +190,7 @@ class SettingsEditor(sl.Reactive):
     async def save(self, values: EditValues, label: sl.TextLike) -> None:
         if self.snapshot is None:
             await self.refresh()
-        await self.edits.execute(
-            EditCommand(GUILD_EDIT, (Revision(guild_target(self._guild_id), self.revision),), values), label
-        )
+        await self.edits.bind(GUILD_EDIT, guild_target(self._guild_id), self.revision).save(values, label)
 
     async def may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self.authorize(node):

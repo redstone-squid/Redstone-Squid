@@ -3,6 +3,8 @@
 from collections.abc import Sequence
 from typing import Any, cast, override
 
+from whenever import Instant
+
 import squid_ui as sl
 from squid.bot.admin import Admin
 from squid.bot.tags_view import TagsScreen
@@ -14,6 +16,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
 )
 from squid.tags.application import TagService
+from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_ui.runtime import transaction
@@ -68,6 +71,17 @@ class FakeTagService(TagService):
     ) -> TagDefinition:
         self.assignments.append((build_id, tag_id, raw_value, actor_account_id))
         return self.published
+
+    @override
+    async def edit_showcase(
+        self, build_id: int, tag_id: int, raw_value: str | None, *, actor_account_id: int
+    ) -> tuple[TagDefinition, AssignmentSnapshot | None, AssignmentSnapshot]:
+        definition = await self.assign_showcase(build_id, tag_id, raw_value, actor_account_id=actor_account_id)
+        return (
+            definition,
+            None,
+            AssignmentSnapshot(TagValueType.NONE, None, None, None, None, "user", actor_account_id, Instant.now()),
+        )
 
     @override
     async def approve(self, tag_id: int) -> TagDefinition:
@@ -163,7 +177,8 @@ async def test_seeded_build_application_uses_the_opening_build() -> None:
     await screen.on_load()
     event = NoticeEvent(tag_id=1, value=None)
 
-    await screen._apply(cast(sl.SubmitEvent, event))
+    with transaction():
+        await screen._apply(cast(sl.SubmitEvent, event))
 
     assert tags.assignments == [(42, 1, None, 7)]
     assert len(event.notices) == 1

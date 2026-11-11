@@ -27,6 +27,7 @@ from squid.edits.domain import (
     EditReceipt,
     EditResult,
     EditTarget,
+    EditValues,
     Revision,
     RevisionConflictError,
 )
@@ -67,6 +68,26 @@ class _ReceiptOperation:
         return _ReceiptOperation(self.controller, result.receipt, self.label, self.original_entry_id)
 
 
+@dataclass(frozen=True, slots=True)
+class BoundEdit:
+    """A command binding pinned to the revision displayed when an editor opens."""
+
+    controller: EditController
+    kind: str
+    expected: tuple[Revision, ...]
+
+    def writer[PatchT](
+        self, encode: Callable[[PatchT], EditValues], label: TextLike
+    ) -> Callable[[PatchT], Awaitable[None]]:
+        async def save_patch(patch: PatchT) -> None:
+            await self.save(encode(patch), label)
+
+        return save_patch
+
+    async def save(self, values: EditValues, label: TextLike) -> EditResult:
+        return await self.controller.execute(EditCommand(self.kind, self.expected, values), label)
+
+
 class EditController:
     """Own committed receipts and revision continuity for one mounted workspace.
 
@@ -92,6 +113,13 @@ class EditController:
         self._lock = asyncio.Lock()
         self._refresh_failed = False
         self._signal = Signal()
+
+    def bind(self, kind: str, target: EditTarget, revision: int) -> BoundEdit:
+        """Capture a displayed revision; later refreshes never rebase this binding."""
+        return BoundEdit(self, kind, (Revision(target, revision),))
+
+    def bind_many(self, kind: str, expected: tuple[Revision, ...]) -> BoundEdit:
+        return BoundEdit(self, kind, expected)
 
     @property
     def refresh_failed(self) -> bool:

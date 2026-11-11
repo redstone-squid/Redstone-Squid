@@ -8,7 +8,7 @@ from squid.bot.edit_controller import EditController
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import RevisionConflictError
+from squid.edits.domain import EditValues, RevisionConflictError
 from squid_ui.runtime import HistoryResultStatus
 from tests.support.unit_of_work import CommittedState
 from tests.unit.edits.test_executor import ACTOR, TARGET, Handler, Store, Work, command
@@ -89,3 +89,15 @@ async def test_refresh_failure_does_not_turn_a_committed_edit_into_an_uncertain_
     assert len(controller.history.entries) == 1
     assert (await controller.history.undo()).applied
     assert state.value.values.unpack()["name"] == "Original"
+
+
+async def test_bound_form_keeps_its_opening_revision_after_another_save() -> None:
+    state = CommittedState(Store())
+    controller = EditController(EditExecutor(partial(Work, state), {"example": Handler()}), actor, refresh)
+    form = controller.bind("example", TARGET, 1)
+    writer = form.writer(lambda name: EditValues.of({"name": name}), "Old form")
+    await controller.bind("example", TARGET, 1).save(EditValues.of({"name": "Newer"}), "New form")
+    with pytest.raises(RevisionConflictError):
+        await writer("Stale")
+    assert state.value.values.unpack()["name"] == "Newer"
+    assert len(controller.history.entries) == 1

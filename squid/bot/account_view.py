@@ -29,7 +29,7 @@ from squid.bot.profile_render import own_profile_avatar, own_profile_fields
 from squid.bot.ui import CardField, tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
+from squid.edits.domain import EditValues, Revision, RevisionConflictError
 
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
@@ -202,12 +202,8 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         identity_id, is_public = identity.id, event.value
 
         async def apply() -> None:
-            await self.edits.execute(
-                EditCommand(
-                    VISIBILITY_EDIT,
-                    (Revision(account_target(self._account_id), self._revision),),
-                    EditValues.of({"identity_id": identity_id, "is_public": is_public}),
-                ),
+            await self.edits.bind(VISIBILITY_EDIT, account_target(self._account_id), self._revision).save(
+                EditValues.of({"identity_id": identity_id, "is_public": is_public}),
                 tr(t"account-history-visibility = Change identity visibility"),
             )
 
@@ -227,13 +223,8 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if identity is None or identity.id is None:
             return
         await event.acknowledge()
-        await self.edits.execute(
-            EditCommand(
-                UNLINK_EDIT,
-                (Revision(account_target(self._account_id), self._revision),),
-                EditValues.of({"identity_id": identity.id}),
-            ),
-            tr(t"account-history-unlink = Unlink identity"),
+        await self.edits.bind(UNLINK_EDIT, account_target(self._account_id), self._revision).save(
+            EditValues.of({"identity_id": identity.id}), tr(t"account-history-unlink = Unlink identity")
         )
         removed_label = _identity_label(identity)
         await event.notice(
@@ -243,7 +234,11 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _edit_page(self, event: sd.PressEvent) -> None:
         async def apply() -> None:
             self._profile_editor = ProfileEditor(
-                self._profile, save=self._save_profile, close=self._close_profile_editor
+                self._profile,
+                save=self.edits.bind(PROFILE_EDIT, account_target(self._account_id), self._revision).writer(
+                    ProfileValues.patch, tr(t"account-history-profile = Edit profile")
+                ),
+                close=self._close_profile_editor,
             )
 
         await self._with_consent(event, apply)
@@ -252,13 +247,8 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._profile_editor = None
 
     async def _save_profile(self, update: ProfileUpdate) -> None:
-        await self.edits.execute(
-            EditCommand(
-                PROFILE_EDIT,
-                (Revision(account_target(self._account_id), self._revision),),
-                ProfileValues.patch(update),
-            ),
-            tr(t"account-history-profile = Edit profile"),
+        await self.edits.bind(PROFILE_EDIT, account_target(self._account_id), self._revision).save(
+            ProfileValues.patch(update), tr(t"account-history-profile = Edit profile")
         )
 
     async def _with_consent(self, event: sd.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
