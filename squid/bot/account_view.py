@@ -6,6 +6,7 @@ its UI action transaction open while the user reads the notice.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
+from dataclasses import fields
 from typing import Protocol, cast, override
 
 import discord
@@ -29,10 +30,12 @@ from squid.accounts.domain import (
 )
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import AccountIdentity, AccountProfile
+from squid.bot.edit_history import history_controls, save_edit
 from squid.bot.profile_render import identity_label as _identity_label
 from squid.bot.profile_render import own_profile_avatar
 from squid.bot.ui import CardField, tr
 from squid.core.errors import ValidationError
+from squid.core.sentinel import UNSET
 
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
@@ -64,6 +67,8 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     Used as the overview within AccountWorkspace. Identity visibility changes are
     saved immediately; profile fields stay in the editor until Save profile.
     """
+
+    history: sl.runtime.History = sl.runtime.history(limit=20)
 
     selected_id: int | None = sl.state(None)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
@@ -203,6 +208,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 key="account-actions",
             )
         )
+        nodes.extend(history_controls(self.history))
         return tuple(nodes)
 
     async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
@@ -215,8 +221,23 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         identity_id, is_public = identity.id, event.value
 
         async def apply() -> None:
-            await self._accounts.set_identity_visibility(self._account_id, identity_id, is_public=is_public)
-            await self._reload()
+            previous = identity.is_public
+
+            async def replace_visibility(expected: bool, replacement: bool) -> bool:
+                return await self._accounts.replace_identity_visibility(
+                    self._account_id, identity_id, expected=expected, replacement=replacement
+                )
+
+            await save_edit(
+                self.history,
+                tr(t"account-history-visibility = Change identity visibility"),
+                previous,
+                is_public,
+                target=f"identity:{identity_id}",
+                authorize=self._may_reverse,
+                replace=replace_visibility,
+                refresh=self._reload,
+            )
 
         await self._with_consent(event, apply)
 
@@ -224,8 +245,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         hidden = not event.value
 
         async def apply() -> None:
-            await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=hidden))
-            await self._reload()
+            await self._save_profile(ProfileUpdate(hidden=hidden))
 
         await self._with_consent(event, apply)
 
@@ -366,10 +386,36 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         values: sp.EditorValues,
         _changed: frozenset[str],
     ) -> None:
-        await self._accounts.update_profile(self._account_id, self._profile_update(values))
-        await self._refresh()
+        await self._save_profile(self._profile_update(values))
         self._profile_editor = None
         await event.source.notice(tr(t"account-view-profile-saved = Profile saved."))
+
+    async def _may_reverse(self) -> bool:
+        account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(self._actor_id))
+        return account is not None and account.id == self._account_id and not account.needs_consent_refresh
+
+    async def _save_profile(self, update: ProfileUpdate) -> None:
+        expected = ProfileUpdate(
+            **{
+                field.name: getattr(self._profile, field.name)
+                for field in fields(update)
+                if getattr(update, field.name) is not UNSET
+            }
+        )
+
+        async def replace_profile(before: ProfileUpdate, after: ProfileUpdate) -> bool:
+            return await self._accounts.replace_profile(self._account_id, before, after)
+
+        await save_edit(
+            self.history,
+            tr(t"account-history-profile = Edit profile"),
+            expected,
+            update,
+            target=f"profile:{self._account_id}",
+            authorize=self._may_reverse,
+            replace=replace_profile,
+            refresh=self._reload,
+        )
 
     async def _cancel_profile_edit(self, _event: sd.PressEvent) -> None:
         self._profile_editor = None

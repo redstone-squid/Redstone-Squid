@@ -8,13 +8,15 @@ import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.edit_history import history_controls, save_edit
 from squid.bot.i18n import localization_for
 from squid.bot.ui import CardField, tr
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
 from squid.settings.domain import ScalarChannelSetting
-from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption
+from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
+from squid.voting.domain.models import VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import Message
 
@@ -76,15 +78,14 @@ type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 class SettingsPanel(sd.Screen):
     """Edit a guild's publication channels, language, voting emojis, and role weights.
 
-    Changes are saved as the user makes them. Channel and language changes also
-    record undo actions for this UI session, including the writes needed to restore
-    stored settings; voting changes are saved without that history.
+    Changes are saved immediately and retained for conditional undo and redo
+    during this session. Navigation does not create history entries.
     """
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD))
 
-    history: sl.runtime.History = sl.runtime.history(limit=10)
-    """Undo for the server page's writes; see `docs/plans/squid-ui-redesign/28-history.md`."""
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    """Recent saved edits for this session."""
 
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
@@ -219,15 +220,10 @@ class SettingsPanel(sd.Screen):
                 )
             )
         actions: list[sl.semantic.ActionControl] = []
-        # Only once there is something to reverse: an always-present disabled pair would be
-        # two dead controls on a panel most readers never undo anything on.
-        if self._capabilities.edit_server and self.history.can_undo:
-            actions.append(sl.action_control(tr(t"bot-settings-view-undo = Undo"), self._undo, key="undo"))
-        if self._capabilities.edit_server and self.history.can_redo:
-            actions.append(sl.action_control(tr(t"bot-settings-view-redo = Redo"), self._redo, key="redo"))
         if self.shows_voting:
             actions.append(sl.action_control(tr(t"bot-settings-view-voting = Voting"), self._show_voting, key="voting"))
         children.append(sl.action_controls(*actions, key="server-actions"))
+        children.extend(history_controls(self.history))
         return children
 
     def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
@@ -279,6 +275,7 @@ class SettingsPanel(sd.Screen):
         if self.shows_server:
             actions.append(sl.action_control(tr(t"bot-settings-view-back = Back"), self._show_server, key="server"))
         children.append(sl.action_controls(*actions, key="voting-actions"))
+        children.extend(history_controls(self.history))
         return children
 
     async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:
@@ -341,6 +338,8 @@ class SettingsPanel(sd.Screen):
             )
 
     async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
+        if not await self._may_event(event, SETTINGS_VOTING_EDIT):
+            return
         form = _VoteWeightForm.from_submission(event)
         text = (form.multiplier or "").strip()
         try:
@@ -351,6 +350,8 @@ class SettingsPanel(sd.Screen):
             )
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
+        if not await self._may_event(event, SETTINGS_VOTING_EDIT):
+            return
         form = _VoteEmojisForm.from_submission(event)
         text = form.aliases
         options: list[VoteOption] = []
@@ -398,32 +399,6 @@ class SettingsPanel(sd.Screen):
         else:
             self.arm_reset()
 
-    async def _undo(self, event: sl.PressEvent) -> None:
-        # Undo is an ordinary write, so it repeats the check of the action it reverses:
-        # a moderator who lost the permission mid-session may not reverse their own change.
-        if not await self._may_event(event, SETTINGS_SERVER_EDIT):
-            return
-        result = await self.history.undo()
-        if result.applied and result.entry is not None:
-            change = result.entry.label
-            await event.notice(tr(t"bot-settings-view-undid = Undid: {change}"))
-        elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
-            await event.notice(
-                tr(t"settings-undo-conflict = That change was modified elsewhere and cannot be undone safely.")
-            )
-
-    async def _redo(self, event: sl.PressEvent) -> None:
-        if not await self._may_event(event, SETTINGS_SERVER_EDIT):
-            return
-        result = await self.history.redo()
-        if result.applied and result.entry is not None:
-            change = result.entry.label
-            await event.notice(tr(t"bot-settings-view-redid = Redid: {change}"))
-        elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
-            await event.notice(
-                tr(t"settings-redo-conflict = That change was modified elsewhere and cannot be redone safely.")
-            )
-
     async def _show_voting(self, event: sl.PressEvent) -> None:
         await self.open_voting()
 
@@ -436,73 +411,100 @@ class SettingsPanel(sd.Screen):
         await event.notice(tr(t"settings-change-permission-denied = You are no longer allowed to change this."))
         return False
 
+    async def _refresh_channels(self) -> None:
+        stored = await self._settings.get_all(self._guild.id)
+        self._channels = {key: stored.get(key) for key in CHANNEL_SETTINGS}
+
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
-        """Write a channel selection and record its previous value for undo.
+        """Save a channel selection as one conditional, reversible edit."""
 
-        The caller must authorize the write. None clears the setting.
-        """
-        previous = self._channels[setting]
-        await self._write_channel(setting, channel_id)
-        self._channels = {**self._channels, setting: channel_id}
+        async def replace_channel(expected: int | None, replacement: int | None) -> bool:
+            return await self._settings.replace_channel(
+                self._guild.id, setting, expected=expected, replacement=replacement
+            )
+
         setting_label = SETTING_LABELS[setting]
-        self.history.record(
+        await save_edit(
+            self.history,
             tr(t"bot-settings-view-changed = Changed {setting_label}"),
-            compensate=sl.runtime.CompensationSpec(
-                lambda _key: self._write_channel(setting, previous),
-                lambda commit: f"settings:{self._guild.id}:channel:{setting}:{commit.context.action_id}",
-            ),
+            self._channels[setting],
+            channel_id,
+            target=f"settings:{self._guild.id}:{setting}",
+            authorize=lambda: self._authorize(SETTINGS_SERVER_EDIT),
+            replace=replace_channel,
+            refresh=self._refresh_channels,
         )
-
-    async def _write_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
-        """Persist a channel change; history restores the component's cached value separately."""
-        if channel_id is None:
-            await self._settings.clear(self._guild.id, setting)
-        else:
-            await self._settings.set_channel(self._guild.id, setting, channel_id)
 
     async def set_locale(self, locale: str | None, *, message_root: sd.MessageRoot) -> None:
-        previous_override = self._locale_override
-        previous_locale = message_root.localization.locale
-        await self._write_locale(locale, locale or previous_locale, message_root)
-        self._locale_override = locale
-        self.history.record(
+        fallback = message_root.localization.locale
+
+        async def replace_locale(expected: str | None, replacement: str | None) -> bool:
+            return await self._settings.replace_locale(self._guild.id, expected=expected, replacement=replacement)
+
+        async def refresh() -> None:
+            self._locale_override = await self._settings.get_locale(self._guild.id)
+            message_root.localize(localization_for(self._locale_override or fallback))
+
+        await save_edit(
+            self.history,
             tr(t"bot-settings-view-changed-the-bot-language = Changed the bot language"),
-            compensate=sl.runtime.CompensationSpec(
-                lambda _key: self._write_locale(previous_override, previous_locale, message_root),
-                lambda commit: f"settings:{self._guild.id}:locale:{commit.context.action_id}",
-            ),
+            self._locale_override,
+            locale,
+            target=f"settings:{self._guild.id}:locale",
+            authorize=lambda: self._authorize(SETTINGS_SERVER_EDIT),
+            replace=replace_locale,
+            refresh=refresh,
         )
-
-    async def _write_locale(self, override: str | None, effective: str | None, message_root: sd.MessageRoot) -> None:
-        """Update stored locale and mounted localization from explicitly captured values.
-
-        Compensation runs before component state is restored, so it must use the
-        supplied previous values rather than reading the state being undone.
-        """
-        await self._settings.set_locale(self._guild.id, override)
-        message_root.localize(localization_for(effective))
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
         """Set or remove a role multiplier for the selected vote kind, then reload the page.
 
         None removes the override. The caller must authorize the operation.
         """
-        if multiplier is None:
-            await self._votes.remove_role_weight(self._guild.id, self.kind, role_id)
-        else:
-            await self._votes.set_role_weight(RoleWeight(self._guild.id, self.kind, role_id, multiplier))
-        await self.open_voting()
+        before = await self._votes.configuration(self._guild.id, self.kind)
+        weights = tuple(weight for weight in before.weights if weight.role_id != role_id)
+        if multiplier is not None:
+            weights += (RoleWeight(self._guild.id, self.kind, role_id, multiplier),)
+        after = replace(before, weights=tuple(sorted(weights, key=lambda weight: weight.role_id)))
+        await self._save_voting(before, after)
 
     async def set_emojis(self, options: Sequence[VoteOption]) -> None:
-        await self._votes.set_emoji_preset(self._guild.id, self.kind, options)
-        await self.open_voting()
+        before = await self._votes.configuration(self._guild.id, self.kind)
+        after = replace(
+            before, preset=EmojiPreset(self._guild.id, self.kind, normalize_vote_options(options, kind=self.kind))
+        )
+        await self._save_voting(before, after)
+
+    async def _save_voting(self, before: VoteConfiguration, after: VoteConfiguration) -> None:
+        kind = self.kind
+
+        async def replace_configuration(expected: VoteConfiguration, replacement: VoteConfiguration) -> bool:
+            return await self._votes.replace_configuration(
+                self._guild.id, kind, expected=expected, replacement=replacement
+            )
+
+        async def refresh() -> None:
+            self._preset = await self._votes.emoji_preset(self._guild.id, self.kind)
+            self._weights = tuple(await self._votes.get_role_weights(self._guild.id, self.kind))
+
+        await save_edit(
+            self.history,
+            KIND_LABELS[kind],
+            before,
+            after,
+            target=f"voting:{self._guild.id}:{kind}",
+            authorize=lambda: self._authorize(SETTINGS_VOTING_EDIT),
+            replace=replace_configuration,
+            refresh=refresh,
+        )
+        self.confirming_reset = False
 
     def arm_reset(self) -> None:
         self.confirming_reset = True
 
     async def reset_voting(self) -> None:
-        await self._votes.reset_configuration(self._guild.id, self.kind)
-        await self.open_voting()
+        before = await self._votes.configuration(self._guild.id, self.kind)
+        await self._save_voting(before, VoteConfiguration(None, ()))
 
     def _server_fields(self) -> list[CardField]:
         fields = [

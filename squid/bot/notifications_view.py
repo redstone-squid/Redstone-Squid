@@ -6,6 +6,7 @@ from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.edit_history import history_controls, record_edit, save_edit
 from squid.bot.ui import tr
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
@@ -42,6 +43,10 @@ class NotificationScreen(sd.Screen):
     """A notification workspace that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("notifications"))
+
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+
+    _visibility: InboxVisibility = sl.state(DEFAULT_INBOX_VISIBILITY, persist=False)
 
     selected_ids: tuple[str, ...] = sl.state(())
     selected_inbox_ids: tuple[str, ...] = sl.state(())
@@ -247,6 +252,7 @@ class NotificationScreen(sd.Screen):
                 key="notification-actions",
             )
         )
+        nodes.extend(history_controls(self.history))
         return tuple(nodes)
 
     async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
@@ -263,48 +269,85 @@ class NotificationScreen(sd.Screen):
 
     async def _set_selected_read_state(self, event: sd.PressEvent, *, read: bool) -> None:
         await event.acknowledge()
-        visibility = await self._resolve_visibility(event)
-        operation = self._notifications.mark_read if read else self._notifications.mark_unread
-        for notification_id in self.selected_inbox_ids:
-            await operation(self._account_id, int(notification_id), visibility=visibility)
-        await self._refresh()
-        self.invalidate()
+        before = tuple(
+            (row.id, row.read_at is not None) for row in self._inbox if str(row.id) in self.selected_inbox_ids
+        )
+        after = tuple((key, read) for key, _ in before)
+
+        async def replace_states(
+            expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
+        ) -> bool:
+            return await self._notifications.replace_read_states(
+                self._account_id, expected, replacement, visibility=await self._resolve_visibility(event)
+            )
+
+        await self._save_states(tr(t"notification-history-read = Change read state"), before, after, replace_states)
+
+    async def _may_reverse(self) -> bool:
+        return (await self._notifications.preferences(self._account_id)).has_current_consent
+
+    async def _save_states[ValueT](
+        self,
+        label: sl.TextLike,
+        before: ValueT,
+        after: ValueT,
+        replace_values: Callable[[ValueT, ValueT], Awaitable[bool]],
+    ) -> None:
+        await save_edit(
+            self.history,
+            label,
+            before,
+            after,
+            target=f"notifications:{self._account_id}",
+            authorize=self._may_reverse,
+            replace=replace_values,
+            refresh=self._refresh,
+        )
 
     async def _toggle_web(self, event: sd.ToggleEvent) -> None:
         await event.acknowledge()
-        self._preferences = await self._notifications.set_preferences(
-            self._account_id,
-            web_enabled=event.value,
-            dm_enabled=self.dm_enabled,
-        )
-        await self._refresh(event)
+        await self._save_preferences((event.value, self.dm_enabled))
 
     async def _toggle_dm(self, event: sd.ToggleEvent) -> None:
         await event.acknowledge()
-        self._preferences = await self._notifications.set_preferences(
-            self._account_id,
-            web_enabled=self.web_enabled,
-            dm_enabled=event.value,
+        await self._save_preferences((self.web_enabled, event.value))
+
+    async def _save_preferences(self, after: tuple[bool, bool]) -> None:
+        async def replace_values(expected: tuple[bool, bool], replacement: tuple[bool, bool]) -> bool:
+            return await self._notifications.replace_preferences(self._account_id, expected, replacement)
+
+        await self._save_states(
+            tr(t"notification-history-preferences = Change notification preferences"),
+            (self.web_enabled, self.dm_enabled),
+            after,
+            replace_values,
         )
-        await self._refresh(event)
+
+    async def _replace_subscriptions(
+        self, expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
+    ) -> bool:
+        return await self._notifications.replace_subscription_states(self._account_id, expected, replacement)
 
     async def _unfollow(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
-        for subscription_id in self.selected_ids:
-            await self._notifications.unsubscribe(self._account_id, int(subscription_id))
-        await self._refresh(event)
-        self.invalidate()
+        before = tuple((int(key), True) for key in self.selected_ids)
+        after = tuple((key, False) for key, _ in before)
+        await self._save_states(
+            tr(t"notification-history-unfollow = Unfollow"), before, after, self._replace_subscriptions
+        )
 
     async def _follow_creator(self, event: sd.SubmitEvent) -> None:
         creator = self._uuid(event.values["creator"])
         if creator is None:
             await event.notice(tr(t"notifications-invalid-creator-uuid = Enter a creator profile ID in UUID form."))
             return
-        await self._notifications.subscribe(
+        previous_ids = {row.id for row in await self._notifications.subscriptions(self._account_id)}
+        subscription = await self._notifications.subscribe(
             self._account_id,
             kind=SubscriptionKind.CREATOR,
             subject_id=creator,
         )
+        self._record_follow(subscription.id, previous_ids)
         await self._followed(event, tr(t"bot-notifications-view-following-that-creator = Following that creator."))
 
     async def _follow_record(self, event: sd.SubmitEvent) -> None:
@@ -313,11 +356,13 @@ class NotificationScreen(sd.Screen):
         if record_title is None:
             await event.notice(tr(t"notifications-invalid-record-title-uuid = Enter a record title ID in UUID form."))
             return
-        await self._notifications.subscribe(
+        previous_ids = {row.id for row in await self._notifications.subscriptions(self._account_id)}
+        subscription = await self._notifications.subscribe(
             self._account_id,
             kind=SubscriptionKind.RECORD,
             subject_id=record_title,
         )
+        self._record_follow(subscription.id, previous_ids)
         await self._followed(event, tr(t"bot-notifications-view-following-that-record = Following that record."))
 
     async def _follow_filter(self, event: sd.SubmitEvent) -> None:
@@ -337,14 +382,30 @@ class NotificationScreen(sd.Screen):
             if tag is None
             else (TagPredicate(cast(int, tag), "present" if tag_value is None else "exact", tag_value),),
         )
-        await self._notifications.subscribe(
+        previous_ids = {row.id for row in await self._notifications.subscriptions(self._account_id)}
+        subscription = await self._notifications.subscribe(
             self._account_id,
             kind=SubscriptionKind.RECORD_FILTER,
             record_filter=record_filter,
         )
+        self._record_follow(subscription.id, previous_ids)
         await self._followed(
             event,
             tr(t"notifications-follow-filter-confirmation = Following records matching that filter."),
+        )
+
+    def _record_follow(self, subscription_id: int, previous_ids: set[int]) -> None:
+        if subscription_id in previous_ids:
+            return
+        record_edit(
+            self.history,
+            tr(t"notification-history-follow = Follow"),
+            ((subscription_id, False),),
+            ((subscription_id, True),),
+            target=f"subscription:{subscription_id}",
+            authorize=self._may_reverse,
+            replace=self._replace_subscriptions,
+            refresh=self._refresh,
         )
 
     async def _followed(self, event: sd.SubmitEvent, notice: sl.TextLike) -> None:

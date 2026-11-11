@@ -615,8 +615,19 @@ class History:
             assert entry.last_result is not None
             return entry.last_result
         entry.state = HistoryEntryState.REAPPLYING if redo else HistoryEntryState.REVERSING
+        cause = current_action()
+        context = ActionContext.create(
+            f"{'Redo' if redo else 'Undo'} {source_text(entry.label)}",
+            kind=ActionPurpose.REDO if redo else ActionPurpose.UNDO,
+            cause=None if cause is None else cause.causal_ref(),
+            relation=ActionRelation("reapplies" if redo else "reverses", entry.original_action_id),
+        )
         try:
-            inverse = await entry.operation.reverse()
+            with fresh_action_transaction(action_context=context):
+                inverse = await entry.operation.reverse()
+        except FreshActionError:
+            entry.state = HistoryEntryState.UNDONE if redo else HistoryEntryState.READY
+            raise
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, conflict=error.detail, error=error)

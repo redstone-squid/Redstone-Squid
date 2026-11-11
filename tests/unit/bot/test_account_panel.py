@@ -253,6 +253,22 @@ class AccountMutationService(AccountService):
         self.unlinks: list[tuple[int, int]] = []
 
     @override
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        return Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+
+    @override
+    async def replace_profile(self, account_id: int, expected: ProfileUpdate, replacement: ProfileUpdate) -> bool:
+        await self.update_profile(account_id, replacement)
+        return True
+
+    @override
+    async def replace_identity_visibility(
+        self, account_id: int, identity_id: int, *, expected: bool, replacement: bool
+    ) -> bool:
+        await self.set_identity_visibility(account_id, identity_id, is_public=replacement)
+        return True
+
+    @override
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         self.profile_updates.append((account_id, update))
         return AccountProfile.empty(account_id)
@@ -772,7 +788,8 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     source = NoticeSource()
 
     assert component.on_change is not None
-    await component.on_change(sp.TransitionEvent(cast(Any, source), "save", staged, committed))
+    with sl.runtime.transaction():
+        await component.on_change(sp.TransitionEvent(cast(Any, source), "save", staged, committed))
 
     accounts = cast(AccountMutationService, panel._accounts)
     assert len(accounts.profile_updates) == 1
@@ -799,7 +816,8 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountOverview, dict
         del preview, on_abandon, timeout
 
         async def answer(consent: AccountConsent | None) -> None:
-            await on_answer(cast(sd.PressEvent, event), consent)
+            with sl.runtime.transaction():
+                await on_answer(cast(sd.PressEvent, event), consent)
             if consent is not None:
                 await cast(Any, event).responder.message_root.schedule()
 
@@ -866,7 +884,7 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
 ) -> None:
     """Visibility writes wait for consent even when triggered by a toggle handler."""
     panel, opened = _gated_panel(monkeypatch)
-    panel._identities = (DISCORD,)
+    panel._identities = (replace(DISCORD, is_public=False),)
     panel.selected_id = DISCORD.id
     message_root = ScheduleRoot()
 

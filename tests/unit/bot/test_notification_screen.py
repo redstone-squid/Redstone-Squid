@@ -7,6 +7,7 @@ from uuid import UUID
 
 from whenever import Instant
 
+import squid_ui as sl
 from squid.bot.notifications_view import NotificationScreen
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.notifications import (
@@ -37,6 +38,19 @@ class NotificationRecorder(NotificationService):
         self.subscribe_calls: list[SubscribeCall] = []
         self.inbox_reads: list[InboxVisibility] = []
         self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
+
+    @override
+    async def replace_read_states(
+        self,
+        account_id: int,
+        expected: tuple[tuple[int, bool], ...],
+        replacement: tuple[tuple[int, bool], ...],
+        *,
+        visibility: InboxVisibility,
+    ) -> bool:
+        for key, read in replacement:
+            self.read_changes.append((account_id, key, read, visibility))
+        return True
 
     @override
     async def preferences(self, account_id: int) -> NotificationPreferences:
@@ -80,7 +94,11 @@ class NotificationRecorder(NotificationService):
         return Page(
             items=(
                 InboxNotification(
-                    id=3, kind=NotificationKind.BUILD_CONFIRMED, payload={"build_id": 9}, created_at=Instant.now()
+                    id=3,
+                    kind=NotificationKind.BUILD_CONFIRMED,
+                    payload={"build_id": 9},
+                    created_at=Instant.now(),
+                    read_at=Instant.now() if self.read_changes and self.read_changes[-1][2] else None,
                 ),
             ),
             total=1,
@@ -152,10 +170,11 @@ async def test_following_a_creator_refreshes_the_subscription_browser() -> None:
     creator = UUID("11111111-1111-1111-1111-111111111111")
     responder = RecordingResponder()
 
-    await submit(screen, "follow-creator", {"creator": str(creator)}, responder=responder)
+    with sl.runtime.transaction():
+        await submit(screen, "follow-creator", {"creator": str(creator)}, responder=responder)
 
     assert harness.notifications.subscribe_calls == [SubscribeCall(7, SubscriptionKind.CREATOR, creator, None)]
-    assert harness.notifications.subscription_reads == 2
+    assert harness.notifications.subscription_reads == 3
     assert len(responder.notices) == 1
 
 
@@ -165,18 +184,19 @@ async def test_following_a_record_filter_uses_typed_tag_input() -> None:
     await screen.on_load()
     responder = RecordingResponder()
 
-    await submit(
-        screen,
-        "follow-filter",
-        {
-            "build_kind": "door",
-            "base_title": None,
-            "version_scope": "up_to_date",
-            "tag": 4,
-            "tag_value": "compact",
-        },
-        responder=responder,
-    )
+    with sl.runtime.transaction():
+        await submit(
+            screen,
+            "follow-filter",
+            {
+                "build_kind": "door",
+                "base_title": None,
+                "version_scope": "up_to_date",
+                "tag": 4,
+                "tag_value": "compact",
+            },
+            responder=responder,
+        )
 
     call = harness.notifications.subscribe_calls[-1]
     assert call.kind is SubscriptionKind.RECORD_FILTER
@@ -194,18 +214,19 @@ async def test_empty_record_filter_does_not_call_the_service() -> None:
     await screen.on_load()
     responder = RecordingResponder()
 
-    await submit(
-        screen,
-        "follow-filter",
-        {
-            "build_kind": None,
-            "base_title": None,
-            "version_scope": None,
-            "tag": None,
-            "tag_value": None,
-        },
-        responder=responder,
-    )
+    with sl.runtime.transaction():
+        await submit(
+            screen,
+            "follow-filter",
+            {
+                "build_kind": None,
+                "base_title": None,
+                "version_scope": None,
+                "tag": None,
+                "tag_value": None,
+            },
+            responder=responder,
+        )
 
     assert harness.notifications.subscribe_calls == []
     assert len(responder.notices) == 1
@@ -218,9 +239,11 @@ async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() ->
     await screen.on_load()
 
     await choose(screen, "inbox", "3")
-    await press(screen, "mark_selected_read")
+    with sl.runtime.transaction():
+        await press(screen, "mark_selected_read")
     await choose(screen, "inbox", "3")
-    await press(screen, "mark_selected_unread")
+    with sl.runtime.transaction():
+        await press(screen, "mark_selected_unread")
 
     assert harness.notifications.inbox_reads == [visibility, visibility, visibility]
     assert harness.notifications.read_changes == [(7, 3, True, visibility), (7, 3, False, visibility)]
@@ -240,7 +263,8 @@ async def test_inbox_mutation_rechecks_staff_visibility_for_the_component_intera
     await screen.on_load()
 
     await choose(screen, "inbox", "3")
-    await press(screen, "mark_selected_read")
+    with sl.runtime.transaction():
+        await press(screen, "mark_selected_read")
 
     assert harness.notifications.read_changes == [(7, 3, True, refreshed)]
     assert harness.notifications.inbox_reads[-1] == refreshed
