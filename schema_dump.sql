@@ -4842,6 +4842,13 @@ COMMENT ON COLUMN public.starboards.max_age_seconds IS 'Maximum source-message a
 
 
 --
+-- Name: COLUMN starboards.archived; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.starboards.archived IS 'Hidden boards retain their ID and revision through creation undo and final deletion.';
+
+
+--
 -- Name: starboards_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 

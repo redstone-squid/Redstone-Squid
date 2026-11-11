@@ -42,6 +42,8 @@ COMMENT ON COLUMN public.starboards.allow_bots IS 'Whether messages authored by 
 
 COMMENT ON COLUMN public.starboards.max_age_seconds IS 'Maximum source-message age in seconds; zero disables the upper age limit.';
 
+COMMENT ON COLUMN public.starboards.archived IS 'Hidden boards retain their ID and revision through creation undo and final deletion.';
+
 ALTER TABLE ONLY public.starboards
     ADD CONSTRAINT starboards_pkey PRIMARY KEY (id);
 
