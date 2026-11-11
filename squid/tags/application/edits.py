@@ -1,24 +1,27 @@
 """Showcase assignments participate in the owning build's revision and audit."""
 
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Annotated, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from whenever import Instant
 
 from squid.accounts.application.edits import AccountEditUnitOfWork
 from squid.accounts.errors import ConsentRequiredError
 from squid.builds.application.ports import BuildUnitOfWork
+from squid.builds.application.restrictions import RestrictionUnitOfWork
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditValues, PreparedEdit, Revision
+from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
 from squid.edits.fields import Aggregate, FieldCommand
+from squid.permissions.application.services import PermissionService
+from squid.permissions.domain.catalogue import RESTRICTION_ALIAS_CREATE
 from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.application.services import TagDefinitionRepository, coerce_assignment_value, require_showcase
-from squid.tags.domain import TagValue
+from squid.tags.domain import TagAuthority, TagSemanticKind, TagValue
 from squid.tags.models import TagDefinition
 
 SHOWCASE_EDIT = "tags.assignment"
@@ -39,6 +42,8 @@ class TagEditStore(TagDefinitionRepository, Protocol):
     async def get_for_update(self, tag_id: int) -> TagDefinition | None: ...
 
     async def advance_build_revision(self, build_id: int, expected: Revision) -> Revision: ...
+
+    async def flush_definition_revision(self, definition: TagDefinition, expected: Revision) -> Revision: ...
 
 
 class TagEditUnitOfWork(BuildUnitOfWork, AccountEditUnitOfWork, EditUnitOfWork, Protocol):
@@ -133,3 +138,59 @@ class ShowcaseAssignmentEdit(FieldCommand[TagEditUnitOfWork, AssignmentRoot, Sho
             correlation_id=str(command.operation_id),
         ):
             return await super().apply(uow, actor, command, prepared)
+
+
+ALIAS_EDIT = "tags.alias"
+
+
+def tag_target(tag_id: int) -> EditTarget:
+    return EditTarget("tag", str(tag_id))
+
+
+class AliasValues(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alias: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    present: bool = True
+
+    def edit_values(self) -> EditValues:
+        return EditValues(self.model_dump_json())
+
+
+class TagAliasUnitOfWork(TagEditUnitOfWork, RestrictionUnitOfWork, Protocol):
+    pass
+
+
+class TagAliasEdit(FieldCommand[TagAliasUnitOfWork, TagDefinition, AliasValues]):
+    def __init__(self, permissions: PermissionService) -> None:
+        async def load(uow: TagAliasUnitOfWork, command: EditCommand) -> TagDefinition:
+            values = AliasValues.model_validate_json(command.values.encoded)
+            # Existing alias writers acquire the name lock before the definition lock.
+            await uow.restrictions.lock_alias(values.alias)
+            definition = await uow.tags.get_for_update(int(command.expected[0].target.key))
+            if (
+                definition is None
+                or definition.authority is not TagAuthority.OFFICIAL
+                or definition.semantic_kind is not TagSemanticKind.RESTRICTION
+            ):
+                raise ValidationError
+            return definition
+
+        async def authorize(uow: TagAliasUnitOfWork, actor: Actor, root: TagDefinition) -> None:
+            if not await permissions.allows_in(uow, actor, RESTRICTION_ALIAS_CREATE):
+                raise AuthorizationError
+
+        async def flush(uow: TagAliasUnitOfWork, root: TagDefinition, expected: Revision) -> Revision:
+            return await uow.tags.flush_definition_revision(root, expected)
+
+        super().__init__(Aggregate("tag", load, lambda root: root.revision, flush), AliasValues, authorize)
+
+    async def capture(self, uow: TagAliasUnitOfWork, root: TagDefinition, command: EditCommand) -> AliasValues:
+        values = AliasValues.model_validate_json(command.values.encoded)
+        return AliasValues(alias=values.alias, present=await uow.restrictions.has_alias(root.id, values.alias))
+
+    async def write(
+        self, uow: TagAliasUnitOfWork, root: TagDefinition, before: AliasValues, after: AliasValues
+    ) -> None:
+        if not await uow.restrictions.replace_alias(root.display_name, after.alias, before.present, after.present):
+            raise ValidationError

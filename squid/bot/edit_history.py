@@ -1,4 +1,4 @@
-"""Session-local receipts for conditional domain edits."""
+"""History controls and reversible values for unsaved widget editors."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -7,20 +7,14 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
-from squid.core.errors import AuthorizationError, InvalidStateError
 from squid_reactivity.actions import ConflictDetail
-from squid_reactivity.errors import ReactiveConflictError, ReactiveWriteError
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.errors import ReactiveConflictError
 from squid_ui.runtime import ReversibleOperation
 
 
 @dataclass(frozen=True, slots=True)
-class _ConditionalEdit[ValueT]:
-    """Reverse one saved value through an atomic domain compare-and-replace.
-
-    The callback must compare and write in one transaction. Refresh runs only after
-    that transaction succeeds; failure then requires reconciliation, not a retry.
-    """
+class _LocalEdit[ValueT]:
+    """Restore unsaved widget values while respecting the editor's current state."""
 
     target: str
     expected: ValueT
@@ -35,47 +29,10 @@ class _ConditionalEdit[ValueT]:
         if not await self.replace(self.expected, self.replacement):
             raise ReactiveConflictError(ConflictDetail(self.target, 0, 1), "The saved value changed elsewhere")
         await self.refresh()
-        return _ConditionalEdit(
-            self.target, self.replacement, self.expected, self.authorize, self.replace, self.refresh
-        )
+        return _LocalEdit(self.target, self.replacement, self.expected, self.authorize, self.replace, self.refresh)
 
 
-async def save_edit[ValueT](
-    stack: sl.runtime.History,
-    label: sl.TextLike,
-    before: ValueT,
-    after: ValueT,
-    *,
-    target: str,
-    authorize: Callable[[], Awaitable[bool]],
-    replace: Callable[[ValueT, ValueT], Awaitable[bool]],
-    refresh: Callable[[], Awaitable[None]],
-    write: Callable[[], Awaitable[bool]] | None = None,
-) -> bool:
-    """Authorize, conditionally save, retain an inverse, and refresh one user edit.
-
-    Equal values do nothing. A stale value refreshes the view and raises a public
-    conflict instead of allowing the screen to announce a successful save.
-    """
-    if before == after:
-        return False
-    current = CURRENT_TRANSACTION.get()
-    if current is None or current.readonly:
-        message = "saved edits require a writable action transaction"
-        raise ReactiveWriteError(message)
-    if not await authorize():
-        raise AuthorizationError
-    if not (await write() if write is not None else await replace(before, after)):
-        await refresh()
-        raise InvalidStateError(
-            tr(t"edit-history-save-conflict = This value changed elsewhere. Review it and try again.")
-        )
-    record_edit(stack, label, before, after, target=target, authorize=authorize, replace=replace, refresh=refresh)
-    await refresh()
-    return True
-
-
-def record_edit[ValueT](
+def _record_local_edit[ValueT](
     stack: sl.runtime.History,
     label: sl.TextLike,
     before: ValueT,
@@ -86,9 +43,9 @@ def record_edit[ValueT](
     replace: Callable[[ValueT, ValueT], Awaitable[bool]],
     refresh: Callable[[], Awaitable[None]],
 ) -> None:
-    """Retain a successful operation whose domain service already performed the write."""
+    """Capture widget values after a local transition."""
     if before != after:
-        stack.record_operation(label, _ConditionalEdit(target, after, before, authorize, replace, refresh))
+        stack.record_operation(label, _LocalEdit(target, after, before, authorize, replace, refresh))
 
 
 async def apply_history(stack: sl.runtime.History, event: sl.PressEvent, *, redo: bool = False) -> None:
@@ -155,7 +112,7 @@ def track_local_edits[StateT, ValueT](
         if original is not None:
             await original(event)
         if enabled():
-            record_edit(
+            _record_local_edit(
                 stack,
                 label,
                 select(event.previous),

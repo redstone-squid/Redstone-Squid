@@ -28,7 +28,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
 )
 from squid.tags.application import TagService
-from squid.tags.application.edits import ShowcaseValues
+from squid.tags.application.edits import ALIAS_EDIT, AliasValues, ShowcaseValues, tag_target
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_ui.runtime import transaction
@@ -97,19 +97,31 @@ class FakeTagService(TagService):
 
 
 class TagEditRecorder(EditRunner):
-    def __init__(self, tags: FakeTagService) -> None:
+    def __init__(self, tags: FakeTagService, restrictions: FakeRestrictionService) -> None:
         self.tags = tags
+        self.restrictions = restrictions
 
     async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
-        values = ShowcaseValues.model_validate_json(command.values.encoded)
-        self.tags.assignments.append(
-            (int(command.expected[0].target.key), values.tag_id, values.value, actor.require_account_id())
-        )
-        self.tags.revision += 1
-        revisions = (Revision(command.expected[0].target, self.tags.revision),)
-        receipt = EditReceipt(
-            command, ShowcaseValues(tag_id=values.tag_id, assigned=False).edit_values(), command.values, revisions
-        )
+        if command.kind == ALIAS_EDIT:
+            values = AliasValues.model_validate_json(command.values.encoded)
+            item = ("locational", values.alias)
+            before = AliasValues(alias=values.alias, present=item in self.restrictions.aliases).edit_values()
+            if values.present:
+                self.restrictions.aliases.append(item)
+            else:
+                self.restrictions.aliases.remove(item)
+            self.restrictions.revision += 1
+            revision = self.restrictions.revision
+        else:
+            values = ShowcaseValues.model_validate_json(command.values.encoded)
+            self.tags.assignments.append(
+                (int(command.expected[0].target.key), values.tag_id, values.value, actor.require_account_id())
+            )
+            self.tags.revision += 1
+            revision = self.tags.revision
+            before = ShowcaseValues(tag_id=values.tag_id, assigned=False).edit_values()
+        revisions = (Revision(command.expected[0].target, revision),)
+        receipt = EditReceipt(command, before, command.values, revisions)
         if attempt is not None:
             attempt.receipt = receipt
         return EditResult(
@@ -124,21 +136,11 @@ class TagEditRecorder(EditRunner):
 class FakeRestrictionService(RestrictionService):
     def __init__(self) -> None:
         self.aliases: list[tuple[str, str]] = []
+        self.revision = 1
 
     @override
-    async def add_alias(self, restriction: str, alias: str) -> None:
-        self.aliases.append((restriction, alias))
-
-    @override
-    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool:
-        item = (restriction, alias)
-        if (item in self.aliases) != expected:
-            return False
-        if replacement:
-            self.aliases.append(item)
-        else:
-            self.aliases.remove(item)
-        return True
+    async def alias_revision(self, restriction: str) -> Revision:
+        return Revision(tag_target(1), self.revision)
 
 
 class NoticeEvent:
@@ -173,7 +175,7 @@ def make_screen(
         TagsScreen(
             tags,
             restrictions,
-            TagEditRecorder(tags),
+            TagEditRecorder(tags, restrictions),
             AsyncMock(return_value=Actor(account_id=account_id)),
             build_id=build_id,
             actor_account_id=account_id,

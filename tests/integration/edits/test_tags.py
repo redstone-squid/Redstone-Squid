@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.domain import AccountConsent
 from squid.accounts.errors import ConsentRequiredError
 from squid.builds.application.edits import build_target
+from squid.builds.application.restrictions import RestrictionService
 from squid.builds.domain import Status
 from squid.builds.history_models import BuildHistoryEntry
 from squid.builds.models import OtherBuild
@@ -16,9 +17,18 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditExecutor
 from squid.edits.domain import EditCommand, Revision, RevisionConflictError
+from squid.permissions.application.services import PermissionService
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.tags.application.edits import SHOWCASE_EDIT, ShowcaseAssignmentEdit, ShowcaseValues
-from squid.tags.domain import TagModerationStatus, TagValueType
+from squid.tags.application.edits import (
+    ALIAS_EDIT,
+    SHOWCASE_EDIT,
+    AliasValues,
+    ShowcaseAssignmentEdit,
+    ShowcaseValues,
+    TagAliasEdit,
+)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagDefinition
 
 
 async def test_showcase_history_and_external_build_edits_share_one_revision(
@@ -78,3 +88,45 @@ async def test_showcase_history_and_external_build_edits_share_one_revision(
         await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
     async with sessions() as session:
         assert await session.scalar(select(func.count()).select_from(BuildHistoryEntry)) == 5
+
+
+async def test_alias_history_fences_legacy_writers_and_current_permissions(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    async with sessions.begin() as session:
+        definition = TagDefinition(
+            stable_key="test_restriction",
+            display_name="Restriction",
+            normalized_name="restriction",
+            authority=TagAuthority.OFFICIAL,
+            semantic_kind=TagSemanticKind.RESTRICTION,
+            restriction_type="miscellaneous",
+            value_type=TagValueType.NONE,
+            moderation_status=TagModerationStatus.APPROVED,
+        )
+        session.add(definition)
+    permissions = PermissionService(uow_factory=factory)
+    executor = EditExecutor(factory, {ALIAS_EDIT: TagAliasEdit(permissions)})
+    restrictions = RestrictionService(uow_factory=factory)
+    actor = Actor(discord_user_id=1, is_bot_owner=True)
+    command = EditCommand(
+        ALIAS_EDIT,
+        (await restrictions.alias_revision("Restriction"),),
+        AliasValues(alias="Alternate").edit_values(),
+    )
+    saved = await executor.execute(command, actor)
+    assert saved.receipt is not None
+    assert (await executor.execute(command, actor)).replayed
+    with pytest.raises(AuthorizationError):
+        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), Actor(discord_user_id=2))
+    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+    assert undone.receipt is not None
+    async with factory() as uow:
+        assert not await uow.restrictions.has_alias(definition.id, "Alternate")
+    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    assert redone.receipt is not None
+    await restrictions.add_alias("Restriction", "Other alias")
+    with pytest.raises(RevisionConflictError):
+        await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)

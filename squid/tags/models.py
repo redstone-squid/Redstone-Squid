@@ -34,6 +34,7 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
+from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC, StrEnumText
 from squid.tags.domain import (
     RecordOperator,
@@ -56,11 +57,12 @@ class UnitDefinition(Base, kw_only=True):
     scale_to_base: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
 
 
-class TagDefinition(AuditTimestampsMixin, Base, kw_only=True):
+class TagDefinition(AuditTimestampsMixin, Revisioned, Base, kw_only=True):
     """A canonical tag that may be assigned to builds."""
 
     __tablename__ = "tag_definitions"
     __table_args__ = (
+        CheckConstraint("revision > 0", name="tag_definitions_revision_positive"),
         Index("tag_definitions_created_by_idx", "created_by_account_id"),
         UniqueConstraint("id", "value_type", name="tag_definitions_id_value_type_key"),
         UniqueConstraint("stable_key", name="tag_definitions_stable_key_key"),

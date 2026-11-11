@@ -7,6 +7,7 @@ from typing import Protocol
 from async_lru import alru_cache
 
 from squid.builds.domain import RestrictionTypeLiteral
+from squid.edits.domain import Revision
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
@@ -18,10 +19,18 @@ class RestrictionDefinition:
     type: RestrictionTypeLiteral | None
 
 
-class RestrictionRepository(Protocol):
-    """Restriction metadata needed by build submission."""
-
+class RestrictionReader(Protocol):
     async def fetch_all_restrictions(self) -> Sequence[RestrictionDefinition]: ...
+
+
+class RestrictionRepository(RestrictionReader, Protocol):
+    """Restriction metadata and alias writes in the caller's transaction."""
+
+    async def alias_revision(self, restriction: str) -> Revision: ...
+
+    async def lock_alias(self, alias: str) -> None: ...
+
+    async def has_alias(self, tag_id: int, alias: str) -> bool: ...
 
     async def add_alias(self, restriction: str, alias: str) -> None: ...
 
@@ -41,14 +50,9 @@ class RestrictionService:
             await uow.commit()
         self.fetch_all_restrictions.cache_clear()
 
-    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool:
-        """Conditionally reverse alias membership without touching a different restriction."""
+    async def alias_revision(self, restriction: str) -> Revision:
         async with self._uow_factory() as uow:
-            changed = await uow.restrictions.replace_alias(restriction, alias, expected, replacement)
-            await uow.commit()
-        if changed:
-            self.fetch_all_restrictions.cache_clear()
-        return changed
+            return await uow.restrictions.alias_revision(restriction)
 
     async def names(self) -> list[str]:
         return [restriction.name for restriction in await self.fetch_all_restrictions()]

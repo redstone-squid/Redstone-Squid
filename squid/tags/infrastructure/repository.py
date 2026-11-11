@@ -12,6 +12,7 @@ from whenever import Instant
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build
 from squid.edits.domain import Revision, RevisionConflictError
+from squid.persistence.revisions import flush_revision
 from squid.tags.application import TagDefinitionRepository
 from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
@@ -79,6 +80,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
 
     async def get_for_update(self, tag_id: int) -> TagDefinition | None:
         return await self._session().get(TagDefinition, tag_id, with_for_update=True)
+
+    async def flush_definition_revision(self, definition: TagDefinition, expected: Revision) -> Revision:
+        return await flush_revision(self._session(), definition, expected)
 
     async def build_revision(self, build_id: int) -> int:
         revision = await self._session().scalar(select(Build.revision).where(Build.id == build_id))

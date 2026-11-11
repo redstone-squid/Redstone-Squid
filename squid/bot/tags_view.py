@@ -9,12 +9,12 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.edit_controller import EditController
-from squid.bot.edit_history import record_edit
 from squid.bot.ui import tr
 from squid.builds.application.edits import build_target
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
+from squid.edits.domain import Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
@@ -23,7 +23,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid.tags.application.edits import SHOWCASE_EDIT, ShowcaseValues
+from squid.tags.application.edits import ALIAS_EDIT, SHOWCASE_EDIT, AliasValues, ShowcaseValues
 from squid.tags.domain import TagValueType
 from squid.tags.models import TagDefinition
 
@@ -56,9 +56,7 @@ class TagOperations(Protocol):
 class RestrictionOperations(Protocol):
     """Restriction taxonomy mutation exposed by the workspace."""
 
-    async def add_alias(self, restriction: str, alias: str) -> None: ...
-
-    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool: ...
+    async def alias_revision(self, restriction: str) -> Revision: ...
 
 
 type TagAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -325,24 +323,14 @@ class TagsScreen(sd.Screen):
         restriction = form.restriction
         alias = form.alias
         try:
-            await self._restrictions.add_alias(restriction, alias)
+            revision = await self._restrictions.alias_revision(restriction)
+            await self.edits.bind_many(ALIAS_EDIT, (revision,)).save(
+                AliasValues(alias=alias).edit_values(), tr(t"tags-history-alias = Add restriction alias")
+            )
         except AliasAlreadyAddedError:
             await event.notice(tr(t"tags-alias-already-exists = That alias is already on this restriction."))
             return
 
-        async def replace_alias(expected: bool, replacement: bool) -> bool:
-            return await self._restrictions.replace_alias(restriction, alias, expected, replacement)
-
-        record_edit(
-            self.history,
-            tr(t"tags-history-alias = Add restriction alias"),
-            before=False,
-            after=True,
-            target=f"restriction:{restriction}:alias:{alias}",
-            authorize=lambda: self._authorize(RESTRICTION_ALIAS_CREATE),
-            replace=replace_alias,
-            refresh=self._refresh,
-        )
         await event.notice(tr(t"bot-tags-view-restriction-alias-added = Restriction alias added."))
 
     async def _request_moderation(

@@ -13,7 +13,7 @@ from squid.builds.application.ports import (
     BuildUnitOfWork,
     DefaultVersionResolver,
 )
-from squid.builds.application.restrictions import RestrictionRepository
+from squid.builds.application.restrictions import RestrictionReader
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
 from squid.builds.domain import BuildDraft, RestrictionTypeLiteral, Status, sort_restrictions
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
@@ -50,7 +50,7 @@ class BuildService:
     def __init__(
         self,
         locks: BuildLockManager,
-        restrictions: RestrictionRepository,
+        restrictions: RestrictionReader,
         versions: DefaultVersionResolver,
         embeddings: BuildEmbeddingCoordinator,
         taxonomy: BuildTaxonomyResolver,
