@@ -64,12 +64,31 @@ class PageEvent[ContextT = object](ActionEvent[ContextT]):
     """The requested zero-based page, already clamped to the pages that exist."""
 
 
-type PageOwnership[ContextT = object] = Ownership[int, PageEvent[ContextT]]
+@dataclass(frozen=True, slots=True)
+class RoutedPage:
+    """An application-owned page whose navigation uses persistent route IDs.
+
+    `route` receives a clamped zero-based target page. `seek_route`, when supplied,
+    returns one input route for a jump menu whose submitted value is the target page.
+    The host validates input and owns authorization, state persistence, and redraws.
+
+    Planning may call these factories repeatedly, including for discarded candidates.
+    They must be safe to repeat; prefer deterministic encoding without registration.
+    Only the returned IDs go into the scene, so no Python callback survives delivery.
+    """
+
+    value: int
+    route: Callable[[int], str]
+    seek_route: Callable[[], str] | None = None
+
+
+type PageOwnership[ContextT = object] = Ownership[int, PageEvent[ContextT]] | RoutedPage
 """Who keeps a pager's zero-based page.
 
 A negative page counts from the end, as Python indexing does: `-1` is the last page. The
 planner clamps any value to the pages the content actually has, because a pager's page
-count is only known after layout.
+count is only known after layout. `RoutedPage` supplies an application-owned value
+with persistent navigation routes instead of an `on_change` callback.
 """
 
 FIRST_PAGE: PageOwnership = Uncontrolled(0)
@@ -91,6 +110,7 @@ __all__ = [
     "Ownership",
     "PageEvent",
     "PageOwnership",
+    "RoutedPage",
     "Uncontrolled",
     "bind_ownership",
     "resolve_page",

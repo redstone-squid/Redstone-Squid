@@ -12,6 +12,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from enum import Enum
 
+from squid_ui.ownership import RoutedPage
+
 
 def stable_fingerprint(values: Sequence[object]) -> str:
     """Hash logical structure without callback identity or process addresses."""
@@ -43,3 +45,18 @@ def stable_value(value: object) -> object:
     if isinstance(value, str | int | float | bool) or value is None:
         return value
     return type(value).__qualname__
+
+
+def has_routed_page(value: object) -> bool:
+    """Whether planning must regenerate IDs hidden behind a page's route factories."""
+    if isinstance(value, RoutedPage):
+        return True
+    if callable(value) or isinstance(value, str | bytes):
+        return False
+    if is_dataclass(value) and not isinstance(value, type):
+        return any(has_routed_page(getattr(value, item.name)) for item in fields(value))
+    if isinstance(value, Mapping):
+        return any(has_routed_page(item) for item in value.values())
+    if isinstance(value, Sequence):
+        return any(has_routed_page(item) for item in value)
+    return False

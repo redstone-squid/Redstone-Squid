@@ -372,7 +372,11 @@ def test_html_paging_honors_min_fill() -> None:
 
     def first_page_text(result) -> str:
         return "".join(
-            node.content for node in testing.walk(result.scene.body.children) if isinstance(node, scene.HtmlText)
+            child.content
+            for node in testing.walk(result.scene.body.children)
+            if isinstance(node, scene.HtmlElement) and node.tag is scene.HtmlTag.P
+            for child in node.children
+            if isinstance(child, scene.HtmlText)
         )
 
     balanced = sl.planning.plan(build(0), target=sl.html.target())
@@ -380,3 +384,44 @@ def test_html_paging_honors_min_fill() -> None:
 
     filled = sl.planning.plan(build(9), target=sl.html.target())
     assert first_page_text(filled) == "aaaabbbbcccc"
+
+
+async def test_html_list_page_ownership_drives_navigation_without_cursor_writes() -> None:
+    seen: list[int] = []
+
+    async def changed(event: sl.PageEvent) -> None:
+        seen.append(event.page)
+
+    result = sl.planning.plan(
+        sl.bullets("a", "b", "c", key="list", ordered=True, page_size=2, page=sl.controlled(1, changed)),
+        target=sl.html.target(),
+    )
+    entries = [item for item in _elements(result) if item.tag is scene.HtmlTag.LI]
+    assert len(entries) == 1
+    assert testing.texts(entries[0].children) == ["c"]
+    assert scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, 3) in entries[0].attributes
+    session = PresentationState()
+    session.apply_updates(result.session_updates)
+    assert not session.cursors
+    await result.bindings["__cursor_previous.list"].handler(testing.press_event())
+    assert seen == [0]
+
+
+def test_html_routed_paging_rebuilds_route_ids_with_a_shared_cache() -> None:
+    cache = PlanCache()
+    for prefix in ("old", "new"):
+        result = sl.planning.plan(
+            sl.paged(
+                sl.stack(sl.paragraph("aaaa"), sl.paragraph("bbbb")),
+                key="region",
+                chars=4,
+                page=sl.RoutedPage(
+                    -1, lambda page, prefix=prefix: f"{prefix}:{page}", lambda prefix=prefix: f"{prefix}:seek"
+                ),
+            ),
+            target=sl.html.target(),
+            cache=cache,
+        )
+        assert result.scene.pagers[0].page == 1
+        assert not result.bindings
+        assert all(item.route.route_id.startswith(prefix) for item in _elements(result) if item.route is not None)

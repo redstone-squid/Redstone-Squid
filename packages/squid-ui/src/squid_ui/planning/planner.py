@@ -10,6 +10,7 @@ from squid_ui.document import DocumentLike, PortableDocumentLike
 from squid_ui.handlers import bind_handlers
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.identity import has_routed_page
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
@@ -77,6 +78,11 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""
+    # Structural fingerprints omit callbacks, but page factories produce scene route IDs.
+    # Replan these documents so a new route encoder cannot replay obsolete IDs.
+    if has_routed_page(rendered):
+        cache = None
+        memo = None
     backend = request.target.dialect.planner
     result = backend.plan(rendered, request, cache=cache, memo=memo)
     frontend = request.target.adapter.frontend or request.target.adapter.name

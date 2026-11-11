@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 
 from squid_ui.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.ownership import Controlled, resolve_page
+from squid_ui.ownership import Controlled, RoutedPage, resolve_page
 from squid_ui.planning.adapter import EMPTY_COST, ResourceCost
 from squid_ui.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_ui.planning.layout_measurement.allocation import (
@@ -35,6 +35,7 @@ from squid_ui.planning.layout_measurement.diagnostics import (
 )
 from squid_ui.planning.layout_measurement.model import (
     PAGE_FOOTER_PREFIX,
+    MeasuredCard,
     MeasuredGroup,
     MeasuredPanel,
     MeasuredText,
@@ -232,6 +233,28 @@ def _insert_after(
     return None
 
 
+def _insert_pager(
+    children: list[Realized], target: MeasuredText, footer: MeasuredText, navigation: list[Realized]
+) -> tuple[list[Realized], int] | None:
+    """Keep an embed's page footer in its description and its controls outside the card."""
+    for index, child in enumerate(children):
+        if isinstance(child, MeasuredCard) and _insert_after(child.blocks, target, [footer]) is not None:
+            # Each pager owns its navigation list, so another pager in the same card
+            # cannot shift the slice that reposition() will later replace. Classic
+            # drawing collects rows separately from embeds, preserving their order.
+            children.insert(index, MeasuredGroup(navigation))
+            return navigation, 0
+        if (
+            isinstance(child, MeasuredPanel | MeasuredGroup)
+            and (placement := _insert_pager(child.children, target, footer, navigation)) is not None
+        ):
+            return placement
+        if child is target:
+            children[index + 1 : index + 1] = [footer, *navigation]
+            return children, index + 2
+    return None
+
+
 def _requested_position(state: PositionState, key: str, *, first: bool) -> Position | None:
     if isinstance(state, Mapping):
         return state.get(key)
@@ -287,7 +310,7 @@ def _measure_once(
             axis_units = [unit for unit in builder.units if unit.axis == axis]
             axis_regions = [region for region in builder.budgets if region.axis == axis]
             footer_reservation = sum(
-                _footer_cost(footers[unit.index], len(unit.content))
+                _footer_cost(footers[unit.index], len(unit.content)) + (2 if unit.axis is Axis.EMBED_TEXT else 0)
                 for unit in paginate_units
                 if unit.index in active and unit.axis == axis
             )
@@ -337,19 +360,23 @@ def _measure_once(
         )
         # A controlled page comes from the application, so a stored position must not override it.
         owner = policy.page
-        requested = None if isinstance(owner, Controlled) else _requested_position(position, key, first=not pagers)
-        opening = owner.value if isinstance(owner, Controlled) else owner.initial
+        requested = (
+            None if isinstance(owner, Controlled | RoutedPage) else _requested_position(position, key, first=not pagers)
+        )
+        opening = owner.value if isinstance(owner, Controlled | RoutedPage) else owner.initial
         shown = pager.select(resolve_page(opening, pager.pages) if requested is None else requested.offset)
-        text_used[unit.axis] = text_used.get(unit.axis, 0) + len(footer_slot.content)
-        additions: list[Realized] = [footer_slot]
-        if nav is not None:
-            additions.extend(builder.realize_children(validated_nav(nav(key, shown, pager.pages, chrome, owner))))
-        placement = _insert_after(children, unit.slot, additions)
+        # Embed description blocks are separated by two newlines.
+        separator = 2 if unit.axis is Axis.EMBED_TEXT else 0
+        text_used[unit.axis] = text_used.get(unit.axis, 0) + len(footer_slot.content) + separator
+        navigation = (
+            [] if nav is None else builder.realize_children(validated_nav(nav(key, shown, pager.pages, chrome, owner)))
+        )
+        placement = _insert_pager(children, unit.slot, footer_slot, navigation)
         if placement is None:
-            placement = (children, len(children))
-            children.extend(additions)
-        # Navigation follows the footer; repositioning replaces only that span.
-        pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
+            children.append(footer_slot)
+            placement = children, len(children)
+            children.extend(navigation)
+        pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1], len(navigation)
         pagers.append(pager)
 
     cost = ResourceCost({**text_used, **structural_cost(children)})

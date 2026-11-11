@@ -11,7 +11,6 @@ from dataclasses import dataclass, replace
 
 from squid_ui.capabilities import Capability
 from squid_ui.errors import UnsolvableLayoutError
-from squid_ui.ownership import FIRST_PAGE, LAST_PAGE
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cursors import MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
@@ -353,7 +352,7 @@ def _paged_region(
         key=node.key,
         extent=len(pages),
         fingerprint=stable_fingerprint(children),
-        owner=LAST_PAGE if node.initial == "end" else FIRST_PAGE,
+        owner=node.page,
     )
     grant = context.pages.grant(request)
     context.pages.record(request, grant.position)
@@ -365,7 +364,7 @@ def _paged_region(
         stretch,
         best_effort=isinstance(node.node, BestEffort),
     )
-    controls = context.pages.controls(node.key, grant.position, grant.extent)
+    controls = context.pages.controls(node.key, grant.position, grant.extent, node.page)
     if controls and node.footer is not None:
         controls[0] = Footer(_resolve(node.footer(grant.position.offset + 1, grant.extent), context), overflow=Never())
     if grant.extent > 1:

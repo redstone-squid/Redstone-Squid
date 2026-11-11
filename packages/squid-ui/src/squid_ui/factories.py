@@ -31,6 +31,7 @@ from squid_ui.forms import FormLike, SubmitHandler, bind_form
 from squid_ui.grids import GridCell
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionMode, BusySpec, PressHandler, SelectionEvent
+from squid_ui.ownership import FIRST_PAGE, PageOwnership
 from squid_ui.palette import INHERIT, Accent, Palette
 from squid_ui.rosters import RosterPlacement
 from squid_ui.semantic import (
@@ -502,6 +503,7 @@ def bullets(
     key: str,
     ordered: bool = False,
     page_size: int | None = None,
+    page: PageOwnership = FIRST_PAGE,
 ) -> List:
     """A bulleted or numbered list; bare text becomes an entry. ``key`` carries its page."""
     collected = _collect(entries, (ListItem, str, ResolvedText, Template), "sl.bullets()")
@@ -510,6 +512,7 @@ def bullets(
         key,
         ordered,
         page_size,
+        page,
     )
 
 
@@ -870,6 +873,7 @@ def routed_choices(
     minimum: int = 1,
     maximum: int = 1,
     available: bool = True,
+    selected: tuple[str, ...] = (),
 ) -> RoutedChoices:
     """A stateless string picker dispatched by ``route_id`` with selected choice keys."""
     return RoutedChoices(
@@ -880,6 +884,7 @@ def routed_choices(
         minimum,
         maximum,
         available,
+        selected,
     )
 
 

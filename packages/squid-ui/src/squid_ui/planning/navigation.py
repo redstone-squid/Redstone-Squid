@@ -19,7 +19,16 @@ from squid_ui.chrome import Chrome
 from squid_ui.context import ContextKey
 from squid_ui.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions import ActionEvent, PressEvent, SelectionEvent
-from squid_ui.ownership import FIRST_PAGE, Controlled, PageEvent, PageOwnership, Uncontrolled, bind_ownership
+from squid_ui.ownership import (
+    FIRST_PAGE,
+    Controlled,
+    Ownership,
+    PageEvent,
+    PageOwnership,
+    RoutedPage,
+    Uncontrolled,
+    bind_ownership,
+)
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.nodes import (
@@ -27,6 +36,7 @@ from squid_ui.primitives.nodes import (
     Gallery,
     Option,
     RawItem,
+    RoutedButton,
     RoutedSelect,
     Row,
     SelectMenu,
@@ -53,7 +63,7 @@ class PageCommit(_HandlerComposition):
     whether to accept it.
     """
 
-    owner: PageOwnership
+    owner: Ownership[int, PageEvent]
     key: str
     extent: int
     session: PresentationState
@@ -150,12 +160,12 @@ class NavigationState:
 
 @dataclass(frozen=True, slots=True)
 class NavigationContext:
-    """Cursor facts and the handlers a navigation factory can bind."""
+    """Cursor facts and navigation bindings: Python callbacks or persistent route IDs."""
 
     state: NavigationState
-    on_previous: Callable[..., Awaitable[None]]
-    on_next: Callable[..., Awaitable[None]]
-    on_seek: Callable[[ActionEvent, int], Awaitable[None]] | None = None
+    on_previous: Callable[..., Awaitable[None]] | str
+    on_next: Callable[..., Awaitable[None]] | str
+    on_seek: Callable[[ActionEvent, int], Awaitable[None]] | str | None = None
     """Jump to a zero-based page, or `None` when the source cannot address one.
 
     A source declares this reachable with `SourceCapabilities.jumpable`; a materialized
@@ -203,29 +213,20 @@ NAV_FACTORY_CONTEXT = ContextKey[NavFactory]("nav_factory")
 def navigation_controls(context: NavigationContext) -> Row:
     """Build stable boundary-aware controls from the facts in ``context``."""
     state = context.state
+
+    def button(
+        label: TextLike, binding: Callable[..., Awaitable[None]] | str, key: str, available: bool
+    ) -> Button | RoutedButton:
+        if isinstance(binding, str):
+            return RoutedButton(label, binding, disabled=not available)
+        return Button(label=label, on_click=binding, key=key, disabled=not available)
+
     previous = (
-        (
-            Button(
-                label=state.previous_label,
-                on_click=context.on_previous,
-                key=state.previous_key,
-                disabled=not state.has_previous,
-            ),
-        )
+        (button(state.previous_label, context.on_previous, state.previous_key, state.has_previous),)
         if state.backward
         else ()
     )
-    return Row(
-        (
-            *previous,
-            Button(
-                label=state.next_label,
-                on_click=context.on_next,
-                key=state.next_key,
-                disabled=not state.has_next,
-            ),
-        )
-    )
+    return Row((*previous, button(state.next_label, context.on_next, state.next_key, state.has_next)))
 
 
 def default_nav(context: NavigationContext) -> Sequence[MountNavNode]:
@@ -248,7 +249,7 @@ def _seek_pages(page: int, extent: int) -> list[int]:
     return sorted(ladder)
 
 
-def seek_control(context: NavigationContext) -> SelectMenu | None:
+def seek_control(context: NavigationContext) -> SelectMenu | RoutedSelect | None:
     """A jump select for a cursor that can address a page, or `None` when it cannot."""
     state = context.state
     seek = context.on_seek
@@ -257,14 +258,12 @@ def seek_control(context: NavigationContext) -> SelectMenu | None:
         return None
     label = state.page_option
 
-    return SelectMenu(
-        options=tuple(
-            Option(label(number + 1), str(number), default=number == page) for number in _seek_pages(page, extent)
-        ),
-        on_select=_SeekSelection(seek),
-        key=state.seek_key,
-        placeholder=state.seek_label or None,
+    options = tuple(
+        Option(label(number + 1), str(number), default=number == page) for number in _seek_pages(page, extent)
     )
+    if isinstance(seek, str):
+        return RoutedSelect(options, seek, placeholder=state.seek_label or None)
+    return SelectMenu(options, on_select=_SeekSelection(seek), key=state.seek_key, placeholder=state.seek_label or None)
 
 
 def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
@@ -310,6 +309,15 @@ class PagerNav:
     ) -> Sequence[NavNode]:
         """Return controls for ``page`` of ``extent`` that send page turns to ``owner``."""
         state = materialized_navigation_state(key, Position(offset=page), extent, chrome)
+        if isinstance(owner, RoutedPage):
+            return self.factory(
+                NavigationContext(
+                    state,
+                    owner.route(max(0, page - 1)),
+                    owner.route(min(extent - 1, page + 1)),
+                    owner.seek_route() if owner.seek_route is not None else None,
+                )
+            )
         commit = PageCommit(owner, key, extent, self.session)
         return self.factory(NavigationContext(state, TurnPage(commit, page - 1), TurnPage(commit, page + 1), commit))
 

@@ -41,6 +41,7 @@ class StaticPlanOptions(TypedDict, total=False):
     localization: Localization
     palette: Palette
     strict: bool
+    nav: PlannedNav | None
     reservation: ResourceCost
 
 
@@ -53,7 +54,6 @@ class PlanOptions(StaticPlanOptions, total=False):
     """
 
     positions: Mapping[str, Position] | None
-    nav: PlannedNav | None
     session: PresentationState | None
     search_budget: int
 

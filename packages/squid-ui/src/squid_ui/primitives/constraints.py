@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_ui.ownership import FIRST_PAGE, Controlled, PageOwnership
+from squid_ui.ownership import FIRST_PAGE, Controlled, PageOwnership, RoutedPage
 from squid_ui.text import TextLike
 
 
@@ -37,6 +37,8 @@ class Paginate:
     example to return to the first page when a filter changes. A controlled pager needs an
     explicit `key`, and its page is clamped to the pages the content has.
 
+    `RoutedPage(value, route, seek_route)` supplies the same page through persistent routes.
+
     For `Lines`, `per` groups that many entries per page even when space remains.
     Pages that exceed the text budget are split further. `footer` receives the
     displayed page number and total pages and replaces this node's default footer.
@@ -55,8 +57,8 @@ class Paginate:
     widows: int = 1
 
     def __post_init__(self) -> None:
-        if isinstance(self.page, Controlled) and not self.key:
-            message = "a controlled Paginate needs a key"
+        if isinstance(self.page, Controlled | RoutedPage) and not self.key:
+            message = "an application-owned Paginate needs a key"
             raise ValueError(message)
         if self.per is not None and self.per < 1:
             message = "Paginate(per=...) must be at least 1"

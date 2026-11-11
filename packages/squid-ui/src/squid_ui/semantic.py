@@ -23,7 +23,7 @@ from squid_ui.forms import FormSpec, SubmitHandler
 from squid_ui.grids import GridCell, validate_grid
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
-from squid_ui.ownership import Controlled, Ownership, Uncontrolled
+from squid_ui.ownership import FIRST_PAGE, Controlled, Ownership, PageOwnership, Uncontrolled
 from squid_ui.palette import INHERIT, Accent, Palette, Tone
 from squid_ui.primitives.nodes import Node
 from squid_ui.rosters import RosterPlacement
@@ -177,7 +177,7 @@ class Adaptable[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rend
         stretch: int = 0,
         min_fill: int = 0,
         widows: int = 1,
-        initial: Literal["start", "end"] = "start",
+        page: PageOwnership = FIRST_PAGE,
         footer: Callable[[int, int], TextLike] | None = None,
     ) -> Budgeted[RenderTargetT, ContextT]:
         """Same as ``paged(self, ...)`` with the same keyword arguments."""
@@ -189,7 +189,7 @@ class Adaptable[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rend
             stretch=stretch,
             min_fill=min_fill,
             widows=widows,
-            initial=initial,
+            page=page,
             footer=footer,
         )
 
@@ -282,10 +282,22 @@ class ListItem:
 
 @dataclass(frozen=True, slots=True)
 class List(Adaptable[RenderTarget]):
+    """A keyed list with application-owned or remembered paging.
+
+    HTML uses `page_size` when supplied. Discord also pages on text overflow and
+    may split a count-based page further. Ordered numbering spans the full list.
+    """
+
     items: tuple[ListItem, ...]
     key: str
     ordered: bool = False
     page_size: int | None = None
+    page: PageOwnership = FIRST_PAGE
+
+    def __post_init__(self) -> None:
+        if self.page_size is not None and self.page_size < 1:
+            message = "List.page_size must be positive"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -695,6 +707,7 @@ class RoutedChoices(Adaptable[RenderTarget]):
     minimum: int = 1
     maximum: int = 1
     available: bool = True
+    selected: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -810,14 +823,14 @@ class KeepWithNext[RenderTargetT = RenderTarget, ContextT = object](Adaptable[Re
 
 @dataclass(frozen=True, slots=True)
 class Paged[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
-    """Paginate the direct children of a keyed heterogeneous region."""
+    """Paginate a keyed region's children, resolving `page` after measuring their sizes."""
 
     node: LayoutNode[RenderTargetT, ContextT]
     key: str
     chars: int
     min_fill: int = 0
     widows: int = 1
-    initial: Literal["start", "end"] = "start"
+    page: PageOwnership = FIRST_PAGE
     footer: Callable[[int, int], TextLike] | None = None
 
     def __post_init__(self) -> None:
@@ -1034,11 +1047,11 @@ def paged[RenderTargetT = RenderTarget, ContextT = object](
     stretch: int = 0,
     min_fill: int = 0,
     widows: int = 1,
-    initial: Literal["start", "end"] = "start",
+    page: PageOwnership = FIRST_PAGE,
     footer: Callable[[int, int], TextLike] | None = None,
 ) -> Budgeted[RenderTargetT, ContextT]:
     """Apply a preferred character budget and heterogeneous paging to ``node``."""
-    region = Paged(node, key, chars, min_fill, widows, initial, footer)
+    region = Paged(node, key, chars, min_fill, widows, page, footer)
     return Budgeted(region, min, chars, stretch)
 
 

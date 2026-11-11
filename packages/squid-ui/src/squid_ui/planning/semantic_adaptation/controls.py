@@ -261,6 +261,7 @@ def _routed_choices(node: RoutedChoices, path: str, context: LoweringContext) ->
                     _resolve(choice.label, context),
                     choice.key,
                     _resolve(choice.description, context) if choice.description is not None else None,
+                    default=choice.key in node.selected,
                 )
                 for choice in available
             ),

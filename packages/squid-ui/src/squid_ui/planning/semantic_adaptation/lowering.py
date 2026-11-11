@@ -363,13 +363,13 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
             return [Text(_resolve(content, context), overflow=Never(), priority=int(importance))]
         case Note(content=content, importance=importance):
             return [Footer(_resolve(content, context), overflow=Never(), priority=int(importance))]
-        case List(items=items, key=key, ordered=ordered, page_size=page_size):
+        case List(items=items, key=key, ordered=ordered, page_size=page_size, page=page):
             marker = (lambda index: f"{index + 1}.") if ordered else (lambda _index: "•")
             lines = tuple(
                 Alt(f"{marker(index)} {_resolve(item.content, context)}", priority=int(item.importance))
                 for index, item in enumerate(items)
             )
-            return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
+            return [Lines(lines, overflow=Paginate(key=key, per=page_size, page=page))]
         case Fields(fields=fields):
             embeds = context.limits.embeds
             if Capability.LAYOUT_EMBED_FIELDS in context.capabilities and embeds is not None:
