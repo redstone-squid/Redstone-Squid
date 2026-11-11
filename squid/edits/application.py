@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Mapping
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from anyio import CancelScope
@@ -10,7 +10,7 @@ from pydantic import ValidationError as SchemaValidationError
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.errors import ConflictError, ValidationError
+from squid.core.errors import ConflictError, InvalidStateError, ValidationError
 from squid.edits.domain import (
     EditAttempt,
     EditCommand,
@@ -28,6 +28,7 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 logger = logging.getLogger(__name__)
 
 
+@runtime_checkable
 class EditRunner(Protocol):
     async def execute(
         self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None
@@ -118,13 +119,13 @@ class EditExecutor[UowT: EditUnitOfWork]:
             v.target for v in command.expected
         }:
             message = "An edit must return every guarded target's resulting revision"
-            raise ValueError(message)
+            raise InvalidStateError(message)
         expected = {v.target: v.value for v in command.expected}
         if any(v.value < expected[v.target] for v in versions) or (
             prepared.changed and not any(v.value > expected[v.target] for v in versions)
         ):
             message = "Changed edits must advance revisions; revisions must never decrease"
-            raise ValueError(message)
+            raise InvalidStateError(message)
         receipt = EditReceipt(command, prepared.before, prepared.after, versions, prepared.final, prepared.resources)
         outcome = EditOutcome(
             command.operation_id, actor_key, command.fingerprint, versions, prepared.changed, prepared.final

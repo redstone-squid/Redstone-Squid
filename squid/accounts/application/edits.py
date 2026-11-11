@@ -10,7 +10,7 @@ from squid.accounts.domain import ProfileLink, ProfileUpdate
 from squid.accounts.errors import AccountIdentityNotFoundError, ConsentRequiredError
 from squid.accounts.models import Account, AccountProfile
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError
+from squid.core.errors import AuthorizationError, ValidationError
 from squid.core.sentinel import UNSET
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
@@ -145,7 +145,7 @@ class AccountUnlinkEdit(AccountEdits):
         identity_id = command.values.unpack().get("identity_id")
         if not isinstance(identity_id, int) or isinstance(identity_id, bool):
             message = "An unlink requires an identity ID"
-            raise TypeError(message)
+            raise ValidationError(message)
         if not any(identity.id == identity_id for identity in account.identities):
             raise AccountIdentityNotFoundError(identity_id, account_id=account.id)
         return PreparedEdit(

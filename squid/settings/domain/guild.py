@@ -3,10 +3,13 @@
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, PositiveInt, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.settings.domain.models import Setting
 from squid.voting.domain.models import VoteConfiguration, VoteKind, normalize_vote_options
+
+_INVALID_VALUE = "value_error"
 
 CHANNEL_FIELDS: dict[Setting, str] = {
     "Smallest": "smallest_channel_id",
@@ -33,19 +36,19 @@ class GuildSettings(BaseModel):
     def supported_locale(cls, value: str | None) -> str | None:
         if value is not None and value not in SUPPORTED_LOCALES:
             message = "Choose a supported bot language"
-            raise ValueError(message)
+            raise PydanticCustomError(_INVALID_VALUE, message)
         return value
 
     @model_validator(mode="after")
     def valid_voting(self) -> Self:
         if set(self.voting) != set(VoteKind):
             message = "Guild settings must include every voting kind"
-            raise ValueError(message)
+            raise PydanticCustomError(_INVALID_VALUE, message)
         for kind, configuration in self.voting.items():
             if configuration.preset is not None:
                 normalize_vote_options(configuration.preset.options, kind=kind)
             roles = [weight.role_id for weight in configuration.weights]
             if len(roles) != len(set(roles)):
                 message = "A role may have only one weight per voting kind"
-                raise ValueError(message)
+                raise PydanticCustomError(_INVALID_VALUE, message)
         return self

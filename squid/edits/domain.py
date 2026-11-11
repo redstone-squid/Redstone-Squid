@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import JsonValue
 from whenever import Instant
 
-from squid.core.errors import ConflictError, InvalidStateError
+from squid.core.errors import ConflictError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
 
 
@@ -40,7 +40,7 @@ class EditValues:
         values = json.loads(self.encoded)
         if not isinstance(values, dict):
             message = "Edit values must be a JSON object"
-            raise TypeError(message)
+            raise ValidationError(message)
         object.__setattr__(self, "encoded", json.dumps(values, sort_keys=True, separators=(",", ":"), allow_nan=False))
 
     @classmethod
@@ -68,10 +68,10 @@ class EditCommand:
         targets = [version.target for version in self.expected]
         if not targets or len(set(targets)) != len(targets):
             message = "An edit requires distinct versioned targets"
-            raise ValueError(message)
+            raise ValidationError(message)
         if any(version.value < 0 for version in self.expected):
             message = "An expected revision cannot be negative"
-            raise ValueError(message)
+            raise ValidationError(message)
 
     @property
     def fingerprint(self) -> bytes:

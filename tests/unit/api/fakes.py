@@ -9,7 +9,6 @@ import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import cast, override
-from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import FastAPI
@@ -37,6 +36,8 @@ from squid.core.actors import Actor
 from squid.core.errors import NotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.diagnostics.application import ErrorReportService
+from squid.edits.application import EditRunner
+from squid.edits.domain import EditAttempt, EditCommand, EditResult
 from squid.idempotency import IdempotencyService, PendingRequest
 from squid.idempotency.domain import StoredResponse, UnsafeHttpMethod
 from squid.media.application.jobs import (
@@ -233,6 +234,18 @@ class MockCliAuthorization(CliAuthorizationService):
 
 _EMPTY_PAGE: Page[object] = Page(items=(), total=0, next=None, prev=None)
 """Empty query result with the pagination metadata required by ``Page.from_domain``."""
+
+
+class MockEditRunner(EditRunner):
+    """No persisted targets exist in the default transport-only application."""
+
+    @override
+    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+        raise NotFoundError
+
+    @override
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
+        return None
 
 
 class MockBuilds(BuildService):
@@ -813,7 +826,7 @@ def build_services(
     """
     return ApiServices(
         settings=RuntimeSettingsStub(),
-        edits=Mock(),
+        edits=MockEditRunner(),
         api_keys=None,
         web_auth=web_auth,
         cli_authorization=cli_authorization or MockCliAuthorization(),

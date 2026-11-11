@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError
+from squid.core.errors import AuthorizationError, ValidationError
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, Revision
 from squid.edits.fields import Aggregate, FieldCommand
@@ -138,10 +138,10 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
                 or any(option.guild_id != guild_id for option in configuration.preset.options)
             ):
                 message = "Vote emojis must belong to this guild and voting kind"
-                raise ValueError(message)
+                raise ValidationError(message)
             if any(weight.guild_id != guild_id or weight.kind != kind for weight in configuration.weights):
                 message = "Role weights must belong to this guild and voting kind"
-                raise ValueError(message)
+                raise ValidationError(message)
         return after
 
     async def write(

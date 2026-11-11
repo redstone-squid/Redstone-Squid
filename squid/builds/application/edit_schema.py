@@ -4,8 +4,11 @@ from collections.abc import Mapping
 from typing import ClassVar, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from squid.builds.application.editing import BuildEditPatch
+
+_INVALID_VALUE = "value_error"
 
 type InputDimensions = tuple[int | None, int | None, int | None]
 
@@ -43,11 +46,11 @@ class DoorPatch(BaseModel):
         non_nullable = {"door_dimensions", "patterns"}
         invalid = sorted(name for name in self.model_fields_set & non_nullable if getattr(self, name) is None)
         if invalid:
-            msg = f"fields cannot be null: {', '.join(invalid)}"
-            raise ValueError(msg)
+            msg = "fields cannot be null: {fields}"
+            raise PydanticCustomError(_INVALID_VALUE, msg, {"fields": ", ".join(invalid)})
         if self.door_dimensions is not None and any(value is not None and value <= 0 for value in self.door_dimensions):
             msg = "door_dimensions must be positive when supplied"
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
     def edit_attributes(self) -> dict[str, object]:
@@ -120,11 +123,11 @@ class BuildPatch(BaseModel):
         }
         invalid = sorted(name for name in self.model_fields_set & non_nullable if getattr(self, name) is None)
         if invalid:
-            msg = f"fields cannot be null: {', '.join(invalid)}"
-            raise ValueError(msg)
+            msg = "fields cannot be null: {fields}"
+            raise PydanticCustomError(_INVALID_VALUE, msg, {"fields": ", ".join(invalid)})
         if self.dimensions is not None and any(value is not None and value <= 0 for value in self.dimensions):
             msg = "dimensions must be positive when supplied"
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
     def edit_attributes(self) -> dict[str, object]:
