@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import cast, override
+from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import FastAPI
@@ -811,6 +812,7 @@ def build_services(
     """
     return ApiServices(
         settings=RuntimeSettingsStub(),
+        edits=Mock(),
         api_keys=None,
         web_auth=web_auth,
         cli_authorization=cli_authorization or MockCliAuthorization(),

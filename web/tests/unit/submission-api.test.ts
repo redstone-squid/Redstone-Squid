@@ -361,11 +361,12 @@ it("runtime settings use account cookies, CSRF, idempotency, and exact string ID
   expect(capturedRequest().credentials).toBe("include");
   expect(capturedRequest().cache).toBe("no-store");
   fetchMock.mockResolvedValueOnce(jsonResponse(current));
-  await api.update({ welcome_channel_id: "1356094722531393681" });
+  await api.update({ welcome_channel_id: "1356094722531393681" }, current.revision);
   const request = capturedRequest();
   expect(request.method).toBe("PATCH");
   expect(request.headers.get("CSRF-Token")).toBe("csrf-token");
   expect(request.headers.get("Idempotency-Key")).toBeTruthy();
+  expect(request.headers.get("If-Match")).toBe(`"runtime-settings-1-r${current.revision}"`);
   expect(await request.json()).toEqual({ welcome_channel_id: "1356094722531393681" });
   expect(api.signInUrl("https://catalogue.test/admin/settings")).toContain("redirect_to=");
 });

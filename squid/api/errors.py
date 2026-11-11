@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from squid.api.i18n import locale_for_request
+from squid.api.revisions import InvalidRevisionError, RevisionRequiredError
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import (
     AuthenticationError,
@@ -27,6 +28,7 @@ from squid.core.errors import (
 )
 from squid.core.i18n import localization_for, tr
 from squid.diagnostics.log_capture import captured
+from squid.edits.domain import ConcurrentEditError, RevisionConflictError
 from squid.observability import correlation_id
 from squid_i18n import localization_scope
 
@@ -137,9 +139,11 @@ def _problem_response(
 
 
 def _status_for_error(error: SquidError) -> int:
-    if isinstance(error, BuildRevisionRequiredError):
+    if isinstance(error, (BuildRevisionRequiredError, RevisionRequiredError)):
         return HTTPStatus.PRECONDITION_REQUIRED
-    if isinstance(error, BuildRevisionMismatchError):
+    if isinstance(
+        error, (BuildRevisionMismatchError, InvalidRevisionError, RevisionConflictError, ConcurrentEditError)
+    ):
         return HTTPStatus.PRECONDITION_FAILED
     if isinstance(error, AuthenticationError):
         return HTTPStatus.UNAUTHORIZED

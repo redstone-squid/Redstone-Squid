@@ -112,6 +112,7 @@ pub struct ApiRequest {
     query: Vec<(String, String)>,
     body: Option<ApiRequestBody>,
     idempotency_key: Option<Uuid>,
+    if_match: Option<String>,
 }
 
 enum ApiRequestBody {
@@ -133,6 +134,7 @@ impl ApiRequest {
             query: Vec::new(),
             body: None,
             idempotency_key: None,
+            if_match: None,
         }
     }
 
@@ -203,6 +205,13 @@ impl ApiRequest {
             content_type: String::from(content_type),
         });
         Ok(self)
+    }
+
+    /// Require the strong revision validator that the user read before editing.
+    #[must_use]
+    pub fn with_if_match(mut self, value: impl Into<String>) -> Self {
+        self.if_match = Some(value.into());
+        self
     }
 
     /// Attach an idempotency key generated or persisted by the recovery layer.
@@ -477,6 +486,9 @@ impl ApiClient {
                     )
                     .body(reqwest::blocking::Body::sized(file, length)),
             };
+        }
+        if let Some(version) = request.if_match {
+            builder = builder.header(reqwest::header::IF_MATCH, version);
         }
         if let Some(key) = request.idempotency_key {
             builder = builder.header(IDEMPOTENCY_HEADER, key.hyphenated().to_string());
@@ -952,7 +964,8 @@ mod tests {
         )?;
         let response = client.send_json::<ResponseBody>(
             ApiRequest::new(ApiMethod::Get, "/v1/capabilities")
-                .with_query_param("category", "door & gate")?,
+                .with_query_param("category", "door & gate")?
+                .with_if_match("\"runtime-settings-1-r7\""),
             None,
         )?;
         assert_eq!(response.data, ResponseBody { ok: true });
@@ -968,6 +981,7 @@ mod tests {
         assert!(!lowercase.contains("cli.handoff.v1"));
         assert!(lowercase.contains("squid-client-instance:"));
         assert!(lowercase.contains("accept-language: en"));
+        assert!(lowercase.contains("if-match: \"runtime-settings-1-r7\""));
         Ok(())
     }
 

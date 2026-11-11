@@ -507,6 +507,7 @@ export type RuntimeSettingsApi = {
   get: () => Promise<import("../generated/types.gen").RuntimeSettingsDetail>;
   update: (
     patch: import("../generated/types.gen").RuntimeSettingsPatch,
+    revision: number,
   ) => Promise<import("../generated/types.gen").RuntimeSettingsDetail>;
   signInUrl: (returnTo: string) => string;
 };
@@ -520,10 +521,16 @@ export function createRuntimeSettingsApi(
   const mutations = createMutationSession(client);
   return {
     get: async () => unwrap(await runtimeSettingsGet({ client })),
-    update: async (body) => {
+    update: async (body, revision) => {
       const key = crypto.randomUUID();
       return mutations.execute(key, async (headers) =>
-        unwrap(await runtimeSettingsUpdate({ client, body, headers })),
+        unwrap(
+          await runtimeSettingsUpdate({
+            client,
+            body,
+            headers: { ...headers, "If-Match": `"runtime-settings-1-r${revision}"` },
+          }),
+        ),
       );
     },
     signInUrl: (returnTo) => signInUrl(config, returnTo),

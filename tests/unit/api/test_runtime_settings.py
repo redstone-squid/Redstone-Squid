@@ -3,26 +3,46 @@
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
+from fastapi import Response
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from squid.api.revisions import InvalidRevisionError, RevisionRequiredError, expected_revision
 from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
 from squid.api.v1.settings import update_runtime_settings
 from squid.core.errors import AuthenticationError
+from squid.edits.domain import EditValues, Revision
+from squid.settings.application.edits import RUNTIME_TARGET
 from squid.settings.domain.runtime import RuntimeSettings
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 
 
 @pytest.mark.parametrize("kind", ["account", "cli", "minecraft_player", "service"])
 async def test_every_account_credential_audits_the_internal_account(kind: str) -> None:
-    settings = SimpleNamespace(update_runtime=AsyncMock(return_value=RuntimeSettings()))
-    services = cast(Any, SimpleNamespace(settings=settings))
+    edits = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                receipt=SimpleNamespace(
+                    after=EditValues.of(RuntimeSettings(welcome_forward_chance=0.5).model_dump(mode="json"))
+                ),
+                outcome=SimpleNamespace(revisions=(Revision(RUNTIME_TARGET, 2),)),
+            )
+        )
+    )
+    services = cast(Any, SimpleNamespace(edits=edits))
     caller = Caller(kind=cast(Any, kind), subject="test", nodes=UNBOUNDED, account_id=7)
-    await update_runtime_settings(RuntimeSettingsPatch(welcome_forward_chance=0.5), services, caller)
-    settings.update_runtime.assert_awaited_once_with({"welcome_forward_chance": 0.5}, actor_account_id=7)
+    response = Response()
+    await update_runtime_settings(
+        RuntimeSettingsPatch(welcome_forward_chance=0.5), services, caller, response, uuid4(), '"runtime-settings-1-r1"'
+    )
+    command, actor = edits.execute.call_args.args
+    assert command.values.unpack() == {"welcome_forward_chance": 0.5}
+    assert actor.subject.account_id == 7
+    assert response.headers["ETag"] == '"runtime-settings-1-r2"'
 
 
 async def test_unowned_credentials_cannot_create_an_audit_entry() -> None:
@@ -32,6 +52,8 @@ async def test_unowned_credentials_cannot_create_an_audit_entry() -> None:
             RuntimeSettingsPatch(welcome_enabled=False),
             cast(Any, SimpleNamespace(settings=settings)),
             ANONYMOUS,
+            Response(),
+            uuid4(),
         )
     settings.update_runtime.assert_not_awaited()
 
@@ -69,3 +91,27 @@ def test_http_read_requires_the_global_view_permission() -> None:
             "/v1/settings/runtime", json={"welcome_enabled": False}, headers={"Authorization": TEST_SYNERGY_SECRET}
         )
         assert denied.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["*", 'W/"runtime-settings-1-r1"', '"runtime-settings-2-r1"', '"runtime-settings-1-r1", "runtime-settings-1-r2"'],
+)
+def test_revision_preconditions_reject_unread_or_foreign_versions(value: str) -> None:
+    with pytest.raises(InvalidRevisionError):
+        expected_revision(RUNTIME_TARGET, value)
+
+
+async def test_runtime_update_requires_the_version_read_by_the_caller() -> None:
+    edits = SimpleNamespace(execute=AsyncMock())
+    caller = Caller(kind="account", subject="test", nodes=UNBOUNDED, account_id=7)
+    with pytest.raises(RevisionRequiredError):
+        await update_runtime_settings(
+            RuntimeSettingsPatch(welcome_enabled=False),
+            cast(Any, SimpleNamespace(edits=edits)),
+            caller,
+            Response(),
+            uuid4(),
+            None,
+        )
+    edits.execute.assert_not_awaited()

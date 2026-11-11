@@ -11724,6 +11724,22 @@
         ],
         "parameters": [
           {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
@@ -11831,6 +11847,26 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -11845,6 +11881,26 @@
               }
             },
             "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -23884,6 +23940,10 @@
       },
       "RuntimeSettingsDetail": {
         "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
           "welcome_forward_chance": {
             "type": "number",
             "title": "Welcome Forward Chance"
@@ -23959,6 +24019,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "revision",
           "welcome_forward_chance",
           "welcome_enabled",
           "redstoner_enabled",

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC
 
 
@@ -37,12 +38,13 @@ class ServerSetting(Base):
     """Admin-configured language override, e.g. "en" or "zh-CN". Falls back to Discord's guild/user locale when unset."""
 
 
-class RuntimeSetting(Base):
+class RuntimeSetting(Revisioned, Base):
     """Singleton containing global defaults and owner-guild community routing."""
 
     __tablename__ = "runtime_settings"
     __table_args__ = (
         CheckConstraint("id = 1", name="runtime_settings_singleton"),
+        CheckConstraint("revision > 0", name="runtime_settings_revision_positive"),
         CheckConstraint("welcome_forward_chance BETWEEN 0 AND 1", name="runtime_settings_chance"),
         CheckConstraint("notification_retention_days BETWEEN 1 AND 3650", name="runtime_settings_retention"),
         CheckConstraint(

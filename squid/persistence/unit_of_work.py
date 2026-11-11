@@ -5,6 +5,7 @@ from typing import Literal, Self
 
 from anyio import CancelScope
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm.exc import StaleDataError
 
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.auth.infrastructure.repository import PostgresApiKeyRepository
@@ -18,6 +19,8 @@ from squid.builds.infrastructure.taxonomy import PostgresBuildTaxonomy
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
+from squid.edits.domain import ConcurrentEditError
+from squid.edits.infrastructure import PostgresEditStore
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency.infrastructure.crypto import IdempotencyResponseCipher
 from squid.idempotency.infrastructure.repository import PostgresIdempotencyRepository
@@ -74,6 +77,7 @@ class SqlAlchemyUnitOfWork:
         self._sessions = sessions
         self._session: AsyncSession | None = None
         self._state: Literal["new", "active", "finished"] = "new"
+        self._edits = PostgresEditStore(self._active_session)
         self._domain_events = PostgresDomainEventRepository(self._active_session)
         self._reconciliation = PostgresDiscordSyncQueue(self._active_session)
         self._notifications = PostgresNotificationRepository(self._active_session)
@@ -118,6 +122,11 @@ class SqlAlchemyUnitOfWork:
         self._starboards = PostgresStarboardRepository(self._active_session)
         self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._versions = VersionRepository(self._active_session)
+
+    @property
+    def edits(self) -> PostgresEditStore:
+        self._active_session()
+        return self._edits
 
     @property
     def settings(self) -> SettingsRepository:
@@ -368,6 +377,8 @@ class SqlAlchemyUnitOfWork:
         session = self._active_session()
         try:
             await session.commit()
+        except StaleDataError as error:
+            raise ConcurrentEditError from error
         finally:
             self._state = "finished"
 

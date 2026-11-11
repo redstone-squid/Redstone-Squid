@@ -16,8 +16,9 @@ from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import allows, enforce, requires
+from squid.bot.utils.permissions import allows, enforce, requires, subject_for_interaction
 from squid.core.i18n import tr
+from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -29,6 +30,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
+from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -141,8 +143,9 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         request: sd.Request[Self],
         setting: str | None = None,
         value: str | None = None,
+        revision: int | None = None,
     ) -> sd.CommandResult:
-        return await self._runtime_settings(request, setting, value=value)
+        return await self._runtime_settings(request, setting, value=value, revision=revision)
 
     @sd.prefix_command(name="runtime-settings")
     @requires(SETTINGS_RUNTIME_VIEW, SETTINGS_RUNTIME_EDIT, mode="any")
@@ -152,9 +155,10 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         setting: str | None = None,
         *,
         value: str | None = None,
+        revision: int | None = None,
     ) -> sd.CommandResult:
         """View or change global runtime settings with JSON values."""
-        return await self._runtime_settings(request, setting, value=value)
+        return await self._runtime_settings(request, setting, value=value, revision=revision)
 
     async def _runtime_settings(
         self,
@@ -162,6 +166,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         setting: str | None = None,
         *,
         value: str | None = None,
+        revision: int | None = None,
     ) -> sd.CommandResult:
         """Inspect settings or change one using a JSON value, e.g. welcome_forward_chance 0.25.
 
@@ -173,27 +178,36 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if value is not None and setting is None:
             return text_node("Choose a setting to change.")
         if setting is None:
-            settings = await service.get_runtime()
-            return text_node(json.dumps(settings.model_dump(mode="json"), indent=2))
+            settings, current_revision = await service.runtime_snapshot()
+            return text_node(json.dumps(settings.model_dump(mode="json") | {"revision": current_revision}, indent=2))
         if value is None:
-            settings = await service.get_runtime()
+            settings, current_revision = await service.runtime_snapshot()
             if setting not in type(settings).model_fields:
                 return text_node("Unknown runtime setting. Run runtime-settings to list available names.")
-            return text_node(f"{setting}: {json.dumps(settings.model_dump(mode='json')[setting])}")
+            return text_node(
+                f"{setting}: {json.dumps(settings.model_dump(mode='json')[setting])} (revision {current_revision})"
+            )
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD,
             str(request.user.id),
         )
         if account is None or account.id is None or account.needs_consent_refresh:
             return text_node("Open /account and accept the current privacy notice before changing runtime settings.")
+        if revision is None or revision < 1:
+            return text_node("Read runtime-settings first, then supply its revision when saving.")
         try:
-            settings = await service.update_runtime(
-                {setting: json.loads(value)},
-                actor_account_id=account.id,
+            result = await self.bot.services.edits.execute(
+                EditCommand(
+                    RUNTIME_EDIT, (Revision(RUNTIME_TARGET, revision),), EditValues.of({setting: json.loads(value)})
+                ),
+                EditActor(await subject_for_interaction(request), discord_user_id=request.user.id),
             )
         except (json.JSONDecodeError, ValidationError) as exc:
             return text_node(f"Invalid setting: {exc}")
-        return text_node(f"Saved {setting}: {json.dumps(settings.model_dump(mode='json')[setting])}")
+        assert result.receipt is not None
+        return text_node(
+            f"Saved {setting}: {json.dumps(result.receipt.after.unpack()[setting])} (revision {result.outcome.revisions[0].value})"
+        )
 
     @sd.prefix_command(name="s", hidden=True)
     @commands.is_owner()

@@ -7,6 +7,7 @@ from squid.builds import history_models as build_history_models
 from squid.builds import models as build_models
 from squid.cli_auth import models as cli_auth_models
 from squid.diagnostics import models as diagnostic_models
+from squid.edits import models as edit_models
 from squid.events import models as event_models
 from squid.idempotency import models as idempotency_models
 from squid.media import models as media_models
@@ -38,6 +39,7 @@ __all__ = [
     "build_models",
     "cli_auth_models",
     "diagnostic_models",
+    "edit_models",
     "event_models",
     "idempotency_models",
     "media_models",

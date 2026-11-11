@@ -6,6 +6,8 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from squid.edits.domain import Revision
+from squid.persistence.revisions import flush_revision
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.models import RuntimeSetting, RuntimeSettingChange, ServerSetting
 
@@ -57,6 +59,9 @@ class SettingsRepository:
         # Seed from deployment configuration once; subsequent processes never overwrite it.
         await session.execute(insert(RuntimeSetting).values(id=1, **defaults.model_dump()).on_conflict_do_nothing())
         return (await session.scalars(statement)).one()
+
+    async def flush_runtime_revision(self, row: RuntimeSetting, expected: Revision) -> Revision:
+        return await flush_revision(self._session(), row, expected)
 
     async def record_runtime_change(
         self, actor_account_id: int, before: RuntimeSettings, after: RuntimeSettings

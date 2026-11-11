@@ -2208,7 +2208,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:242"
+      "squid/bot/admin.py:256"
     ]
   },
   "admin-database": {
@@ -2217,7 +2217,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:252"
+      "squid/bot/admin.py:266"
     ]
   },
   "admin-globally": {
@@ -2226,7 +2226,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:217"
+      "squid/bot/admin.py:231"
     ]
   },
   "admin-message-archived": {
@@ -2235,7 +2235,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:94"
+      "squid/bot/admin.py:96"
     ]
   },
   "admin-open-database": {
@@ -2244,7 +2244,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:254"
+      "squid/bot/admin.py:268"
     ]
   },
   "admin-open-spreadsheet": {
@@ -2253,7 +2253,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:244"
+      "squid/bot/admin.py:258"
     ]
   },
   "admin-synced-commands": {
@@ -2273,7 +2273,7 @@
       }
     ],
     "locations": [
-      "squid/bot/admin.py:222"
+      "squid/bot/admin.py:236"
     ]
   },
   "admin-synced-the-tree-to": {
@@ -2293,7 +2293,7 @@
       }
     ],
     "locations": [
-      "squid/bot/admin.py:235"
+      "squid/bot/admin.py:249"
     ]
   },
   "admin-that-message-is-not-from-this-server": {
@@ -2302,7 +2302,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:92"
+      "squid/bot/admin.py:94"
     ]
   },
   "admin-to-the-current-guild": {
@@ -2311,7 +2311,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:219"
+      "squid/bot/admin.py:233"
     ]
   },
   "api-errors-http-error": {
@@ -2320,7 +2320,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/errors.py:262"
+      "squid/api/errors.py:266"
     ]
   },
   "api-errors-internal-server-error": {
@@ -2329,8 +2329,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/errors.py:203",
-      "squid/api/errors.py:282"
+      "squid/api/errors.py:207",
+      "squid/api/errors.py:286"
     ]
   },
   "api-errors-invalid-request": {
@@ -2339,7 +2339,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/errors.py:237"
+      "squid/api/errors.py:241"
     ]
   },
   "api-errors-service-unavailable": {
@@ -2348,7 +2348,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/errors.py:201"
+      "squid/api/errors.py:205"
     ]
   },
   "api-internal-server-error-occurred": {
@@ -2357,7 +2357,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/errors.py:36"
+      "squid/api/errors.py:38"
     ]
   },
   "api-request-validation-failed": {
@@ -2366,7 +2366,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/errors.py:238"
+      "squid/api/errors.py:242"
     ]
   },
   "api-service-unavailable": {
@@ -2375,7 +2375,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/errors.py:37"
+      "squid/api/errors.py:39"
     ]
   },
   "artifacts-artifact-keys-non": {
@@ -10951,7 +10951,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/domain.py:169"
+      "squid/edits/domain.py:187"
+    ]
+  },
+  "edits-concurrent-write": {
+    "fingerprint": "9ae2f43e9270c25d25b515db121718c40f517055b11f0af4f707f408794de9cc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/edits/domain.py:201"
     ]
   },
   "edits-fields-not-editable": {
@@ -10960,7 +10969,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/application.py:72"
+      "squid/edits/application.py:98"
     ]
   },
   "edits-final": {
@@ -10969,7 +10978,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/domain.py:126"
+      "squid/edits/domain.py:139"
+    ]
+  },
+  "edits-invalid-revision": {
+    "fingerprint": "945a1a6f6e27936abb0e81d500146e87e9d612f21848a5c86e2cfe768db8a556",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/api/revisions.py:15"
     ]
   },
   "edits-operation-expired": {
@@ -10978,7 +10996,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/domain.py:177"
+      "squid/edits/domain.py:197"
     ]
   },
   "edits-operation-reused": {
@@ -10987,7 +11005,25 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/domain.py:165"
+      "squid/edits/domain.py:183"
+    ]
+  },
+  "edits-pending": {
+    "fingerprint": "7638c37394d6b1ae33aa5b1dbc474b2e6cd9ad2b1f82979e1d72acfbd4152391",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/edit_controller.py:96"
+    ]
+  },
+  "edits-pending-discard": {
+    "fingerprint": "6c20320cd681e697425e737afa30ea149520092f3aa79c98bc165e43fc96902f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/edit_controller.py:176"
     ]
   },
   "edits-revision-conflict": {
@@ -10996,7 +11032,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/domain.py:156"
+      "squid/edits/domain.py:174"
+    ]
+  },
+  "edits-revision-required": {
+    "fingerprint": "ff4554c200b2e61bb3a1855f27475fea3c82a65379f80d7bd9b7e377b36f6a68",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/api/revisions.py:11"
     ]
   },
   "errors-all-permissions-required": {

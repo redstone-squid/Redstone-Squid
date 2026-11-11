@@ -652,55 +652,55 @@ accounts-verification-attempts-exceeded = Too many incorrect verification codes.
 # squid/accounts/errors.py:140
 accounts-verification-code-invalid = The verification code is invalid or expired.
 
-# squid/bot/admin.py:242
+# squid/bot/admin.py:256
 admin-build-spreadsheet = Build spreadsheet
 
-# squid/bot/admin.py:252
+# squid/bot/admin.py:266
 admin-database = Database
 
-# squid/bot/admin.py:217
+# squid/bot/admin.py:231
 admin-globally = globally
 
-# squid/bot/admin.py:94
+# squid/bot/admin.py:96
 admin-message-archived = Message archived.
 
-# squid/bot/admin.py:254
+# squid/bot/admin.py:268
 admin-open-database = Open database
 
-# squid/bot/admin.py:244
+# squid/bot/admin.py:258
 admin-open-spreadsheet = Open spreadsheet
 
-# squid/bot/admin.py:222
+# squid/bot/admin.py:236
 admin-synced-commands = Synced { $count } commands { $scope }.
 
-# squid/bot/admin.py:235
+# squid/bot/admin.py:249
 admin-synced-the-tree-to = Synced the tree to { $synced }/{ $total }.
 
-# squid/bot/admin.py:92
+# squid/bot/admin.py:94
 admin-that-message-is-not-from-this-server = That message is not from this server.
 
-# squid/bot/admin.py:219
+# squid/bot/admin.py:233
 admin-to-the-current-guild = to the current guild
 
-# squid/api/errors.py:262
+# squid/api/errors.py:266
 api-errors-http-error = HTTP error
 
-# squid/api/errors.py:203, squid/api/errors.py:282
+# squid/api/errors.py:207, squid/api/errors.py:286
 api-errors-internal-server-error = Internal server error
 
-# squid/api/errors.py:237
+# squid/api/errors.py:241
 api-errors-invalid-request = Invalid request
 
-# squid/api/errors.py:201
+# squid/api/errors.py:205
 api-errors-service-unavailable = Service unavailable
 
-# squid/api/errors.py:36
+# squid/api/errors.py:38
 api-internal-server-error-occurred = An internal server error occurred.
 
-# squid/api/errors.py:238
+# squid/api/errors.py:242
 api-request-validation-failed = The request did not pass validation.
 
-# squid/api/errors.py:37
+# squid/api/errors.py:39
 api-service-unavailable = A required service is temporarily unavailable. Please try again later.
 
 # squid/artifacts/infrastructure.py:107, squid/artifacts/infrastructure.py:255
@@ -3371,23 +3371,38 @@ edit-history-uncertain = The saved result needs checking. Refresh before editing
 # squid/bot/edit_history.py:123
 edit-history-undo = Undo
 
-# squid/edits/domain.py:169
+# squid/edits/domain.py:187
 edits-commit-uncertain = The saved result needs checking before this item can be edited again.
 
-# squid/edits/application.py:72
+# squid/edits/domain.py:201
+edits-concurrent-write = Another edit committed first. Reload this item before trying again.
+
+# squid/edits/application.py:98
 edits-fields-not-editable = This edit contains fields that cannot be changed.
 
-# squid/edits/domain.py:126
+# squid/edits/domain.py:139
 edits-final = This operation cannot be undone.
 
-# squid/edits/domain.py:177
+# squid/api/revisions.py:15
+edits-invalid-revision = This revision does not match the item being edited.
+
+# squid/edits/domain.py:197
 edits-operation-expired = This edit has expired. Reload the item before editing again.
 
-# squid/edits/domain.py:165
+# squid/edits/domain.py:183
 edits-operation-reused = This operation identifier was already used for another edit.
 
-# squid/edits/domain.py:156
+# squid/bot/edit_controller.py:96
+edits-pending = Check the previous saved result before editing this item.
+
+# squid/bot/edit_controller.py:176
+edits-pending-discard = Check the saved result before discarding its history.
+
+# squid/edits/domain.py:174
 edits-revision-conflict = This item changed elsewhere. Reload it before editing.
+
+# squid/api/revisions.py:11
+edits-revision-required = Send the ETag you read in the If-Match header.
 
 # squid/bot/errors.py:175
 errors-all-permissions-required = You need these permissions to use this command:

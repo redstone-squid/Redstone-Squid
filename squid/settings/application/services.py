@@ -37,6 +37,14 @@ class SettingsService:
             await uow.commit()
             return result
 
+    async def runtime_snapshot(self) -> tuple[RuntimeSettings, int]:
+        """Read settings and the revision used to guard an editor's subsequent save."""
+        async with self._uow_factory() as uow:
+            row = await uow.settings.runtime(self._runtime_defaults)
+            result = RuntimeSettings.model_validate(row), row.revision
+            await uow.commit()
+            return result
+
     async def update_runtime(self, changes: Mapping[str, object], *, actor_account_id: int) -> RuntimeSettings:
         """Validate and audit a patch atomically. The caller must authorize the actor.
 

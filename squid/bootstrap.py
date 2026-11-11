@@ -16,6 +16,7 @@ from functools import cached_property, partial
 from importlib import resources
 
 import httpx
+from whenever import Instant
 
 from squid.accounts.application import AccountService
 from squid.accounts.application.services import generate_verification_code
@@ -41,6 +42,7 @@ from squid.community.application import WelcomeRelayService
 from squid.community.domain import WelcomeRelayPolicy
 from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
+from squid.edits.application import EditExecutor
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -83,6 +85,7 @@ from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.search.application import SearchEmbeddingService, SearchService
 from squid.search.application.projection import SearchProjectionService
 from squid.settings.application import SettingsService
+from squid.settings.application.edits import RUNTIME_EDIT, RuntimeSettingsEdit
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.starboard.application import StarboardService
 from squid.submissions.application import (
@@ -304,6 +307,14 @@ class _ServiceGraph:
                 notification_retention_days=self.config.notifications.retention_days,
             ),
         )
+
+    @cached_property
+    def edits(self) -> EditExecutor[SqlAlchemyUnitOfWork]:
+        defaults = RuntimeSettings(
+            **self.config.community.model_dump(),
+            notification_retention_days=self.config.notifications.retention_days,
+        )
+        return EditExecutor(self.uow_factory, {RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults)})
 
     @cached_property
     def notifications(self) -> NotificationService:
@@ -686,6 +697,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         raise RuntimeError(msg)
     return ApiServices(
         settings=graph.settings,
+        edits=graph.edits,
         builds=graph.builds,
         error_reports=graph.error_reports,
         api_keys=graph.api_keys,
@@ -746,6 +758,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         search=graph.search,
         tags=graph.tags,
         settings=graph.settings,
+        edits=graph.edits,
         starboards=graph.starboards,
         suggestions=graph.bot_suggestions,
         accounts=graph.accounts,
@@ -770,6 +783,14 @@ def create_worker_services(
     """Create only capabilities used by background jobs, which serve no request."""
     graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     idempotency = IdempotencyService(uow_factory=graph.uow_factory)
+
+    async def purge_mutation_outcomes() -> int:
+        removed = await idempotency.purge_expired()
+        async with graph.uow_factory() as uow:
+            await uow.edits.purge_expired(now=Instant.now())
+            await uow.commit()
+        return removed
+
     return WorkerServices(
         builds=graph.builds,
         error_reports=graph.error_reports,
@@ -791,7 +812,7 @@ def create_worker_services(
         search_embeddings=graph.search_embeddings,
         refresh_search_index=graph.search_projection.process_batch,
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
-        purge_idempotency=idempotency.purge_expired,
+        purge_idempotency=purge_mutation_outcomes,
         expire_submission_drafts=graph.submission_drafts.expire_due,
         cleanup_submission_schematics=graph.submission_schematics.cleanup,
         process_submission_schematics=graph.submission_schematics.process_pending,

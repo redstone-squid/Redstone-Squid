@@ -1,0 +1,180 @@
+"""Session history orchestration; application handlers remain independent of the UI."""
+
+import asyncio
+import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from uuid import UUID
+
+from squid.core.errors import AuthorizationError, ConflictError, InvalidStateError, ValidationError
+from squid.core.i18n import tr
+from squid.edits.application import EditRunner
+from squid.edits.domain import (
+    EditActor,
+    EditAttempt,
+    EditCommand,
+    EditCommitUncertainError,
+    EditReceipt,
+    EditResult,
+    EditTarget,
+    Revision,
+    RevisionConflictError,
+)
+from squid_reactivity.actions import ConflictDetail
+from squid_reactivity.errors import ReactiveConflictError
+from squid_ui.runtime import History, ReversibleOperation
+from squid_ui.text import TextLike
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class PendingEdit:
+    command: EditCommand
+    attempt: EditAttempt
+    label: TextLike
+    original_entry_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _ReceiptOperation:
+    controller: EditController
+    receipt: EditReceipt
+    label: TextLike
+    original_entry_id: UUID
+
+    async def reverse(self) -> ReversibleOperation:
+        expected = tuple(
+            Revision(version.target, self.controller._heads[version.target]) for version in self.receipt.revisions
+        )
+        command = self.receipt.inverse(expected, redo=self.receipt.command.purpose == "undo")
+        try:
+            result = await self.controller._run(command, self.label, original_entry_id=self.original_entry_id)
+        except (AuthorizationError, ConflictError) as error:
+            raise ReactiveConflictError(ConflictDetail(self.receipt.command.kind, 0, 1), str(error)) from error
+        assert result.receipt is not None
+        return _ReceiptOperation(self.controller, result.receipt, self.label, self.original_entry_id)
+
+
+class EditController:
+    """Own committed receipts and revision continuity for one mounted workspace.
+
+    Bind the current actor provider and refresh callback once, rather than making
+    every screen mutation assemble inverse callbacks. Pending outcomes block all
+    further writes to the targets involved, including undo and redo.
+    """
+
+    def __init__(
+        self,
+        runner: EditRunner,
+        actor: Callable[[], Awaitable[EditActor]],
+        refresh: Callable[[], Awaitable[None]],
+        *,
+        history: History | None = None,
+    ) -> None:
+        self.history = History(limit=20) if history is None else history
+        self._runner = runner
+        self._actor = actor
+        self._refresh = refresh
+        self._heads: dict[EditTarget, int] = {}
+        self._pending: dict[UUID, PendingEdit] = {}
+        self._lock = asyncio.Lock()
+        self.refresh_failed = False
+
+    @property
+    def pending(self) -> tuple[PendingEdit, ...]:
+        return tuple(self._pending.values())
+
+    async def execute(self, command: EditCommand, label: TextLike) -> EditResult:
+        return await self._run(command, label)
+
+    async def _run(self, command: EditCommand, label: TextLike, *, original_entry_id: UUID | None = None) -> EditResult:
+        async with self._lock:
+            targets = {v.target for v in command.expected}
+            if any(targets.intersection(v.target for v in pending.command.expected) for pending in self.pending):
+                raise InvalidStateError(
+                    tr(t"edits-pending = Check the previous saved result before editing this item.")
+                )
+            retained = frozenset(
+                target for entry in (*self.history.entries, *self.history.redoable) for target in entry.targets
+            )
+            for version in command.expected:
+                known = self._heads.get(version.target)
+                if known is not None and known != version.value and version.target.identity in retained:
+                    raise RevisionConflictError(Revision(version.target, known), version.value)
+            pending = PendingEdit(command, EditAttempt(), label, original_entry_id)
+            try:
+                result = await self._runner.execute(command, await self._actor(), attempt=pending.attempt)
+            except BaseException:
+                if pending.attempt.receipt is not None:
+                    self._pending[command.operation_id] = pending
+                raise
+            try:
+                self._accept(result, pending)
+            except BaseException:
+                self._pending[command.operation_id] = pending
+                raise
+            await self.refresh()
+            return result
+
+    def _accept(self, result: EditResult, pending: PendingEdit) -> None:
+        for version in result.outcome.revisions:
+            self._heads[version.target] = version.value
+        receipt = result.receipt
+        if receipt is not None and result.outcome.changed:
+            if receipt.final:
+                self.history.discard_targets(receipt.targets)
+            elif pending.original_entry_id is None:
+                self.history.accept_committed(
+                    pending.label,
+                    _ReceiptOperation(self, receipt, pending.label, receipt.command.operation_id),
+                    operation_id=receipt.command.operation_id,
+                    targets=receipt.targets,
+                )
+        self._pending.pop(pending.command.operation_id, None)
+
+    async def reconcile(self, operation_id: UUID) -> EditResult:
+        async with self._lock:
+            pending = self._pending[operation_id]
+            actor = await self._actor()
+            result = await self._runner.reconcile(pending.command, actor, pending.attempt)
+            if result is None:
+                try:
+                    result = await self._runner.execute(pending.command, actor, attempt=pending.attempt)
+                except EditCommitUncertainError:
+                    raise
+                except AuthorizationError, ConflictError, ValidationError:
+                    if pending.original_entry_id is not None:
+                        self.history.settle_reversal(pending.original_entry_id, inverse=None)
+                    self._pending.pop(operation_id, None)
+                    raise
+            if pending.original_entry_id is not None:
+                assert result.receipt is not None
+                self.history.settle_reversal(
+                    pending.original_entry_id,
+                    inverse=_ReceiptOperation(self, result.receipt, pending.label, pending.original_entry_id),
+                )
+            self._accept(result, pending)
+        await self.refresh()
+        return result
+
+    async def refresh(self) -> None:
+        try:
+            await self._refresh()
+        except Exception:
+            self.refresh_failed = True
+            logger.warning("Committed edit retained; editor refresh failed", exc_info=True)
+        else:
+            self.refresh_failed = False
+
+    async def discard(self, targets: frozenset[str]) -> None:
+        async with self._lock:
+            if any(
+                targets.intersection(v.target.identity for v in pending.command.expected) for pending in self.pending
+            ):
+                raise InvalidStateError(
+                    tr(t"edits-pending-discard = Check the saved result before discarding its history.")
+                )
+            self.history.discard_targets(targets)
+            self._heads = {target: version for target, version in self._heads.items() if target.identity not in targets}
+        await self.refresh()

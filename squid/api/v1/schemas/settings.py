@@ -12,6 +12,7 @@ class RuntimeSettingsDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    revision: int
     welcome_forward_chance: float
     welcome_enabled: bool
     redstoner_enabled: bool
@@ -31,8 +32,8 @@ class RuntimeSettingsDetail(BaseModel):
     build_log_channel_ids: list[str]
 
     @classmethod
-    def from_domain(cls, settings: RuntimeSettings) -> Self:
-        values = settings.model_dump()
+    def from_domain(cls, settings: RuntimeSettings, *, revision: int = 1) -> Self:
+        values = settings.model_dump() | {"revision": revision}
         for name in cls.model_fields:
             if name.endswith("_id"):
                 values[name] = str(values[name])

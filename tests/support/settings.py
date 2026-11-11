@@ -67,3 +67,7 @@ class RuntimeSettingsStub(SettingsService):
     @override
     async def get_runtime(self) -> RuntimeSettings:
         return self.value
+
+    @override
+    async def runtime_snapshot(self) -> tuple[RuntimeSettings, int]:
+        return self.value, 1

@@ -28,6 +28,7 @@ from squid.cli_auth import CliAuthorizationService
 from squid.community.application import WelcomeRelayService
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured, install_log_capture
+from squid.edits.application import EditRunner
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -84,6 +85,7 @@ class ApiServices:
     """Capabilities exposed by the HTTP API process."""
 
     settings: SettingsService
+    edits: EditRunner
 
     builds: BuildService
     error_reports: ErrorReportService
@@ -144,6 +146,7 @@ class BotServices:
     search: SearchService
     tags: TagService
     settings: SettingsService
+    edits: EditRunner
     starboards: StarboardService
     suggestions: SuggestionService
     accounts: AccountService

@@ -631,6 +631,31 @@ class History:
         self._push(entry)
         return entry
 
+    def settle_reversal(self, action_id: ActionId, *, inverse: ReversibleOperation | None) -> None:
+        """Resolve an uncertain external reversal after the application checks its outcome.
+
+        Pass the committed inverse to finish moving the entry, or None after
+        proving no write occurred. No external operation is executed here.
+        """
+        entry = self._select(self._undone, action_id)
+        undoing = entry is not None
+        if entry is None:
+            entry = self._select(self._redoable, action_id)
+        if entry is None or entry.state is not HistoryEntryState.NEEDS_RECONCILIATION:
+            message = "only an uncertain retained reversal can be reconciled"
+            raise HistoryError(message)
+        if inverse is not None:
+            entry.operation = inverse
+            source, destination = (self._undone, self._redoable) if undoing else (self._redoable, self._undone)
+            self._remove_identity(source, entry)
+            destination.append(entry)
+            entry.state = HistoryEntryState.UNDONE if undoing else HistoryEntryState.READY
+            entry.last_result = HistoryResult(HistoryResultStatus.APPLIED, entry)
+        else:
+            entry.state = HistoryEntryState.READY if undoing else HistoryEntryState.UNDONE
+            entry.last_result = None
+        self._signal.notify()
+
     def discard_targets(self, targets: frozenset[str]) -> None:
         """Forget receipts touching these targets, preserving unrelated edits."""
         selected = [entry for entry in (*self._undone, *self._redoable) if entry.targets & targets]

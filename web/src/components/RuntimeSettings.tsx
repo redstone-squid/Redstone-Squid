@@ -11,7 +11,7 @@ import {
 import ConsentGate from "./ConsentGate";
 
 type Props = { locale: Locale; config: RuntimeConfig; api?: RuntimeSettingsApi };
-type Setting = keyof RuntimeSettingsDetail;
+type Setting = Exclude<keyof RuntimeSettingsDetail, "revision">;
 
 const labels: Record<Setting, [string, string]> = {
   welcome_forward_chance: ["Welcome forwarding probability (0–1)", "欢迎消息转发概率（0–1）"],
@@ -99,7 +99,7 @@ export default function RuntimeSettings({ locale, config, api: suppliedApi }: Pr
           ? Number(value)
           : value.trim();
     try {
-      const updated = await api.update({ [selected]: parsed });
+      const updated = await api.update({ [selected]: parsed }, settings.revision);
       setSettings(updated);
       setValue(display(updated[selected]));
       setSaved(true);

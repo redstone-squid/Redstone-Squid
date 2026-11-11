@@ -134,7 +134,13 @@ enum SettingsCommand {
     /// Show current runtime settings.
     Show,
     /// Change one setting using a JSON value. Discord IDs must be quoted strings.
-    Set { name: String, value: String },
+    Set {
+        name: String,
+        value: String,
+        /// Revision from `settings show`; a stale revision refuses the write.
+        #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
+        revision: u64,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1434,9 +1440,13 @@ fn run_settings(
     session: &mut ConnectedSession,
     output: &mut impl Write,
 ) -> Result<(), RunError> {
-    let (operation, body) = match command {
-        SettingsCommand::Show => ("settings.show", None),
-        SettingsCommand::Set { name, value } => {
+    let (operation, body, revision) = match command {
+        SettingsCommand::Show => ("settings.show", None, 0),
+        SettingsCommand::Set {
+            name,
+            value,
+            revision,
+        } => {
             let value = serde_json::from_str::<Value>(&value).map_err(|error| {
                 CommandFailure::new(
                     ExitStatus::Usage,
@@ -1445,13 +1455,18 @@ fn run_settings(
                 )
                 .with_field_error("value", sanitize_terminal_text(&error.to_string()))
             })?;
-            ("settings.set", Some(serde_json::json!({ name: value })))
+            (
+                "settings.set",
+                Some(serde_json::json!({ name: value })),
+                revision,
+            )
         }
     };
     let key = Uuid::new_v4();
     let response = session.request(|client, token| {
         let request = if let Some(body) = &body {
             ApiRequest::new(ApiMethod::Patch, "/v1/settings/runtime")
+                .with_if_match(format!("\"runtime-settings-1-r{}\"", revision))
                 .with_json(body)?
                 .with_idempotency_key(key)
         } else {
@@ -3064,10 +3079,17 @@ mod tests {
     #[test]
     fn runtime_settings_commands_parse() {
         assert!(super::Cli::try_parse_from(["squid", "settings", "show"]).is_ok());
-        let parsed =
-            super::Cli::try_parse_from(["squid", "settings", "set", "welcome_enabled", "false"]);
+        let parsed = super::Cli::try_parse_from([
+            "squid",
+            "settings",
+            "set",
+            "welcome_enabled",
+            "false",
+            "--revision",
+            "7",
+        ]);
         assert!(matches!(parsed, Ok(super::Cli {
-            command: super::Command::Settings { command: super::SettingsCommand::Set { name, value } }, ..
+            command: super::Command::Settings { command: super::SettingsCommand::Set { name, value, revision: 7 } }, ..
         }) if name == "welcome_enabled" && value == "false"));
     }
 

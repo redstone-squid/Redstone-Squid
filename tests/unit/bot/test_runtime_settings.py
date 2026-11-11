@@ -9,8 +9,10 @@ import pytest
 from squid.accounts.domain import IdentityProvider
 from squid.bot.admin import Admin
 from squid.core.errors import AuthorizationError
+from squid.edits.domain import EditValues, Revision
+from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.settings.application.edits import RUNTIME_TARGET
 
 
 @pytest.mark.parametrize("linked", [True, False])
@@ -22,19 +24,33 @@ async def test_runtime_edit_uses_internal_account_or_refuses_unlinked_owner(
     monkeypatch.setattr("squid.bot.admin.enforce", authorize)
     account = SimpleNamespace(id=17, needs_consent_refresh=False) if linked else None
     accounts = SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account))
-    settings = SimpleNamespace(update_runtime=AsyncMock(return_value=RuntimeSettings(welcome_forward_chance=0.25)))
-    owner = SimpleNamespace(bot=SimpleNamespace(services=SimpleNamespace(accounts=accounts, settings=settings)))
+    edits = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                receipt=SimpleNamespace(after=EditValues.of({"welcome_forward_chance": 0.25})),
+                outcome=SimpleNamespace(revisions=(Revision(RUNTIME_TARGET, 2),)),
+            )
+        )
+    )
+    monkeypatch.setattr("squid.bot.admin.subject_for_interaction", AsyncMock(return_value=Subject(account_id=17)))
+    settings = SimpleNamespace()
+    owner = SimpleNamespace(
+        bot=SimpleNamespace(services=SimpleNamespace(accounts=accounts, settings=settings, edits=edits))
+    )
     request = SimpleNamespace(user=SimpleNamespace(id=999999))
 
     callback = cast(Any, Admin)._runtime_settings
-    await callback(owner, request, "welcome_forward_chance", value="0.25")
+    await callback(owner, request, "welcome_forward_chance", value="0.25", revision=1)
 
     authorize.assert_awaited_once_with(request, SETTINGS_RUNTIME_EDIT)
     accounts.get_account_by_identity.assert_awaited_once_with(IdentityProvider.DISCORD, "999999")
     if linked:
-        settings.update_runtime.assert_awaited_once_with({"welcome_forward_chance": 0.25}, actor_account_id=17)
+        command, actor = edits.execute.call_args.args
+        assert command.values.unpack() == {"welcome_forward_chance": 0.25}
+        assert command.expected == (Revision(RUNTIME_TARGET, 1),)
+        assert actor.subject.account_id == 17
     else:
-        settings.update_runtime.assert_not_awaited()
+        edits.execute.assert_not_awaited()
 
 
 @pytest.mark.parametrize(("value", "node"), [(None, SETTINGS_RUNTIME_VIEW), ("false", SETTINGS_RUNTIME_EDIT)])

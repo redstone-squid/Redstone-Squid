@@ -28,7 +28,10 @@ describe("RuntimeSettings", () => {
     fireEvent.change(screen.getByLabelText("Value"), { target: { value: "1356094722531393681" } });
     fireEvent.click(screen.getByRole("button", { name: "Save setting" }));
     await screen.findByText("Setting saved.");
-    expect(client.update).toHaveBeenCalledWith({ welcome_channel_id: "1356094722531393681" });
+    expect(client.update).toHaveBeenCalledWith(
+      { welcome_channel_id: "1356094722531393681" },
+      settings.revision,
+    );
   });
   it("writes boolean values", async () => {
     const client = api();
@@ -38,7 +41,7 @@ describe("RuntimeSettings", () => {
     fireEvent.change(screen.getByLabelText("Value"), { target: { value: "false" } });
     fireEvent.click(screen.getByRole("button", { name: "Save setting" }));
     await screen.findByText("Setting saved.");
-    expect(client.update).toHaveBeenCalledWith({ welcome_enabled: false });
+    expect(client.update).toHaveBeenCalledWith({ welcome_enabled: false }, settings.revision);
   });
   it("offers sign-in when unauthenticated", async () => {
     const client = api();
@@ -74,7 +77,7 @@ it("preserves the entered probability and reports a refused write", async () => 
   fireEvent.change(screen.getByLabelText("Value"), { target: { value: "2" } });
   fireEvent.click(screen.getByRole("button", { name: "Save setting" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Probability is outside its range.");
-  expect(client.update).toHaveBeenCalledWith({ welcome_forward_chance: 2 });
+  expect(client.update).toHaveBeenCalledWith({ welcome_forward_chance: 2 }, settings.revision);
   expect(screen.getByLabelText("Value")).toHaveValue(2);
   expect(screen.queryByText("Setting saved.")).not.toBeInTheDocument();
 });
@@ -91,9 +94,12 @@ it("saves comma-separated channel IDs as exact strings", async () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Save setting" }));
   await screen.findByText("Setting saved.");
-  expect(client.update).toHaveBeenCalledWith({
-    build_log_channel_ids: ["1356094722531393681", "1356094722531393682"],
-  });
+  expect(client.update).toHaveBeenCalledWith(
+    {
+      build_log_channel_ids: ["1356094722531393681", "1356094722531393682"],
+    },
+    settings.revision,
+  );
 });
 
 it("offers the same editor and success feedback in Chinese", async () => {
@@ -103,5 +109,5 @@ it("offers the same editor and success feedback in Chinese", async () => {
   fireEvent.change(screen.getByLabelText("值"), { target: { value: "0.25" } });
   fireEvent.click(screen.getByRole("button", { name: "保存" }));
   expect(await screen.findByRole("status")).toHaveTextContent("设置已保存。");
-  expect(client.update).toHaveBeenCalledWith({ welcome_forward_chance: 0.25 });
+  expect(client.update).toHaveBeenCalledWith({ welcome_forward_chance: 0.25 }, settings.revision);
 });

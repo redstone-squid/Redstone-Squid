@@ -10,6 +10,7 @@ so clients must resend the same representation, not merely equivalent JSON.
 import hashlib
 from dataclasses import dataclass
 from typing import Annotated, cast
+from uuid import UUID, uuid4
 
 from anyio import CancelScope
 from fastapi import Depends, Header, Request
@@ -89,6 +90,12 @@ async def reserve_idempotent_request_for(
     if isinstance(reservation, StoredResponse):
         raise IdempotencyReplay(reservation)
     setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation))
+
+
+def edit_operation_id(request: Request) -> UUID:
+    """Share the reserved HTTP mutation identity with the application's outcome record."""
+    reservation = getattr(request.state, _STATE_KEY, None)
+    return reservation.request.request_id if isinstance(reservation, IdempotencyReservationState) else uuid4()
 
 
 async def replay_response(_request: Request, error: Exception) -> Response:

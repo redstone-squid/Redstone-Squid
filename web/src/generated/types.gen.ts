@@ -2915,6 +2915,10 @@ export type RevisionProposalResponse = {
  */
 export type RuntimeSettingsDetail = {
     /**
+     * Revision
+     */
+    revision: number;
+    /**
      * Welcome Forward Chance
      */
     welcome_forward_chance: number;
@@ -7433,6 +7437,10 @@ export type RuntimeSettingsUpdateData = {
     body: RuntimeSettingsPatch;
     headers?: {
         /**
+         * If-Match
+         */
+        'If-Match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -7454,9 +7462,17 @@ export type RuntimeSettingsUpdateErrors = {
      */
     403: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ProblemDetail;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
