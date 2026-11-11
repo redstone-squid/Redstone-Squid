@@ -10,6 +10,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.edits.infrastructure import retained_resource
 from squid.media.application.jobs import (
     MEDIA_VIDEO_THUMBNAIL_ROLES,
     ArtifactCleanupClaim,
@@ -522,10 +523,43 @@ class PostgresMediaJobRepository(MediaJobRepository):
         applied = bool(outcome.rowcount)
         return MediaJobFailureOutcome(applied=applied, dead=dead and applied)
 
+    async def _discard_unreferenced(self, *, limit: int) -> None:
+        """End jobs whose last draft reference and history lease have both gone away."""
+        session = self._session()
+        unreferenced = select(MediaUploadRecord.id).where(
+            exists(select(MediaDraftReference.upload_id).where(MediaDraftReference.upload_id == MediaUploadRecord.id)),
+            ~retained_elsewhere(UUID(int=0)),
+        )
+        jobs = tuple(
+            await session.scalars(
+                select(MediaNormalizationJobRecord)
+                .where(
+                    MediaNormalizationJobRecord.upload_id.in_(unreferenced),
+                    MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED,
+                )
+                .order_by(MediaNormalizationJobRecord.upload_id)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            )
+        )
+        for job in jobs:
+            # A reference or lease may have committed while we waited for the job lock.
+            if await session.scalar(unreferenced.where(MediaUploadRecord.id == job.upload_id)) is None:
+                continue
+            job.status = MediaJobStatus.DISCARDED
+            job.claim_token = None
+            job.claimed_at = None
+            job.completed_at = None
+            job.dead_at = None
+            job.discarded_at = database_now()
+            job.last_error = None
+        await session.flush()
+
     @override
     async def terminal_sources(self, *, limit: int) -> Sequence[TerminalMediaSource]:
         """List raw objects whose terminal metadata still lacks cleanup confirmation."""
         session = self._session()
+        await self._discard_unreferenced(limit=limit)
         rows = (
             await session.execute(
                 select(MediaUploadRecord.id, MediaUploadRecord.source_object_key)
@@ -535,6 +569,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 )
                 .where(
                     MediaUploadRecord.raw_deleted_at.is_(None),
+                    ~retained_resource("attachment", MediaUploadRecord.id),
                     MediaNormalizationJobRecord.status.in_(
                         (
                             MediaJobStatus.COMPLETED,

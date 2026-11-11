@@ -2673,6 +2673,17 @@ CREATE TABLE public.edit_operations (
 
 
 --
+-- Name: edit_resource_leases; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.edit_resource_leases (
+    operation_id uuid NOT NULL,
+    resource text NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
+
+
+--
 -- Name: entrances; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5191,6 +5202,7 @@ CREATE TABLE public.submission_supplied_attachments (
     filename text NOT NULL,
     kind text NOT NULL,
     status text NOT NULL,
+    discarded boolean DEFAULT false NOT NULL,
     CONSTRAINT submission_supplied_attachments_kind_check CHECK ((kind = ANY (ARRAY['schematic'::text, 'image'::text, 'video'::text, 'unknown'::text]))),
     CONSTRAINT submission_supplied_attachments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'discarded'::text])))
 );
@@ -6289,6 +6301,14 @@ ALTER TABLE ONLY public.doors
 
 ALTER TABLE ONLY public.edit_operations
     ADD CONSTRAINT edit_operations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: edit_resource_leases edit_resource_leases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.edit_resource_leases
+    ADD CONSTRAINT edit_resource_leases_pkey PRIMARY KEY (operation_id, resource);
 
 
 --
@@ -7613,6 +7633,13 @@ CREATE INDEX domain_events_aggregate_idx ON public.domain_events USING btree (ag
 --
 
 CREATE INDEX edit_operations_expiry_idx ON public.edit_operations USING btree (expires_at);
+
+
+--
+-- Name: edit_resource_leases_resource_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX edit_resource_leases_resource_expiry_idx ON public.edit_resource_leases USING btree (resource, expires_at);
 
 
 --

@@ -3,12 +3,15 @@
 from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Text, cast, delete, exists, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.sql.elements import ColumnElement
 from whenever import Instant
 
 from squid.edits.domain import EditOutcome, EditTarget, Revision
-from squid.edits.models import EditOperation
+from squid.edits.models import EditOperation, EditResourceLease
 
 
 class PostgresEditStore:
@@ -62,3 +65,42 @@ class PostgresEditStore:
             delete(EditOperation).where(EditOperation.expires_at <= now).returning(EditOperation.id)
         )
         return len(removed.all())
+
+    async def retain(self, operation_id: UUID, resources: tuple[str, ...]) -> None:
+        if resources:
+            await self._session().execute(
+                insert(EditResourceLease)
+                .values(
+                    [
+                        {
+                            "operation_id": operation_id,
+                            "resource": resource,
+                            "expires_at": Instant.now().add(seconds=120),
+                        }
+                        for resource in sorted(set(resources))
+                    ]
+                )
+                .on_conflict_do_nothing()
+            )
+
+    async def renew_retention(self, operations: frozenset[UUID], release: frozenset[UUID]) -> None:
+        now = Instant.now()
+        await self._session().execute(
+            delete(EditResourceLease).where(
+                (EditResourceLease.operation_id.in_(release)) | (EditResourceLease.expires_at <= now)
+            )
+        )
+        await self._session().execute(
+            update(EditResourceLease)
+            .where(EditResourceLease.operation_id.in_(operations))
+            .values(expires_at=now.add(seconds=120))
+        )
+
+
+def retained_resource(kind: str, identity: ColumnElement[UUID] | InstrumentedAttribute[UUID]) -> ColumnElement[bool]:
+    return exists(
+        select(EditResourceLease.operation_id).where(
+            EditResourceLease.resource == kind + ":" + cast(identity, Text),
+            EditResourceLease.expires_at > func.now(),
+        )
+    )

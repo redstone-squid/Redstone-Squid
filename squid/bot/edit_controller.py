@@ -131,6 +131,16 @@ class EditController:
         self._signal.track()
         return tuple(self._pending.values())
 
+    def retained_operations(self) -> frozenset[UUID]:
+        """Operations whose attachment resources remain reachable from this workspace."""
+        receipts = [
+            entry.operation.receipt
+            for entry in (*self.history.entries, *self.history.redoable)
+            if isinstance(entry.operation, _ReceiptOperation)
+        ]
+        receipts.extend(pending.attempt.receipt for pending in self.pending if pending.attempt.receipt is not None)
+        return frozenset(receipt.command.operation_id for receipt in receipts if receipt.resources)
+
     def require_ready(self, targets: frozenset[str]) -> None:
         """Fence other session actions while a write's result still needs reconciliation."""
         if any(targets.intersection(v.target.identity for v in item.command.expected) for item in self.pending):

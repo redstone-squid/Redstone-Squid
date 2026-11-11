@@ -42,6 +42,7 @@ from squid.search.infrastructure.projection import PostgresSearchProjection
 from squid.search.infrastructure.repository import PostgresSearchBackend
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
+from squid.submissions.infrastructure.attachment_edits import PostgresAttachmentEdits
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
@@ -90,6 +91,7 @@ class SqlAlchemyUnitOfWork:
         self._submission_drafts = PostgresDraftRepository(self._active_session)
         self._finalization_jobs = PostgresFinalizationJobRepository(self._active_session)
         self._revision_proposals = PostgresRevisionProposals(self._active_session)
+        self._attachment_edits = PostgresAttachmentEdits(self._active_session)
         self._attachment_intake = PostgresAttachmentIntake(self._active_session)
         self._draft_schematics = PostgresDraftSchematics(self._active_session)
         self._inference_runs = PostgresInferenceRuns(self._active_session)
@@ -267,6 +269,10 @@ class SqlAlchemyUnitOfWork:
     def revision_proposals(self) -> PostgresRevisionProposals:
         self._active_session()
         return self._revision_proposals
+
+    @property
+    def attachment_edits(self) -> PostgresAttachmentEdits:
+        return self._attachment_edits
 
     @property
     def attachment_intake(self) -> PostgresAttachmentIntake:

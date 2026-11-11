@@ -52,6 +52,7 @@ from squid.community.domain import WelcomeRelayPolicy
 from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
 from squid.edits.application import EditExecutor
+from squid.edits.retention import EditRetentionService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -140,6 +141,7 @@ from squid.submissions.application import (
 from squid.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
+from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, DraftAttachmentsEdit
 from squid.submissions.application.build_target import SubmissionBuildPreparation
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
@@ -361,6 +363,10 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def edit_retention(self) -> EditRetentionService:
+        return EditRetentionService(self.uow_factory)
+
+    @cached_property
     def edits(self) -> EditExecutor[SqlAlchemyUnitOfWork]:
         defaults = RuntimeSettings(
             **self.config.community.model_dump(),
@@ -369,6 +375,7 @@ class _ServiceGraph:
         return EditExecutor(
             self.uow_factory,
             {
+                DRAFT_ATTACHMENTS: DraftAttachmentsEdit(self.submission_drafts, self.media_job_service.limits),
                 DRAFT_ANSWERS: DraftAnswersEdit(self.submission_drafts),
                 SHOWCASE_EDIT: ShowcaseAssignmentEdit(),
                 ALIAS_EDIT: TagAliasEdit(self.permissions),
@@ -839,6 +846,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         tags=graph.tags,
         settings=graph.settings,
         edits=graph.edits,
+        edit_retention=graph.edit_retention,
         starboards=graph.starboards,
         suggestions=graph.bot_suggestions,
         accounts=graph.accounts,

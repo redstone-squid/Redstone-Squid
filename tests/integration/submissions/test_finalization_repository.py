@@ -13,6 +13,7 @@ from whenever import Instant
 
 from squid.accounts.models import Account
 from squid.core.errors import DataIntegrityError
+from squid.edits.models import EditResourceLease
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
@@ -63,6 +64,7 @@ pytestmark = pytest.mark.asyncio
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")
 NOW = Instant.parse_iso("2026-08-11T18:00:00Z")
 _TABLES = model_tables(
+    EditResourceLease,
     Account,
     SubmissionDraft,
     SubmissionDraftAccess,

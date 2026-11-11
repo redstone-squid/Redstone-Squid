@@ -5,10 +5,11 @@ from uuid import UUID
 
 from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.selectable import Exists
+from sqlalchemy.sql.elements import ColumnElement
 from whenever import Instant
 
 from squid.core.errors import ConflictError, DataIntegrityError, NotFoundError, ValidationError
+from squid.edits.infrastructure import retained_resource
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.schematics.application import IngestedSchematic
 from squid.schematics.infrastructure.wire import encode_analysis
@@ -311,8 +312,8 @@ class PostgresDraftSchematics:
         )
 
 
-def _has_retained_reference() -> Exists:
-    return exists(
+def _has_retained_reference() -> ColumnElement[bool]:
+    return retained_resource("attachment", DraftSchematicSource.id) | exists(
         select(DraftSchematicLink.source_id)
         .join(SubmissionDraft, SubmissionDraft.id == DraftSchematicLink.draft_id)
         .where(

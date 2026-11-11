@@ -32,18 +32,18 @@ class PostgresAttachmentIntake:
             if (existing.filename, existing.kind) != (attachment.filename, attachment.kind):
                 message = "This source identifier already belongs to another supplied file."
                 raise ConflictError(message)
-            if existing.status is IntakeStatus.READY:
-                return
-            if existing.status is IntakeStatus.DISCARDED:
+            if existing.discarded:
                 message = "Discarded source identifiers cannot be reused; supply a new file identifier."
                 raise ConflictError(message)
+            if existing.status is IntakeStatus.READY:
+                return
             existing.status = IntakeStatus.PENDING
         else:
             retained = tuple(
                 await session.scalars(
                     select(SubmissionSuppliedAttachment).where(
                         SubmissionSuppliedAttachment.draft_id == draft.snapshot.id,
-                        SubmissionSuppliedAttachment.status != IntakeStatus.DISCARDED,
+                        SubmissionSuppliedAttachment.discarded.is_(False),
                     )
                 )
             )
@@ -69,7 +69,10 @@ class PostgresAttachmentIntake:
             .order_by(SubmissionSuppliedAttachment.source_id)
         )
         retained = {
-            row.source_id: SuppliedAttachment(row.source_id, row.filename, row.kind, row.status) for row in rows
+            row.source_id: SuppliedAttachment(
+                row.source_id, row.filename, row.kind, IntakeStatus.DISCARDED if row.discarded else row.status
+            )
+            for row in rows
         }
         draft = await session.get(SubmissionDraft, draft_id)
         if draft is not None:
@@ -97,7 +100,8 @@ class PostgresAttachmentIntake:
         )
         if model is None:
             raise NotFoundError
-        if model.status is IntakeStatus.DISCARDED:
+        if status is IntakeStatus.DISCARDED:
+            model.discarded = True
             return
         if status is IntakeStatus.FAILED and model.status is IntakeStatus.READY:
             return

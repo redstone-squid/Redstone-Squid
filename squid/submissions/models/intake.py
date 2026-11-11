@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import UUID as SQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,3 +30,4 @@ class SubmissionSuppliedAttachment(Base, kw_only=True):
     filename: Mapped[str] = mapped_column(Text)
     kind: Mapped[str] = mapped_column(Text)
     status: Mapped[IntakeStatus] = mapped_column(StrEnumText(IntakeStatus))
+    discarded: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))

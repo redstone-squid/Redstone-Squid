@@ -29,6 +29,7 @@ from squid.community.application import WelcomeRelayService
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured, install_log_capture
 from squid.edits.application import EditRunner
+from squid.edits.retention import EditRetentionService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -147,6 +148,7 @@ class BotServices:
     tags: TagService
     settings: SettingsService
     edits: EditRunner
+    edit_retention: EditRetentionService
     starboards: StarboardService
     suggestions: SuggestionService
     accounts: AccountService

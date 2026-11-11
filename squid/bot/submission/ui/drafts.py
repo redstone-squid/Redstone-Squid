@@ -37,6 +37,7 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
+from squid.bot.edit_retention import EditHistoryRetention
 from squid.bot.submission import draft_intake
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui import controls as build_controls
@@ -49,6 +50,7 @@ from squid.core.errors import JSONValue, SquidError
 from squid.core.i18n import tr
 from squid.runtime import BotServices
 from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
+from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
 from squid.submissions.application.build_target import PREVIEW_TITLE_FIELDS, preview_build
 from squid.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
 from squid.submissions.application.intake import SuppliedAttachment
@@ -356,8 +358,10 @@ class DraftWorkspace(sl.Reactive):
         await self.reload()
 
     async def remove_file(self, file_id: UUID) -> None:
-        await self.services.submission_intake.discard(self._draft_id, self.actor_id, file_id)
-        await self.reload()
+        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), self.draft.snapshot.revision).save(
+            AttachmentValues(files=(FileMembership(source_id=file_id, present=False),)).edit_values(),
+            tr(t"draft-history-remove-file = Remove submission file"),
+        )
 
     async def use_file(self, file_id: UUID) -> None:
         """Download a file found in the build-log post the draft was inferred from."""
@@ -370,8 +374,10 @@ class DraftWorkspace(sl.Reactive):
         await self.reload()
 
     async def make_main_schematic(self, file_id: UUID) -> None:
-        await self.services.submission_schematics.select_primary(self._draft_id, self.actor_id, file_id)
-        await self.reload()
+        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), self.draft.snapshot.revision).save(
+            AttachmentValues(primary=file_id, select_primary=True).edit_values(),
+            tr(t"draft-history-primary = Choose primary schematic"),
+        )
 
     async def replace_file(self, file_id: UUID, source: sl.forms.UploadedFile) -> UUID | None:
         """Add a replacement, then remove the original; on failure keep the original and set the notice."""
@@ -403,6 +409,7 @@ class DraftEditorScreen(BuildEditorScreen[None]):
 
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace
+        self.own(EditHistoryRetention(workspace.edits, workspace.services.edit_retention))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
