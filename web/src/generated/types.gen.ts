@@ -228,6 +228,7 @@ export type BuildPatch = {
     version_spec?: string | null;
     dimensions?: InputDimensions | null;
     door?: DoorPatch | null;
+    extender?: ExtenderPatch | null;
     /**
      * Wiring Placement Restrictions
      */
@@ -1476,6 +1477,22 @@ export type ExtenderDetails = {
      * Extender Type
      */
     extender_type: string | null;
+};
+
+/**
+ * ExtenderPatch
+ *
+ * Partial changes to an extender's direction and reach.
+ */
+export type ExtenderPatch = {
+    /**
+     * Orientation
+     */
+    orientation?: 'Horizontal' | 'Up' | 'Down' | null;
+    /**
+     * Extension Length
+     */
+    extension_length?: number | null;
 };
 
 /**

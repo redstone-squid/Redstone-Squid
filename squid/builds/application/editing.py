@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from typing import Literal, Self, cast
 
 from squid.builds.application.commands import Dimensions
+from squid.builds.application.input import normalize_extender_orientation, validate_extension_length
 from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo, UnresolvedTaxonomy
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import InvalidBuildError
-from squid.builds.models import Build, DoorBuild
+from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.sentinel import UNSET
 
 type PatchValue[T] = T | UNSET
@@ -28,6 +29,8 @@ class BuildEditPatch:
     all entries of that kind.
     """
 
+    extender_orientation: PatchValue[str | None] = UNSET
+    extension_length: PatchValue[int | None] = UNSET
     display_name: PatchValue[str | None] = UNSET
     visible_opening_time: PatchValue[int | None] = UNSET
     visible_closing_time: PatchValue[int | None] = UNSET
@@ -64,6 +67,8 @@ class BuildEditPatch:
         combined = cls()
         for patch in patches:
             combined = cls(
+                extender_orientation=_latest(combined.extender_orientation, patch.extender_orientation),
+                extension_length=_latest(combined.extension_length, patch.extension_length),
                 display_name=_latest(combined.display_name, patch.display_name),
                 visible_opening_time=_latest(combined.visible_opening_time, patch.visible_opening_time),
                 visible_closing_time=_latest(combined.visible_closing_time, patch.visible_closing_time),
@@ -216,6 +221,24 @@ class BuildEditPatch:
                 build.visible_opening_time = self.visible_opening_time
             if self.visible_closing_time is not UNSET:
                 build.visible_closing_time = self.visible_closing_time
+
+        extender_fields = ("extender_orientation", "extension_length")
+        patched_extender_fields = [name for name in extender_fields if getattr(self, name) is not UNSET]
+        if patched_extender_fields:
+            if not isinstance(build, ExtenderBuild):
+                msg_0 = "Extender fields can only be edited on extender builds."
+                raise InvalidBuildError(
+                    msg_0,
+                    context={"fields": patched_extender_fields},
+                    public_context={"fields": patched_extender_fields},
+                )
+            try:
+                if self.extender_orientation is not UNSET:
+                    build.orientation = normalize_extender_orientation(self.extender_orientation)
+                if self.extension_length is not UNSET:
+                    build.extension_length = validate_extension_length(self.extension_length)
+            except ValueError as error:
+                raise InvalidBuildError(str(error)) from error
 
         if self.locationality is not UNSET:
             self._replace_reliability(

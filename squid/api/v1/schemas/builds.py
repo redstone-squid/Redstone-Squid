@@ -76,6 +76,21 @@ class DoorPatch(BaseModel):
         return {self._EDIT_FIELDS[name]: value for name, value in supplied.items()}
 
 
+class ExtenderPatch(BaseModel):
+    """Partial changes to an extender's direction and reach."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    orientation: Literal["Horizontal", "Up", "Down"] | None = None
+    extension_length: int | None = Field(default=None, ge=1, le=512)
+
+    def edit_attributes(self) -> dict[str, object]:
+        supplied: dict[str, object] = self.model_dump(exclude_unset=True)
+        if "orientation" in supplied:
+            supplied["extender_orientation"] = supplied.pop("orientation")
+        return supplied
+
+
 class BuildPatch(BaseModel):
     """A partial build edit which preserves omitted versus explicitly cleared fields."""
 
@@ -85,6 +100,7 @@ class BuildPatch(BaseModel):
     version_spec: str | None = Field(default=None, max_length=500)
     dimensions: InputDimensions | None = None
     door: DoorPatch | None = None
+    extender: ExtenderPatch | None = None
     wiring_placement_restrictions: list[str] | None = Field(default=None, max_length=100)
     animated_restrictions: list[str] | None = Field(default=None, max_length=100)
     component_restrictions: list[str] | None = Field(default=None, max_length=100)
@@ -108,6 +124,7 @@ class BuildPatch(BaseModel):
         non_nullable = {
             "dimensions",
             "door",
+            "extender",
             "wiring_placement_restrictions",
             "animated_restrictions",
             "component_restrictions",
@@ -138,8 +155,11 @@ class BuildPatch(BaseModel):
         """
         attributes: dict[str, object] = self.model_dump(exclude_unset=True)
         attributes.pop("door", None)
+        attributes.pop("extender", None)
         if self.door is not None:
             attributes.update(self.door.edit_attributes())
+        if self.extender is not None:
+            attributes.update(self.extender.edit_attributes())
         return attributes
 
 

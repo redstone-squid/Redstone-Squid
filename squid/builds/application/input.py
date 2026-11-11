@@ -21,3 +21,20 @@ def parse_build_ticks(text: str) -> int:
         message = "Enter a time such as 30gt, 15rt, or 1.5s."
         raise ValueError(message)
     return ticks
+
+
+def normalize_extender_orientation(value: str | None) -> str | None:
+    """Normalize an optional extender direction to the stored spelling."""
+    normalized = (value.strip().title() or None) if value is not None else None
+    if normalized not in {None, "Horizontal", "Up", "Down"}:
+        message = "Choose Horizontal, Up, or Down."
+        raise ValueError(message)
+    return normalized
+
+
+def validate_extension_length(value: int | None) -> int | None:
+    """Validate a supplied extender length while allowing an explicit clear."""
+    if value is not None and (isinstance(value, bool) or not 1 <= value <= 512):
+        message = "Extension length must be between 1 and 512 blocks."
+        raise ValueError(message)
+    return value

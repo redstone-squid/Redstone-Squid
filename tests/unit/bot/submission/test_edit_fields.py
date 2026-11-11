@@ -21,6 +21,8 @@ from squid_ui_discord.testing import assert_within_limits, commit_render, intera
 def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
     """Each parser result reaches its declared domain mutation without a string lookup."""
     samples = {
+        "extender_orientation": "Up",
+        "extension_length": "5",
         "display_name": "My build",
         "visible_opening_time": "3gt",
         "visible_closing_time": "4gt",
@@ -47,14 +49,14 @@ def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
     }
     assert len(EDIT_FIELDS) == len(samples)
     assert {field.key for field in EDIT_FIELDS} == samples.keys()
-    source = DoorBuild()
     for field in EDIT_FIELDS:
+        source = ExtenderBuild() if field.categories == frozenset({BuildCategory.EXTENDER}) else DoorBuild()
         bound = field.bind(source)
         assert field.parser(bound.current_text) == bound.value, field.key
         bound.stage(samples[field.key])
         assert bound.validation_error is None
 
-        target = DoorBuild()
+        target = type(source)()
         bound.to_patch().apply(target)
 
         assert field.reader(target) == bound.value, field.key
@@ -281,7 +283,7 @@ def test_edit_fields_include_retained_taxonomy_proposals() -> None:
             "unknown_patterns": ["New pattern"],
         },
     )
-    fields = {field.key: field.bind(build) for field in EDIT_FIELDS}
+    fields = {field.key: field.bind(build) for field in EDIT_FIELDS if field.applies_to(build)}
     assert fields["component_restrictions"].value == ["Observerless", "New component"]
     assert fields["door_type"].value == ["New pattern"]
     fields["component_restrictions"].stage("")

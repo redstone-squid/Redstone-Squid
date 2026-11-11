@@ -6,12 +6,14 @@ import pytest
 
 from squid.builds.application import BuildEditPatch
 from squid.builds.errors import InvalidBuildError
-from squid.builds.models import DoorBuild, UtilityBuild
+from squid.builds.models import DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
 
 
 def test_combine_preserves_every_typed_patch_field() -> None:
     patch = BuildEditPatch(
+        extender_orientation="Up",
+        extension_length=5,
         display_name="My build",
         visible_opening_time=3,
         visible_closing_time=4,
@@ -93,3 +95,23 @@ def test_taxonomy_replacements_remove_only_the_replaced_fields_proposals() -> No
     BuildEditPatch(door_type=[]).apply(build)
     assert "unknown_patterns" not in build.extra_info
     assert build.extra_info["unknown_restrictions"] == {"animated_restrictions": ["New motion"]}
+
+
+def test_extender_edits_normalize_preserve_and_clear_geometry() -> None:
+    build = ExtenderBuild(orientation="Horizontal", extension_length=3)
+    BuildEditPatch(extender_orientation="up").apply(build)
+    assert build.orientation == "Up"
+    assert build.extension_length == 3
+    BuildEditPatch(extension_length=None).apply(build)
+    assert build.extension_length is None
+
+
+@pytest.mark.parametrize("length", [0, -1, 513])
+def test_extender_edits_reject_invalid_lengths(length: int) -> None:
+    with pytest.raises(InvalidBuildError, match="between 1 and 512"):
+        BuildEditPatch(extension_length=length).apply(ExtenderBuild())
+
+
+def test_extender_geometry_rejects_other_categories() -> None:
+    with pytest.raises(InvalidBuildError, match="Extender fields"):
+        BuildEditPatch(extension_length=3).apply(DoorBuild())

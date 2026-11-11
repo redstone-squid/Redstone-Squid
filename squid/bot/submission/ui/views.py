@@ -18,6 +18,7 @@ from squid.bot.submission.input import parse_web_urls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.fields import (
     DIMENSIONS_FORMAT,
+    OPTIONAL_INT_FORMAT,
     OPTIONAL_TEXT_FORMAT,
     STRING_LIST_FORMAT,
     TIMING_FORMAT,
@@ -29,15 +30,17 @@ from squid.bot.submission.ui.fields import (
 from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, tr
 from squid.bot.utils.permissions import subject_for_interaction
 from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
+from squid.builds.application.input import normalize_extender_orientation, validate_extension_length
 from squid.builds.domain import BuildCategory, UnresolvedTaxonomy
 from squid.builds.errors import BuildRevisionMismatchError
-from squid.builds.models import Build, DoorBuild
+from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import DEFAULT
 from squid_reactivity import TopicHandle
 from squid_ui.text import Message, md
 
 _DOOR_ONLY = frozenset({BuildCategory.DOOR})
+_EXTENDER_ONLY = frozenset({BuildCategory.EXTENDER})
 
 
 def _door(build: Build) -> DoorBuild:
@@ -47,11 +50,38 @@ def _door(build: Build) -> DoorBuild:
     return build
 
 
+def _extender(build: Build) -> ExtenderBuild:
+    if not isinstance(build, ExtenderBuild):
+        msg = "extender-only field bound to a non-extender build"
+        raise TypeError(msg)
+    return build
+
+
 def _server_info_value(build: Build, key: str) -> str | None:
     return cast(str | None, build.extra_info.get("server_info", {}).get(key))
 
 
 EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
+    field_spec(
+        "extender_orientation",
+        OPTIONAL_TEXT_FORMAT,
+        "Horizontal, Up, Down",
+        label=tr(t"submissions-application-forms-movement-orientation = Direction"),
+        reader=lambda build: _extender(build).orientation,
+        patch=lambda value: BuildEditPatch(extender_orientation=value),
+        parser=normalize_extender_orientation,
+        categories=_EXTENDER_ONLY,
+    ),
+    field_spec(
+        "extension_length",
+        OPTIONAL_INT_FORMAT,
+        "",
+        label=tr(t"submissions-application-forms-extension-length = Extension length"),
+        reader=lambda build: _extender(build).extension_length,
+        patch=lambda value: BuildEditPatch(extension_length=value),
+        parser=lambda text: validate_extension_length(int(text) if text.strip() else None),
+        categories=_EXTENDER_ONLY,
+    ),
     field_spec(
         "display_name",
         OPTIONAL_TEXT_FORMAT,
@@ -507,8 +537,14 @@ EDIT_SECTIONS: tuple[tuple[str, sl.TextLike, tuple[str, ...]], ...] = (
     (
         "door",
         tr(t"build-editor-section-door = Door size and type"),
-        ("door_dimensions", "door_orientation_type", "door_type"),
+        ("door_dimensions", "door_orientation_type"),
     ),
+    (
+        "extender",
+        tr(t"submissions-application-forms-extender-movement = Extender size and direction"),
+        ("extender_orientation", "extension_length"),
+    ),
+    ("patterns", tr(t"submissions-application-forms-mechanism-patterns = Patterns"), ("door_type",)),
     (
         "timing",
         tr(t"build-editor-section-timing = Timing"),

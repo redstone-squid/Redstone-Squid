@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
-from squid.api.v1.schemas.builds import BuildPatch, DoorPatch
+from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
 from squid.builds.application import BuildEditor, BuildService
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import Status
@@ -148,3 +148,12 @@ def test_name_and_visible_timings_preserve_explicit_clears() -> None:
     }
     with pytest.raises(ValidationError):
         DoorPatch.model_validate({"visible_opening_time": -1})
+
+
+def test_extender_patch_preserves_omission_and_clear_semantics() -> None:
+    assert BuildPatch(extender=ExtenderPatch(orientation="Up")).edit_attributes() == {"extender_orientation": "Up"}
+    assert BuildPatch(extender=ExtenderPatch(extension_length=None)).edit_attributes() == {"extension_length": None}
+    with pytest.raises(ValidationError):
+        BuildPatch(extender=None)
+    with pytest.raises(ValidationError):
+        ExtenderPatch.model_validate({"extension_length": -1})

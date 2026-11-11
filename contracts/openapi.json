@@ -19453,6 +19453,16 @@
               }
             ]
           },
+          "extender": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtenderPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "wiring_placement_restrictions": {
             "anyOf": [
               {
@@ -21738,6 +21748,43 @@
         ],
         "title": "ExtenderDetails",
         "description": "Facts owned by piston extenders."
+      },
+      "ExtenderPatch": {
+        "properties": {
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "Horizontal",
+                  "Up",
+                  "Down"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          },
+          "extension_length": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 512.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extension Length"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ExtenderPatch",
+        "description": "Partial changes to an extender's direction and reach."
       },
       "FabricChallengeCreateRequest": {
         "properties": {
