@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from typing import Any, cast, override
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -12,7 +13,9 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, Ident
 from squid.accounts.models import Account
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.drafts import DraftEditorScreen
+from squid.bot.utils.permissions import AccountIdCache
 from squid.builds.application import BuildService
+from squid.core.actors import Actor
 from squid.messages.domain import MessageSnapshot
 from squid.schematics.application.services import SchematicService
 from squid.settings.application import SettingsService
@@ -257,3 +260,29 @@ async def test_submit_rejects_inapplicable_prefills(options: dict[str, str]) -> 
     harness = await _submit(cog, **options)
     assert _screen(harness) is None
     harness.edit_original_response.assert_awaited_once()
+
+
+@pytest.mark.parametrize("inbox", [True, False])
+async def test_saved_drafts_preserves_bot_owner_authority(inbox: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    cog = _cog()
+    cog.bot.account_ids = AccountIdCache()
+    cog.bot.is_owner = AsyncMock(return_value=True)
+    attention = AsyncMock(return_value=())
+    own = AsyncMock(return_value=())
+    inference = AsyncMock(return_value=())
+    monkeypatch.setattr(cog.bot.services.submission_drafts, "attention_inbox", attention)
+    monkeypatch.setattr(cog.bot.services.submission_drafts, "list_active", own)
+    cog.bot.services = replace(cog.bot.services, submission_inference=AsyncMock(list_active=inference))
+    harness = InteractionHarness(user_id=7, client=cog.bot)
+    harness.guild = None
+
+    await cast(Any, BuildSubmitCommands).saved_drafts.callback(cog, harness.source, inbox=inbox)
+
+    actor = Actor(account_id=1, discord_user_id=7, is_bot_owner=True)
+    if inbox:
+        attention.assert_awaited_once_with(actor, limit=10)
+        own.assert_not_awaited()
+    else:
+        own.assert_awaited_once_with(1)
+        attention.assert_not_awaited()
+    inference.assert_awaited_once_with(actor, inbox=inbox)

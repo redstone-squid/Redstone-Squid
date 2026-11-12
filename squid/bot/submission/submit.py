@@ -301,17 +301,16 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     )
     async def saved_drafts(self, request: sd.Request[Self], *, inbox: bool = False) -> sd.CommandResult:
         """Reopen saved drafts, or browse the staff correction inbox."""
-        actor = await ensure_consented_account(request, self.bot.services.accounts)
-        if actor is None:
+        account_id = await ensure_consented_account(request, self.bot.services.accounts)
+        if account_id is None:
             return None
+        actor = await actor_for_interaction(request)
         drafts = (
             await self.bot.services.submission_drafts.attention_inbox(actor, limit=10)
             if inbox
-            else await self.bot.services.submission_drafts.list_active(actor)
+            else await self.bot.services.submission_drafts.list_active(account_id)
         )
-        runs = await self.bot.services.submission_inference.list_active(
-            await actor_for_interaction(request), inbox=inbox
-        )
+        runs = await self.bot.services.submission_inference.list_active(actor, inbox=inbox)
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.primitives.Section(
                 (sl.primitives.Text(_draft_line(draft)),),
