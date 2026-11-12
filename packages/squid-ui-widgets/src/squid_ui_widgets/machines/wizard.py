@@ -356,7 +356,11 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
                 self._prefilled(current, state),
                 f"submit:{current.key}",
                 key=f"{self.key}.{current.key}",
-                label=controls.chrome.edit if editing else last_label if next_step is None else "Continue",
+                label=controls.chrome.edit
+                if editing
+                else last_label
+                if next_step is None
+                else controls.chrome.continue_step,
             )
         elif next_step is not None and next_step.form is not None:
             primary = controls.form(
@@ -376,7 +380,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
 
         return stack(
             heading(self.title),
-            progress(index + 1, maximum=len(live), label=f"Step {index + 1} of {len(live)}"),
+            progress(index + 1, maximum=len(live), label=controls.chrome.step_progress(index + 1, len(live))),
             heading(current.label, level=3),
             *controls.content(current.content),
             action_controls(

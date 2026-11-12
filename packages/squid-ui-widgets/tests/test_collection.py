@@ -6,6 +6,7 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.semantic import ActionControl, Choices, FormTrigger, RoutedActionControl
+from squid_ui.text import NEUTRAL, TextLike, resolve_text
 from squid_ui_widgets import testing as wt
 
 
@@ -95,9 +96,9 @@ def test_window_pages_past_twenty_five_and_clamps_after_removal() -> None:
 def test_errors_report_invalid_initial_cardinality() -> None:
     editor = _editor(minimum=2, maximum=3)
 
-    assert editor.errors(editor.initial_state) == ("Add at least 2 entries.",)
+    assert _english(editor.errors(editor.initial_state)) == ("Add at least 2 entries.",)
     too_many = editor.initial_from({"name": str(index)} for index in range(4))
-    assert editor.errors(too_many) == ("Keep no more than 3 entries.",)
+    assert _english(editor.errors(too_many)) == ("Keep no more than 3 entries.",)
 
 
 def test_custom_identity_and_routed_form_parity() -> None:
@@ -146,3 +147,8 @@ def test_collection_removal_clamps_before_the_next_page_turn() -> None:
     assert removed.page == 0
     assert removed.selected is None
     assert len(removed.entries) == 2
+
+
+def _english(messages: tuple[TextLike, ...]) -> tuple[str, ...]:
+    """Resolve validation messages to their English text."""
+    return tuple(resolve_text(message, NEUTRAL).content for message in messages)

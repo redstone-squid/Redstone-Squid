@@ -18,5 +18,108 @@
     "locations": [
       "packages/squid-ui-widgets/src/squid_ui_widgets/agreement.py:90"
     ]
+  },
+  "widgets-collection-too-few": {
+    "fingerprint": "e991b4780e2fd9dc1fccff7a7aab75bec1aee38984d6c89433adcb909d5b6806",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/collection.py:148"
+    ]
+  },
+  "widgets-collection-too-many": {
+    "fingerprint": "ac6c203ba401b39881cc583c8b75692575ec4099f6ffd97ccb789b5f10b74040",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/collection.py:157"
+    ]
+  },
+  "widgets-multi-choice-exclusive": {
+    "fingerprint": "98bcec52748b9eb9a9d0025177796557ab30144b472d00674dc65ec8bfa3bbaf",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "group_label",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:219"
+    ]
+  },
+  "widgets-multi-choice-options": {
+    "fingerprint": "1dde75181824517a8c0eb0ab709a4c1eb159526701d1be52e7bb7e1246c76ec4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:301"
+    ]
+  },
+  "widgets-multi-choice-select-options": {
+    "fingerprint": "64cb8b8630dc864a862d72494747a4abf0be69d82518db71c44fd083757720c2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:297",
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:369"
+    ]
+  },
+  "widgets-multi-choice-too-few": {
+    "fingerprint": "528b4884c42d4b9071d55f043aa23e496c4f14c818e2fc015e5e3d4f2f14198d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:193"
+    ]
+  },
+  "widgets-multi-choice-too-many": {
+    "fingerprint": "b33f646c092216a081c5600728da9cab2a94ee339f77c117b6b30bcc77cc22f3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:202"
+    ]
+  },
+  "widgets-multi-choice-unavailable": {
+    "fingerprint": "a7040b8133401d3545a0f86e66ad49f99f34b4c26f238552f6bbc9bbead7aca7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:212"
+    ]
   }
 }

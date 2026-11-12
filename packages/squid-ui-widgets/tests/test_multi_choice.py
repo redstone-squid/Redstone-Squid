@@ -7,6 +7,7 @@ import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.ownership import Controlled
 from squid_ui.semantic import ActionControl, Choices, FormTrigger, RoutedActionControl, RoutedChoices
+from squid_ui.text import NEUTRAL, TextLike, resolve_text
 from squid_ui_widgets import testing as wt
 
 
@@ -91,7 +92,7 @@ def test_cardinality_violation_blocks_apply_and_reduces_other_window_capacity() 
         if isinstance(node, sl.semantic.ActionControl) and node.key == "choices.apply"
     )
     assert not apply.available
-    assert pattern.errors(invalid) == ("Select no more than 3 options.",)
+    assert _english(pattern.errors(invalid)) == ("Select no more than 3 options.",)
 
     staged_elsewhere = sp.MultiChoiceState(("right-0", "right-1"))
     rendered = pattern.build_component(initial=staged_elsewhere).render()
@@ -352,3 +353,8 @@ def test_no_available_options_renders_without_a_picker() -> None:
     for nodes in (wt.mounted(pattern).nodes, wt.routed(pattern).nodes):
         assert not any(isinstance(node, Choices | RoutedChoices) for node in engine.walk(nodes))
         assert "No available options." in engine.texts(nodes)
+
+
+def _english(messages: tuple[TextLike, ...]) -> tuple[str, ...]:
+    """Resolve validation messages to their English text."""
+    return tuple(resolve_text(message, NEUTRAL).content for message in messages)

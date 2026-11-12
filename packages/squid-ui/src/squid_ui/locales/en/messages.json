@@ -5,7 +5,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:120"
+      "packages/squid-ui/src/squid_ui/chrome.py:124"
     ]
   },
   "ui-chrome-and-n-more": {
@@ -29,7 +29,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:114"
+      "packages/squid-ui/src/squid_ui/chrome.py:118"
     ]
   },
   "ui-chrome-approve": {
@@ -38,7 +38,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:143"
+      "packages/squid-ui/src/squid_ui/chrome.py:151"
     ]
   },
   "ui-chrome-approved-count": {
@@ -58,7 +58,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:64"
+      "packages/squid-ui/src/squid_ui/chrome.py:68"
     ]
   },
   "ui-chrome-approximate-total-footer": {
@@ -83,7 +83,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:30"
+      "packages/squid-ui/src/squid_ui/chrome.py:34"
     ]
   },
   "ui-chrome-back": {
@@ -92,7 +92,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:104"
+      "packages/squid-ui/src/squid_ui/chrome.py:108"
     ]
   },
   "ui-chrome-cancel": {
@@ -101,7 +101,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:113"
+      "packages/squid-ui/src/squid_ui/chrome.py:117"
     ]
   },
   "ui-chrome-changed-elsewhere": {
@@ -110,7 +110,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:89"
+      "packages/squid-ui/src/squid_ui/chrome.py:93"
     ]
   },
   "ui-chrome-close": {
@@ -119,7 +119,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:106"
+      "packages/squid-ui/src/squid_ui/chrome.py:110"
     ]
   },
   "ui-chrome-confirm": {
@@ -128,7 +128,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:112"
+      "packages/squid-ui/src/squid_ui/chrome.py:116"
+    ]
+  },
+  "ui-chrome-continue": {
+    "fingerprint": "edd2b1741871d3f74b9f7a5646e4a177a488b333ab7841f6b11ef1dd5d705083",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:131"
     ]
   },
   "ui-chrome-continue-session": {
@@ -137,7 +146,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:87"
+      "packages/squid-ui/src/squid_ui/chrome.py:91"
     ]
   },
   "ui-chrome-decided": {
@@ -152,7 +161,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:42"
+      "packages/squid-ui/src/squid_ui/chrome.py:46"
     ]
   },
   "ui-chrome-dm-unavailable": {
@@ -161,7 +170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:95"
+      "packages/squid-ui/src/squid_ui/chrome.py:99"
     ]
   },
   "ui-chrome-download": {
@@ -170,7 +179,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:111"
+      "packages/squid-ui/src/squid_ui/chrome.py:115"
     ]
   },
   "ui-chrome-edit": {
@@ -179,7 +188,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:121"
+      "packages/squid-ui/src/squid_ui/chrome.py:125"
     ]
   },
   "ui-chrome-finish": {
@@ -188,7 +197,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:126"
+      "packages/squid-ui/src/squid_ui/chrome.py:130"
     ]
   },
   "ui-chrome-full": {
@@ -197,7 +206,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:141"
+      "packages/squid-ui/src/squid_ui/chrome.py:149"
     ]
   },
   "ui-chrome-home": {
@@ -206,7 +215,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:105"
+      "packages/squid-ui/src/squid_ui/chrome.py:109"
     ]
   },
   "ui-chrome-jump-to-page": {
@@ -215,7 +224,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:136"
+      "packages/squid-ui/src/squid_ui/chrome.py:144"
     ]
   },
   "ui-chrome-move-down": {
@@ -224,7 +233,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:124"
+      "packages/squid-ui/src/squid_ui/chrome.py:128"
     ]
   },
   "ui-chrome-move-up": {
@@ -233,7 +242,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:123"
+      "packages/squid-ui/src/squid_ui/chrome.py:127"
     ]
   },
   "ui-chrome-newer": {
@@ -242,7 +251,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:103"
+      "packages/squid-ui/src/squid_ui/chrome.py:107"
     ]
   },
   "ui-chrome-next": {
@@ -251,7 +260,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:101"
+      "packages/squid-ui/src/squid_ui/chrome.py:105"
     ]
   },
   "ui-chrome-no-results": {
@@ -260,7 +269,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:118"
+      "packages/squid-ui/src/squid_ui/chrome.py:122"
     ]
   },
   "ui-chrome-not-now": {
@@ -269,7 +278,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:77"
+      "packages/squid-ui/src/squid_ui/chrome.py:81"
     ]
   },
   "ui-chrome-not-yours": {
@@ -278,7 +287,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:73"
+      "packages/squid-ui/src/squid_ui/chrome.py:77"
     ]
   },
   "ui-chrome-off": {
@@ -287,7 +296,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:110"
+      "packages/squid-ui/src/squid_ui/chrome.py:114"
     ]
   },
   "ui-chrome-older": {
@@ -296,7 +305,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:102"
+      "packages/squid-ui/src/squid_ui/chrome.py:106"
     ]
   },
   "ui-chrome-on": {
@@ -305,7 +314,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:109"
+      "packages/squid-ui/src/squid_ui/chrome.py:113"
     ]
   },
   "ui-chrome-page-footer": {
@@ -325,7 +334,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:22"
+      "packages/squid-ui/src/squid_ui/chrome.py:26"
     ]
   },
   "ui-chrome-page-option": {
@@ -340,7 +349,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:38"
+      "packages/squid-ui/src/squid_ui/chrome.py:42"
     ]
   },
   "ui-chrome-previous": {
@@ -349,7 +358,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:100"
+      "packages/squid-ui/src/squid_ui/chrome.py:104"
     ]
   },
   "ui-chrome-range-footer": {
@@ -369,7 +378,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:26"
+      "packages/squid-ui/src/squid_ui/chrome.py:30"
     ]
   },
   "ui-chrome-redo": {
@@ -378,7 +387,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:108"
+      "packages/squid-ui/src/squid_ui/chrome.py:112"
     ]
   },
   "ui-chrome-remove": {
@@ -387,7 +396,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:122"
+      "packages/squid-ui/src/squid_ui/chrome.py:126"
     ]
   },
   "ui-chrome-review": {
@@ -396,7 +405,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:125"
+      "packages/squid-ui/src/squid_ui/chrome.py:129"
     ]
   },
   "ui-chrome-save": {
@@ -405,7 +414,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:115"
+      "packages/squid-ui/src/squid_ui/chrome.py:119"
     ]
   },
   "ui-chrome-search": {
@@ -414,7 +423,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:117"
+      "packages/squid-ui/src/squid_ui/chrome.py:121"
     ]
   },
   "ui-chrome-sent-privately": {
@@ -423,7 +432,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:93"
+      "packages/squid-ui/src/squid_ui/chrome.py:97"
     ]
   },
   "ui-chrome-session-ended": {
@@ -432,7 +441,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:75"
+      "packages/squid-ui/src/squid_ui/chrome.py:79"
     ]
   },
   "ui-chrome-session-expiring": {
@@ -441,7 +450,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:85"
+      "packages/squid-ui/src/squid_ui/chrome.py:89"
     ]
   },
   "ui-chrome-slot-capacity": {
@@ -461,7 +470,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:59"
+      "packages/squid-ui/src/squid_ui/chrome.py:63"
     ]
   },
   "ui-chrome-slot-count": {
@@ -476,7 +485,27 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:57"
+      "packages/squid-ui/src/squid_ui/chrome.py:61"
+    ]
+  },
+  "ui-chrome-step-progress": {
+    "fingerprint": "bd390e92241d8d6df07f366914e4abda2690c98d839e6bc570b5f2a0969c8774",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "step",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "steps",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:22"
     ]
   },
   "ui-chrome-total-range-footer": {
@@ -501,7 +530,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:34"
+      "packages/squid-ui/src/squid_ui/chrome.py:38"
     ]
   },
   "ui-chrome-try-again-in": {
@@ -516,7 +545,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:47"
+      "packages/squid-ui/src/squid_ui/chrome.py:51"
     ]
   },
   "ui-chrome-unanswered": {
@@ -525,7 +554,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:127"
+      "packages/squid-ui/src/squid_ui/chrome.py:135"
     ]
   },
   "ui-chrome-undo": {
@@ -534,7 +563,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:107"
+      "packages/squid-ui/src/squid_ui/chrome.py:111"
     ]
   },
   "ui-chrome-unsaved": {
@@ -543,7 +572,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:116"
+      "packages/squid-ui/src/squid_ui/chrome.py:120"
     ]
   },
   "ui-chrome-updates-paused": {
@@ -552,7 +581,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:83"
+      "packages/squid-ui/src/squid_ui/chrome.py:87"
     ]
   },
   "ui-chrome-waitlist": {
@@ -561,7 +590,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:140"
+      "packages/squid-ui/src/squid_ui/chrome.py:148"
     ]
   },
   "ui-chrome-withdraw": {
@@ -570,7 +599,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:144"
+      "packages/squid-ui/src/squid_ui/chrome.py:152"
     ]
   },
   "ui-chrome-working": {
@@ -579,7 +608,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:81"
+      "packages/squid-ui/src/squid_ui/chrome.py:85"
     ]
   },
   "ui-form-date-format": {

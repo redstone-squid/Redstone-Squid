@@ -18,6 +18,10 @@ def _default_and_n_more(count: int) -> TextLike:
     return tr(t"ui-chrome-and-n-more = …and {count} more")
 
 
+def _default_step_progress(step: int, steps: int) -> TextLike:
+    return tr(t"ui-chrome-step-progress = Step {step} of {steps}")
+
+
 def _default_page_footer(page: int, pages: int) -> TextLike:
     return tr(t"ui-chrome-page-footer = Page {page} of {pages}")
 
@@ -124,6 +128,10 @@ class Chrome:
     move_down: TextLike = tr(t"ui-chrome-move-down = Move down")
     review: TextLike = tr(t"ui-chrome-review = Review")
     finish: TextLike = tr(t"ui-chrome-finish = Finish")
+    continue_step: TextLike = tr(t"ui-chrome-continue = Continue")
+    """Opens the current wizard step's form when more steps follow it."""
+    step_progress: Callable[[int, int], TextLike] = _default_step_progress
+    """A wizard's position; called with (step, steps), 1-based."""
     unanswered: TextLike = tr(t"ui-chrome-unanswered = Not answered yet")
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
@@ -195,6 +203,8 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         move_down=resolve_text(chrome.move_down, localization).content,
         review=resolve_text(chrome.review, localization).content,
         finish=resolve_text(chrome.finish, localization).content,
+        continue_step=resolve_text(chrome.continue_step, localization).content,
+        step_progress=lambda step, steps: resolve_text(chrome.step_progress(step, steps), localization).content,
         unanswered=resolve_text(chrome.unanswered, localization).content,
         page_footer=lambda page, pages: resolve_text(chrome.page_footer(page, pages), localization).content,
         range_footer=lambda first, last: resolve_text(chrome.range_footer(first, last), localization).content,

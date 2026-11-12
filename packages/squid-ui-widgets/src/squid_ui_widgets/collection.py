@@ -5,11 +5,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from squid_i18n import NUMBER
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack, status
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.semantic import ControlDisplay, FormTrigger, Tone
-from squid_ui.text import TextLike
+from squid_ui.text import TextLike, tr
 from squid_ui_widgets._actions import MachineKeySegment, WindowSelection
 from squid_ui_widgets._option_window import OptionWindow
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
@@ -138,13 +139,28 @@ class CollectionEditor:
         """Project state to its ordered public form-value mappings."""
         return tuple(self._mapping(entry) for entry in state.entries)
 
-    def errors(self, state: CollectionState) -> tuple[str, ...]:
+    def errors(self, state: CollectionState) -> tuple[TextLike, ...]:
         """Return collection-bound violations for `state`."""
-        errors: list[str] = []
-        if len(state.entries) < self.minimum:
-            errors.append(f"Add at least {self.minimum} entries.")
-        if self.maximum is not None and len(state.entries) > self.maximum:
-            errors.append(f"Keep no more than {self.maximum} entries.")
+        errors: list[TextLike] = []
+        minimum, maximum = self.minimum, self.maximum
+        if len(state.entries) < minimum:
+            errors.append(
+                tr(t"""
+                    widgets-collection-too-few = {{ {NUMBER(minimum)} ->
+                        [one] Add at least {NUMBER(minimum)} entry.
+                       *[other] Add at least {NUMBER(minimum)} entries.
+                    }}
+                    """)
+            )
+        if maximum is not None and len(state.entries) > maximum:
+            errors.append(
+                tr(t"""
+                    widgets-collection-too-many = {{ {NUMBER(maximum)} ->
+                        [one] Keep no more than {NUMBER(maximum)} entry.
+                       *[other] Keep no more than {NUMBER(maximum)} entries.
+                    }}
+                    """)
+            )
         return tuple(errors)
 
     def _selected_index(self, state: CollectionState) -> int | None:

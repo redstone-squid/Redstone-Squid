@@ -4,11 +4,12 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
+from squid_i18n import NUMBER
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_ui.semantic import Choice, ControlDisplay, Tone, fallback
-from squid_ui.text import TextLike
+from squid_ui.text import TextLike, tr
 from squid_ui_widgets._actions import (
     MachineKeySegment,
     PageAction,
@@ -182,21 +183,41 @@ class MultiChoice:
         inverse = tuple(group.key for group in self.groups if group_key in group.exclusive_with)
         return frozenset((*direct, *inverse))
 
-    def errors(self, state: MultiChoiceState) -> tuple[str, ...]:
+    def errors(self, state: MultiChoiceState) -> tuple[TextLike, ...]:
         """Return every commit-blocking violation for the staged set."""
-        errors: list[str] = []
+        errors: list[TextLike] = []
         count = len(state.staged)
-        if count < self.minimum:
-            errors.append(f"Select at least {self.minimum} options.")
-        if count > self.maximum:
-            errors.append(f"Select no more than {self.maximum} options.")
+        minimum, maximum = self.minimum, self.maximum
+        if count < minimum:
+            errors.append(
+                tr(t"""
+                    widgets-multi-choice-too-few = {{ {NUMBER(minimum)} ->
+                        [one] Select at least {NUMBER(minimum)} option.
+                       *[other] Select at least {NUMBER(minimum)} options.
+                    }}
+                    """)
+            )
+        if count > maximum:
+            errors.append(
+                tr(t"""
+                    widgets-multi-choice-too-many = {{ {NUMBER(maximum)} ->
+                        [one] Select no more than {NUMBER(maximum)} option.
+                       *[other] Select no more than {NUMBER(maximum)} options.
+                    }}
+                    """)
+            )
         unknown = set(state.staged) - set(self._choices)
         if unknown:
-            errors.append("One or more selected options are no longer available.")
+            errors.append(
+                tr(t"widgets-multi-choice-unavailable = One or more selected options are no longer available.")
+            )
         selected_groups = {self._group_for[key] for key in state.staged if key in self._group_for}
         for group in self.groups:
             if group.key in selected_groups and self._rivals(group.key) & selected_groups:
-                errors.append(f"{display_text(group.label)} cannot be combined with an exclusive group.")
+                group_label = group.label
+                errors.append(
+                    tr(t"widgets-multi-choice-exclusive = {group_label} cannot be combined with an exclusive group.")
+                )
                 break
         return tuple(errors)
 
@@ -273,11 +294,11 @@ class MultiChoice:
         if action != "modal" or len(self._choice_order) > 25:
             return None
         return FormSpec(
-            "Select options",
+            tr(t"widgets-multi-choice-select-options = Select options"),
             (
                 MultiChoiceField[str, Any](
                     key="selection",
-                    label="Options",
+                    label=tr(t"widgets-multi-choice-options = Options"),
                     required=self.minimum > 0,
                     options=tuple(
                         ChoiceOption(
@@ -341,7 +362,12 @@ class MultiChoice:
             modal = self.form_for(state, "modal")
             assert modal is not None
             # fallback needs layout nodes, so wrap the form control in a container.
-            trigger = controls.form(modal, "modal", key=f"{self.key}.modal", label="Select options")
+            trigger = controls.form(
+                modal,
+                "modal",
+                key=f"{self.key}.modal",
+                label=tr(t"widgets-multi-choice-select-options = Select options"),
+            )
             selection = fallback(direct, action_controls(trigger, key=f"{self.key}.modal-action"))
         else:
             selection = direct
