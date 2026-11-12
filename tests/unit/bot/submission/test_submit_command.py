@@ -11,7 +11,8 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account
-from squid.bot.submission.submit import BuildSubmitCommands
+from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
+from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.utils.permissions import AccountIdCache
 from squid.builds.application import BuildService
@@ -35,7 +36,7 @@ from squid.submissions.application.intake import SubmissionAttachmentIntake, Sup
 from squid.submissions.domain import DraftChange, DraftSnapshot, FormManifest, SubmissionOrigin
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui.text import source_text
-from squid_ui_discord.testing import InteractionHarness
+from squid_ui_discord.testing import InteractionHarness, iter_component_payloads, stage
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 
@@ -286,3 +287,60 @@ async def test_saved_drafts_preserves_bot_owner_authority(inbox: bool, monkeypat
         own.assert_awaited_once_with(1)
         attention.assert_not_awaited()
     inference.assert_awaited_once_with(actor, inbox=inbox)
+
+
+@pytest.mark.parametrize("inbox", [True, False])
+@pytest.mark.parametrize(("draft_count", "run_count"), [(20, 0), (0, 20), (10, 10)])
+async def test_saved_drafts_paginate_all_entries(
+    inbox: bool, draft_count: int, run_count: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cog = _cog()
+    cog.bot.account_ids = AccountIdCache()
+    cog.bot.is_owner = AsyncMock(return_value=True)
+    now = Instant.now()
+    drafts = tuple(
+        StoredDraft(
+            snapshot=DraftSnapshot(
+                UUID(int=index + 1), 1, CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION, "door"
+            ),
+            origin=SubmissionOrigin.DISCORD,
+            created_at=now,
+            updated_at=now,
+            expires_at=now.add(days=7, days_assumed_24h_ok=True),
+        )
+        for index in range(draft_count)
+    )
+    runs = tuple(UUID(int=index + 100) for index in range(run_count))
+    monkeypatch.setattr(cog.bot.services.submission_drafts, "attention_inbox", AsyncMock(return_value=drafts))
+    monkeypatch.setattr(cog.bot.services.submission_drafts, "list_active", AsyncMock(return_value=drafts))
+    cog.bot.services = replace(
+        cog.bot.services, submission_inference=AsyncMock(list_active=AsyncMock(return_value=runs))
+    )
+    harness = InteractionHarness(user_id=7, client=cog.bot)
+    harness.guild = None
+
+    await cast(Any, BuildSubmitCommands).saved_drafts.callback(cog, harness.source, inbox=inbox)
+
+    screen = _screen(harness)
+    assert isinstance(screen, SavedDraftsScreen)
+    expected = {
+        *(build_controls.reopen_draft.id(draft_id=str(draft.snapshot.id)) for draft in drafts),
+        *(build_controls.reopen_inference.id(run_id=str(run_id)) for run_id in runs),
+    }
+    seen: list[str] = []
+    async with stage(SavedDraftsScreen(screen.nodes), owner=object(), user_id=7) as ui:
+        while True:
+            ui.assert_within_limits()
+            view = ui.root._candidates.view
+            assert view is not None
+            seen.extend(
+                route
+                for item in iter_component_payloads(view.to_components())
+                if (route := item.get("custom_id")) in expected
+            )
+            next_key = ui.key_for("__cursor_next.saved-drafts")
+            if ui.control(next_key).payload.get("disabled"):
+                break
+            await ui.press(next_key)
+        assert len(seen) == len(expected)
+        assert set(seen) == expected

@@ -9,7 +9,7 @@ input and presents progress while those services decide when a build is ready.
 import logging
 from collections.abc import Sequence
 from functools import partial
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Self, override
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import discord
@@ -64,6 +64,17 @@ logger = logging.getLogger(__name__)
 # Disable the consent banner without disabling ingestion for consenting accounts.
 # The bool annotation keeps type checkers from treating the guarded branches as unreachable.
 CONSENT_STICKY_ENABLED: bool = False
+
+
+class SavedDraftsScreen(sd.Screen):
+    """Keep saved drafts and inference runs reachable across Discord message pages."""
+
+    def __init__(self, nodes: Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]) -> None:
+        self.nodes = tuple(nodes)
+
+    @override
+    def render(self) -> sl.Document[sl.ComponentsV2Target, sd.Request]:
+        return sl.Document(self.nodes, key="saved-drafts")
 
 
 class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[BotT]):
@@ -330,7 +341,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             for run_id in runs
         )
         if nodes:
-            return tuple(nodes)
+            return SavedDraftsScreen(nodes)
         if inbox:
             return text_node(tr(t"build-drafts-inbox-empty = No drafts are waiting for staff correction."))
         return text_node(tr(t"build-drafts-empty = You have no drafts in progress. Start one with `/build submit`."))
