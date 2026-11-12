@@ -7,6 +7,8 @@ from enum import Enum
 from functools import partial
 from typing import Any, cast, override
 
+from discord.utils import escape_markdown
+
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
@@ -115,6 +117,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     _review: BoundEdit | None = sl.state(None, opaque=True)
     _pending_review: str | None = sl.state(None, persist=False)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
+    _show_schematics: bool = sl.state(default=False)
 
     def __init__(
         self,
@@ -182,7 +185,20 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if actions is not None:
             nodes.append(actions)
         nodes.extend(self.controller.controls())
-        nodes.append(self.schematics)
+        nodes.append(
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"build-schematic-tools-hide = Hide schematic tools")
+                    if self._show_schematics
+                    else tr(t"build-schematic-tools-show = Schematic tools"),
+                    self._toggle_schematics,
+                    key="schematic-tools",
+                ),
+                key="schematic-toggle",
+            )
+        )
+        if self._show_schematics:
+            nodes.append(self.schematics)
         if self._asset is not None:
             nodes.append(
                 sl.download(
@@ -192,6 +208,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 )
             )
         return tuple(nodes)
+
+    async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
+        self._show_schematics = not self._show_schematics
 
     def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None:
         actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = []
@@ -326,7 +345,6 @@ class BuildBrowseScreen(sd.Screen):
     policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
 
     _selected: _BuildDetail | None = sl.state(None, opaque=True)
-    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
 
     def __init__(
         self,
@@ -359,6 +377,7 @@ class BuildBrowseScreen(sd.Screen):
         statuses = {Status.CONFIRMED}
         if capabilities.view_pending:
             statuses.add(Status.PENDING)
+        self._statuses = frozenset(statuses)
         self._browser = sp.Browser(
             _BuildSource(queries, frozenset(statuses)),
             key="builds",
@@ -366,9 +385,10 @@ class BuildBrowseScreen(sd.Screen):
             label=lambda build: f"#{build.id} {build.title}",
             # `_BuildSource` filters on `submission_status`, so every listed build carries one; the
             # domain type stays optional only for a build that has not been submitted yet.
-            summary=lambda build: f"{build.category} · {cast(Status, build.submission_status).name.lower()}",
+            summary=_build_summary,
+            on_open=self._open_list_build,
             detail=self._detail,
-            page_size=15,
+            page_size=8,
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
             empty=tr(t"build-list-empty = No builds are available."),
             # `_BuildSource` uses the default listing order: highest, so newest, build ID first.
@@ -379,30 +399,45 @@ class BuildBrowseScreen(sd.Screen):
     async def on_load(self) -> None:
         if self._initial_id is not None:
             await self._select(self._initial_id)
-        self._tabs = sp.Tabs(
-            (
-                sp.Tab("browse", tr(t"bot-submission-build-browse-browse = Browse"), self._browser),
-                sp.Tab("find", tr(t"bot-submission-build-browse-find-build = Find build"), self._find_nodes()),
-            ),
-            key="build-tabs",
-            title=tr(t"bot-submission-build-browse-builds = Builds"),
-        )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._selected is not None:
             return (
-                self._selected,
+                *self._find_nodes(),
                 sl.action_controls(
-                    sl.action_control(
-                        tr(t"bot-submission-build-browse-back-to-builds = Back to builds"), self._back, key="back"
-                    ),
+                    sl.action_control(tr(t"build-browse-newer = Newer"), self._newer, key="newer"),
+                    sl.action_control(tr(t"build-browse-older = Older"), self._older, key="older"),
+                    sl.action_control(tr(t"build-browse-list = List view"), self._back, key="back"),
                     key="selected-actions",
+                    display=sl.semantic.ControlDisplay.INDIVIDUAL,
                 ),
+                self._selected,
             )
-        if self._tabs is None:
-            return (sl.status(tr(t"bot-submission-build-browse-loading-builds = Loading builds.")),)
-        return (self._tabs,)
+        return (*self._find_nodes(), self._browser)
+
+    async def _open_list_build(self, _event: sl.ActionEvent, build: Build) -> None:
+        await self._show_build(build)
+
+    async def _newer(self, event: sl.PressEvent) -> None:
+        await self._adjacent(event, newer=True)
+
+    async def _older(self, event: sl.PressEvent) -> None:
+        await self._adjacent(event, newer=False)
+
+    async def _adjacent(self, event: sl.PressEvent, *, newer: bool) -> None:
+        if self._selected is None:
+            return
+        build_id = self._selected._build_id
+        page = await self._queries.list_page(
+            statuses=self._statuses,
+            selector=PageSelector(before_id=build_id) if newer else PageSelector(after_id=build_id),
+            page_size=1,
+        )
+        if page.items:
+            await self._show_build(page.items[0])
+        else:
+            await event.notice(tr(t"build-browse-end = No more builds in this direction."))
 
     def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
@@ -443,8 +478,15 @@ class BuildBrowseScreen(sd.Screen):
         build = await self._queries.get(build_id)
         if build is None or (build.submission_status is not Status.CONFIRMED and not self._capabilities.view_pending):
             return False
-        self._selected = self._detail(build)
+        await self._show_build(build)
         return True
+
+    async def _show_build(self, build: Build) -> None:
+        detail = self._detail(build)
+        # Prepare the card before switching views so a modal submission can present
+        # the result in its response instead of waiting for a later live refresh.
+        await detail.projection._load()
+        self._selected = detail
 
     async def _open_id(self, event: sl.SubmitEvent) -> None:
         form = _OpenBuildForm.from_submission(event)
@@ -460,6 +502,15 @@ class BuildBrowseScreen(sd.Screen):
 
     async def _back(self, _event: sl.PressEvent) -> None:
         self._selected = None
+        await self._browser._back(_event)
+
+
+def _build_summary(build: Build) -> str:
+    """A compact list entry; the full card is reserved for an opened build."""
+    title = escape_markdown(build.title)
+    size = " x ".join(str(value) if value is not None else "?" for value in (build.width, build.height, build.depth))
+    status = cast(Status, build.submission_status).name.lower()
+    return f"**#{build.id} {title}** — {size} · {build.category} · {status}"
 
 
 class _OpenBuildForm(sl.forms.Form):

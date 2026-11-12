@@ -11,7 +11,7 @@ from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabiliti
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
-from squid.core.pagination import Page
+from squid.core.pagination import Page, PageSelector
 from squid.permissions.domain import PermissionNode
 from squid.schematics.application import SchematicService
 from squid_reactivity import LocalTopicBus
@@ -27,7 +27,7 @@ def _screen(
     queries.get.return_value = build
     queries.semantic.return_value = build
     queries.list_page.return_value = Page(items=(build,), total=1, next=None, prev=None)
-    schematics = Mock(spec=SchematicService, available=schematics_available)
+    schematics = Mock(spec=SchematicService, available=schematics_available, videos=None)
 
     async def render_build(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         return sl.paragraph(f"Build #{build.id}")
@@ -133,7 +133,53 @@ async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
 async def test_schematic_controls_survive_opening_and_cancelling_review() -> None:
     screen = _screen(status=Status.PENDING, schematics_available=True)
     async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("schematic-tools"))
         ui.control(ui.key_for("schematic-info"))
         await ui.press(ui.key_for("approve"))
         await ui.press(ui.key_for("build-review.cancel"))
         ui.control(ui.key_for("schematic-info"))
+
+
+async def test_open_id_through_the_discord_modal() -> None:
+    async with stage(_screen(initial_id=None), owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("open-id"))
+        await form.submit({"id": "7"})
+        assert "Build #7" in ui.texts()
+        ui.control(ui.key_for("older"))
+        ui.control(ui.key_for("open-id"))
+
+
+async def test_schematic_tools_are_collapsed_on_arrival() -> None:
+    async with stage(_screen(schematics_available=True), owner=object()) as ui:
+        assert "Schematic info" not in ui.texts()
+        await ui.press(ui.key_for("schematic-tools"))
+        ui.control(ui.key_for("schematic-info"))
+
+
+@pytest.mark.parametrize("newer", [False, True])
+async def test_detail_navigation_uses_id_anchors_and_preserves_visibility(newer: bool) -> None:
+    screen = _screen()
+    queries = cast(AsyncMock, screen._queries)
+    queries.list_page.return_value = Page(
+        items=(DoorBuild(id=8 if newer else 6, submission_status=Status.CONFIRMED),),
+        total=20,
+        next=None,
+        prev=None,
+    )
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("newer" if newer else "older"))
+        assert f"Build #{8 if newer else 6}" in ui.texts()
+        queries.list_page.assert_awaited_once_with(
+            statuses=frozenset({Status.CONFIRMED, Status.PENDING}),
+            selector=PageSelector(before_id=7) if newer else PageSelector(after_id=7),
+            page_size=1,
+        )
+
+
+async def test_list_selection_and_return_keep_the_list_available() -> None:
+    async with stage(_screen(initial_id=None), owner=object()) as ui:
+        await ui.select(ui.key_for("builds.open"), ["7"])
+        assert "Build #7" in ui.texts()
+        await ui.press(ui.key_for("back"))
+        assert "## Build catalogue" in ui.texts()
+        ui.control(ui.key_for("builds.open"))
