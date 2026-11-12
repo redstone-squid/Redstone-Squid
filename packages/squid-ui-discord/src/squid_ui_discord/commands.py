@@ -12,7 +12,7 @@ import inspect
 import weakref
 from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from dataclasses import dataclass, replace
-from functools import wraps
+from functools import partial, wraps
 from typing import Any, Concatenate, Protocol, Unpack, cast, get_origin, overload, override
 
 import discord
@@ -22,9 +22,8 @@ from typing_extensions import TypedDict
 
 from squid_reactivity.operations import Cancelled, Failed, Pending, Succeeded
 from squid_ui import paragraph
-from squid_ui.document import DocumentLike
 from squid_ui.forms import FormSpec
-from squid_ui_discord._pending import _ManagedResult
+from squid_ui_discord._pending import _PendingCommand
 from squid_ui_discord.access import Everyone
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, RequestSource
 from squid_ui_discord.modal import ModalSpec
@@ -271,21 +270,10 @@ async def _run_pending(req: Request[Any], card: PendingCard, work: Callable[[], 
     re-raised afterwards so discord.py's error handling still sees it.
     """
     errors = req.runtime.config.errors
-    # `_ManagedResult` is declared for portable content, and `Renderable` is contravariant in its
-    # render target, so Components V2 content is not portable content. Sound here and nowhere else:
-    # this result is only ever mounted into the V2 message `req.respond` below delivers.
-    initial = paragraph(card) if isinstance(card, str) else cast(DocumentLike, card)
-    # Bound once rather than read inside the lambda: `ErrorPolicy` is frozen, so this is the same
-    # callable either way, and only the local form survives the None check into the closure.
-    render = errors.render
-    render_error = None if render is None else (lambda error: cast(DocumentLike, render(req, error)))
-    component = _ManagedResult(
-        # `| None` because `work` wraps a command handler, and a handler that returns nothing is
-        # exactly what the `value is None` arm below leaves showing the pending card.
-        cast(Callable[[], Awaitable[DocumentLike | None]], work),
-        initial=initial,
-        render_success=lambda value: initial if value is None else value,
-        render_error=render_error,
+    component = _PendingCommand(
+        cast(Callable[[], Awaitable[DocumentContent | None]], work),
+        initial=paragraph(card) if isinstance(card, str) else card,
+        render_error=None if errors.render is None else partial(errors.render, req),
     )
     result = await req.respond(component, access=Everyone())
     match component.execution.status:

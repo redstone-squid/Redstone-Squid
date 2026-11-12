@@ -272,22 +272,28 @@ def render_failure(request: sd.Request[Any], error: Exception) -> sl.LayoutNode:
 
 class Slow(sd.Cog[commands.Bot]):
     @sd.command(pending="Working…")
-    async def work(self, request: sd.Request[Self], outcome: str) -> sl.LayoutNode:
+    async def work(self, request: sd.Request[Self], outcome: str) -> sl.LayoutNode | None:
         if outcome == "fail":
             raise ValueError("boom")
+        if outcome == "none":
+            return None
         return paragraph("Done")
 
 
-async def test_pending_shows_a_card_then_the_result() -> None:
+@pytest.mark.parametrize("outcome", ["ok", "none"])
+async def test_pending_shows_a_card_then_the_result(outcome: str) -> None:
     bot = installed_bot()
     cog = Slow(bot)
     interaction = interaction_for(bot)
 
-    await run(cog.work, cog, interaction.source, "ok")
+    await run(cog.work, cog, interaction.source, outcome)
 
     [sent] = interaction.sends
     assert "Working…" in payload_texts(sent.kwargs["view"])
-    assert "Done" in payload_texts(interaction.edits[-1].kwargs["view"])
+    if outcome == "none":
+        assert not interaction.edits
+    else:
+        assert "Done" in payload_texts(interaction.edits[-1].kwargs["view"])
 
 
 async def test_pending_failure_uses_the_error_policy_and_reraises() -> None:
