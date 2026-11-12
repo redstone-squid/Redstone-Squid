@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from typing import Any
 
+import pytest
 from pydantic import BaseModel
 
 from squid.builds.application import (
@@ -14,7 +15,6 @@ from squid.builds.application import (
     InlineImage,
 )
 from squid.builds.domain import RestrictionTypeLiteral
-from squid.versions.domain import Edition
 
 
 def inferred(**overrides: Any) -> InferredBuild:
@@ -80,10 +80,11 @@ class FakeTaxonomy:
 
 
 class FakeVersions:
-    async def newest(self, edition: Edition) -> str:
-        return f"{edition} 1.21.0"
+    def __init__(self) -> None:
+        self.resolved_specs: list[str] = []
 
     async def resolve_spec(self, version_spec: str) -> list[str]:
+        self.resolved_specs.append(version_spec)
         return ["Java 1.20.0", "Java 1.21.0"]
 
 
@@ -128,6 +129,7 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert build.patterns == ["Regular"]
     assert build.extra_info.get("unknown_patterns") == ["Unknown Pattern"]
     assert build.version_spec == "1.20+"
+    assert build.versions == ["Java 1.20.0", "Java 1.21.0"]
     assert build.description == "first line\nsecond line"
 
 
@@ -164,3 +166,20 @@ async def test_infer_passes_images_to_generator() -> None:
     await service.infer(source(images=(image,)), model="model")
 
     assert generator.calls[0][4] == (image,)
+
+
+@pytest.mark.parametrize("version_spec", [None, "", "   "])
+async def test_missing_version_stays_unknown(version_spec: str | None) -> None:
+    versions = FakeVersions()
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(version_spec=version_spec)])),
+        FakeTaxonomy(),
+        versions,
+        "prompt",
+    )
+
+    builds = await service.infer(source(), model="model")
+
+    assert builds[0].version_spec is None
+    assert builds[0].versions == []
+    assert versions.resolved_specs == []

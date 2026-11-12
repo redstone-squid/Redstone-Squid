@@ -17,6 +17,8 @@ Record titles are FIRST, FASTEST, SMALLEST, FASTEST SMALLEST, and SMALLEST FASTE
 FIELD GUIDANCE
 Use null for unknown scalar fields and [] for absent lists. Normalize taxonomy names to the vocabulary above while retaining meaningful tiers. Creators are Minecraft names, not automatically every Discord author. Put useful caveats, credits, dates, reliability notes, and corrections in author_note. confidence reflects how directly the messages support the result.
 
+Set version_spec only when the messages or supporting evidence identify a Minecraft version for this build. Otherwise use null. Do not substitute the latest release or guess a version from the message date or build date.
+
 BUNDLE RULES
 Only messages marked primary may be source_message_ids. Reply-parent and preceding messages are context for disambiguation and inheritance only. A bundle can contain zero, one, or several builds regardless of message count. Attribute every build to exactly the primary message ids that describe it. Ignore chatter, reactions, corrections without a build, and replies such as “nice door”. A terse reply may describe a build when its reply ancestry makes that clear.
 

@@ -19,7 +19,6 @@ from squid.builds.domain import (
 )
 from squid.core.concurrency import run_all_awaitables
 from squid.messages.domain import MessageSnapshot
-from squid.versions.domain import Edition
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +147,6 @@ class BuildTaxonomy(Protocol):
 
 class VersionResolver(Protocol):
     """Resolve build version specifications."""
-
-    async def newest(self, edition: Edition) -> str: ...
 
     async def resolve_spec(self, version_spec: str) -> list[str]: ...
 
@@ -305,7 +302,7 @@ class BuildInferenceService:
         build.normal_opening_time = parse_time_string(inferred.opening_time)
         build.normal_closing_time = parse_time_string(inferred.closing_time)
         build.creators_ign = inferred.creators
-        build.version_spec = inferred.version_spec or await self._versions.newest("Java")
-        build.versions = await self._versions.resolve_spec(build.version_spec)
+        build.version_spec = (inferred.version_spec or "").strip() or None
+        build.versions = await self._versions.resolve_spec(build.version_spec) if build.version_spec is not None else []
         if inferred.author_note is not None:
             build.description = inferred.author_note
