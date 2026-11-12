@@ -49,6 +49,7 @@ from squid.search.models import (
     SearchProjectionQueueItem,
 )
 from squid.tags.domain import TagSemanticKind
+from squid.tags.infrastructure.loading import assignment_units
 from squid.tags.models import TagAlias, TagDefinition
 from squid.tags.models import TagAssignment as TagAssignment
 from squid.versions.models import Version
@@ -340,7 +341,7 @@ class SearchProjectionLoader:
             select(Build)
             .where(Build.id == build_id)
             .options(
-                selectinload(Build.tags),
+                selectinload(Build.tags).options(*assignment_units()),
                 selectinload(Build.links),
             )
         )

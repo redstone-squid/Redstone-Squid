@@ -11,6 +11,7 @@ from squid.builds.application.queries import PublicBuildSummary
 from squid.builds.domain import Status
 from squid.builds.models import OtherBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.search.infrastructure.projection import SearchProjectionLoader
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition, UnitDefinition
 from tests.support.build_edits import build_edit_session
@@ -34,6 +35,7 @@ async def test_public_values_and_incompatible_assignment_units(
         definition = TagDefinition(
             stable_key="test_delay",
             display_name="Delay",
+            render_template="{name}: {value:.0f} {unit}",
             authority=TagAuthority.OFFICIAL,
             semantic_kind=TagSemanticKind.RESTRICTION,
             restriction_type="miscellaneous",
@@ -56,6 +58,14 @@ async def test_public_values_and_incompatible_assignment_units(
         commit=True,
     )
     assert build.id is not None
+    # A fresh worker session must load definitions and units without an identity-map cache.
+    async with migrated_session_factory() as session:
+        projection = await SearchProjectionLoader(session).load("build", str(build.id))
+    assert projection is not None
+    assert projection.tags == ("Delay: 1 test_second",)
+    assert projection.document_data["restrictions"] == ("Delay",)
+    assert any(facet.field_name == f"tag:{definition.id}" and facet.value == Decimal(20) for facet in projection.facets)
+
     loaded = await transact(factory, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     summary = await transact(factory, lambda uow: uow.builds.get_public_summaries([build.id]))
