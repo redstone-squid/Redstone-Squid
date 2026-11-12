@@ -1,6 +1,6 @@
 # Discord runtime simplification
 
-Status: implementing. Baseline lifecycle tests pass; ownership audit completed.
+Status: complete. All five phases are implemented and validated.
 
 Simplify `squid-ui-discord` so opening a screen, handling an interaction, and closing a
 message can each be understood through a small sequence of operations with explicit owners.
@@ -200,3 +200,46 @@ Retain screen `claimed`, `opened`, `closing`, and `pending`: they distinguish fa
 callback eligibility, finalization, and an outcome awaiting action commit. Retain session
 graph, retiring graph, and scope registry because they represent membership, cleanup in
 progress, and application ownership respectively.
+
+## Implementation results
+
+| Concern | Before | After |
+| --- | --- | --- |
+| Candidate publication | Application and renewal commits each installed generation, view, timeout, and tracking. Root assigned `behind` on failed writes. | One publication operation; failed-write state belongs to the candidate owner. Suppression and terminal rendering retain their distinct semantics. |
+| Interaction execution | Two watchdog/task-group implementations, two forwarding methods, two successful presentation paths. | One task lifetime and one completion path. Form evaluation and busy-error policy stay explicit. |
+| Close acceptance | Root `_finished` and `Shutdown.accepted` represented the same transition. | `finished` derives from shutdown acceptance; one mutable flag removed. |
+| Dependencies and cleanup | Root, screen, and session modules mutated dependency collections; screens composed session cleanup closures. | Root alone registers/releases dependencies and orders cleanup. Screen and session provide their own cleanup without composing each other. |
+| Opening | Duplicated keyed/unkeyed admission call, unused session binding argument, captured delivery result even without a session. | One admission call under an optional key lock; root-only binding; direct sessionless delivery result. |
+
+The Discord production changes remove 68 lines without adding modules or changing its public API.
+Candidate lifecycle fields and shutdown dependency collections each have one mutating module. Child-cleanup registration replaces each owner's previous callback without duplicating
+work; completed dependencies release even after failed cleanup.
+
+Opening cleanup remains at both the scope and child-screen boundaries because a request can fail
+before the scope claims a child. Removing either without redesigning that authority transfer
+would leave a gap. Durable reservation, promotion, registration, and retirement order remain intact.
+The larger reorganization of `MessageRoot` is deliberately unnecessary for these reductions.
+
+Added behavioral coverage checks slow modal completion/cancellation and mixed screen/session
+child cleanup, including failure propagation and ordering. Focused checks passed after each
+implementation phase: 265 publication tests, 304 dispatch tests, 160 ownership tests, and
+205 admission tests. Whole-workspace Pyrefly reports zero errors.
+
+The architecture checks also exposed a pre-existing private import from `squid-reactivity` in
+`squid-ui` service supervision. A separate commit exports the same execution type through the
+existing `internals` integration interface. Its 104 focused architecture and service tests pass;
+the final workspace typecheck still reports zero errors.
+
+The render-cache benchmark was compared against commit `50452abb5` using the same Python 3.15
+installation and sequential processes. Unchanged-render p95 for 1/100/1,000 components was
+0.022/0.057/0.366 ms before and 0.018/0.058/0.340 ms after. The atomic-resource pipeline retained
+one render, one leaf render, one load, and one explored planner state per operation. Scenario
+timings varied in both directions; these single-run observations do not establish a speed change.
+
+SQLite durability tests initially stalled inside the execution sandbox, including on the
+pre-change code. The same tests pass outside it; final suite validation uses that environment.
+
+Final validation passed all 2,833 tests across the Discord package, architecture checks, and
+bot unit tests. The service/integration-interface check passed 104 tests separately. Ruff,
+commit hooks, `git diff --check`, and the final whole-workspace typecheck passed. The full
+repository test suite remains for CI.

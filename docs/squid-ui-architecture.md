@@ -852,13 +852,16 @@ runtime deterministic `on_mount`/`on_unmount` ownership. Components have no mess
 the Discord message root is one frontend consumer of the runtime.
 
 Within the Discord frontend, `_CandidateLifecycle` owns the published view, bindings,
-generation, and staged candidate. `MessageRoot` owns delivery, locking, and policy.
+generation, and staged candidate. It also records uncertainty after a failed application edit,
+so a subsequent exclusive action repaints before acting. `MessageRoot` owns delivery, locking,
+and policy; it does not assign candidate lifecycle fields.
 Each delivery attempt commits or discards its candidate; cancellation also discards
 staged resources. Suppression commits application state while retaining the visible
 generation. Renewal publishes replacement controls without committing an application
 tree, and terminal paints are discarded after delivery so they cannot mount components.
 Application commit settles before component hooks run, so a hook failure cannot cause
-a second settlement of the same candidate.
+a second settlement of the same candidate. Application and renewal commits share view installation,
+while suppression retains the current view and generation.
 
 `async def on_load(self)` is where a component fetches what it cannot render without. The
 frontend awaits it before the first delivery that would show the component, once per instance,
@@ -1031,6 +1034,11 @@ writes have rolled back. Middleware is application policy, not component code; i
 component or binding and should not mutate component state through captured references. A
 short-circuit still returns to the message root's acknowledgement/flush path, and the watchdog, Discord
 write, generation commit, and error presentation remain outside user middleware.
+
+Mounted button presses and modal submissions share one acknowledgement watchdog task lifetime
+and one successful-result presentation path. Form evaluation and validation retry remain specific
+to submissions; busy indicators remain specific to bindings that request them. The watchdog runs
+independently of rendering, and its task ends with the interaction.
 
 Form submissions run the same funnel, so REBASE resolves the newest binding there too: a
 `FormTrigger` declares one per render, planning carries it in `PlanResult.form_bindings`, and
@@ -1595,6 +1603,12 @@ serializes attachments and membership changes, but closure does not take that lo
 durable promotion must therefore recheck the parent after awaiting external work. Recovered and
 new children share registration bookkeeping. A detached child remains a shutdown dependency until
 its cleanup and callbacks settle, then releases that reference even when cleanup failed.
+
+Message roots own dependency registration and release for both screens and sessions. They also
+run each owner's child cleanup once, in screen-before-session order, collecting failures before
+continuing with parent cleanup. Screen parentage and session membership remain separate; neither
+module edits the root's dependency collections. The root's `finished` property derives directly
+from accepted shutdown, while `wait()` observes completed cleanup.
 
 Replacement commits when the newcomer is registered. All selected incumbents are asked to close
 before their cleanup results are collected. Cleanup failures are logged and remain available from
