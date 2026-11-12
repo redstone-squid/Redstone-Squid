@@ -527,11 +527,10 @@ class MessageRoot[
         # execution stays outside it; only staged generations and terminal teardown serialize.
         self._render_lock = asyncio.Lock()
         self._settlement_wake: asyncio.Event | None = None
-        self._finished = False
         self._close_reason: CloseReason | None = None
         self._shutdown = Shutdown()
         self._finishing_hooks: list[Callable[[AnyMessageRoot], None]] = []
-        self._finish_children: Callable[[bool], Awaitable[None]] | None = None
+        self._child_cleanups: dict[object, Callable[[bool], Awaitable[None]]] = {}
         self._shutdown_dependencies: tuple[AnyMessageRoot, ...] = ()
         self._acceptance_errors: list[Exception] = []
         self._hooks = _LifecycleHooks()
@@ -574,7 +573,7 @@ class MessageRoot[
             StaleHandleError: The supplied handle is already expired.
         """
         async with self._rendering():
-            if self._finished:
+            if self.finished:
                 message = f"mount {self.id} has already finished"
                 raise RuntimeError(message)
             if handle.expired():
@@ -662,7 +661,7 @@ class MessageRoot[
     @property
     def finished(self) -> bool:
         """Whether this mount has stopped dispatching, by close, timeout or error."""
-        return self._finished
+        return self._shutdown.accepted
 
     @property
     def close_reason(self) -> CloseReason | None:
@@ -697,7 +696,7 @@ class MessageRoot[
             address=self.address,
             generation=self._candidates.generation,
             pending=self._candidates.dirty,
-            finished=self._finished,
+            finished=self.finished,
             age=now - self._born,
             idle=idle,
             expires_in=None if self.timeout is None else max(0.0, self.timeout - idle),
@@ -726,7 +725,7 @@ class MessageRoot[
         policy = self.expiry
         if (
             policy is None
-            or self._finished
+            or self.finished
             or self._candidates.status is not MessageRootStatus.ACTIVE
             or self._candidates.plan is None
             or handle is not self._handle
@@ -803,7 +802,7 @@ class MessageRoot[
         if self._candidates.pending is not None:
             message = "a delivery candidate is already staged"
             raise RuntimeError(message)
-        candidate = self._draw(self.runtime.render(terminal=self._finished), disabled=disabled)
+        candidate = self._draw(self.runtime.render(terminal=self.finished), disabled=disabled)
         self._candidates.stage_only(candidate)
         return candidate
 
@@ -1114,7 +1113,7 @@ class MessageRoot[
         is mid-transaction and a re-render would observe half-written state.
         """
         async with self._rendering():
-            if self._finished or self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
+            if self.finished or self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
                 return None
             plan = self._candidates.plan
             if plan is None:
@@ -1506,7 +1505,7 @@ class MessageRoot[
         name = f"{component.__module__}.{component.__qualname__}"
         with self.profiler.operation(OperationKind.SEND, name=name, attributes={"message_root_id": self.id}) as profile:
             async with self._rendering(profile):
-                if self._finished:
+                if self.finished:
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return deliver.Abandoned()
                 # A render staged by `_stage_view` and never delivered is superseded, not delivered.
@@ -1787,7 +1786,7 @@ class MessageRoot[
             if (
                 source is None
                 or source.expired()
-                or self._finished
+                or self.finished
                 or self._candidates.status is not MessageRootStatus.RENEWAL_ARMED
                 or generation != self._candidates.generation
                 or self._candidates.handlers.get(key) is not binding
@@ -1931,7 +1930,7 @@ class MessageRoot[
         # what it carries is where the question was answered.
         if not profile.resumed:
             self._note_address(interaction.message)
-        if self._finished:
+        if self.finished:
             # A finished mount can still be on screen with live controls: its disable-edit
             # may have failed, or a replacement may have taken over the session while this
             # message stayed visible. Say so rather than running a handler against state
@@ -2492,7 +2491,7 @@ class MessageRoot[
                     # lock rolls back the action and leaves its closure unaccepted.
                     await self._render_lock.acquire()
                     locked = True
-                    if not self._finished:
+                    if not self.finished:
                         if self.config.execution_host is None:
                             message = "action closure requires a running UIExecutionHost"
                             raise RuntimeError(message)
@@ -2608,7 +2607,7 @@ class MessageRoot[
         acknowledge = False
         presentation = PresentationStatus.NO_CHANGE
         async with self._rendering(operation):
-            if self._finished:
+            if self.finished:
                 return PresentationStatus.ABANDONED
             if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
                 acknowledge = True
@@ -2715,7 +2714,7 @@ class MessageRoot[
             OperationKind.REFRESH, name=name, attributes={"message_root_id": self.id}, links=links
         ) as profile:
             async with self._rendering(profile):
-                if self._finished:
+                if self.finished:
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return PresentationStatus.ABANDONED
                 armed = await self._apply_expiry_arm(profile)
@@ -2828,6 +2827,29 @@ class MessageRoot[
         self._check_shutdown_wait()
         await self._shutdown.wait()
 
+    def _depend_on(self, child: AnyMessageRoot) -> None:
+        """Retain a child's wait dependency until its cleanup and callbacks settle."""
+        if child in self._shutdown_dependencies:
+            return
+        self._shutdown_dependencies = (*self._shutdown_dependencies, child)
+
+        def completed() -> None:
+            self._shutdown_dependencies = tuple(root for root in self._shutdown_dependencies if root is not child)
+
+        child._shutdown.add_done_callback(completed)
+
+    def _on_finishing(self, callback: Callable[[AnyMessageRoot], None]) -> None:
+        if callback not in self._finishing_hooks:
+            self._finishing_hooks.append(callback)
+
+    def _finish_children_with(self, owner: object, cleanup: Callable[[bool], Awaitable[None]]) -> None:
+        """Run each owner's child cleanup once, with screen cleanup before session cleanup.
+
+        Sessions register before screens. Updating a session branch retains its original
+        position, so repeated closure preparation cannot duplicate or reorder that work.
+        """
+        self._child_cleanups[owner] = cleanup
+
     def _check_shutdown_wait(self) -> None:
         self.runtime.check_service_wait()
         self._shutdown.check_wait()
@@ -2870,7 +2892,7 @@ class MessageRoot[
         delete: bool = False,
         reason: CloseReason = CloseReason.CLOSED,
     ) -> None:
-        if self._finished:
+        if self.finished:
             return
         self._report_missed_redraw("closed")
         candidate: _Candidate[RenderTargetT] | _LifecycleCandidate | None = None
@@ -2882,7 +2904,6 @@ class MessageRoot[
         # Even immediate low-level closure captures the caller's current render state.
         self._shutdown.start(self.config.execution_host, work)
         self._close_reason = reason
-        self._finished = True
         if not delete and disable and (self._handle is not None or interaction is not None):
             try:
                 self._candidates.supersede()
@@ -2910,9 +2931,10 @@ class MessageRoot[
         errors = self._acceptance_errors
         try:
             with self._candidates.attempt(candidate) if candidate is not None else nullcontext():
-                if self._finish_children is not None:
+                cleanups, self._child_cleanups = self._child_cleanups, {}
+                for cleanup in reversed(cleanups.values()):
                     try:
-                        await self._finish_children(disable)
+                        await cleanup(disable)
                     except Exception as error:
                         errors.append(error)
                 async with self._render_lock:
@@ -2988,7 +3010,7 @@ class MessageRoot[
             yield
         finally:
             self._render_lock.release()
-            if not self._finished:
+            if not self.finished:
                 await self._wait_services()
 
     async def _wait_services(self) -> None:

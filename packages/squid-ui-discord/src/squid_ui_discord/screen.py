@@ -177,14 +177,7 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         root.on_finish(self._screen_root_finished)
         if state.parent is not None:
             parent_root = state.parent._screen_require_root()
-            parent_root._shutdown_dependencies = (*parent_root._shutdown_dependencies, root)
-
-            def detach() -> None:
-                parent_root._shutdown_dependencies = tuple(
-                    child for child in parent_root._shutdown_dependencies if child is not root
-                )
-
-            root._shutdown.add_done_callback(detach)
+            parent_root._depend_on(root)
 
     def _screen_opened(self) -> None:
         state = self._screen_flow
@@ -195,15 +188,11 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
             msg = "the screen closed during presentation"
             raise RuntimeError(msg)
         state.opened = True
-        self._screen_require_root()._finishing_hooks.append(self._screen_finish_children_first)
+        self._screen_require_root()._on_finishing(self._screen_finish_children_first)
 
     def _screen_finish_children_first(self, root: MessageRoot) -> None:
-        # Installed after session activation so existing session cleanup is composed,
-        # not overwritten. Borrowing children must stop before parent services do.
+        # Borrowing children must stop before parent services do.
         children = tuple(self._screen_flow.children)
-        prior = root._finish_children
-        dependencies = tuple(child._screen_flow.root for child in children if child._screen_flow.root is not None)
-        root._shutdown_dependencies = tuple(dict.fromkeys((*root._shutdown_dependencies, *dependencies)))
 
         async def close_children(disable: bool) -> None:
             errors: list[Exception] = []
@@ -212,16 +201,11 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
                     await child._screen_close(ScreenCancelReason.PARENT_CLOSED)
                 except Exception as error:
                     errors.append(error)
-            if prior is not None:
-                try:
-                    await prior(disable)
-                except Exception as error:
-                    errors.append(error)
             if errors:
                 message = "screen child cleanup failed"
                 raise ExceptionGroup(message, errors)
 
-        root._finish_children = close_children
+        root._finish_children_with(self, close_children)
 
     async def _screen_opening_failed(self) -> None:
         await self._screen_supervised_close(ScreenCancelReason.CLOSED)

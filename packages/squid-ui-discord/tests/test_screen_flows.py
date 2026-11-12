@@ -397,3 +397,53 @@ async def test_a_rolled_back_open_leaves_the_existing_child_open() -> None:
 
         assert first.outcome is None
         assert first in parent._screen_flow.children
+
+
+@pytest.mark.parametrize("fail_child", [False, True])
+async def test_screen_children_and_session_attachments_both_finish_before_parent(fail_child: bool) -> None:
+    order: list[str] = []
+
+    class Borrower(Choice):
+        @override
+        async def on_close(self, outcome: Completed[str] | Cancelled) -> None:
+            order.append("screen")
+            if fail_child:
+                raise ValueError("screen cleanup failed")
+
+    class Attachment(sl.Component[sl.ComponentsV2Target]):
+        @override
+        def render(self) -> sl.LayoutNode:
+            return sl.paragraph("Attached")
+
+    async def attachment_finished(root: sd.MessageRoot) -> None:
+        order.append("attachment")
+
+    async def parent_finished(root: sd.MessageRoot) -> None:
+        order.append("parent")
+
+    parent = Parent()
+    parent.child = Borrower()
+    async with sd.testing.stage(parent, owner=object()) as ui:
+        await ui.press("open")
+        assert parent.session is not None
+        attached = sd.MessageRoot(Attachment(), access=sd.Everyone())
+        attached.on_finish(attachment_finished)
+        await parent.session.attach(attached, sd.testing.delivered_to(sd.testing.message_harness()))
+        ui.root.on_finish(parent_finished)
+
+        with anyio.fail_after(2):
+            if fail_child:
+                with pytest.raises(ExceptionGroup):
+                    await ui.root.finish()
+            else:
+                await ui.root.finish()
+
+        assert order == ["screen", "attachment", "parent"]
+        assert attached.finished
+        assert ui.root._shutdown_dependencies == ()
+        if fail_child:
+            # Scope shutdown must also report the stored failure when it joins these roots.
+            scope = parent._screen_flow.scope
+            assert scope is not None
+            with pytest.raises(ExceptionGroup, match="UI scope shutdown failed"):
+                await scope.close()

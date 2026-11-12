@@ -301,7 +301,7 @@ class _BusyPaint:
     async def show(self, profile: _DispatchProfile) -> None:
         """Relabel the pressed control and disable the panel, once."""
         async with self._lock:
-            if self._closed or self._shown or self._root._finished:
+            if self._closed or self._shown or self._root.finished:
                 return
             pending = self._busy.pending
             label = self._root._chrome_text(self._root.chrome.working if pending is None else pending)
@@ -324,7 +324,7 @@ class _BusyPaint:
     async def restore(self) -> None:
         """Put the committed scene back, live controls and all."""
         async with self._lock:
-            if not self._shown or self._root._finished:
+            if not self._shown or self._root.finished:
                 return
             self._shown = False
             await self._root._repaint(None, None, through=self._root._source(self._interaction, resumed=self._resumed))

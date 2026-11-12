@@ -638,8 +638,7 @@ class Session:
         Closing removes the session from admission bookkeeping. Its root supervises
         child-before-parent cleanup; repeated callers observe that same shutdown.
         """
-        if self._message_root_finishing not in self.root._finishing_hooks:
-            self.root._finishing_hooks.append(self._message_root_finishing)
+        self.root._on_finishing(self._message_root_finishing)
         await self.root.finish(disable=disable, wait=False, reason=reason)
         if wait:
             await self.wait()
@@ -653,22 +652,19 @@ class Session:
 
     def _activate(self) -> None:
         self._manager._index_root(self, self.root)
-        self.root._finishing_hooks.append(self._message_root_finishing)
+        self.root._on_finishing(self._message_root_finishing)
 
     def _attach_existing(self, message_root: MessageRoot, *, parent: MessageRoot, actor_id: int | None) -> None:
         """Register a delivered or recovered child and own it until shutdown completes."""
         if not self._accepts_attachment(parent):
             message = "attachment parent is not active in the session"
             raise ValueError(message)
-        parent._shutdown_dependencies = (*parent._shutdown_dependencies, message_root)
+        parent._depend_on(message_root)
         self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
         self._manager._index_root(self, message_root)
-        message_root._finishing_hooks.append(self._message_root_finishing)
+        message_root._on_finishing(self._message_root_finishing)
 
         def completed() -> None:
-            parent._shutdown_dependencies = tuple(
-                child for child in parent._shutdown_dependencies if child is not message_root
-            )
             self._retiring.pop(message_root, None)
 
         message_root._shutdown.add_done_callback(completed)
@@ -682,8 +678,7 @@ class Session:
         for parent in branch:
             children = tuple(child for child in branch if graph[child].parent is parent)
             if children:
-                parent._shutdown_dependencies = children
-                parent._finish_children = self._children_cleanup(children)
+                parent._finish_children_with(self, self._children_cleanup(children))
         if message_root is self.root:
             self._closing_roots = branch
             self._closed = True
