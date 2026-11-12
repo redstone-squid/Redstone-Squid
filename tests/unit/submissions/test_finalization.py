@@ -31,7 +31,6 @@ from squid.submissions.domain import (
     BuildSubmissionResult,
     DoorSubmissionDetails,
     DraftChange,
-    DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
     ExtenderSubmissionDetails,
@@ -89,9 +88,11 @@ class FakeDraftRepository:
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: DraftChangeKey,
+        change: DraftChange,
+        *,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange | None:
-        del draft_id, account_id, idempotency_key
+        del draft_id, account_id, change, actor_account_id
         return None
 
     async def apply_change(

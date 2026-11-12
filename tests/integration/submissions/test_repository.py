@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.models import Account
+from squid.edits.domain import OperationReuseError
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
@@ -152,6 +153,31 @@ async def test_create_adds_owner_grant_and_replays_change(
     assert applied.draft.snapshot.revision == 1
     assert replayed.replayed is True
     assert replayed.draft.snapshot.revision == 1
+    conflicts = (
+        (replace(change, base_revision=99), account_id),
+        (replace(change, client_instance_id="another-client"), account_id),
+        (replace(change, operations=(replace(change.operations[0], value="different"),)), account_id),
+        (change, account_id + 1),
+    )
+    for conflicting, actor_id in conflicts:
+        with pytest.raises(OperationReuseError):
+            async with repository() as uow:
+                await uow.submission_drafts.replayed_change(
+                    DRAFT_ID,
+                    account_id,
+                    conflicting,
+                    actor_account_id=actor_id,
+                )
+        with pytest.raises(OperationReuseError):
+            async with repository() as uow:
+                await uow.submission_drafts.apply_change(
+                    DRAFT_ID,
+                    account_id,
+                    conflicting,
+                    actor_account_id=actor_id,
+                    updated_at=NOW,
+                    expires_at=NOW.add(hours=1),
+                )
     async with async_session_factory() as session:
         grants = await session.scalar(select(func.count()).select_from(SubmissionDraftAccess))
         changes = await session.scalar(select(func.count()).select_from(SubmissionDraftChange))

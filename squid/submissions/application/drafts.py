@@ -17,7 +17,6 @@ from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.submissions.application.forms import FormManifestRegistry
 from squid.submissions.domain import (
     DraftChange,
-    DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
     FormManifest,
@@ -131,7 +130,9 @@ class DraftRepository(Protocol):
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: DraftChangeKey,
+        change: DraftChange,
+        *,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange | None: ...
 
     async def apply_change(
@@ -417,7 +418,9 @@ class SubmissionDraftService:
         async with self._uow_factory() as uow:
             current = await self.get_accessible_in(uow, draft_id, account_id)
             owner_id = current.snapshot.owner_account_id
-            replayed = await uow.submission_drafts.replayed_change(draft_id, owner_id, change.idempotency_key)
+            replayed = await uow.submission_drafts.replayed_change(
+                draft_id, owner_id, change, actor_account_id=draft_actor_id(account_id)
+            )
             if replayed is not None:
                 return replayed
         await self.validate_change(current, change, locale=locale)

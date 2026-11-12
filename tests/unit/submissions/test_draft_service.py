@@ -104,9 +104,11 @@ class FakeDraftRepository:
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: DraftChangeKey,
+        change: DraftChange,
+        *,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange | None:
-        replay = self.replays.get((draft_id, idempotency_key))
+        replay = self.replays.get((draft_id, change.idempotency_key))
         if replay is not None and replay.draft.snapshot.owner_account_id != account_id:
             raise DraftAccessDeniedError
         return replay

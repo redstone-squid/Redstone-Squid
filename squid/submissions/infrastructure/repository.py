@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.errors import JSONValue
+from squid.edits.domain import OperationReuseError
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
@@ -22,7 +23,6 @@ from squid.persistence.advisory_locks import (
 from squid.submissions.application import AppliedDraftChange, AppliedDraftUpgrade, DraftRepository, StoredDraft
 from squid.submissions.domain import (
     DraftChange,
-    DraftChangeKey,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
@@ -176,22 +176,25 @@ class PostgresDraftRepository(DraftRepository):
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: DraftChangeKey,
+        change: DraftChange,
+        *,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange | None:
         session = self._session()
         row = (
             await session.execute(
-                select(SubmissionDraft, SubmissionDraftChange.id)
+                select(SubmissionDraft, SubmissionDraftChange)
                 .join(SubmissionDraftChange, SubmissionDraftChange.draft_id == SubmissionDraft.id)
                 .where(
                     SubmissionDraft.id == draft_id,
                     SubmissionDraft.owner_account_id == account_id,
-                    SubmissionDraftChange.idempotency_key == idempotency_key,
+                    SubmissionDraftChange.idempotency_key == change.idempotency_key,
                 )
             )
         ).one_or_none()
         if row is None:
             return None
+        _require_same_change(row[1], change, account_id if actor_account_id is None else actor_account_id)
         # Replay returns today's snapshot, not the snapshot when the edit was accepted.
         return AppliedDraftChange(_to_stored(row[0]), replayed=True)
 
@@ -210,12 +213,13 @@ class PostgresDraftRepository(DraftRepository):
         model = await self._locked(session, draft_id)
         self._require_owner(model, account_id)
         replay = await session.scalar(
-            select(SubmissionDraftChange.id).where(
+            select(SubmissionDraftChange).where(
                 SubmissionDraftChange.draft_id == draft_id,
                 SubmissionDraftChange.idempotency_key == change.idempotency_key,
             )
         )
         if replay is not None:
+            _require_same_change(replay, change, account_id if actor_account_id is None else actor_account_id)
             return AppliedDraftChange(_to_stored(model), replayed=True)
 
         candidate = _to_stored(model).snapshot.apply(change)
@@ -455,3 +459,13 @@ def _operations_to_json(operations: Sequence[FieldOperation]) -> list[dict[str, 
         }
         for operation in operations
     ]
+
+
+def _require_same_change(row: SubmissionDraftChange, change: DraftChange, actor_account_id: int) -> None:
+    if (
+        row.actor_account_id != actor_account_id
+        or row.base_revision != change.base_revision
+        or row.client_instance_id != change.client_instance_id
+        or row.operations != _operations_to_json(change.operations)
+    ):
+        raise OperationReuseError
