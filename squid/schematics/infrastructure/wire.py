@@ -26,6 +26,7 @@ from collections.abc import Mapping, Sequence
 from typing import IO, Any, Literal, cast
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -50,12 +51,14 @@ LENGTH_PREFIX_BYTES = 4
 MAX_FRAME_BYTES = 256 * 1024 * 1024
 """Maximum combined header and body size, excluding the eight-byte length prefix."""
 
-type Operation = Literal["capabilities", "analyze", "convert", "compare", "render", "simulate", "autostack"]
+type Operation = Literal[
+    "capabilities", "analyze", "convert", "compare", "render", "render_video", "simulate", "autostack"
+]
 type ErrorKind = Literal["invalid", "ambiguous_simulation_input", "too_large", "unavailable", "internal"]
 """Error kinds the supervisor accepts when reconstructing a typed exception."""
 
 _OPERATIONS: frozenset[str] = frozenset(
-    {"capabilities", "analyze", "convert", "compare", "render", "simulate", "autostack"}
+    {"capabilities", "analyze", "convert", "compare", "render", "render_video", "simulate", "autostack"}
 )
 _ERROR_KINDS: frozenset[str] = frozenset(
     {"invalid", "ambiguous_simulation_input", "too_large", "unavailable", "internal"}
@@ -66,6 +69,7 @@ _REQUEST_PAYLOAD_ARITY: Mapping[Operation, int] = {
     "convert": 1,
     "compare": 2,
     "render": 1,
+    "render_video": 1,
     "simulate": 1,
     "autostack": 1,
 }
@@ -75,12 +79,14 @@ _RESPONSE_PAYLOAD_ARITY: Mapping[Operation, int] = {
     "convert": 1,
     "compare": 0,
     "render": 1,
+    "render_video": 1,
     "simulate": 0,
     "autostack": 1,
 }
 _DURABLE_REQUEST_PAYLOAD_ARITY: Mapping[Operation, tuple[int, ...]] = {
     **{operation: (arity,) for operation, arity in _REQUEST_PAYLOAD_ARITY.items()},
     "render": (1, 2),
+    "render_video": (1, 2),
 }
 MAX_FRAME_PARTS = max(_REQUEST_PAYLOAD_ARITY.values())
 
@@ -760,3 +766,8 @@ def _payload_arity(payloads: Sequence[bytes], expected: int, what: str) -> None:
     if len(payloads) != expected:
         msg = f"Expected {what} to carry {expected} payload(s), got {len(payloads)}."
         raise ValueError(msg)
+
+
+def decode_video_request(payload: object) -> VideoRenderRequest:
+    """Validate video recipes on both sides of the durable/native boundary."""
+    return VideoRenderRequest.model_validate(payload)

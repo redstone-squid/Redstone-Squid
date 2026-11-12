@@ -29,6 +29,7 @@ from collections import deque
 from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping, Sequence
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from tempfile import TemporaryDirectory
 from typing import Any, Self, cast
 
 import anyio
@@ -38,6 +39,7 @@ from squid.config import SchematicConfig
 from squid.core.errors import DomainError, InfrastructureError
 from squid.observability import add_counter, record_gauge, record_histogram, trace_context_headers
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -540,6 +542,22 @@ class SchematicWorkerPool:
         async with self._render_slot:
             frame = await self._call("render", params, (data,), self._config.render_timeout_seconds)
         return _payload(frame)
+
+    async def render_video(
+        self, data: bytes, *, request: VideoRenderRequest, resource_pack: VerifiedResourcePack
+    ) -> bytes:
+        # The parent owns scratch files so timeout/crash cleanup does not depend on child finally blocks.
+        async with self._render_slot:
+            with TemporaryDirectory(prefix="squid-video-") as scratch:
+                params = {
+                    "request": request.model_dump(mode="json"),
+                    "resource_pack_b64": base64.b64encode(resource_pack.data).decode("ascii"),
+                    "resource_pack": wire.encode_resource_pack(resource_pack),
+                    "scratch": scratch,
+                    "helper": str(self._config.video_helper_path),
+                }
+                frame = await self._call("render_video", params, (data,), self._config.video_timeout_seconds)
+                return _payload(frame)
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
         params = {"request": wire.encode_simulation_request(request)}

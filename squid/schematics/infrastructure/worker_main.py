@@ -158,6 +158,15 @@ def handle(
             resource_pack=_resource_pack(params),
         )
 
+    if operation == "render_video":
+        return {}, engine.render_video(
+            payloads[0],
+            request=wire.decode_video_request(params.get("request")),
+            resource_pack=_resource_pack(params),
+            scratch=Path(params["scratch"]),
+            helper=str(params["helper"]),
+        )
+
     if operation == "simulate":
         result = engine.simulate(
             payloads[0],

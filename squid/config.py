@@ -748,6 +748,8 @@ class SchematicConfig(_FrozenModel):
     compare_timeout_seconds: float = Field(default=15.0, gt=0)
     convert_timeout_seconds: float = Field(default=15.0, gt=0)
     render_timeout_seconds: float = Field(default=45.0, gt=0)
+    video_timeout_seconds: float = Field(default=240.0, gt=0, le=240)
+    video_helper_path: Path = Path("squid-schematic-video")
     simulate_timeout_seconds: float = Field(default=90.0, gt=0)
 
     render_enabled: bool = False

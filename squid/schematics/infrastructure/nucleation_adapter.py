@@ -14,13 +14,17 @@ import hashlib
 import json
 import logging
 import math
+import os
+import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Any, Literal, cast
 
 import nucleation
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.formats import sniff_schematic_format
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -781,3 +785,61 @@ def _base64_bytes(value: object, what: str) -> bytes:
     except (binascii.Error, ValueError) as exc:
         msg = f"The engine returned malformed base64 for {what}."
         raise InvalidSchematicError(msg) from exc
+
+
+def render_video(
+    data: bytes, *, request: VideoRenderRequest, resource_pack: VerifiedResourcePack, scratch: Path, helper: str
+) -> bytes:
+    """Render through the pinned native helper inside the supervised process group."""
+    schematic = _load(data)
+    _guard_allocated_volume(schematic, SchematicLimits())
+    source = scratch / "source.snbt"
+    pack = scratch / "pack.zip"
+    output = scratch / "result.mp4"
+    source.write_text(nucleation.TickSimulation.gametest_snbt(schematic))
+    pack.write_bytes(resource_pack.data)
+    args = [helper, str(pack), str(source), str(output), "--in-world"]
+    for key, value in (
+        ("ticks", request.duration_ticks),
+        ("width", request.width),
+        ("height", request.height),
+        ("fps", request.fps),
+        ("yaw", request.yaw),
+        ("pitch", request.pitch),
+        ("zoom", request.zoom),
+        ("orbit", request.orbit_degrees),
+    ):
+        args.extend((f"--{key}", str(value)))
+    simulation = None
+    for interaction in request.interactions:
+        position = interaction.position
+        if simulation is None:
+            simulation = nucleation.TickSimulation.from_schematic(
+                schematic, nucleation.TickSettleMode.InWorld, 0, 0, 0, ""
+            )
+        simulation.run(interaction.tick - int(simulation.tick_count()))
+        snapshot = _json_array(simulation.world_snapshot_json(), "simulation snapshot")
+        position, _ = _resolve_simulation_input(schematic, snapshot, position)
+        simulation.use_block(*position)
+        args.extend(("--click", f"{position[0]},{position[1]},{position[2]}@{interaction.tick}"))
+    # The supervisor enforces the deadline and kills this process group, including FFmpeg.
+    # Limit Mesa and Rayon thread stacks to fit the worker address-space budget.
+    with (scratch / "renderer.log").open("wb") as log:
+        result = subprocess.run(
+            args,
+            stdout=log,
+            stderr=log,
+            check=False,
+            env={**os.environ, "LP_NUM_THREADS": "2", "RAYON_NUM_THREADS": "2"},
+        )
+    if result.returncode != 0:
+        msg = "The native video renderer failed."
+        raise InvalidSchematicError(msg, context={"exit_code": result.returncode})
+    size = output.stat().st_size
+    if size > 64 * 1024 * 1024:
+        raise SchematicTooLargeError(actual=size, limit=64 * 1024 * 1024, measure="video bytes")
+    content = output.read_bytes()
+    if len(content) < 12 or content[4:8] != b"ftyp":
+        msg = "The video renderer did not return an MP4 file."
+        raise InvalidSchematicError(msg)
+    return content
