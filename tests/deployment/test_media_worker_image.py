@@ -92,9 +92,9 @@ def test_deployment_consumers_select_named_runtime_targets() -> None:
     worker = compose.split("\n  worker:\n", maxsplit=1)[1].split("\n  redis:\n", maxsplit=1)[0]
 
     assert "target: runtime-base" in compose
-    assert "target: runtime-media" in worker
+    assert "target: runtime-video" in worker
     assert "--target runtime-base" in workflow
-    assert "--target runtime-media" in workflow
+    assert "--target runtime-video" in workflow
     assert "WITH_MEDIA" not in compose
     assert "WITH_MEDIA" not in workflow
     assert "SQUID_MEDIA_FFMPEG: /usr/bin/ffmpeg" in worker

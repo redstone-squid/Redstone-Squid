@@ -70,7 +70,7 @@ services:
     container_name: redstone-squid-worker
     build:
       context: .
-      target: runtime-media
+      target: runtime-video
       args:
         WITH_OBSERVABILITY: ${WITH_OBSERVABILITY:-1}
         WITH_SCHEMATICS: ${WITH_SCHEMATICS:-1}
