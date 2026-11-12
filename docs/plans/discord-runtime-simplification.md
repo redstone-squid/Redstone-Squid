@@ -1,6 +1,6 @@
 # Discord runtime simplification
 
-Status: proposed. Implementation has not started.
+Status: implementing. Baseline lifecycle tests pass; ownership audit completed.
 
 Simplify `squid-ui-discord` so opening a screen, handling an interaction, and closing a
 message can each be understood through a small sequence of operations with explicit owners.
@@ -162,3 +162,41 @@ The final review should show fewer independently mutated lifecycle fields, fewer
 writing another owner's private state, and less duplicated dispatch/cleanup logic. Include
 before/after evidence from phase one. A smaller `message_root.py` with the same coordination
 spread across more files does not satisfy this plan.
+
+## Ownership audit
+
+The initial focused baseline passed all 146 tests covering candidate settlement, action
+completion, forms, shutdown, screen flows, and durable sessions.
+
+| Path and awaited work | State owner and serialization | Commit and cleanup |
+| --- | --- | --- |
+| Scope presentation, initial loads, destination send | Scope claims the screen; root render lock protects staged candidates. Session admission additionally holds the key lock. | Delivery commits the candidate. Screen opening failure closes the bound root; candidate attempt discards unsettled renders. |
+| Session collision selection, send, member lock, durable promotion and store commit | Session manager owns indexes; member lock protects the final quota check and registration. Durable runtime owns reservation and claim. | Register only after durable preparation. Promotion failure closes the newcomer; unconsumed reservation is abandoned. Retirement errors do not undo registration. |
+| Button or form handler and subsequent presentation | Action lock follows binding mode; transaction owns handler writes. Render lock protects later edits. Watchdog runs independently. | Handler commit precedes presentation. Candidate discard preserves live bindings; failed application edits mark the message behind. |
+| Child completion and parent callback | Screen owns pending outcome; parent dispatch supplies fresh authority and its own transaction. | Parent commit accepts the result. Failed callback leaves the child retryable; accepted results close the child even if later rendering fails. |
+| Parent close during child opening | Root render lock serializes close acceptance; screen parentage exists before delivery. Session attachment validates parent after awaited delivery. | Accepted shutdown belongs to the execution host. Bound child roots remain wait dependencies until cleanup settles. |
+| Child cleanup, final edit, services, finish callbacks | Root owns shutdown; screen and session supply child cleanup. | First accepted options are final. Each cleanup stage is attempted, and every waiter observes the stored result. |
+
+Concrete deletion targets:
+
+- Root `_finished` duplicates `Shutdown.accepted`: both change synchronously during close
+  acceptance with no intervening await. Derive `finished` from the shutdown owner.
+- Screen and session modules both append/remove root shutdown dependencies and compose
+  child cleanup. Root methods should own registration, ordering, and error collection.
+- Button and modal execution duplicate watchdog task lifetime and successful presentation
+  handling. Share those operations while retaining their different error and validation scopes.
+- `SessionManager.open` duplicates the complete call to `_open_locked` solely to omit a
+  key lock for an unkeyed session. Use an optional context manager.
+- `Screen._screen_bind` accepts an unused session argument. Session lookup already uses
+  the manager's index, including during initial render.
+
+Candidate publication is already substantially centralized. The remaining root write is
+the failed-edit `behind` flag; publication repeats generation/view/timeout installation for
+application and renewal candidates. Consolidate these transitions without changing planning.
+Retain staged-candidate ownership: `_stage` is used by terminal rendering as well as tests,
+so moving its bookkeeping into testing helpers would split a real lifecycle invariant.
+
+Retain screen `claimed`, `opened`, `closing`, and `pending`: they distinguish failed opening,
+callback eligibility, finalization, and an outcome awaiting action commit. Retain session
+graph, retiring graph, and scope registry because they represent membership, cleanup in
+progress, and application ownership respectively.
