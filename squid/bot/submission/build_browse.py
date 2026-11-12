@@ -348,7 +348,6 @@ class BuildBrowseScreen(sd.Screen):
     policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
 
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")
-    _tools_loaded: bool = sl.state(default=False)
     _selected: _BuildDetail | None = sl.state(None, opaque=True)
 
     def __init__(
@@ -453,9 +452,6 @@ class BuildBrowseScreen(sd.Screen):
         )
 
     async def _switch(self, mode: Literal["builds", "records", "tools"], _event: sl.PressEvent) -> None:
-        if mode == "tools" and self._record_tools is not None and not self._tools_loaded:
-            await self._record_tools.on_load()
-            self._tools_loaded = True
         self._mode = mode
         self._selected = None
         await self._browser._back(_event)

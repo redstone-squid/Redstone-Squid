@@ -19,7 +19,7 @@ from squid.builds.models import Build, DoorBuild
 from squid.core.pagination import Page, PageSelector
 from squid.permissions.domain import PermissionNode
 from squid.records.application import RecordService
-from squid.records.application.models import PublishedTitle
+from squid.records.application.models import PublishedTitle, RecordGap
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.schematics.application import SchematicService
 from squid_reactivity import LocalTopicBus
@@ -255,6 +255,8 @@ async def test_record_tools_load_on_request_and_return_to_builds() -> None:
         records.gaps.assert_not_awaited()
         await ui.press(ui.key_for("record-tools"))
         records.gaps.assert_awaited_once()
+        assert "## Record evidence gaps" in ui.texts()
+        assert "No unresolved active record categories." in ui.texts()
         ui.assert_within_limits()
         await ui.press(ui.key_for("all-builds"))
         assert "## Build catalogue" in ui.texts()
@@ -267,4 +269,17 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
         ui.control(ui.key_for("older"))
         ui.control(ui.key_for("schematic-tools"))
         assert any("Submission ID: 7" in text for text in ui.texts())
+        ui.assert_within_limits()
+
+
+async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
+    records = AsyncMock()
+    records.gaps.return_value = (RecordGap(1, "Smallest 2x2 door", None, BaseTitle.SMALLEST, (7,), ("width",)),)
+    records.title_gaps.return_value = ()
+    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    async with stage(_screen(initial_id=None, record_tools=tools), owner=object()) as ui:
+        await ui.press(ui.key_for("record-tools"))
+        assert "## Record evidence gaps" in ui.texts()
+        await ui.select(ui.key_for("evidence-gaps.open"), ["1"])
+        assert any("width" in text for text in ui.texts())
         ui.assert_within_limits()

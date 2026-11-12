@@ -60,6 +60,10 @@ class RecordsScreen(sd.Screen):
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD))
 
+    _gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
+    _titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
+
     def __init__(
         self,
         records: RecordOperations,
@@ -74,9 +78,6 @@ class RecordsScreen(sd.Screen):
         self._can_inspect = can_inspect
         self._can_rebuild = can_rebuild
         self._authorize = authorize
-        self._gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request] | None = None
-        self._titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target, sd.Request] | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:

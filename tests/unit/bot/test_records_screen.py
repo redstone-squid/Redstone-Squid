@@ -4,6 +4,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
+import pytest
+
+import squid_ui as sl
 from squid.bot.submission.records import RecordsScreen
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
@@ -153,3 +156,18 @@ async def test_revoked_rebuild_permission_prevents_the_write() -> None:
 
     assert harness.computation.rebuild_calls == []
     assert len(responder.notices) == 1
+
+
+async def test_failed_diagnostic_refresh_rolls_back_the_visible_browsers() -> None:
+    screen = make_screen().screen
+    await screen.on_load()
+    original = screen._gaps, screen._titles, screen._tabs
+
+    async def refresh_then_fail() -> None:
+        await screen.on_load()
+        raise RuntimeError("later failure")
+
+    with pytest.raises(RuntimeError, match="later failure"), sl.runtime.transaction():
+        await refresh_then_fail()
+
+    assert (screen._gaps, screen._titles, screen._tabs) == original
