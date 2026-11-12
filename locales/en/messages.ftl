@@ -1818,7 +1818,7 @@ bot-voting-controls-poll-weights-refreshed = Poll weights refreshed.
 # squid/bot/voting/controls.py:38
 bot-voting-controls-refresh-weights = Refresh weights
 
-# squid/bot/voting/poll_wizard.py:360
+# squid/bot/voting/poll_wizard.py:366
 bot-voting-poll-wizard-cancel = Cancel
 
 # squid/bot/voting/poll_wizard.py:289
@@ -1887,10 +1887,10 @@ bot-voting-poll-wizard-minute =
 # squid/bot/voting/poll_wizard.py:197
 bot-voting-poll-wizard-options-one-per-line = Options (one per line)
 
-# squid/bot/voting/poll_wizard.py:353
+# squid/bot/voting/poll_wizard.py:359
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/poll_wizard.py:349
+# squid/bot/voting/poll_wizard.py:355
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
 # squid/bot/voting/poll_wizard.py:253
@@ -1908,7 +1908,7 @@ bot-voting-poll-wizard-reach = Reach
 # squid/bot/voting/poll_wizard.py:294
 bot-voting-poll-wizard-reaches = Reaches
 
-# squid/bot/voting/poll_wizard.py:329
+# squid/bot/voting/poll_wizard.py:330
 bot-voting-poll-wizard-review-poll = Review poll
 
 # squid/bot/voting/poll_wizard.py:158
@@ -2714,19 +2714,19 @@ core-state-invalid-operation = Application state is invalid for this operation.
 # squid/core/errors.py:182
 core-supplied-value-invalid = The supplied value is invalid.
 
-# squid/bot/diagnostics_view.py:377
+# squid/bot/diagnostics_view.py:383
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
 # squid/bot/diagnostics_view.py:37
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages } · the attachment has the whole report
 
-# squid/bot/diagnostics_view.py:316
+# squid/bot/diagnostics_view.py:322
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
 # squid/bot/diagnostics_view.py:46
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics_view.py:178
+# squid/bot/diagnostics_view.py:191
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
 # squid/diagnostics/domain.py:23
@@ -2735,92 +2735,89 @@ diagnostics-error-report-not-found = Error report not found
 # squid/diagnostics/application.py:63
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
-# squid/bot/diagnostics_view.py:212
+# squid/bot/diagnostics_view.py:226
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
 # squid/diagnostics/domain.py:22
 diagnostics-no-stored-error = No stored error matches that reference.
 
-# squid/bot/diagnostics_view.py:140
+# squid/bot/diagnostics_view.py:153
 diagnostics-path-privacy-warning = An error report names internal paths, so it is never posted in a channel.
 
-# squid/bot/diagnostics_view.py:108
+# squid/bot/diagnostics_view.py:109
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics_view.py:387
+# squid/bot/diagnostics_view.py:393
 diagnostics-shared-reference-note = { $count } reports share this reference; this is the newest.
 
-# squid/bot/diagnostics_view.py:103
+# squid/bot/diagnostics_view.py:104
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics_view.py:386
+# squid/bot/diagnostics_view.py:392
 diagnostics-view-ambiguous = Ambiguous
 
-# squid/bot/diagnostics_view.py:260
+# squid/bot/diagnostics_view.py:274
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics_view.py:176
+# squid/bot/diagnostics_view.py:189
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics_view.py:184
+# squid/bot/diagnostics_view.py:197
 diagnostics-view-delete-reports = Delete reports
 
-# squid/bot/diagnostics_view.py:230
+# squid/bot/diagnostics_view.py:244
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
 # squid/bot/diagnostics_view.py:47
 diagnostics-view-earlier = Earlier
 
-# squid/bot/diagnostics_view.py:278
+# squid/bot/diagnostics_view.py:284
 diagnostics-view-error = Error { $reference }
 
-# squid/bot/diagnostics_view.py:228
+# squid/bot/diagnostics_view.py:242
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics_view.py:370
+# squid/bot/diagnostics_view.py:376
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics_view.py:371
+# squid/bot/diagnostics_view.py:377
 diagnostics-view-full-id = Full ID
 
-# squid/bot/diagnostics_view.py:292
+# squid/bot/diagnostics_view.py:298
 diagnostics-view-full-report = Full report
 
 # squid/bot/diagnostics_view.py:48
 diagnostics-view-later = Later
 
-# squid/bot/diagnostics_view.py:245
+# squid/bot/diagnostics_view.py:259
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics_view.py:285
+# squid/bot/diagnostics_view.py:291
 diagnostics-view-log-tail = Log tail
 
-# squid/bot/diagnostics_view.py:274
+# squid/bot/diagnostics_view.py:280
 diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 
-# squid/bot/diagnostics_view.py:211
+# squid/bot/diagnostics_view.py:225
 diagnostics-view-recent-errors = Recent errors
 
-# squid/bot/diagnostics_view.py:125
+# squid/bot/diagnostics_view.py:137
 diagnostics-view-refresh-reports = Refresh reports
-
-# squid/bot/diagnostics_view.py:253
-diagnostics-view-show-all = Show all
-
-# squid/bot/diagnostics_view.py:255
-diagnostics-view-show-work-lost-only = Show work lost only
 
 # squid/bot/diagnostics_view.py:36
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics_view.py:366
+# squid/bot/diagnostics_view.py:372
 diagnostics-view-when = When
 
-# squid/bot/diagnostics_view.py:369
+# squid/bot/diagnostics_view.py:375
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics_view.py:376
+# squid/bot/diagnostics_view.py:382
 diagnostics-view-work-lost = Work lost
+
+# squid/bot/diagnostics_view.py:265
+diagnostics-view-work-lost-only = Work lost only
 
 # squid/bot/submission/ui/drafts.py:1169, squid/bot/submission/ui/drafts.py:488, squid/bot/submission/ui/drafts.py:791
 draft-editor-add-files = Add files
@@ -3140,13 +3137,13 @@ edit-history-conflict = This edit changed elsewhere or is no longer permitted.
 # squid/bot/edit_history.py:64
 edit-history-failed = The edit could not be reversed.
 
-# squid/bot/edit_controller.py:226, squid/bot/edit_history.py:81
+# squid/bot/edit_controller.py:226, squid/bot/edit_history.py:80
 edit-history-redo = Redo
 
 # squid/bot/edit_history.py:61
 edit-history-uncertain = The saved result needs checking. Refresh before editing again.
 
-# squid/bot/edit_controller.py:225, squid/bot/edit_history.py:80
+# squid/bot/edit_controller.py:225, squid/bot/edit_history.py:78
 edit-history-undo = Undo
 
 # squid/edits/domain.py:217
@@ -4125,10 +4122,10 @@ permissions-vote-polls = Vote in polls.
 # squid/permissions/domain/catalogue.py:477
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
-# squid/bot/voting/poll_wizard.py:337
+# squid/bot/voting/poll_wizard.py:343
 poll-history-edit = Edit poll
 
-# squid/bot/voting/poll_wizard.py:357
+# squid/bot/voting/poll_wizard.py:332
 poll-publish-final = Publishing is final and cannot be undone here.
 
 # squid/bot/voting/poll_wizard.py:45

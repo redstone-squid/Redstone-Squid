@@ -36,6 +36,7 @@ Home = "index.md"
 
 [[project.nav]]
 Bot = [
+    { "Screen conventions" = "bot-screens.md" },
     { Internationalization = "i18n.md" },
     { Notifications = "notifications.md" },
     { "Edits and history" = "edits.md" },

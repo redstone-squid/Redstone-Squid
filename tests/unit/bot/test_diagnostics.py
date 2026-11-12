@@ -333,7 +333,8 @@ async def test_filtering_reloads_from_the_service() -> None:
 async def test_clear_finishes_once_with_a_terminal_count() -> None:
     screen = make_screen((make_report(),), can_clear=True)
     async with sd.testing.stage(screen, owner=object()) as ui:
-        await ui.press("clear")
+        # Clear all sits in the list's last row, inside the update controls component.
+        await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith(".clear")))
         key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("clear-errors.confirm"))
         await ui.press(key)
         assert await screen.wait() == sd.Completed(3)

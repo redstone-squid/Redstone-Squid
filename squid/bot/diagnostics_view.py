@@ -60,12 +60,13 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
         *,
         work_lost_only: bool,
         refresh: Callable[[sl.PressEvent], Awaitable[None]],
+        list_actions: Callable[[], tuple[_ListAction, ...]],
     ) -> None:
         self._operations = operations
         self._shown = tuple(report.id for report in shown)
         self._work_lost_only = work_lost_only
         self._notice = _ReportUpdateNotice()
-        self._controls = _ReportUpdateControls(refresh)
+        self._controls = _ReportUpdateControls(refresh, list_actions)
         self.monitor = self.own(ErrorReportRefresh(self._check))
 
     @property
@@ -110,11 +111,22 @@ class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return tuple(nodes)
 
 
-class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
-    """Keep manual refresh available while automatic checks load or fail."""
+type _ListAction = sl.semantic.ActionControl | sl.semantic.Toggle
 
-    def __init__(self, refresh: Callable[[sl.PressEvent], Awaitable[None]]) -> None:
+
+class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    """Keep manual refresh available while automatic checks load or fail.
+
+    The screen's other list controls join Refresh here, so the list ends with one row of controls.
+    """
+
+    def __init__(
+        self,
+        refresh: Callable[[sl.PressEvent], Awaitable[None]],
+        list_actions: Callable[[], tuple[_ListAction, ...]],
+    ) -> None:
         self._refresh = refresh
+        self._list_actions = list_actions
 
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
@@ -127,6 +139,7 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 key="refresh",
                 tone=sl.Tone.INFO if changed else sl.Tone.NEUTRAL,
             ),
+            *self._list_actions(),
             key="report-updates",
         )
 
@@ -199,6 +212,7 @@ class ErrorReportScreen(sd.Screen[int]):
             self._reports,
             work_lost_only=self.work_lost_only,
             refresh=self._refresh_reports,
+            list_actions=self._list_actions,
         )
         self._browser = sp.Browser(
             sl.sources.list_source(self._reports),
@@ -244,29 +258,21 @@ class ErrorReportScreen(sd.Screen[int]):
         if self._browser is None:
             return sl.Document((sl.status(tr(t"diagnostics-view-loading-error-reports = Loading error reports.")),))
         assert self._updates is not None
-        return sl.Document(
-            (
-                self._browser,
-                self._updates,
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"diagnostics-view-show-all = Show all")
-                        if self.work_lost_only
-                        else tr(t"diagnostics-view-show-work-lost-only = Show work lost only"),
-                        self._toggle_filter,
-                        key="filter",
-                    ),
-                    sl.action_control(
-                        tr(t"diagnostics-view-clear-all = Clear all"),
-                        self._confirm_clear,
-                        key="clear",
-                        tone=sl.Tone.DANGER,
-                    )
-                    if self._can_clear
-                    else None,
-                    key="error-actions",
-                ),
-            )
+        return sl.Document((self._browser, self._updates))
+
+    def _list_actions(self) -> tuple[_ListAction, ...]:
+        filter_toggle = sl.toggle(
+            tr(t"diagnostics-view-work-lost-only = Work lost only"),
+            key="filter",
+            on=sl.controlled(self.work_lost_only, self._toggle_filter),
+        )
+        if not self._can_clear:
+            return (filter_toggle,)
+        return (
+            filter_toggle,
+            sl.action_control(
+                tr(t"diagnostics-view-clear-all = Clear all"), self._confirm_clear, key="clear", tone=sl.Tone.DANGER
+            ),
         )
 
     def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
@@ -301,7 +307,7 @@ class ErrorReportScreen(sd.Screen[int]):
         await event.acknowledge()
         await self._load_recent()
 
-    async def _toggle_filter(self, event: sl.PressEvent) -> None:
+    async def _toggle_filter(self, event: sl.ActionEvent) -> None:
         await event.acknowledge()
         self.work_lost_only = not self.work_lost_only
         await self._load_recent()

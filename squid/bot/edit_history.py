@@ -64,10 +64,8 @@ async def apply_history(stack: sl.runtime.History, event: sl.PressEvent, *, redo
         await event.notice(tr(t"edit-history-failed = The edit could not be reversed."))
 
 
-def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-    """Render session edit controls, with truthful outcomes for external writes."""
-    if not stack.can_undo and not stack.can_redo:
-        return ()
+def history_actions(stack: sl.runtime.History) -> tuple[sl.semantic.ActionControl[sd.Request], ...]:
+    """Undo and Redo, each only when it can run, with truthful outcomes for external writes."""
 
     async def undo(event: sl.PressEvent) -> None:
         await apply_history(stack, event)
@@ -75,13 +73,18 @@ def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[sl.Compon
     async def redo(event: sl.PressEvent) -> None:
         await apply_history(stack, event, redo=True)
 
-    return (
-        sl.action_controls(
-            stack.can_undo and sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo"),
-            stack.can_redo and sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo"),
-            key="edit-history",
-        ),
-    )
+    actions: list[sl.semantic.ActionControl[sd.Request]] = []
+    if stack.can_undo:
+        actions.append(sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo"))
+    if stack.can_redo:
+        actions.append(sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo"))
+    return tuple(actions)
+
+
+def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    """Render `history_actions` as their own row, or nothing when neither can run."""
+    actions = history_actions(stack)
+    return (sl.action_controls(*actions, key="edit-history"),) if actions else ()
 
 
 def track_local_edits[StateT, ValueT](

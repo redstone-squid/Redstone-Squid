@@ -8,7 +8,7 @@ from typing import cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.edit_history import history_controls, track_local_edits
+from squid.bot.edit_history import history_actions, track_local_edits
 from squid.bot.ui import tr
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
@@ -326,7 +326,13 @@ class PollScreen(sd.Screen[str]):
             tr(t"bot-voting-poll-wizard-create-a-poll = Create a poll"),
             _poll_steps(allow_network),
             key="poll",
-            review=sp.WizardReview(label=tr(t"bot-voting-poll-wizard-review-poll = Review poll"), summarize=_review),
+            review=sp.WizardReview(
+                label=tr(t"bot-voting-poll-wizard-review-poll = Review poll"),
+                summarize=_review,
+                note=tr(t"poll-publish-final = Publishing is final and cannot be undone here."),
+            ),
+            # Undo, Redo, and Cancel share the wizard's last row instead of adding rows below it.
+            actions=self._wizard_actions,
             on_finish=self._finish,
         )
         self.wizard = wizard.machine
@@ -351,15 +357,13 @@ class PollScreen(sd.Screen[str]):
             )
         if self.cancelled:
             return (sl.status(tr(t"bot-voting-poll-wizard-poll-cancelled = Poll cancelled.")),)
+        return (self.driver,)
+
+    def _wizard_actions(self) -> tuple[sl.semantic.ActionControl[sd.Request], ...]:
         return (
-            self.driver,
-            *history_controls(self.history),
-            sl.note(tr(t"poll-publish-final = Publishing is final and cannot be undone here.")),
-            sl.action_controls(
-                sl.action_control(
-                    tr(t"bot-voting-poll-wizard-cancel = Cancel"), self._cancel, key="cancel", tone=sl.Tone.DANGER
-                ),
-                key="poll-actions",
+            *history_actions(self.history),
+            sl.action_control(
+                tr(t"bot-voting-poll-wizard-cancel = Cancel"), self._cancel, key="cancel", tone=sl.Tone.DANGER
             ),
         )
 

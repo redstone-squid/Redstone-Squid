@@ -144,7 +144,8 @@ def test_settings_step_uses_typed_portable_fields() -> None:
 async def test_cancelling_finishes_with_a_terminal_screen() -> None:
     screen = make_screen()
     async with sd.testing.stage(screen, owner=object()) as ui:
-        await ui.press("cancel")
+        # Cancel sits in the wizard's last row, so its key carries the wizard's placement.
+        await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith(".cancel")))
 
         assert screen.cancelled is True
         assert labels(screen.render()) == []
