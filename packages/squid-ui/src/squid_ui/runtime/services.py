@@ -19,10 +19,10 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 from squid_reactivity import Reactive
-from squid_reactivity.async_values import _Execution
 from squid_reactivity.diagnostics import (
     copy_event_observers,
 )
+from squid_reactivity.internals import Execution
 from squid_ui.runtime.tasks import anyio, task_is_within
 
 if TYPE_CHECKING:
@@ -131,7 +131,7 @@ class ServiceRun:
         self._cancelled = False
         self._started = False
         self._ready = asyncio.Event()
-        self._execution: _Execution[ExceptionGroup | None] = _Execution()
+        self._execution: Execution[ExceptionGroup | None] = Execution()
         self._errors: list[Exception] = []
         self._failure: ExceptionGroup | None = None
 

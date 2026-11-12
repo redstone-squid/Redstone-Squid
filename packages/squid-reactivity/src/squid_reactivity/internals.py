@@ -5,6 +5,7 @@ reactive storage and transactions. They may change in any release. Application
 code should import from ``squid_reactivity`` instead.
 """
 
+from squid_reactivity.async_values import _Execution as Execution
 from squid_reactivity.core import (
     _State as StateDescriptor,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "CURRENT_TRANSACTION",
     "AtomicResourcePending",
     "Cell",
+    "Execution",
     "Signal",
     "StateDescriptor",
     "Transaction",
