@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, InvalidStateError, ValidationError
+from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError, ValidationError
 from squid.edits.application import EditExecutor
 from squid.edits.domain import (
     EditCommand,
@@ -152,8 +152,9 @@ async def test_operation_reuse_and_expired_attempts_cannot_write() -> None:
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
     edit = command()
     await executor.execute(edit, ACTOR)
-    with pytest.raises(OperationReuseError):
+    with pytest.raises(OperationReuseError) as conflict:
         await executor.execute(replace(edit, values=EditValues.of({"name": "Other"})), ACTOR)
+    assert conflict.value.code is ErrorCode.IDEMPOTENCY_CONFLICT
     with pytest.raises(OperationReuseError):
         await executor.execute(edit, Actor(account_id=8))
     expired = replace(command(revision=2), issued_at=Instant.now().subtract(hours=25))

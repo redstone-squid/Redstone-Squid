@@ -43,9 +43,10 @@ Submission drafts start at revision 0 rather than 1 and do not use `version_id_c
 Every draft writer advances the counter itself.
 
 HTTP clients receive revisions as ETags such as `"build-42-r7"` and return them in
-`If-Match` (`squid/api/revisions.py`). A request without `If-Match` applies to the
+`If-Match` (`squid/api/revisions.py`). Most requests without `If-Match` apply to the
 current record: the command carries a `LatestRevision`, and the handler reports
-whatever revision it finds after locking the record.
+whatever revision it finds after locking the record. Staff profile clearing requires
+`If-Match`; its review endpoint supplies the ETag.
 
 ## Edits
 
@@ -65,10 +66,31 @@ An edit moves through these steps:
 5. The executor stores an `EditOutcome` (operation ID, actor, new revisions) in
    `edit_operations` and commits.
 
-The caller receives an `EditReceipt` containing the values before and after the change.
-Receipts are kept only in memory; the database does not store the old values. Outcome
-rows expire after 24 hours, and the executor rejects commands issued more than 24
-hours ago, so a retry cannot apply an edit twice after its outcome has been deleted.
+A newly executed command returns an `EditReceipt` containing its before and after values.
+Replays return the stored outcome without a receipt. Receipts are kept only in memory;
+the outcome table does not store old values.
+
+Outcome rows expire after 24 hours. When no retained outcome exists, the executor
+also rejects commands whose `issued_at` is more than 24 hours old. This protects retries of the original command
+object, but HTTP creates a fresh command on each request. After retention expires,
+an HTTP key can therefore start a new operation; clients must not assume indefinite
+retry protection. The retention period is defined in `squid/core/replay.py`.
+
+HTTP idempotency records, edit outcomes, and draft changes remain separate:
+
+- HTTP idempotency retains whole responses for any participating route. Its request
+  identity becomes the executor's operation ID on edit routes. Ordinary unhandled
+  failures retain the redacted failure response, since the mutation may already
+  have committed. Releasing that key would allow a duplicate write. Executor-backed
+  failures remain resumable under the original operation ID.
+- `edit_operations` commits an outcome in the same transaction as the edit.
+- `submission_draft_changes` permanently records accepted changes. A matching retry
+  returns the current draft snapshot, not the original result. Reusing the key with
+  a different actor, revision, client identity, or operation batch is a conflict.
+
+All three layers report conflicting key reuse as `IDEMPOTENCY_CONFLICT`. Staff
+profile clears additionally retain actor and target IDs, operation IDs, revisions,
+and timestamps in `profile_clear_audit`, without storing the cleared content.
 
 If the commit fails in a way that may or may not have saved the change, the executor
 raises `EditCommitUncertainError`. Retrying the same command is safe: it returns the

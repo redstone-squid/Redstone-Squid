@@ -7,6 +7,7 @@ from whenever import Instant
 
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
+from squid.core.replay import REPLAY_RETENTION_HOURS
 from squid.idempotency.domain import (
     ExistingRequest,
     IdempotencyConflictError,
@@ -59,7 +60,7 @@ class IdempotencyService:
         self,
         *,
         uow_factory: UnitOfWorkFactory[IdempotencyUnitOfWork],
-        ttl_hours: int = 24,
+        ttl_hours: int = REPLAY_RETENTION_HOURS,
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if ttl_hours < 1:

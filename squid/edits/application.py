@@ -15,6 +15,7 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import ConflictError, InvalidStateError, ValidationError
+from squid.core.replay import REPLAY_RETENTION_HOURS
 from squid.edits.domain import (
     EditCommand,
     EditCommitUncertainError,
@@ -152,7 +153,7 @@ class EditExecutor[UowT: EditUnitOfWork]:
 
     @staticmethod
     def _check_deadline(command: EditCommand) -> None:
-        if command.issued_at.add(hours=24) <= Instant.now():
+        if command.issued_at.add(hours=REPLAY_RETENTION_HOURS) <= Instant.now():
             raise EditExpiredError
 
     @staticmethod

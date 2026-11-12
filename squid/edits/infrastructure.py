@@ -7,6 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.core.replay import REPLAY_RETENTION_HOURS
 from squid.edits.domain import EditOutcome, EditTarget, Revision
 from squid.edits.models import EditOperation
 
@@ -52,7 +53,7 @@ class PostgresEditStore:
                 changed=outcome.changed,
                 final=outcome.final,
                 created_at=now,
-                expires_at=now.add(hours=24),
+                expires_at=now.add(hours=REPLAY_RETENTION_HOURS),
             )
         )
         await self._session().flush()

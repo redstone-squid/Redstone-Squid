@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import JsonValue
 from whenever import Instant
 
-from squid.core.errors import ConflictError, InvalidStateError, ValidationError
+from squid.core.errors import ConflictError, ErrorCode, InvalidStateError, ValidationError
 from squid.core.i18n import tr
 
 
@@ -204,6 +204,8 @@ def require_revision(expected: Revision | LatestRevision, current: int) -> Revis
 
 
 class OperationReuseError(ConflictError):
+    default_code = ErrorCode.IDEMPOTENCY_CONFLICT
+
     default_message = tr(t"edits-operation-reused = This operation identifier was already used for another edit.")
 
 
