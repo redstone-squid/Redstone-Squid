@@ -101,6 +101,7 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
     assert "Pending: Observerless 2x2 Door" in str(payload)
     assert "https://example.com/build.png" in str(payload)
     assert "https://discord.com/channels/1/2/3" in str(payload)
+    assert "Original Discord message" in str(payload)
     assert "Submission ID: 7" in str(payload)
 
 

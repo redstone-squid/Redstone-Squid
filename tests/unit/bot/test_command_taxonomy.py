@@ -15,7 +15,6 @@ from squid.bot.permissions import PermissionCog
 from squid.bot.settings import SettingsCog
 from squid.bot.starboard import StarboardCog
 from squid.bot.submission.commands import BuildCommands
-from squid.bot.submission.records import RecordCog
 from squid.bot.verify import VerifyCog
 from squid.bot.version_tracking import VersionTracker
 from squid.bot.voting.vote import VoteCog
@@ -36,7 +35,6 @@ PUBLIC_COGS = (
     BuildCommands,
     Admin,
     Diagnostics,
-    RecordCog,
     VoteCog,
     VerifyCog,
     VersionTracker,
@@ -53,7 +51,6 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # newly restricted or newly public commands visible in review.
     "errors": frozenset({"manage_guild"}),
     "access": frozenset({"manage_guild"}),
-    "records": frozenset({"manage_guild"}),
     "redstoner": frozenset({"manage_roles"}),
     "settings": frozenset({"manage_guild"}),
     "starboard": frozenset({"manage_guild"}),
@@ -183,3 +180,9 @@ def test_access_is_one_app_only_workspace() -> None:
     access = cast(Any, PermissionCog)
     assert access.__cog_commands__ == []
     assert [command.qualified_name for command in access.__cog_app_commands__] == ["access"]
+
+
+def test_records_is_a_public_entry_to_the_catalogue() -> None:
+    records = next(command for command in cast(Any, BuildCommands).__cog_app_commands__ if command.name == "records")
+    assert records.default_permissions is None
+    assert not records.guild_only

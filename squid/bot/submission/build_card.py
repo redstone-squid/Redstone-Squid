@@ -148,7 +148,7 @@ async def render_build_card(
     if build.original_link is not None:
         rows = (
             sl.action_controls(
-                sl.link("Original submission", build.original_link, key="original-submission"),
+                sl.link("Original Discord message", build.original_link, key="original-submission"),
                 key="submission-links",
             ),
         )

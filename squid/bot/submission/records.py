@@ -7,24 +7,16 @@ service persists the requested category and recomputes its standings.
 """
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Literal, Protocol, Self, override
-
-from discord import app_commands
+from typing import Literal, Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
-from squid_ui_discord import Cog
-from squid_ui_discord.i18n import to_locale_str
-
-if TYPE_CHECKING:
-    import squid.bot.app
 
 
 class RecordOperations(Protocol):
@@ -259,41 +251,6 @@ class RecordsScreen(sd.Screen):
             tr(t"records-operation-permission-denied = You are no longer allowed to perform this records operation.")
         )
         return False
-
-
-class RecordCog[BotT: squid.bot.app.RedstoneSquid](Cog[BotT]):
-    """Open the record diagnostics and maintenance workspace."""
-
-    def __init__(self, bot: BotT) -> None:
-        super().__init__(bot)
-        self.records = bot.services.records
-        self.computation = bot.services.record_computation
-
-    @sd.command(
-        name=to_locale_str(tr(t"command-records-name = records")),
-        description=to_locale_str(tr(t"command-records-help = Inspect and maintain computed records")),
-    )
-    @app_commands.guild_only()
-    @hide_unless(manage_guild=True)
-    async def records_workspace(self, request: sd.Request[Self]) -> RecordsScreen:
-        """Open capability-aware diagnostics, lookup, and rebuild tools."""
-        await enforce(request, RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
-
-        async def authorize(node: PermissionNode) -> bool:
-            return await allows(request, node)
-
-        return RecordsScreen(
-            self.records,
-            self.computation,
-            can_inspect=await authorize(RECORD_ENTRY_INSPECT),
-            can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
-            authorize=authorize,
-        )
-
-
-async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Load the records workspace cog."""
-    await bot.add_cog(RecordCog(bot))
 
 
 class _LookupForm(sl.forms.Form):

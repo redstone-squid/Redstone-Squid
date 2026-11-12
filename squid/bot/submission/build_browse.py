@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
-from typing import Any, cast, override
+from typing import Any, Literal, cast, override
 
 from discord.utils import escape_markdown
 
@@ -15,6 +15,8 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.consent import with_consented_account
 from squid.bot.edit_controller import BoundEdit, EditController
+from squid.bot.submission.record_browser import record_browser
+from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.schematic_tools import SchematicTools
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr
@@ -32,6 +34,7 @@ from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_DEBUG,
     BUILD_SUBMISSION_REJECT,
 )
+from squid.records.application import RecordService
 from squid.schematics.application import SchematicService
 from squid_reactivity import TopicBus, TopicHandle
 from squid_ui.sources import window_fingerprint
@@ -344,6 +347,8 @@ class BuildBrowseScreen(sd.Screen):
 
     policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
 
+    _mode: Literal["builds", "records", "tools"] = sl.state("builds")
+    _tools_loaded: bool = sl.state(default=False)
     _selected: _BuildDetail | None = sl.state(None, opaque=True)
 
     def __init__(
@@ -361,7 +366,13 @@ class BuildBrowseScreen(sd.Screen):
         actor_account_id: int | None,
         authorize: BuildAuthorizer,
         refresh_posts: RefreshPosts,
+        records: RecordService | None = None,
+        record_tools: RecordsScreen | None = None,
+        initial_records: bool = False,
     ) -> None:
+        self._mode = "records" if initial_records and records is not None else "builds"
+        self._records = record_browser(records, self._open_holder) if records is not None else None
+        self._record_tools = record_tools
         self._topics = topics
         self._queries = queries
         self._builds = builds
@@ -404,6 +415,7 @@ class BuildBrowseScreen(sd.Screen):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._selected is not None:
             return (
+                self._workspace_controls(),
                 *self._find_nodes(),
                 sl.action_controls(
                     sl.action_control(tr(t"build-browse-newer = Newer"), self._newer, key="newer"),
@@ -414,7 +426,43 @@ class BuildBrowseScreen(sd.Screen):
                 ),
                 self._selected,
             )
-        return (*self._find_nodes(), self._browser)
+        if self._mode == "tools" and self._record_tools is not None:
+            return (self._workspace_controls(), self._record_tools)
+        listing = self._records if self._mode == "records" and self._records is not None else self._browser
+        return (self._workspace_controls(), *self._find_nodes(), listing)
+
+    def _workspace_controls(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        return sl.action_controls(
+            sl.action_control(
+                tr(t"build-browse-all-builds = Builds"), partial(self._switch, "builds"), key="all-builds"
+            ),
+            self._records is not None
+            and sl.action_control(
+                tr(t"build-browse-records = Records"),
+                partial(self._switch, "records"),
+                key="all-records",
+            ),
+            self._record_tools is not None
+            and sl.action_control(
+                tr(t"build-browse-record-tools = Record tools"),
+                partial(self._switch, "tools"),
+                key="record-tools",
+            ),
+            key="catalogue-views",
+            display=sl.semantic.ControlDisplay.INDIVIDUAL,
+        )
+
+    async def _switch(self, mode: Literal["builds", "records", "tools"], _event: sl.PressEvent) -> None:
+        if mode == "tools" and self._record_tools is not None and not self._tools_loaded:
+            await self._record_tools.on_load()
+            self._tools_loaded = True
+        self._mode = mode
+        self._selected = None
+        await self._browser._back(_event)
+
+    async def _open_holder(self, build_id: int, event: sl.PressEvent) -> None:
+        if not await self._select(build_id):
+            await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
 
     async def _open_list_build(self, _event: sl.ActionEvent, build: Build) -> None:
         await self._show_build(build)

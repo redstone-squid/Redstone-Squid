@@ -1,18 +1,26 @@
 """Build browser actions participate in the UI's state transactions."""
 
+from datetime import UTC, datetime
 from typing import cast
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
+from squid.bot.submission.build_card import render_build_card
+from squid.bot.submission.records import RecordsScreen
+from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
 from squid.core.pagination import Page, PageSelector
 from squid.permissions.domain import PermissionNode
+from squid.records.application import RecordService
+from squid.records.application.models import PublishedTitle
+from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.schematics.application import SchematicService
 from squid_reactivity import LocalTopicBus
 from squid_ui.testing import press_event, submit_event
@@ -20,7 +28,13 @@ from squid_ui_discord.testing import stage
 
 
 def _screen(
-    *, initial_id: int | None = 7, status: Status = Status.CONFIRMED, schematics_available: bool = False
+    *,
+    initial_id: int | None = 7,
+    status: Status = Status.CONFIRMED,
+    schematics_available: bool = False,
+    records: RecordService | None = None,
+    initial_records: bool = False,
+    record_tools: RecordsScreen | None = None,
 ) -> BuildBrowseScreen:
     build = DoorBuild(id=7, submission_status=status)
     queries = AsyncMock(spec=BuildQueryService)
@@ -58,6 +72,9 @@ def _screen(
         actor_account_id=1,
         authorize=authorize,
         refresh_posts=refresh_posts,
+        records=records,
+        record_tools=record_tools,
+        initial_records=initial_records,
     )
 
 
@@ -183,3 +200,71 @@ async def test_list_selection_and_return_keep_the_list_available() -> None:
         await ui.press(ui.key_for("back"))
         assert "## Build catalogue" in ui.texts()
         ui.control(ui.key_for("builds.open"))
+
+
+async def test_records_open_holders_and_preserve_the_selected_record() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(
+        items=(
+            PublishedTitle(
+                id=10,
+                definition_id=1,
+                title_id=uuid4(),
+                title="Smallest 2x2 door",
+                subtitle=None,
+                base_title=BaseTitle.SMALLEST,
+                build_kind=BuildKind.DOOR,
+                version_scope=VersionScope.ALL_TIME,
+                status=ResolutionStatus.RESOLVED,
+                holder_build_ids=(7, 9),
+                computed_at=datetime.now(UTC),
+            ),
+        ),
+        total=1,
+        next=None,
+        prev=None,
+    )
+    async with stage(_screen(initial_id=None, records=records, initial_records=True), owner=object()) as ui:
+        ui.assert_within_limits()
+        await ui.select(ui.key_for("records.open"), ["10"])
+        await ui.press(ui.key_for("holder-7"))
+        assert "Build #7" in ui.texts()
+        await ui.press(ui.key_for("back"))
+        assert "## Smallest 2x2 door" in ui.texts()
+        ui.control(ui.key_for("holder-9"))
+        await ui.press(ui.key_for("all-builds"))
+        assert "## Build catalogue" in ui.texts()
+        ui.assert_within_limits()
+
+
+async def test_missing_id_keeps_the_current_build() -> None:
+    screen = _screen()
+    async with stage(screen, owner=object()) as ui:
+        cast(AsyncMock, screen._queries).get.return_value = None
+        form = await ui.press_for_form(ui.key_for("open-id"))
+        await form.submit({"id": "999"})
+        assert "Build #7" in ui.texts()
+
+
+async def test_record_tools_load_on_request_and_return_to_builds() -> None:
+    records = AsyncMock()
+    records.gaps.return_value = ()
+    records.title_gaps.return_value = ()
+    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    async with stage(_screen(initial_id=None, record_tools=tools), owner=object()) as ui:
+        records.gaps.assert_not_awaited()
+        await ui.press(ui.key_for("record-tools"))
+        records.gaps.assert_awaited_once()
+        ui.assert_within_limits()
+        await ui.press(ui.key_for("all-builds"))
+        assert "## Build catalogue" in ui.texts()
+
+
+async def test_full_build_card_fits_with_catalogue_navigation() -> None:
+    screen = _screen(status=Status.PENDING)
+    screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
+    async with stage(screen, owner=object()) as ui:
+        ui.control(ui.key_for("older"))
+        ui.control(ui.key_for("schematic-tools"))
+        assert any("Submission ID: 7" in text for text in ui.texts())
+        ui.assert_within_limits()

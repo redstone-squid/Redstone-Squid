@@ -15,6 +15,7 @@ from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
+from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.autocomplete import autocompletes
@@ -27,6 +28,8 @@ from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_EDIT,
     BUILD_SUBMISSION_REJECT,
     BUILD_SUBMISSION_VIEW_PENDING,
+    RECORD_ENTRY_INSPECT,
+    RECORD_ENTRY_REBUILD,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 from squid_i18n import tr
@@ -179,16 +182,31 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_group.command(
         name=to_locale_str(tr(t"command-build-browse-name = browse")),
-        description=to_locale_str(
-            tr(t"command-build-browse-help = Browse searchable build details, review actions, and schematic tools.")
-        ),
+        description=to_locale_str(tr(t"command-build-browse-help = Browse builds and record holders.")),
     )
     @app_commands.rename(build_id=to_locale_str(tr(t"command-build-browse-build-id-name = id")))
     @app_commands.describe(
         build_id=to_locale_str(tr(t"bot-submission-search-open-this-build-directly = Open this build directly."))
     )
     async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
-        """Browse searchable build details, review actions, and schematic tools."""
+        """Browse builds and record holders."""
+        return await self._catalogue(request, build_id=build_id)
+
+    @sd.command(
+        name=to_locale_str(tr(t"command-records-name = records")),
+        description=to_locale_str(tr(t"command-records-browse-help = Browse records and their holder builds")),
+    )
+    async def records_workspace(self, request: sd.Request[Self]) -> BuildBrowseScreen:
+        """Open the shared catalogue at its record standings."""
+        return await self._catalogue(request, initial_records=True)
+
+    async def _catalogue(
+        self,
+        request: sd.Request[Self],
+        *,
+        build_id: int | None = None,
+        initial_records: bool = False,
+    ) -> BuildBrowseScreen:
         subject = await actor_for_interaction(request)
         permissions = self.bot.services.permissions
 
@@ -210,6 +228,20 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         async def refresh_posts(build_id: int) -> None:
             await self.bot.refresh_posts("build", str(build_id))
 
+        can_inspect = request.guild is not None and await held(RECORD_ENTRY_INSPECT)
+        can_rebuild = request.guild is not None and await held(RECORD_ENTRY_REBUILD)
+        record_tools = (
+            RecordsScreen(
+                self.bot.services.records,
+                self.bot.services.record_computation,
+                can_inspect=can_inspect,
+                can_rebuild=can_rebuild,
+                authorize=authorize,
+            )
+            if can_inspect or can_rebuild
+            else None
+        )
+
         return BuildBrowseScreen(
             self.queries,
             self.builds,
@@ -223,6 +255,9 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             actor_account_id=subject.account_id,
             authorize=authorize,
             refresh_posts=refresh_posts,
+            records=self.bot.services.records,
+            record_tools=record_tools,
+            initial_records=initial_records,
         )
 
     @sd.Cog.listener("on_command_error")
