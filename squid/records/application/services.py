@@ -326,6 +326,7 @@ class RecordService:
         selector: PageSelector = FIRST_PAGE,
         descending: bool = True,
         page_size: int = 20,
+        resolved_only: bool = False,
     ) -> Page[PublishedTitle]:
         """Return one page of published record results in display order."""
         async with self._uow_factory() as uow:
@@ -336,12 +337,13 @@ class RecordService:
                 descending=descending,
                 # One row past the page proves whether another page follows.
                 limit=page_size + 1,
+                resolved_only=resolved_only,
             )
             return keyset_page(
                 rows,
                 selector=selector,
                 page_size=page_size,
-                total=await uow.records.count_published_records(),
+                total=await uow.records.count_published_records(resolved_only=resolved_only),
                 keyset=True,
                 id_of=lambda record: record.id,
             )

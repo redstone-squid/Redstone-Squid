@@ -376,6 +376,7 @@ class PostgresRecordRepository:
         before_id: int | None,
         descending: bool,
         limit: int,
+        resolved_only: bool = False,
     ) -> Sequence[PublishedTitle]:
         """List one page of published results in display order.
 
@@ -389,9 +390,10 @@ class PostgresRecordRepository:
             before_id=before_id,
             descending=descending,
             limit=limit,
+            resolved_only=resolved_only,
         )
 
-    async def count_published_records(self) -> int:
+    async def count_published_records(self, *, resolved_only: bool = False) -> int:
         """Count the results belonging to the currently active computation runs."""
         session = self._session()
         statement = (
@@ -400,6 +402,8 @@ class PostgresRecordRepository:
             .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
             .where(ComputationRun.is_active.is_(True))
         )
+        if resolved_only:
+            statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
         return await session.scalar(statement) or 0
 
     async def _active_records(
@@ -411,6 +415,7 @@ class PostgresRecordRepository:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
+        resolved_only: bool = False,
     ) -> tuple[PublishedTitle, ...]:
         session = self._session()
         statement = (
@@ -420,6 +425,8 @@ class PostgresRecordRepository:
             .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
             .where(ComputationRun.is_active.is_(True))
         )
+        if resolved_only:
+            statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
         if result_id is not None:
             statement = statement.where(TitleResult.id == result_id)
         reverse = before_id is not None

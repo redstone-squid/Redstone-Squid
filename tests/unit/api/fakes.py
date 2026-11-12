@@ -503,6 +503,7 @@ class MockRecords(RecordService):
         selector: PageSelector = FIRST_PAGE,
         descending: bool = True,
         page_size: int = 20,
+        resolved_only: bool = False,
     ) -> Page[PublishedTitle]:
         return cast(Page[PublishedTitle], _EMPTY_PAGE)
 

@@ -90,8 +90,16 @@ class FakeRuns:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
+        resolved_only: bool = False,
     ) -> Sequence[PublishedTitle]:
-        ordered = sorted(self.published_records, reverse=descending)
+        ordered = sorted(
+            (
+                key
+                for key, record in self.published_records.items()
+                if not resolved_only or record.status is ResolutionStatus.RESOLVED
+            ),
+            reverse=descending,
+        )
         if before_id is not None:
             kept = [rid for rid in ordered if (rid > before_id if descending else rid < before_id)]
             return tuple(self.published_records[rid] for rid in kept[-limit:])
@@ -99,8 +107,11 @@ class FakeRuns:
             ordered = [rid for rid in ordered if (rid < after_id if descending else rid > after_id)]
         return tuple(self.published_records[rid] for rid in ordered[offset : offset + limit])
 
-    async def count_published_records(self) -> int:
-        return len(self.published_records)
+    async def count_published_records(self, *, resolved_only: bool = False) -> int:
+        return sum(
+            not resolved_only or record.status is ResolutionStatus.RESOLVED
+            for record in self.published_records.values()
+        )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))

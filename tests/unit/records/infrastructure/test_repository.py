@@ -1,6 +1,9 @@
 import uuid
+from unittest.mock import AsyncMock, Mock
 
 from sqlalchemy import CheckConstraint, Index
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.records.application.models import CategoryIdentity
 from squid.records.domain import (
@@ -12,6 +15,7 @@ from squid.records.domain import (
 from squid.records.infrastructure.repository import (
     CALCULATOR_VERSION,
     FORMATTER_VERSION,
+    PostgresRecordRepository,
     _gap_from_row,
     parse_category_key,
 )
@@ -95,3 +99,24 @@ def test_active_run_identity_is_global_across_rules_revisions() -> None:
     assert tuple(column.name for column in active_index.columns) == ("build_kind", "version_id")
     assert FORMATTER_VERSION == "2"
     assert CALCULATOR_VERSION == "3"
+
+
+async def test_standings_filter_is_applied_to_both_rows_and_count() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.execute.return_value = Mock(all=Mock(return_value=[]))
+    session.scalar.return_value = 0
+    repository = PostgresRecordRepository(lambda: session)
+    await repository.list_published_records(
+        offset=8,
+        after_id=None,
+        before_id=None,
+        descending=True,
+        limit=9,
+        resolved_only=True,
+    )
+    await repository.count_published_records(resolved_only=True)
+
+    for statement in (session.execute.call_args.args[0], session.scalar.call_args.args[0]):
+        sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+        assert "title_results.status = 'resolved'" in sql
+        assert "record_computation_runs.is_active IS true" in sql
