@@ -174,8 +174,8 @@ async def collect_images(
                     data = (await extract_first_frame(video_data)).getvalue()
                     content_type = "image/png"
                     origin = "video_frame"
-            except discord.HTTPException, OSError, RuntimeError:
-                logger.warning("Could not read inference image %s", attachment.filename, exc_info=True)
+            except (discord.HTTPException, OSError, RuntimeError) as exc:
+                logger.warning("Could not read inference image %s: %s", attachment.filename, exc)
                 continue
             if total_bytes + len(data) > max_bytes:
                 continue

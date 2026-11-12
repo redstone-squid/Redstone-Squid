@@ -1,14 +1,15 @@
 """Constrained media-preview fetching for trusted Discord origins."""
 
-import asyncio
 import io
 import logging
 import mimetypes
+import tempfile
 from collections import OrderedDict
 from typing import TypedDict, cast
 from urllib.parse import urlsplit
 
 import aiohttp
+import anyio
 import bs4
 
 logger = logging.getLogger(__name__)
@@ -92,44 +93,47 @@ async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10)
     than `MAX_VIDEO_FRAME_BYTES` raise RuntimeError; the size check occurs after
     the subprocess output has been read.
     """
-    process = await asyncio.create_subprocess_exec(
-        "ffmpeg",
-        "-v",
-        "error",
-        "-nostdin",
-        "-threads",
-        "1",
-        "-i",
-        "pipe:0",
-        "-frames:v",
-        "1",
-        "-vf",
-        "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease",
-        "-f",
-        "image2pipe",
-        "-vcodec",
-        "png",
-        "pipe:1",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    try:
-        async with asyncio.timeout(timeout_seconds):
-            output, _error = await process.communicate(input=video_data)
-    except asyncio.CancelledError:
-        # A cancellation from outside — bot shutdown, or a view timing out — would
-        # otherwise leave ffmpeg running with nobody reading its pipes.
-        process.kill()
-        await process.wait()
-        raise
-    except TimeoutError:
-        process.kill()
-        await process.wait()
-        msg = "Video frame extraction exceeded its deadline."
-        raise RuntimeError(msg) from None
+    # Ordinary MP4 files can store their index after the video packets. A pipe
+    # cannot seek back to those packets once ffmpeg has read the index.
+    with tempfile.TemporaryDirectory(prefix="squid-preview-") as directory:
+        source = anyio.Path(directory) / "source"
+        await source.write_bytes(video_data)
+        try:
+            with anyio.fail_after(timeout_seconds):
+                process = await anyio.run_process(
+                    [
+                        "ffmpeg",
+                        "-v",
+                        "error",
+                        "-nostdin",
+                        "-threads",
+                        "1",
+                        "-protocol_whitelist",
+                        "file,pipe",
+                        "-i",
+                        str(source),
+                        "-frames:v",
+                        "1",
+                        "-vf",
+                        "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease",
+                        "-f",
+                        "image2pipe",
+                        "-vcodec",
+                        "png",
+                        "pipe:1",
+                    ],
+                    check=False,
+                )
+        except TimeoutError:
+            msg = "Video frame extraction exceeded its deadline."
+            raise RuntimeError(msg) from None
     if process.returncode != 0:
-        msg = "Video frame extraction failed."
+        detail = process.stderr.decode("utf-8", errors="replace").strip()[-2000:]
+        msg = f"Video frame extraction failed (exit {process.returncode}): {detail}"
+        raise RuntimeError(msg)
+    output = process.stdout
+    if not output:
+        msg = "Video contains no decodable frame."
         raise RuntimeError(msg)
     if len(output) > MAX_VIDEO_FRAME_BYTES:
         msg = "Video frame extraction exceeded its output limit."
