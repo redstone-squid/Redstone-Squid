@@ -5,7 +5,7 @@ from typing import cast
 
 from squid.settings.application.edits import guild_snapshot
 from squid.settings.application.ports import GuildSettingsUnitOfWork
-from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
+from squid.settings.domain import Setting, SettingOptions
 from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.unit_of_work import UnitOfWorkFactory
@@ -122,29 +122,8 @@ class SettingsService:
                 return {}
             return SettingOptions(**{setting: getattr(row, column) for setting, column in CHANNEL_FIELDS.items()})
 
-    async def set_channel(self, server_id: int, setting: ScalarChannelSetting, channel_id: int) -> None:
-        """Save a channel ID; the caller must check that it is usable in this server."""
-        await self._set(server_id, setting, channel_id)
-
-    async def clear(self, server_id: int, setting: Setting) -> None:
-        """Unset a channel destination, creating the settings row if needed."""
-        await self._set(server_id, setting, None)
-
     async def get_locale(self, server_id: int) -> str | None:
         """Get the server's admin-configured locale override, if any."""
         async with self._uow_factory() as uow:
             row = await uow.settings.get(server_id)
             return None if row is None else row.locale
-
-    async def set_locale(self, server_id: int, locale: str | None) -> None:
-        """Set or clear the server's admin-configured locale override."""
-        async with self._uow_factory() as uow:
-            settings = await uow.settings.get_or_create_for_update(server_id)
-            settings.locale = locale
-            await uow.commit()
-
-    async def _set(self, server_id: int, setting: Setting, value: int | None) -> None:
-        async with self._uow_factory() as uow:
-            settings = await uow.settings.get_or_create_for_update(server_id)
-            setattr(settings, CHANNEL_FIELDS[setting], value)
-            await uow.commit()

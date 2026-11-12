@@ -95,12 +95,10 @@ class FakeSettingsService(SettingsService):
         del server_id
         return cast(SettingOptions, dict(self.stored))
 
-    @override
     async def set_channel(self, server_id: int, setting: ScalarChannelSetting, channel_id: int) -> None:
         self.channel_writes.append((server_id, setting, channel_id))
         self.stored[setting] = channel_id
 
-    @override
     async def clear(self, server_id: int, setting: Setting) -> None:
         self.clears.append((server_id, setting))
         self.stored.pop(setting, None)
@@ -110,7 +108,6 @@ class FakeSettingsService(SettingsService):
         del server_id
         return self.locale
 
-    @override
     async def set_locale(self, server_id: int, locale: str | None) -> None:
         del server_id
         self.locale = locale

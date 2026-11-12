@@ -62,8 +62,6 @@ from squid.notifications import NotificationPreferences, NotificationService
 from squid.notifications.domain import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
-    RecordSubscriptionFilter,
-    SubscriptionKind,
 )
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application import PermissionService, SubjectRecords
@@ -571,30 +569,9 @@ class MockNotifications(NotificationService):
     async def preferences(self, account_id: int) -> NotificationPreferences:
         return NotificationPreferences(account_id=account_id, consent_pending=True)
 
-    async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
-        return NotificationPreferences(
-            account_id=account_id,
-            consent_pending=False,
-            web_enabled=web_enabled,
-            dm_enabled=dm_enabled,
-        )
-
     @override
     async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         return ()
-
-    async def subscribe(
-        self,
-        account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None = None,
-        record_filter: RecordSubscriptionFilter | None = None,
-    ) -> NotificationSubscription:
-        raise AssertionError("service callers cannot create notification subscriptions")
-
-    async def unsubscribe(self, account_id: int, subscription_id: int) -> None:
-        return None
 
     @override
     async def inbox(
@@ -606,11 +583,6 @@ class MockNotifications(NotificationService):
         visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
         return cast(Page[InboxNotification], _EMPTY_PAGE)
-
-    async def mark_read(
-        self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
-    ) -> None:
-        return None
 
 
 class EmptyPermissionStore:

@@ -15,6 +15,8 @@ from squid.core.errors import InvalidStateError, ValidationError
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.application import SettingsService
+from squid.settings.domain import Setting
+from squid.settings.domain.guild import CHANNEL_FIELDS
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.settings.models import RuntimeSettingChange, ServerSetting
@@ -45,37 +47,25 @@ def service(
     return SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
 
-async def test_set_updates_existing_server_and_preserves_other_settings(service: SettingsService) -> None:
-    await service.set_channel(123, "Smallest", 1001)
-    await service.set_channel(123, "Vote", 1002)
-    await service.set_channel(456, "Smallest", 2001)
-
-    await service.set_channel(123, "Smallest", 1003)
-
-    assert await service.get(123, "Smallest") == 1003
-    assert await service.get(123, "Vote") == 1002
-    assert await service.get(456, "Smallest") == 2001
+async def _seed_channel(service: SettingsService, server_id: int, setting: Setting, value: int | None) -> None:
+    async with service._uow_factory() as uow:
+        row = await uow.settings.get_or_create_for_update(server_id)
+        setattr(row, CHANNEL_FIELDS[setting], value)
+        await uow.commit()
 
 
-@pytest.mark.parametrize("locale", ["zh-CN", None])
-async def test_set_locale_updates_or_clears_existing_server(
-    service: SettingsService,
-    locale: str | None,
-) -> None:
-    await service.set_channel(123, "Vote", 1002)
-    await service.set_locale(123, "en")
-
-    await service.set_locale(123, locale)
-
-    assert await service.get_locale(123) == locale
-    assert await service.get(123, "Vote") == 1002
+async def _seed_locale(service: SettingsService, server_id: int, locale: str | None) -> None:
+    async with service._uow_factory() as uow:
+        row = await uow.settings.get_or_create_for_update(server_id)
+        row.locale = locale
+        await uow.commit()
 
 
 async def test_guild_remove_persists_membership_and_allows_rejoining(
     service: SettingsService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await service.set_channel(123, "Vote", 1002)
+    await _seed_channel(service, 123, "Vote", 1002)
     await service.guild_joined(123)
 
     await service.guild_removed(123)
@@ -100,7 +90,7 @@ async def test_sync_presence_creates_missing_guilds_and_marks_absent_ones(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     # 123 was left while offline, 456 is still present, 789 was joined while offline.
-    await service.set_channel(123, "Vote", 1002)
+    await _seed_channel(service, 123, "Vote", 1002)
     await service.guild_joined(456)
 
     joined, left = await service.sync_presence([456, 789])
@@ -118,7 +108,7 @@ async def test_ensure_server_settings_creates_only_missing_rows(
     service: SettingsService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await service.set_locale(123, "fr")
+    await _seed_locale(service, 123, "fr")
 
     async with async_session_factory() as session, session.begin():
         created = await ensure_server_settings(session, [123, None, 456, 456])
@@ -129,9 +119,9 @@ async def test_ensure_server_settings_creates_only_missing_rows(
 
 
 async def test_forget_channels_clears_only_matching_settings(service: SettingsService) -> None:
-    await service.set_channel(123, "Vote", 1002)
-    await service.set_channel(123, "Builds", 1003)
-    await service.set_channel(123, "Fastest", 1004)
+    await _seed_channel(service, 123, "Vote", 1002)
+    await _seed_channel(service, 123, "Builds", 1003)
+    await _seed_channel(service, 123, "Fastest", 1004)
 
     assert await service.referenced_channels(123) == {1002, 1003, 1004}
     assert set(await service.forget_channels(123, {1002, 1004, 9999})) == {"Vote", "Fastest"}
@@ -141,7 +131,7 @@ async def test_forget_channels_clears_only_matching_settings(service: SettingsSe
 
 
 async def test_locale_service_creates_missing_settings(service: SettingsService) -> None:
-    await service.set_locale(123, "fr")
+    await _seed_locale(service, 123, "fr")
     assert await service.get_locale(123) == "fr"
 
 
@@ -167,7 +157,7 @@ async def test_uow_exit_without_commit_rolls_back_all_rows(
     async_session_factory: async_sessionmaker[AsyncSession],
     raise_error: bool,
 ) -> None:
-    await service.set_channel(123, "Vote", 1002)
+    await _seed_channel(service, 123, "Vote", 1002)
     factory = partial(SqlAlchemyUnitOfWork, async_session_factory)
     with pytest.raises(RuntimeError, match="abort") if raise_error else nullcontext():
         async with factory() as uow:
@@ -233,8 +223,8 @@ async def test_cancelled_uow_rolls_back_and_releases_its_connection(
 
 async def test_concurrent_first_writes_preserve_different_settings(service: SettingsService) -> None:
     async with create_task_group() as tasks:
-        tasks.start_soon(service.set_locale, 123, "fr")
-        tasks.start_soon(service.set_channel, 123, "Vote", 1003)
+        tasks.start_soon(_seed_locale, service, 123, "fr")
+        tasks.start_soon(_seed_channel, service, 123, "Vote", 1003)
         tasks.start_soon(service.guild_joined, 123)
     assert await service.get_locale(123) == "fr"
     assert await service.get(123, "Vote") == 1003
@@ -244,8 +234,8 @@ async def test_failed_commit_rolls_back_and_finishes_the_uow(
     service: SettingsService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await service.set_channel(123, "Smallest", 1001)
-    await service.set_channel(456, "Smallest", 1002)
+    await _seed_channel(service, 123, "Smallest", 1001)
+    await _seed_channel(service, 456, "Smallest", 1002)
     factory = partial(SqlAlchemyUnitOfWork, async_session_factory)
     async with factory() as uow:
         settings = await uow.settings.get_or_create_for_update(456)
@@ -282,12 +272,12 @@ async def test_channel_reads_and_clears_preserve_missing_server_semantics(servic
     assert await service.get_all(789) == {}
     await service.guild_removed(789)
     assert await service.get_all(789) == {}
-    await service.set_channel(123, "Vote", 1001)
+    await _seed_channel(service, 123, "Vote", 1001)
     await service.guild_joined(456)
     assert await service.get_many(iter([123, 456, 789]), "Vote") == {123: 1001, 456: None}
     assert await service.get_many([], "Vote") == {}
     assert await service.get(789, "Vote") is None
-    await service.clear(123, "Vote")
+    await _seed_channel(service, 123, "Vote", None)
     assert await service.get_all(123) == {
         "Smallest": None,
         "Fastest": None,

@@ -53,8 +53,11 @@ async def test_guild_child_writes_advance_root_and_block_stale_undo(
     with pytest.raises(RevisionConflictError):
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     # Returning to the old value does not return to the old version (the ABA case).
-    await settings.set_locale(GUILD, None)
-    await settings.set_locale(GUILD, "zh-CN")
+    for locale in (None, "zh-CN"):
+        async with factory() as uow:
+            row = await uow.settings.get_or_create_for_update(GUILD)
+            row.locale = locale
+            await uow.commit()
     with pytest.raises(RevisionConflictError):
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
 
