@@ -35,7 +35,6 @@ class _Flow[ResultT, OwnerT]:
     opening: Request[OwnerT] | None = None
     root: MessageRoot | None = None
     parent: Screen[Any, Any] | None = None
-    children: set[Screen[Any, Any]] = field(default_factory=set)
     on_result: Callable[[ScreenResultEvent[ResultT]], Awaitable[None]] | None = None
     on_cancel: Callable[[Cancelled], Awaitable[None]] | None = None
     outcome: Completed[ResultT] | Cancelled | None = None
@@ -176,7 +175,7 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         root.on_finish(self._screen_root_finished)
         if state.parent is not None:
             parent_root = state.parent._screen_require_root()
-            parent_root._depend_on(root)
+            parent_root._lifetime.adopt(root._lifetime)
 
     def _screen_opened(self) -> None:
         state = self._screen_flow
@@ -187,24 +186,6 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
             msg = "the screen closed during presentation"
             raise RuntimeError(msg)
         state.opened = True
-        self._screen_require_root()._on_finishing(self._screen_finish_children_first)
-
-    def _screen_finish_children_first(self, root: MessageRoot) -> None:
-        # Borrowing children must stop before parent services do.
-        children = tuple(self._screen_flow.children)
-
-        async def close_children(disable: bool) -> None:
-            errors: list[Exception] = []
-            for child in children:
-                try:
-                    await child._screen_close(ScreenCancelReason.PARENT_CLOSED)
-                except Exception as error:
-                    errors.append(error)
-            if errors:
-                message = "screen child cleanup failed"
-                raise ExceptionGroup(message, errors)
-
-        root._finish_children_with(self, close_children)
 
     async def _screen_opening_failed(self) -> None:
         await self._screen_supervised_close(ScreenCancelReason.CLOSED)
@@ -325,12 +306,10 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         child_state.parent = self
         child_state.on_result = on_result
         child_state.on_cancel = on_cancel
-        state.children.add(child)
         scope = state.scope
         assert scope is not None
         host = scope.runtime.execution_host
         if host is None:
-            state.children.discard(child)
             child_state.parent = None
             msg = "screen flows require an execution host"
             raise RuntimeError(msg)
@@ -409,11 +388,6 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         assert outcome is not None
         errors: list[Exception] = []
         try:
-            for child in tuple(state.children):
-                try:
-                    await child._screen_close(ScreenCancelReason.PARENT_CLOSED)
-                except Exception as error:
-                    errors.append(error)
             if state.opened and isinstance(outcome, Cancelled) and state.on_cancel is not None:
                 try:
                     await state.on_cancel(outcome)
@@ -424,9 +398,6 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
             except Exception as error:
                 errors.append(error)
         finally:
-            if state.parent is not None:
-                state.parent._screen_flow.children.discard(self)
-            state.children.clear()
             state.on_result = None
             state.on_cancel = None
             state.done.resolve(outcome)

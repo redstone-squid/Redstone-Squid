@@ -13,7 +13,7 @@ each message root's access policy still decides who may interact with it.
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Hashable, Iterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Hashable, Iterator
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -29,6 +29,7 @@ from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui.text import TextLike
 from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.delivery import Abandoned, Delivered, DeliveryResult, MessageDestination
+from squid_ui_discord.lifetime import Lifetime
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_options import MessageRootDefaults
@@ -342,20 +343,6 @@ def _require_user_id(user_id: int) -> int:
     return user_id
 
 
-@dataclass(frozen=True, slots=True)
-class _Membership:
-    """One mount's place in a session: under which parent, and attributed to whom.
-
-    Keeping parent and actor together lets attachment and detachment change one entry,
-    without separate indexes that could disagree about the mount's ownership.
-    """
-
-    parent: MessageRoot | None
-    """`None` for the root, which the session holds directly."""
-    actor: int | None
-    """Operational attribution, not membership -- see `Session.join`."""
-
-
 class Session:
     """One root mount and every child mount in its operational lifetime."""
 
@@ -387,7 +374,7 @@ class Session:
         self.key = key
         self.root = root
         self._manager = manager
-        self._graph: dict[MessageRoot, _Membership] = {root: _Membership(parent=None, actor=actor_id)}
+        self._attachments: dict[MessageRoot, int | None] = {root: actor_id}
         # The opener is the initial member: a semantic default that makes their presence
         # explicit, not an authorization decision. Recovery supplies the stored set instead.
         if members is None:
@@ -405,14 +392,11 @@ class Session:
             local=local,
         )
         self._lifecycle_lock = asyncio.Lock()
-        self._closed = False
-        self._closing_roots: tuple[MessageRoot, ...] = ()
-        self._retiring: dict[MessageRoot, _Membership] = {}
 
     @property
     def message_roots(self) -> tuple[MessageRoot, ...]:
         """The root followed by attached message roots in registration order."""
-        return tuple(self._graph)
+        return tuple(self._attachments)
 
     @property
     def members(self) -> frozenset[int]:
@@ -452,20 +436,21 @@ class Session:
     def attachment_actors(self) -> frozenset[int]:
         """Actors attributed to non-root message roots, for replacement protection."""
         return frozenset(
-            membership.actor
-            for message_root, membership in self._graph.items()
-            if message_root is not self.root and membership.actor is not None
+            actor
+            for message_root, actor in self._attachments.items()
+            if message_root is not self.root and actor is not None
         )
 
     def parent_of(self, message_root: MessageRoot) -> MessageRoot | None:
         """Return the mount's parent, or `None` for the root or an unknown mount."""
-        membership = self._graph.get(message_root)
-        return None if membership is None else membership.parent
+        if message_root not in self._attachments or message_root is self.root:
+            return None
+        parent = message_root._lifetime.parent
+        return None if parent is None else parent.root
 
     def actor_for(self, message_root: MessageRoot) -> int | None:
         """Return the actor attributed to one mount in this session."""
-        membership = self._graph.get(message_root)
-        return None if membership is None else membership.actor
+        return self._attachments.get(message_root)
 
     @property
     def snapshot(self) -> SessionSnapshot:
@@ -519,7 +504,7 @@ class Session:
             return Opened(self)
 
     def _accepts_attachment(self, parent: MessageRoot) -> bool:
-        return not (self._closed or self.root.finished or parent not in self._graph or parent.finished)
+        return not (self.root.finished or parent not in self._attachments or parent.finished)
 
     @asynccontextmanager
     async def _deliver_attachment(
@@ -534,6 +519,7 @@ class Session:
             if not self._accepts_attachment(parent):
                 yield Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
                 return
+            parent._lifetime.check_adoption(message_root._lifetime)
             delivered = False
 
             async def deliver(payload: MessagePayload) -> DeliveryResult:
@@ -549,7 +535,7 @@ class Session:
                 else:
                     yield result
             finally:
-                if delivered and message_root not in self._graph:
+                if delivered and message_root not in self._attachments:
                     # Cancellation must not interrupt the transfer to host-owned cleanup.
                     with anyio.CancelScope(shield=True):
                         await message_root.finish(wait=False)
@@ -608,7 +594,7 @@ class Session:
 
     def _membership_refusal(self, user_id: int, expect: frozenset[int] | None) -> MembershipResult | None:
         """The two refusals both operations share, checked under the lifecycle lock."""
-        if self._closed or self.root.finished:
+        if self.root.finished:
             return self._membership(user_id, MembershipStatus.SESSION_FINISHED)
         if expect is not None and expect != self._members:
             return self._membership(user_id, MembershipStatus.CONFLICT)
@@ -645,12 +631,11 @@ class Session:
 
     async def wait(self) -> None:
         """Observe session shutdown without initiating it or owning its execution."""
-        for root in self._closing_roots:
-            root.runtime.check_service_wait()
-            root._shutdown.check_wait()
         await self.root.wait()
 
     def _activate(self) -> None:
+        if self.root._lifetime.parent is None:
+            self._manager._lifetime.adopt(self.root._lifetime)
         self._manager._index_root(self, self.root)
         self.root._on_finishing(self._message_root_finishing)
 
@@ -659,73 +644,20 @@ class Session:
         if not self._accepts_attachment(parent):
             message = "attachment parent is not active in the session"
             raise ValueError(message)
-        parent._depend_on(message_root)
-        self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
+        parent._lifetime.adopt(message_root._lifetime)
+        self._attachments[message_root] = actor_id
         self._manager._index_root(self, message_root)
         message_root._on_finishing(self._message_root_finishing)
 
-        def completed() -> None:
-            self._retiring.pop(message_root, None)
-
-        message_root._shutdown.add_done_callback(completed)
-
     def _message_root_finishing(self, message_root: MessageRoot) -> None:
-        if message_root not in self._graph:
+        if message_root not in self._attachments:
             return
-        self._retiring = {root: member for root, member in self._retiring.items() if not root._shutdown.done.is_set()}
-        graph = self._retiring | self._graph
-        branch = self._depth_first(message_root)
-        for parent in branch:
-            children = tuple(child for child in branch if graph[child].parent is parent)
-            if children:
-                parent._finish_children_with(self, self._children_cleanup(children))
         if message_root is self.root:
-            self._closing_roots = branch
-            self._closed = True
             self._manager._forget(self)
         else:
-            self._detach(branch)
-
-    @staticmethod
-    def _children_cleanup(children: tuple[MessageRoot, ...]) -> Callable[[bool], Awaitable[None]]:
-        async def cleanup(disable: bool) -> None:
-            errors: list[Exception] = []
-            for child in children:
-                try:
-                    await child.finish(disable=disable, wait=False, reason=CloseReason.PARENT_CLOSED)
-                except Exception as error:
-                    errors.append(error)
-            for child in children:
-                if child.finished:
-                    try:
-                        await child.wait()
-                    except Exception as error:
-                        errors.append(error)
-            if errors:
-                message = "session child shutdown failed"
-                raise ExceptionGroup(message, errors)
-
-        return cleanup
-
-    def _depth_first(self, root: MessageRoot) -> tuple[MessageRoot, ...]:
-        ordered: list[MessageRoot] = []
-
-        def visit(parent: MessageRoot) -> None:
-            for child, membership in (self._retiring | self._graph).items():
-                if membership.parent is parent:
-                    visit(child)
-            ordered.append(parent)
-
-        visit(root)
-        return tuple(ordered)
-
-    def _detach(self, branch: Sequence[MessageRoot]) -> None:
-        for message_root in branch:
-            # The registry is a separate owner of the same mount, so its index is dropped
-            # separately rather than folded into the membership record.
-            self._manager._unindex_root(self, message_root)
-            if (membership := self._graph.pop(message_root, None)) is not None:
-                self._retiring[message_root] = membership
+            for root in (message_root, *message_root._lifetime.roots()):
+                self._manager._unindex_root(self, root)
+                self._attachments.pop(root, None)
 
 
 def _resolve_victims(selected: tuple[SessionSnapshot, ...], occupants: tuple[Session, ...]) -> tuple[Session, ...]:
@@ -739,6 +671,7 @@ class SessionManager:
 
     def __init__(self, defaults: MessageRootDefaults = MessageRootDefaults()) -> None:  # noqa: B008  # frozen value
         self.defaults = defaults
+        self._lifetime = Lifetime()
         self._by_key: dict[Hashable, list[Session]] = {}
         self._by_root: dict[MessageRoot, Session] = {}
         self._sessions: list[Session] = []

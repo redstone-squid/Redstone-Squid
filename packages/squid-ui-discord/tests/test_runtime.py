@@ -143,7 +143,9 @@ async def test_close_finishes_every_session_and_stops_answering_of() -> None:
 async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None:
     client = fake_client()
     runtime = install(cast(discord.Client, client))
-    runtime.sessions.close_all = AsyncCallRecorder(error=RuntimeError("gateway is gone"))
+    root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
+    await runtime.sessions.open(root, delivered_to(message_harness()))
+    root.on_finish(AsyncCallRecorder(error=RuntimeError("gateway is gone")))
 
     with pytest.raises(ExceptionGroup):
         await runtime.close()

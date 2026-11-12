@@ -30,6 +30,7 @@ from squid_ui_discord.config import Config
 from squid_ui_discord.contracts import LocalizationResolver
 from squid_ui_discord.delivery import DeliveryResult, Replyable
 from squid_ui_discord.facade import Scope
+from squid_ui_discord.lifetime import Lifetime
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootDefaults
@@ -103,8 +104,8 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.response_defaults = response_defaults
         self.config = config
         self.execution_host = sessions.defaults.execution_host
-        self._scopes: list[Scope[Any]] = []
-        self._scope_roots: dict[int, set[MessageRoot]] = {}
+        self._lifetime = Lifetime()
+        self._lifetime.adopt(sessions._lifetime)
 
     @property
     def defaults(self) -> MessageRootDefaults:
@@ -152,13 +153,9 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         """
         errors: list[Exception] = []
         try:
-            for scope in tuple(self._scopes):
-                try:
-                    await scope.close(reason=CloseReason.SHUTDOWN)
-                except Exception as error:
-                    errors.append(error)
+            self._lifetime.closing = True
             try:
-                await self.sessions.close_all(reason=CloseReason.SHUTDOWN)
+                await self._lifetime.close_children(reason=CloseReason.SHUTDOWN)
             except Exception as error:
                 errors.append(error)
         finally:
@@ -203,12 +200,14 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         if owner is None:
             message = "None cannot own a Discord UI scope"
             raise TypeError(message)
-        for scope in self._scopes:
+        for node in self._lifetime.children:
+            scope = node.scope
+            if scope is None:
+                continue
             if scope.owner is owner and not scope.closed:
                 return cast(Scope[OwnerT], scope)
         scope = Scope(cast(DiscordUIRuntime[discord.Client], self), owner)
-        self._scopes.append(cast(Scope[Any], scope))
-        self._scope_roots[id(scope)] = set()
+        self._lifetime.adopt(scope._lifetime)
         return scope
 
     @property
@@ -218,25 +217,34 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     def scope_for[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]:
         """Return an owner's registered live scope, raising if it is missing or closed."""
-        for scope in self._scopes:
+        for node in self._lifetime.children:
+            scope = node.scope
+            if scope is None:
+                continue
             if scope.owner is owner and not scope.closed:
                 return cast(Scope[OwnerT], scope)
         message = f"{type(owner).__name__} has no live UI scope; register it before dispatch"
         raise RuntimeError(message)
 
     def scope_of_root(self, root: MessageRoot | None) -> Scope[Any]:
-        """The scope that tracked `root`, so a click inherits the lifetime of the panel it hit."""
+        """Find invocation authority through the presentation's lifetime owner."""
         if root is not None:
             if root.finished:
                 message = "the component request belongs to a finished message root"
                 raise RuntimeError(message)
-            for scope in self._scopes:
-                if root in self._scope_roots.get(id(scope), ()):
-                    return scope
+            scope = root._lifetime.scope_owner()
+            if scope is not None:
+                return scope
         return self.app
 
     def _track[OwnerT](self, scope: Scope[OwnerT], message_root: MessageRoot) -> None:
-        self._scope_roots[id(scope)].add(message_root)
+        existing = message_root._lifetime.scope_owner()
+        if existing is not None:
+            if existing is not scope:
+                message = "presentation belongs to another scope"
+                raise ValueError(message)
+            return
+        scope._lifetime.adopt(message_root._lifetime)
 
     async def _handle_component_error(self, event: ActionEvent, error: Exception, source: str) -> None:
         """Present and observe a rolled-back component failure through the installed policy."""
@@ -258,24 +266,10 @@ class DiscordUIRuntime[ClientT: discord.Client]:
                 await policy.observe(req, error, delivery)
 
     async def _close_scope[OwnerT](self, scope: Scope[OwnerT], *, reason: CloseReason) -> None:
-        roots = self._scope_roots.pop(id(scope), set())
-        targets = {session.root if (session := self.sessions.session_for(root)) is not None else root for root in roots}
-        errors: list[Exception] = []
-        for message_root in targets:
-            try:
-                await message_root.finish(wait=False, reason=reason)
-            except Exception as error:
-                errors.append(error)
-        for message_root in targets:
-            if message_root.finished:
-                try:
-                    await message_root.wait()
-                except Exception as error:
-                    errors.append(error)
-        self._scopes = [candidate for candidate in self._scopes if candidate is not scope]
-        if errors:
-            message = "UI scope shutdown failed"
-            raise ExceptionGroup(message, errors)
+        try:
+            await scope._lifetime.close_children(reason=reason)
+        finally:
+            scope._lifetime.detach()
 
 
 def install[ClientT: discord.Client](

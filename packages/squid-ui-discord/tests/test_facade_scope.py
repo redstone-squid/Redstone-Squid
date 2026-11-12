@@ -67,7 +67,7 @@ async def test_runtime_close_closes_every_scope() -> None:
     assert second.closed
 
 
-async def test_scope_close_finishes_session_when_it_tracks_a_child() -> None:
+async def test_scope_claims_a_session_root_instead_of_its_owned_child() -> None:
     installed = runtime()
     ui = installed.scope(Owner())
     root = installed.mount(Panel(), access=sd.Everyone())
@@ -75,7 +75,9 @@ async def test_scope_close_finishes_session_when_it_tracks_a_child() -> None:
     assert isinstance(opened, sd.sessions.Opened)
     child = installed.mount(Panel(), access=sd.Everyone())
     await opened.session.attach(child, delivered_to(message_harness()))
-    installed._track(ui, child)
+    with pytest.raises(ValueError, match="different parent"):
+        installed._track(ui, child)
+    installed._track(ui, root)
 
     await ui.close()
 

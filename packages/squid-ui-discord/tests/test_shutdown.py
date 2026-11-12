@@ -293,14 +293,12 @@ async def test_failed_child_cleanup_releases_parent_dependencies() -> None:
     with anyio.fail_after(3):
         await child.finish(wait=False)
         await pause.wait()
-        assert child in root._shutdown_dependencies
-        assert child in opened.session._retiring
+        assert child._lifetime in root._lifetime.children
         release.set()
         with pytest.raises(ExceptionGroup):
             await child.wait()
 
-    assert child not in root._shutdown_dependencies
-    assert child not in opened.session._retiring
+    assert child._lifetime not in root._lifetime.children
     await root.finish()
 
 

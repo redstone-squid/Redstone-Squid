@@ -20,6 +20,7 @@ from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
 from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui_discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
+from squid_ui_discord.lifetime import Lifetime
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions, PauseUpdates, RenewEphemeral
@@ -59,7 +60,7 @@ class Scope[OwnerT = Any]:
     def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT) -> None:
         self._runtime = runtime
         self._owner = owner
-        self._closed = False
+        self._lifetime = Lifetime(scope=self)
 
     @property
     def runtime(self) -> DiscordUIRuntime[discord.Client]:
@@ -74,10 +75,10 @@ class Scope[OwnerT = Any]:
     @property
     def closed(self) -> bool:
         """Whether this scope has ended."""
-        return self._closed
+        return self._lifetime.closed
 
     def _require_live(self) -> None:
-        if self._closed:
+        if self.closed:
             message = "this Discord UI scope is closed"
             raise RuntimeError(message)
 
@@ -291,6 +292,7 @@ class Scope[OwnerT = Any]:
             if parent is None and session_key is None:
                 session_key = session_spec.key(open_context)
         root = self._runtime.mount(content, access=access, **self._root_options(policy, localization))
+        self._runtime._track(self, root)
         if isinstance(content, Screen):
             content._screen_bind(root)
         if session_spec is None:
@@ -352,10 +354,10 @@ class Scope[OwnerT = Any]:
 
     async def close(self, *, reason: CloseReason = CloseReason.SCOPE_CLOSED) -> None:
         """Finish roots and sessions opened by this scope, then unregister it."""
-        if self._closed:
+        if self.closed:
             return
+        self._lifetime.closing = True
         await self._runtime._close_scope(self, reason=reason)
-        self._closed = True
 
 
 __all__ = ["Scope"]

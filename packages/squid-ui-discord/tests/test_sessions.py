@@ -836,3 +836,24 @@ class TestRacesAndCleanup:
 
 async def _note(order: list[str], label: str) -> None:
     order.append(label)
+
+
+async def test_attachment_cannot_acquire_a_second_parent_or_create_a_cycle() -> None:
+    manager = SessionManager()
+    root, child, sibling = a_root(), a_root(), a_root()
+    opened = await manager.open(root, to_message())
+    assert isinstance(opened, Opened)
+    await opened.session.attach(child, to_message())
+    await opened.session.attach(sibling, to_message())
+    destination = AsyncCallRecorder()
+
+    with pytest.raises(ValueError, match="different parent"):
+        await opened.session.attach(child, destination, parent=sibling)
+    with pytest.raises(ValueError, match="cycle"):
+        await opened.session.attach(root, destination, parent=child)
+
+    destination.assert_not_awaited()
+    assert opened.session.parent_of(child) is root
+    assert opened.session.parent_of(sibling) is root
+    await root.finish()
+    assert child.finished and sibling.finished

@@ -102,6 +102,7 @@ from squid_ui_discord.attachments import attachment_assets, files_for
 from squid_ui_discord.classic import render_message as render_classic_message
 from squid_ui_discord.classic_renderer import ClassicRenderer
 from squid_ui_discord.closure import CloseReason
+from squid_ui_discord.lifetime import Lifetime
 from squid_ui_discord.message_payload import MessageMode, MessagePayload
 from squid_ui_discord.message_root_candidates import (
     _ADMITTED,
@@ -530,8 +531,8 @@ class MessageRoot[
         self._close_reason: CloseReason | None = None
         self._shutdown = Shutdown()
         self._finishing_hooks: list[Callable[[AnyMessageRoot], None]] = []
-        self._child_cleanups: dict[object, Callable[[bool], Awaitable[None]]] = {}
-        self._shutdown_dependencies: tuple[AnyMessageRoot, ...] = ()
+        self._lifetime = Lifetime(root=self)
+        self._shutdown.add_done_callback(self._lifetime.detach)
         self._acceptance_errors: list[Exception] = []
         self._hooks = _LifecycleHooks()
         self._candidates = _CandidateLifecycle(
@@ -2827,34 +2828,16 @@ class MessageRoot[
         self._check_shutdown_wait()
         await self._shutdown.wait()
 
-    def _depend_on(self, child: AnyMessageRoot) -> None:
-        """Retain a child's wait dependency until its cleanup and callbacks settle."""
-        if child in self._shutdown_dependencies:
-            return
-        self._shutdown_dependencies = (*self._shutdown_dependencies, child)
-
-        def completed() -> None:
-            self._shutdown_dependencies = tuple(root for root in self._shutdown_dependencies if root is not child)
-
-        child._shutdown.add_done_callback(completed)
-
     def _on_finishing(self, callback: Callable[[AnyMessageRoot], None]) -> None:
         if callback not in self._finishing_hooks:
             self._finishing_hooks.append(callback)
 
-    def _finish_children_with(self, owner: object, cleanup: Callable[[bool], Awaitable[None]]) -> None:
-        """Run each owner's child cleanup once, with screen cleanup before session cleanup.
-
-        Sessions register before screens. Updating a session branch retains its original
-        position, so repeated closure preparation cannot duplicate or reorder that work.
-        """
-        self._child_cleanups[owner] = cleanup
-
     def _check_shutdown_wait(self) -> None:
         self.runtime.check_service_wait()
         self._shutdown.check_wait()
-        for child in self._shutdown_dependencies:
-            child._check_shutdown_wait()
+        for child in self._lifetime.roots():
+            child.runtime.check_service_wait()
+            child._shutdown.check_wait()
 
     async def dismiss(self, *, wait: bool = True, reason: CloseReason = CloseReason.CLOSED) -> None:
         """Delete the message and finish its owned work, optionally awaiting completion."""
@@ -2931,12 +2914,10 @@ class MessageRoot[
         errors = self._acceptance_errors
         try:
             with self._candidates.attempt(candidate) if candidate is not None else nullcontext():
-                cleanups, self._child_cleanups = self._child_cleanups, {}
-                for cleanup in reversed(cleanups.values()):
-                    try:
-                        await cleanup(disable)
-                    except Exception as error:
-                        errors.append(error)
+                try:
+                    await self._lifetime.close_children(reason=CloseReason.PARENT_CLOSED, disable=disable)
+                except Exception as error:
+                    errors.append(error)
                 async with self._render_lock:
                     try:
                         if delete:

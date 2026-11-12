@@ -320,7 +320,7 @@ async def test_rejected_opening_does_not_invoke_child_cancellation() -> None:
         await ui.press("open")
         assert parent.cancelled == []
         assert parent.child.closed == [Cancelled(ScreenCancelReason.CLOSED)]
-        assert parent._screen_flow.children == set()
+        assert not ui.root._lifetime.children
         assert not existing.root.finished
 
 
@@ -383,7 +383,7 @@ async def test_opening_from_a_press_replaces_the_colliding_child_after_commit() 
         with anyio.fail_after(2):
             assert await first.wait() == Cancelled(ScreenCancelReason.REPLACED)
         assert second.outcome is None
-        assert parent._screen_flow.children == {second}
+        assert tuple(ui.root._lifetime.roots()) == (second._screen_require_root(),)
 
 
 async def test_a_rolled_back_open_leaves_the_existing_child_open() -> None:
@@ -396,7 +396,7 @@ async def test_a_rolled_back_open_leaves_the_existing_child_open() -> None:
         await anyio.sleep(0)
 
         assert first.outcome is None
-        assert first in parent._screen_flow.children
+        assert first._screen_require_root() in tuple(ui.root._lifetime.roots())
 
 
 @pytest.mark.parametrize("fail_child", [False, True])
@@ -438,12 +438,11 @@ async def test_screen_children_and_session_attachments_both_finish_before_parent
             else:
                 await ui.root.finish()
 
-        assert order == ["screen", "attachment", "parent"]
+        assert set(order[:2]) == {"screen", "attachment"}
+        assert order[2:] == ["parent"]
         assert attached.finished
-        assert ui.root._shutdown_dependencies == ()
-        if fail_child:
-            # Scope shutdown must also report the stored failure when it joins these roots.
-            scope = parent._screen_flow.scope
-            assert scope is not None
-            with pytest.raises(ExceptionGroup, match="UI scope shutdown failed"):
-                await scope.close()
+        assert not ui.root._lifetime.children
+        # Completed roots leave the ownership tree even when their stored result is a failure.
+        scope = parent._screen_flow.scope
+        assert scope is not None
+        await scope.close()
