@@ -76,9 +76,6 @@ class CheckboxGroupField[ValueT, RequiredT: (Literal[True], Literal[False]) = Li
     capability: ClassVar[str] = Capability.FORMS_DISCORD_CHECKBOX_GROUP
 
     def __post_init__(self) -> None:
-        if not 1 <= len(self.options) <= 10:
-            message = "CheckboxGroupField needs 1-10 options"
-            raise ValueError(message)
         self._portable_field()
 
     @override

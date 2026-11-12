@@ -200,7 +200,12 @@ class _Planner:
                         for point in field.points
                     ),
                 )
-            return TextControl(default=selected, placeholder=f"{field.minimum}\N{EN DASH}{field.maximum}")
+            return TextControl(
+                default=self.optional_text(selected, limits.text_input_value, f"{path} default"),
+                placeholder=self.text(
+                    f"{field.minimum}\N{EN DASH}{field.maximum}", limits.text_input_placeholder, f"{path} placeholder"
+                ),
+            )
         if isinstance(field, ChoiceField | MultiChoiceField | CheckboxGroupField):
             multiple = not isinstance(field, ChoiceField)
             if isinstance(field, CheckboxGroupField):
@@ -281,22 +286,14 @@ def plan_form(
     are never repaired, because submissions must still match the original schema.
     """
     adapted = spec.adapt(FORM_CAPABILITIES, maximum_fields=limits.modal_components)
-    if not adapted.items:
-        msg = f"form has 0 components; target permits 1-{limits.modal_components}"
-        raise LayoutInvariantError(msg)
     planner = _Planner(localization, limits)
     title = planner.text(adapted.title, limits.modal_title, "modal title")
     items: list[FieldPlan | StaticTextPlan] = []
-    keys: set[str] = set()
     for field in adapted.items:
         if isinstance(field, FormText):
             items.append(StaticTextPlan(planner.text(field.content, limits.modal_text, "modal text display")))
             continue
         planner.identifier(field.key, limits.custom_id, f"form field {field.key!r} key")
-        if field.key in keys:
-            msg = f"duplicate form field key {field.key!r}"
-            raise LayoutInvariantError(msg)
-        keys.add(field.key)
         description = field.description
         if description is None and isinstance(field, ZonedDateTimeField):
             description = field.timezone

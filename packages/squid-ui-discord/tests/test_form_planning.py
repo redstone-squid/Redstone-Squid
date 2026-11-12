@@ -10,13 +10,14 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, LimitViolationError
-from squid_ui.forms import ChoiceField, ChoiceOption, FormSpec, TextField
+from squid_ui.forms import ChoiceField, ChoiceOption, FormSpec, ScaleField, TextField
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.limits import COMPONENT_LIMITS
 from squid_ui.planning.planner import plan
 from squid_ui.planning.target import AnyTarget
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.actions import ActionResponder
+from squid_ui_discord.form_fields import CheckboxGroupField
 from squid_ui_discord.form_planning import ChoiceControl, DiscordFormPlan, FieldPlan, TextControl, plan_form
 from squid_ui_discord.modal import render_form_modal
 from squid_ui_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
@@ -195,3 +196,25 @@ def test_declared_form_respects_target_text_limits_and_strict_mode() -> None:
     assert prepared.title == "Long…"
     with pytest.raises(LimitViolationError):
         plan(document, target=target, strict=True)
+
+
+def test_scale_text_fallback_is_conformed_before_rendering() -> None:
+    spec = FormSpec("Score", (ScaleField(key="score", label="Score", minimum=0, maximum=100, default=42),))
+    limits = replace(COMPONENT_LIMITS, text_input_placeholder=3, text_input_value=1)
+    prepared = plan_form(spec, limits=limits)
+    field = prepared.items[0]
+    assert isinstance(field, FieldPlan)
+    assert isinstance(field.control, TextControl)
+    assert field.control.placeholder == "0\N{EN DASH}…"
+    assert field.control.default == "…"
+    with pytest.raises(LimitViolationError):
+        plan_form(spec, limits=limits, strict=True)
+
+
+def test_native_checkbox_option_limit_belongs_to_planning() -> None:
+    field = CheckboxGroupField(
+        key="checks", label="Checks", options=tuple(ChoiceOption(str(index), str(index), index) for index in range(11))
+    )
+    assert field.parse(["10"]) == (10,)
+    with pytest.raises(LayoutInvariantError, match="1-10"):
+        plan_form(FormSpec("Checks", (field,)))
