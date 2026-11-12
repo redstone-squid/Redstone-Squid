@@ -102,3 +102,41 @@ async def test_the_overview_hook_receives_the_loaded_window() -> None:
     assert nodes
     assert seen == [loaded]
     assert "Warning" in engine.texts(nodes)
+
+
+def _paged_browser(
+    source: sl.sources.WindowSource[Entry], chronology: sl.sources.Chronology | None = None
+) -> sp.Browser[Entry]:
+    return sp.Browser(
+        source,
+        identity=lambda item: item.key,
+        label=lambda item: item.label,
+        detail=lambda item: item.label,
+        page_size=2,
+        chronology=chronology,
+    )
+
+
+async def test_paging_says_previous_and_next_unless_the_list_is_sorted_by_time() -> None:
+    source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
+    plain = _paged_browser(source)
+    plain.window.replace(loaded)
+    newest_first = _paged_browser(source, sl.sources.Chronology.NEWEST_FIRST)
+    newest_first.window.replace(loaded)
+
+    assert "Next" in engine.labels(engine.render_tree(plain))
+    assert not {"Older", "Newer"} & set(engine.labels(engine.render_tree(plain)))
+    # The next page of a newest-first list holds older items.
+    assert "Older" in engine.labels(engine.render_tree(newest_first))
+
+
+async def test_stepping_between_items_follows_the_list_order_in_time() -> None:
+    source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B")))
+    browser = _paged_browser(source, sl.sources.Chronology.OLDEST_FIRST)
+    browser.window.replace(loaded)
+
+    await engine.choose(browser, "browser.open", "a")
+    tree = engine.render_tree(browser)
+
+    assert engine.labels(engine.find(tree, sl.semantic.ActionControl, key="browser.item-previous")) == ["Older"]
+    assert engine.labels(engine.find(tree, sl.semantic.ActionControl, key="browser.item-next")) == ["Newer"]

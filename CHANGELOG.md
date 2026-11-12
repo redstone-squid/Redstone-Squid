@@ -65,6 +65,11 @@ Action layout, still pre-release:
   separate row after the actions. When actions fold into a picker, toggles, forms, links, and
   routed controls stay buttons.
 - `DiscordPreviewRenderer` draws entity selects with their placeholder and current values.
+- Source-backed widgets (`Browser`, `SourceRankedList`) label paging Previous and Next.
+  They said Older and Newer whatever the list's order, so a newest-first list pointed the
+  wrong way and a ranking or alphabetical list was labelled by time. `Browser` takes a
+  `chronology` (`sl.sources.Chronology`) for lists sorted by time; it labels both paging and
+  stepping between opened items.
 
 Late pre-release hardening, after the version was first aligned:
 

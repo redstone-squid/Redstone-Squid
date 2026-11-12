@@ -32,6 +32,7 @@ from squid_ui.runtime.component import Component
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
     ORIGIN,
+    Chronology,
     LoadedWindow,
     Position,
     WindowLoader,
@@ -48,6 +49,7 @@ from squid_ui_widgets._window import (
     last_ready,
     load_window,
     source_navigation_state,
+    step_labels,
 )
 
 type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = Callable[
@@ -67,6 +69,9 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
     The previous page remains usable during loading or failure. detail is called once
     per open; refreshing the source does not rebuild an already open detail. A detail
     component must manage any refresh of its own data.
+
+    Paging and stepping between opened items say Previous and Next. Pass `chronology` for a
+    list sorted by time to label them Newer and Older instead.
     """
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
@@ -89,6 +94,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         title: TextLike | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
+        chronology: Chronology | None = None,
     ) -> None:
         self.key = require_key(key, name="Browser.key")
         if page_size < 1 or page_size > 25:
@@ -106,6 +112,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         self.title = title
         self.empty = normalize_content(empty, name="Browser.empty")
         self.copy = copy
+        self.chronology = chronology
         self.loader = WindowLoader(source, page_size, identity, initial=ORIGIN)
 
     @resource
@@ -292,6 +299,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             key=self.key,
             page_size=self.page_size,
             chrome=chrome,
+            chronology=self.chronology,
         )
         if state is None:
             return ()
@@ -321,6 +329,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         detail_value = self._detail_value
         assert detail_value is not None
         detail = normalize_content(detail_value, name="Browser.detail")
+        previous_label, next_label = step_labels(chrome, self.chronology)
         entry_actions = tuple(self.entry_actions(item)) if self.entry_actions is not None else ()
         return stack(
             heading(self.title) if self.title is not None else None,
@@ -329,10 +338,10 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             action_controls(
                 action_control(chrome.back, self._back, key=f"{self.key}.back"),
                 action_control(
-                    chrome.previous, self._previous_item, key=f"{self.key}.item-previous", available=index > 0
+                    previous_label, self._previous_item, key=f"{self.key}.item-previous", available=index > 0
                 ),
                 action_control(
-                    chrome.next,
+                    next_label,
                     self._next_item,
                     key=f"{self.key}.item-next",
                     available=index < len(items) - 1,

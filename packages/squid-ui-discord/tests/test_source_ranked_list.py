@@ -131,7 +131,8 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     await message_root.send(delivered_to(message_harness()))
 
     assert message_root._candidates.view is not None
-    assert _labels(message_root._candidates.view) == ["Newer"]
+    # A ranking is not ordered by time, so the step is "Next", not "Newer".
+    assert _labels(message_root._candidates.view) == ["Next"]
     interaction = interaction_harness()
     await message_root.dispatch("stream.next", interaction)
 

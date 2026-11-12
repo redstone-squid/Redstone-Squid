@@ -82,6 +82,24 @@ class PositionResolver:
 POSITION_RESOLVER = PositionResolver()
 
 
+class Chronology(StrEnum):
+    """Which end of time a list starts from.
+
+    Widgets use it to label paging by time. Declare it only for lists sorted by time: the
+    labels then name where each step leads, such as "Older" for the next page of a list that
+    starts with the newest items. Without it, widgets say "Previous" and "Next".
+    """
+
+    NEWEST_FIRST = "newest_first"
+    OLDEST_FIRST = "oldest_first"
+
+    def step_labels(self, chrome: Chrome) -> tuple[TextLike, TextLike]:
+        """The labels for moving toward the start and toward the end of the list."""
+        if self is Chronology.NEWEST_FIRST:
+            return chrome.newer, chrome.older
+        return chrome.older, chrome.newer
+
+
 class CountPrecision(StrEnum):
     """Accuracy of the total a source returns with each window."""
 
@@ -323,6 +341,7 @@ def window_footer[ItemT](
 __all__ = [
     "ORIGIN",
     "POSITION_RESOLVER",
+    "Chronology",
     "CountPrecision",
     "Direction",
     "LoadedWindow",
