@@ -248,12 +248,11 @@ def _metadata_label(kind: str) -> sl.TextLike:
 
 def _result_description(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
-        base_title = hit.base_title
         build_title = hit.build_title
-        return tr(t"bot-submission-search-view-record = Record · {base_title} · {build_title}")
+        return f"**{escape_markdown(hit.title)}** — {escape_markdown(build_title)}"
     if isinstance(hit, BuildSearchHit):
         status = hit.status
-        return tr(t"bot-submission-search-view-build = Build · {status}")
+        return f"**{escape_markdown(hit.title)}** · {status}"
     return _metadata_label(hit.metadata_kind)
 
 

@@ -186,19 +186,33 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
     )
     @app_commands.rename(build_id=to_locale_str(tr(t"command-build-browse-build-id-name = id")))
     @app_commands.describe(
-        build_id=to_locale_str(tr(t"bot-submission-search-open-this-build-directly = Open this build directly."))
+        build_id=to_locale_str(tr(t"bot-submission-search-open-this-build-directly = Open this build directly.")),
+        query=to_locale_str(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
     )
-    async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
+    async def browse_builds(
+        self, request: sd.Request[Self], build_id: int | None = None, query: str | None = None
+    ) -> BuildBrowseScreen:
         """Browse builds and record holders."""
-        return await self._catalogue(request, build_id=build_id)
+        screen = await self._catalogue(request, build_id=build_id)
+        if query is not None:
+            await screen._run_search(query, "")
+        return screen
 
     @sd.command(
         name=to_locale_str(tr(t"command-records-name = records")),
         description=to_locale_str(tr(t"command-records-browse-help = Browse records and their holder builds")),
     )
-    async def records_workspace(self, request: sd.Request[Self]) -> BuildBrowseScreen:
+    @app_commands.describe(
+        query=to_locale_str(
+            tr(t"record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.")
+        ),
+    )
+    async def records_workspace(self, request: sd.Request[Self], query: str | None = None) -> BuildBrowseScreen:
         """Open the shared catalogue at its record standings."""
-        return await self._catalogue(request, initial_records=True)
+        screen = await self._catalogue(request, initial_records=True)
+        if query is not None:
+            await screen._run_search(query, "")
+        return screen
 
     async def _catalogue(
         self,
@@ -256,6 +270,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             authorize=authorize,
             refresh_posts=refresh_posts,
             records=self.bot.services.records,
+            search=self.search,
             record_tools=record_tools,
             initial_records=initial_records,
         )

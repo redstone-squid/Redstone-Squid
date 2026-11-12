@@ -408,14 +408,20 @@ def _to_hit(document: SearchDocument, score: float | None) -> SearchHit:
     data = document.document_data
     tags = tuple(document.tags)
     if document.resource_kind == "record":
-        metrics = data.get("metrics", {})
+        metrics = data.get("metrics", data.get("metric", {}))
+        holder_ids = data.get("holder_build_ids", ())
+        build_id = _integer(data, "build_id")
+        if not build_id and isinstance(holder_ids, list | tuple) and holder_ids:
+            first_holder = holder_ids[0]
+            if isinstance(first_holder, int) and not isinstance(first_holder, bool):
+                build_id = first_holder
         if not isinstance(metrics, dict):
             metrics = {}
         return RecordSearchHit(
             source_id=document.source_key,
             title=document.title,
             subtitle=document.subtitle,
-            build_id=_integer(data, "build_id"),
+            build_id=build_id,
             build_title=_string(data, "build_title", document.title),
             base_title=_string(data, "base_title", "unknown"),
             version_scope=_string(data, "version_scope", "all-time"),

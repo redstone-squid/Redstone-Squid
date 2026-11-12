@@ -1241,22 +1241,22 @@ bot-starboard-screen-up = Up
 # squid/bot/starboard/screen.py:398
 bot-starboard-screen-value = Value
 
-# squid/bot/submission/build_browse.py:235
+# squid/bot/submission/build_browse.py:238
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/submission/build_browse.py:264
+# squid/bot/submission/build_browse.py:267
 bot-submission-build-browse-build = { $action } build #{ $build_id_text }?
 
-# squid/bot/submission/build_browse.py:402
+# squid/bot/submission/build_browse.py:411
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:563
+# squid/bot/submission/build_browse.py:633
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/submission/build_browse.py:281
+# squid/bot/submission/build_browse.py:284
 bot-submission-build-browse-cancel = Cancel
 
-# squid/bot/submission/build_browse.py:280
+# squid/bot/submission/build_browse.py:283
 bot-submission-build-browse-confirm = Confirm
 
 # squid/bot/submission/schematic_tools.py:313
@@ -1265,43 +1265,37 @@ bot-submission-build-browse-conversion-report = Conversion report: { $loss_summa
 # squid/bot/submission/schematic_tools.py:100, squid/bot/submission/schematic_tools.py:356
 bot-submission-build-browse-convert-schematic = Convert schematic
 
-# squid/bot/submission/build_browse.py:253
+# squid/bot/submission/build_browse.py:256
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:570
-bot-submission-build-browse-description-or-title = Description or title
-
-# squid/bot/submission/build_browse.py:208, squid/bot/submission/schematic_tools.py:72
+# squid/bot/submission/build_browse.py:211, squid/bot/submission/schematic_tools.py:72
 bot-submission-build-browse-download-result = Download result
 
 # squid/bot/submission/schematic_tools.py:90
 bot-submission-build-browse-download-schematic = Download schematic
 
-# squid/bot/submission/build_browse.py:227
+# squid/bot/submission/build_browse.py:230
 bot-submission-build-browse-edit = Edit
-
-# squid/bot/submission/build_browse.py:567
-bot-submission-build-browse-find-build = Find build
 
 # squid/bot/submission/schematic_tools.py:380
 bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 
-# squid/bot/submission/build_browse.py:178
+# squid/bot/submission/build_browse.py:181
 bot-submission-build-browse-loading-build = Loading build.
 
 # squid/bot/submission/schematic_tools.py:121
 bot-submission-build-browse-measure-timing = Measure timing
 
-# squid/bot/submission/build_browse.py:561
+# squid/bot/submission/build_browse.py:631
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:490
+# squid/bot/submission/build_browse.py:530
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/submission/schematic_tools.py:359
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/submission/build_browse.py:244
+# squid/bot/submission/build_browse.py:247
 bot-submission-build-browse-reject = Reject
 
 # squid/bot/submission/schematic_tools.py:95
@@ -1309,9 +1303,6 @@ bot-submission-build-browse-render-schematic = Render schematic
 
 # squid/bot/submission/schematic_tools.py:85
 bot-submission-build-browse-schematic-info = Schematic info
-
-# squid/bot/submission/build_browse.py:496
-bot-submission-build-browse-search-by-meaning = Search by meaning
 
 # squid/bot/submission/consent_banner.py:70
 bot-submission-consent-banner-consent-recorded = Consent recorded
@@ -1415,10 +1406,7 @@ bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt
 # squid/bot/submission/commands.py:189
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/submission/search_view.py:256
-bot-submission-search-view-build = Build · { $status }
-
-# squid/bot/submission/search_view.py:267
+# squid/bot/submission/search_view.py:266
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id_text })
@@ -1428,12 +1416,12 @@ bot-submission-search-view-build-base-title =
 # squid/bot/submission/search_view.py:240
 bot-submission-search-view-creator = Creator
 
-# squid/bot/submission/search_view.py:298
+# squid/bot/submission/search_view.py:297
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/submission/search_view.py:279
+# squid/bot/submission/search_view.py:278
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
@@ -1441,9 +1429,6 @@ bot-submission-search-view-metrics =
 
 # squid/bot/submission/search_view.py:236
 bot-submission-search-view-pattern = Pattern
-
-# squid/bot/submission/search_view.py:253
-bot-submission-search-view-record = Record · { $base_title } · { $build_title }
 
 # squid/bot/submission/search_view.py:234
 bot-submission-search-view-restriction = Restriction
@@ -1457,7 +1442,7 @@ bot-submission-search-view-search-results = Search results
 # squid/bot/submission/search_view.py:238
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/submission/search_view.py:289
+# squid/bot/submission/search_view.py:288
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
@@ -1465,13 +1450,13 @@ bot-submission-search-view-status =
 # squid/bot/submission/search_view.py:244
 bot-submission-search-view-tag = Tag
 
-# squid/bot/submission/search_view.py:306
+# squid/bot/submission/search_view.py:305
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/submission/search_view.py:312
+# squid/bot/submission/search_view.py:311
 bot-submission-search-view-value =
     { $description }
     { $fields }
@@ -1929,26 +1914,41 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:64
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/submission/build_browse.py:436
+# squid/bot/submission/build_browse.py:472
 build-browse-all-builds = Builds
 
-# squid/bot/submission/build_browse.py:484
+# squid/bot/submission/build_browse.py:524
 build-browse-end = No more builds in this direction.
 
-# squid/bot/submission/build_browse.py:422
+# squid/bot/submission/build_browse.py:431
 build-browse-list = List view
 
-# squid/bot/submission/build_browse.py:420
+# squid/bot/submission/build_browse.py:429
 build-browse-newer = Newer
 
-# squid/bot/submission/build_browse.py:421
+# squid/bot/submission/build_browse.py:430
 build-browse-older = Older
 
-# squid/bot/submission/build_browse.py:446
+# squid/bot/submission/build_browse.py:482
 build-browse-record-tools = Record tools
 
-# squid/bot/submission/build_browse.py:440
+# squid/bot/submission/build_browse.py:476
 build-browse-records = Records
+
+# squid/bot/submission/build_browse.py:643
+build-browser-filter-help = Examples: title:door, creator:Steve, width:5, kind:door, base_title:smallest
+
+# squid/bot/submission/build_browse.py:536, squid/bot/submission/build_browse.py:637
+build-browser-search-filters = Search & filters
+
+# squid/bot/submission/build_browse.py:640
+build-browser-search-query = Name, keywords, or filters
+
+# squid/bot/submission/build_browse.py:648
+build-browser-search-sort = Sort (optional)
+
+# squid/bot/submission/build_browse.py:651
+build-browser-sort-help = Examples: width, -width, -created_at. Leave blank for relevance.
 
 # squid/bot/submission/submit.py:326
 build-drafts-detected = **Builds found in your build-log posts**
@@ -2075,7 +2075,7 @@ build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
 
-# squid/bot/submission/build_browse.py:461, squid/bot/submission/build_browse.py:539
+# squid/bot/submission/build_browse.py:501, squid/bot/submission/build_browse.py:579
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:32
@@ -2093,7 +2093,7 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/submission/build_browse.py:403
+# squid/bot/submission/build_browse.py:412
 build-list-empty = No builds are available.
 
 # squid/bot/submission/schematic_tools.py:367
@@ -2102,19 +2102,19 @@ build-minecraft-data-version-label = Minecraft data version
 # squid/bot/submission/schematic_tools.py:370
 build-minecraft-version-label = Minecraft version name
 
-# squid/bot/submission/build_browse.py:326
+# squid/bot/submission/build_browse.py:329
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:340, squid/bot/submission/schematic_tools.py:350
+# squid/bot/submission/build_browse.py:343, squid/bot/submission/schematic_tools.py:350
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/submission/build_browse.py:262
+# squid/bot/submission/build_browse.py:265
 build-review-confirmation-title = Confirm review decision
 
-# squid/bot/submission/build_browse.py:305, squid/bot/submission/build_browse.py:307
+# squid/bot/submission/build_browse.py:308, squid/bot/submission/build_browse.py:310
 build-review-state-updated = Build review state updated.
 
-# squid/bot/submission/build_browse.py:278
+# squid/bot/submission/build_browse.py:281
 build-review-state-warning = This changes the build's review state.
 
 # squid/bot/submission/schematic_tools.py:146
@@ -2126,10 +2126,10 @@ build-schematic-not-public = This schematic is not publicly available.
 # squid/bot/submission/schematic_tools.py:377
 build-schematic-timing-action = Measure schematic timing
 
-# squid/bot/submission/build_browse.py:194
+# squid/bot/submission/build_browse.py:197
 build-schematic-tools-hide = Hide schematic tools
 
-# squid/bot/submission/build_browse.py:196
+# squid/bot/submission/build_browse.py:199
 build-schematic-tools-show = Schematic tools
 
 # squid/bot/submission/search_view.py:123, squid/bot/submission/search_view.py:127
@@ -2147,10 +2147,7 @@ build-search-matching-mode-help = Use keyword matching or smart meaning-based ma
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/build_browse.py:545
-build-search-no-visible-match = No visible build matches that search.
-
-# squid/bot/submission/commands.py:134
+# squid/bot/submission/commands.py:134, squid/bot/submission/commands.py:190
 build-search-query-help = Search text and filters, e.g. `width:5`.
 
 # squid/bot/submission/commands.py:141
@@ -2504,10 +2501,10 @@ command-poll-name = poll
 # squid/bot/submission/submit.py:387
 command-recalculate-build-name = Scan Build Message
 
-# squid/bot/submission/commands.py:197
+# squid/bot/submission/commands.py:203
 command-records-browse-help = Browse records and their holder builds
 
-# squid/bot/submission/commands.py:196
+# squid/bot/submission/commands.py:202
 command-records-name = records
 
 # squid/bot/recount.py:55
@@ -4278,19 +4275,40 @@ recalculation-reviewed = Build #{ $build_id }, reviewed revision { $revision }.
 # squid/bot/submission/ui/recalculation.py:61
 recalculation-target = Build #{ $target }
 
-# squid/bot/submission/record_browser.py:78
+# squid/bot/submission/record_browser.py:80
 record-browse-empty = No published records are available.
 
-# squid/bot/submission/record_browser.py:66
+# squid/bot/submission/record_browser.py:68
 record-browse-no-holders = No confirmed holders yet.
 
-# squid/bot/submission/record_browser.py:57
+# squid/bot/submission/record_browser.py:59
 record-browse-open-holder = Open build #{ $build_id_text }
 
-# squid/bot/submission/record_browser.py:77
+# squid/bot/submission/record_browser.py:79
 record-browse-title = Records
 
-# squid/records/application/services.py:582, squid/records/application/services.py:611
+# squid/bot/submission/build_browse.py:460
+record-browser-all = All standings
+
+# squid/bot/submission/build_browse.py:454
+record-browser-fastest = Fastest
+
+# squid/bot/submission/build_browse.py:457
+record-browser-first = First
+
+# squid/bot/submission/build_browse.py:445
+record-browser-guide = Choose a record type, or search by name and filters.
+
+# squid/bot/submission/build_browse.py:444
+record-browser-home = Find a record
+
+# squid/bot/submission/build_browse.py:449
+record-browser-smallest = Smallest
+
+# squid/bot/submission/commands.py:207
+record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
+
+# squid/records/application/services.py:584, squid/records/application/services.py:613
 records-candidate-no-typed = Candidate { $build_id_text } has no typed category facts.
 
 # squid/records/errors.py:29, squid/records/errors.py:45
@@ -4302,13 +4320,13 @@ records-diagnostics-loading = Loading record diagnostics.
 # squid/records/errors.py:15
 records-errors-record-not-found = Record not found.
 
-# squid/records/application/services.py:622
+# squid/records/application/services.py:624
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/records/domain/models.py:115
 records-fixed-volume-positive = Fixed volume must be positive.
 
-# squid/records/application/services.py:557
+# squid/records/application/services.py:559
 records-invalid-boolean-category = Invalid boolean category value { $value_text }.
 
 # squid/records/domain/categories.py:50
@@ -4329,7 +4347,7 @@ records-no-unresolved-categories = No unresolved active record categories.
 # squid/bot/submission/records.py:252
 records-operation-permission-denied = You are no longer allowed to perform this records operation.
 
-# squid/records/application/services.py:545
+# squid/records/application/services.py:547
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/submission/records.py:242
@@ -4338,19 +4356,19 @@ records-rebuild-summary = Rebuilt { $definitions } definitions; { $resolved } re
 # squid/bot/submission/records.py:224
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/records/application/services.py:365
+# squid/records/application/services.py:367
 records-record-category-category = Record category { $definition_id_text } is a { $actual } category, not { $requested }.
 
 # squid/records/errors.py:28
 records-record-category-not-found = Record category not found.
 
-# squid/records/infrastructure/repository.py:504
+# squid/records/infrastructure/repository.py:511
 records-record-definition-stores = Record definition { $definition_id_text } stores a category key that does not parse.
 
 # squid/records/errors.py:16
 records-record-not-found-title = Record not found
 
-# squid/records/application/services.py:638
+# squid/records/application/services.py:640
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/submission/records.py:208

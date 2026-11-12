@@ -27,7 +27,9 @@ class RecordSource:
         self._records = records
 
     async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[PublishedTitle]:
-        page = await self._records.list_page(selector=PageSelector(offset=position.offset), page_size=extent)
+        page = await self._records.list_page(
+            selector=PageSelector(offset=position.offset), page_size=extent, resolved_only=True
+        )
         return sl.sources.Window(
             sl.sources.Position(str(page.items[0].id) if page.items else None, position.offset),
             page.items,
@@ -50,7 +52,7 @@ def record_browser(
         return sl.section(
             sl.heading(escape_markdown(record.title)),
             record.subtitle and sl.paragraph(escape_markdown(record.subtitle)),
-            sl.note(f"{record.build_kind.value} · {record.version_scope} · {record.status.value}"),
+            sl.note(f"{record.build_kind.value} · {record.version_scope.replace('_', ' ')}"),
             sl.action_controls(
                 *(
                     sl.action_control(
@@ -71,7 +73,7 @@ def record_browser(
         key="records",
         identity=lambda record: str(record.id),
         label=lambda record: record.title,
-        summary=lambda record: f"**{escape_markdown(record.title)}** — {record.version_scope} · {record.status.value}",
+        summary=lambda record: f"**{escape_markdown(record.title)}** — {record.version_scope.replace('_', ' ')}",
         detail=detail,
         page_size=8,
         title=tr(t"record-browse-title = Records"),

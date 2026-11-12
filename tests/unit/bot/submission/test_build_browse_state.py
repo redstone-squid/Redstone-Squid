@@ -22,6 +22,8 @@ from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle, RecordGap
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.schematics.application import SchematicService
+from squid.search.application import SearchService
+from squid.search.domain import SearchMode, SearchPage, SearchScope
 from squid_reactivity import LocalTopicBus
 from squid_ui.testing import press_event, submit_event
 from squid_ui_discord.testing import stage
@@ -41,6 +43,8 @@ def _screen(
     queries.get.return_value = build
     queries.semantic.return_value = build
     queries.list_page.return_value = Page(items=(build,), total=1, next=None, prev=None)
+    search = AsyncMock(spec=SearchService)
+    search.search.return_value = SearchPage(hits=(), total=0, next=None, prev=None)
     schematics = Mock(spec=SchematicService, available=schematics_available, videos=None)
 
     async def render_build(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
@@ -73,6 +77,7 @@ def _screen(
         authorize=authorize,
         refresh_posts=refresh_posts,
         records=records,
+        search=search,
         record_tools=record_tools,
         initial_records=initial_records,
     )
@@ -110,11 +115,11 @@ async def test_find_build_actions_can_select_inside_a_transaction(search: bool) 
 
     with sl.runtime.transaction():
         if search:
-            await screen._search(submit_event({"query": "door"}))
+            await screen._search(submit_event({"query": "door", "sort": None}))
         else:
             await screen._open_id(submit_event({"id": 7}))
 
-    assert screen._selected is not None
+    assert screen._results is not None if search else screen._selected is not None
 
 
 @pytest.mark.parametrize("action", ["approve", "reject"])
@@ -226,11 +231,14 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
     )
     async with stage(_screen(initial_id=None, records=records, initial_records=True), owner=object()) as ui:
         ui.assert_within_limits()
+        assert "## Find a record" in ui.texts()
+        await ui.press(ui.key_for("all-standings"))
         await ui.select(ui.key_for("records.open"), ["10"])
         await ui.press(ui.key_for("holder-7"))
         assert "Build #7" in ui.texts()
         await ui.press(ui.key_for("back"))
         assert "## Smallest 2x2 door" in ui.texts()
+        assert not any("resolved" in text or "no_candidate" in text for text in ui.texts())
         ui.control(ui.key_for("holder-9"))
         await ui.press(ui.key_for("all-builds"))
         assert "## Build catalogue" in ui.texts()
@@ -283,3 +291,31 @@ async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
         await ui.select(ui.key_for("evidence-gaps.open"), ["1"])
         assert any("width" in text for text in ui.texts())
         ui.assert_within_limits()
+
+
+@pytest.mark.parametrize("records", [False, True])
+async def test_keyword_search_and_filters_from_the_catalogue_modal(records: bool) -> None:
+    screen = _screen(initial_id=None)
+    if records:
+        screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("catalogue-search"))
+        await form.submit({"query": "door kind:door", "sort": "-created_at"})
+        request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
+        assert request.mode is SearchMode.LEXICAL
+        assert request.scope is (SearchScope.RECORDS if records else SearchScope.BUILDS)
+        assert request.query == ("status:resolved AND (door kind:door)" if records else "door kind:door")
+        assert "## Search results" in ui.texts()
+        assert not any("Search by meaning" in text for text in ui.texts())
+        ui.assert_within_limits()
+
+
+async def test_record_category_shortcut_requests_only_populated_standings() -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("smallest"))
+        request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
+        assert request.query == "status:resolved AND (base_title:smallest)"
+        assert request.scope is SearchScope.RECORDS
+        assert "## Search results" in ui.texts()

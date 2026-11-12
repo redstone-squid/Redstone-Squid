@@ -18,6 +18,7 @@ from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.submission.record_browser import record_browser
 from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.schematic_tools import SchematicTools
+from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr
 from squid.builds.application import BuildQueryService, BuildService
@@ -36,6 +37,8 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.records.application import RecordService
 from squid.schematics.application import SchematicService
+from squid.search.application import SearchService
+from squid.search.domain import SearchRequest, SearchScope, SearchSort
 from squid_reactivity import TopicBus, TopicHandle
 from squid_ui.sources import window_fingerprint
 
@@ -347,6 +350,10 @@ class BuildBrowseScreen(sd.Screen):
 
     policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
 
+    _results: SearchScreen | None = sl.state(None, opaque=True)
+    _show_standings: bool = sl.state(default=False)
+    _query: str = sl.state("")
+    _sort: str = sl.state("")
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")
     _selected: _BuildDetail | None = sl.state(None, opaque=True)
 
@@ -368,7 +375,9 @@ class BuildBrowseScreen(sd.Screen):
         records: RecordService | None = None,
         record_tools: RecordsScreen | None = None,
         initial_records: bool = False,
+        search: SearchService | None = None,
     ) -> None:
+        self._search_service = search
         self._mode = "records" if initial_records and records is not None else "builds"
         self._records = record_browser(records, self._open_holder) if records is not None else None
         self._record_tools = record_tools
@@ -427,6 +436,33 @@ class BuildBrowseScreen(sd.Screen):
             )
         if self._mode == "tools" and self._record_tools is not None:
             return (self._workspace_controls(), self._record_tools)
+        if self._results is not None:
+            return (self._workspace_controls(), *self._find_nodes(), sl.note(self._query), self._results)
+        if self._mode == "records" and not self._show_standings:
+            return (
+                self._workspace_controls(),
+                sl.heading(tr(t"record-browser-home = Find a record")),
+                sl.paragraph(tr(t"record-browser-guide = Choose a record type, or search by name and filters.")),
+                *self._find_nodes(),
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"record-browser-smallest = Smallest"),
+                        partial(self._record_search, "smallest"),
+                        key="smallest",
+                    ),
+                    sl.action_control(
+                        tr(t"record-browser-fastest = Fastest"), partial(self._record_search, "fastest"), key="fastest"
+                    ),
+                    sl.action_control(
+                        tr(t"record-browser-first = First"), partial(self._record_search, "first"), key="first"
+                    ),
+                    sl.action_control(
+                        tr(t"record-browser-all = All standings"), self._all_standings, key="all-standings"
+                    ),
+                    key="record-categories",
+                    display=sl.semantic.ControlDisplay.INDIVIDUAL,
+                ),
+            )
         listing = self._records if self._mode == "records" and self._records is not None else self._browser
         return (self._workspace_controls(), *self._find_nodes(), listing)
 
@@ -452,6 +488,10 @@ class BuildBrowseScreen(sd.Screen):
         )
 
     async def _switch(self, mode: Literal["builds", "records", "tools"], _event: sl.PressEvent) -> None:
+        self._results = None
+        self._query = ""
+        self._sort = ""
+        self._show_standings = False
         self._mode = mode
         self._selected = None
         await self._browser._back(_event)
@@ -493,9 +533,9 @@ class BuildBrowseScreen(sd.Screen):
                     on_submit=self._open_id,
                 ),
                 sl.form(
-                    tr(t"bot-submission-build-browse-search-by-meaning = Search by meaning"),
-                    _SearchForm().spec(),
-                    key="semantic-search",
+                    tr(t"build-browser-search-filters = Search & filters"),
+                    _SearchForm(query=self._query, sort=self._sort).spec(),
+                    key="catalogue-search",
                     on_submit=self._search,
                 ),
                 key="find-forms",
@@ -540,9 +580,39 @@ class BuildBrowseScreen(sd.Screen):
 
     async def _search(self, event: sl.SubmitEvent) -> None:
         form = _SearchForm.from_submission(event)
-        build = await self._queries.semantic(form.query)
-        if build is None or build.id is None or not await self._select(build.id):
-            await event.notice(tr(t"build-search-no-visible-match = No visible build matches that search."))
+        await self._run_search(form.query or "", form.sort or "")
+
+    async def _record_search(self, category: str, _event: sl.PressEvent) -> None:
+        await self._run_search(f"base_title:{category}", "")
+
+    async def _all_standings(self, _event: sl.PressEvent) -> None:
+        self._show_standings = True
+
+    async def _run_search(self, query: str, sort: str) -> None:
+        if self._search_service is None:
+            message = "The catalogue search service is not configured"
+            raise RuntimeError(message)
+        scope = SearchScope.RECORDS if self._mode == "records" else SearchScope.BUILDS
+        # Enforce standings eligibility outside the user's expression, including OR queries.
+        expression = f"status:resolved AND ({query})" if query.strip() else "status:resolved"
+        request = SearchRequest(
+            expression if scope is SearchScope.RECORDS else query,
+            scope=scope,
+            sort=SearchSort.parse(sort or None),
+            page_size=8,
+            visible_statuses=frozenset(status.name.lower() for status in self._statuses),
+        )
+        page = await self._search_service.search(request)
+        self._results = SearchScreen(
+            self._search_service,
+            request,
+            page,
+            load_build=self._queries.get,
+            render_build=self._render_build,
+        )
+        self._query = query
+        self._sort = sort
+        self._selected = None
 
     async def _back(self, _event: sl.PressEvent) -> None:
         self._selected = None
@@ -564,8 +634,19 @@ class _OpenBuildForm(sl.forms.Form):
 
 
 class _SearchForm(sl.forms.Form):
-    title = tr(t"bot-submission-build-browse-find-build = Find build")
+    title = tr(t"build-browser-search-filters = Search & filters")
 
     query = sl.forms.TextField(
-        label=tr(t"bot-submission-build-browse-description-or-title = Description or title"), maximum=500
+        label=tr(t"build-browser-search-query = Name, keywords, or filters"),
+        maximum=500,
+        required=False,
+        description=tr(
+            t"build-browser-filter-help = Examples: title:door, creator:Steve, width:5, kind:door, base_title:smallest"
+        ),
+    )
+    sort = sl.forms.TextField(
+        label=tr(t"build-browser-search-sort = Sort (optional)"),
+        required=False,
+        maximum=80,
+        description=tr(t"build-browser-sort-help = Examples: width, -width, -created_at. Leave blank for relevance."),
     )
