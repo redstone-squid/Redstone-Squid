@@ -652,25 +652,22 @@ accounts-verification-attempts-exceeded = Too many incorrect verification codes.
 # squid/accounts/errors.py:140
 accounts-verification-code-invalid = The verification code is invalid or expired.
 
-# squid/bot/admin.py:321
+# squid/bot/admin.py:324
 admin-build-spreadsheet = Build spreadsheet
 
-# squid/bot/admin.py:331
+# squid/bot/admin.py:334
 admin-database = Database
 
-# squid/bot/admin.py:296
+# squid/bot/admin.py:299
 admin-globally = globally
-
-# squid/bot/admin.py:145
-admin-message-archived = Message archived.
 
 # squid/bot/admin.py:108
 admin-message-queued = Message selected. Run /paste in the destination channel to move it.
 
-# squid/bot/admin.py:333
+# squid/bot/admin.py:336
 admin-open-database = Open database
 
-# squid/bot/admin.py:323
+# squid/bot/admin.py:326
 admin-open-spreadsheet = Open spreadsheet
 
 # squid/bot/admin.py:130
@@ -688,16 +685,16 @@ admin-paste-source-hidden = You no longer have access to the source message.
 # squid/bot/admin.py:133
 admin-paste-source-unavailable = The source channel is unavailable.
 
-# squid/bot/admin.py:301
+# squid/bot/admin.py:304
 admin-synced-commands = Synced { $count } commands { $scope }.
 
-# squid/bot/admin.py:314
+# squid/bot/admin.py:317
 admin-synced-the-tree-to = Synced the tree to { $synced }/{ $total }.
 
 # squid/bot/admin.py:105
 admin-that-message-is-not-from-this-server = That message is not from this server.
 
-# squid/bot/admin.py:298
+# squid/bot/admin.py:301
 admin-to-the-current-guild = to the current guild
 
 # squid/api/errors.py:266
@@ -2558,28 +2555,28 @@ command-redstoner-help = Inspect and deploy Redstoner automation
 # squid/bot/give_redstoner.py:162
 command-redstoner-name = redstoner
 
-# squid/bot/admin.py:191
+# squid/bot/admin.py:194
 command-runtime-settings-help = View or change global runtime settings
 
-# squid/bot/admin.py:190
+# squid/bot/admin.py:193
 command-runtime-settings-name = runtime-settings
 
-# squid/bot/admin.py:200
+# squid/bot/admin.py:203
 command-runtime-settings-revision-help = …
 
-# squid/bot/admin.py:195
+# squid/bot/admin.py:198
 command-runtime-settings-revision-name = revision
 
-# squid/bot/admin.py:201
+# squid/bot/admin.py:204
 command-runtime-settings-setting-help = …
 
-# squid/bot/admin.py:196
+# squid/bot/admin.py:199
 command-runtime-settings-setting-name = setting
 
-# squid/bot/admin.py:202
+# squid/bot/admin.py:205
 command-runtime-settings-value-help = …
 
-# squid/bot/admin.py:197
+# squid/bot/admin.py:200
 command-runtime-settings-value-name = value
 
 # squid/bot/submission/commands.py:113

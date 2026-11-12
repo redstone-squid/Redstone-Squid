@@ -52,7 +52,7 @@ class Message:
     clean_content: str
     embeds: tuple[str, ...]
     attachments: tuple[Attachment, ...]
-    stickers: tuple[str, ...]
+    stickers: tuple[discord.StickerItem, ...]
     delete: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
 
 
@@ -80,21 +80,23 @@ async def test_archive_copies_attachments_and_deletes_the_original() -> None:
         clean_content="A useful old message",
         embeds=("embed",),
         attachments=(attachment,),
-        stickers=("sticker",),
+        stickers=(cast(discord.StickerItem, SimpleNamespace(url="https://cdn.discordapp.com/stickers/123.png")),),
     )
     cog = Admin.__new__(Admin)
     cog.bot = cast(Any, Bot())
 
-    destination = Channel(send=AsyncCallRecorder(result=archived))
-    await cog._archive_message(cast(discord.Message, message), cast(discord.abc.Messageable, destination))
+    interaction = Mock(spec=discord.Interaction)
+    interaction.edit_original_response = AsyncCallRecorder(result=archived)
+    await cog._archive_message(cast(discord.Message, message), interaction)
 
     attachment.to_file.assert_awaited_once_with()
     assert channel.send.await_args is None
-    call = destination.send.await_args
+    call = interaction.edit_original_response.await_args
     assert call is not None
     assert "⭐:3 🔥:2" in call.kwargs["content"]
     assert "A useful old message" in call.kwargs["content"]
-    assert call.kwargs["files"] == ["upload"]
+    assert call.kwargs["attachments"] == ["upload"]
+    assert "https://cdn.discordapp.com/stickers/123.png" in call.kwargs["content"]
     assert "<@7> (builder `<@7>`) wrote:" in call.kwargs["content"]
     archived.add_reaction.assert_awaited_once_with("❌")
     message.delete.assert_awaited_once_with()
@@ -189,7 +191,10 @@ async def test_paste_moves_only_the_callers_accessible_selection(outcome: str, m
     guild = SimpleNamespace(id=2 if outcome == "other_guild" else 1, fetch_member=AsyncMock())
     destination = source if outcome == "same_channel" else Mock(spec=discord.TextChannel)
     request = SimpleNamespace(
-        guild=guild, user=SimpleNamespace(id=8 if outcome == "other_user" else 7), channel=destination
+        guild=guild,
+        user=SimpleNamespace(id=8 if outcome == "other_user" else 7),
+        channel=destination,
+        interaction=Mock(spec=discord.Interaction),
     )
     move = AsyncMock(side_effect=RuntimeError("send failed") if outcome == "send_failure" else None)
     owner = SimpleNamespace(_pending_archives={(1, 7): selected}, _paste_lock=asyncio.Lock(), _archive_message=move)
@@ -201,7 +206,7 @@ async def test_paste_moves_only_the_callers_accessible_selection(outcome: str, m
         await callback(owner, request)
     authorize.assert_awaited_once()
     if outcome == "success":
-        move.assert_awaited_once_with(current, destination)
+        move.assert_awaited_once_with(current, request.interaction)
         assert owner._pending_archives == {}
     else:
         assert owner._pending_archives == {(1, 7): selected}

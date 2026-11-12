@@ -111,7 +111,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @sd.command(
         name=to_locale_str(tr(t"command-paste-name = paste")),
         description=to_locale_str(tr(t"command-paste-help = Move your selected archive message into this channel")),
-        defer="private",
+        defer="public",
     )
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
@@ -139,13 +139,14 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                     tr(t"admin-paste-same-channel = Run /paste in a different channel to move this message.")
                 )
             current = await message.channel.fetch_message(message.id)
-            await self._archive_message(current, request.channel)
+            assert request.interaction is not None
+            await self._archive_message(current, request.interaction)
             if self._pending_archives.get(key) is message:
                 del self._pending_archives[key]
-        return text_node(tr(t"admin-message-archived = Message archived."))
+        return None
 
-    async def _archive_message(self, message: discord.Message, destination: discord.abc.Messageable) -> None:
-        """Send an attributed copy to the destination, then remove the original."""
+    async def _archive_message(self, message: discord.Message, interaction: discord.Interaction) -> None:
+        """Complete the public command response with the copy, then remove the original."""
         if isinstance(message.author, discord.User):
             user = message.author
         else:
@@ -158,11 +159,13 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if has_reactions:
             content += "\n" + " ".join(f"{reaction.emoji}:{reaction.count}" for reaction in reactions)
         content += "\nIf you are the author, you may delete this message by reacting with ❌."
-        sent_message = await destination.send(
+        # Interaction responses cannot carry native stickers; retain their CDN links.
+        if message.stickers:
+            content += "\n" + "\n".join(sticker.url for sticker in message.stickers)
+        sent_message = await interaction.edit_original_response(
             content=content,
             embeds=message.embeds,
-            files=[await attachment.to_file() for attachment in message.attachments],
-            stickers=message.stickers,
+            attachments=[await attachment.to_file() for attachment in message.attachments],
             allowed_mentions=discord.AllowedMentions(
                 everyone=False, users=(message.author,), roles=False, replied_user=False
             ),

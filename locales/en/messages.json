@@ -2205,7 +2205,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:321"
+      "squid/bot/admin.py:324"
     ]
   },
   "admin-database": {
@@ -2214,7 +2214,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:331"
+      "squid/bot/admin.py:334"
     ]
   },
   "admin-globally": {
@@ -2223,16 +2223,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:296"
-    ]
-  },
-  "admin-message-archived": {
-    "fingerprint": "f7a5742f63b39c348e94576c3132329c76aa8ec0835c4e06b26435caa57a9e38",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/admin.py:145"
+      "squid/bot/admin.py:299"
     ]
   },
   "admin-message-queued": {
@@ -2250,7 +2241,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:333"
+      "squid/bot/admin.py:336"
     ]
   },
   "admin-open-spreadsheet": {
@@ -2259,7 +2250,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:323"
+      "squid/bot/admin.py:326"
     ]
   },
   "admin-paste-empty": {
@@ -2324,7 +2315,7 @@
       }
     ],
     "locations": [
-      "squid/bot/admin.py:301"
+      "squid/bot/admin.py:304"
     ]
   },
   "admin-synced-the-tree-to": {
@@ -2344,7 +2335,7 @@
       }
     ],
     "locations": [
-      "squid/bot/admin.py:314"
+      "squid/bot/admin.py:317"
     ]
   },
   "admin-that-message-is-not-from-this-server": {
@@ -2362,7 +2353,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:298"
+      "squid/bot/admin.py:301"
     ]
   },
   "api-errors-http-error": {
@@ -8323,7 +8314,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:191"
+      "squid/bot/admin.py:194"
     ]
   },
   "command-runtime-settings-name": {
@@ -8332,7 +8323,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:190"
+      "squid/bot/admin.py:193"
     ]
   },
   "command-runtime-settings-revision-help": {
@@ -8341,7 +8332,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:200"
+      "squid/bot/admin.py:203"
     ]
   },
   "command-runtime-settings-revision-name": {
@@ -8350,7 +8341,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:195"
+      "squid/bot/admin.py:198"
     ]
   },
   "command-runtime-settings-setting-help": {
@@ -8359,7 +8350,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:201"
+      "squid/bot/admin.py:204"
     ]
   },
   "command-runtime-settings-setting-name": {
@@ -8368,7 +8359,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:196"
+      "squid/bot/admin.py:199"
     ]
   },
   "command-runtime-settings-value-help": {
@@ -8377,7 +8368,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:202"
+      "squid/bot/admin.py:205"
     ]
   },
   "command-runtime-settings-value-name": {
@@ -8386,7 +8377,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:197"
+      "squid/bot/admin.py:200"
     ]
   },
   "command-search-choice-mode-keyword": {
