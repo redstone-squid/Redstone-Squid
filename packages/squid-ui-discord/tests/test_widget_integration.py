@@ -199,3 +199,18 @@ async def test_a_ranked_list_pages_through_the_planner_with_the_host_navigation(
     texts = [child.content for child in edited.walk_children() if isinstance(child, discord.ui.TextDisplay)]
     assert any("3. **Edsger** — 10" in text for text in texts)
     assert any("Page 2 of 2" in text for text in texts)
+
+
+async def test_tab_buttons_render_the_active_tab_in_primary_style() -> None:
+    tabs = _tabs()
+    root = MessageRoot(tabs, access=Everyone(), timeout=None)
+    for selected, other in (("One", "Two"), ("Two", "One")):
+        payload = commit_render(root).to_components()
+        buttons = payload[0]["components"]
+        active = next(button for button in buttons if button["label"] == selected)
+        inactive = next(button for button in buttons if button["label"] == other)
+        assert active["style"] == 1
+        assert active["disabled"]
+        assert inactive["style"] == 2
+        assert not inactive.get("disabled", False)
+        await engine.press(tabs, f"tabs.{other.lower()}")

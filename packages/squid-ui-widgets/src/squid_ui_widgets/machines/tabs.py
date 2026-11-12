@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.semantic import ControlDisplay, LayoutNode
+from squid_ui.semantic import ControlDisplay, Emphasis, LayoutNode
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
@@ -99,6 +99,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
                         f"select:{tab.key}",
                         key=f"{self.key}.{tab.key}",
                         available=tab.key != current.key,
+                        emphasis=Emphasis.STRONG if tab.key == current.key else Emphasis.NORMAL,
                     )
                     for tab in self.tabs
                 ),

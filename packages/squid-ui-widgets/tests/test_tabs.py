@@ -159,3 +159,15 @@ async def test_shared_child_keeps_its_namespace_when_tab_and_position_change() -
     await wt.driving(tabs).press("tabs.first")
     restored = runtime.render(reuse_committed=True)
     assert restored.components[child_path] is child
+
+
+async def test_active_button_tab_is_emphasized_and_inactive_tabs_are_available() -> None:
+    harness = wt.driving(_settings())
+    for selected, other in (("general", "privacy"), ("privacy", "general")):
+        active = engine.find(harness.nodes, sl.semantic.ActionControl, key=f"settings.{selected}")
+        inactive = engine.find(harness.nodes, sl.semantic.ActionControl, key=f"settings.{other}")
+        assert active.emphasis is sl.semantic.Emphasis.STRONG
+        assert not active.available
+        assert inactive.emphasis is sl.semantic.Emphasis.NORMAL
+        assert inactive.available
+        await harness.press(f"settings.{other}")
