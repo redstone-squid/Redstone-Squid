@@ -1259,31 +1259,31 @@ bot-submission-build-browse-cancel = Cancel
 # squid/bot/submission/build_browse.py:279
 bot-submission-build-browse-confirm = Confirm
 
-# squid/bot/submission/schematic_tools.py:313
+# squid/bot/submission/schematic_tools.py:326
 bot-submission-build-browse-conversion-report = Conversion report: { $loss_summary }
 
-# squid/bot/submission/schematic_tools.py:100, squid/bot/submission/schematic_tools.py:356
+# squid/bot/submission/schematic_tools.py:105, squid/bot/submission/schematic_tools.py:369
 bot-submission-build-browse-convert-schematic = Convert schematic
 
 # squid/bot/submission/build_browse.py:243
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:198, squid/bot/submission/schematic_tools.py:72
+# squid/bot/submission/build_browse.py:198, squid/bot/submission/schematic_tools.py:77
 bot-submission-build-browse-download-result = Download result
 
-# squid/bot/submission/schematic_tools.py:90
+# squid/bot/submission/schematic_tools.py:95
 bot-submission-build-browse-download-schematic = Download schematic
 
 # squid/bot/submission/build_browse.py:217
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/schematic_tools.py:380
+# squid/bot/submission/schematic_tools.py:393
 bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 
-# squid/bot/submission/build_browse.py:182
+# squid/bot/submission/build_browse.py:183
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/schematic_tools.py:121
+# squid/bot/submission/schematic_tools.py:112
 bot-submission-build-browse-measure-timing = Measure timing
 
 # squid/bot/submission/build_browse.py:698
@@ -1292,16 +1292,16 @@ bot-submission-build-browse-open-build = Open build
 # squid/bot/submission/build_browse.py:523
 bot-submission-build-browse-open-by-id = Open by ID
 
-# squid/bot/submission/schematic_tools.py:359
+# squid/bot/submission/schematic_tools.py:372
 bot-submission-build-browse-output-format = Output format
 
 # squid/bot/submission/build_browse.py:234
 bot-submission-build-browse-reject = Reject
 
-# squid/bot/submission/schematic_tools.py:95
+# squid/bot/submission/schematic_tools.py:100
 bot-submission-build-browse-render-schematic = Render schematic
 
-# squid/bot/submission/schematic_tools.py:85
+# squid/bot/submission/schematic_tools.py:90
 bot-submission-build-browse-schematic-info = Schematic info
 
 # squid/bot/submission/consent_banner.py:70
@@ -2087,7 +2087,7 @@ build-input-extender-orientation = Choose Horizontal, Up, or Down.
 # squid/builds/application/input.py:40
 build-input-extension-length = Extension length must be between 1 and 512 blocks.
 
-# squid/bot/submission/schematic_tools.py:328
+# squid/bot/submission/schematic_tools.py:341
 build-input-position-invalid = Input position must contain three integers, for example `12 5 -3`.
 
 # squid/builds/application/input.py:23
@@ -2099,16 +2099,16 @@ build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or
 # squid/bot/submission/build_browse.py:412
 build-list-empty = No builds are available.
 
-# squid/bot/submission/schematic_tools.py:367
+# squid/bot/submission/schematic_tools.py:380
 build-minecraft-data-version-label = Minecraft data version
 
-# squid/bot/submission/schematic_tools.py:370
+# squid/bot/submission/schematic_tools.py:383
 build-minecraft-version-label = Minecraft version name
 
 # squid/bot/submission/build_browse.py:325
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:339, squid/bot/submission/schematic_tools.py:350
+# squid/bot/submission/build_browse.py:339, squid/bot/submission/schematic_tools.py:363
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
 # squid/bot/submission/build_browse.py:261
@@ -2120,13 +2120,13 @@ build-review-state-updated = Build review state updated.
 # squid/bot/submission/build_browse.py:277
 build-review-state-warning = This changes the build's review state.
 
-# squid/bot/submission/schematic_tools.py:146
+# squid/bot/submission/schematic_tools.py:159
 build-schematic-missing = This build has no schematic attached.
 
-# squid/bot/submission/schematic_tools.py:150
+# squid/bot/submission/schematic_tools.py:163
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/submission/schematic_tools.py:377
+# squid/bot/submission/schematic_tools.py:390
 build-schematic-timing-action = Measure schematic timing
 
 # squid/bot/submission/build_browse.py:248
@@ -4459,49 +4459,49 @@ schematic-simulated-timing-evidence =
 # squid/bot/submission/schematics.py:83
 schematic-simulation-input-unresolved = ### Simulation input not resolved
 
-# squid/bot/submission/schematic_tools.py:108, squid/bot/submission/schematic_tools.py:387
+# squid/bot/submission/schematic_tools.py:127, squid/bot/submission/schematic_tools.py:400
 schematic-video-action = Render video
 
-# squid/bot/submission/schematic_tools.py:397
+# squid/bot/submission/schematic_tools.py:410
 schematic-video-duration = Duration (seconds)
 
-# squid/bot/submission/schematic_tools.py:270
+# squid/bot/submission/schematic_tools.py:283
 schematic-video-failed = The video failed or expired. Please try again.
 
-# squid/bot/submission/schematic_tools.py:261
+# squid/bot/submission/schematic_tools.py:274
 schematic-video-input-choice = Choose an input position and request the video again: { $candidates }
 
-# squid/bot/submission/schematic_tools.py:403
+# squid/bot/submission/schematic_tools.py:416
 schematic-video-inputs = Activations: tick x y z, one per line
 
-# squid/bot/submission/schematic_tools.py:207
+# squid/bot/submission/schematic_tools.py:220
 schematic-video-invalid = Use a tick followed by x y z on each line, with activations inside the clip.
 
-# squid/bot/submission/schematic_tools.py:389
+# squid/bot/submission/schematic_tools.py:402
 schematic-video-motion = Build motion
 
-# squid/bot/submission/schematic_tools.py:400
+# squid/bot/submission/schematic_tools.py:413
 schematic-video-orbit = Camera orbit (degrees; 0 for fixed)
 
-# squid/bot/submission/schematic_tools.py:237
+# squid/bot/submission/schematic_tools.py:250
 schematic-video-pending = The video is still rendering.
 
-# squid/bot/submission/schematic_tools.py:222
+# squid/bot/submission/schematic_tools.py:235
 schematic-video-queued = Video #{ $job_id } queued. I'll attach it here when it is ready.
 
-# squid/bot/submission/schematic_tools.py:293
+# squid/bot/submission/schematic_tools.py:306
 schematic-video-ready = Your schematic video is ready.
 
-# squid/bot/submission/schematic_tools.py:115
+# squid/bot/submission/schematic_tools.py:134
 schematic-video-refresh = Check video
 
-# squid/bot/submission/schematic_tools.py:392
+# squid/bot/submission/schematic_tools.py:405
 schematic-video-simulate = Simulate inputs
 
-# squid/bot/submission/schematic_tools.py:393
+# squid/bot/submission/schematic_tools.py:406
 schematic-video-static = Keep build static
 
-# squid/bot/submission/schematic_tools.py:282
+# squid/bot/submission/schematic_tools.py:295
 schematic-video-too-large = This video exceeds Discord's attachment limit. Download it while signed in: { $url }
 
 # squid/schematics/application/previews.py:52

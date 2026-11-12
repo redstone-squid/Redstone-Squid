@@ -34,6 +34,7 @@ def _screen(
     initial_id: int | None = 7,
     status: Status = Status.CONFIRMED,
     schematics_available: bool = False,
+    video_enabled: bool = False,
     records: RecordService | None = None,
     initial_records: bool = False,
     record_tools: RecordsScreen | None = None,
@@ -45,7 +46,9 @@ def _screen(
     queries.list_page.return_value = Page(items=(build,), total=1, next=None, prev=None)
     search = AsyncMock(spec=SearchService)
     search.search.return_value = SearchPage(hits=(), total=0, next=None, prev=None)
-    schematics = Mock(spec=SchematicService, available=schematics_available, videos=None)
+    schematics = Mock(
+        spec=SchematicService, available=schematics_available, videos=Mock(enabled=True) if video_enabled else None
+    )
 
     async def render_build(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         return sl.paragraph(f"Build #{build.id}")
@@ -449,3 +452,15 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         assert screen._query == (
             "kind:door base_title:fastest version_scope:all_time" if records else "door width<=5 height<=6"
         )
+
+
+async def test_video_form_is_available_without_expanding_schematic_tools() -> None:
+    async with stage(_screen(schematics_available=True, video_enabled=True), owner=object()) as ui:
+        assert "Schematic info" not in ui.texts()
+        await ui.press_for_form(ui.key_for("schematic-video"))
+        await ui.press(ui.key_for("schematic-tools"))
+        ui.control(ui.key_for("schematic-info"))
+        ui.control(ui.key_for("schematic-video"))
+        await ui.press(ui.key_for("schematic-tools"))
+        assert "Schematic info" not in ui.texts()
+        ui.control(ui.key_for("schematic-video"))

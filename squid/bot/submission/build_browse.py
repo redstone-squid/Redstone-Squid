@@ -157,6 +157,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             measure_timing=capabilities.measure_timing,
             actor_account_id=actor_account_id,
             authorize=authorize,
+            show_details=lambda: self._show_schematics,
         )
         self._render_build = render_build
         self._capabilities = capabilities
@@ -190,8 +191,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [node]
         nodes.append(self._detail_actions(build))
         nodes.extend(self.controller.controls())
-        if self._show_schematics:
-            nodes.append(self.schematics)
+        nodes.append(self.schematics)
         if self._asset is not None:
             nodes.append(
                 sl.download(

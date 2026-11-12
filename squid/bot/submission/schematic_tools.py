@@ -52,18 +52,23 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         measure_timing: bool,
         actor_account_id: int | None,
         authorize: Callable[[PermissionNode], Awaitable[bool]],
+        show_details: Callable[[], bool] | None = None,
     ) -> None:
         self._build_id = build_id
         self._schematics = schematics
         self._measure_timing = measure_timing
         self._actor_account_id = actor_account_id
         self._authorize = authorize
+        self._show_details = show_details
         self._video_delivery_lock = asyncio.Lock()
         self._delivered_videos: set[int] = set()
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes = list(self._schematic_nodes())
+        nodes = list(self._video_nodes())
+        if self._show_details is not None and not self._show_details():
+            return tuple(nodes)
+        nodes.extend(self._schematic_nodes())
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
         if self._asset is not None:
@@ -102,9 +107,23 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     key="convert",
                     on_submit=self._convert,
                 ),
-                self._schematics.videos is not None
-                and self._schematics.videos.enabled
+                self._measure_timing
                 and sl.form(
+                    tr(t"bot-submission-build-browse-measure-timing = Measure timing"),
+                    self._timing_form(),
+                    key="timing",
+                    on_submit=self._timing,
+                ),
+                key="schematic-actions",
+            ),
+        )
+
+    def _video_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        if not self._schematics.available or self._schematics.videos is None or not self._schematics.videos.enabled:
+            return ()
+        return (
+            sl.action_controls(
+                sl.form(
                     tr(t"schematic-video-action = Render video"),
                     _VideoForm().spec(),
                     key="schematic-video",
@@ -116,14 +135,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     self._refresh_video,
                     key="video-refresh",
                 ),
-                self._measure_timing
-                and sl.form(
-                    tr(t"bot-submission-build-browse-measure-timing = Measure timing"),
-                    self._timing_form(),
-                    key="timing",
-                    on_submit=self._timing,
-                ),
-                key="schematic-actions",
+                key="video-actions",
+                display=sl.semantic.ControlDisplay.INDIVIDUAL,
             ),
         )
 
