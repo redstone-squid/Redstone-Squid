@@ -70,6 +70,10 @@ Action layout, still pre-release:
   wrong way and a ranking or alphabetical list was labelled by time. `Browser` takes a
   `chronology` (`sl.sources.Chronology`) for lists sorted by time; it labels both paging and
   stepping between opened items.
+- A browser leaves out item stepping when the page holds one item, and puts Back after the
+  step buttons.
+- `Wizard` takes `actions`, the hosting screen's controls to append to the wizard's last row,
+  and `WizardReview.note`, shown above Finish. A form-opening Continue shares its row with Back.
 
 Late pre-release hardening, after the version was first aligned:
 
