@@ -319,3 +319,94 @@ async def test_record_category_shortcut_requests_only_populated_standings() -> N
         assert request.query == "status:resolved AND (base_title:smallest)"
         assert request.scope is SearchScope.RECORDS
         assert "## Search results" in ui.texts()
+
+
+async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_removed() -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records"
+    service = cast(AsyncMock, screen._search_service)
+    async with stage(screen, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("catalogue-search"))
+        await form.submit({"query": 'title:"vault door"', "sort": "-created_at"})
+        await ui.press(ui.key_for("smallest"))
+        assert ui.control(ui.key_for("smallest")).payload["style"] == 3
+        await ui.press(ui.key_for("fastest"))
+        request = service.search.call_args.args[0]
+        assert request.query == (
+            'status:resolved AND (title:"vault door") AND (base_title:fastest OR base_title:smallest)'
+        )
+        assert request.sort is not None
+        assert request.sort.field == "created_at"
+        assert screen._query == 'title:"vault door"'
+        assert screen._sort == "-created_at"
+        form = await ui.press_for_form(ui.key_for("catalogue-search"))
+        await form.submit({"query": 'title:"vault door"', "sort": "-created_at"})
+        assert service.search.call_args.args[0].query == request.query
+        await ui.press(ui.key_for("smallest"))
+        assert ui.control(ui.key_for("smallest")).payload["style"] == 2
+        assert service.search.call_args.args[0].query.endswith("AND (base_title:fastest)")
+        await ui.press(ui.key_for("fastest"))
+        assert service.search.call_args.args[0].query == 'status:resolved AND (title:"vault door")'
+        ui.assert_within_limits()
+
+
+async def test_all_standings_clears_active_search_and_toggles() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records, initial_records=True)
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("smallest"))
+        await ui.press(ui.key_for("all-standings"))
+        assert screen._record_categories == frozenset()
+        assert screen._results is None
+        assert screen._query == screen._sort == ""
+        assert ui.control(ui.key_for("smallest")).payload["style"] == 2
+        assert "## Records" in ui.texts()
+        ui.assert_within_limits()
+
+
+@pytest.mark.parametrize("records", [False, True])
+async def test_search_help_stays_with_results_without_refetching(records: bool) -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records" if records else "builds"
+    service = cast(AsyncMock, screen._search_service)
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("search-help"))
+        assert "## Search help" in ui.texts()
+        assert any(("version_scope:all_time" if records else "creator:Steve") in text for text in ui.texts())
+        service.search.assert_not_awaited()
+        form = await ui.press_for_form(ui.key_for("catalogue-search"))
+        await form.submit({"query": "door", "sort": ""})
+        assert "## Search help" in ui.texts()
+        assert "## Search results" in ui.texts()
+        await ui.press(ui.key_for("search-help"))
+        assert "## Search help" not in ui.texts()
+        service.search.assert_awaited_once()
+        ui.assert_within_limits()
+
+
+async def test_record_toggles_are_visible_on_build_details() -> None:
+    screen = _screen()
+    screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        assert "Build #7" in ui.texts()
+        for category in ("smallest", "fastest", "first"):
+            ui.control(ui.key_for(category))
+        await ui.press(ui.key_for("first"))
+        assert "## Search results" in ui.texts()
+        assert screen._selected is None
+        assert screen._record_categories == frozenset({"first"})
+
+
+async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("smallest"))
+        original_results = screen._results
+        cast(AsyncMock, screen._search_service).search.side_effect = RuntimeError("search unavailable")
+        await ui.press(ui.key_for("fastest"))
+        assert screen._record_categories == frozenset({"smallest"})
+        assert screen._results is original_results
+        assert ui.control(ui.key_for("smallest")).payload["style"] == 3
+        assert ui.control(ui.key_for("fastest")).payload["style"] == 2

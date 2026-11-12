@@ -351,6 +351,8 @@ class BuildBrowseScreen(sd.Screen):
     policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
 
     _results: SearchScreen | None = sl.state(None, opaque=True)
+    _record_categories: frozenset[str] = sl.state(frozenset())
+    _show_search_help: bool = sl.state(default=False)
     _show_standings: bool = sl.state(default=False)
     _query: str = sl.state("")
     _sort: str = sl.state("")
@@ -444,24 +446,6 @@ class BuildBrowseScreen(sd.Screen):
                 sl.heading(tr(t"record-browser-home = Find a record")),
                 sl.paragraph(tr(t"record-browser-guide = Choose a record type, or search by name and filters.")),
                 *self._find_nodes(),
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"record-browser-smallest = Smallest"),
-                        partial(self._record_search, "smallest"),
-                        key="smallest",
-                    ),
-                    sl.action_control(
-                        tr(t"record-browser-fastest = Fastest"), partial(self._record_search, "fastest"), key="fastest"
-                    ),
-                    sl.action_control(
-                        tr(t"record-browser-first = First"), partial(self._record_search, "first"), key="first"
-                    ),
-                    sl.action_control(
-                        tr(t"record-browser-all = All standings"), self._all_standings, key="all-standings"
-                    ),
-                    key="record-categories",
-                    display=sl.semantic.ControlDisplay.INDIVIDUAL,
-                ),
             )
         listing = self._records if self._mode == "records" and self._records is not None else self._browser
         return (self._workspace_controls(), *self._find_nodes(), listing)
@@ -492,6 +476,7 @@ class BuildBrowseScreen(sd.Screen):
         self._query = ""
         self._sort = ""
         self._show_standings = False
+        self._record_categories = frozenset()
         self._mode = mode
         self._selected = None
         await self._browser._back(_event)
@@ -524,7 +509,7 @@ class BuildBrowseScreen(sd.Screen):
             await event.notice(tr(t"build-browse-end = No more builds in this direction."))
 
     def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        return (
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.action_controls(
                 sl.form(
                     tr(t"bot-submission-build-browse-open-by-id = Open by ID"),
@@ -538,9 +523,97 @@ class BuildBrowseScreen(sd.Screen):
                     key="catalogue-search",
                     on_submit=self._search,
                 ),
+                sl.action_control(
+                    tr(t"catalogue-hide-search-help = Hide search help")
+                    if self._show_search_help
+                    else tr(t"catalogue-search-help = Search help"),
+                    self._toggle_search_help,
+                    key="search-help",
+                ),
                 key="find-forms",
             ),
-        )
+        ]
+        if self._mode == "records":
+            nodes.extend(
+                (
+                    sl.action_controls(
+                        *(
+                            sl.toggle(
+                                label,
+                                key=category,
+                                on=sl.controlled(
+                                    category in self._record_categories, partial(self._toggle_record_category, category)
+                                ),
+                                tone=sl.Tone.SUCCESS if category in self._record_categories else sl.Tone.NEUTRAL,
+                            )
+                            for category, label in (
+                                ("smallest", tr(t"record-browser-smallest = Smallest")),
+                                ("fastest", tr(t"record-browser-fastest = Fastest")),
+                                ("first", tr(t"record-browser-first = First")),
+                            )
+                        ),
+                        sl.action_control(
+                            tr(t"record-browser-all = All standings"),
+                            self._all_standings,
+                            key="all-standings",
+                        ),
+                        key="record-categories",
+                        display=sl.semantic.ControlDisplay.INDIVIDUAL,
+                    ),
+                    sl.note(
+                        tr(
+                            t"record-filter-hint = Toggle any record types; none selected means all types. "
+                            t"Search keeps your selection."
+                        )
+                    ),
+                )
+            )
+        else:
+            nodes.append(
+                sl.note(
+                    tr(
+                        t"build-filter-hint = Search by name, or add filters such as creator:Steve or width:5. "
+                        t"See Search help for examples."
+                    )
+                )
+            )
+        if self._show_search_help:
+            examples = (
+                tr(
+                    t"record-filter-examples = Try `door kind:door` or `version_scope:all_time`. "
+                    t"Other kinds: entrance, extender, utility. Use `version_scope:up_to_date` "
+                    t"for current-version records."
+                )
+                if self._mode == "records"
+                else tr(
+                    t"build-filter-examples = Try `door creator:Steve`, `width:5`, or `restriction:observerless`. "
+                    t"Combine filters with spaces to match all of them."
+                )
+            )
+            nodes.append(
+                sl.section(
+                    sl.heading(tr(t"catalogue-search-help = Search help")),
+                    sl.paragraph(
+                        tr(
+                            t"catalogue-search-help-text = Enter a name or keywords in Search & filters. "
+                            t'Use `title:"vault door"` for a title phrase. Combine alternatives with `OR`, '
+                            t"for example `door OR extender`."
+                        )
+                    ),
+                    sl.paragraph(examples),
+                    sl.paragraph(
+                        tr(
+                            t"catalogue-search-help-sort = Leave Sort blank for relevance, or use `-created_at` "
+                            t"for newest first. Build searches also support `width` and `-width`. "
+                            t"The minus sign reverses the order."
+                        )
+                    ),
+                )
+            )
+        return tuple(nodes)
+
+    async def _toggle_search_help(self, _event: sl.PressEvent) -> None:
+        self._show_search_help = not self._show_search_help
 
     def _detail(self, build: Build) -> _BuildDetail:
         return _BuildDetail(
@@ -582,10 +655,19 @@ class BuildBrowseScreen(sd.Screen):
         form = _SearchForm.from_submission(event)
         await self._run_search(form.query or "", form.sort or "")
 
-    async def _record_search(self, category: str, _event: sl.PressEvent) -> None:
-        await self._run_search(f"base_title:{category}", "")
+    async def _toggle_record_category(self, category: str, event: sl.ToggleEvent) -> None:
+        if event.value:
+            self._record_categories = self._record_categories | {category}
+        else:
+            self._record_categories = self._record_categories - {category}
+        await self._run_search(self._query, self._sort)
 
     async def _all_standings(self, _event: sl.PressEvent) -> None:
+        self._record_categories = frozenset()
+        self._query = ""
+        self._sort = ""
+        self._results = None
+        self._selected = None
         self._show_standings = True
 
     async def _run_search(self, query: str, sort: str) -> None:
@@ -595,6 +677,9 @@ class BuildBrowseScreen(sd.Screen):
         scope = SearchScope.RECORDS if self._mode == "records" else SearchScope.BUILDS
         # Enforce standings eligibility outside the user's expression, including OR queries.
         expression = f"status:resolved AND ({query})" if query.strip() else "status:resolved"
+        if self._record_categories:
+            categories = " OR ".join(f"base_title:{category}" for category in sorted(self._record_categories))
+            expression += f" AND ({categories})"
         request = SearchRequest(
             expression if scope is SearchScope.RECORDS else query,
             scope=scope,
