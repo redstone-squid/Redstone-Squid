@@ -1,7 +1,8 @@
 # One build editor for drafts and saved builds
 
-> **Status:** proposed, not started. Agreed in direction on 2026-11-12: edit saved builds through the
-> submission form manifest. The decisions at the end still need an answer before phase 2.
+> **Status:** agreed 2026-11-12, not started: edit saved builds through the submission form manifest. Restrictions
+> and patterns become catalogue pickers; showcase tags, versions, and extender timings become editable;
+> AI-generated stays read-only.
 
 ## Problem
 
@@ -23,16 +24,17 @@ pickers against four free-text lists, and empty values as "Optional. Nothing add
 
 The manifest becomes the only description of build fields in Discord. A saved build is edited by turning it into
 manifest answers, editing those answers with the draft editor's sections and pickers, and turning the changed
-answers back into a `BuildEditPatch`. The HTTP patch contract (`edit_schema.py`) does not change.
+answers back into a `BuildEditPatch`. The HTTP patch contract (`edit_schema.py`) gains the fields the editor needs
+that it does not have yet: showcase tags, versions, and extender timings.
 
 ### Manifest
 
 Fields say which kind of form shows them, alongside the existing origin rule (`FormField.is_visible`). A new
 `FormPurpose` (`submit`, `edit`) is separate from `SubmissionOrigin`, which names the client, not the task.
 
-- **Submission only:** schematic visibility, licence and rights attestation, sponsor attribution, source version,
-  pattern and restriction proposals, AI-generated, extender timings. The build stores these only as provenance, or
-  `BuildEditPatch` cannot change them.
+- **Submission only:** schematic visibility, licence and rights attestation, sponsor attribution, pattern and
+  restriction proposals, and AI-generated. The build stores these only as provenance, or editing them is not
+  allowed.
 - **Edit only:** image, video, and world download links, and server address, coordinates, and command. The
   manifest has no fields for them today; they get one "Links and location" section.
 - **Both:** every other field. The category is shown but cannot change, because door and extender data are
@@ -79,10 +81,28 @@ Known traps, each needing a test:
    - saved build: Review changes (then Apply changes), Preview, Undo, Redo, Cancel.
 4. Delete `EDIT_FIELDS`, `EDIT_SECTIONS`, `squid/bot/submission/ui/fields.py`, and the shared base in `editor.py`.
 
+### Patch fields for showcase tags, versions, and extender timings
+
+- **Showcase tags** are tag assignments by key. `apply_build_taxonomy` keeps them today
+  (`squid/builds/application/taxonomy.py`); the patch replaces the showcase set and leaves restriction and pattern
+  tags to their own fields.
+- **Versions** are the build's `build_versions` rows. The patch replaces the set, using the same version lookup as
+  submission (`source_version` falls back to the newest Java version only for new submissions).
+- **Extender timings** have no column on the build. Records read them from `extender_timing_variants`
+  (`squid/records/models.py`), which nothing writes: a submission keeps its extension and retraction times only in
+  provenance, so no extender has a timing for records. The patch writes a `default` variant row, and submission
+  finalization writes one too.
+
+Door timings have a related problem, outside this plan: a migration copied each door's timings into
+`door_timing_variants` once, and records prefer that row over the door's own columns, so later edits to an older
+door's timings never reach records. Track it separately.
+
 ## Phases
 
 Each phase lands as its own commits with tests.
 
+0. Patch and HTTP fields for showcase tags, versions, and extender timings, with finalization writing the extender
+   timing variant. Regenerate the OpenAPI contract.
 1. Manifest purposes, edit-only fields, and edit limits. No user-visible change for submissions.
 2. `build_answers.py` with round-trip tests over door, extender, and other builds, including every trap above.
 3. `AnswerWorkspace`, with `DraftWorkspace` moved onto it unchanged. Draft editor tests must pass untouched.
@@ -90,12 +110,9 @@ Each phase lands as its own commits with tests.
    both modes in `just ui-gallery` before and after.
 5. Delete the old editor code.
 
-## Decisions needed
+## Decisions
 
-1. **Restrictions and patterns become catalogue pickers when editing**, as they are for drafts. Names on a build
-   that match no approved tag stay on it and are listed, but can only be removed, not retyped. Recommended: yes;
-   new names go through tag proposals.
-2. **Showcase tags, versions, and extender timings** cannot be edited today. Recommended: keep them out of the edit
-   form for now; each needs a patch field first.
-3. **AI-generated** is stored but `BuildEditPatch` cannot change it through the shared contract. Recommended: keep
-   it out of the edit form.
+1. Restrictions and patterns become catalogue pickers when editing. Names on a build that match no approved tag
+   stay on it and are listed, but can only be removed, not retyped; new names go through tag proposals.
+2. Showcase tags, versions, and extender timings become editable (phase 0).
+3. AI-generated stays out of the edit form.
