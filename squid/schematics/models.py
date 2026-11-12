@@ -351,7 +351,7 @@ class SchematicJob(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     __tablename__ = "schematic_jobs"
     __table_args__ = (
         CheckConstraint(
-            "operation IN ('capabilities', 'analyze', 'convert', 'compare', 'render', 'simulate', 'autostack')",
+            "operation IN ('capabilities', 'analyze', 'convert', 'compare', 'render', 'render_video', 'simulate', 'autostack')",
             name="schematic_jobs_operation_check",
         ),
         CheckConstraint(

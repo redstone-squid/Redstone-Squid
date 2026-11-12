@@ -15,6 +15,7 @@ import json
 import logging
 import math
 import os
+import shutil
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
@@ -47,6 +48,7 @@ from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
+    SchematicSupportUnavailableError,
     SchematicTooLargeError,
 )
 from squid.schematics.infrastructure.java_structure import (
@@ -791,6 +793,8 @@ def render_video(
     data: bytes, *, request: VideoRenderRequest, resource_pack: VerifiedResourcePack, scratch: Path, helper: str
 ) -> bytes:
     """Render through the pinned native helper inside the supervised process group."""
+    if shutil.which(helper) is None or shutil.which("ffmpeg") is None:
+        raise SchematicSupportUnavailableError(developer_action="Install the video helper and FFmpeg on the worker.")
     schematic = _load(data)
     _guard_allocated_volume(schematic, SchematicLimits())
     source = scratch / "source.snbt"
@@ -799,6 +803,8 @@ def render_video(
     source.write_text(nucleation.TickSimulation.gametest_snbt(schematic))
     pack.write_bytes(resource_pack.data)
     args = [helper, str(pack), str(source), str(output), "--in-world"]
+    if not request.simulation_enabled:
+        args.append("--static")
     for key, value in (
         ("ticks", request.duration_ticks),
         ("width", request.width),

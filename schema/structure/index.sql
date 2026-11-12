@@ -117,6 +117,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/permission_role_patterns.sql
 \ir public/TABLES/permission_roles.sql
 \ir public/SEQUENCES/permission_roles_id_seq.sql
+\ir public/TABLES/profile_clear_audit.sql
 \ir public/TABLES/public_creator_redirects.sql
 \ir public/TABLES/record_computation_runs.sql
 \ir public/SEQUENCES/record_computation_runs_id_seq.sql

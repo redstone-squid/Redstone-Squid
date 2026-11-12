@@ -1,8 +1,10 @@
 """Validated recipes shared by video clients and native workers."""
 
-from typing import Annotated, Self
+from typing import Annotated, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from squid.schematics.domain.values import VerifiedResourcePack
 
 type VideoCoordinate = Annotated[int, Field(strict=True, ge=-(2**31), le=2**31 - 1)]
 type VideoPosition = tuple[VideoCoordinate, VideoCoordinate, VideoCoordinate]
@@ -24,6 +26,7 @@ class VideoRenderRequest(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    simulation_enabled: bool = Field(default=True, strict=True)
     width: int = Field(default=640, ge=64, le=1280, multiple_of=2, strict=True)
     height: int = Field(default=360, ge=64, le=720, multiple_of=2, strict=True)
     fps: int = Field(default=30, ge=1, le=30, strict=True)
@@ -36,6 +39,9 @@ class VideoRenderRequest(BaseModel):
 
     @model_validator(mode="after")
     def check_interactions(self) -> Self:
+        if not self.simulation_enabled and self.interactions:
+            msg = "Static videos cannot contain input activations."
+            raise ValueError(msg)
         if len(self.interactions) > 16 or any(item.tick >= self.duration_ticks for item in self.interactions):
             msg = "Video interactions must fit within the clip and contain at most 16 activations."
             raise ValueError(msg)
@@ -43,3 +49,12 @@ class VideoRenderRequest(BaseModel):
             msg = "Video interactions must be in chronological order."
             raise ValueError(msg)
         return self
+
+
+@runtime_checkable
+class SchematicVideoRenderer(Protocol):
+    """Optional capability supplied by subprocess and durable analyzers."""
+
+    async def render_video(
+        self, data: bytes, *, request: VideoRenderRequest, resource_pack: VerifiedResourcePack
+    ) -> bytes: ...

@@ -170,6 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 in_world,
                 hash_origin,
                 seed,
+                args.iter().any(|arg| arg == "--static"),
             );
             println!("simulated {ticks} ticks, {} block changes", out.1.len());
             out
@@ -759,6 +760,7 @@ fn simulate(
     in_world: bool,
     hash_origin: Pos,
     seed: Option<i64>,
+    static_only: bool,
 ) -> (
     Vec<(Pos, String)>,
     Vec<(u64, Pos, String, String)>,
@@ -927,7 +929,9 @@ fn simulate(
                 sim.place_block(*pos, redstone_block);
             }
         }
-        sim.step();
+        if !static_only {
+            sim.step();
+        }
     }
 
     // Entity events -> dense per-tick position tracks. Positions persist

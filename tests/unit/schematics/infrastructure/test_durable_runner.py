@@ -55,6 +55,9 @@ class RecordingJobRepository:
         claimed, self.pending = self.pending[:limit], self.pending[limit:]
         return claimed
 
+    async def renew(self, job: ClaimedSchematicJob) -> bool:
+        return True
+
     async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
         return True
 

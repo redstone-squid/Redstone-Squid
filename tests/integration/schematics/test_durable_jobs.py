@@ -13,10 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.artifacts.application import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.config import SchematicConfig
+from squid.core.errors import RateLimitedError
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
+from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
 from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
@@ -340,3 +342,70 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
     assert await jobs.get(legacy_id) is None
     for key in {first_key, winning_key, "legacy-output"}:
         assert await artifacts.get(key, max_bytes=1024) is None
+
+
+async def test_video_jobs_retain_mp4_results(
+    schematic_job_table: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    del schematic_job_table
+
+    class VideoAnalyzer(FakeSchematicAnalyzer):
+        async def render_video(
+            self, data: bytes, *, request: VideoRenderRequest, resource_pack: VerifiedResourcePack
+        ) -> bytes:
+            assert data == b"schematic"
+            assert request.orbit_degrees == 90
+            assert resource_pack.data == b"pack"
+            return b"test-mp4"
+
+    config = SchematicConfig(job_poll_interval_seconds=0.005, job_wait_timeout_seconds=3)
+    artifacts = LocalArtifactStore(tmp_path / "objects")
+    jobs = SchematicJobService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+    runner = SchematicJobRunner(jobs, artifacts, VideoAnalyzer(), config)
+    client = QueuedSchematicAnalyzer(jobs, artifacts, config)
+    actual = await _with_runner(
+        runner,
+        client.render_video(
+            b"schematic",
+            request=VideoRenderRequest(orbit_degrees=90),
+            resource_pack=VerifiedResourcePack.from_bytes(b"pack"),
+        ),
+    )
+    assert actual == b"test-mp4"
+
+
+async def test_renewing_a_claim_rejects_a_stale_worker(
+    durable_components: tuple[QueuedSchematicAnalyzer, SchematicJobRunner, FakeSchematicAnalyzer, SchematicJobService],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    _, _, _, jobs = durable_components
+    job_id = await jobs.submit("render_video", {}, ())
+    (first,) = await jobs.claim(limit=1)
+    assert await jobs.renew(first)
+    async with async_session_factory() as session:
+        await session.execute(
+            update(SchematicJob)
+            .where(SchematicJob.id == job_id)
+            .values(
+                claimed_at=func.now() - text("interval '10 minutes'"),
+            )
+        )
+        await session.commit()
+    (replacement,) = await jobs.claim(limit=1)
+    assert replacement.claim_token != first.claim_token
+    assert not await jobs.renew(first)
+    assert await jobs.renew(replacement)
+
+
+async def test_video_admission_limits_each_account_independently(
+    durable_components: tuple[QueuedSchematicAnalyzer, SchematicJobRunner, FakeSchematicAnalyzer, SchematicJobService],
+) -> None:
+    _, _, _, jobs = durable_components
+    params = {"video": {"account_id": 10}}
+    await jobs.submit("render_video", params, ())
+    await jobs.submit("render_video", params, ())
+    with pytest.raises(RateLimitedError):
+        await jobs.submit("render_video", params, ())
+    assert await jobs.submit("render_video", {"video": {"account_id": 11}}, ())

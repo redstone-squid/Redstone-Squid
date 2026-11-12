@@ -18,6 +18,9 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any, cast
 
+import anyio
+from anyio.abc import TaskGroup
+
 from squid.artifacts import ArtifactStore
 from squid.config import SchematicConfig
 from squid.core.concurrency import run_all, run_all_settled
@@ -31,6 +34,7 @@ from squid.schematics.application.jobs import (
     SchematicJobSnapshot,
 )
 from squid.schematics.application.ports import SchematicAnalyzer
+from squid.schematics.application.video import SchematicVideoRenderer, VideoRenderRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -165,6 +169,18 @@ class QueuedSchematicAnalyzer:
         )
         return response.payload or b""
 
+    async def render_video(
+        self, data: bytes, *, request: VideoRenderRequest, resource_pack: VerifiedResourcePack
+    ) -> bytes:
+        self._require_enabled()
+        response = await self._request(
+            "render_video",
+            {"request": request.model_dump(mode="json"), "resource_pack": wire.encode_resource_pack(resource_pack)},
+            (data, resource_pack.data),
+            timeout_seconds=self._config.job_wait_timeout_seconds,
+        )
+        return response.payload or b""
+
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
         self._require_enabled()
         response = await self._request(
@@ -268,9 +284,19 @@ class SchematicJobRunner:
     async def _process(self, job: ClaimedSchematicJob) -> None:
         token = current_schematic_job_id.set(job.id)
         try:
-            await self._process_claimed(job)
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(self._renew_claim, job, tasks)
+                await self._process_claimed(job)
+                tasks.cancel_scope.cancel()
         finally:
             current_schematic_job_id.reset(token)
+
+    async def _renew_claim(self, job: ClaimedSchematicJob, tasks: TaskGroup) -> None:
+        while True:
+            await anyio.sleep(30)
+            if not await self._jobs.renew(job):
+                tasks.cancel_scope.cancel()
+                return
 
     async def _process_claimed(self, job: ClaimedSchematicJob) -> None:
         result_object_key: str | None = None
@@ -283,7 +309,9 @@ class SchematicJobRunner:
                 result_object_key = f"schematic-jobs/results/{job.id}/{job.claim_token}"
                 if not await self._jobs.register_result_object(job, result_object_key):
                     return
-                content_type = "image/png" if job.operation == "render" else "application/octet-stream"
+                content_type = {"render": "image/png", "render_video": "video/mp4"}.get(
+                    job.operation, "application/octet-stream"
+                )
                 await self._artifacts.put(result_object_key, output, content_type=content_type)
             applied = await self._jobs.complete(job, result, result_object_key)
             if not applied and result_object_key is not None:
@@ -356,6 +384,18 @@ class SchematicJobRunner:
                 inputs[0],
                 request=wire.decode_render_request(params.get("request")),
                 resource_pack=pack,
+            )
+            return {}, rendered
+        if operation == "render_video":
+            if not isinstance(self._analyzer, SchematicVideoRenderer):
+                raise SchematicSupportUnavailableError
+            if len(inputs) != 2:
+                msg = "Video rendering requires a staged resource pack."
+                raise InvalidSchematicError(msg)
+            rendered = await self._analyzer.render_video(
+                inputs[0],
+                request=wire.decode_video_request(params.get("request")),
+                resource_pack=wire.decode_resource_pack(params.get("resource_pack"), inputs[1]),
             )
             return {}, rendered
         if operation == "simulate":

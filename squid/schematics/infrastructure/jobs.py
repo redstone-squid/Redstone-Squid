@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from squid.core.errors import RateLimitedError
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.persistence.types import database_now
 from squid.schematics.application.jobs import (
@@ -52,6 +53,23 @@ class PostgresSchematicJobRepository:
         params: Mapping[str, Any],
         input_keys: Sequence[str],
     ) -> int:
+        session = self._session()
+        owner = params.get("video", {}).get("account_id") if operation == "render_video" else None
+        if owner is not None:
+            # Serialize account admission so simultaneous requests cannot exceed the queue budget.
+            await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f"video:{owner}", 0))))
+            active = await session.scalar(
+                select(func.count())
+                .select_from(SchematicJob)
+                .where(
+                    SchematicJob.operation == "render_video",
+                    SchematicJob.params["video"]["account_id"].astext == str(owner),
+                    SchematicJob.completed_at.is_(None),
+                    SchematicJob.dead_at.is_(None),
+                )
+            )
+            if active is not None and active >= 2:
+                raise RateLimitedError(retry_after=30)
         statement = (
             insert(SchematicJob)
             .values(operation=operation, params=dict(params), input_keys=list(input_keys), error_context={})
@@ -76,6 +94,10 @@ class PostgresSchematicJobRepository:
             last_error=row.last_error,
             error_kind=cast(SchematicJobErrorKind | None, row.error_kind),
             error_context=cast(Mapping[str, Any], row.error_context),
+            operation=row.operation,
+            params=row.params,
+            claimed_at=row.claimed_at,
+            expires_at=row.expires_at,
         )
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]:
@@ -90,6 +112,20 @@ class PostgresSchematicJobRepository:
             )
             for row in await self._queue.claim(limit=limit, session=self._session())
         )
+
+    async def renew(self, job: ClaimedSchematicJob) -> bool:
+        statement = (
+            update(SchematicJob)
+            .where(
+                SchematicJob.id == job.id,
+                self._queue.held_by(job.claim_token),
+                SchematicJob.completed_at.is_(None),
+                SchematicJob.dead_at.is_(None),
+            )
+            .values(claimed_at=database_now())
+            .returning(SchematicJob.id)
+        )
+        return await self._session().scalar(statement) is not None
 
     async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
         statement = (

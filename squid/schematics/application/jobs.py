@@ -2,7 +2,7 @@
 
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 import anyio
@@ -18,6 +18,7 @@ type SchematicJobOperation = Literal[
     "convert",
     "compare",
     "render",
+    "render_video",
     "simulate",
     "autostack",
 ]
@@ -51,6 +52,10 @@ class SchematicJobSnapshot:
     last_error: str | None
     error_kind: SchematicJobErrorKind | None
     error_context: Mapping[str, Any]
+    operation: str = ""
+    params: Mapping[str, Any] = field(default_factory=dict)
+    claimed_at: Instant | None = None
+    expires_at: Instant | None = None
 
 
 class SchematicJobRepository(Protocol):
@@ -66,6 +71,8 @@ class SchematicJobRepository(Protocol):
     async def get(self, job_id: int) -> SchematicJobSnapshot | None: ...
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]: ...
+
+    async def renew(self, job: ClaimedSchematicJob) -> bool: ...
 
     async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
         """Retain an output for cleanup only while this claim owns the job."""
@@ -145,6 +152,13 @@ class SchematicJobService:
             result = await uow.schematic_jobs.claim(limit=limit)
             await uow.commit()
             return result
+
+    async def renew(self, job: ClaimedSchematicJob) -> bool:
+        """Extend a live claim while native work is still running or waiting for a slot."""
+        async with self._uow_factory() as uow:
+            renewed = await uow.schematic_jobs.renew(job)
+            await uow.commit()
+            return renewed
 
     async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
         """Record cleanup ownership before a worker uploads an output object."""

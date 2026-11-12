@@ -19,7 +19,7 @@ CREATE TABLE public.schematic_jobs (
     result_object_keys text[] DEFAULT '{}'::text[] NOT NULL,
     CONSTRAINT schematic_jobs_attempts_nonnegative CHECK ((attempts >= 0)),
     CONSTRAINT schematic_jobs_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL))),
-    CONSTRAINT schematic_jobs_operation_check CHECK ((operation = ANY (ARRAY['capabilities'::text, 'analyze'::text, 'convert'::text, 'compare'::text, 'render'::text, 'simulate'::text, 'autostack'::text]))),
+    CONSTRAINT schematic_jobs_operation_check CHECK ((operation = ANY (ARRAY['capabilities'::text, 'analyze'::text, 'convert'::text, 'compare'::text, 'render'::text, 'render_video'::text, 'simulate'::text, 'autostack'::text]))),
     CONSTRAINT schematic_jobs_single_terminal_state CHECK (((completed_at IS NULL) OR (dead_at IS NULL)))
 );
 
