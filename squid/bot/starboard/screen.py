@@ -153,26 +153,29 @@ class StarboardScreen(sd.Screen):
         )
 
     def _settings_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
-        if STARBOARD_BOARD_EDIT in self._capabilities:
-            nodes.append(
-                sl.form(
+        may_edit = STARBOARD_BOARD_EDIT in self._capabilities
+        may_delete = STARBOARD_BOARD_DELETE in self._capabilities
+        if not (may_edit or may_delete):
+            return ()
+        return (
+            sl.action_controls(
+                may_edit
+                and sl.form(
                     tr(t"bot-starboard-screen-edit-setting = Edit setting"),
                     _EditSettingForm().spec(),
                     key="edit-setting",
                     on_submit=self._edit,
-                )
-            )
-        if STARBOARD_BOARD_DELETE in self._capabilities:
-            nodes.append(
-                sl.form(
+                ),
+                may_delete
+                and sl.form(
                     tr(t"bot-starboard-screen-delete-board = Delete board"),
                     _DeleteBoardForm().spec(),
                     key="delete-board",
                     on_submit=self._request_delete,
-                )
-            )
-        return tuple(nodes)
+                ),
+                key="settings-forms",
+            ),
+        )
 
     def _emoji_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (

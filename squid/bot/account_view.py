@@ -149,8 +149,9 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 )
             )
         identity = self.selected
-        nodes.extend(
-            (
+        # Each row pairs a visibility toggle with the other action on the same thing.
+        nodes.append(
+            sl.action_controls(
                 sl.toggle(
                     tr(t"account-view-selected-identity = Selected identity"),
                     key="identity_visibility",
@@ -159,17 +160,6 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     off_label=tr(t"account-view-hidden-from-page = Hidden from page"),
                     available=identity is not None,
                 ),
-                sl.toggle(
-                    tr(t"account-view-creator-page = Creator page"),
-                    key="page_visibility",
-                    on=sl.controlled(not self.page_hidden, self._toggle_page),
-                    on_label=tr(t"account-view-shown = Shown"),
-                    off_label=tr(t"account-view-hidden-2 = Hidden"),
-                ),
-            )
-        )
-        nodes.append(
-            sl.action_controls(
                 sl.action_control(
                     tr(t"account-view-unlink = Unlink"),
                     self._unlink,
@@ -178,13 +168,25 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     available=self.selected is not None,
                     guard=sp.guards.confirm(self._unlink_warning()),
                 ),
+                key="identity-actions",
+            )
+        )
+        nodes.append(
+            sl.action_controls(
+                sl.toggle(
+                    tr(t"account-view-creator-page = Creator page"),
+                    key="page_visibility",
+                    on=sl.controlled(not self.page_hidden, self._toggle_page),
+                    on_label=tr(t"account-view-shown = Shown"),
+                    off_label=tr(t"account-view-hidden-2 = Hidden"),
+                ),
                 sl.action_control(
                     tr(t"account-view-edit-page = Edit page"),
                     self._edit_page,
                     key="edit_page",
                     emphasis=sl.semantic.Emphasis.STRONG,
                 ),
-                key="account-actions",
+                key="page-actions",
             )
         )
         nodes.extend(self.edits.controls())

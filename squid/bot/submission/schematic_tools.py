@@ -63,44 +63,39 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if not self._schematics.available:
             return ()
-        actions = [
-            sl.action_control(
-                tr(t"bot-submission-build-browse-schematic-info = Schematic info"),
-                self._schematic_info,
-                key="schematic-info",
-            ),
-            sl.action_control(
-                tr(t"bot-submission-build-browse-download-schematic = Download schematic"),
-                self._schematic_download,
-                key="schematic-download",
-            ),
-            sl.action_control(
-                tr(t"bot-submission-build-browse-render-schematic = Render schematic"),
-                self._schematic_render,
-                key="schematic-render",
-            ),
-        ]
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sl.action_controls(*actions, key="schematic-actions")
-        ]
-        nodes.append(
-            sl.form(
-                tr(t"bot-submission-build-browse-convert-schematic = Convert schematic"),
-                self._convert_form(),
-                key="convert",
-                on_submit=self._convert,
-            )
-        )
-        if self._measure_timing:
-            nodes.append(
+        return (
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"bot-submission-build-browse-schematic-info = Schematic info"),
+                    self._schematic_info,
+                    key="schematic-info",
+                ),
+                sl.action_control(
+                    tr(t"bot-submission-build-browse-download-schematic = Download schematic"),
+                    self._schematic_download,
+                    key="schematic-download",
+                ),
+                sl.action_control(
+                    tr(t"bot-submission-build-browse-render-schematic = Render schematic"),
+                    self._schematic_render,
+                    key="schematic-render",
+                ),
                 sl.form(
+                    tr(t"bot-submission-build-browse-convert-schematic = Convert schematic"),
+                    self._convert_form(),
+                    key="convert",
+                    on_submit=self._convert,
+                ),
+                self._measure_timing
+                and sl.form(
                     tr(t"bot-submission-build-browse-measure-timing = Measure timing"),
                     self._timing_form(),
                     key="timing",
                     on_submit=self._timing,
-                )
-            )
-        return tuple(nodes)
+                ),
+                key="schematic-actions",
+            ),
+        )
 
     @staticmethod
     def _convert_form() -> sl.forms.FormSpec:

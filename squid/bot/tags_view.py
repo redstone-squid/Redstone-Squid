@@ -236,17 +236,20 @@ class TagsScreen(sd.Screen):
                 ),
             )
         return (
-            sl.form(
-                tr(t"bot-tags-view-propose-tag = Propose tag"),
-                self._proposal_form(),
-                key="propose",
-                on_submit=self._propose,
-            ),
-            sl.form(
-                tr(t"bot-tags-view-apply-tag-to-build = Apply tag to build"),
-                assignment,
-                key="apply",
-                on_submit=partial(self._apply, base_revision=self._build_revision),
+            sl.action_controls(
+                sl.form(
+                    tr(t"bot-tags-view-propose-tag = Propose tag"),
+                    self._proposal_form(),
+                    key="propose",
+                    on_submit=self._propose,
+                ),
+                sl.form(
+                    tr(t"bot-tags-view-apply-tag-to-build = Apply tag to build"),
+                    assignment,
+                    key="apply",
+                    on_submit=partial(self._apply, base_revision=self._build_revision),
+                ),
+                key="contribution-forms",
             ),
         )
 

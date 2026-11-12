@@ -153,26 +153,27 @@ class RecordsScreen(sd.Screen):
         return (self._tabs,)
 
     def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
-        if self._can_inspect:
-            nodes.append(
-                sl.form(
+        if not (self._can_inspect or self._can_rebuild):
+            return (sl.note(tr(t"records-no-maintenance-actions = No maintenance actions are available.")),)
+        return (
+            sl.action_controls(
+                self._can_inspect
+                and sl.form(
                     tr(t"bot-submission-records-lookup-category = Lookup category"),
                     self._lookup_form(),
                     key="lookup",
                     on_submit=self._lookup,
-                )
-            )
-        if self._can_rebuild:
-            nodes.append(
-                sl.form(
+                ),
+                self._can_rebuild
+                and sl.form(
                     tr(t"bot-submission-records-rebuild-records = Rebuild records"),
                     self._rebuild_form(),
                     key="rebuild",
                     on_submit=self._rebuild,
-                )
-            )
-        return tuple(nodes) or (sl.note(tr(t"records-no-maintenance-actions = No maintenance actions are available.")),)
+                ),
+                key="maintenance-forms",
+            ),
+        )
 
     @staticmethod
     def _kind_field[RequiredT: (Literal[True], Literal[False]) = Literal[True]](

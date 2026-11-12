@@ -150,9 +150,8 @@ class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Req
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
-        nodes.extend(
-            (
+        return (
+            sl.action_controls(
                 sl.toggle(
                     tr(t"bot-notifications-view-web-inbox = Web inbox"),
                     key="web",
@@ -165,9 +164,9 @@ class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Req
                     on=sl.controlled(self.dm_enabled, self._toggle_dm),
                     tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
                 ),
-            )
+                key="delivery",
+            ),
         )
-        return tuple(nodes)
 
     async def _toggle_web(self, event: sd.ToggleEvent) -> None:
         await event.acknowledge()
@@ -214,9 +213,9 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        selection: tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...] = ()
         if self.subscriptions:
-            nodes.append(
+            selection = (
                 sl.choices(
                     *(
                         sl.choice(
@@ -230,61 +229,37 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
                     selection=sl.controlled(self.selected_ids, self._selection_changed),
                     minimum=0,
                     maximum=len(self.subscriptions),
-                )
-            )
-        nodes.extend(
-            (
-                sl.form(
-                    tr(t"bot-notifications-view-follow-creator = Follow creator"),
-                    sl.forms.FormSpec(
-                        tr(t"bot-notifications-view-follow-a-creator = Follow a creator"),
-                        (
-                            sl.forms.TextField(
-                                key="creator",
-                                label=tr(t"bot-notifications-view-creator-profile-id = Creator profile ID"),
-                                maximum=36,
-                            ),
-                        ),
-                    ),
-                    key="follow-creator",
-                    on_submit=self._follow_creator,
-                ),
-                sl.form(
-                    tr(t"bot-notifications-view-follow-record = Follow record"),
-                    sl.forms.FormSpec(
-                        tr(t"bot-notifications-view-follow-a-record = Follow a record"),
-                        (
-                            sl.forms.TextField(
-                                key="record_title",
-                                label=tr(t"bot-notifications-view-record-title-id = Record title ID"),
-                                maximum=36,
-                            ),
-                        ),
-                    ),
-                    key="follow-record",
-                    on_submit=self._follow_record,
-                ),
-                sl.form(
-                    tr(t"bot-notifications-view-follow-matching-records = Follow matching records"),
-                    self._filter_form(),
-                    key="follow-filter",
-                    on_submit=self._follow_filter,
                 ),
             )
+        actions = sl.action_controls(
+            sl.form(
+                tr(t"bot-notifications-view-follow-creator = Follow creator"),
+                self._creator_form(),
+                key="follow-creator",
+                on_submit=self._follow_creator,
+            ),
+            sl.form(
+                tr(t"bot-notifications-view-follow-record = Follow record"),
+                self._record_form(),
+                key="follow-record",
+                on_submit=self._follow_record,
+            ),
+            sl.form(
+                tr(t"bot-notifications-view-follow-matching-records = Follow matching records"),
+                self._filter_form(),
+                key="follow-filter",
+                on_submit=self._follow_filter,
+            ),
+            sl.action_control(
+                tr(t"bot-notifications-view-unfollow-selected = Unfollow selected"),
+                self._unfollow,
+                key="unfollow_selected",
+                tone=sl.Tone.DANGER,
+                available=bool(self.selected_ids),
+            ),
+            key="subscription-actions",
         )
-        nodes.append(
-            sl.action_controls(
-                sl.action_control(
-                    tr(t"bot-notifications-view-unfollow-selected = Unfollow selected"),
-                    self._unfollow,
-                    key="unfollow_selected",
-                    tone=sl.Tone.DANGER,
-                    available=bool(self.selected_ids),
-                ),
-                key="subscription-actions",
-            )
-        )
-        return tuple(nodes)
+        return (*selection, actions)
 
     async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
         self.selected_ids = event.selected
@@ -386,6 +361,34 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
     def _optional_text(value: object) -> str | None:
         text = str(value).strip() if value is not None else ""
         return text or None
+
+    # The specs live outside render() because Pyrefly cannot infer a request context for a
+    # FormSpec built inline inside an action_controls entry, and falls back to `object`.
+    @staticmethod
+    def _creator_form() -> sl.forms.FormSpec:
+        return sl.forms.FormSpec(
+            tr(t"bot-notifications-view-follow-a-creator = Follow a creator"),
+            (
+                sl.forms.TextField(
+                    key="creator",
+                    label=tr(t"bot-notifications-view-creator-profile-id = Creator profile ID"),
+                    maximum=36,
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _record_form() -> sl.forms.FormSpec:
+        return sl.forms.FormSpec(
+            tr(t"bot-notifications-view-follow-a-record = Follow a record"),
+            (
+                sl.forms.TextField(
+                    key="record_title",
+                    label=tr(t"bot-notifications-view-record-title-id = Record title ID"),
+                    maximum=36,
+                ),
+            ),
+        )
 
     @staticmethod
     def _filter_form() -> sl.forms.FormSpec:

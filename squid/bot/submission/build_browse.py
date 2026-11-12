@@ -380,17 +380,20 @@ class BuildBrowseScreen(sd.Screen):
 
     def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
-            sl.form(
-                tr(t"bot-submission-build-browse-open-by-id = Open by ID"),
-                _OpenBuildForm().spec(),
-                key="open-id",
-                on_submit=self._open_id,
-            ),
-            sl.form(
-                tr(t"bot-submission-build-browse-search-by-meaning = Search by meaning"),
-                _SearchForm().spec(),
-                key="semantic-search",
-                on_submit=self._search,
+            sl.action_controls(
+                sl.form(
+                    tr(t"bot-submission-build-browse-open-by-id = Open by ID"),
+                    _OpenBuildForm().spec(),
+                    key="open-id",
+                    on_submit=self._open_id,
+                ),
+                sl.form(
+                    tr(t"bot-submission-build-browse-search-by-meaning = Search by meaning"),
+                    _SearchForm().spec(),
+                    key="semantic-search",
+                    on_submit=self._search,
+                ),
+                key="find-forms",
             ),
         )
 

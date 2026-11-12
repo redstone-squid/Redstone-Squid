@@ -175,26 +175,27 @@ class AccessScreen(sd.Screen):
         )
 
     def _subject_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
-        if self._may_grant:
-            nodes.append(
-                sl.form(
+        if not (self._may_grant or self._may_manage_roles):
+            return ()
+        return (
+            sl.action_controls(
+                self._may_grant
+                and sl.form(
                     tr(t"access-view-change-direct-rule = Change direct rule"),
                     self._rule_form(),
                     key="rule",
                     on_submit=partial(self._change_rule, base_revision=self._revision),
-                )
-            )
-        if self._may_manage_roles:
-            nodes.append(
-                sl.form(
+                ),
+                self._may_manage_roles
+                and sl.form(
                     tr(t"access-view-change-role-assignment = Change role assignment"),
                     self._assignment_form(),
                     key="assignment",
                     on_submit=partial(self._change_assignment, base_revision=self._revision),
-                )
-            )
-        return tuple(nodes)
+                ),
+                key="subject-forms",
+            ),
+        )
 
     @staticmethod
     def _rule_form() -> sl.forms.FormSpec:
@@ -222,17 +223,20 @@ class AccessScreen(sd.Screen):
 
     def _role_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
-            sl.form(
-                tr(t"access-view-create-internal-role = Create internal role"),
-                self._create_role_form(),
-                key="create-role",
-                on_submit=partial(self._create_role, base_revision=self._revision),
-            ),
-            sl.form(
-                tr(t"access-view-edit-internal-role = Edit internal role"),
-                self._edit_role_form(),
-                key="edit-role",
-                on_submit=partial(self._edit_role, base_revision=self._revision),
+            sl.action_controls(
+                sl.form(
+                    tr(t"access-view-create-internal-role = Create internal role"),
+                    self._create_role_form(),
+                    key="create-role",
+                    on_submit=partial(self._create_role, base_revision=self._revision),
+                ),
+                sl.form(
+                    tr(t"access-view-edit-internal-role = Edit internal role"),
+                    self._edit_role_form(),
+                    key="edit-role",
+                    on_submit=partial(self._edit_role, base_revision=self._revision),
+                ),
+                key="role-forms",
             ),
         )
 
