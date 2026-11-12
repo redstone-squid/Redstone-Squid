@@ -1971,6 +1971,36 @@ build-drafts-state-needs-changes = Needs changes
 # squid/bot/submission/submit.py:476
 build-drafts-state-waiting = Waiting for files
 
+# squid/submissions/application/edit_form.py:105
+build-edit-form-about = About this build
+
+# squid/submissions/application/edit_form.py:153
+build-edit-form-command = Command to get there
+
+# squid/submissions/application/edit_form.py:152
+build-edit-form-coordinates = Coordinates
+
+# squid/submissions/application/edit_form.py:148
+build-edit-form-images = Image links
+
+# squid/submissions/application/edit_form.py:146
+build-edit-form-links-location = Links and location
+
+# squid/submissions/application/edit_form.py:127
+build-edit-form-one-per-line = One link per line.
+
+# squid/submissions/application/edit_form.py:151
+build-edit-form-server = Server address
+
+# squid/submissions/application/edit_form.py:114
+build-edit-form-versions = Minecraft versions
+
+# squid/submissions/application/edit_form.py:149
+build-edit-form-videos = Video links
+
+# squid/submissions/application/edit_form.py:150
+build-edit-form-world-downloads = World download links
+
 # squid/bot/submission/ui/views.py:849
 build-edit-history-fields = Edit build fields
 

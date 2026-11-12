@@ -6481,6 +6481,96 @@
       "squid/bot/submission/submit.py:476"
     ]
   },
+  "build-edit-form-about": {
+    "fingerprint": "10b73ee3f81599fb0ec9bd58457891ce7f57fa7f5c713ad9b8a21502af1fe4dc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:105"
+    ]
+  },
+  "build-edit-form-command": {
+    "fingerprint": "21093c49d4fef94bb0d07a5291119d226a9673c2767bb0f07cbd991932592928",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:153"
+    ]
+  },
+  "build-edit-form-coordinates": {
+    "fingerprint": "dab9e073fe984e67e69def960b1d1372fd854f20e2fe70cb0749ec143256401d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:152"
+    ]
+  },
+  "build-edit-form-images": {
+    "fingerprint": "f9f86a6e9ecc0a385832b0b7b80aad25fa93e97c8e1470fe9c87e6f19d2a555c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:148"
+    ]
+  },
+  "build-edit-form-links-location": {
+    "fingerprint": "ced1d1dec19971332158f9cd009f7c1a2964c7887658dfb26afdcfb9f6506172",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:146"
+    ]
+  },
+  "build-edit-form-one-per-line": {
+    "fingerprint": "eec0b56439990311c71f94d9fb01c41a92eac3d37571e15ac494f221f492c85e",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:127"
+    ]
+  },
+  "build-edit-form-server": {
+    "fingerprint": "566602322cc6f5a7e43afcb32ed2ecfa498e6196c9053ea4b655c91f5bc61412",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:151"
+    ]
+  },
+  "build-edit-form-versions": {
+    "fingerprint": "5106c9ef47b2fe125ec9f393bd501a883c55ab9c47e695ab467748cd0c57bddd",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:114"
+    ]
+  },
+  "build-edit-form-videos": {
+    "fingerprint": "983b89f42d6c6d487d4e300055206f346929bd0979b06af14bd230762191e7fa",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:149"
+    ]
+  },
+  "build-edit-form-world-downloads": {
+    "fingerprint": "144d2f654fb1a68113556620a424babfb51e1503317218d8d88f822b17bcd487",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/edit_form.py:150"
+    ]
+  },
   "build-edit-history-fields": {
     "fingerprint": "19ec6fe9844739f09ad649de80c9844512b26892ed67ffb199f2f212be8f53d3",
     "attributes": [],

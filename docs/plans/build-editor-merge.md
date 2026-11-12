@@ -27,22 +27,20 @@ manifest answers, editing those answers with the draft editor's sections and pic
 answers back into a `BuildEditPatch`. The HTTP patch contract (`edit_schema.py`) gains the fields the editor needs
 that it does not have yet: showcase tags, versions, and extender timings.
 
-### Manifest
+### The edit form
 
-Fields say which kind of form shows them, alongside the existing origin rule (`FormField.is_visible`). A new
-`FormPurpose` (`submit`, `edit`) is separate from `SubmissionOrigin`, which names the client, not the task.
+`build_edit_form` (`squid/submissions/application/edit_form.py`) derives the form for saved builds from the
+current submission manifest, so both editors show the same sections, labels, and pickers. Checked-in submission
+revisions are immutable and pinned by drafts, so the edit form is built in code rather than added to them, and it
+is never stored or published to submission clients.
 
-- **Submission only:** schematic visibility, licence and rights attestation, sponsor attribution, pattern and
-  restriction proposals, and AI-generated. The build stores these only as provenance, or editing them is not
-  allowed.
-- **Edit only:** image, video, and world download links, and server address, coordinates, and command. The
-  manifest has no fields for them today; they get one "Links and location" section.
-- **Both:** every other field. The category is shown but cannot change, because door and extender data are
-  structural.
-
-Where the manifest and the patch disagree on limits (description 4000 against 10000 characters, creators 20
-against 100, restrictions 40 against 100 per list, patterns 20 against 50, completion 200 against 100), the edit
-form uses the stored limits so that opening a build never truncates it. Submission limits stay as they are.
+- **Left out:** schematic visibility, licence and rights attestation, sponsor attribution, AI-generated, and tag
+  proposals. The build stores these only as provenance, or editing them is not allowed.
+- **Replaced:** the single source version becomes the build's list of versions.
+- **Added:** a "Links and location" section for media links and server details.
+- **Limits:** those of `BuildPatch`, so opening a build saved under larger limits never truncates it. Creators are
+  optional, because older builds can have none.
+- The category is shown but cannot change, because door and extender data are structural.
 
 ### Mapping saved builds to answers and back
 
@@ -103,7 +101,7 @@ Each phase lands as its own commits with tests.
 
 0. Patch and HTTP fields for showcase tags, versions, and extender timings, with finalization writing the extender
    timing variant. Regenerate the OpenAPI contract.
-1. Manifest purposes, edit-only fields, and edit limits. No user-visible change for submissions.
+1. The derived edit form. No user-visible change for submissions.
 2. `build_answers.py` with round-trip tests over door, extender, and other builds, including every trap above.
 3. `AnswerWorkspace`, with `DraftWorkspace` moved onto it unchanged. Draft editor tests must pass untouched.
 4. `BuildEditWorkspace` and the merged screen. Port `test_components_v2_ui.py` and `test_edit_fields.py`; compare
