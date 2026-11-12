@@ -42,6 +42,7 @@ from squid.submissions.application.forms import (
     FormOptionCatalog,
     FormOptionSet,
     SubmissionFormService,
+    build_edit_manifest,
     build_submission_manifest,
 )
 from squid.submissions.application.preparation import (
@@ -94,6 +95,7 @@ __all__ = [
     "SubmissionRequestResult",
     "SubmissionSponsorResolver",
     "ValidatedDraft",
+    "build_edit_manifest",
     "build_submission_manifest",
     "draft_attachment_service",
 ]

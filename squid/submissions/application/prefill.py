@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from squid.builds.domain import BuildDraft, UnresolvedTaxonomy
 from squid.core.errors import JSONValue
 from squid.submissions.application.forms import SubmissionFormService
-from squid.submissions.domain import ChoiceOption, FormManifest, SubmissionOrigin
+from squid.submissions.domain import ChoiceOption, FormManifest, SubmissionOrigin, match_choice
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,7 +87,9 @@ def project_submission(
         values.update({"movement_orientation": orientation, "extension_length": source.extension_length})
     answers.update({key: value for key, value in values.items() if value is not None and value != []})
     versions = options.get("approved_source_versions", ())
-    exact_version = _known(source.version_spec or (source.versions[0] if len(source.versions) == 1 else ""), versions)
+    exact_version = match_choice(
+        source.version_spec or (source.versions[0] if len(source.versions) == 1 else ""), versions
+    )
     if exact_version is not None:
         answers["source_version"] = exact_version
     # Names the taxonomy could not resolve still go through the catalog match below, so they become
@@ -111,7 +113,7 @@ def project_submission(
         known: list[JSONValue] = []
         proposed: list[JSONValue] = []
         for name in dict.fromkeys(names):
-            key = _known(name, options.get(catalog, ()))
+            key = match_choice(name, options.get(catalog, ()))
             if key is None:
                 proposed.append(name)
             else:
@@ -129,10 +131,3 @@ def project_submission(
     visible = manifest.visible_answers(category, answers, origin=origin)
     answers = {field_id: value for field_id, value in answers.items() if field_id in visible}
     return SubmissionPrefill(category, answers, tuple(dict.fromkeys(unresolved)))
-
-
-def _known(value: str, choices: Sequence[ChoiceOption]) -> str | None:
-    matches = {
-        choice.value for choice in choices if value.casefold() in {choice.value.casefold(), choice.label.casefold()}
-    }
-    return next(iter(matches)) if len(matches) == 1 else None

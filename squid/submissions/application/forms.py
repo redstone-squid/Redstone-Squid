@@ -1,4 +1,15 @@
-"""Authored submission form schema and dynamic option resolution."""
+"""The authored build form, and dynamic option resolution for its catalogue fields.
+
+One manifest describes every build field for both tasks that use it: submitting a new build and
+editing a saved one. Each field says which tasks show it (`FormPurpose`), and a field can relax its
+rules when editing (`EditRules`), because a saved build may hold values the submission rules no
+longer allow. Callers never see the combined form: `build_submission_manifest` returns the submit
+projection that drafts pin and the HTTP API publishes, and `build_edit_manifest` returns the
+projection the Discord build editor uses.
+
+Checked-in revisions are immutable for submissions. Edit-only fields and edit rules do not
+appear in the submit projection, so adding them does not change a pinned revision.
+"""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -10,9 +21,11 @@ from squid.submissions.domain import (
     CategoryForm,
     ChoiceOption,
     ControlKind,
+    EditRules,
     FieldConstraints,
     FormField,
     FormManifest,
+    FormPurpose,
     FormSection,
     SubmissionOrigin,
     ValueKind,
@@ -36,6 +49,8 @@ class FormManifestRegistry(Protocol):
     async def current(self, *, locale: str | None) -> FormManifest: ...
 
     async def get(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None: ...
+
+    async def edit(self, *, locale: str | None) -> FormManifest: ...
 
 
 class FormOptionCatalog(Protocol):
@@ -92,6 +107,10 @@ class SubmissionFormService:
         """Return one immutable checked-in form revision while this server can validate it."""
         return await self._manifests.get(schema_id, revision, locale=locale)
 
+    async def edit_manifest(self, *, locale: str | None) -> FormManifest:
+        """Return the localized current form for editing saved builds; see `build_edit_manifest`."""
+        return await self._manifests.edit(locale=locale)
+
     async def options(
         self,
         source: str,
@@ -122,6 +141,10 @@ class CheckedInFormManifestRegistry:
             return None
         return build_submission_manifest(locale, revision=revision)
 
+    async def edit(self, *, locale: str | None) -> FormManifest:
+        """Return the current form for editing saved builds."""
+        return build_edit_manifest(locale)
+
 
 def build_submission_manifest(
     locale: str | None = None,
@@ -133,10 +156,20 @@ def build_submission_manifest(
         msg = tr(t"submissions-unsupported-checked-submission = unsupported checked-in submission form revision")
         raise InvalidStateError(msg)
     with localization_scope(localization_for(locale)):
-        return _build_submission_manifest(revision)
+        return _build_form_manifest(revision).for_purpose(FormPurpose.SUBMIT)
 
 
-def _build_submission_manifest(revision: int) -> FormManifest:
+def build_edit_manifest(locale: str | None = None) -> FormManifest:
+    """Build the current form for editing saved builds, localized for one client."""
+    with localization_scope(localization_for(locale)):
+        return _build_form_manifest(CURRENT_SUBMISSION_SCHEMA_REVISION).for_purpose(FormPurpose.EDIT)
+
+
+_SUBMIT_ONLY = frozenset({FormPurpose.SUBMIT})
+_EDIT_ONLY = frozenset({FormPurpose.EDIT})
+
+
+def _build_form_manifest(revision: int) -> FormManifest:
     # The manifest is JSON for web clients, so its text is resolved in the requested locale here.
     localize = Message.resolve
     context_section_id = "provenance" if revision == 2 else "submission_context"
@@ -174,6 +207,7 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING,
                     constraints=FieldConstraints(max_length=4_000),
+                    edit_rules=EditRules(constraints=FieldConstraints(max_length=10_000)),
                 ),
                 FormField(
                     id="creators",
@@ -184,6 +218,10 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     repeatable=True,
                     constraints=FieldConstraints(min_length=1, max_length=120, min_items=1, max_items=20),
                     required_capability="repeatable_text",
+                    # Older saved builds can have no creators; requiring one would block every other edit.
+                    edit_rules=EditRules(
+                        required=False, constraints=FieldConstraints(min_length=1, max_length=120, max_items=100)
+                    ),
                 ),
             ),
         ),
@@ -236,6 +274,17 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                         if revision >= 4
                         else frozenset(SubmissionOrigin)
                     ),
+                    purposes=_SUBMIT_ONLY,
+                ),
+                # A saved build lists every version it was recorded for, not the one it was exported from.
+                FormField(
+                    id="versions",
+                    label=localize(tr(t"build-edit-form-versions = Minecraft versions")),
+                    control=ControlKind.MULTI_CHOICE,
+                    value_kind=ValueKind.STRING_LIST,
+                    option_source="approved_source_versions",
+                    constraints=FieldConstraints(max_length=80, max_items=100),
+                    purposes=_EDIT_ONLY,
                 ),
                 FormField(
                     id="version_compatibility",
@@ -257,6 +306,7 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     value_kind=ValueKind.STRING_LIST,
                     option_source="approved_restrictions",
                     constraints=FieldConstraints(max_length=64, max_items=40),
+                    edit_rules=EditRules(constraints=FieldConstraints(max_length=64, max_items=400)),
                 ),
                 FormField(
                     id="restriction_proposals",
@@ -272,6 +322,8 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     repeatable=True,
                     constraints=FieldConstraints(max_length=200, max_items=5),
                     required_capability="repeatable_text",
+                    # A saved build's unmatched names are listed by the editor instead.
+                    purposes=_SUBMIT_ONLY,
                 ),
                 FormField(
                     id="showcase_tags",
@@ -301,6 +353,7 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     control=ControlKind.CHOICE,
                     value_kind=ValueKind.STRING,
                     required=True,
+                    purposes=_SUBMIT_ONLY,
                     options=(
                         ChoiceOption(
                             "reviewer_only",
@@ -320,6 +373,7 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     required=True,
                     options=_license_options(localize),
                     visible_when=VisibilityRule("schematic_visibility", VisibilityOperator.EQUALS, "public_download"),
+                    purposes=_SUBMIT_ONLY,
                 ),
                 FormField(
                     id="rights_attestation",
@@ -334,12 +388,15 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     required=True,
                     constraints=FieldConstraints(must_equal=True),
                     visible_when=VisibilityRule("schematic_visibility", VisibilityOperator.EQUALS, "public_download"),
+                    purposes=_SUBMIT_ONLY,
                 ),
             ),
         ),
         FormSection(
             id=context_section_id,
             title=localize(context_title),
+            # Editing leaves only the completion date, which describes the build, not its submission.
+            edit_title=localize(tr(t"build-edit-form-about = About this build")),
             fields=(
                 FormField(
                     id="completion",
@@ -347,6 +404,7 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING,
                     constraints=FieldConstraints(max_length=200),
+                    edit_rules=EditRules(constraints=FieldConstraints(max_length=100)),
                 ),
                 FormField(
                     id="ai_generated",
@@ -355,6 +413,8 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     value_kind=ValueKind.BOOLEAN,
                     required=True,
                     default=False,
+                    # Stored on the build, but the shared build patch does not allow changing it.
+                    purposes=_SUBMIT_ONLY,
                 ),
                 FormField(
                     id="sponsor_attribution",
@@ -363,9 +423,11 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     value_kind=ValueKind.BOOLEAN,
                     default=False,
                     origins=frozenset({SubmissionOrigin.PAPER}),
+                    purposes=_SUBMIT_ONLY,
                 ),
             ),
         ),
+        _links_and_location(localize),
     )
     return FormManifest(
         schema_id=CURRENT_SUBMISSION_SCHEMA,
@@ -528,6 +590,46 @@ def _extender_form(localize: Callable[[Message], str]) -> CategoryForm:
     )
 
 
+def _links_and_location(localize: Callable[[Message], str]) -> FormSection:
+    """Media links and server details, which a submission collects as files and context instead."""
+
+    def links(field_id: str, label: Message) -> FormField:
+        return FormField(
+            id=field_id,
+            label=localize(label),
+            help_text=localize(tr(t"build-edit-form-one-per-line = One link per line.")),
+            control=ControlKind.TEXT,
+            value_kind=ValueKind.STRING_LIST,
+            repeatable=True,
+            constraints=FieldConstraints(max_items=100),
+            required_capability="repeatable_text",
+            purposes=_EDIT_ONLY,
+        )
+
+    def text(field_id: str, label: Message, max_length: int) -> FormField:
+        return FormField(
+            id=field_id,
+            label=localize(label),
+            control=ControlKind.TEXT,
+            value_kind=ValueKind.STRING,
+            constraints=FieldConstraints(max_length=max_length),
+            purposes=_EDIT_ONLY,
+        )
+
+    return FormSection(
+        id="links_location",
+        title=localize(tr(t"build-edit-form-links-location = Links and location")),
+        fields=(
+            links("image_urls", tr(t"build-edit-form-images = Image links")),
+            links("video_urls", tr(t"build-edit-form-videos = Video links")),
+            links("world_download_urls", tr(t"build-edit-form-world-downloads = World download links")),
+            text("server_ip", tr(t"build-edit-form-server = Server address"), 500),
+            text("coordinates", tr(t"build-edit-form-coordinates = Coordinates"), 500),
+            text("command_to_get_to_build", tr(t"build-edit-form-command = Command to get there"), 2_000),
+        ),
+    )
+
+
 def _pattern_section(localize: Callable[[Message], str]) -> FormSection:
     return FormSection(
         id="patterns",
@@ -540,6 +642,7 @@ def _pattern_section(localize: Callable[[Message], str]) -> FormSection:
                 value_kind=ValueKind.STRING_LIST,
                 option_source="approved_patterns",
                 constraints=FieldConstraints(max_length=64, max_items=20),
+                edit_rules=EditRules(constraints=FieldConstraints(max_length=64, max_items=50)),
             ),
             FormField(
                 id="pattern_proposals",
@@ -554,6 +657,7 @@ def _pattern_section(localize: Callable[[Message], str]) -> FormSection:
                 repeatable=True,
                 constraints=FieldConstraints(max_length=200, max_items=5),
                 required_capability="repeatable_text",
+                purposes=_SUBMIT_ONLY,
             ),
         ),
     )

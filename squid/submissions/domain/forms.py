@@ -8,8 +8,9 @@ a later form change does not silently change the meaning of existing answers.
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from typing import Self
 
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
@@ -25,6 +26,19 @@ class SubmissionOrigin(StrEnum):
     CLI = "cli"
     PAPER = "paper"
     FABRIC = "fabric"
+
+
+class FormPurpose(StrEnum):
+    """The task a projection of the build form serves.
+
+    One manifest describes every build field. Submitting a new build and editing a saved one use
+    most fields alike, but some only make sense for one task: a rights attestation for a new
+    submission, media links for a saved build. `FormManifest.for_purpose` returns the view for one
+    task.
+    """
+
+    SUBMIT = "submit"
+    EDIT = "edit"
 
 
 class ControlKind(StrEnum):
@@ -74,6 +88,17 @@ class ChoiceOption:
         if not self.label.strip():
             msg = tr(t"submissions-choice-labels-blank = choice labels cannot be blank")
             raise ValidationError(msg)
+
+
+def match_choice(name: str, choices: Sequence[ChoiceOption]) -> str | None:
+    """Return the value of the one choice whose value or label equals `name`, ignoring case.
+
+    Return None when no choice matches, or when several do: guessing between two tags would
+    attach the wrong one.
+    """
+    folded = name.casefold()
+    matches = {choice.value for choice in choices if folded in {choice.value.casefold(), choice.label.casefold()}}
+    return next(iter(matches)) if len(matches) == 1 else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +159,20 @@ class FieldConstraints:
 
 
 @dataclass(frozen=True, slots=True)
+class EditRules:
+    """How a field differs when it edits a saved build rather than a new submission.
+
+    A saved build can hold values that the submission rules no longer allow, such as a longer
+    description or no creators, so editing uses the limits of the stored build instead.
+    """
+
+    required: bool | None = None
+    """Replaces `FormField.required` when not None."""
+    constraints: FieldConstraints | None = None
+    """Replaces `FormField.constraints` when not None."""
+
+
+@dataclass(frozen=True, slots=True)
 class FormField:
     """A form field with its value type, presentation, and validation rules."""
 
@@ -151,6 +190,10 @@ class FormField:
     repeatable: bool = False
     required_capability: str | None = None
     origins: frozenset[SubmissionOrigin] = field(default_factory=lambda: frozenset(SubmissionOrigin))
+    purposes: frozenset[FormPurpose] = field(default_factory=lambda: frozenset(FormPurpose))
+    """The tasks that show this field; see `FormPurpose`."""
+    edit_rules: EditRules | None = None
+    """Overrides applied in the edit projection."""
 
     def __post_init__(self) -> None:
         _require_stable_id(self.id, "field ID")
@@ -179,6 +222,12 @@ class FormField:
                     t"submissions-repeatable-field-use = repeatable field {(field_id_text := str(field_id))} must use string_list values"
                 )
             )
+        if not self.purposes:
+            raise ValidationError(
+                tr(
+                    t"submissions-field-purpose = field {(field_id_text := str(field_id))} must apply to at least one purpose"
+                )
+            )
         if not self.origins:
             raise ValidationError(
                 tr(
@@ -198,6 +247,8 @@ class FormSection:
     id: str
     title: str
     fields: tuple[FormField, ...]
+    edit_title: str | None = None
+    """Replaces `title` in the edit projection, for a section whose wording is about the submission."""
 
     def __post_init__(self) -> None:
         _require_stable_id(self.id, "section ID")
@@ -276,6 +327,20 @@ class FormManifest:
                         t"common fields: {fields}"
                     )
                 )
+
+    def for_purpose(self, purpose: FormPurpose) -> Self:
+        """Return the form for one task: only its fields, with edit rules applied when editing.
+
+        Sections left without fields are dropped, so a submission client never sees an empty
+        "Links and location" section.
+        """
+        return replace(
+            self,
+            common_sections=_sections_for(self.common_sections, purpose),
+            categories=tuple(
+                replace(category, sections=_sections_for(category.sections, purpose)) for category in self.categories
+            ),
+        )
 
     def category(self, code: str) -> CategoryForm:
         """Resolve a category by stable code."""
@@ -374,6 +439,28 @@ class FormManifest:
         normalized = self.apply_defaults(category, answers, origin=origin)
         visible = {item.id for item in self.fields_for(category) if item.is_visible(normalized, origin)}
         return {field_id: value for field_id, value in normalized.items() if field_id in visible}
+
+
+def _sections_for(sections: tuple[FormSection, ...], purpose: FormPurpose) -> tuple[FormSection, ...]:
+    projected: list[FormSection] = []
+    for section in sections:
+        fields = tuple(_field_for(item, purpose) for item in section.fields if purpose in item.purposes)
+        if not fields:
+            continue
+        title = section.edit_title if purpose is FormPurpose.EDIT and section.edit_title is not None else section.title
+        projected.append(replace(section, title=title, fields=fields))
+    return tuple(projected)
+
+
+def _field_for(item: FormField, purpose: FormPurpose) -> FormField:
+    rules = item.edit_rules
+    if purpose is not FormPurpose.EDIT or rules is None:
+        return item
+    return replace(
+        item,
+        required=item.required if rules.required is None else rules.required,
+        constraints=item.constraints if rules.constraints is None else rules.constraints,
+    )
 
 
 def _validate_value(field: FormField, value: JSONValue) -> str | None:

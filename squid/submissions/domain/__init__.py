@@ -41,14 +41,17 @@ from squid.submissions.domain.forms import (
     CategoryForm,
     ChoiceOption,
     ControlKind,
+    EditRules,
     FieldConstraints,
     FormField,
     FormManifest,
+    FormPurpose,
     FormSection,
     SubmissionOrigin,
     ValueKind,
     VisibilityOperator,
     VisibilityRule,
+    match_choice,
 )
 
 __all__ = [
@@ -68,6 +71,7 @@ __all__ = [
     "DraftRevisionConflictError",
     "DraftSnapshot",
     "DraftStatus",
+    "EditRules",
     "ExtenderOrientation",
     "ExtenderSubmissionDetails",
     "ExtenderTiming",
@@ -78,6 +82,7 @@ __all__ = [
     "FinalizedBuild",
     "FormField",
     "FormManifest",
+    "FormPurpose",
     "FormSection",
     "GeneralSubmissionDetails",
     "NormalizedSubmission",
@@ -96,4 +101,5 @@ __all__ = [
     "VerifiedSubmissionArtifacts",
     "VisibilityOperator",
     "VisibilityRule",
+    "match_choice",
 ]
