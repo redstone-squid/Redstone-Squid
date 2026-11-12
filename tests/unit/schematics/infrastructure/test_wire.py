@@ -24,7 +24,11 @@ from squid.schematics.domain.models import (
     VersionLossEntry,
 )
 from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
-from squid.schematics.errors import AmbiguousSimulationInputError
+from squid.schematics.errors import (
+    AmbiguousSimulationInputError,
+    InvalidSchematicError,
+    SchematicSupportUnavailableError,
+)
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.wire import Frame, FrameStreamClosed
 from squid.schematics.infrastructure.worker import _translate
@@ -431,3 +435,19 @@ def test_a_malformed_candidate_list_is_rejected(context: dict[str, object]) -> N
     """The child is our own code, but it is still JSON arriving down a pipe."""
     with pytest.raises((TypeError, ValueError)):
         _translate({"kind": "ambiguous_simulation_input", "message": "ambiguous", "context": context}, "simulate")
+
+
+def test_unavailable_video_dependency_survives_the_worker_pipe() -> None:
+    original = SchematicSupportUnavailableError("Missing video helper", context={"executable": "helper"})
+    rebuilt = _translate(json.loads(json.dumps(_error_payload(original))), "render_video")
+    assert isinstance(rebuilt, SchematicSupportUnavailableError)
+    assert "Missing video helper" in str(rebuilt)
+    assert rebuilt.context["executable"] == "helper"
+
+
+def test_native_renderer_diagnostics_survive_the_worker_pipe() -> None:
+    original = InvalidSchematicError("Native renderer failed", context={"renderer_log": "encoder unavailable"})
+    rebuilt = _translate(json.loads(json.dumps(_error_payload(original))), "render_video")
+    assert isinstance(rebuilt, InvalidSchematicError)
+    assert str(rebuilt) == "Native renderer failed"
+    assert rebuilt.context["renderer_log"] == "encoder unavailable"

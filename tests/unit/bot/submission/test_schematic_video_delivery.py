@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 import squid_ui_discord as sd
-from squid.bot.submission.schematic_tools import SchematicTools
+from squid.bot.submission.schematic_tools import SchematicTools, _video_failure_reason
 from squid.core.actors import Actor
 from squid.schematics.application.services import SchematicService
 from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
+from squid_ui.text import source_text
 
 
 @pytest.fixture
@@ -69,3 +70,31 @@ async def test_failed_upload_can_retry_from_the_stored_result(delivery: tuple[Sc
     request.respond.side_effect = None
     assert await component._deliver_video(request, 41)
     assert service.open_video_content.await_count == 2
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        ("unavailable", "FFmpeg"),
+        ("timeout", "time limit"),
+        ("invalid", "worker logs"),
+        ("ambiguous_simulation_input", "lever or button"),
+        ("internal", "worker logs"),
+    ],
+)
+def test_failure_message_explains_the_next_step(error: str, expected: str) -> None:
+    assert expected in source_text(_video_failure_reason(error, expired=False))
+    assert "expired" in source_text(_video_failure_reason(error, expired=True))
+
+
+async def test_failed_video_reports_privately_without_fetching_content(
+    delivery: tuple[SchematicTools, Mock, Mock],
+) -> None:
+    component, request, service = delivery
+    service.get_video.return_value = VideoStatus(
+        id=41, build_id=7, schematic_id=1, status="failed", error="unavailable"
+    )
+    assert await component._deliver_video(request, 41)
+    request.respond.assert_awaited_once()
+    assert request.respond.call_args.kwargs["audience"] == "personal"
+    service.open_video_content.assert_not_awaited()

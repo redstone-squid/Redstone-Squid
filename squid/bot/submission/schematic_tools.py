@@ -279,8 +279,9 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             )
             return True
         if status.status != "succeeded":
+            reason = _video_failure_reason(status.error, expired=status.status == "expired")
             await request.respond(
-                sl.paragraph(tr(t"schematic-video-failed = The video failed or expired. Please try again.")),
+                sl.paragraph(tr(t"schematic-video-failure-detail = Video #{job_id}: {reason}")),
                 audience="personal",
             )
             return True
@@ -418,3 +419,37 @@ class _VideoForm(sl.forms.Form):
         required=False,
         maximum=1000,
     )
+
+
+def _video_failure_reason(error: str | None, *, expired: bool) -> sl.TextLike:
+    if expired:
+        return tr(t"schematic-video-expired = The stored video has expired. Request a new render.")
+    match error:
+        case "unavailable":
+            return tr(
+                t"schematic-video-unavailable = Video rendering is unavailable on the worker. Ask an administrator to check the video helper and FFmpeg installation."
+            )
+        case "timeout":
+            return tr(
+                t"schematic-video-timeout = Rendering exceeded its time limit. Try a shorter clip or a smaller schematic."
+            )
+        case "too_large":
+            return tr(
+                t"schematic-video-too-large-failure = The schematic or output exceeded the rendering limits. Try a smaller schematic or shorter clip."
+            )
+        case "ambiguous_simulation_input":
+            return tr(
+                t"schematic-video-no-input = No usable simulation input was selected. Specify a lever or button position, or keep the build static."
+            )
+        case "invalid":
+            return tr(
+                t"schematic-video-invalid-failure = The renderer could not process this schematic. Ask an administrator to check the worker logs using this video number."
+            )
+        case "crashed":
+            return tr(
+                t"schematic-video-crashed = The rendering process stopped unexpectedly. Ask an administrator to check the worker logs using this video number."
+            )
+        case _:
+            return tr(
+                t"schematic-video-internal-failure = Rendering failed. Ask an administrator to check the worker logs using this video number."
+            )

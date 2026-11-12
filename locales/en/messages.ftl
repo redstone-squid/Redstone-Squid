@@ -1259,10 +1259,10 @@ bot-submission-build-browse-cancel = Cancel
 # squid/bot/submission/build_browse.py:279
 bot-submission-build-browse-confirm = Confirm
 
-# squid/bot/submission/schematic_tools.py:326
+# squid/bot/submission/schematic_tools.py:327
 bot-submission-build-browse-conversion-report = Conversion report: { $loss_summary }
 
-# squid/bot/submission/schematic_tools.py:105, squid/bot/submission/schematic_tools.py:369
+# squid/bot/submission/schematic_tools.py:105, squid/bot/submission/schematic_tools.py:370
 bot-submission-build-browse-convert-schematic = Convert schematic
 
 # squid/bot/submission/build_browse.py:243
@@ -1277,7 +1277,7 @@ bot-submission-build-browse-download-schematic = Download schematic
 # squid/bot/submission/build_browse.py:217
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/schematic_tools.py:393
+# squid/bot/submission/schematic_tools.py:394
 bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 
 # squid/bot/submission/build_browse.py:183
@@ -1292,7 +1292,7 @@ bot-submission-build-browse-open-build = Open build
 # squid/bot/submission/build_browse.py:523
 bot-submission-build-browse-open-by-id = Open by ID
 
-# squid/bot/submission/schematic_tools.py:372
+# squid/bot/submission/schematic_tools.py:373
 bot-submission-build-browse-output-format = Output format
 
 # squid/bot/submission/build_browse.py:234
@@ -2087,7 +2087,7 @@ build-input-extender-orientation = Choose Horizontal, Up, or Down.
 # squid/builds/application/input.py:40
 build-input-extension-length = Extension length must be between 1 and 512 blocks.
 
-# squid/bot/submission/schematic_tools.py:341
+# squid/bot/submission/schematic_tools.py:342
 build-input-position-invalid = Input position must contain three integers, for example `12 5 -3`.
 
 # squid/builds/application/input.py:23
@@ -2099,16 +2099,16 @@ build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or
 # squid/bot/submission/build_browse.py:412
 build-list-empty = No builds are available.
 
-# squid/bot/submission/schematic_tools.py:380
+# squid/bot/submission/schematic_tools.py:381
 build-minecraft-data-version-label = Minecraft data version
 
-# squid/bot/submission/schematic_tools.py:383
+# squid/bot/submission/schematic_tools.py:384
 build-minecraft-version-label = Minecraft version name
 
 # squid/bot/submission/build_browse.py:325
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:339, squid/bot/submission/schematic_tools.py:363
+# squid/bot/submission/build_browse.py:339, squid/bot/submission/schematic_tools.py:364
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
 # squid/bot/submission/build_browse.py:261
@@ -2126,7 +2126,7 @@ build-schematic-missing = This build has no schematic attached.
 # squid/bot/submission/schematic_tools.py:163
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/submission/schematic_tools.py:390
+# squid/bot/submission/schematic_tools.py:391
 build-schematic-timing-action = Measure schematic timing
 
 # squid/bot/submission/build_browse.py:248
@@ -4459,28 +4459,43 @@ schematic-simulated-timing-evidence =
 # squid/bot/submission/schematics.py:83
 schematic-simulation-input-unresolved = ### Simulation input not resolved
 
-# squid/bot/submission/schematic_tools.py:127, squid/bot/submission/schematic_tools.py:400
+# squid/bot/submission/schematic_tools.py:127, squid/bot/submission/schematic_tools.py:401
 schematic-video-action = Render video
 
-# squid/bot/submission/schematic_tools.py:410
+# squid/bot/submission/schematic_tools.py:449
+schematic-video-crashed = The rendering process stopped unexpectedly. Ask an administrator to check the worker logs using this video number.
+
+# squid/bot/submission/schematic_tools.py:411
 schematic-video-duration = Duration (seconds)
 
-# squid/bot/submission/schematic_tools.py:283
-schematic-video-failed = The video failed or expired. Please try again.
+# squid/bot/submission/schematic_tools.py:426
+schematic-video-expired = The stored video has expired. Request a new render.
+
+# squid/bot/submission/schematic_tools.py:284
+schematic-video-failure-detail = Video #{ $job_id }: { $reason }
 
 # squid/bot/submission/schematic_tools.py:274
 schematic-video-input-choice = Choose an input position and request the video again: { $candidates }
 
-# squid/bot/submission/schematic_tools.py:416
+# squid/bot/submission/schematic_tools.py:417
 schematic-video-inputs = Activations: tick x y z, one per line
+
+# squid/bot/submission/schematic_tools.py:453
+schematic-video-internal-failure = Rendering failed. Ask an administrator to check the worker logs using this video number.
 
 # squid/bot/submission/schematic_tools.py:220
 schematic-video-invalid = Use a tick followed by x y z on each line, with activations inside the clip.
 
-# squid/bot/submission/schematic_tools.py:402
+# squid/bot/submission/schematic_tools.py:445
+schematic-video-invalid-failure = The renderer could not process this schematic. Ask an administrator to check the worker logs using this video number.
+
+# squid/bot/submission/schematic_tools.py:403
 schematic-video-motion = Build motion
 
-# squid/bot/submission/schematic_tools.py:413
+# squid/bot/submission/schematic_tools.py:441
+schematic-video-no-input = No usable simulation input was selected. Specify a lever or button position, or keep the build static.
+
+# squid/bot/submission/schematic_tools.py:414
 schematic-video-orbit = Camera orbit (degrees; 0 for fixed)
 
 # squid/bot/submission/schematic_tools.py:250
@@ -4489,20 +4504,29 @@ schematic-video-pending = The video is still rendering.
 # squid/bot/submission/schematic_tools.py:235
 schematic-video-queued = Video #{ $job_id } queued. I'll attach it here when it is ready.
 
-# squid/bot/submission/schematic_tools.py:306
+# squid/bot/submission/schematic_tools.py:307
 schematic-video-ready = Your schematic video is ready.
 
 # squid/bot/submission/schematic_tools.py:134
 schematic-video-refresh = Check video
 
-# squid/bot/submission/schematic_tools.py:405
+# squid/bot/submission/schematic_tools.py:406
 schematic-video-simulate = Simulate inputs
 
-# squid/bot/submission/schematic_tools.py:406
+# squid/bot/submission/schematic_tools.py:407
 schematic-video-static = Keep build static
 
-# squid/bot/submission/schematic_tools.py:295
+# squid/bot/submission/schematic_tools.py:433
+schematic-video-timeout = Rendering exceeded its time limit. Try a shorter clip or a smaller schematic.
+
+# squid/bot/submission/schematic_tools.py:296
 schematic-video-too-large = This video exceeds Discord's attachment limit. Download it while signed in: { $url }
+
+# squid/bot/submission/schematic_tools.py:437
+schematic-video-too-large-failure = The schematic or output exceeded the rendering limits. Try a smaller schematic or shorter clip.
+
+# squid/bot/submission/schematic_tools.py:429
+schematic-video-unavailable = Video rendering is unavailable on the worker. Ask an administrator to check the video helper and FFmpeg installation.
 
 # squid/schematics/application/previews.py:52
 schematics-build-no-primary = This build has no primary schematic to preview.

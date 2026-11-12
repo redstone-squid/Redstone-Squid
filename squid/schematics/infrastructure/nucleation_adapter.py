@@ -793,8 +793,13 @@ def render_video(
     data: bytes, *, request: VideoRenderRequest, resource_pack: VerifiedResourcePack, scratch: Path, helper: str
 ) -> bytes:
     """Render through the pinned native helper inside the supervised process group."""
-    if shutil.which(helper) is None or shutil.which("ffmpeg") is None:
-        raise SchematicSupportUnavailableError(developer_action="Install the video helper and FFmpeg on the worker.")
+    for executable in (helper, "ffmpeg"):
+        if shutil.which(executable) is None:
+            msg = f"Required video executable was not found: {executable}"
+            raise SchematicSupportUnavailableError(
+                msg,
+                developer_action="Deploy the runtime-video worker image, or install the helper and FFmpeg on PATH.",
+            )
     schematic = _load(data)
     _guard_allocated_volume(schematic, SchematicLimits())
     source = scratch / "source.snbt"
@@ -840,7 +845,11 @@ def render_video(
         )
     if result.returncode != 0:
         msg = "The native video renderer failed."
-        raise InvalidSchematicError(msg, context={"exit_code": result.returncode})
+        with (scratch / "renderer.log").open("rb") as log:
+            log.seek(0, os.SEEK_END)
+            log.seek(max(0, log.tell() - 8192))
+            diagnostics = log.read().decode("utf-8", errors="replace")
+        raise InvalidSchematicError(msg, context={"exit_code": result.returncode, "renderer_log": diagnostics})
     size = output.stat().st_size
     if size > 64 * 1024 * 1024:
         raise SchematicTooLargeError(actual=size, limit=64 * 1024 * 1024, measure="video bytes")

@@ -7,6 +7,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+import pytest
 from whenever import Instant
 
 from squid.artifacts.infrastructure import LocalArtifactStore
@@ -95,7 +96,9 @@ class RecordingJobRepository:
         pass
 
 
-async def test_a_missing_input_artifact_is_classified_and_failed_terminally(tmp_path: Path) -> None:
+async def test_a_missing_input_artifact_is_classified_and_failed_terminally(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """The input fan-out must not wrap the error: classification is by exception type."""
     job = ClaimedSchematicJob(
         id=1,
@@ -121,6 +124,8 @@ async def test_a_missing_input_artifact_is_classified_and_failed_terminally(tmp_
     assert failure.terminal is True
     assert failure.error_kind == "internal"
     assert failure.error_context["object_key"] == "schematics/ab/missing"
+    assert "Schematic job #1 (analyze) failed" in caplog.text
+    assert "input artifact is missing" in caplog.text
 
 
 def test_historical_invalid_jobs_recover_input_choices_without_reclassifying_other_errors() -> None:

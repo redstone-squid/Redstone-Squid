@@ -325,12 +325,17 @@ class SchematicJobRunner:
                 error_context=context,
                 terminal=terminal,
             )
-            if dead:
-                logger.warning(
-                    "Schematic job moved to dead state",
-                    extra={"squid.schematic.job_id": job.id, "squid.schematic.operation": job.operation},
-                    exc_info=True,
-                )
+            logger.warning(
+                "Schematic job #%s (%s) failed: kind=%s, terminal=%s: %s\nRenderer diagnostics: %s",
+                job.id,
+                job.operation,
+                kind,
+                dead,
+                error,
+                context.get("renderer_log", "not available"),
+                extra={"squid.schematic.job_id": job.id, "squid.schematic.operation": job.operation},
+                exc_info=True,
+            )
 
     async def _load_input(self, job: ClaimedSchematicJob, key: str) -> bytes:
         payload = await self._artifacts.get(key, max_bytes=self._config.max_job_artifact_bytes)

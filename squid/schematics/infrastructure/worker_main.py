@@ -29,6 +29,7 @@ from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
+    SchematicSupportUnavailableError,
     SchematicTooLargeError,
 )
 from squid.schematics.infrastructure import wire
@@ -215,6 +216,9 @@ def _error_payload(exc: Exception) -> Mapping[str, Any]:
         context = dict(wire.encode_simulation_input_error(exc))
     elif isinstance(exc, InvalidSchematicError):
         kind = "invalid"
+        context = dict(exc.context)
+    elif isinstance(exc, SchematicSupportUnavailableError):
+        kind = "unavailable"
         context = dict(exc.context)
     elif isinstance(exc, SquidError):
         context = dict(exc.context)

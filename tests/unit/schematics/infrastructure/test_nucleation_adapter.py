@@ -1,7 +1,9 @@
 # pyright: reportPrivateUsage=false
 """Nucleation adapter contract tests."""
 
+from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -9,8 +11,9 @@ from pytest_mock import MockerFixture
 pytest.importorskip("nucleation")
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
-from squid.schematics.domain.values import RgbaColor
+from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
 from squid.schematics.errors import InvalidSchematicError
 from squid.schematics.infrastructure import nucleation_adapter
 
@@ -226,3 +229,30 @@ def test_engine_base64_is_strictly_validated(payload: str) -> None:
 def test_conversion_loss_json_rejects_malformed_required_evidence(payload: object) -> None:
     with pytest.raises(InvalidSchematicError):
         nucleation_adapter._loss_entries(payload)
+
+
+def test_video_failure_preserves_a_bounded_renderer_log(tmp_path: Path, mocker: MockerFixture) -> None:
+    mocker.patch.object(nucleation_adapter.shutil, "which", return_value="/bin/helper")
+    mocker.patch.object(nucleation_adapter, "_load", return_value=object())
+    mocker.patch.object(nucleation_adapter, "_guard_allocated_volume")
+    simulation = mocker.patch.object(nucleation_adapter.nucleation, "TickSimulation")
+    simulation.gametest_snbt.return_value = "{}"
+
+    def fail_render(*args: object, **kwargs: object) -> Mock:
+        (tmp_path / "renderer.log").write_bytes(b"x" * 10000 + b"encoder failed")
+        return Mock(returncode=1)
+
+    mocker.patch.object(nucleation_adapter.subprocess, "run", side_effect=fail_render)
+    with pytest.raises(InvalidSchematicError) as failure:
+        nucleation_adapter.render_video(
+            b"schematic",
+            request=VideoRenderRequest(simulation_enabled=False, interactions=()),
+            resource_pack=VerifiedResourcePack.from_bytes(b"pack"),
+            scratch=tmp_path,
+            helper="helper",
+        )
+    assert failure.value.context["exit_code"] == 1
+    diagnostics = failure.value.context["renderer_log"]
+    assert isinstance(diagnostics, str)
+    assert len(diagnostics) == 8192
+    assert diagnostics.endswith("encoder failed")

@@ -670,9 +670,9 @@ def _translate(error: object, operation: str) -> Exception:
     if kind == "ambiguous_simulation_input":
         return wire.decode_simulation_input_error(context).with_context(context={"operation": operation})
     if kind == "invalid":
-        return InvalidSchematicError(context={**context, "operation": operation})
+        return InvalidSchematicError(message, context={**context, "operation": operation})
     if kind == "unavailable":
-        return SchematicSupportUnavailableError(context={"operation": operation})
+        return SchematicSupportUnavailableError(message, context={**context, "operation": operation})
     return InfrastructureError(
         message or "The schematic engine failed.",
         resource="schematic",
