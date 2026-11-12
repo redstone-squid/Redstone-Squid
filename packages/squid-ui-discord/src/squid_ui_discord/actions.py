@@ -8,6 +8,7 @@ work are recorded during the handler, then accepted only after its transaction c
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from functools import partial
 from typing import TYPE_CHECKING, Any, override
 
 import discord
@@ -83,10 +84,7 @@ class ActionResponder:
         spec, handler, default_mode = bind_form(form, on_submit)
         selected_mode = mode or default_mode
         modal = self._form_modal(spec, key, handler, selected_mode, self.message_root.generation, label, record)
-        if self.interaction.response.is_done():
-            message = "Discord modals must be the interaction's initial response"
-            raise RuntimeError(message)
-        await self.interaction.response.send_modal(modal)
+        await self.send_modal(modal)
 
     def _form_modal(
         self,
@@ -148,7 +146,8 @@ class ActionResponder:
                 lines.append(resolve_text(error.message, self.message_root.localization).content)
         retry = _RetryButton(
             owner_id=actor_id,
-            modal=lambda interaction: ActionResponder(interaction, self.message_root)._form_modal(
+            modal=partial(
+                self._form_modal,
                 spec,
                 key,
                 handler,
@@ -256,13 +255,8 @@ def _responder(event: ActionEvent) -> ActionResponder:
     return found
 
 
-def _selected_entities(event: ActionEvent) -> tuple[object, ...]:
-    """Return the Discord objects resolved for an entity-selection event."""
-    return _responder(event).selected_entities
-
-
 class _RetryButton(discord.ui.Button[discord.ui.LayoutView]):
-    def __init__(self, *, owner_id: int, modal: Callable[[discord.Interaction], discord.ui.Modal]) -> None:
+    def __init__(self, *, owner_id: int, modal: Callable[[], discord.ui.Modal]) -> None:
         super().__init__(label="Try again")
         self.owner_id = owner_id
         self.modal = modal
@@ -272,4 +266,4 @@ class _RetryButton(discord.ui.Button[discord.ui.LayoutView]):
         if interaction.user.id != self.owner_id:
             await deliver.respond_text(interaction, "This form attempt belongs to another member.", ephemeral=True)
             return
-        await interaction.response.send_modal(self.modal(interaction))
+        await interaction.response.send_modal(self.modal())

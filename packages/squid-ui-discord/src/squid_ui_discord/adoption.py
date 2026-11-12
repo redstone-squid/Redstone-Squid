@@ -50,7 +50,7 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui_discord.actions import ActionResponder, _responder, _selected_entities
+from squid_ui_discord.actions import ActionResponder, _responder
 from squid_ui_discord.message_root_wiring import _CONVERSATION_TYPES
 
 type Item = discord.ui.Item[Any]
@@ -570,7 +570,7 @@ class _AdoptedView(Component[Any, Any]):
 
     def _entity_selection(self, key: str) -> Callable[[EntitySelectionEvent], Awaitable[None]]:
         async def on_select(event: EntitySelectionEvent) -> None:
-            await self._invoke(key, event, list(_selected_entities(event)))
+            await self._invoke(key, event, list(_responder(event).selected_entities))
 
         return on_select
 
