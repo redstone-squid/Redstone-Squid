@@ -1,5 +1,6 @@
 """PostgreSQL persistence for synchronized submission drafts."""
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import cast, override
 from uuid import UUID
@@ -466,6 +467,7 @@ def _require_same_change(row: SubmissionDraftChange, change: DraftChange, actor_
         row.actor_account_id != actor_account_id
         or row.base_revision != change.base_revision
         or row.client_instance_id != change.client_instance_id
-        or row.operations != _operations_to_json(change.operations)
+        or json.dumps(row.operations, sort_keys=True)
+        != json.dumps(_operations_to_json(change.operations), sort_keys=True)
     ):
         raise OperationReuseError

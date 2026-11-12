@@ -118,13 +118,17 @@ def _change(*, key: str, operation_id: str) -> DraftChange:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("boolean_value", [False, True])
 async def test_create_adds_owner_grant_and_replays_change(
+    boolean_value: bool,
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     created = await transact(repository, lambda uow: uow.submission_drafts.create(_stored(account_id)), commit=True)
     change = _change(key="operation-a", operation_id="00000000-0000-4000-8000-000000000202")
+    if boolean_value:
+        change = replace(change, operations=(replace(change.operations[0], value=True),))
 
     applied = await transact(
         repository,
@@ -156,7 +160,10 @@ async def test_create_adds_owner_grant_and_replays_change(
     conflicts = (
         (replace(change, base_revision=99), account_id),
         (replace(change, client_instance_id="another-client"), account_id),
-        (replace(change, operations=(replace(change.operations[0], value="different"),)), account_id),
+        (
+            replace(change, operations=(replace(change.operations[0], value=1 if boolean_value else "different"),)),
+            account_id,
+        ),
         (change, account_id + 1),
     )
     for conflicting, actor_id in conflicts:
