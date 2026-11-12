@@ -3,6 +3,7 @@
 Dry runs call the model but do not retain inputs or submit drafts. Real imports queue
 shared finalization; the worker must be running to finish them. Repeat the same bounds
 and grouping options to resume retained runs without changing their bundle identities.
+The summary counts intake, not completed builds; finalization runs separately.
 """
 
 import argparse
@@ -45,6 +46,7 @@ class ImportOptions:
     include_images: bool = True
     dry_run: bool = False
     channel_consent: bool = False
+    retry_failed: bool = False
     resume_channel: int | None = None
     resume_from: int | None = None
 
@@ -158,9 +160,17 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
             model=options.model,
             reasoning_effort=options.reasoning_effort,
             include_images=options.include_images,
+            retry_failed=options.retry_failed,
         )
-        logger.info("Processed group %s as inference run %s", [message.id for message in primary], run_id)
-        return ImportSummary(groups=1, processed=1)
+        status = await services.submission_inference.public_status(run_id)
+        if status is None:
+            logger.error("The imported inference run %s has no retained status", run_id)
+            return ImportSummary(groups=1, failed=1)
+        count = len(status.candidates)
+        logger.info(
+            "Retained group %s as inference run %s: %s candidates", [message.id for message in primary], run_id, count
+        )
+        return ImportSummary(groups=1, processed=1, inferred_candidates=count)
     except Exception:
         logger.exception("Failed to import message group beginning at %s", primary[0].id)
         return ImportSummary(groups=1, failed=1)
@@ -286,6 +296,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--group-max-messages", type=_positive_int, default=8)
     parser.add_argument("--no-images", action="store_true")
     parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry untouched drafts whose finalization retries were exhausted; reuse retained model results.",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="Call inference without retaining or submitting results."
     )
     parser.add_argument(
@@ -320,6 +335,7 @@ async def main(arguments: argparse.Namespace) -> int:
         include_images=not arguments.no_images,
         dry_run=arguments.dry_run,
         channel_consent=arguments.channel_consent,
+        retry_failed=arguments.retry_failed,
         resume_channel=arguments.resume_channel,
         resume_from=arguments.resume_from,
     )
@@ -348,6 +364,10 @@ async def main(arguments: argparse.Namespace) -> int:
             exc.log_resume(boundary)
             return 1
     logger.info("Import complete: %s", summary)
+    if not options.dry_run:
+        logger.info(
+            "Summary counts inference intake. Finalization continues in the worker; incomplete drafts need review."
+        )
     return 1 if summary.failed else 0
 
 

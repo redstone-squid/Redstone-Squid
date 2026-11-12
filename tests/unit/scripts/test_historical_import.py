@@ -16,6 +16,7 @@ import pytest
 
 from scripts import populate_db_with_logs_historical_messages as importer
 from squid.runtime import BotServices
+from squid.submissions.application.inference_runs import InferenceStatus
 
 
 def message(identifier: int, author: int = 1, *, bot: bool = False, reply: int | None = None) -> discord.Message:
@@ -52,7 +53,9 @@ def services(*, consent: bool = True) -> BotServices:
                     return_value=SimpleNamespace(id=7, needs_consent_refresh=False) if consent else None
                 )
             ),
-            submission_inference=SimpleNamespace(public_status=AsyncMock(return_value=None)),
+            submission_inference=SimpleNamespace(
+                public_status=AsyncMock(side_effect=[None, InferenceStatus(42, None, 1, "completed", ("a", "b"))])
+            ),
             builds=SimpleNamespace(list_ids_for_source_message=AsyncMock(return_value=[])),
             build_inference=SimpleNamespace(infer=AsyncMock(return_value=[object(), object()])),
         ),
@@ -109,8 +112,15 @@ async def test_real_import_reuses_shared_resumable_intake(monkeypatch: pytest.Mo
     result = await importer.process_group(bundle, runtime, importer.ImportOptions("x", include_images=False))
     assert result.processed == 1
     ingest.assert_awaited_once_with(
-        bundle.primary, bundle.preceding, runtime, model="x", reasoning_effort=None, include_images=False
+        bundle.primary,
+        bundle.preceding,
+        runtime,
+        model="x",
+        reasoning_effort=None,
+        include_images=False,
+        retry_failed=False,
     )
+    assert result.inferred_candidates == 2
 
 
 @pytest.mark.parametrize(("existing", "skipped", "failed"), [([True, True], 1, 0), ([True, False], 0, 1)])
@@ -175,7 +185,11 @@ def test_invalid_arguments_fail_before_connecting(arguments: list[str]) -> None:
 
 async def test_retained_run_resumes_even_when_a_candidate_is_already_saved(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = services()
-    monkeypatch.setattr(runtime.submission_inference, "public_status", AsyncMock(return_value=object()))
+    monkeypatch.setattr(
+        runtime.submission_inference,
+        "public_status",
+        AsyncMock(return_value=InferenceStatus(42, None, 1, "completed", ("a", "b"))),
+    )
     lookup = AsyncMock(return_value=[42])
     monkeypatch.setattr(runtime.builds, "list_ids_for_source_message", lookup)
     ingest = AsyncMock(return_value=uuid4())
@@ -184,6 +198,7 @@ async def test_retained_run_resumes_even_when_a_candidate_is_already_saved(monke
         importer.MessageBundle((message(1), message(2)), ()), runtime, importer.ImportOptions("x")
     )
     assert result.processed == 1
+    assert result.inferred_candidates == 2
     lookup.assert_not_awaited()
     ingest.assert_awaited_once()
 
@@ -312,3 +327,21 @@ def test_resume_log_reports_inclusive_message_and_original_upper_bound(caplog: p
 
     assert "--before 2026-11-12T10:00:00+00:00 --resume-channel 42 --resume-from 3" in caplog.text
     assert "Keep --after, --limit, channel order, and grouping unchanged" in caplog.text
+
+
+async def test_retry_failed_reuses_intake_and_reports_retained_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    ingest = AsyncMock(return_value=uuid4())
+    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
+    runtime = services()
+    arguments = importer.parse_args(["--retry-failed"])
+
+    summary = await importer.process_group(
+        importer.MessageBundle((message(1),), ()),
+        runtime,
+        importer.ImportOptions("x", retry_failed=arguments.retry_failed),
+    )
+
+    assert summary.inferred_candidates == 2
+    assert summary.failed == 0
+    assert ingest.await_args is not None
+    assert ingest.await_args.kwargs["retry_failed"] is True

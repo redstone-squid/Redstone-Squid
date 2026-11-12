@@ -20,9 +20,10 @@ from squid.core.actors import Actor
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
 from squid.submissions.application.drafts import DraftActor
+from squid.submissions.application.finalization import DraftPreparationSnapshot
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
-from squid.submissions.domain import DraftStatus
+from squid.submissions.domain import DraftStatus, SubmissionAttentionIssue, SubmissionAttentionReason
 from squid.submissions.domain.source_files import SubmissionSourceFile
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ async def ingest_message_bundle(
     model: str,
     reasoning_effort: str | None = None,
     include_images: bool = True,
+    retry_failed: bool = False,
 ) -> UUID:
     """Resume or infer candidates for a nonempty, ordered bundle of primary messages.
 
@@ -72,18 +74,23 @@ async def ingest_message_bundle(
             reasoning_effort=reasoning_effort,
             source_files=source_files,
         )
-    await admit_candidates(services, candidates)
+    await admit_candidates(services, candidates, retry_failed=retry_failed)
     return run_id
 
 
 async def admit_candidates(
-    services: BotServices, candidates: tuple[InferenceCandidate, ...], *, actor: DraftActor | None = None
+    services: BotServices,
+    candidates: tuple[InferenceCandidate, ...],
+    *,
+    actor: DraftActor | None = None,
+    retry_failed: bool = False,
 ) -> None:
     """Try to submit untouched inferred drafts while preserving edits and unresolved files.
 
     Only drafts still at their initial inferred revision are admitted automatically.
-    Files shared by multiple candidates require explicit assignment. Domain errors
-    are logged per candidate so other candidates can continue.
+    retry_failed also admits untouched drafts whose worker retries were exhausted.
+    Missing facts still require correction. Files shared by multiple candidates
+    require explicit assignment. Domain errors are logged per candidate.
     """
     for candidate in candidates:
         if candidate.facts.category is None:
@@ -94,17 +101,39 @@ async def admit_candidates(
                 candidate, services.submission_drafts, services.submission_forms, actor=authority
             )
             # Replayed deliveries must not submit a draft that the owner has since corrected.
-            if draft.snapshot.revision != 1 or draft.snapshot.status is not DraftStatus.EDITING:
+            retryable = (
+                retry_failed
+                and draft.snapshot.status is DraftStatus.NEEDS_ATTENTION
+                and draft.preparation_issues
+                == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED),)
+            )
+            if draft.snapshot.revision != 1 or (draft.snapshot.status is not DraftStatus.EDITING and not retryable):
+                logger.info(
+                    "Preserved candidate %s: %s, revision %s; issues: %s",
+                    candidate.id,
+                    draft.snapshot.status.value,
+                    draft.snapshot.revision,
+                    ", ".join(f"{issue.field_id}: {issue.reason.value}" for issue in draft.preparation_issues)
+                    or "none",
+                )
                 continue
-            if len(candidates) > 1 and candidate.source_files:
-                # Finalization records the unresolved assignment without guessing which draft owns each file.
-                await services.submission_finalization.submit(candidate.id, authority, locale=None)
-                continue
-            for source in candidate.source_files:
-                try:
-                    await receive_retained_file(services, candidate.id, authority, source.id)
-                except Exception:
-                    logger.warning("Could not receive inferred source %s", source.id, exc_info=True)
-            await services.submission_finalization.submit(candidate.id, authority, locale=None)
+            # Finalization records shared files as unresolved rather than guessing their assignment.
+            if not (len(candidates) > 1 and candidate.source_files):
+                for source in candidate.source_files:
+                    try:
+                        await receive_retained_file(services, candidate.id, authority, source.id)
+                    except Exception:
+                        logger.warning("Could not receive inferred source %s", source.id, exc_info=True)
+            outcome = await services.submission_finalization.submit(candidate.id, authority, locale=None)
+            if isinstance(outcome, DraftPreparationSnapshot):
+                logger.warning(
+                    "Candidate %s needs attention: %s",
+                    candidate.id,
+                    ", ".join(f"{issue.field_id}: {issue.reason.value}" for issue in outcome.issues),
+                )
+            else:
+                logger.info(
+                    "Candidate %s finalization: %s (job %s)", candidate.id, outcome.status.value, outcome.job_id
+                )
         except SquidError:
             logger.warning("Inferred candidate %s requires recovery", candidate.id, exc_info=True)

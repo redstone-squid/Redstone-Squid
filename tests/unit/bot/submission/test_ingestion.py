@@ -14,9 +14,19 @@ from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.actors import Actor
 from squid.runtime import BotServices
 from squid.submissions.application.drafts import DraftActor, StoredDraft
-from squid.submissions.application.finalization import FinalizationJobSnapshot, SubmissionFinalizationService
+from squid.submissions.application.finalization import (
+    DraftPreparationSnapshot,
+    FinalizationJobSnapshot,
+    SubmissionFinalizationService,
+)
 from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
-from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
+from squid.submissions.domain import (
+    DraftSnapshot,
+    DraftStatus,
+    SubmissionAttentionIssue,
+    SubmissionAttentionReason,
+    SubmissionOrigin,
+)
 from squid.submissions.domain.finalization import FinalizationJobStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
@@ -80,14 +90,22 @@ class Harness:
     download: AsyncCallRecorder
 
 
-def setup(monkeypatch: pytest.MonkeyPatch, candidates: tuple[InferenceCandidate, ...], *, revision: int = 1) -> Harness:
+def setup(
+    monkeypatch: pytest.MonkeyPatch,
+    candidates: tuple[InferenceCandidate, ...],
+    *,
+    revision: int = 1,
+    status: DraftStatus = DraftStatus.EDITING,
+    issues: tuple[SubmissionAttentionIssue, ...] = (),
+) -> Harness:
     now = Instant.now()
     draft = StoredDraft(
-        DraftSnapshot(uuid4(), 7, "build_submission.v1", 1, "door", revision=revision),
+        DraftSnapshot(uuid4(), 7, "build_submission.v1", 1, "door", revision=revision, status=status),
         SubmissionOrigin.DISCORD,
         now,
         now,
         now.add(days=7, days_assumed_24h_ok=True),
+        preparation_issues=issues,
     )
     materialize = AsyncCallRecorder(result=draft)
     download = AsyncCallRecorder()
@@ -187,3 +205,69 @@ async def test_staff_retry_is_attributed_to_the_staff_actor(monkeypatch: pytest.
     assert h.materialize.await_args is not None
     assert h.materialize.await_args.kwargs["actor"] == actor
     h.finalization.submit_calls.assert_awaited_once_with(item.id, actor, locale=None)
+
+
+async def test_explicit_retry_resubmits_a_dead_job_without_another_model_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = candidate()
+    h = setup(
+        monkeypatch,
+        (item,),
+        status=DraftStatus.NEEDS_ATTENTION,
+        issues=(SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED),),
+    )
+    h.inference.resume_calls.return_value = (item,)
+
+    await ingestion.ingest_message_bundle([message()], [], h.services, model="test", retry_failed=True)
+
+    h.inference.infer_calls.assert_not_awaited()
+    cast(Any, ingestion.assemble_bundle).assert_not_awaited()
+    h.finalization.submit_calls.assert_awaited_once_with(item.id, 7, locale=None)
+
+
+@pytest.mark.parametrize(
+    ("retry_failed", "revision", "reason"),
+    [
+        (False, 1, SubmissionAttentionReason.RETRY_EXHAUSTED),
+        (True, 2, SubmissionAttentionReason.RETRY_EXHAUSTED),
+        (True, 1, SubmissionAttentionReason.REQUIRED),
+    ],
+)
+async def test_retry_preserves_edits_and_missing_facts(
+    monkeypatch: pytest.MonkeyPatch,
+    retry_failed: bool,
+    revision: int,
+    reason: SubmissionAttentionReason,
+) -> None:
+    item = candidate()
+    h = setup(
+        monkeypatch,
+        (item,),
+        revision=revision,
+        status=DraftStatus.NEEDS_ATTENTION,
+        issues=(SubmissionAttentionIssue("submission", reason),),
+    )
+
+    await ingestion.admit_candidates(h.services, (item,), retry_failed=retry_failed)
+
+    h.finalization.submit_calls.assert_not_awaited()
+
+
+async def test_missing_facts_are_reported_in_intake_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    item = candidate()
+    h = setup(monkeypatch, (item,))
+    issue = SubmissionAttentionIssue("opening_width", SubmissionAttentionReason.REQUIRED)
+    monkeypatch.setattr(
+        h.services.submission_finalization,
+        "submit",
+        AsyncCallRecorder(
+            result=DraftPreparationSnapshot(item.id, 1, (issue,)),
+        ),
+    )
+
+    await ingestion.admit_candidates(h.services, (item,))
+
+    assert str(item.id) in caplog.text
+    assert "needs attention: opening_width: required" in caplog.text
