@@ -1,0 +1,27 @@
+{
+  "reason": "Translations from the replaced help screen, retained for reuse.",
+  "messages": {
+    "bot-help-commands": "{ $description }{ \"\\u000A\" }{ \"\\u000A\" }命令：{ $commands }{ \"\\u000A\" }{ \"\\u000A\" }{ $more_information }{ \"\\u000A\" }",
+    "bot-help-usable-subcommands": "{ $description }{ \"\\u000A\" }{ \"\\u000A\" }可用子命令：{ $commands }{ \"\\u000A\" }{ \"\\u000A\" }{ $more_information }",
+    "bot-help-usable-subcommands-2": "{ $description }{ \"\\u000A\" }{ \"\\u000A\" }可用子命令：{ $commands }{ \"\\u000A\" }{ \"\\u000A\" }{ $more_information }",
+    "help-command-help": "命令帮助 - `{ $name }`",
+    "help-command-help-2": "命令帮助",
+    "help-command-lookup-failed": "找不到命令 `{ $name }`。请使用 /help 获取可用命令列表。",
+    "help-details-hint": "使用 `/help <command>` 获取更多信息。",
+    "help-error": "错误。",
+    "help-help": "帮助",
+    "help-none": "无"
+  },
+  "source-revisions": {
+    "bot-help-commands": "ad5656feaa47c622eff799a5f8d7c0a8899f2d725e834d5cc1f2e60de743a1f2",
+    "bot-help-usable-subcommands": "3e9234e154bafdb78fb43d9e77b6301284713ed614aca7cd6adcb678164f09ad",
+    "bot-help-usable-subcommands-2": "81d9233b26c1f76b35653ec085dffe3ad2225f32389f9310bff0512f281358b9",
+    "help-command-help": "afca63605ca468cea9921948355a88df69ff6e22f39e0c420c00084e699025d1",
+    "help-command-help-2": "15b16e4eee3494a30bf40dd7656528cfad9272b07681ee35b530ebd97a58a0ec",
+    "help-command-lookup-failed": "3c808464fec3f0e60fd6299500b939f83a4cf0bd82c3463031cdfc07a1adf274",
+    "help-details-hint": "89683fbee62130d0720f23a65f7444aac6cb051a169554cf47e5c7e9132aef33",
+    "help-error": "5cd52637601526be234903e79ebfde7e97a82c3559b9c340b5ea7240c25ce0a2",
+    "help-help": "b06e698814c12b9a36947f45f0e7f95ee226760e26e51e9eca9c151ffae9d191",
+    "help-none": "7327d93c6590dde42d4a9f736f8d8b96085a4b9822ca3728926e436d3d0e65f6"
+  }
+}
