@@ -28,6 +28,11 @@ from squid.submissions.domain.source_files import SubmissionSourceFile
 logger = logging.getLogger(__name__)
 
 
+def message_bundle_run_id(primary: Sequence[discord.Message]) -> UUID:
+    """Identify a retained Discord inference run by its ordered primary messages."""
+    return uuid5(NAMESPACE_URL, "discord-inference:" + ":".join(str(message.id) for message in primary))
+
+
 async def ingest_message_bundle(
     primary: Sequence[discord.Message],
     preceding: Sequence[discord.Message],
@@ -43,7 +48,7 @@ async def ingest_message_bundle(
     entering. Primary message IDs determine its retry identity. Admission may queue
     complete drafts, while missing categories and ambiguous files remain for review.
     """
-    run_id = uuid5(NAMESPACE_URL, "discord-inference:" + ":".join(str(message.id) for message in primary))
+    run_id = message_bundle_run_id(primary)
     owner = await get_or_create_discord_account_id(services.accounts, primary[0].author)
     candidates = await services.submission_inference.resume(run_id, Actor(account_id=owner))
     if candidates is None:
