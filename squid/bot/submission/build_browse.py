@@ -18,6 +18,7 @@ from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.submission.record_browser import record_browser
 from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.schematic_tools import SchematicTools
+from squid.bot.submission.search_help import search_help
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr
@@ -379,6 +380,8 @@ class BuildBrowseScreen(sd.Screen):
         initial_records: bool = False,
         search: SearchService | None = None,
     ) -> None:
+        self._build_search_help = search_help(records=False, apply_example=self._apply_search_example)
+        self._record_search_help = search_help(records=True, apply_example=self._apply_search_example)
         self._search_service = search
         self._mode = "records" if initial_records and records is not None else "builds"
         self._records = record_browser(records, self._open_holder) if records is not None else None
@@ -453,25 +456,35 @@ class BuildBrowseScreen(sd.Screen):
     def _workspace_controls(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         return sl.action_controls(
             sl.action_control(
-                tr(t"build-browse-all-builds = Builds"), partial(self._switch, "builds"), key="all-builds"
+                tr(t"build-browse-all-builds = Builds"),
+                partial(self._switch, "builds"),
+                key="all-builds",
+                emphasis=sl.semantic.Emphasis.STRONG if self._mode == "builds" else sl.semantic.Emphasis.NORMAL,
+                available=self._mode != "builds",
             ),
             self._records is not None
             and sl.action_control(
                 tr(t"build-browse-records = Records"),
                 partial(self._switch, "records"),
                 key="all-records",
+                emphasis=sl.semantic.Emphasis.STRONG if self._mode == "records" else sl.semantic.Emphasis.NORMAL,
+                available=self._mode != "records",
             ),
             self._record_tools is not None
             and sl.action_control(
                 tr(t"build-browse-record-tools = Record tools"),
                 partial(self._switch, "tools"),
                 key="record-tools",
+                emphasis=sl.semantic.Emphasis.STRONG if self._mode == "tools" else sl.semantic.Emphasis.NORMAL,
+                available=self._mode != "tools",
             ),
             key="catalogue-views",
             display=sl.semantic.ControlDisplay.INDIVIDUAL,
         )
 
     async def _switch(self, mode: Literal["builds", "records", "tools"], _event: sl.PressEvent) -> None:
+        if mode == self._mode:
+            return
         self._results = None
         self._query = ""
         self._sort = ""
@@ -578,42 +591,16 @@ class BuildBrowseScreen(sd.Screen):
                 )
             )
         if self._show_search_help:
-            examples = (
-                tr(
-                    t"record-filter-examples = Try `door kind:door` or `version_scope:all_time`. "
-                    t"Other kinds: entrance, extender, utility. Use `version_scope:up_to_date` "
-                    t"for current-version records."
-                )
-                if self._mode == "records"
-                else tr(
-                    t"build-filter-examples = Try `door creator:Steve`, `width:5`, or `restriction:observerless`. "
-                    t"Combine filters with spaces to match all of them."
-                )
-            )
-            nodes.append(
-                sl.section(
-                    sl.heading(tr(t"catalogue-search-help = Search help")),
-                    sl.paragraph(
-                        tr(
-                            t"catalogue-search-help-text = Enter a name or keywords in Search & filters. "
-                            t'Use `title:"vault door"` for a title phrase. Combine alternatives with `OR`, '
-                            t"for example `door OR extender`."
-                        )
-                    ),
-                    sl.paragraph(examples),
-                    sl.paragraph(
-                        tr(
-                            t"catalogue-search-help-sort = Leave Sort blank for relevance, or use `-created_at` "
-                            t"for newest first. Build searches also support `width` and `-width`. "
-                            t"The minus sign reverses the order."
-                        )
-                    ),
-                )
-            )
+            nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
         return tuple(nodes)
 
     async def _toggle_search_help(self, _event: sl.PressEvent) -> None:
         self._show_search_help = not self._show_search_help
+
+    async def _apply_search_example(self, query: str, _event: sl.PressEvent) -> None:
+        self._record_categories = frozenset()
+        await self._run_search(query, "")
+        self._show_search_help = False
 
     def _detail(self, build: Build) -> _BuildDetail:
         return _BuildDetail(
