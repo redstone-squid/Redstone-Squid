@@ -1,11 +1,13 @@
 """Public schematic metadata representations."""
 
-from typing import Self, override
+from typing import Literal, Self, override
 
-from pydantic import ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from squid.api.v1.schemas import FromDomain
 from squid.schematics.application.attachments import StoredSchematic
+from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
+from squid.schematics.application.video_service import VideoStatus
 from squid.schematics.domain import SchematicDimensions
 
 
@@ -80,4 +82,65 @@ class SchematicSummary(FromDomain[StoredSchematic]):
             license=license.value,
             license_url=license.uri,
             download_url=download_url,
+        )
+
+
+class VideoResponse(VideoStatus):
+    status_url: str
+    download_url: str | None = None
+
+    @classmethod
+    def from_status(cls, status: VideoStatus, *, status_url: str, download_url: str) -> Self:
+        return cls(
+            **status.model_dump(),
+            status_url=status_url,
+            download_url=download_url if status.status == "succeeded" else None,
+        )
+
+
+class VideoSimulation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = True
+    interactions: tuple[VideoInteraction, ...] = (VideoInteraction(tick=20),)
+
+
+class VideoCamera(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    mode: Literal["fixed", "orbit"] = "orbit"
+    yaw: float = Field(default=45, ge=-360, le=360)
+    pitch: float = Field(default=30, ge=-90, le=90)
+    zoom: float = Field(default=1, gt=0, le=16)
+    orbit_degrees: float = Field(default=180, ge=-360, le=360)
+
+
+class VideoCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    width: int = Field(default=640, ge=64, le=1280, multiple_of=2, strict=True)
+    height: int = Field(default=360, ge=64, le=720, multiple_of=2, strict=True)
+    fps: int = Field(default=30, ge=1, le=30, strict=True)
+    duration_ticks: int = Field(default=120, ge=1, le=200, strict=True)
+    simulation: VideoSimulation = Field(default_factory=VideoSimulation)
+    camera: VideoCamera = Field(default_factory=VideoCamera)
+
+    @model_validator(mode="after")
+    def validate_recipe(self) -> Self:
+        self.to_request()
+        return self
+
+    def to_request(self) -> VideoRenderRequest:
+        return VideoRenderRequest(
+            width=self.width,
+            height=self.height,
+            fps=self.fps,
+            duration_ticks=self.duration_ticks,
+            simulation_enabled=self.simulation.enabled,
+            interactions=(
+                self.simulation.interactions
+                if self.simulation.enabled or "interactions" in self.simulation.model_fields_set
+                else ()
+            ),
+            yaw=self.camera.yaw,
+            pitch=self.camera.pitch,
+            zoom=self.camera.zoom,
+            orbit_degrees=self.camera.orbit_degrees if self.camera.mode == "orbit" else 0,
         )

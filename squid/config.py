@@ -748,6 +748,7 @@ class SchematicConfig(_FrozenModel):
     compare_timeout_seconds: float = Field(default=15.0, gt=0)
     convert_timeout_seconds: float = Field(default=15.0, gt=0)
     render_timeout_seconds: float = Field(default=45.0, gt=0)
+    video_enabled: bool = False
     video_timeout_seconds: float = Field(default=240.0, gt=0, le=240)
     video_helper_path: Path = Path("squid-schematic-video")
     simulate_timeout_seconds: float = Field(default=90.0, gt=0)
@@ -837,7 +838,7 @@ class SchematicConfig(_FrozenModel):
         if self.render_pack_path is not None and self.render_pack_url is not None:
             msg = "Configure only one of render_pack_path and render_pack_url."
             raise ValueError(msg)
-        if self.render_enabled and (
+        if (self.render_enabled or self.video_enabled) and (
             (self.render_pack_path is None and self.render_pack_url is None) or self.render_public_base_url is None
         ):
             msg = "Rendering requires a resource pack and render_public_base_url."

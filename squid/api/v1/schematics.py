@@ -2,15 +2,18 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 
-from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import BuildQueries, Schematics
+from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
+from squid.api.dependencies import BuildQueries, CurrentCaller, Permissions, Schematics
 from squid.api.errors import responses
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.links import relative_url_for
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, resolve_selector
-from squid.api.v1.schemas.schematics import SchematicSummary
+from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
+from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
+from squid.schematics.errors import SchematicSupportUnavailableError
 
 router = APIRouter(tags=["schematics"])
 
@@ -164,4 +167,122 @@ async def get_schematic_render_content(
         content=content,
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@router.post(
+    "/builds/{build_id}/schematics/{schematic_id}/videos",
+    status_code=202,
+    response_model=VideoResponse,
+    operation_id="schematic_video_create",
+    responses=responses(403, 404, 409, 413, 422, 503),
+    dependencies=[Depends(reserve_idempotent_request)],
+    openapi_extra=contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def submit_schematic_video(
+    build_id: int,
+    schematic_id: int,
+    body: VideoCreateRequest,
+    build_queries: BuildQueries,
+    schematics: Schematics,
+    caller: CurrentCaller,
+    permissions: Permissions,
+    request: Request,
+    response: Response,
+) -> VideoResponse:
+    """Queue a private MP4 of a stored schematic with timed input activations."""
+    account_id = caller.require_consented_account()
+    if schematics.videos is None:
+        raise SchematicSupportUnavailableError
+    await build_queries.get_public(build_id)
+    status = await schematics.videos.submit_video(
+        build_id,
+        schematic_id,
+        body.to_request(),
+        account_id=account_id,
+        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+    )
+    await build_queries.get_public(status.build_id)
+    response.headers["Cache-Control"] = "private, no-store"
+    return VideoResponse.from_status(
+        status,
+        status_url=relative_url_for(request, "get_schematic_video", video_id=status.id),
+        download_url=relative_url_for(request, "get_schematic_video_content", video_id=status.id),
+    )
+
+
+@router.get(
+    "/schematic-videos/{video_id}",
+    response_model=VideoResponse,
+    operation_id="schematic_video_status",
+    responses=responses(403, 404, 422, 503),
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def get_schematic_video(
+    video_id: int,
+    build_queries: BuildQueries,
+    schematics: Schematics,
+    caller: CurrentCaller,
+    permissions: Permissions,
+    request: Request,
+    response: Response,
+) -> VideoResponse:
+    """Return only the requesting account's video status."""
+    account_id = caller.require_consented_account()
+    if schematics.videos is None:
+        raise SchematicSupportUnavailableError
+    status = await schematics.videos.get_video(
+        video_id,
+        account_id=account_id,
+        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+    )
+    await build_queries.get_public(status.build_id)
+    response.headers["Cache-Control"] = "private, no-store"
+    return VideoResponse.from_status(
+        status,
+        status_url=relative_url_for(request, "get_schematic_video", video_id=status.id),
+        download_url=relative_url_for(request, "get_schematic_video_content", video_id=status.id),
+    )
+
+
+@router.get(
+    "/schematic-videos/{video_id}/content",
+    response_class=Response,
+    operation_id="schematic_video_content",
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    responses={
+        **responses(403, 404, 409, 422, 503),
+        200: {"content": {"video/mp4": {}}, "description": "Private schematic video"},
+    },
+)
+async def get_schematic_video_content(
+    video_id: int,
+    build_queries: BuildQueries,
+    schematics: Schematics,
+    caller: CurrentCaller,
+    permissions: Permissions,
+) -> Response:
+    """Download a completed private video while its source remains accessible."""
+    account_id = caller.require_consented_account()
+    if schematics.videos is None:
+        raise SchematicSupportUnavailableError
+    status = await schematics.videos.get_video(
+        video_id,
+        account_id=account_id,
+        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+    )
+    await build_queries.get_public(status.build_id)
+    content = await schematics.videos.open_video_content(
+        video_id,
+        account_id=account_id,
+        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+    )
+    return Response(
+        content,
+        media_type="video/mp4",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": f'attachment; filename="schematic-video-{video_id}.mp4"',
+        },
     )

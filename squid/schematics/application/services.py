@@ -28,6 +28,7 @@ from squid.schematics.application.previews import (
     RenderSkipReason,
     StoredRender,
 )
+from squid.schematics.application.video_service import SchematicVideoService
 from squid.schematics.domain.formats import inflated_size_at_most, sniff_schematic_format
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -88,12 +89,14 @@ class SchematicService:
         duplicate_max_comparisons: int = 5,
         duplicate_result_limit: int = 3,
         duplicate_total_timeout_seconds: float = 15.0,
+        video_service: SchematicVideoService | None = None,
         render_enabled: bool = False,
         resource_pack: SchematicResourcePackProvider | None = None,
         render_request: RenderRequest | None = None,
         render_max_block_count: int = 400_000,
         render_max_bounding_volume: int = 2_000_000,
     ) -> None:
+        self.videos = video_service
         self._analyzer = analyzer
         self._store = store
         self._versions = versions

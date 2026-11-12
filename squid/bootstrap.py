@@ -114,6 +114,7 @@ from squid.schematics.application import (
 from squid.schematics.application.preview_storage import SchematicPreviewStorage
 from squid.schematics.application.storage import SchematicStorageService
 from squid.schematics.application.versions import SchematicVersionService
+from squid.schematics.application.video_service import SchematicVideoService
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
@@ -197,7 +198,7 @@ def create_schematic_service(
     """
     analyzer = QueuedSchematicAnalyzer(jobs, artifacts, config)
     resource_pack = None
-    if render_capable and config.render_enabled:
+    if render_capable and (config.render_enabled or config.video_enabled):
         resource_pack = ResourcePackLoader(
             path=config.render_pack_path,
             url=str(config.render_pack_url) if config.render_pack_url is not None else None,
@@ -205,9 +206,10 @@ def create_schematic_service(
             cache_dir=config.render_cache_dir,
         )
     previews = SchematicPreviewStorage(artifacts, uow_factory=uow_factory)
+    store = SchematicStorageService(artifacts, uow_factory=uow_factory)
     return SchematicService(
         analyzer,
-        SchematicStorageService(artifacts, uow_factory=uow_factory),
+        store,
         previews,
         SchematicVersionService(uow_factory=uow_factory),
         limits=SchematicLimits(
@@ -222,6 +224,16 @@ def create_schematic_service(
         duplicate_max_comparisons=config.duplicate_max_comparisons,
         duplicate_result_limit=config.duplicate_result_limit,
         duplicate_total_timeout_seconds=config.duplicate_total_timeout_seconds,
+        video_service=SchematicVideoService(
+            jobs,
+            artifacts,
+            store,
+            resource_pack,
+            enabled=config.enabled and config.video_enabled and render_capable,
+            max_blocks=config.render_max_block_count,
+            max_volume=config.render_max_bounding_volume,
+            public_base_url=str(config.render_public_base_url) if config.render_public_base_url else None,
+        ),
         render_enabled=config.render_enabled and render_capable,
         resource_pack=resource_pack,
         render_request=RenderRequest(
