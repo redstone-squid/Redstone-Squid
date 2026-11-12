@@ -5,6 +5,7 @@ from functools import partial
 import pytest
 from alembic_utils.pg_function import PGFunction
 from alembic_utils.pg_trigger import PGTrigger
+from anyio import create_task_group
 from sqlalchemy import Table, insert, text, update
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -905,3 +906,34 @@ async def test_clearing_a_ballot_twice_keeps_it_absent(
     assert repeated is not None
     assert repeated.previous_weight is None
     assert repeated.session.votes == {}
+
+
+async def test_concurrent_deletion_requests_share_one_session(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
+    ids: list[int] = []
+
+    async def create() -> None:
+        ids.append(
+            await transact(
+                repository,
+                lambda uow: uow.votes.create_delete_log_session(
+                    author_account_id=AUTHOR_ACCOUNT_IDS[0],
+                    pass_threshold=10,
+                    fail_threshold=-10,
+                    message_id=123456,
+                    channel_id=123,
+                    server_id=GUILD_ID,
+                ),
+                commit=True,
+            )
+        )
+
+    async with create_task_group() as tasks:
+        tasks.start_soon(create)
+        tasks.start_soon(create)
+    assert len(ids) == 2
+    assert ids[0] == ids[1]
+    await transact(repository, lambda uow: uow.votes.close(ids[0]), commit=True)
+    await create()
+    assert ids[2] == ids[0]

@@ -143,6 +143,17 @@ class VoteRepository:
     ) -> int:
         options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
         session = self._session()
+        # Match build-review creation: keep this lock through the caller's commit.
+        lock_key = f"delete-log-vote:{message_id}"
+        await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(lock_key, 0))))
+        existing = await session.scalar(
+            select(DeleteLogVoteSession.vote_session_id)
+            .where(DeleteLogVoteSession.target_message_id == message_id)
+            .order_by(DeleteLogVoteSession.vote_session_id)
+            .limit(1)
+        )
+        if existing is not None:
+            return existing
         session_id = await self._create_session(
             session, author_account_id, VoteKind.DELETE_LOG, pass_threshold, fail_threshold, options
         )
