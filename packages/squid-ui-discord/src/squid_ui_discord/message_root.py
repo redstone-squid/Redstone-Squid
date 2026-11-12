@@ -1571,14 +1571,8 @@ class MessageRoot[
         A failed or cancelled write of an application render marks the message as behind its
         state; see `_CandidateLifecycle.behind`.
         """
-        try:
+        with self._candidates.delivery(candidate):
             return await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
-        except BaseException:
-            # A cancelled edit may still have landed. Assuming it did not costs the reader one
-            # press that repaints instead of acting; assuming it did can act on unseen state.
-            if isinstance(candidate, _Candidate):
-                self._candidates.behind = True
-            raise
 
     async def _write(
         self,

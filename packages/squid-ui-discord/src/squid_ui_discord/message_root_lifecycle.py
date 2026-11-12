@@ -136,12 +136,8 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
     def commit(self, candidate: _Candidate[RenderTargetT]) -> None:
         """Commit application state, then publish the successfully delivered controls."""
         self._commit_application(candidate)
-        self.generation = candidate.generation
         self.assets = candidate.assets
-        self.status = MessageRootStatus.ACTIVE
-        candidate.view.timeout = self._remaining_timeout()
-        self._swap_view(candidate.view)
-        self._track()
+        self._publish(candidate, MessageRootStatus.ACTIVE)
 
     def commit_presented(self, candidate: _Candidate[RenderTargetT]) -> None:
         self.commit(candidate)
@@ -179,12 +175,8 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self._settle(candidate, "commit renewal")
         self.handlers = candidate.handlers
         self.form_bindings = {}
-        self.generation = candidate.generation
         self.plan = candidate.rendered.plan
-        self.status = MessageRootStatus.RENEWAL_ARMED
-        candidate.view.timeout = self._remaining_timeout()
-        self._swap_view(candidate.view)
-        self._track()
+        self._publish(candidate, MessageRootStatus.RENEWAL_ARMED)
         self._presented()
 
     def discard(self, candidate: _SettlementCandidate[RenderTargetT]) -> None:
@@ -196,10 +188,26 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
             candidate.render.discard()
         self.mark_dirty()
 
-    def _swap_view(self, view: AnyMountedView) -> None:
-        if self.view is not None and self.view is not view:
+    def _publish(self, candidate: _Candidate[RenderTargetT] | _LifecycleCandidate, status: MessageRootStatus) -> None:
+        self.generation = candidate.generation
+        self.status = status
+        candidate.view.timeout = self._remaining_timeout()
+        if self.view is not None and self.view is not candidate.view:
             self.view.stop()
-        self.view = view
+        self.view = candidate.view
+        self._track()
+
+    @contextmanager
+    def delivery(self, candidate: _Candidate[RenderTargetT] | _LifecycleCandidate) -> Iterator[None]:
+        """Treat a failed application edit as potentially visible until the next commit."""
+        try:
+            yield
+        except BaseException:
+            # A cancelled edit may have landed. Repainting before another exclusive action
+            # is safer than letting the handler act on state the reader may not have seen.
+            if isinstance(candidate, _Candidate):
+                self.behind = True
+            raise
 
     def close(self) -> None:
         """End any staged test render and stop the committed view."""
