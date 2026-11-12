@@ -5,6 +5,7 @@ from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.ui import tr
 from squid.bot.utils.permissions import actor_for_interaction
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
@@ -32,7 +33,8 @@ class RecalculationProposalScreen(sd.Screen):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         proposal = self.proposal
         if proposal.applied_revision is not None:
-            return (sl.status(f"Applied to build #{proposal.build_id}, revision {proposal.applied_revision}."),)
+            build_id, revision = proposal.build_id, proposal.applied_revision
+            return (sl.status(tr(t"recalculation-applied = Applied to build #{build_id}, revision {revision}.")),)
         changes = [
             f"{name.replace('_', ' ')}: {proposal.before.get(name)!s} → {value!s}"
             for name, value in proposal.after.items()
@@ -40,10 +42,14 @@ class RecalculationProposalScreen(sd.Screen):
         ]
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
-                sl.heading("Review recalculation"),
+                sl.heading(tr(t"recalculation-heading = Review recalculation")),
                 sl.paragraph(
                     self.notice
-                    or ("\n".join(changes)[:3000] if changes else "Choose a target build to review the changes.")
+                    or (
+                        "\n".join(changes)[:3000]
+                        if changes
+                        else tr(t"recalculation-choose-target = Choose a target build to review the changes.")
+                    )
                 ),
             )
         ]
@@ -51,19 +57,23 @@ class RecalculationProposalScreen(sd.Screen):
             if self.targets:
                 nodes.append(
                     sl.choices(
-                        *(sl.choice(f"Build #{target}", key=str(target)) for target in self.targets[:25]),
+                        *(
+                            sl.choice(tr(t"recalculation-target = Build #{target}"), key=str(target))
+                            for target in self.targets[:25]
+                        ),
                         key="target",
                         selection=sl.controlled((), self._match),
                     )
                 )
             else:
-                nodes.append(sl.note("No existing build is linked to this message."))
+                nodes.append(sl.note(tr(t"recalculation-no-target = No existing build is linked to this message.")))
         else:
-            nodes.append(sl.note(f"Build #{proposal.build_id}, reviewed revision {proposal.expected_revision}."))
+            build_id, revision = proposal.build_id, proposal.expected_revision
+            nodes.append(sl.note(tr(t"recalculation-reviewed = Build #{build_id}, reviewed revision {revision}.")))
             nodes.append(
                 sl.action_controls(
-                    sl.action_control("Approve changes", self._approve, key="approve"),
-                    sl.action_control("Renew review", self._renew, key="renew"),
+                    sl.action_control(tr(t"recalculation-approve = Approve changes"), self._approve, key="approve"),
+                    sl.action_control(tr(t"recalculation-renew = Renew review"), self._renew, key="renew"),
                     key="review",
                 )
             )
@@ -92,7 +102,7 @@ class RecalculationProposalScreen(sd.Screen):
             self.proposal = await self.services.submission_recalculations.match(
                 self.proposal.id, self.proposal.build_id, actor, renew=True
             )
-            self.notice = "Review the refreshed diff before approving."
+            self.notice = tr(t"recalculation-renewed = Review the refreshed diff before approving.")
 
 
 async def proposal_screen(services: BotServices, proposal_id: UUID, request: sd.Request) -> RecalculationProposalScreen:

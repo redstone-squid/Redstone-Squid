@@ -7,6 +7,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.ingestion import admit_candidates
 from squid.bot.submission.ui import controls as build_controls
+from squid.bot.ui import tr
 from squid.bot.utils.permissions import actor_for_interaction
 from squid.builds.domain import BuildCategory
 from squid.core.errors import SquidError
@@ -44,24 +45,39 @@ class InferenceCandidatesScreen(sd.Screen):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
-                sl.heading("Inferred candidates"),
-                sl.paragraph(self.notice or "Choose a candidate. Missing facts and file assignments require review."),
+                sl.heading(tr(t"inference-candidates-heading = Inferred candidates")),
+                sl.paragraph(
+                    self.notice
+                    or tr(
+                        t"inference-candidates-hint = Choose a candidate. Missing facts and file assignments "
+                        t"require review."
+                    )
+                ),
             )
         ]
         nodes.append(
-            sl.action_controls(sl.action_control("Retry retained inference", self._retry, key="retry"), key="recovery")
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"inference-candidates-retry = Retry retained inference"), self._retry, key="retry"
+                ),
+                key="recovery",
+            )
         )
         if not self.candidates:
-            nodes.append(sl.note("No retained candidates are available yet. Reopen this run to refresh."))
+            nodes.append(
+                sl.note(
+                    tr(
+                        t"inference-candidates-empty = No retained candidates are available yet. "
+                        t"Reopen this run to refresh."
+                    )
+                )
+            )
             return tuple(nodes)
         nodes.append(
             sl.choices(
                 *(
-                    sl.choice(
-                        f"Candidate {index + 1}: {item.facts.category.value if item.facts.category else 'choose category'}",
-                        key=str(item.id),
-                    )
-                    for index, item in enumerate(self.visible_candidates, start=self.page * 25)
+                    sl.choice(_candidate_label(number, item), key=str(item.id))
+                    for number, item in enumerate(self.visible_candidates, start=self.page * 25 + 1)
                 ),
                 key="candidate",
                 selection=sl.controlled((self.selected,) if self.selected else (), self._select),
@@ -70,9 +86,17 @@ class InferenceCandidatesScreen(sd.Screen):
         if len(self.candidates) > 25:
             nodes.append(
                 sl.action_controls(
-                    sl.action_control("Previous candidates", self._previous, key="previous", available=self.page > 0),
                     sl.action_control(
-                        "More candidates", self._next, key="next", available=self.page + 1 < self.page_count
+                        tr(t"inference-candidates-previous = Previous candidates"),
+                        self._previous,
+                        key="previous",
+                        available=self.page > 0,
+                    ),
+                    sl.action_control(
+                        tr(t"inference-candidates-next = More candidates"),
+                        self._next,
+                        key="next",
+                        available=self.page + 1 < self.page_count,
                     ),
                     key="candidate_pages",
                 )
@@ -88,13 +112,23 @@ class InferenceCandidatesScreen(sd.Screen):
                     )
                 )
             nodes.append(
-                sl.action_controls(sl.action_control("Open candidate draft", self._open, key="open"), key="actions")
+                sl.action_controls(
+                    sl.action_control(tr(t"inference-candidates-open = Open candidate draft"), self._open, key="open"),
+                    key="actions",
+                )
             )
         if self.opened:
             nodes.append(
                 sl.primitives.Section(
-                    (sl.primitives.Text("Draft saved. Open it to review facts and supplied files."),),
-                    sl.primitives.RoutedButton("Open draft", build_controls.reopen_draft.id(draft_id=self.opened)),
+                    (
+                        sl.primitives.Text(
+                            tr(t"inference-candidates-saved = Draft saved. Open it to review facts and supplied files.")
+                        ),
+                    ),
+                    sl.primitives.RoutedButton(
+                        tr(t"inference-candidates-open-draft = Open draft"),
+                        build_controls.reopen_draft.id(draft_id=self.opened),
+                    ),
                 )
             )
         return tuple(nodes)
@@ -108,7 +142,9 @@ class InferenceCandidatesScreen(sd.Screen):
                 self.candidates = candidates
                 self.page = min(self.page, self.page_count - 1)
                 await admit_candidates(self.services, candidates, actor=actor)
-                self.notice = "Retained inference recovered. Open a candidate to continue."
+                self.notice = tr(
+                    t"inference-candidates-recovered = Retained inference recovered. Open a candidate to continue."
+                )
         except SquidError as error:
             self.notice = error.public_text()
 
@@ -152,3 +188,10 @@ class InferenceCandidatesScreen(sd.Screen):
             self.notice = error.public_text()
         else:
             self.opened = str(draft.snapshot.id)
+
+
+def _candidate_label(number: int, candidate: InferenceCandidate) -> sl.TextLike:
+    if candidate.facts.category is None:
+        return tr(t"inference-candidate-uncategorized = Candidate {number}: choose a category")
+    category = candidate.facts.category.value
+    return tr(t"inference-candidate = Candidate {number}: {category}")

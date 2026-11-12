@@ -17,6 +17,7 @@ from squid.bot.ui import tr
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build
+from squid.core.pagination import PageSelector
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
@@ -78,8 +79,6 @@ class _BuildSource:
         self._statuses = statuses
 
     async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
-        from squid.core.pagination import PageSelector
-
         page = await self._queries.list_page(
             statuses=self._statuses,
             selector=PageSelector(offset=position.offset),

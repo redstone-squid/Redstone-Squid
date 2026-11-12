@@ -4093,7 +4093,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:201"
+      "squid/bot/submission/build_browse.py:200"
     ]
   },
   "bot-submission-build-browse-back-to-builds": {
@@ -4102,7 +4102,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:374"
+      "squid/bot/submission/build_browse.py:373"
     ]
   },
   "bot-submission-build-browse-browse": {
@@ -4111,7 +4111,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:360"
+      "squid/bot/submission/build_browse.py:359"
     ]
   },
   "bot-submission-build-browse-build": {
@@ -4131,7 +4131,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/build_browse.py:230"
+      "squid/bot/submission/build_browse.py:229"
     ]
   },
   "bot-submission-build-browse-build-catalogue": {
@@ -4140,7 +4140,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:348"
+      "squid/bot/submission/build_browse.py:347"
     ]
   },
   "bot-submission-build-browse-build-id": {
@@ -4149,7 +4149,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:442"
+      "squid/bot/submission/build_browse.py:441"
     ]
   },
   "bot-submission-build-browse-builds": {
@@ -4158,7 +4158,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:364"
+      "squid/bot/submission/build_browse.py:363"
     ]
   },
   "bot-submission-build-browse-cancel": {
@@ -4167,7 +4167,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:246"
+      "squid/bot/submission/build_browse.py:245"
     ]
   },
   "bot-submission-build-browse-confirm": {
@@ -4176,7 +4176,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:245"
+      "squid/bot/submission/build_browse.py:244"
     ]
   },
   "bot-submission-build-browse-conversion-report": {
@@ -4210,7 +4210,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:219"
+      "squid/bot/submission/build_browse.py:218"
     ]
   },
   "bot-submission-build-browse-description-or-title": {
@@ -4219,7 +4219,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:449"
+      "squid/bot/submission/build_browse.py:448"
     ]
   },
   "bot-submission-build-browse-download-result": {
@@ -4228,7 +4228,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:177",
+      "squid/bot/submission/build_browse.py:176",
       "squid/bot/submission/schematic_tools.py:56"
     ]
   },
@@ -4247,7 +4247,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:193"
+      "squid/bot/submission/build_browse.py:192"
     ]
   },
   "bot-submission-build-browse-find-build": {
@@ -4256,8 +4256,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:361",
-      "squid/bot/submission/build_browse.py:446"
+      "squid/bot/submission/build_browse.py:360",
+      "squid/bot/submission/build_browse.py:445"
     ]
   },
   "bot-submission-build-browse-input-position-x-y-z": {
@@ -4275,7 +4275,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:161"
+      "squid/bot/submission/build_browse.py:160"
     ]
   },
   "bot-submission-build-browse-loading-builds": {
@@ -4284,7 +4284,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:380"
+      "squid/bot/submission/build_browse.py:379"
     ]
   },
   "bot-submission-build-browse-measure-timing": {
@@ -4302,7 +4302,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:440"
+      "squid/bot/submission/build_browse.py:439"
     ]
   },
   "bot-submission-build-browse-open-by-id": {
@@ -4311,7 +4311,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:387"
+      "squid/bot/submission/build_browse.py:386"
     ]
   },
   "bot-submission-build-browse-output-format": {
@@ -4329,7 +4329,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:210"
+      "squid/bot/submission/build_browse.py:209"
     ]
   },
   "bot-submission-build-browse-render-schematic": {
@@ -4356,7 +4356,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:393"
+      "squid/bot/submission/build_browse.py:392"
     ]
   },
   "bot-submission-consent-banner-consent-recorded": {
@@ -6689,7 +6689,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:427"
+      "squid/bot/submission/build_browse.py:426"
     ]
   },
   "build-input-extender-orientation": {
@@ -6743,7 +6743,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:349"
+      "squid/bot/submission/build_browse.py:348"
     ]
   },
   "build-minecraft-data-version-label": {
@@ -6770,7 +6770,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:284"
+      "squid/bot/submission/build_browse.py:283"
     ]
   },
   "build-operation-permission-denied": {
@@ -6779,7 +6779,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:298",
+      "squid/bot/submission/build_browse.py:297",
       "squid/bot/submission/schematic_tools.py:204"
     ]
   },
@@ -6789,7 +6789,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:228"
+      "squid/bot/submission/build_browse.py:227"
     ]
   },
   "build-review-state-updated": {
@@ -6798,7 +6798,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:269"
+      "squid/bot/submission/build_browse.py:268"
     ]
   },
   "build-review-state-warning": {
@@ -6807,7 +6807,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:243"
+      "squid/bot/submission/build_browse.py:242"
     ]
   },
   "build-schematic-missing": {
@@ -6889,7 +6889,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:433"
+      "squid/bot/submission/build_browse.py:432"
     ]
   },
   "build-search-query-help": {
@@ -10960,6 +10960,131 @@
       "squid/idempotency/domain.py:73"
     ]
   },
+  "inference-candidate": {
+    "fingerprint": "d28d0c7a827a744822cfb989bb42191bf8e0e08ec9b534c999d63bbcf6f18c46",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "number",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "category",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:197"
+    ]
+  },
+  "inference-candidate-uncategorized": {
+    "fingerprint": "1b9f2092db545911f1b8561df4570dc78adf9438131ec74405a03e4910f3ebfb",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "number",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:195"
+    ]
+  },
+  "inference-candidates-empty": {
+    "fingerprint": "1ebe2c9cf1f9a6c95be49feb1f45419ecc47a688f9a998831ced7350c9bc16f7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:69"
+    ]
+  },
+  "inference-candidates-heading": {
+    "fingerprint": "7ac3de55b2bec03c79580513f4db6163761615a001de5ca0dd0e6ddba749d3c7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:48"
+    ]
+  },
+  "inference-candidates-hint": {
+    "fingerprint": "12acd41ee48ba0c12cca8c25699b9ab70a69f4b106b9b3405979ef41145e11c8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:51"
+    ]
+  },
+  "inference-candidates-next": {
+    "fingerprint": "fc3f76da144e1448f153922c06efeaa588f041051f65230820782fe608e890af",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:96"
+    ]
+  },
+  "inference-candidates-open": {
+    "fingerprint": "ce0673d6726be43851141eb3772b968872a20f26f030bea137a696cc3746fc04",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:116"
+    ]
+  },
+  "inference-candidates-open-draft": {
+    "fingerprint": "58833e6228e4794ec5a3d2730a9acca8b6b58d8f48e5fadad80d742bd00ddd67",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:129"
+    ]
+  },
+  "inference-candidates-previous": {
+    "fingerprint": "ce9b6ba85a7688619bf04058b9316adf5dc3a46df6784d38b2032782c9344c79",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:90"
+    ]
+  },
+  "inference-candidates-recovered": {
+    "fingerprint": "8a41b0be818868e48eb592c7c74fc18f68c10c40b6056d57a98bf62121bad7aa",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:145"
+    ]
+  },
+  "inference-candidates-retry": {
+    "fingerprint": "63128950420831798fe9ad4c3e33c74c2c85cd2d5063284899d35ab5d66025e4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:61"
+    ]
+  },
+  "inference-candidates-saved": {
+    "fingerprint": "87ba2933ed6f45e000cda0fb6558396c5e9b9445a03b5da0325e1d5670379d2d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/inference.py:125"
+    ]
+  },
   "ingestion-consent-accept-action": {
     "fingerprint": "70728ae2e70b0f710cc02e1a66b48ad232c192e6a14703b2912a46da87c6f6e2",
     "attributes": [],
@@ -13490,6 +13615,115 @@
     "arguments": [],
     "locations": [
       "squid/reactions/application/policies.py:33"
+    ]
+  },
+  "recalculation-applied": {
+    "fingerprint": "ba529ad9344c45342ce935cc3a08ff214ef43e063c90f66a6621c3231c016bac",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "build_id",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "revision",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:37"
+    ]
+  },
+  "recalculation-approve": {
+    "fingerprint": "54961aa3a7d91f81e5e1e3034a9644c2f13f4e8092047d890f41701a5c80cafd",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:75"
+    ]
+  },
+  "recalculation-choose-target": {
+    "fingerprint": "3657c644a25ba7bca7a6ceb0c28475545d1f7d2f3cc56dacfebc62131b16e530",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:51"
+    ]
+  },
+  "recalculation-heading": {
+    "fingerprint": "13125aeac541af867d389aea669161f30e876bc5ddeb058788ed66338d190a4f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:45"
+    ]
+  },
+  "recalculation-no-target": {
+    "fingerprint": "35014d209f8c5cd72fc51a2b5978b15356e422909b67a60881dcd764ecb35785",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:69"
+    ]
+  },
+  "recalculation-renew": {
+    "fingerprint": "caa32a90303d152b240c4a44891156dee1b90f0d47ba50bc98b53cdc9a1cd935",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:76"
+    ]
+  },
+  "recalculation-renewed": {
+    "fingerprint": "3d1cb3d0053c822e078bcb16a230c13e3cefecd6e3e458773d4be96cda90e2e0",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:105"
+    ]
+  },
+  "recalculation-reviewed": {
+    "fingerprint": "6a7bcf52516175dd8479d6b71d380fa8429873ff49e5359a2e7ccc726a746fa9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "build_id",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "revision",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:72"
+    ]
+  },
+  "recalculation-target": {
+    "fingerprint": "8bef777098619ae19f594dc17d00716c5ccc32da233f416dbabc23e8b5eeec7a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "target",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/submission/ui/recalculation.py:61"
     ]
   },
   "records-candidate-no-typed": {

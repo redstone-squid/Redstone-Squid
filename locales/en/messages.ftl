@@ -1241,31 +1241,31 @@ bot-starboard-screen-up = Up
 # squid/bot/starboard/screen.py:398
 bot-starboard-screen-value = Value
 
-# squid/bot/submission/build_browse.py:201
+# squid/bot/submission/build_browse.py:200
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/submission/build_browse.py:374
+# squid/bot/submission/build_browse.py:373
 bot-submission-build-browse-back-to-builds = Back to builds
 
-# squid/bot/submission/build_browse.py:360
+# squid/bot/submission/build_browse.py:359
 bot-submission-build-browse-browse = Browse
 
-# squid/bot/submission/build_browse.py:230
+# squid/bot/submission/build_browse.py:229
 bot-submission-build-browse-build = { $action } build #{ $build_id_text }?
 
-# squid/bot/submission/build_browse.py:348
+# squid/bot/submission/build_browse.py:347
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:442
+# squid/bot/submission/build_browse.py:441
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/submission/build_browse.py:364
+# squid/bot/submission/build_browse.py:363
 bot-submission-build-browse-builds = Builds
 
-# squid/bot/submission/build_browse.py:246
+# squid/bot/submission/build_browse.py:245
 bot-submission-build-browse-cancel = Cancel
 
-# squid/bot/submission/build_browse.py:245
+# squid/bot/submission/build_browse.py:244
 bot-submission-build-browse-confirm = Confirm
 
 # squid/bot/submission/schematic_tools.py:167
@@ -1274,46 +1274,46 @@ bot-submission-build-browse-conversion-report = Conversion report: { $loss_summa
 # squid/bot/submission/schematic_tools.py:210, squid/bot/submission/schematic_tools.py:84
 bot-submission-build-browse-convert-schematic = Convert schematic
 
-# squid/bot/submission/build_browse.py:219
+# squid/bot/submission/build_browse.py:218
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:449
+# squid/bot/submission/build_browse.py:448
 bot-submission-build-browse-description-or-title = Description or title
 
-# squid/bot/submission/build_browse.py:177, squid/bot/submission/schematic_tools.py:56
+# squid/bot/submission/build_browse.py:176, squid/bot/submission/schematic_tools.py:56
 bot-submission-build-browse-download-result = Download result
 
 # squid/bot/submission/schematic_tools.py:74
 bot-submission-build-browse-download-schematic = Download schematic
 
-# squid/bot/submission/build_browse.py:193
+# squid/bot/submission/build_browse.py:192
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/build_browse.py:361, squid/bot/submission/build_browse.py:446
+# squid/bot/submission/build_browse.py:360, squid/bot/submission/build_browse.py:445
 bot-submission-build-browse-find-build = Find build
 
 # squid/bot/submission/schematic_tools.py:234
 bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 
-# squid/bot/submission/build_browse.py:161
+# squid/bot/submission/build_browse.py:160
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:380
+# squid/bot/submission/build_browse.py:379
 bot-submission-build-browse-loading-builds = Loading builds.
 
 # squid/bot/submission/schematic_tools.py:91
 bot-submission-build-browse-measure-timing = Measure timing
 
-# squid/bot/submission/build_browse.py:440
+# squid/bot/submission/build_browse.py:439
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:387
+# squid/bot/submission/build_browse.py:386
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/submission/schematic_tools.py:213
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/submission/build_browse.py:210
+# squid/bot/submission/build_browse.py:209
 bot-submission-build-browse-reject = Reject
 
 # squid/bot/submission/schematic_tools.py:79
@@ -1322,7 +1322,7 @@ bot-submission-build-browse-render-schematic = Render schematic
 # squid/bot/submission/schematic_tools.py:69
 bot-submission-build-browse-schematic-info = Schematic info
 
-# squid/bot/submission/build_browse.py:393
+# squid/bot/submission/build_browse.py:392
 bot-submission-build-browse-search-by-meaning = Search by meaning
 
 # squid/bot/submission/consent_banner.py:70
@@ -2036,7 +2036,7 @@ build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
 
-# squid/bot/submission/build_browse.py:427
+# squid/bot/submission/build_browse.py:426
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:32
@@ -2054,7 +2054,7 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/submission/build_browse.py:349
+# squid/bot/submission/build_browse.py:348
 build-list-empty = No builds are available.
 
 # squid/bot/submission/schematic_tools.py:221
@@ -2063,19 +2063,19 @@ build-minecraft-data-version-label = Minecraft data version
 # squid/bot/submission/schematic_tools.py:224
 build-minecraft-version-label = Minecraft version name
 
-# squid/bot/submission/build_browse.py:284
+# squid/bot/submission/build_browse.py:283
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:298, squid/bot/submission/schematic_tools.py:204
+# squid/bot/submission/build_browse.py:297, squid/bot/submission/schematic_tools.py:204
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/submission/build_browse.py:228
+# squid/bot/submission/build_browse.py:227
 build-review-confirmation-title = Confirm review decision
 
-# squid/bot/submission/build_browse.py:269
+# squid/bot/submission/build_browse.py:268
 build-review-state-updated = Build review state updated.
 
-# squid/bot/submission/build_browse.py:243
+# squid/bot/submission/build_browse.py:242
 build-review-state-warning = This changes the build's review state.
 
 # squid/bot/submission/schematic_tools.py:116
@@ -2102,7 +2102,7 @@ build-search-matching-mode-help = Use keyword matching or smart meaning-based ma
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/build_browse.py:433
+# squid/bot/submission/build_browse.py:432
 build-search-no-visible-match = No visible build matches that search.
 
 # squid/bot/submission/commands.py:131
@@ -3356,6 +3356,42 @@ idempotency-request-idempotency-key = A request with this idempotency key is sti
 # squid/idempotency/domain.py:73
 idempotency-request-in-progress = Idempotent request in progress
 
+# squid/bot/submission/ui/inference.py:197
+inference-candidate = Candidate { $number }: { $category }
+
+# squid/bot/submission/ui/inference.py:195
+inference-candidate-uncategorized = Candidate { $number }: choose a category
+
+# squid/bot/submission/ui/inference.py:69
+inference-candidates-empty = No retained candidates are available yet. Reopen this run to refresh.
+
+# squid/bot/submission/ui/inference.py:48
+inference-candidates-heading = Inferred candidates
+
+# squid/bot/submission/ui/inference.py:51
+inference-candidates-hint = Choose a candidate. Missing facts and file assignments require review.
+
+# squid/bot/submission/ui/inference.py:96
+inference-candidates-next = More candidates
+
+# squid/bot/submission/ui/inference.py:116
+inference-candidates-open = Open candidate draft
+
+# squid/bot/submission/ui/inference.py:129
+inference-candidates-open-draft = Open draft
+
+# squid/bot/submission/ui/inference.py:90
+inference-candidates-previous = Previous candidates
+
+# squid/bot/submission/ui/inference.py:145
+inference-candidates-recovered = Retained inference recovered. Open a candidate to continue.
+
+# squid/bot/submission/ui/inference.py:61
+inference-candidates-retry = Retry retained inference
+
+# squid/bot/submission/ui/inference.py:125
+inference-candidates-saved = Draft saved. Open it to review facts and supplied files.
+
 # squid/bot/submission/consent_banner.py:74
 ingestion-consent-accept-action = Agree & Enable Ingestion
 
@@ -4175,6 +4211,33 @@ reactions-role-multiplier-finite = Role multiplier must be finite and greater th
 
 # squid/reactions/application/policies.py:33
 reactions-staff-multiplier-finite = Staff multiplier must be finite and greater than zero.
+
+# squid/bot/submission/ui/recalculation.py:37
+recalculation-applied = Applied to build #{ $build_id }, revision { $revision }.
+
+# squid/bot/submission/ui/recalculation.py:75
+recalculation-approve = Approve changes
+
+# squid/bot/submission/ui/recalculation.py:51
+recalculation-choose-target = Choose a target build to review the changes.
+
+# squid/bot/submission/ui/recalculation.py:45
+recalculation-heading = Review recalculation
+
+# squid/bot/submission/ui/recalculation.py:69
+recalculation-no-target = No existing build is linked to this message.
+
+# squid/bot/submission/ui/recalculation.py:76
+recalculation-renew = Renew review
+
+# squid/bot/submission/ui/recalculation.py:105
+recalculation-renewed = Review the refreshed diff before approving.
+
+# squid/bot/submission/ui/recalculation.py:72
+recalculation-reviewed = Build #{ $build_id }, reviewed revision { $revision }.
+
+# squid/bot/submission/ui/recalculation.py:61
+recalculation-target = Build #{ $target }
 
 # squid/records/application/services.py:582, squid/records/application/services.py:611
 records-candidate-no-typed = Candidate { $build_id_text } has no typed category facts.
