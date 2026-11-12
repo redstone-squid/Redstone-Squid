@@ -39,14 +39,14 @@ def _traceback_footer(page: int, pages: int) -> sl.TextLike:
     )
 
 
-# Earlier and Later page through a traceback, which opens at its last frame. The report list
-# is newest first and labels its own steps through the browser's chronology.
+# Earlier and Later page through a traceback, which opens at its last frame. Chrome applies to
+# the whole screen, but the traceback is its only Previous/Next pager: the report list is newest
+# first and labels its own steps through the browser's chronology.
 ERROR_CHROME = dataclasses.replace(
     CHROME,
     not_yours=tr(t"diagnostics-controls-not-owner = These error controls belong to someone else."),
     previous=tr(t"diagnostics-view-earlier = Earlier"),
     next=tr(t"diagnostics-view-later = Later"),
-    page_footer=_traceback_footer,
 )
 
 
@@ -283,7 +283,12 @@ class ErrorReportScreen(sd.Screen[int]):
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sd.v2.heading(tr(t"diagnostics-view-error = Error {reference}")),
             # Opens at the end because the failing frame is the last one.
-            sd.v2.code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", page=sl.primitives.LAST_PAGE)),
+            sd.v2.code(
+                traceback_text,
+                overflow=sl.primitives.Paginate(
+                    key="traceback", page=sl.primitives.LAST_PAGE, footer=_traceback_footer
+                ),
+            ),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the

@@ -2714,16 +2714,16 @@ core-state-invalid-operation = Application state is invalid for this operation.
 # squid/core/errors.py:182
 core-supplied-value-invalid = The supplied value is invalid.
 
-# squid/bot/diagnostics_view.py:383
+# squid/bot/diagnostics_view.py:388
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
 # squid/bot/diagnostics_view.py:37
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages } · the attachment has the whole report
 
-# squid/bot/diagnostics_view.py:322
+# squid/bot/diagnostics_view.py:327
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
-# squid/bot/diagnostics_view.py:46
+# squid/bot/diagnostics_view.py:47
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
 # squid/bot/diagnostics_view.py:191
@@ -2747,13 +2747,13 @@ diagnostics-path-privacy-warning = An error report names internal paths, so it i
 # squid/bot/diagnostics_view.py:109
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics_view.py:393
+# squid/bot/diagnostics_view.py:398
 diagnostics-shared-reference-note = { $count } reports share this reference; this is the newest.
 
 # squid/bot/diagnostics_view.py:104
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics_view.py:392
+# squid/bot/diagnostics_view.py:397
 diagnostics-view-ambiguous = Ambiguous
 
 # squid/bot/diagnostics_view.py:274
@@ -2768,7 +2768,7 @@ diagnostics-view-delete-reports = Delete reports
 # squid/bot/diagnostics_view.py:244
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
-# squid/bot/diagnostics_view.py:47
+# squid/bot/diagnostics_view.py:48
 diagnostics-view-earlier = Earlier
 
 # squid/bot/diagnostics_view.py:284
@@ -2777,22 +2777,22 @@ diagnostics-view-error = Error { $reference }
 # squid/bot/diagnostics_view.py:242
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics_view.py:376
+# squid/bot/diagnostics_view.py:381
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics_view.py:377
+# squid/bot/diagnostics_view.py:382
 diagnostics-view-full-id = Full ID
 
-# squid/bot/diagnostics_view.py:298
+# squid/bot/diagnostics_view.py:303
 diagnostics-view-full-report = Full report
 
-# squid/bot/diagnostics_view.py:48
+# squid/bot/diagnostics_view.py:49
 diagnostics-view-later = Later
 
 # squid/bot/diagnostics_view.py:259
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics_view.py:291
+# squid/bot/diagnostics_view.py:296
 diagnostics-view-log-tail = Log tail
 
 # squid/bot/diagnostics_view.py:280
@@ -2807,13 +2807,13 @@ diagnostics-view-refresh-reports = Refresh reports
 # squid/bot/diagnostics_view.py:36
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics_view.py:372
+# squid/bot/diagnostics_view.py:377
 diagnostics-view-when = When
 
-# squid/bot/diagnostics_view.py:375
+# squid/bot/diagnostics_view.py:380
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics_view.py:382
+# squid/bot/diagnostics_view.py:387
 diagnostics-view-work-lost = Work lost
 
 # squid/bot/diagnostics_view.py:265
