@@ -40,6 +40,7 @@ from squid_ui.text import NEUTRAL, Message, TextLike, localization_scope
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
+_CORRELATION_ATTRIBUTE = "_squid_error_correlation_id"
 type ErrorResponder = Callable[[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]], Awaitable[None]]
 
 
@@ -249,7 +250,12 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
             tr(t"errors-context-forbidden = You cannot use this command here."),
         )
 
-    error_id = correlation_id()
+    # Rendering and recording are separate hooks and may run outside a shared
+    # trace. Keep the displayed reference attached to the underlying exception.
+    error_id = getattr(error, _CORRELATION_ATTRIBUTE, None)
+    if not isinstance(error_id, str):
+        error_id = correlation_id()
+        setattr(error, _CORRELATION_ATTRIBUTE, error_id)
     reference = correlation_reference(error_id)
     return _NoticeDraft(
         tr(t"errors-something-went-wrong = Something went wrong"),

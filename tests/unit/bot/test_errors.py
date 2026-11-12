@@ -375,3 +375,17 @@ async def test_presented_error_is_not_rendered_or_logged_twice(caplog: pytest.Lo
     (record,) = [record for record in caplog.records if record.name == "squid.bot.errors"]
     assert "surface=command_operation" in record.getMessage()
     assert is_error_presented(error)
+
+
+async def test_saved_report_uses_the_reference_already_shown_to_the_user(mocker: MockerFixture) -> None:
+    mocker.patch("squid.bot.errors.correlation_id", side_effect=["a" * 32, "b" * 32])
+    error = RuntimeError("record tools failed")
+    notice = build_error_notice(commands.CommandInvokeError(error))
+    reports = mocker.Mock(spec=ErrorReportService)
+    reports.record = mocker.AsyncMock()
+
+    await record_operation_error(error, locale=None, result=None, presented=False, reports=reports)
+
+    reports.record.assert_awaited_once()
+    assert reports.record.call_args.kwargs["reference"] == notice.reference
+    assert reports.record.call_args.kwargs["correlation_id"] == notice.error_id
