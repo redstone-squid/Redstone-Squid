@@ -109,6 +109,41 @@ with inserted_restrictions as (
 insert into tag_applicabilities (tag_id, build_kind)
 select id, 'Door' from inserted_restrictions;
 
+-- Common spellings with the same meaning as the canonical restriction. Bare
+-- "hipster" and "seamless" do not specify a tier; "sandless" does not exclude
+-- every gravity block. Keep those claims distinct rather than broadening them.
+with aliases (stable_key, alias) as (
+    values
+    ('no_observers', 'Observerless'),
+    ('no_observers', 'Obsless'),
+    ('no_note_blocks', 'Noteblockless'),
+    ('no_note_blocks', 'Note Blockless'),
+    ('no_note_blocks', 'Note-blockless'),
+    ('no_slime_blocks', 'Slimeless'),
+    ('no_slime_blocks', 'Slimeblockless'),
+    ('no_slime_blocks', 'Slime Blockless'),
+    ('no_honey_blocks', 'Honeyless'),
+    ('no_honey_blocks', 'Honeyblockless'),
+    ('no_honey_blocks', 'Honey Blockless'),
+    ('no_gravity_blocks', 'Gravityblockless'),
+    ('no_gravity_blocks', 'Gravity Blockless'),
+    ('no_gravity_blocks', 'No Falling Blocks'),
+    ('no_sticky_pistons', 'Sticky Pistonless'),
+    ('no_sticky_pistons', 'Stickypistonless'),
+    ('no_clocks', 'Clockless'),
+    ('no_entities', 'Entityless'),
+    ('no_flying_machines', 'Flying Machineless'),
+    ('redstone_block_only', 'RBO'),
+    ('redstone_block_only', 'Redstone Blocks Only'),
+    ('flush', 'Full Flush')
+)
+insert into tag_aliases (tag_id, alias, normalized_alias)
+select definition.id, aliases.alias, lower(aliases.alias)
+from aliases
+join tag_definitions definition using (stable_key)
+where definition.authority = 'official' and definition.moderation_status = 'approved'
+on conflict (tag_id, normalized_alias) do nothing;
+
 -- Stable releases checked 2026-11-12 against the official release changelog index:
 -- https://feedback.minecraft.net/hc/en-us/sections/360001186971-Release-Changelogs
 -- Platform hotfixes also cross-checked with https://minecraft.wiki/w/Bedrock_Edition_version_history

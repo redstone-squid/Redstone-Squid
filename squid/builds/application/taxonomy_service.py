@@ -6,7 +6,7 @@ from typing import Protocol
 from async_lru import alru_cache
 
 from squid.builds.application.taxonomy import TaxonomyResolution
-from squid.builds.domain import RestrictionTypeLiteral
+from squid.builds.domain import RestrictionTypeLiteral, normalize_tag_name
 from squid.tags.models import TagDefinition
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
@@ -72,26 +72,39 @@ class BuildTaxonomyService:
         restrictions: list[str],
         type: RestrictionTypeLiteral,
     ) -> tuple[list[str], list[str]]:
-        """Split names into recognized display names and unrecognized input.
-
-        Match case-insensitively against approved names of the requested type.
-        This validation does not resolve aliases or normalize whitespace.
-        """
-        valid_by_normalized = {value.casefold(): value for value in await self.get_valid_restrictions(type)}
-        valid = [
-            valid_by_normalized[value.casefold()] for value in restrictions if value.casefold() in valid_by_normalized
-        ]
-        invalid = [value for value in restrictions if value.casefold() not in valid_by_normalized]
-        return valid, invalid
+        """Resolve approved names and aliases, retaining unknown or ambiguous input."""
+        resolution = await self.resolve_official(build_kind=None, restrictions=restrictions, patterns=())
+        return _validated_names(
+            restrictions,
+            [item.definition for item in resolution.assignments if item.definition.restriction_type == type],
+            resolution.unknown_restrictions,
+        )
 
     async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]:
         """Split door pattern names into recognized display names and unrecognized input."""
-        valid_by_normalized = {value.casefold(): value for value in await self.get_valid_door_types()}
-        valid = [
-            valid_by_normalized[value.casefold()] for value in door_types if value.casefold() in valid_by_normalized
-        ]
-        invalid = [value for value in door_types if value.casefold() not in valid_by_normalized]
-        return valid, invalid
+        resolution = await self.resolve_official(build_kind="Door", restrictions=(), patterns=door_types)
+        return _validated_names(
+            door_types, [item.definition for item in resolution.assignments], resolution.unknown_patterns
+        )
+
+
+def _validated_names(
+    requested: list[str], definitions: list[TagDefinition], unresolved: frozenset[str]
+) -> tuple[list[str], list[str]]:
+    by_name = {
+        name: definition.display_name
+        for definition in definitions
+        for name in {definition.normalized_name, *(alias.normalized_alias for alias in definition.aliases)}
+    }
+    recognized: list[str] = []
+    unknown: list[str] = []
+    for value in requested:
+        name = normalize_tag_name(value)
+        if name in unresolved or name not in by_name:
+            unknown.append(value)
+        elif by_name[name] not in recognized:
+            recognized.append(by_name[name])
+    return recognized, unknown
 
 
 class TaxonomyUnitOfWork(UnitOfWork, Protocol):
