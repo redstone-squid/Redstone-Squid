@@ -271,3 +271,21 @@ async def test_missing_facts_are_reported_in_intake_logs(
 
     assert str(item.id) in caplog.text
     assert "needs attention: opening_width: required" in caplog.text
+
+
+async def test_retry_resubmits_ingested_drafts_blocked_on_old_metadata_requirements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = candidate()
+    h = setup(
+        monkeypatch,
+        (item,),
+        status=DraftStatus.NEEDS_ATTENTION,
+        issues=(SubmissionAttentionIssue("opening_width", SubmissionAttentionReason.REQUIRED),),
+    )
+    stored = h.materialize.return_value
+    h.materialize.return_value = replace(stored, inferred=True, inference_run_id=item.run_id)
+
+    await ingestion.admit_candidates(h.services, (item,), retry_failed=True)
+
+    h.finalization.submit_calls.assert_awaited_once_with(item.id, 7, locale=None)

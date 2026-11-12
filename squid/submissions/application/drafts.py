@@ -36,6 +36,21 @@ from squid.unit_of_work import UnitOfWorkFactory
 DEFAULT_DRAFT_RETENTION_DAYS = 7
 DEFAULT_ACCOUNT_DRAFT_CAPACITY = 10
 DEFAULT_INFERRED_DRAFT_CAPACITY = 1_000
+INGESTION_OPTIONAL_FIELDS = frozenset(
+    {
+        "creators",
+        "capture_width",
+        "capture_height",
+        "capture_depth",
+        "source_version",
+        "opening_width",
+        "opening_height",
+        "opening_depth",
+        "door_orientation",
+        "movement_orientation",
+        "extension_length",
+    }
+)
 
 type DraftActor = int | Actor
 
@@ -519,16 +534,34 @@ class SubmissionDraftService:
         """
         current = await self.get_accessible(draft_id, account_id)
         manifest = await self._pinned_manifest(current, locale)
+        # Ingestion provenance is set by the server, not by the form's origin or
+        # AI checkbox. Normal Discord submissions retain the pinned requirements.
+        ingested = (
+            current.origin is SubmissionOrigin.DISCORD and current.inferred and current.inference_run_id is not None
+        )
+        answers = dict(current.snapshot.answers)
+        if ingested:
+            answers = {
+                key: value
+                for key, value in answers.items()
+                if key not in INGESTION_OPTIONAL_FIELDS or value not in (None, "", [])
+            }
         errors = manifest.validate_answers(
             current.snapshot.category,
-            current.snapshot.answers,
+            answers,
             origin=current.origin,
         )
+        if ingested:
+            errors = {
+                key: reason
+                for key, reason in errors.items()
+                if key not in INGESTION_OPTIONAL_FIELDS or reason != "required"
+            }
         if errors:
             raise DraftValidationError(errors)
         normalized = manifest.visible_answers(
             current.snapshot.category,
-            current.snapshot.answers,
+            answers,
             origin=current.origin,
         )
         return ValidatedDraft(current, normalized)

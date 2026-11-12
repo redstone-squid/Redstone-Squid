@@ -19,7 +19,7 @@ from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.core.actors import Actor
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
-from squid.submissions.application.drafts import DraftActor
+from squid.submissions.application.drafts import INGESTION_OPTIONAL_FIELDS, DraftActor
 from squid.submissions.application.finalization import DraftPreparationSnapshot
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
@@ -89,8 +89,8 @@ async def admit_candidates(
 
     Only drafts still at their initial inferred revision are admitted automatically.
     retry_failed also admits untouched drafts whose worker retries were exhausted.
-    Missing facts still require correction. Files shared by multiple candidates
-    require explicit assignment. Domain errors are logged per candidate.
+    Untouched imported drafts blocked on missing metadata can also be retried.
+    Shared files still need explicit assignment.
     """
     for candidate in candidates:
         if candidate.facts.category is None:
@@ -101,13 +101,26 @@ async def admit_candidates(
                 candidate, services.submission_drafts, services.submission_forms, actor=authority
             )
             # Replayed deliveries must not submit a draft that the owner has since corrected.
+            metadata_retry = (
+                retry_failed
+                and draft.inferred
+                and draft.inference_run_id is not None
+                and draft.snapshot.status is DraftStatus.NEEDS_ATTENTION
+                and bool(draft.preparation_issues)
+                and all(
+                    issue.reason is SubmissionAttentionReason.REQUIRED and issue.field_id in INGESTION_OPTIONAL_FIELDS
+                    for issue in draft.preparation_issues
+                )
+            )
             retryable = (
                 retry_failed
                 and draft.snapshot.status is DraftStatus.NEEDS_ATTENTION
                 and draft.preparation_issues
                 == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED),)
             )
-            if draft.snapshot.revision != 1 or (draft.snapshot.status is not DraftStatus.EDITING and not retryable):
+            if draft.snapshot.revision != 1 or (
+                draft.snapshot.status is not DraftStatus.EDITING and not retryable and not metadata_retry
+            ):
                 logger.info(
                     "Preserved candidate %s: %s, revision %s; issues: %s",
                     candidate.id,

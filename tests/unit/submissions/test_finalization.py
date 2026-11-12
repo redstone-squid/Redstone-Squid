@@ -331,8 +331,12 @@ async def _submit(
     category: str = "other",
     answers: dict[str, JSONValue] | None = None,
     sponsor: PublicSponsor | None = None,
+    ingested: bool = False,
 ) -> tuple[SubmissionRequestResult, FakeFinalizationJobs]:
-    repository = FakeDraftRepository(_stored(origin, category=category, answers=answers))
+    draft = _stored(origin, category=category, answers=answers)
+    if ingested:
+        draft = replace(draft, inferred=True, inference_run_id=UUID(int=999))
+    repository = FakeDraftRepository(draft)
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
     service = SubmissionFinalizationService(
@@ -773,3 +777,47 @@ class FinalizationScope(PublishingFakeUnitOfWork[FakeFinalizationJobs]):
     @property
     def permissions(self) -> PermissionStore:
         raise AssertionError("These finalization tests use owner authority.")
+
+
+@pytest.mark.parametrize("category", ["door", "extender", "other"])
+@pytest.mark.parametrize("ingested", [False, True])
+async def test_only_ingested_drafts_may_omit_metadata(category: str, ingested: bool) -> None:
+    result, jobs = await _submit(
+        SubmissionOrigin.DISCORD,
+        SubmissionArtifactReadiness(),
+        category=category,
+        answers={"ai_generated": True, "schematic_visibility": "reviewer_only"},
+        ingested=ingested,
+    )
+    if ingested:
+        assert result.status is FinalizationJobStatus.PENDING
+        assert jobs.enqueued is not None
+        assert jobs.enqueued.creators == ()
+        assert jobs.enqueued.source_version is None
+        assert decode_submission(encode_submission(jobs.enqueued)) == jobs.enqueued
+    else:
+        assert result.status is DraftStatus.NEEDS_ATTENTION
+        assert jobs.enqueued is None
+        assert any(issue.field_id == "creators" for issue in jobs.attention)
+
+
+@pytest.mark.parametrize(
+    ("answers", "field", "reason"),
+    [
+        ({"opening_width": -1}, "opening_width", SubmissionAttentionReason.BELOW_MINIMUM),
+        ({"door_orientation": "sideways"}, "door_orientation", SubmissionAttentionReason.UNKNOWN_OPTION),
+        ({"creators": [""]}, "creators", SubmissionAttentionReason.TOO_SHORT),
+        ({"schematic_visibility": "public_download"}, "rights_attestation", SubmissionAttentionReason.REQUIRED),
+    ],
+)
+async def test_ingestion_still_rejects_invalid_values_and_requires_publication_rights(
+    answers: dict[str, JSONValue],
+    field: str,
+    reason: SubmissionAttentionReason,
+) -> None:
+    result, jobs = await _submit(
+        SubmissionOrigin.DISCORD, SubmissionArtifactReadiness(), category="door", answers=answers, ingested=True
+    )
+    assert result.status is DraftStatus.NEEDS_ATTENTION
+    assert SubmissionAttentionIssue(field, reason) in jobs.attention
+    assert jobs.enqueued is None

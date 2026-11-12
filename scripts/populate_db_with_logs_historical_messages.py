@@ -298,7 +298,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--retry-failed",
         action="store_true",
-        help="Retry untouched drafts whose finalization retries were exhausted; reuse retained model results.",
+        help="Retry failed untouched drafts, including old metadata requirements; reuse retained model results.",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Call inference without retaining or submitting results."

@@ -125,8 +125,8 @@ class SubmissionAttentionIssue:
 class SubmissionDimensions:
     """A width, height, and depth in blocks; None means the submitter did not give that part.
 
-    Which parts may be None depends on the form revision: from revision 4 the whole build size
-    and a door's depth are optional. Parts that are given must be positive.
+    Form revisions and ingestion policy decide which parts may be omitted.
+    Parts that are given must be positive.
     """
 
     width: int | None
@@ -304,7 +304,7 @@ class NormalizedSubmission:
     creators: tuple[str, ...]
     capture_dimensions: SubmissionDimensions
     source_version: str | None
-    """The Minecraft version the capture was exported from; None when the form did not ask for it."""
+    """The capture's Minecraft export version, when known."""
     version_compatibility: str | None
     taxonomy: SubmissionTaxonomy
     schematic_policy: SchematicRightsPolicy
