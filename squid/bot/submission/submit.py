@@ -344,7 +344,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         return message.channel.id in settings.build_log_channel_ids
 
     @sd.Cog.listener(name="on_message")
-    async def infer_build_from_message(self, message: discord.Message):
+    async def infer_build_from_message(self, message: discord.Message) -> None:
         """Ingest an eligible build log message when its author has current consent."""
         if not await self._is_build_log_message(message):
             return
@@ -375,11 +375,8 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
                 reasoning_effort=self.bot.inference_reasoning_effort,
             )
         except DraftCapacityExceededError:
-            await message.channel.send(
-                "Automated submission intake is full. Use `/build drafts` to finish or discard retained work, "
-                "then post this submission again.",
-                reference=message,
-                allowed_mentions=discord.AllowedMentions(replied_user=True),
+            logger.warning(
+                "Automated submission intake is full; skipped message %s in channel %s", message.id, message.channel.id
             )
             return
         await self.bot.refresh_posts("inference_run", str(run_id))

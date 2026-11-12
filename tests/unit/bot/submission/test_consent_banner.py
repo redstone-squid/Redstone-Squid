@@ -182,8 +182,9 @@ async def test_consented_message_records_activity_and_proceeds_with_ingestion(
     mock_ingest.assert_awaited_once()
 
 
-async def test_full_inference_intake_replies_with_recovery_instructions(
+async def test_full_inference_intake_logs_without_replying_to_the_source_channel(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     cog = _make_cog(account=_discord_account(consented=True))
     message = _make_message()
@@ -193,11 +194,9 @@ async def test_full_inference_intake_replies_with_recovery_instructions(
     await cog.infer_build_from_message(message)
 
     send = cast(AsyncCallRecorder, message.channel.send)
-    send.assert_awaited_once()
-    assert send.await_args is not None
-    response = send.await_args.args[0]
-    assert "intake is full" in response
-    assert "/build drafts" in response
+    send.assert_not_awaited()
+    assert "intake is full" in caplog.text
+    assert f"message {message.id} in channel {message.channel.id}" in caplog.text
 
 
 def _make_interaction(accounts: AccountService) -> Any:

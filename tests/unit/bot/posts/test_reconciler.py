@@ -13,8 +13,10 @@ import pytest
 from whenever import Instant
 
 import squid_ui_discord as sd
+from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
+from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.messages.application import MessageService
 from squid.messages.domain import MessageSnapshot
 from squid.posts.application import PostService
@@ -263,6 +265,32 @@ async def test_reconciling_twice_does_not_publish_again() -> None:
     await reconciler.reconcile("build", "42", 8)
 
     assert [len(channel.sent) for channel in channels] == [1, 1]
+
+
+async def test_inference_status_refresh_removes_legacy_posts_without_sending_new_ones() -> None:
+    channel = FakeChannel(1)
+    source = FakeMessage(1, channel.id)
+    legacy_status = FakeMessage(2, channel.id)
+    channel.messages = {source.id: source, legacy_status.id: legacy_status}
+    bot = FakeBot([channel])
+    await bot.services.posts.record(
+        message_id=legacy_status.id,
+        channel_id=channel.id,
+        resource_kind="inference_run",
+        resource_key="42",
+        surface="submission_status",
+        applied_revision=1,
+    )
+    renderer = SubmissionStatusRenderer(cast(RedstoneSquid, bot))
+    reconciler = PostReconciler(cast(RedstoneSquid, bot), [renderer])
+
+    await reconciler.reconcile("inference_run", "42", 2)
+    await reconciler.reconcile("inference_run", "42", 3)
+
+    assert legacy_status.deleted
+    assert not source.deleted
+    assert channel.sent == []
+    assert await bot.services.posts.list_for_resource("inference_run", "42") == []
 
 
 async def test_a_partial_failure_is_repaired_by_posting_only_the_missing_channel() -> None:
