@@ -194,6 +194,9 @@ class FakeVoteRepository:
         )
         return self.mutation
 
+    async def clear_vote(self, vote_session_id: int, account_id: int) -> StoredVoteMutation | None:
+        return self.mutation
+
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
         return self.mutation
 

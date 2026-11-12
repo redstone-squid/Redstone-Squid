@@ -142,6 +142,10 @@ class VoteRepository(Protocol):
         """
         ...
 
+    async def clear_vote(self, vote_session_id: int, account_id: int) -> StoredVoteMutation | None:
+        """Remove a ballot and check thresholds; return None if the session is missing or closed."""
+        ...
+
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
         """Close an open session as cancelled; return None if it is missing or already closed."""
         ...

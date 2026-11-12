@@ -330,6 +330,30 @@ class VoteService:
             just_closed=mutation.just_closed,
         )
 
+    async def clear_vote(self, vote_session_id: int, actor: Actor) -> CastVoteResult:
+        """Remove the actor's ballot while the session is open, without toggling it back on."""
+        account_id = actor.require_account_id()
+        snapshot = await self.get_session(vote_session_id)
+        if snapshot is None:
+            return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
+        if not snapshot.is_open:
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
+        if actor.guild_id is None or actor.guild_id not in {message.guild_id for message in snapshot.messages}:
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
+        async with self._uow_factory() as uow:
+            mutation = await uow.votes.clear_vote(vote_session_id, account_id)
+            await uow.commit()
+        if mutation is None:
+            latest = await self.get_session(vote_session_id)
+            rejection = VoteRejection.CLOSED if latest is not None else VoteRejection.NOT_FOUND
+            return CastVoteResult(session=latest, rejection=rejection)
+        return CastVoteResult(
+            session=mutation.session,
+            previous_weight=mutation.previous_weight,
+            current_weight=mutation.current_weight,
+            just_closed=mutation.just_closed,
+        )
+
     async def refresh(self, vote_session_id: int) -> VoteRefreshResult:
         """Recalculate resolvable ballot weights and check the session's existing thresholds."""
         snapshot = await self.get_session(vote_session_id)

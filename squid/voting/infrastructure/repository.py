@@ -406,6 +406,17 @@ class VoteRepository:
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, current_weight, just_closed)
 
+    async def clear_vote(self, vote_session_id: int, account_id: int) -> StoredVoteMutation | None:
+        session = self._session()
+        row = await self._lock_session_row(session, vote_session_id)
+        if row is None or row.status is not VoteStatus.OPEN:
+            return None
+        previous_weight = await session.scalar(
+            delete(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id).returning(Vote.weight)
+        )
+        just_closed = await self._close_at_threshold(session, row)
+        return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, None, just_closed)
+
     async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
         session = self._session()
         row = await self._lock_session_row(session, vote_session_id)

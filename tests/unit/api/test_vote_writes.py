@@ -6,7 +6,7 @@ from typing import override
 import pytest
 
 from squid.api.security import Caller
-from squid.api.v1.votes import VoteInput, cast_vote
+from squid.api.v1.votes import VoteInput, cast_vote, clear_vote
 from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.voting.application import VoteService
@@ -74,8 +74,13 @@ class VoteRecorder(VoteService):
         toggle: bool = True,
     ) -> CastVoteResult:
         assert emoji is None
-        assert toggle
+        assert not toggle
         self.cast_calls.append(CastCall(vote_session_id, actor, option_id))
+        return CastVoteResult(self.session, rejection=self.rejection)
+
+    @override
+    async def clear_vote(self, vote_session_id: int, actor: Actor) -> CastVoteResult:
+        self.cast_calls.append(CastCall(vote_session_id, actor, "clear"))
         return CastVoteResult(self.session, rejection=self.rejection)
 
 
@@ -173,3 +178,12 @@ async def test_every_vote_rejection_maps_to_a_typed_api_error(
             members,
             account(f"account:{rejection.value}"),
         )
+
+
+async def test_clear_resolves_the_authenticated_member() -> None:
+    actor = Actor(account_id=1, discord_user_id=7, guild_id=10)
+    votes = VoteRecorder(snapshot())
+    members = MemberRecorder(actor)
+    await clear_vote(12, 10, votes, members, account())
+    assert votes.cast_calls == [CastCall(12, actor, "clear")]
+    assert members.calls == [(1, 10, VoteKind.BUILD)]

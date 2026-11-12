@@ -73,7 +73,38 @@ async def cast_vote(
     actor = await vote_members.member(account_id, vote.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
-    result = await votes.cast_vote(vote_session_id, actor, vote.option_id)
+    result = await votes.cast_vote(vote_session_id, actor, vote.option_id, toggle=False)
+    _raise_vote_rejection(vote_session_id, result)
+    assert result.session is not None
+    return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)
+
+
+@router.delete(
+    "/{vote_session_id}/votes",
+    response_model=VoteSessionDetail,
+    responses=responses(400, 401, 403, 404, 409, 429, 503),
+    dependencies=[Depends(reserve_idempotent_request)],
+    operation_id="vote_clear",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+)
+async def clear_vote(
+    vote_session_id: int,
+    guild_id: int,
+    votes: Votes,
+    vote_members: VoteMembers,
+    caller: UserVoter,
+) -> VoteSessionDetail:
+    """Remove the authenticated member's ballot; repeating this keeps it absent."""
+    account_id = caller.require_consented_account()
+    session = await votes.get_session(vote_session_id)
+    if session is None:
+        raise VoteSessionNotFoundError(vote_session_id)
+    if vote_members is None:
+        raise AuthorizationError
+    actor = await vote_members.member(account_id, guild_id, session.kind)
+    if actor is None:
+        raise AuthorizationError
+    result = await votes.clear_vote(vote_session_id, actor)
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
     return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)

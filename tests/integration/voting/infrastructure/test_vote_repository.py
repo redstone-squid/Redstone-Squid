@@ -890,3 +890,18 @@ async def test_ballot_cannot_reference_another_sessions_alias(
                 ),
                 {"first": first, "second": second, "guild": GUILD_ID},
             )
+
+
+async def test_clearing_a_ballot_twice_keeps_it_absent(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
+    await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
+    removed = await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 7), commit=True)
+    repeated = await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 7), commit=True)
+    assert removed is not None
+    assert removed.previous_weight == 1.0
+    assert repeated is not None
+    assert repeated.previous_weight is None
+    assert repeated.session.votes == {}
