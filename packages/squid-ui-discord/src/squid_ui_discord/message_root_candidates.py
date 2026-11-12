@@ -17,7 +17,6 @@ from squid_ui.chrome import Chrome
 from squid_ui.document import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding, FormSpec
-from squid_ui.guards import Challenge
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.palette import Palette
 from squid_ui.planning.navigation import NavFactory
@@ -241,28 +240,6 @@ class _DispatchProfile:
                 DispatchResult(disposition, self.action, self.presentation, self.generation),
             )
         )
-
-
-@dataclass(frozen=True, slots=True)
-class _Admission:
-    """What the admission stage decided, and the question it wants put to the actor.
-
-    Three-valued because a challenge is not a refusal the funnel can simply return on: the
-    dialog is presented after the action lock is released, so `_dispatch_binding` has to
-    carry it back out rather than answer it in place.
-    """
-
-    admitted: bool
-    challenge: Challenge | None = None
-
-
-_ADMITTED = _Admission(admitted=True)
-
-
-_REFUSED = _Admission(admitted=False)
-
-
-"""Refused *and already answered*: the guard denied or raised, and the profile is finished."""
 
 
 class _BusyPaint:

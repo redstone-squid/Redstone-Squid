@@ -105,9 +105,6 @@ from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.lifetime import Lifetime
 from squid_ui_discord.message_payload import MessageMode, MessagePayload
 from squid_ui_discord.message_root_candidates import (
-    _ADMITTED,
-    _REFUSED,
-    _Admission,
     _ApplicationCandidate,
     _BusyPaint,
     _Candidate,
@@ -2017,7 +2014,7 @@ class MessageRoot[
         interaction: discord.Interaction,
         values: _SelectionValues,
         profile: _DispatchProfile,
-    ) -> _Admission:
+    ) -> bool | Challenge:
         """Evaluate the action guard before starting the handler transaction.
 
         Access has already established who may use the panel; the guard decides whether
@@ -2029,7 +2026,7 @@ class MessageRoot[
         """
         guard = binding.guard
         if guard is None:
-            return _ADMITTED
+            return True
         ledger = self.guards.for_action(key).staged()
         try:
             with profile.operation.span(
@@ -2041,12 +2038,12 @@ class MessageRoot[
             await self.handle_error(interaction, error, f"guard:{key}")
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.GUARD_FAILED, error)
-            return _REFUSED
+            return False
         if isinstance(decision, Challenge):
-            return _Admission(admitted=False, challenge=decision)
+            return decision
         ledger.commit()
         if decision.allowed:
-            return _ADMITTED
+            return True
         reason = decision.reason
         if reason is None:
             reason = (
@@ -2056,7 +2053,7 @@ class MessageRoot[
         profile.presentation = PresentationStatus.WRITTEN
         profile.acknowledge("guard_denied")
         profile.finish(DispatchDisposition.GUARD_DENIED)
-        return _REFUSED
+        return False
 
     async def _present_challenge(
         self,
@@ -2186,23 +2183,10 @@ class MessageRoot[
                 locked = False
                 self._action_lock.release()
 
-        if binding.mode in {ActionMode.IMMEDIATE, ActionMode.PARALLEL_READ}:
-            rebased = False
-            profile.decide_generation(self._candidates.generation)
-            # No lock to be inside for these two, so admission is simply the last gate
-            # before the handler, exactly as it is under the other policies.
-            admission = await self._admit(binding, key, interaction, values, profile)
-            if admission.challenge is not None:
-                await self._present_challenge(admission.challenge, key, interaction, values, profile)
-                return
-            if not admission.admitted:
-                return
-            await invoke(binding, rebased, self._candidates.generation, release)
-            return
-
-        with profile.operation.span("action_lock"):
-            await self._action_lock.acquire()
-        locked = True
+        if binding.mode not in {ActionMode.IMMEDIATE, ActionMode.PARALLEL_READ}:
+            with profile.operation.span("action_lock"):
+                await self._action_lock.acquire()
+            locked = True
         try:
             profile.decide_generation(self._candidates.generation)
             if binding.mode is ActionMode.EXCLUSIVE and generation not in {None, self._candidates.generation}:
@@ -2238,18 +2222,16 @@ class MessageRoot[
             # Serialize guards for locked action modes; immediate actions can still run.
             # Admission precedes the handler transaction.
             admission = await self._admit(binding, key, interaction, values, profile)
-            if admission.challenge is None:
-                if not admission.admitted:
-                    return
-                await invoke(binding, rebased, self._candidates.generation, release)
+            if not isinstance(admission, Challenge):
+                if admission:
+                    await invoke(binding, rebased, self._candidates.generation, release)
                 return
-            challenged = admission.challenge
         finally:
             release()
         # Only a challenge falls out of the block above rather than returning from inside it.
         # The dialog is opened with the lock released and the press already over, so every
         # other control on the panel stays live while the actor reads the question.
-        await self._present_challenge(challenged, key, interaction, values, profile)
+        await self._present_challenge(admission, key, interaction, values, profile)
 
     @asynccontextmanager
     async def _interaction_tasks(
