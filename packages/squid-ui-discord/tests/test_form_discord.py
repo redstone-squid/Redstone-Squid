@@ -1,8 +1,10 @@
 """Discord form presentation, submission funnel, and validation retry."""
 
+import asyncio
 from typing import cast, override
 from unittest.mock import AsyncMock, Mock
 
+import anyio
 import discord
 import pytest
 
@@ -488,3 +490,40 @@ async def test_descriptor_form_hooks_keep_invalid_attempts_out_of_on_submit(cust
     inputs[1]._value = ""  # pyrefly: ignore[missing-attribute]
     await modal.on_submit(interaction_harness())
     assert submitted == [(42, None)]
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_slow_submission_is_acknowledged_and_settles_with_its_handler(cancel: bool) -> None:
+    started, release, acknowledged = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    class SlowDuration(DurationPanel):
+        @override
+        async def submitted(self, event: sl.SubmitEvent) -> None:
+            self.seconds = 120
+            started.set()
+            await release.wait()
+
+    panel = SlowDuration()
+    root = MessageRoot(panel, access=Everyone(), timeout=None, acknowledgement_timeout=0.01)
+    commit_render(root)
+    modal = await _open_form(panel, root)
+    _text_input(modal)._value = "2m"  # pyrefly: ignore[missing-attribute]
+    interaction = interaction_harness()
+
+    async def defer(**kwargs: object) -> None:
+        interaction.response._done = True
+        acknowledged.set()
+
+    interaction.response.defer.side_effect = defer
+    with anyio.fail_after(2):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(modal.on_submit, interaction)
+            await started.wait()
+            await acknowledged.wait()
+            interaction.response.defer.assert_awaited_once()
+            if cancel:
+                tasks.cancel_scope.cancel()
+            else:
+                release.set()
+
+    assert panel.seconds == (0 if cancel else 120)

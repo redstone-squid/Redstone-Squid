@@ -2247,6 +2247,31 @@ class MessageRoot[
         # other control on the panel stays live while the actor reads the question.
         await self._present_challenge(challenged, key, interaction, values, profile)
 
+    @asynccontextmanager
+    async def _interaction_tasks(
+        self, interaction: discord.Interaction, profile: _DispatchProfile, busy: _BusyPaint | None = None
+    ) -> AsyncIterator[None]:
+        """Keep acknowledgement independent of rendering and end helpers with the interaction."""
+
+        async def acknowledge_by_deadline() -> None:
+            await anyio.sleep(self.acknowledgement_timeout)
+            deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
+            if deferred:
+                profile.operation.mark_deadline_missed()
+
+        async def paint_when_slow(paint: _BusyPaint) -> None:
+            await anyio.sleep(min(self.pending_after, self.acknowledgement_timeout))
+            await paint.show(profile)
+
+        # Handler-triggered reloads can supersede loads just like render settlement does.
+        with abandon_superseded_loads(anyio.CancelScope), _unwrapped():
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(acknowledge_by_deadline)
+                if busy is not None:
+                    tasks.start_soon(paint_when_slow, busy)
+                yield
+                tasks.cancel_scope.cancel()
+
     async def _invoke(
         self,
         binding: ActionBinding,
@@ -2258,104 +2283,47 @@ class MessageRoot[
         rebased: bool,
         profile: _DispatchProfile,
     ) -> None:
-        # Painting busy may wait behind arbitrary visible-resource work under the render
-        # lock. The acknowledgement deadline is independent so only Discord can delay it.
         busy = (
             None if binding.busy is None else _BusyPaint(self, key, binding.busy, interaction, resumed=profile.resumed)
         )
-
-        async def acknowledge_by_deadline() -> None:
-            await anyio.sleep(self.acknowledgement_timeout)
-            deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
-            if deferred:
-                profile.operation.mark_deadline_missed()
-
-        async def paint_when_slow() -> None:
-            await anyio.sleep(min(self.pending_after, self.acknowledgement_timeout))
-            await busy.show(profile)  # type: ignore[union-attr]
-
-        # A handler is the other place loads start -- `Resource.reload`, or a pattern's
-        # `refresh` -- and two fast presses supersede each other the same way a settle pass does.
-        with abandon_superseded_loads(anyio.CancelScope), _unwrapped():
-            async with anyio.create_task_group() as tasks:
-                tasks.start_soon(acknowledge_by_deadline)
-                if busy is not None:
-                    tasks.start_soon(paint_when_slow)
-                await self._invoke_and_flush(
-                    binding,
-                    key,
-                    interaction,
-                    values,
-                    submitted_generation,
-                    active_generation,
-                    rebased,
-                    profile,
-                    busy,
-                )
-                tasks.cancel_scope.cancel()
-
-    async def _invoke_and_flush(
-        self,
-        binding: ActionBinding,
-        key: str,
-        interaction: discord.Interaction,
-        values: _SelectionValues,
-        submitted_generation: int | None,
-        active_generation: int,
-        rebased: bool,
-        profile: _DispatchProfile,
-        busy: _BusyPaint | None = None,
-    ) -> None:
-        event = await self._event(interaction, values)
-        action_context = ActionContext.create(
-            f"{type(self.component).__name__}.{key}",
-            actor=ActorRef("discord_user", str(interaction.user.id)),
-            metadata={"message_root_id": self.id, "generation": str(active_generation)},
-        )
-        request = ActionRequest(
-            event,
-            key,
-            InteractionKind.PRESS if values is None else InteractionKind.SELECTION,
-            binding.mode,
-            submitted_generation,
-            active_generation,
-            action_context,
-            rebased,
-        )
-
-        async def handle() -> None:
-            await self._run_action(binding, event, action_context)
-
-        try:
-            handled = await self._run_middleware(request, handle, profile.operation)
-        except Exception as error:
-            profile.action = ActionStatus.FAILED
-            # Before the error hook: the failed action leaves no flush behind, so without
-            # this the panel would sit on "working" with every control dead.
-            restore = binding.busy is not None and binding.busy.restore_on_error
-            if busy is not None and await busy.close() and restore:
-                await busy.restore()
-            await self.handle_error(interaction, error, f"action:{key}")
-            profile.acknowledge("error_hook")
-            profile.finish(DispatchDisposition.ACTION_FAILED, error)
-            return
-        profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
-        profile.acknowledge("action")
-        self._renew(interaction, resumed=profile.resumed)
-        painted = busy is not None and await busy.close()
-        try:
-            profile.presentation = await self._present_action_result(
-                cast(ActionResponder, event.responder), interaction, profile
+        async with self._interaction_tasks(interaction, profile, busy):
+            event = await self._event(interaction, values)
+            action_context = ActionContext.create(
+                f"{type(self.component).__name__}.{key}",
+                actor=ActorRef("discord_user", str(interaction.user.id)),
+                metadata={"message_root_id": self.id, "generation": str(active_generation)},
             )
-        except Exception as error:
-            profile.presentation = PresentationStatus.FAILED
-            profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
-            raise
-        # An action that changed nothing flushes nothing, and a stranded "working" panel is
-        # not a policy choice -- so this restore ignores `restore_on_error`.
-        if painted and busy is not None and profile.presentation is not PresentationStatus.WRITTEN:
-            await busy.restore()
-        profile.finish(DispatchDisposition.COMPLETED)
+            request = ActionRequest(
+                event,
+                key,
+                InteractionKind.PRESS if values is None else InteractionKind.SELECTION,
+                binding.mode,
+                submitted_generation,
+                active_generation,
+                action_context,
+                rebased,
+            )
+
+            async def handle() -> None:
+                await self._run_action(binding, event, action_context)
+
+            try:
+                handled = await self._run_middleware(request, handle, profile.operation)
+            except Exception as error:
+                profile.action = ActionStatus.FAILED
+                # Before the error hook: the failed action leaves no flush behind, so without
+                # this the panel would sit on "working" with every control dead.
+                restore = binding.busy is not None and binding.busy.restore_on_error
+                if busy is not None and await busy.close() and restore:
+                    await busy.restore()
+                await self.handle_error(interaction, error, f"action:{key}")
+                profile.acknowledge("error_hook")
+                profile.finish(DispatchDisposition.ACTION_FAILED, error)
+                return
+            profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
+            await self._complete_interaction(
+                interaction, cast(ActionResponder, event.responder), profile, busy=busy, resumed=profile.resumed
+            )
 
     async def _invoke_submit(
         self,
@@ -2369,73 +2337,14 @@ class MessageRoot[
         rebased: bool,
         profile: _DispatchProfile,
     ) -> None:
-        async def watchdog() -> None:
-            await anyio.sleep(self.acknowledgement_timeout)
-            deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
-            if deferred:
-                profile.operation.mark_deadline_missed()
-
-        with abandon_superseded_loads(anyio.CancelScope), _unwrapped():
-            async with anyio.create_task_group() as tasks:
-                tasks.start_soon(watchdog)
-                await self._invoke_submit_and_flush(
-                    binding,
-                    key,
-                    interaction,
-                    spec,
-                    values,
-                    generation,
-                    active_generation,
-                    rebased,
-                    profile,
-                )
-                tasks.cancel_scope.cancel()
-
-    async def _invoke_submit_and_flush(
-        self,
-        binding: ActionBinding,
-        key: str,
-        interaction: discord.Interaction,
-        spec: FormSpec,
-        values: Mapping[str, object],
-        generation: int | None,
-        active_generation: int,
-        rebased: bool,
-        profile: _DispatchProfile,
-    ) -> None:
-        try:
-            with profile.operation.span("form_evaluation"):
-                evaluation = await spec.evaluate(values)
-            context = await self._event_context(interaction)
-            actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
-            responder = ActionResponder(interaction, self)
-            event = SubmitEvent(
-                actor,
-                responder,
-                self.localization.locale,
-                {"frontend": "discord"},
-                evaluation.values,
-                evaluation.attempted,
-                evaluation.errors,
-                context=context,
-            )
-            submission_handler = binding.handler
-
-            async def retry() -> None:
-                await responder.retry_form(
-                    spec.with_prefill(evaluation.attempted),
-                    evaluation.errors,
-                    key=key,
-                    handler=submission_handler,
-                    mode=binding.mode,
-                    generation=self._candidates.generation if generation is None else generation,
-                    actor_id=interaction.user.id,
-                    label=binding.label,
-                    record=binding.record,
-                )
-
-            if evaluation.errors and spec.on_invalid is not None:
-                event = InvalidSubmitEvent(
+        async with self._interaction_tasks(interaction, profile):
+            try:
+                with profile.operation.span("form_evaluation"):
+                    evaluation = await spec.evaluate(values)
+                context = await self._event_context(interaction)
+                actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
+                responder = ActionResponder(interaction, self)
+                event = SubmitEvent(
                     actor,
                     responder,
                     self.localization.locale,
@@ -2443,58 +2352,97 @@ class MessageRoot[
                     evaluation.values,
                     evaluation.attempted,
                     evaluation.errors,
-                    _retry=retry,
                     context=context,
                 )
-                invalid_handler = spec.on_invalid
+                submission_handler = binding.handler
 
-                async def handle_invalid(submission: SubmitEvent) -> None:
-                    assert isinstance(submission, InvalidSubmitEvent)
-                    await invalid_handler(submission)
+                async def retry() -> None:
+                    await responder.retry_form(
+                        spec.with_prefill(evaluation.attempted),
+                        evaluation.errors,
+                        key=key,
+                        handler=submission_handler,
+                        mode=binding.mode,
+                        generation=self._candidates.generation if generation is None else generation,
+                        actor_id=interaction.user.id,
+                        label=binding.label,
+                        record=binding.record,
+                    )
 
-                binding = replace(binding, handler=handle_invalid)
-            elif evaluation.errors and spec.validation is FormValidationMode.RETRY:
-                await retry()
-                profile.presentation = PresentationStatus.WRITTEN
-                profile.acknowledge("validation_retry")
-                profile.finish(DispatchDisposition.VALIDATION_RETRY)
+                if evaluation.errors and spec.on_invalid is not None:
+                    event = InvalidSubmitEvent(
+                        actor,
+                        responder,
+                        self.localization.locale,
+                        {"frontend": "discord"},
+                        evaluation.values,
+                        evaluation.attempted,
+                        evaluation.errors,
+                        _retry=retry,
+                        context=context,
+                    )
+                    invalid_handler = spec.on_invalid
+
+                    async def handle_invalid(submission: SubmitEvent) -> None:
+                        assert isinstance(submission, InvalidSubmitEvent)
+                        await invalid_handler(submission)
+
+                    binding = replace(binding, handler=handle_invalid)
+                elif evaluation.errors and spec.validation is FormValidationMode.RETRY:
+                    await retry()
+                    profile.presentation = PresentationStatus.WRITTEN
+                    profile.acknowledge("validation_retry")
+                    profile.finish(DispatchDisposition.VALIDATION_RETRY)
+                    return
+                request = ActionRequest(
+                    event,
+                    key,
+                    InteractionKind.SUBMIT,
+                    binding.mode,
+                    generation,
+                    active_generation,
+                    action_context := ActionContext.create(
+                        f"{type(self.component).__name__}.{key}",
+                        actor=ActorRef("discord_user", str(interaction.user.id)),
+                        metadata={"message_root_id": self.id, "generation": str(active_generation)},
+                    ),
+                    rebased,
+                )
+
+                async def handle() -> None:
+                    await self._run_action(binding, event, action_context)
+
+                handled = await self._run_middleware(request, handle, profile.operation)
+                profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
+            except Exception as error:
+                profile.action = ActionStatus.FAILED
+                await self.handle_error(interaction, error, f"form:{key}")
+                profile.acknowledge("error_hook")
+                profile.finish(DispatchDisposition.ACTION_FAILED, error)
                 return
-            request = ActionRequest(
-                event,
-                key,
-                InteractionKind.SUBMIT,
-                binding.mode,
-                generation,
-                active_generation,
-                action_context := ActionContext.create(
-                    f"{type(self.component).__name__}.{key}",
-                    actor=ActorRef("discord_user", str(interaction.user.id)),
-                    metadata={"message_root_id": self.id, "generation": str(active_generation)},
-                ),
-                rebased,
-            )
+            await self._complete_interaction(interaction, cast(ActionResponder, event.responder), profile)
 
-            async def handle() -> None:
-                await self._run_action(binding, event, action_context)
-
-            handled = await self._run_middleware(request, handle, profile.operation)
-            profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
-        except Exception as error:
-            profile.action = ActionStatus.FAILED
-            await self.handle_error(interaction, error, f"form:{key}")
-            profile.acknowledge("error_hook")
-            profile.finish(DispatchDisposition.ACTION_FAILED, error)
-            return
+    async def _complete_interaction(
+        self,
+        interaction: discord.Interaction,
+        responder: ActionResponder,
+        profile: _DispatchProfile,
+        *,
+        busy: _BusyPaint | None = None,
+        resumed: bool = False,
+    ) -> None:
         profile.acknowledge("action")
-        self._renew(interaction)
+        self._renew(interaction, resumed=resumed)
+        painted = busy is not None and await busy.close()
         try:
-            profile.presentation = await self._present_action_result(
-                cast(ActionResponder, event.responder), interaction, profile
-            )
+            profile.presentation = await self._present_action_result(responder, interaction, profile)
         except Exception as error:
             profile.presentation = PresentationStatus.FAILED
             profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
             raise
+        # Even an unchanged action must clear a visible busy indicator.
+        if painted and busy is not None and profile.presentation is not PresentationStatus.WRITTEN:
+            await busy.restore()
         profile.finish(DispatchDisposition.COMPLETED)
 
     async def _present_action_result(
