@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any, Unpack, cast
 import anyio
 import discord
 
+from squid_reactivity.completion import Completion
+from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui import paragraph
 from squid_ui.runtime.component import Component
 from squid_ui.text import Localization
@@ -291,49 +293,94 @@ class Scope[OwnerT = Any]:
             open_context = OpenContext.of(source)
             if parent is None and session_key is None:
                 session_key = session_spec.key(open_context)
+        parent_session = self._runtime.sessions.session_for(parent) if parent is not None else None
+        if parent is not None:
+            if parent_session is None:
+                return Rejected(RejectionReason.SESSION_FINISHED)
+            self._runtime._track(self, parent)
         root = self._runtime.mount(content, access=access, **self._root_options(policy, localization))
-        self._runtime._track(self, root)
-        if isinstance(content, Screen):
-            content._screen_bind(root)
-        if session_spec is None:
-            result = await root.send(destination)
+        opened = False
+        opening_error: BaseException | None = None
+        try:
+            self._runtime._track(self, root)
+            if isinstance(content, Screen):
+                content._screen_bind(root)
+            if session_spec is None:
+                result = await root.send(destination)
+                if isinstance(result, DeliveryAbandoned):
+                    return Abandoned()
+                opened = True
+                return Presented(content, root, None, result.result)
+            captured: DeliveryResult | None = None
+
+            async def capture(payload: MessagePayload) -> DeliveryResult:
+                nonlocal captured
+                captured = await destination(payload)
+                return captured
+
+            if parent is None:
+                result = await self._runtime.sessions.open(
+                    root,
+                    capture,
+                    key=session_key,
+                    admission=session_spec.admission,
+                    actor_id=actor_id,
+                    capacity=session_spec.capacity,
+                    quota=session_spec.quota,
+                    domain=session_spec.domain,
+                )
+            else:
+                assert parent_session is not None
+                result = await parent_session.attach(root, capture, actor_id=actor_id, parent=parent)
+            if isinstance(result, SessionRejected):
+                notice_delivery = None
+                if result.notice is not None:
+                    notice_delivery = await destination(
+                        self.render(paragraph(result.notice), localization=localization)
+                    )
+                return Rejected(result.reason, notice_delivery)
             if isinstance(result, DeliveryAbandoned):
                 return Abandoned()
-            self._runtime._track(self, root)
-            return Presented(content, root, None, result.result)
-        parent_session = self._runtime.sessions.session_for(parent) if parent is not None else None
-        captured: DeliveryResult | None = None
+            assert isinstance(result, Opened) and captured is not None
+            opened = True
+            return Presented(content, root, result.session, captured)
+        except BaseException as error:
+            opening_error = error
+            raise
+        finally:
+            if not opened:
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await self._discard_root(root)
+                    except BaseException as cleanup_error:
+                        if opening_error is not None:
+                            message = "presentation and cleanup failed"
+                            raise BaseExceptionGroup(message, [opening_error, cleanup_error]) from None
+                        raise
 
-        async def capture(payload: MessagePayload) -> DeliveryResult:
-            nonlocal captured
-            captured = await destination(payload)
-            return captured
+    async def _discard_root(self, root: MessageRoot) -> None:
+        """Release an unsuccessful presentation outside its opener's transaction."""
+        current = CURRENT_TRANSACTION.get()
+        if current is None or current.closed:
+            await root.finish()
+            return
+        done = Completion[Exception | None]()
 
-        if parent is None:
-            result = await self._runtime.sessions.open(
-                root,
-                capture,
-                key=session_key,
-                admission=session_spec.admission,
-                actor_id=actor_id,
-                capacity=session_spec.capacity,
-                quota=session_spec.quota,
-                domain=session_spec.domain,
-            )
-        elif parent_session is None:
-            return Rejected(RejectionReason.SESSION_FINISHED)
-        else:
-            result = await parent_session.attach(root, capture, actor_id=actor_id, parent=parent)
-        if isinstance(result, SessionRejected):
-            notice_delivery = None
-            if result.notice is not None:
-                notice_delivery = await destination(self.render(paragraph(result.notice), localization=localization))
-            return Rejected(result.reason, notice_delivery)
-        if isinstance(result, DeliveryAbandoned):
-            return Abandoned()
-        assert isinstance(result, Opened) and captured is not None
-        self._runtime._track(self, root)
-        return Presented(content, root, result.session, captured)
+        async def cleanup() -> None:
+            error: Exception | None = None
+            try:
+                await root.finish()
+            except Exception as caught:
+                error = caught
+            finally:
+                done.resolve(error)
+
+        host = root.config.execution_host
+        assert host is not None
+        host.start_cleanup(cleanup)
+        error = await done.wait()
+        if error is not None:
+            raise error
 
     def _root_options(self, policy: ResolvedResponse, localization: Localization) -> MessageRootBehaviorOptions:
         options: MessageRootBehaviorOptions = {}

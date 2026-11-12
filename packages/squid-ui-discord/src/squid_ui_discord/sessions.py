@@ -933,33 +933,36 @@ class SessionManager:
         # session facts would otherwise find no session on its own first paint and never be
         # asked to draw again. An abandoned delivery takes the entry back out.
         self._index_root(newcomer, message_root)
-        result = await message_root.send(message_destination)
-        if isinstance(result, Abandoned):
-            self._unindex_root(newcomer, message_root)
-            return result
+        try:
+            result = await message_root.send(message_destination)
+            if isinstance(result, Abandoned):
+                return result
 
-        # The opener joins by opening, so a quota has to bind here too — otherwise it is
-        # evaded by opening a second session rather than joining one. Held from before the
-        # external commit through registration, so the count and the append are one step.
-        async with AsyncExitStack() as commit:
-            if actor_id is not None:
-                await commit.enter_async_context(self._member_lock(actor_id))
-                if newcomer._quota_reached(actor_id, excluding=victims):
-                    self._unindex_root(newcomer, message_root)
-                    await message_root.finish()
-                    return Rejected(snapshots, RejectionReason.QUOTA_REACHED)
+            # The opener joins by opening, so a quota has to bind here too — otherwise it is
+            # evaded by opening a second session rather than joining one. Held from before the
+            # external commit through registration, so the count and the append are one step.
+            async with AsyncExitStack() as commit:
+                if actor_id is not None:
+                    await commit.enter_async_context(self._member_lock(actor_id))
+                    if newcomer._quota_reached(actor_id, excluding=victims):
+                        await message_root.finish()
+                        return Rejected(snapshots, RejectionReason.QUOTA_REACHED)
 
-            if before_registration is not None:
-                try:
-                    await before_registration(newcomer, result, selected)
-                except BaseException:
-                    await newcomer.finish()
-                    raise
+                if before_registration is not None:
+                    try:
+                        await before_registration(newcomer, result, selected)
+                    except BaseException:
+                        await newcomer.finish()
+                        raise
 
-            self._sessions.append(newcomer)
-            if key is not None:
-                self._by_key.setdefault(key, []).append(newcomer)
-            newcomer._activate()
+                self._sessions.append(newcomer)
+                if key is not None:
+                    self._by_key.setdefault(key, []).append(newcomer)
+                newcomer._activate()
+        finally:
+            if newcomer not in self._sessions:
+                self._unindex_root(newcomer, message_root)
+
         current = CURRENT_TRANSACTION.get()
         host = message_root.config.execution_host
         if victims and current is not None and not current.closed and host is not None:

@@ -1,7 +1,8 @@
 """Audience-aware static and live facade presentation."""
 
-from typing import Any, cast, override
+from typing import Any, Literal, cast, override
 
+import anyio
 import discord
 import pytest
 
@@ -107,3 +108,38 @@ async def test_private_interaction_is_ephemeral() -> None:
     await request.respond("Secret", audience=sd.Private("sensitive"))
 
     assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
+
+
+@pytest.mark.parametrize("session", [None, sd.SessionSpec("failed-opening")])
+@pytest.mark.parametrize("failure", ["error", "abandon", "cancel"])
+async def test_failed_open_releases_scope_ownership_and_provisional_session(
+    session: sd.SessionSpec | None, failure: Literal["error", "abandon", "cancel"]
+) -> None:
+    ui, interaction = installed()
+    captured: list[sd.MessageRoot] = []
+    cancellation = anyio.CancelScope()
+
+    class Opening(Panel):
+        @override
+        async def on_load(self) -> None:
+            captured.extend(ui._lifetime.roots())
+            if failure == "cancel":
+                cancellation.cancel()
+                await anyio.lowlevel.checkpoint()
+
+    request = await ui.request(interaction.source)
+    if failure == "error":
+        interaction.response.send_message.error = OSError("delivery failed")
+        with pytest.raises(OSError, match="delivery failed"):
+            await request.respond(Opening(), session=session)
+    elif failure == "abandon":
+        interaction.response.send_message.error = sd.delivery.DeliveryAbandoned()
+        assert isinstance(await request.respond(Opening(), session=session), sd.Abandoned)
+    else:
+        with cancellation:
+            await request.respond(Opening(), session=session)
+    (root,) = captured
+    assert root.finished
+    assert not tuple(ui._lifetime.roots())
+    assert ui.runtime.sessions.session_for(root) is None
+    await root.wait()
