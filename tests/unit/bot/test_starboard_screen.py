@@ -56,21 +56,17 @@ class FakeStarboardService(StarboardService):
         del guild_id
         return self.config if name == self.config.name else None
 
-    @override
     async def delete_starboard(self, guild_id: int, name: str) -> bool:
         self.deletions.append((guild_id, name))
         return True
 
-    @override
     async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None:
         del guild_id, name, settings
         return self.config
 
-    @override
     async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None:
         del config, emojis
 
-    @override
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
         del config, role_id, multiplier
 

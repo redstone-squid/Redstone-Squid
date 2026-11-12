@@ -168,7 +168,7 @@ class FakeVoteRepository:
         return self.session
 
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
-        return [] if self.session is None else [self.session]
+        return [] if self.session is None or self.session.kind is not kind else [self.session]
 
     async def cast_vote(
         self,
@@ -893,7 +893,7 @@ async def test_a_weight_edit_reaches_only_the_sessions_that_guild_owns() -> None
     )
 
     # A guild that merely hosts a card for the shared review.
-    await service.set_role_weight(RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0))
+    await service.refresh_configuration(VOTING_GUILD_ID)
 
     assert resolver.calls == []
 
@@ -907,7 +907,7 @@ async def test_a_weight_edit_in_the_owner_guild_reweighs_its_sessions() -> None:
         actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
     )
 
-    await service.set_role_weight(RoleWeight(OWNER_GUILD_ID, VoteKind.BUILD, 55, 4.0))
+    await service.refresh_configuration(OWNER_GUILD_ID)
 
     assert resolver.calls == [(7, OWNER_GUILD_ID)]
 

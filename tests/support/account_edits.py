@@ -1,6 +1,7 @@
 """A transport recorder for account edit commands; database invariants have integration tests."""
 
 from dataclasses import fields
+from typing import Protocol
 
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import (
@@ -10,12 +11,21 @@ from squid.accounts.application.edits import (
 )
 from squid.accounts.domain import ProfileUpdate
 from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.models import AccountProfile
+from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.core.actors import Actor
 from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 
 
 class SnapshotAccountService(AccountService):
+    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
+        raise AssertionError("This fixture does not edit profiles")
+
+    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
+        raise AssertionError("This fixture does not edit identities")
+
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
+        raise AssertionError("This fixture does not unlink identities")
+
     async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
         account = await self.get_account_by_id(account_id)
         if account is None:
@@ -23,8 +33,16 @@ class SnapshotAccountService(AccountService):
         return AccountEditorSnapshot(account, await self.get_profile(account_id))
 
 
+class AccountRecorder(Protocol):
+    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile: ...
+    async def set_identity_visibility(
+        self, account_id: int, identity_id: int, *, is_public: bool
+    ) -> AccountIdentity: ...
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity: ...
+
+
 class AccountEditRecorder:
-    def __init__(self, accounts: AccountService) -> None:
+    def __init__(self, accounts: AccountRecorder) -> None:
         self.accounts = accounts
         self.commands: list[EditCommand] = []
 
@@ -34,8 +52,6 @@ class AccountEditRecorder:
         values = command.values.unpack()
         before = EditValues.of({})
         match command.kind:
-            case "accounts.profile_clear":
-                await self.accounts.clear_profile(account_id)
             case "accounts.profile":
                 normalized = ProfileValues.model_validate(values)
                 update = ProfileUpdate(

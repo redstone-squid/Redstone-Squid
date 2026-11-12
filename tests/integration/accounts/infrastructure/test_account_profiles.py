@@ -432,11 +432,15 @@ class TestIdentityVisibilityAndUnlink:
             return None
 
         service = AccountService(unused_username_lookup, lambda: 123456, uow_factory=repository)
-        outcomes: list[AccountIdentityValue | LastIdentityError] = []
+        outcomes: list[AccountIdentityValue | LastIdentityError | None] = []
 
         async def unlink(identity_id: int) -> None:
             try:
-                outcomes.append(await service.unlink_identity(account_id, identity_id))
+                outcomes.append(
+                    await transact(
+                        repository, lambda uow: uow.accounts.unlink_identity(account_id, identity_id), commit=True
+                    )
+                )
             except LastIdentityError as error:
                 outcomes.append(error)
 
@@ -472,13 +476,14 @@ class TestIdentityVisibilityAndUnlink:
             commit=True,
         )
         with pytest.raises(LastIdentityError):
-            await service.unlink_identity(account_id, remaining.id)
+            await transact(repository, lambda uow: uow.accounts.unlink_identity(account_id, remaining.id), commit=True)
         profile = await transact(repository, lambda uow: uow.accounts.get_profile(account_id))
         assert profile is not None
         assert profile.avatar_identity_id == remaining.id
         assert [identity.id for identity in await service.list_identities(account_id)] == [remaining.id]
-        with pytest.raises(AccountIdentityNotFoundError):
-            await service.unlink_identity(account_id, 9999)
+        assert (
+            await transact(repository, lambda uow: uow.accounts.unlink_identity(account_id, 9999), commit=True) is None
+        )
 
     async def test_avatar_edit_serializes_with_identity_unlink(
         self,

@@ -14,7 +14,6 @@ from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, Re
 from squid.events.models import DomainEvent
 from squid.notifications.application import NotificationService
 from squid.notifications.domain import (
-    InboxVisibility,
     NotificationKind,
     NotificationSource,
     RecordSubscriptionFilter,
@@ -77,10 +76,13 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.receipt is not None
     assert undone.outcome.revisions[0].value == 2
-    await service.subscribe(
-        account.id,
-        kind=SubscriptionKind.RECORD_FILTER,
-        record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"utility"})),
+    await executor.execute(
+        EditCommand(
+            SUBSCRIPTIONS_EDIT,
+            undone.outcome.revisions,
+            EditValues.of({"create": {"kind": "record_filter", "record_filter": {"build_kinds": ["utility"]}}}),
+        ),
+        actor,
     )
     with pytest.raises(RevisionConflictError):
         await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
@@ -168,7 +170,14 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
             return row
 
     first, second = await arrive(), await arrive()
-    await service.mark_read(account.id, second.id, visibility=InboxVisibility())
+    await executor.execute(
+        EditCommand(
+            INBOX_EDIT,
+            (Revision(inbox_target(second.id), second.revision),),
+            EditValues.of({"states": {str(second.id): True}}),
+        ),
+        Actor(account_id=account.id),
+    )
     with pytest.raises(RevisionConflictError):
         await executor.execute(
             EditCommand(

@@ -20,6 +20,7 @@ from squid.starboard.application.edits import (
     STARBOARD_EDIT,
     BoardPresence,
     BoardValues,
+    EmojiValues,
     StarboardCreation,
     StarboardDeletion,
     StarboardEdit,
@@ -28,6 +29,7 @@ from squid.starboard.application.edits import (
 from squid.starboard.application.services import StarboardService
 from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
+from tests.support.starboard_setup import create_starboard
 
 ACTOR = Actor(guild_id=10, is_bot_owner=True, discord_user_id=42)
 
@@ -38,7 +40,7 @@ async def test_configuration_children_share_revision_and_undo_checks_current_aut
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     service = StarboardService(uow_factory=factory)
     executor = EditExecutor(factory, {STARBOARD_EDIT: StarboardEdit(PermissionService(uow_factory=factory))})
-    row = await service.create_starboard(10, 20)
+    row = await create_starboard(factory, 10, 20)
     snapshot = await service.snapshot(row.id)
     assert snapshot is not None
     expected = (Revision(starboard_target(row.id), snapshot.revision),)
@@ -61,7 +63,12 @@ async def test_configuration_children_share_revision_and_undo_checks_current_aut
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), Actor(guild_id=10, discord_user_id=42))
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), ACTOR)
     assert undone.receipt is not None
-    await service.set_emojis(row, (StarboardEmoji(emoji="✅", direction="up"),))
+    current = await service.snapshot(row.id)
+    assert current is not None
+    values = BoardValues.capture(current).model_copy(
+        update={"emojis": (EmojiValues(emoji="✅", direction="up", position=0, multiplier=1.0),)}
+    )
+    await executor.execute(EditCommand(STARBOARD_EDIT, undone.outcome.revisions, values.values()), ACTOR)
     with pytest.raises(RevisionConflictError):
         await executor.execute(saved.receipt.redo(undone.outcome.revisions), ACTOR)
     assert await service.is_relevant_emoji(10, "✅")
@@ -95,7 +102,7 @@ async def test_creation_retains_identity_and_revision_and_refuses_name_reuse(
     assert restored.id == identity
     undone_again = await executor.execute(redone.receipt.undo(redone.outcome.revisions), ACTOR)
     assert undone_again.receipt is not None
-    other = await service.create_starboard(10, 21)
+    other = await create_starboard(factory, 10, 21)
     assert other.id != identity
     with pytest.raises(ConflictError):
         await executor.execute(redone.receipt.redo(undone_again.outcome.revisions), ACTOR)

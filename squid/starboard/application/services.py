@@ -2,11 +2,8 @@
 
 from collections.abc import Collection
 from dataclasses import dataclass
-from math import isfinite
 
 from squid.core.actors import Actor
-from squid.core.errors import ValidationError
-from squid.core.i18n import tr
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import RoleMultiplier, WeightScope
 from squid.starboard.application.ports import (
@@ -18,8 +15,7 @@ from squid.starboard.application.ports import (
 )
 from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import evaluate_vote
-from squid.starboard.domain.models import EDITABLE_SETTINGS
-from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
+from squid.starboard.models import OriginMessage, StarboardConfig
 from squid.unit_of_work import UnitOfWorkFactory
 
 
@@ -154,31 +150,6 @@ class StarboardService:
         async with self._uow_factory() as uow:
             return await uow.starboards.reserve_id()
 
-    async def create_starboard(
-        self, guild_id: int, channel_id: int, name: str = "main", *, required: float = 3.0
-    ) -> StarboardConfig:
-        async with self._uow_factory() as uow:
-            config = StarboardConfig(
-                id=0,
-                guild_id=guild_id,
-                channel_id=channel_id,
-                name=name.strip(),
-                emojis=(
-                    StarboardEmoji(emoji="⭐", direction="up", position=0),
-                    StarboardEmoji(emoji="💩", direction="down", position=1),
-                ),
-                required=required,
-            )
-            created = await uow.starboards.create(config)
-            await uow.commit()
-            return created
-
-    async def delete_starboard(self, guild_id: int, name: str) -> bool:
-        async with self._uow_factory() as uow:
-            deleted = await uow.starboards.delete(guild_id, name)
-            await uow.commit()
-            return deleted
-
     async def list_for_guild(self, guild_id: int) -> tuple[StarboardConfig, ...]:
         async with self._uow_factory() as uow:
             return tuple(await uow.starboards.list_for_guild(guild_id))
@@ -186,44 +157,6 @@ class StarboardService:
     async def get(self, guild_id: int, name: str) -> StarboardConfig | None:
         async with self._uow_factory() as uow:
             return await uow.starboards.get(guild_id, name)
-
-    async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None:
-        if not settings or not set(settings) <= set(EDITABLE_SETTINGS) | {"channel_id", "name"}:
-            msg = "Unknown or empty starboard setting update."
-            raise ValidationError(msg)
-        async with self._uow_factory() as uow:
-            current = await uow.starboards.get(guild_id, name, for_update=True)
-            if current is None:
-                return None
-            if "name" in settings:
-                await uow.starboards.lock_names(guild_id)
-            for key, value in settings.items():
-                setattr(current, key, value)
-            current.validate()
-            await uow.commit()
-        return current
-
-    async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None:
-        async with self._uow_factory() as uow:
-            StarboardConfig(
-                id=config.id,
-                guild_id=config.guild_id,
-                channel_id=config.channel_id,
-                name=config.name,
-                emojis=emojis,
-                required=config.required,
-                required_remove=config.required_remove,
-            )
-            await uow.starboards.set_emojis(config.id, emojis)
-            await uow.commit()
-
-    async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
-        async with self._uow_factory() as uow:
-            if multiplier is not None and (not isfinite(multiplier) or multiplier <= 0):
-                msg = tr(t"starboard-role-multiplier-finite = Role multiplier must be finite and greater than zero.")
-                raise ValidationError(msg)
-            await uow.starboards.set_role_multiplier(config.id, role_id, multiplier)
-            await uow.commit()
 
     async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None:
         """Return one entry's config, origin and score, for rendering."""

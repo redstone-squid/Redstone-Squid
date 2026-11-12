@@ -39,22 +39,6 @@ class SettingsService:
             await uow.commit()
             return result
 
-    async def update_runtime(self, changes: Mapping[str, object], *, actor_account_id: int) -> RuntimeSettings:
-        """Validate and audit a patch atomically. The caller must authorize the actor.
-
-        Locking the singleton prevents concurrent patches from losing unrelated changes.
-        """
-        async with self._uow_factory() as uow:
-            row = await uow.settings.runtime(self._runtime_defaults, for_update=True)
-            before = RuntimeSettings.model_validate(row)
-            after = RuntimeSettings.model_validate(before.model_dump() | dict(changes))
-            if before != after:
-                for field, value in after.model_dump().items():
-                    setattr(row, field, value)
-                await uow.settings.record_runtime_change(actor_account_id, before, after)
-            await uow.commit()
-            return after
-
     async def guild_snapshot(self, guild_id: int) -> tuple[GuildSettings, int]:
         async with self._uow_factory() as uow:
             result = await guild_snapshot(uow, guild_id)

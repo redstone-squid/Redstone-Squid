@@ -25,7 +25,6 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
-    ProfileLink,
     ProfileUpdate,
     RecentAccountProof,
     fold_creator_name,
@@ -46,7 +45,6 @@ from squid.accounts.errors import (
     VerificationAttemptsExhaustedError,
 )
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
-from squid.core.errors import ValidationError
 from tests.support.identity_uow import AccountScope
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -800,7 +798,7 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     java = repository.accounts[account.id].identity_for(IdentityProvider.JAVA, str(JAVA_UUID))
     assert java is not None
     assert java.id is not None
-    await accounts.unlink_identity(account.id, java.id)
+    await repository.unlink_identity(account.id, java.id)
     assert repository.accounts[account.id].identities_for(IdentityProvider.JAVA) == ()
 
 
@@ -814,64 +812,13 @@ async def test_linking_against_a_missing_account_does_not_create_one() -> None:
 
 
 class TestProfiles:
-    async def test_update_requires_current_consent(self) -> None:
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1)
-        assert account.id is not None
-
-        with pytest.raises(ConsentRequiredError):
-            await service(repository).update_profile(account.id, ProfileUpdate(display_name="Notch"))
-
-    async def test_update_normalizes_through_the_domain(self) -> None:
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1, consent=CONSENT)
-        assert account.id is not None
-
-        profile = await service(repository).update_profile(account.id, ProfileUpdate(display_name="  Notch  "))
-
-        assert profile.display_name == "Notch"
-
-    async def test_update_rejects_an_invalid_link(self) -> None:
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1, consent=CONSENT)
-        assert account.id is not None
-        update = ProfileUpdate(links=(ProfileLink("Site", "javascript:alert(1)"),))
-
-        with pytest.raises(ValidationError):
-            await service(repository).update_profile(account.id, update)
-
-    async def test_update_refuses_an_avatar_from_another_account(self) -> None:
-        repository = FakeAccountRepository()
-        owner = repository.seed_account(1, consent=CONSENT)
-        repository.seed_account(2, consent=CONSENT)
-        assert owner.id is not None
-
-        with pytest.raises(AccountIdentityNotFoundError):
-            await service(repository).update_profile(owner.id, ProfileUpdate(avatar_identity_id=9999))
-
-    async def test_update_refuses_an_unknown_account(self) -> None:
-        with pytest.raises(AccountNotFoundError):
-            await service(FakeAccountRepository()).update_profile(404, ProfileUpdate(bio="hi"))
-
-    async def test_clear_profile_resets_content_and_leaves_it_visible(self) -> None:
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1, consent=CONSENT)
-        assert account.id is not None
-        accounts = service(repository)
-        await accounts.update_profile(account.id, ProfileUpdate(display_name="Spam", hidden=True))
-
-        cleared = await accounts.clear_profile(account.id)
-
-        assert cleared.display_name is None
-        assert not cleared.hidden
-
     async def test_public_profile_applies_visibility(self) -> None:
         repository = FakeAccountRepository()
         account = repository.seed_account(1, consent=CONSENT)
         assert account.id is not None
         assert account.public_creator_id is not None
         accounts = service(repository)
-        await accounts.update_profile(account.id, ProfileUpdate(display_name="Notch", hidden=True))
+        await repository.upsert_profile(account.id, ProfileUpdate(display_name="Notch", hidden=True))
 
         public = await accounts.get_public_profile(account.public_creator_id)
 
@@ -889,20 +836,12 @@ class TestIdentityManagement:
         account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
         assert account.id is not None
         accounts = service(repository)
-        await accounts.set_identity_visibility(account.id, 2, is_public=False)
+        await repository.set_identity_visibility(account.id, 2, is_public=False)
 
         identities = await accounts.list_identities(account.id)
 
         assert len(identities) == 2
         assert not next(identity for identity in identities if identity.id == 2).is_public
-
-    async def test_unlink_refuses_an_identity_the_account_does_not_hold(self) -> None:
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1, consent=CONSENT)
-        assert account.id is not None
-
-        with pytest.raises(AccountIdentityNotFoundError):
-            await service(repository).unlink_identity(account.id, 9999)
 
 
 class TestMergeCodes:

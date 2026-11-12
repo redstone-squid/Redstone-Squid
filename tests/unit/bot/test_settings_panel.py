@@ -136,15 +136,12 @@ class FakeVoteService(VoteService):
             raise self.role_weight_error
         return self.role_weights
 
-    @override
     async def set_emoji_preset(self, guild_id: int, kind: VoteKind, options: Sequence[VoteOption]) -> None:
         del guild_id, kind, options
 
-    @override
     async def set_role_weight(self, weight: RoleWeight) -> None:
         self.role_weights = (*self.role_weights, weight)
 
-    @override
     async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
         self.role_weights = tuple(
             weight
@@ -152,7 +149,6 @@ class FakeVoteService(VoteService):
             if (weight.guild_id, weight.kind, weight.role_id) != (guild_id, kind, role_id)
         )
 
-    @override
     async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
         del guild_id, kind
         self.role_weights = ()

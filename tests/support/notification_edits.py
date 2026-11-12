@@ -1,18 +1,44 @@
 """Record notification transport commands; PostgreSQL tests cover revision enforcement."""
 
+from typing import Protocol
+from uuid import UUID
+
 from squid.core.actors import Actor
 from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
-from squid.notifications.application import NotificationService
-from squid.notifications.domain import DEFAULT_INBOX_VISIBILITY, InboxVisibility
+from squid.notifications.domain import (
+    DEFAULT_INBOX_VISIBILITY,
+    InboxVisibility,
+    NotificationPreferences,
+    RecordSubscriptionFilter,
+    SubscriptionKind,
+)
 from squid.notifications.edits import (
     StatesValues,
     SubscriptionsValues,
     SubscriptionValues,
 )
+from squid.notifications.models import NotificationSubscription
+
+
+class NotificationRecorder(Protocol):
+    async def preferences(self, account_id: int) -> NotificationPreferences: ...
+    async def set_preferences(
+        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
+    ) -> NotificationPreferences: ...
+    async def subscribe(
+        self,
+        account_id: int,
+        *,
+        kind: SubscriptionKind,
+        subject_id: UUID | None = None,
+        record_filter: RecordSubscriptionFilter | None = None,
+    ) -> NotificationSubscription: ...
+    async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> None: ...
+    async def mark_unread(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> None: ...
 
 
 class NotificationEditRecorder:
-    def __init__(self, service: NotificationService, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY) -> None:
+    def __init__(self, service: NotificationRecorder, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY) -> None:
         self.service = service
         self.visibility = visibility
         self.commands: list[EditCommand] = []

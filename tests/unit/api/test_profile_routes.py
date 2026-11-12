@@ -3,6 +3,7 @@
 from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any, cast, override
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -70,12 +71,10 @@ class AccountRecorder(AccountService):
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         return self.identities
 
-    @override
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         self.profile_updates.append((account_id, update))
         return self.profile
 
-    @override
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         self.visibility_updates.append((account_id, identity_id, is_public))
         self.identities = tuple(
@@ -83,17 +82,11 @@ class AccountRecorder(AccountService):
         )
         return replace(JAVA, is_public=is_public)
 
-    @override
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
         self.unlinks.append((account_id, identity_id))
         if self.unlink_error is not None:
             raise self.unlink_error
         return JAVA
-
-    @override
-    async def clear_profile(self, account_id: int) -> AccountProfile:
-        self.clears.append(account_id)
-        return AccountProfile.empty(account_id)
 
     @override
     async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
@@ -249,22 +242,23 @@ class TestIdentities:
 
 
 class TestStaffClear:
-    async def test_clearing_targets_the_named_account(self) -> None:
+    async def test_clearing_targets_the_named_account_and_displayed_revision(self) -> None:
         accounts = _accounts()
-
-        response = await clear_profile(
+        edits = AsyncMock()
+        await clear_profile(
             42,
             accounts,
             _caller(),
-            cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
+            cast(Any, SimpleNamespace(edits=edits)),
             Response(),
             uuid4(),
-            '"account-42-r1"',
+            '"account-42-r7"',
         )
-
-        assert accounts.clears == [42]
-        assert response.display_name is None
-        assert response.hidden is False
+        command, actor = edits.execute.call_args.args
+        assert command.kind == "accounts.profile_clear"
+        assert command.expected[0].target.key == "42"
+        assert command.expected[0].value == 7
+        assert actor.account_id == 1
 
 
 class TestMerge:

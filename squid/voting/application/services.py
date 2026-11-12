@@ -473,33 +473,9 @@ class VoteService:
                 )
             return EmojiPreset(guild_id, kind, options)
 
-    async def set_emoji_preset(self, guild_id: int, kind: VoteKind, options: Sequence[VoteOption]) -> None:
-        async with self._uow_factory() as uow:
-            await uow.votes.set_emoji_preset(EmojiPreset(guild_id, kind, normalize_vote_options(options, kind=kind)))
-            await uow.commit()
-
     async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]:
         async with self._uow_factory() as uow:
             return await uow.votes.get_role_weights(guild_id, kind)
-
-    async def set_role_weight(self, weight: RoleWeight) -> None:
-        async with self._uow_factory() as uow:
-            await uow.votes.set_role_weight(weight)
-            await uow.commit()
-        await self._refresh_kind(weight.guild_id, weight.kind)
-
-    async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
-        async with self._uow_factory() as uow:
-            await uow.votes.remove_role_weight(guild_id, kind, role_id)
-            await uow.commit()
-        await self._refresh_kind(guild_id, kind)
-
-    async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
-        async with self._uow_factory() as uow:
-            await uow.votes.reset_configuration(guild_id, kind)
-            await uow.commit()
-        for current_kind in (kind,) if kind is not None else tuple(VoteKind):
-            await self._refresh_kind(guild_id, current_kind)
 
     async def refresh_configuration(self, guild_id: int) -> None:
         """Refresh ballots after a durable guild-configuration event, including retries."""

@@ -571,7 +571,6 @@ class MockNotifications(NotificationService):
     async def preferences(self, account_id: int) -> NotificationPreferences:
         return NotificationPreferences(account_id=account_id, consent_pending=True)
 
-    @override
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         return NotificationPreferences(
             account_id=account_id,
@@ -584,7 +583,6 @@ class MockNotifications(NotificationService):
     async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         return ()
 
-    @override
     async def subscribe(
         self,
         account_id: int,
@@ -595,7 +593,6 @@ class MockNotifications(NotificationService):
     ) -> NotificationSubscription:
         raise AssertionError("service callers cannot create notification subscriptions")
 
-    @override
     async def unsubscribe(self, account_id: int, subscription_id: int) -> None:
         return None
 
@@ -610,7 +607,6 @@ class MockNotifications(NotificationService):
     ) -> Page[InboxNotification]:
         return cast(Page[InboxNotification], _EMPTY_PAGE)
 
-    @override
     async def mark_read(
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
     ) -> None:

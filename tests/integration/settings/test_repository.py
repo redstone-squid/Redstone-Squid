@@ -6,23 +6,23 @@ from functools import partial
 
 import pytest
 from anyio import CancelScope, create_task_group, sleep
-from pydantic import ValidationError
 from sqlalchemy import delete, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
-from squid.core.errors import InvalidStateError
+from squid.core.errors import InvalidStateError, ValidationError
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.settings.models import RuntimeSettingChange, ServerSetting
+from tests.support.runtime_edits import edit_runtime
 
 _TABLES = [
     Base.metadata.tables[name]
-    for name in ("accounts", "server_settings", "runtime_settings", "runtime_setting_changes")
+    for name in ("edit_operations", "accounts", "server_settings", "runtime_settings", "runtime_setting_changes")
 ]
 
 
@@ -316,11 +316,11 @@ async def test_runtime_edits_persist_and_audit_atomically(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     assert (await service.get_runtime()).welcome_forward_chance == 0.1
-    await service.update_runtime({"welcome_forward_chance": 0.75}, actor_account_id=actor_account_id)
+    await edit_runtime(service, {"welcome_forward_chance": 0.75}, actor_account_id=actor_account_id)
     fresh = SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     assert (await fresh.get_runtime()).welcome_forward_chance == 0.75
     with pytest.raises(ValidationError):
-        await fresh.update_runtime({"welcome_forward_chance": 2}, actor_account_id=actor_account_id)
+        await edit_runtime(fresh, {"welcome_forward_chance": 2}, actor_account_id=actor_account_id)
     assert (await fresh.get_runtime()).welcome_forward_chance == 0.75
     async with async_session_factory() as session:
         changes = (await session.scalars(select(RuntimeSettingChange))).all()
@@ -347,7 +347,7 @@ async def test_concurrent_runtime_patches_preserve_unrelated_values(
     actor_account_id: int,
 ) -> None:
     async def change(values: Mapping[str, object]) -> None:
-        await service.update_runtime(values, actor_account_id=actor_account_id)
+        await edit_runtime(service, values, actor_account_id=actor_account_id)
 
     async with create_task_group() as group:
         group.start_soon(change, {"welcome_forward_chance": 0.8})
@@ -362,7 +362,7 @@ async def test_deleting_actor_preserves_settings_audit(
     actor_account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await service.update_runtime({"welcome_enabled": False}, actor_account_id=actor_account_id)
+    await edit_runtime(service, {"welcome_enabled": False}, actor_account_id=actor_account_id)
     async with async_session_factory() as session:
         await session.execute(delete(Account).where(Account.id == actor_account_id))
         await session.commit()

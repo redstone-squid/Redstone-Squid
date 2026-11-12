@@ -54,12 +54,10 @@ class NotificationRecorder(NotificationService):
     async def preferences(self, account_id: int) -> NotificationPreferences:
         return self.preferences_result
 
-    @override
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         self.preference_updates.append((account_id, web_enabled, dm_enabled))
         return self.preferences_result
 
-    @override
     async def subscribe(
         self,
         account_id: int,
@@ -84,13 +82,11 @@ class NotificationRecorder(NotificationService):
         self.inbox_reads.append((account_id, selector, page_size, visibility))
         return self.inbox_result
 
-    @override
     async def mark_read(
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
     ) -> None:
         self.read_changes.append((account_id, notification_id, True, visibility))
 
-    @override
     async def mark_unread(
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
     ) -> None:

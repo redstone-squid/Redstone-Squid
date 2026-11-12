@@ -1,104 +1,73 @@
-"""Notification application policy contracts."""
+"""Notification edit policy and background cleanup contracts."""
 
-from dataclasses import dataclass, field
 from typing import cast
-from uuid import UUID
+from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import JsonValue
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.core.actors import Actor
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.notifications import NotificationPreferences, NotificationService
 from squid.notifications.application import NotificationRepository
-from squid.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
+from squid.notifications.edits import (
+    PREFERENCES_EDIT,
+    SUBSCRIPTIONS_EDIT,
+    NotificationEditUnitOfWork,
+    NotificationPreferencesEdit,
+    NotificationSubscriptionsEdit,
+    notification_target,
+)
 from squid.notifications.errors import NotificationSubscriptionNotFoundError
-from squid.notifications.models import NotificationSubscription
+from squid.permissions.application.services import PermissionService
 from squid.settings.domain.runtime import RuntimeSettings
 from tests.support.delivery_uow import NotificationUnitOfWork
 from tests.support.settings import RuntimeSettingsStub
 
-SUBJECT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
-
-@dataclass(slots=True)
-class NotificationRepositoryFake:
-    """Return fixed policy inputs and fail if a rejected subscription reaches insertion."""
-
-    preferences: NotificationPreferences
-    target_exists: bool = True
-    attempted_add: bool = False
-    target_checks: list[UUID] = field(default_factory=list)
-
-    async def get_preferences(self, account_id: int) -> NotificationPreferences:
-        return self.preferences
-
-    async def update_preferences(
-        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
-    ) -> NotificationPreferences | None:
-        return None
-
-    async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
-        self.target_checks.append(subject_id)
-        return self.target_exists
-
-    async def add_subscription(
-        self,
-        account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None,
-        record_filter: RecordSubscriptionFilter | None,
-    ) -> NotificationSubscription:
-        self.attempted_add = True
-        raise AssertionError("a rejected subscription must not be persisted")
-
-    async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
-        return account_id == 7 and notification_id == 3 and visibility.include_staff
-
-    async def mark_unread(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
-        return account_id == 7 and notification_id == 3 and visibility.include_staff
-
-
-def _repository(*, consent_pending: bool, target_exists: bool = True) -> NotificationRepositoryFake:
-    return NotificationRepositoryFake(
-        NotificationPreferences(account_id=7, consent_pending=consent_pending), target_exists=target_exists
+@pytest.mark.parametrize("kind", [PREFERENCES_EDIT, SUBSCRIPTIONS_EDIT])
+async def test_edits_require_consent_before_target_lookup(kind: str) -> None:
+    uow = AsyncMock(spec=NotificationEditUnitOfWork)
+    uow.notifications = AsyncMock()
+    uow.notifications.lock_settings.return_value = 1
+    uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=True)
+    permissions = AsyncMock(spec=PermissionService)
+    permissions.allows_in.return_value = True
+    handler = (
+        NotificationPreferencesEdit(permissions)
+        if kind == PREFERENCES_EDIT
+        else NotificationSubscriptionsEdit(permissions)
     )
-
-
-def _service(repository: NotificationRepositoryFake) -> NotificationService:
-    return NotificationService(uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository)))
-
-
-async def test_channels_cannot_be_enabled_before_the_privacy_notice_is_accepted() -> None:
+    values: dict[str, JsonValue] = (
+        {"web_enabled": True} if kind == PREFERENCES_EDIT else {"create": {"kind": "creator"}}
+    )
     with pytest.raises(ConsentRequiredError):
-        await _service(_repository(consent_pending=True)).set_preferences(7, web_enabled=True, dm_enabled=False)
+        await handler.prepare(
+            uow, Actor(account_id=7), EditCommand(kind, (Revision(notification_target(7), 1),), EditValues.of(values))
+        )
+    uow.notifications.subscription_target_exists.assert_not_called()
 
 
-async def test_subscriptions_require_the_privacy_notice_before_target_lookup() -> None:
-    repository = _repository(consent_pending=True)
-
-    with pytest.raises(ConsentRequiredError):
-        await _service(repository).subscribe(7, kind=SubscriptionKind.CREATOR, subject_id=SUBJECT_ID)
-
-    assert repository.target_checks == []
-    assert not repository.attempted_add
-
-
-async def test_public_subscription_targets_are_validated_before_persistence() -> None:
-    repository = _repository(consent_pending=False, target_exists=False)
-
+async def test_subscription_target_is_checked_before_persistence() -> None:
+    uow = AsyncMock(spec=NotificationEditUnitOfWork)
+    uow.notifications = AsyncMock()
+    uow.notifications.lock_settings.return_value = 1
+    uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=False)
+    uow.notifications.subscription_target_exists.return_value = False
+    permissions = AsyncMock(spec=PermissionService)
+    permissions.allows_in.return_value = True
     with pytest.raises(NotificationSubscriptionNotFoundError):
-        await _service(repository).subscribe(7, kind=SubscriptionKind.RECORD, subject_id=SUBJECT_ID)
-
-    assert repository.target_checks == [SUBJECT_ID]
-    assert not repository.attempted_add
-
-
-async def test_read_and_unread_use_the_same_visibility_contract() -> None:
-    service = _service(_repository(consent_pending=False))
-    visibility = InboxVisibility(include_staff=True)
-
-    await service.mark_read(7, 3, visibility=visibility)
-    await service.mark_unread(7, 3, visibility=visibility)
+        await NotificationSubscriptionsEdit(permissions).prepare(
+            uow,
+            Actor(account_id=7),
+            EditCommand(
+                SUBSCRIPTIONS_EDIT,
+                (Revision(notification_target(7), 1),),
+                EditValues.of({"create": {"kind": "record", "subject_id": "11111111-1111-1111-1111-111111111111"}}),
+            ),
+        )
+    uow.notifications.save_subscription.assert_not_called()
 
 
 async def test_cleanup_reads_retention_each_time() -> None:

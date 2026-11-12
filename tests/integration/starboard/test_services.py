@@ -14,26 +14,7 @@ from squid.messages.models import Message
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.starboard.application import PendingVote, StarboardService
 from squid.starboard.models import OriginMessage
-
-
-async def test_setting_changes_validate_before_commit(
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    async with factory() as uow:
-        await uow.settings.get_or_create_for_update(10)
-        await uow.commit()
-    service = StarboardService(uow_factory=factory)
-    created = await service.create_starboard(10, 20)
-    updated = await service.update_settings(10, "main", channel_id=21, required=5.0)
-    assert updated is not None
-    assert updated.id == created.id
-    assert updated.channel_id == 21
-    with pytest.raises(ValueError, match="threshold"):
-        await service.update_settings(10, "main", required=-1.0)
-    stored = await service.get(10, "main")
-    assert stored is not None
-    assert stored.required == 5.0
+from tests.support.starboard_setup import create_starboard
 
 
 async def test_concurrent_votes_commit_and_abandoned_votes_leave_no_entry(
@@ -44,7 +25,7 @@ async def test_concurrent_votes_commit_and_abandoned_votes_leave_no_entry(
         await uow.settings.get_or_create_for_update(10)
         await uow.commit()
     service = StarboardService(uow_factory=factory)
-    config = await service.create_starboard(10, 20, required=1.0)
+    config = await create_starboard(factory, 10, 20, required=1.0)
     origin = OriginMessage(
         id=100,
         author_is_bot=False,
@@ -74,7 +55,7 @@ async def test_shared_deletion_survives_reactions_and_recounts(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     service = StarboardService(uow_factory=factory)
-    config = await service.create_starboard(10, 20, required=1.0)
+    config = await create_starboard(factory, 10, 20, required=1.0)
     origin = OriginMessage(
         id=100,
         author_is_bot=False,

@@ -21,14 +21,12 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkReservation,
     MergePreview,
-    ProfileUpdate,
     PublicCreatorProfile,
     RecentAccountProof,
     present_public_profile,
 )
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
-    AccountIdentityNotFoundError,
     AccountNotFoundError,
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
@@ -363,27 +361,6 @@ class AccountService:
                 raise AccountNotFoundError(account_id)
             return account.identities
 
-    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
-        """Remove one linked identity, refusing to strand the account without any.
-
-        Creator credit is deliberately untouched: aliases stay claimed, because a build's
-        attribution is a fact about the build and should not change when someone tidies up how
-        they sign in.
-        """
-        async with self._uow_factory() as uow:
-            removed = await uow.accounts.unlink_identity(account_id, identity_id)
-            if removed is None:
-                raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
-            await uow.commit()
-            return removed
-
-    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
-        """Publish or withhold one linked identity on the account's public profile."""
-        async with self._uow_factory() as uow:
-            result = await uow.accounts.set_identity_visibility(account_id, identity_id, is_public=is_public)
-            await uow.commit()
-            return result
-
     async def record_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
         """Store the provider key an avatar URL needs, when a caller happens to hold a fresh one."""
         async with self._uow_factory() as uow:
@@ -405,29 +382,6 @@ class AccountService:
             if profile is None:
                 raise AccountNotFoundError(account_id)
             return profile
-
-    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
-        """Validate and save a partial profile edit after checking the account's consent."""
-        async with self._uow_factory() as uow:
-            account = await uow.accounts.get_by_id(account_id)
-            if account is None:
-                raise AccountNotFoundError(account_id)
-            if account.needs_consent_refresh:
-                raise ConsentRequiredError(account_id=account_id)
-            result = await uow.accounts.upsert_profile(account_id, update.validated())
-            await uow.commit()
-            return result
-
-    async def clear_profile(self, account_id: int) -> AccountProfile:
-        """Clear profile text, links, and avatar, and make the profile visible.
-
-        The caller must authorize this moderation action. Creator aliases and linked
-        identities are retained.
-        """
-        async with self._uow_factory() as uow:
-            result = await uow.accounts.clear_profile(account_id)
-            await uow.commit()
-            return result
 
     async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
         """Return what a stranger may see of one creator, following merge redirects."""

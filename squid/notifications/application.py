@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from squid.accounts.errors import ConsentRequiredError
-from squid.core.errors import InvalidStateError, ValidationError
+from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.events import DomainEvent
@@ -18,7 +17,6 @@ from squid.notifications.domain import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.errors import NotificationNotFoundError, NotificationSubscriptionNotFoundError
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
@@ -154,67 +152,10 @@ class NotificationService:
         async with self._uow_factory() as uow:
             return await uow.notifications.get_preferences(account_id)
 
-    async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
-        """Set both channels when the account satisfies the privacy-consent policy."""
-        async with self._uow_factory() as uow:
-            preferences = await uow.notifications.update_preferences(
-                account_id,
-                web_enabled=web_enabled,
-                dm_enabled=dm_enabled,
-            )
-            if preferences is None:
-                raise ConsentRequiredError(account_id=account_id)
-            await uow.commit()
-            return preferences
-
-    async def subscribe(
-        self,
-        account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None = None,
-        record_filter: RecordSubscriptionFilter | None = None,
-    ) -> NotificationSubscription:
-        """Create or return one equivalent enabled subscription."""
-        async with self._uow_factory() as uow:
-            preferences = await uow.notifications.get_preferences(account_id)
-            if not preferences.has_current_consent:
-                raise ConsentRequiredError(account_id=account_id)
-            if kind is SubscriptionKind.RECORD_FILTER:
-                if subject_id is not None or record_filter is None:
-                    msg = tr(
-                        t"notifications-record-filter-structured-only "
-                        t"= record_filter subscriptions require only a structured filter"
-                    )
-                    raise ValidationError(msg)
-            elif subject_id is None or record_filter is not None:
-                msg = tr(
-                    t"notifications-creator-record-subscriptions = creator "
-                    t"and record subscriptions require only a subject_id"
-                )
-                raise ValidationError(msg)
-            elif not await uow.notifications.subscription_target_exists(kind, subject_id):
-                raise NotificationSubscriptionNotFoundError(public_context={"subject_id": str(subject_id)})
-            result = await uow.notifications.add_subscription(
-                account_id,
-                kind=kind,
-                subject_id=subject_id,
-                record_filter=record_filter,
-            )
-            await uow.commit()
-            return result
-
     async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         """List the caller's enabled subscriptions."""
         async with self._uow_factory() as uow:
             return await uow.notifications.list_subscriptions(account_id)
-
-    async def unsubscribe(self, account_id: int, subscription_id: int) -> None:
-        """Disable one caller-owned subscription while retaining its stable ID."""
-        async with self._uow_factory() as uow:
-            if not await uow.notifications.delete_subscription(account_id, subscription_id):
-                raise NotificationSubscriptionNotFoundError(public_context={"subscription_id": subscription_id})
-            await uow.commit()
 
     async def inbox(
         self,
@@ -246,32 +187,6 @@ class NotificationService:
                 keyset=True,
                 id_of=lambda item: item.id,
             )
-
-    async def mark_read(
-        self,
-        account_id: int,
-        notification_id: int,
-        *,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
-    ) -> None:
-        """Mark a visible caller-owned inbox item as read."""
-        async with self._uow_factory() as uow:
-            if not await uow.notifications.mark_read(account_id, notification_id, visibility=visibility):
-                raise NotificationNotFoundError(public_context={"notification_id": notification_id})
-            await uow.commit()
-
-    async def mark_unread(
-        self,
-        account_id: int,
-        notification_id: int,
-        *,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
-    ) -> None:
-        """Mark a visible caller-owned inbox item as unread."""
-        async with self._uow_factory() as uow:
-            if not await uow.notifications.mark_unread(account_id, notification_id, visibility=visibility):
-                raise NotificationNotFoundError(public_context={"notification_id": notification_id})
-            await uow.commit()
 
     async def materialize(self, event: DomainEvent) -> None:
         """Create eligible recipients' stored notifications and queue their DMs.

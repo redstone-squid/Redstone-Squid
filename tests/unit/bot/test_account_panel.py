@@ -12,7 +12,6 @@ from whenever import Instant
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     AccountConsent,
     AccountMerge,
@@ -55,11 +54,11 @@ async def edit_actor() -> Actor:
     return Actor(account_id=ACCOUNT_ID, discord_user_id=AUTHOR_ID)
 
 
-def _workspace(*, accounts: AccountService, **kwargs: Any) -> AccountWorkspace:
+def _workspace(*, accounts: SnapshotAccountService, **kwargs: Any) -> AccountWorkspace:
     return AccountWorkspace(accounts=accounts, edits=AccountEditRecorder(accounts), actor=edit_actor, **kwargs)
 
 
-def _overview(*, accounts: AccountService, **kwargs: Any) -> AccountOverview:
+def _overview(*, accounts: SnapshotAccountService, **kwargs: Any) -> AccountOverview:
     return AccountOverview(accounts=accounts, edits=AccountEditRecorder(accounts), actor=edit_actor, **kwargs)
 
 
@@ -271,7 +270,6 @@ class AccountMutationService(SnapshotAccountService):
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         return Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
 
-    @override
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         self.profile_updates.append((account_id, update))
         return AccountProfile.empty(account_id)
@@ -283,12 +281,10 @@ class AccountMutationService(SnapshotAccountService):
         account.revision = 2
         return account
 
-    @override
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         self.visibility_writes.append((account_id, identity_id, is_public))
         return DISCORD
 
-    @override
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
         self.unlinks.append((account_id, identity_id))
         return self.unlinked

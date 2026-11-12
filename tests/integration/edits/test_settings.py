@@ -25,6 +25,7 @@ from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, Runti
 from squid.settings.application.services import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.models import RuntimeSettingChange
+from tests.support.runtime_edits import edit_runtime
 
 
 async def owner(sessions: async_sessionmaker[AsyncSession]) -> Actor:
@@ -72,7 +73,7 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
 
     # Ordinary writers advance the same root; a stale receipt cannot undo them.
     assert actor.account_id is not None
-    await settings.update_runtime({"welcome_enabled": False}, actor_account_id=actor.account_id)
+    await edit_runtime(settings, {"welcome_enabled": False}, actor_account_id=actor.account_id)
     with pytest.raises(RevisionConflictError):
         await executor.execute(receipt.redo(reverted.receipt.revisions), actor)
 
