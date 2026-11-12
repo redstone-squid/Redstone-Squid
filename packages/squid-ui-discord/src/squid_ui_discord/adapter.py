@@ -11,6 +11,7 @@ from packaging.version import InvalidVersion, Version
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.extensions import ExtensionKind
+from squid_ui.forms import FormSpec
 from squid_ui.planning.adapter import (
     AdapterCapability,
     AdapterProfile,
@@ -19,6 +20,8 @@ from squid_ui.planning.adapter import (
 )
 from squid_ui.planning.target import AnyTarget
 from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
+from squid_ui.text import Localization
+from squid_ui_discord.form_planning import DiscordFormPlan, plan_form
 from squid_ui_discord.inspection import cost
 
 type ItemFactory = Callable[[], discord.ui.Item[Any]]
@@ -47,6 +50,12 @@ class _DiscordItemExtension:
 
 DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(AdapterCapability)
 
+
+def _plan_form(spec: FormSpec, *, target: AnyTarget, localization: Localization, strict: bool) -> DiscordFormPlan:
+    require_discord_py_target(target, AdapterCapability.MODAL_FORMS, "plan a modal form")
+    return plan_form(spec, localization=localization, limits=target.limits.components, strict=strict)
+
+
 DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     DiscordPy27Adapter,
     "discord.py",
@@ -54,6 +63,7 @@ DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     DISCORD_PY_BEHAVIOR_CAPABILITIES,
     {DISCORD_ITEM.name: _DiscordItemExtension()},
     frontend="discord",
+    form_planner=_plan_form,
 )
 """Verified discord.py 2.7 profile, annotated at the family accepted by renderer defaults.
 
@@ -93,6 +103,7 @@ def discord_py_adapter_profile(
         capabilities,
         {} if extensions is None else extensions,
         frontend="discord",
+        form_planner=_plan_form,
     )
 
 

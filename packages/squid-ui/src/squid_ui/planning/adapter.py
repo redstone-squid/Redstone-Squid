@@ -4,12 +4,23 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_ui.extensions import ExtensionKind as ExtensionKind
 from squid_ui.planning.resources import EMPTY_COST as EMPTY_COST
 from squid_ui.planning.resources import ResourceCost as ResourceCost
 from squid_ui.scene.model import JsonValue
+
+if TYPE_CHECKING:
+    from squid_ui.forms import FormSpec
+    from squid_ui.planning.target import AnyTarget
+    from squid_ui.text import Localization
+
+
+class FormPlanner(Protocol):
+    """Prepare a declared form for presentation without constructing frontend controls."""
+
+    def __call__(self, spec: FormSpec, *, target: AnyTarget, localization: Localization, strict: bool) -> object: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +72,8 @@ class AdapterProfile[AdapterT]:
 
     frontend: str | None = field(default=None, kw_only=True)
     """Dispatch identity used to select frontend-specific callback implementations."""
+    form_planner: FormPlanner | None = field(default=None, kw_only=True, repr=False, compare=False)
+    """Optional preparation for forms opened from this adapter's message controls."""
 
     family: type[AdapterT]
     name: str

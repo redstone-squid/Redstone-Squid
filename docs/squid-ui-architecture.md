@@ -542,6 +542,15 @@ can use `MyForm.from_submission(event)` to bind an already validated event witho
 it as prefill. `FormSpec` retains `ACCEPT_AND_MARK` for mapping-based consumers; descriptor forms
 always route invalid attempts to `on_invalid`.
 
+Discord forms have their own planning step. The adapter's form planner resolves labels,
+defaults, control choices, and limits into a `DiscordFormPlan`, without allocating Discord
+controls. Declared forms are prepared with the containing message and retained in
+`PlanResult.form_plans`, so an unsupported form fails before its button is published.
+Presentation renders that plan into fresh controls. Dynamic forms and validation retries
+use the same planner with their current values; schema evaluation still owns parsing and
+application validation. Supported display-text trimming happens during planning, and strict
+mode rejects it. Identifiers are rejected rather than truncated to preserve submission keys.
+
 ## Widgets: one state machine, two drivers
 
 Machine-based widgets are authored as pure `state -> tree` state machines. Control and

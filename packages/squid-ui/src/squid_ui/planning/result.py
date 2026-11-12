@@ -76,6 +76,8 @@ class PlanResult[BodyT = Body]:
     report: PlanReport
     form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)
     """What each declared form key presents right now, for resolving a late submission."""
+    form_plans: Mapping[str, object] = field(default_factory=dict, kw_only=True)
+    """Adapter-owned presentation plans, prepared after frontend callbacks are bound."""
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
     session_updates: tuple[SessionUpdate, ...] = ()

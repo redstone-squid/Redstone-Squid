@@ -24,7 +24,8 @@ from squid_ui.interactions import ActionEvent, ActionMode, Visibility
 from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.text import TextLike, resolve_text
 from squid_ui_discord import delivery as deliver
-from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal
+from squid_ui_discord.form_planning import DiscordFormPlan
+from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal, render_form_modal
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
@@ -109,12 +110,24 @@ class ActionResponder:
                 record=record,
             )
 
+        current = self.message_root.plan
+        prepared = None if current is None else current.form_plans.get(key)
+        if (
+            isinstance(prepared, DiscordFormPlan)
+            and prepared.spec is spec
+            and prepared.localization == self.message_root.localization
+            and prepared.limits == self.message_root.limits.components
+            and prepared.strict == self.message_root.strict
+        ):
+            return render_form_modal(prepared, on_submit=submit, timeout=self.message_root.timeout)
         return build_form_modal(
             spec,
             on_submit=submit,
             timeout=self.message_root.timeout,
             localization=self.message_root.localization,
             limits=self.message_root.limits.components,
+            strict=self.message_root.strict,
+            adapter=self.message_root.target.adapter,
         )
 
     async def retry_form(

@@ -87,11 +87,22 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     result = backend.plan(rendered, request, cache=cache, memo=memo)
     frontend = request.target.adapter.frontend or request.target.adapter.name
     bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend)
-    return (
+    result = (
         replace(result, bindings=bindings, form_bindings=forms)
         if bindings is not result.bindings or forms is not result.form_bindings
         else result
     )
+    if (prepare_form := request.target.adapter.form_planner) is not None and forms:
+        result = replace(
+            result,
+            form_plans={
+                key: prepare_form(
+                    binding.spec, target=request.target, localization=request.localization, strict=request.strict
+                )
+                for key, binding in forms.items()
+            },
+        )
+    return result
 
 
 __all__ = ["plan", "plan_request"]
