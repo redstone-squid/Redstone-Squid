@@ -18,7 +18,7 @@ from squid.accounts.models import Account, AccountIdentity, AliasClaim
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import ConsentedAccountWork
 from squid.permissions.domain import PermissionNode
-from squid_ui.testing import RecordingResponder, choose, press_event
+from squid_ui.testing import RecordingResponder, choose, keys, press_event, render_tree
 from squid_ui_discord.testing import (
     AsyncCallRecorder,
     commit_render,
@@ -221,3 +221,9 @@ async def test_approving_through_the_panel_removes_the_claim(monkeypatch: pytest
     on_error.assert_not_awaited()
     assert harness.accounts.decisions == [("approve", 7, AUTHOR_ID, False)]
     assert harness.component.claims == ()
+
+
+def test_an_empty_queue_offers_no_review_actions() -> None:
+    tree = render_tree(make_component(()).component)
+
+    assert not {"approve", "reject"} & set(keys(tree))

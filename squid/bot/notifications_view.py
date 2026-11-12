@@ -266,7 +266,8 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
                 key="follow-filter",
                 on_submit=self._follow_filter,
             ),
-            sl.action_control(
+            bool(self.subscriptions)
+            and sl.action_control(
                 tr(t"bot-notifications-view-unfollow-selected = Unfollow selected"),
                 self._unfollow,
                 key="unfollow_selected",
@@ -483,27 +484,25 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
-        if self._inbox:
-            nodes.append(
-                sl.choices(
-                    *(
-                        sl.choice(
-                            self._inbox_label(notification),
-                            key=str(notification.id),
-                            description=tr(t"bot-notifications-view-unread = Unread")
-                            if notification.read_at is None
-                            else tr(t"bot-notifications-view-read = Read"),
-                        )
-                        for notification in self._inbox
-                    ),
-                    key="inbox",
-                    selection=sl.controlled(self.selected_inbox_ids, self._inbox_selection_changed),
-                    minimum=0,
-                    maximum=len(self._inbox),
-                )
-            )
-        nodes.append(
+        if not self._inbox:
+            return ()
+        return (
+            sl.choices(
+                *(
+                    sl.choice(
+                        self._inbox_label(notification),
+                        key=str(notification.id),
+                        description=tr(t"bot-notifications-view-unread = Unread")
+                        if notification.read_at is None
+                        else tr(t"bot-notifications-view-read = Read"),
+                    )
+                    for notification in self._inbox
+                ),
+                key="inbox",
+                selection=sl.controlled(self.selected_inbox_ids, self._inbox_selection_changed),
+                minimum=0,
+                maximum=len(self._inbox),
+            ),
             sl.action_controls(
                 sl.action_control(
                     tr(t"bot-notifications-view-mark-selected-read = Mark selected read"),
@@ -518,9 +517,8 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     available=bool(self.selected_inbox_ids),
                 ),
                 key="inbox-actions",
-            )
+            ),
         )
-        return tuple(nodes)
 
     async def _inbox_selection_changed(self, event: sd.ChoiceEvent) -> None:
         self.selected_inbox_ids = event.selected

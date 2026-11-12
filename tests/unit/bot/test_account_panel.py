@@ -37,7 +37,7 @@ from squid.bot.verify import VerifyCog
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
-from squid_ui.testing import labels
+from squid_ui.testing import find, keys, labels, render_tree
 from squid_ui.text import NEUTRAL, resolve_text, source_text
 from squid_ui_discord.testing import commit_render, interaction_harness
 from tests.support.account_edits import AccountEditRecorder, SnapshotAccountService
@@ -1100,3 +1100,15 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
         assert overview._profile_editor is not None
         assert overview._profile_editor is not draft
         assert not overview._profile_editor.history.entries
+
+
+async def test_identity_visibility_needs_a_selected_identity() -> None:
+    # Without a selection the toggle would have no real state to show; Unlink stays, greyed out.
+    panel, _, _, _ = _linked_panel()
+    with sl.runtime.transaction():
+        panel.selected_id = None
+
+    tree = render_tree(panel)
+
+    assert "identity_visibility" not in keys(tree)
+    assert find(tree, sl.semantic.ActionControl, key="unlink").available is False

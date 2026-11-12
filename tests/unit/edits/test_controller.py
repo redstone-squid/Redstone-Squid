@@ -125,7 +125,9 @@ async def test_settings_screens_get_refresh_without_undo() -> None:
     await controller.execute(command(), "Edit")
 
     assert keys(controller.refresh_controls()) == ["edit-refresh", "refresh-saved"]
-    assert {"edit-undo", "edit-redo", "refresh-saved"} <= set(keys(controller.controls()))
+    # Editors show only the history step that can run: nothing has been undone, so no Redo.
+    assert {"edit-undo", "refresh-saved"} <= set(keys(controller.controls()))
+    assert "edit-redo" not in keys(controller.controls())
 
 
 async def test_a_stale_form_fails_without_dropping_history() -> None:

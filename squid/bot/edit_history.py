@@ -77,8 +77,8 @@ def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[sl.Compon
 
     return (
         sl.action_controls(
-            sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo", available=stack.can_undo),
-            sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo", available=stack.can_redo),
+            stack.can_undo and sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo"),
+            stack.can_redo and sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo"),
             key="edit-history",
         ),
     )

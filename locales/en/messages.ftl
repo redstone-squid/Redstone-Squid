@@ -211,28 +211,28 @@ account-credits-retained = You are still credited under: { $names }.
 # squid/bot/account_presentation.py:27
 account-discord-linked = Your Discord account is now linked to **{ $name }**.
 
-# squid/bot/account_view.py:326
+# squid/bot/account_view.py:329
 account-discord-unlink-warning = This is the Discord account you are using now. The bot will stop recognising you here.
 
-# squid/bot/account_view.py:335
+# squid/bot/account_view.py:338
 account-hidden-page-credit-note = A hidden page still lists the creator names you hold, because that credit is what attributes your builds.
 
-# squid/bot/account_view.py:239, squid/bot/account_view.py:251
+# squid/bot/account_view.py:242, squid/bot/account_view.py:254
 account-history-profile = Edit profile
 
 # squid/bot/profile_editor.py:147
 account-history-profile-draft = Edit profile draft
 
-# squid/bot/account_view.py:227
+# squid/bot/account_view.py:230
 account-history-unlink = Unlink identity
 
-# squid/bot/account_view.py:207
+# squid/bot/account_view.py:210
 account-history-visibility = Change identity visibility
 
-# squid/bot/account_view.py:231
+# squid/bot/account_view.py:234
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
-# squid/bot/account_view.py:321
+# squid/bot/account_view.py:324
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
 # squid/bot/account_workspace.py:200
@@ -265,13 +265,13 @@ account-view-bio = Bio
 # squid/bot/profile_editor.py:56
 account-view-cancel = Cancel
 
-# squid/bot/account_view.py:177
+# squid/bot/account_view.py:180
 account-view-creator-page = Creator page
 
 # squid/bot/profile_editor.py:77
 account-view-display-name = Display name
 
-# squid/bot/account_view.py:184
+# squid/bot/account_view.py:187
 account-view-edit-page = Edit page
 
 # squid/bot/profile_editor.py:73
@@ -280,13 +280,13 @@ account-view-edit-profile = Edit profile
 # squid/bot/profile_editor.py:128
 account-view-edit-your-creator-page = Edit your creator page
 
-# squid/bot/account_view.py:306
+# squid/bot/account_view.py:309
 account-view-hidden = hidden
 
-# squid/bot/account_view.py:181
+# squid/bot/account_view.py:184
 account-view-hidden-2 = Hidden
 
-# squid/bot/account_view.py:160
+# squid/bot/account_view.py:164
 account-view-hidden-from-page = Hidden from page
 
 # squid/bot/profile_editor.py:108
@@ -295,7 +295,7 @@ account-view-https-url = HTTPS URL
 # squid/bot/profile_editor.py:103
 account-view-label = Label
 
-# squid/bot/account_view.py:295
+# squid/bot/account_view.py:298
 account-view-linked-accounts = Linked accounts
 
 # squid/bot/profile_editor.py:28
@@ -304,7 +304,7 @@ account-view-links = { $count } links
 # squid/bot/profile_editor.py:120, squid/bot/profile_editor.py:97
 account-view-links-2 = Links
 
-# squid/bot/account_view.py:296
+# squid/bot/account_view.py:299
 account-view-none-yet = _None yet._
 
 # squid/bot/profile_editor.py:71
@@ -319,34 +319,34 @@ account-view-profile-saved = Profile saved.
 # squid/bot/profile_editor.py:83
 account-view-pronouns = Pronouns
 
-# squid/bot/account_view.py:319
+# squid/bot/account_view.py:322
 account-view-remove-this-linked-account = Remove this linked account?
 
 # squid/bot/profile_editor.py:131
 account-view-save-profile = Save profile
 
-# squid/bot/account_view.py:156
+# squid/bot/account_view.py:160
 account-view-selected-identity = Selected identity
 
-# squid/bot/account_view.py:180
+# squid/bot/account_view.py:183
 account-view-shown = Shown
 
-# squid/bot/account_view.py:159
+# squid/bot/account_view.py:163
 account-view-shown-on-page = Shown on page
 
-# squid/bot/account_view.py:304
+# squid/bot/account_view.py:307
 account-view-shown-publicly = shown publicly
 
-# squid/bot/account_view.py:311
+# squid/bot/account_view.py:314
 account-view-unknown = unknown
 
-# squid/bot/account_view.py:164
+# squid/bot/account_view.py:167
 account-view-unlink = Unlink
 
-# squid/bot/account_view.py:330
+# squid/bot/account_view.py:333
 account-view-value = { $warning } { $consequence }
 
-# squid/bot/account_view.py:313
+# squid/bot/account_view.py:316
 account-view-verified = { $visibility } · verified { $age }
 
 # squid/bot/account_view.py:124, squid/bot/profile_editor.py:191
@@ -824,7 +824,7 @@ bot-build-field-world-download-urls =
     .label = World Download Urls
     .placeholder = any urls, comma separated
 
-# squid/bot/claims_view.py:197
+# squid/bot/claims_view.py:198
 bot-claims-view-value =
     { "*" }*{ $heading }**
     { $detail }
@@ -848,36 +848,36 @@ bot-notifications-a-credited-build-gained-record =
        *[other] A credited build gained { $count } records.
     }
 
-# squid/bot/notifications_view.py:432
+# squid/bot/notifications_view.py:433
 bot-notifications-remainder = …and { $hidden } more.
 
-# squid/bot/notifications_view.py:423
+# squid/bot/notifications_view.py:424
 bot-notifications-subscription =
     { "*" }*{ $label }**
     { $detail }
 
-# squid/bot/notifications_view.py:394
+# squid/bot/notifications_view.py:395
 bot-notifications-view-base-title = Base title
 
-# squid/bot/notifications_view.py:563
+# squid/bot/notifications_view.py:561
 bot-notifications-view-build-awaiting-review = Build awaiting review
 
-# squid/bot/notifications_view.py:555
+# squid/bot/notifications_view.py:553
 bot-notifications-view-build-confirmed = Build confirmed
 
-# squid/bot/notifications_view.py:557
+# squid/bot/notifications_view.py:555
 bot-notifications-view-build-denied = Build denied
 
-# squid/bot/notifications_view.py:388
+# squid/bot/notifications_view.py:389
 bot-notifications-view-build-kind = Build kind
 
-# squid/bot/notifications_view.py:567
+# squid/bot/notifications_view.py:565
 bot-notifications-view-build-notification = Build notification
 
 # squid/bot/notifications_view.py:47
 bot-notifications-view-creator = Creator
 
-# squid/bot/notifications_view.py:559
+# squid/bot/notifications_view.py:557
 bot-notifications-view-creator-build-confirmed = Creator build confirmed
 
 # squid/bot/notifications_view.py:240
@@ -886,7 +886,7 @@ bot-notifications-view-creator-profile-id = Creator profile ID
 # squid/bot/notifications_view.py:158
 bot-notifications-view-discord-dms = Discord DMs
 
-# squid/bot/notifications_view.py:412
+# squid/bot/notifications_view.py:413
 bot-notifications-view-exact-tag-value = Exact tag value
 
 # squid/bot/notifications_view.py:236
@@ -898,7 +898,7 @@ bot-notifications-view-follow-a-record = Follow a record
 # squid/bot/notifications_view.py:232
 bot-notifications-view-follow-creator = Follow creator
 
-# squid/bot/notifications_view.py:264, squid/bot/notifications_view.py:384
+# squid/bot/notifications_view.py:264, squid/bot/notifications_view.py:385
 bot-notifications-view-follow-matching-records = Follow matching records
 
 # squid/bot/notifications_view.py:249
@@ -907,25 +907,25 @@ bot-notifications-view-follow-record = Follow record
 # squid/bot/notifications_view.py:90
 bot-notifications-view-following = Following
 
-# squid/bot/notifications_view.py:326
+# squid/bot/notifications_view.py:327
 bot-notifications-view-following-that-creator = Following that creator.
 
-# squid/bot/notifications_view.py:338
+# squid/bot/notifications_view.py:339
 bot-notifications-view-following-that-record = Following that record.
 
-# squid/bot/notifications_view.py:509
+# squid/bot/notifications_view.py:508
 bot-notifications-view-mark-selected-read = Mark selected read
 
-# squid/bot/notifications_view.py:515
+# squid/bot/notifications_view.py:514
 bot-notifications-view-mark-selected-unread = Mark selected unread
 
-# squid/bot/notifications_view.py:421
+# squid/bot/notifications_view.py:422
 bot-notifications-view-nothing-yet = _Nothing yet._
 
 # squid/bot/notifications_view.py:100
 bot-notifications-view-notifications = Notifications
 
-# squid/bot/notifications_view.py:496
+# squid/bot/notifications_view.py:497
 bot-notifications-view-read = Read
 
 # squid/bot/notifications_view.py:49
@@ -934,22 +934,22 @@ bot-notifications-view-record = Record
 # squid/bot/notifications_view.py:51
 bot-notifications-view-record-filter = Record filter
 
-# squid/bot/notifications_view.py:561
+# squid/bot/notifications_view.py:559
 bot-notifications-view-record-gained = Record gained
 
 # squid/bot/notifications_view.py:255
 bot-notifications-view-record-title-id = Record title ID
 
-# squid/bot/notifications_view.py:406
+# squid/bot/notifications_view.py:407
 bot-notifications-view-showcase-tag-id = Showcase tag ID
 
-# squid/bot/notifications_view.py:270
+# squid/bot/notifications_view.py:271
 bot-notifications-view-unfollow-selected = Unfollow selected
 
-# squid/bot/notifications_view.py:494, squid/bot/notifications_view.py:91
+# squid/bot/notifications_view.py:495, squid/bot/notifications_view.py:91
 bot-notifications-view-unread = Unread
 
-# squid/bot/notifications_view.py:400
+# squid/bot/notifications_view.py:401
 bot-notifications-view-version-scope = Version scope
 
 # squid/bot/notifications_view.py:152
@@ -2183,34 +2183,34 @@ catalogue-piston-extender-length = Piston extender length must be positive.
 # squid/catalogue/domain/titles.py:67
 catalogue-title-token-blank = A title token cannot be blank.
 
-# squid/bot/claims_view.py:180
+# squid/bot/claims_view.py:181
 claims-closed-uncredited = Closed { $claimant }'s claim on **{ $name }** without crediting it.
 
-# squid/bot/claims_view.py:212
+# squid/bot/claims_view.py:213
 claims-reapproval-warning = Approving again takes the name from them.
 
-# squid/bot/claims_view.py:144
+# squid/bot/claims_view.py:145
 claims-resolve-forbidden = You are no longer allowed to resolve creator claims.
 
 # squid/bot/claims_view.py:72
 claims-review-empty = No creator credit claims are awaiting review.
 
-# squid/bot/claims_view.py:116
+# squid/bot/claims_view.py:115
 claims-review-heading = Creator credit claims awaiting review
 
 # squid/bot/claims_view.py:98
 claims-view-approve = Approve
 
-# squid/bot/claims_view.py:193, squid/bot/claims_view.py:207
+# squid/bot/claims_view.py:194, squid/bot/claims_view.py:208
 claims-view-claim = Claim #{ $claim_id_text } — { $name }
 
-# squid/bot/claims_view.py:178
+# squid/bot/claims_view.py:179
 claims-view-credited-to = Credited **{ $name }** to { $claimant }.
 
-# squid/bot/claims_view.py:196
+# squid/bot/claims_view.py:197
 claims-view-opened = { $claimant } — opened { $age }
 
-# squid/bot/claims_view.py:126
+# squid/bot/claims_view.py:127
 claims-view-page-of-in-total = Page { $page } of { $pages } — { $total } in total
 
 # squid/bot/claims_view.py:108
@@ -3823,16 +3823,16 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/notifications_view.py:314
+# squid/bot/notifications_view.py:315
 notification-history-follow = Follow
 
 # squid/bot/notifications_view.py:180
 notification-history-preferences = Change notification preferences
 
-# squid/bot/notifications_view.py:543
+# squid/bot/notifications_view.py:541
 notification-history-read = Change read state
 
-# squid/bot/notifications_view.py:290
+# squid/bot/notifications_view.py:291
 notification-history-unfollow = Unfollow
 
 # squid/bot/notifications.py:122
@@ -3870,19 +3870,19 @@ notifications-domain-unsupported = unsupported { $name }: { $value }
 # squid/notifications/domain.py:164
 notifications-exact-predicate-value-required = exact predicates require a value
 
-# squid/bot/notifications_view.py:363
+# squid/bot/notifications_view.py:364
 notifications-follow-filter-confirmation = Following records matching that filter.
 
 # squid/bot/notifications.py:137
 notifications-followed-creator-build = A creator you follow has a newly confirmed build.
 
-# squid/bot/notifications_view.py:320
+# squid/bot/notifications_view.py:321
 notifications-invalid-creator-uuid = Enter a creator profile ID in UUID form.
 
 # squid/notifications/domain.py:231
 notifications-invalid-exact-tag-value = invalid exact tag value
 
-# squid/bot/notifications_view.py:332
+# squid/bot/notifications_view.py:333
 notifications-invalid-record-title-uuid = Enter a record title ID in UUID form.
 
 # squid/notifications/domain.py:283, squid/notifications/domain.py:288
@@ -3903,7 +3903,7 @@ notifications-presence-predicates-include = presence predicates cannot include a
 # squid/notifications/domain.py:191
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
-# squid/bot/notifications_view.py:347
+# squid/bot/notifications_view.py:348
 notifications-record-filter-required = Choose at least one record filter.
 
 # squid/notifications/domain.py:198

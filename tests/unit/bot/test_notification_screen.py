@@ -22,7 +22,7 @@ from squid.notifications import (
 from squid.notifications.application import NotificationEditorSnapshot
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid_ui.testing import RecordingResponder, choose, labels, press, render_tree, submit
+from squid_ui.testing import RecordingResponder, choose, find_all, keys, labels, press, render_tree, submit
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import stage
 from tests.support.notification_edits import NotificationEditRecorder
@@ -280,3 +280,18 @@ async def test_mounted_inbox_updates_summary_without_undo() -> None:
         assert not any(key.endswith(("edit-undo", "edit-redo")) for key in handler_keys)
         assert any(key.endswith(".follow-creator") for key in handler_keys)
         assert any(key.endswith(".web") for key in handler_keys)
+
+
+async def test_selection_actions_need_something_to_select() -> None:
+    # The recorder follows nothing but has inbox entries: unfollowing is impossible, while marking
+    # read is greyed out until an entry is selected.
+    screen = make_screen().screen
+    await screen.on_load()
+
+    tree = render_tree(screen)
+
+    assert "unfollow_selected" not in {key.rsplit(".", 1)[-1] for key in keys(tree)}
+    mark_read = next(
+        node for node in find_all(tree, sl.semantic.ActionControl) if node.key.endswith("mark_selected_read")
+    )
+    assert mark_read.available is False

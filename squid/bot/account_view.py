@@ -149,28 +149,31 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 )
             )
         identity = self.selected
-        # Each row pairs a visibility toggle with the other action on the same thing.
-        nodes.append(
-            sl.action_controls(
-                sl.toggle(
-                    tr(t"account-view-selected-identity = Selected identity"),
-                    key="identity_visibility",
-                    on=sl.controlled(identity is not None and identity.is_public, self._toggle_identity),
-                    on_label=tr(t"account-view-shown-on-page = Shown on page"),
-                    off_label=tr(t"account-view-hidden-from-page = Hidden from page"),
-                    available=identity is not None,
-                ),
-                sl.action_control(
-                    tr(t"account-view-unlink = Unlink"),
-                    self._unlink,
-                    key="unlink",
-                    tone=sl.Tone.DANGER,
-                    available=self.selected is not None,
-                    guard=sp.guards.confirm(self._unlink_warning()),
-                ),
-                key="identity-actions",
+        # Each row pairs a visibility toggle with the other action on the same thing. The identity
+        # toggle needs a selected identity to show a real state; Unlink stays visible, greyed out,
+        # while there are identities to select.
+        if self.identities:
+            nodes.append(
+                sl.action_controls(
+                    identity is not None
+                    and sl.toggle(
+                        tr(t"account-view-selected-identity = Selected identity"),
+                        key="identity_visibility",
+                        on=sl.controlled(identity.is_public, self._toggle_identity),
+                        on_label=tr(t"account-view-shown-on-page = Shown on page"),
+                        off_label=tr(t"account-view-hidden-from-page = Hidden from page"),
+                    ),
+                    sl.action_control(
+                        tr(t"account-view-unlink = Unlink"),
+                        self._unlink,
+                        key="unlink",
+                        tone=sl.Tone.DANGER,
+                        available=identity is not None,
+                        guard=sp.guards.confirm(self._unlink_warning()),
+                    ),
+                    key="identity-actions",
+                )
             )
-        )
         nodes.append(
             sl.action_controls(
                 sl.toggle(

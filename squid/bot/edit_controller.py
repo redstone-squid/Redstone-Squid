@@ -222,8 +222,8 @@ class EditController:
 
             nodes.append(
                 sl.action_controls(
-                    sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo", available=can_undo),
-                    sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo", available=can_redo),
+                    can_undo and sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo"),
+                    can_redo and sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo"),
                     key="edit-history",
                 )
             )

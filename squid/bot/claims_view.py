@@ -111,15 +111,16 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     available=self.selected is not None,
                 )
             )
-        return (
-            sd.v2.panel(
-                sd.v2.heading(tr(t"claims-review-heading = Creator credit claims awaiting review")),
-                body,
-                choices,
-                accent=DISCORD_BLUE,
-            ),
-            sl.action_controls(*buttons, key="claim-actions"),
+        panel = sd.v2.panel(
+            sd.v2.heading(tr(t"claims-review-heading = Creator credit claims awaiting review")),
+            body,
+            choices,
+            accent=DISCORD_BLUE,
         )
+        if not self._claims:
+            # With no claims there is nothing to select, so the actions could never be used.
+            return (panel,)
+        return (panel, sl.action_controls(*buttons, key="claim-actions"))
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self._claims)
