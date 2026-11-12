@@ -30,6 +30,10 @@ uv run prek install       # installs the pre-commit and pre-push hooks
 - **Types**: `just typecheck`. A clean tree reports zero errors, so any error it prints belongs
   to your change.
 - **Formatting and linting**: ruff, enforced by the pre-commit hooks; `just lint` runs both.
+- **Screen layout**: `just ui-gallery` runs the bot's UI tests and writes every distinct Discord
+  screen they render to `ui-gallery/index.html`, grouped by screen. Compare it before and after
+  a layout change. Add `--ui-gallery-screenshots` for PNGs (needs Chrome or Chromium), or pass other
+  test paths: `just ui-gallery tests/unit/bot/test_account_panel.py`.
 
 The workspace packages still support Python 3.14+. The root development environment
 runs on Python 3.15; use `uv sync --locked --all-packages` before checking the whole workspace.

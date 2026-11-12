@@ -49,6 +49,10 @@ lint:
 typecheck:
     uv run --locked pyrefly check --config pyproject.toml
 
+# Render every Discord screen the selected tests open into ui-gallery/index.html.
+ui-gallery paths="tests/unit/bot" *flags:
+    uv run --locked pytest -p tests.support.ui_gallery --ui-gallery=ui-gallery --no-cov -q {{paths}} {{flags}}
+
 build:
     docker build --build-arg GIT_COMMIT_HASH=$(git rev-parse HEAD) --build-arg GIT_COMMIT_MESSAGE="$(git log -1 --pretty=%s)" -t rssquid .
 
