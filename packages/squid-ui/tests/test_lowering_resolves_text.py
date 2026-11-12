@@ -4,6 +4,7 @@ The fixture covers text-bearing primitive fields and nested records. Leaving a M
 unresolved would send it to downstream readers that expect resolved text.
 """
 
+from dataclasses import replace
 from typing import Any, cast
 
 import pytest
@@ -13,6 +14,7 @@ from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.limits import LIMITS
 from squid_ui.planning.semantic_adaptation.lowering import lower_semantics
+from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Card,
     CardAuthor,
@@ -134,3 +136,20 @@ def test_unknown_renderables_are_rejected_with_their_path() -> None:
             localization=NEUTRAL,
             session=PresentationState(),
         )
+
+
+@pytest.mark.parametrize("make", [Text, Heading, Footer, Code, lambda content: Lines(lines=(content,))])
+def test_a_page_footer_is_resolved_on_every_text_primitive(make: Any) -> None:
+    # Only Lines used to resolve its footer, so a paged traceback in a code block failed to plan.
+    node = make(tr(t"test-hello = hello"))
+    paged = replace(node, overflow=Paginate(key="pages", footer=lambda page, pages: tr(t"test-page = page {page}")))
+
+    lowered = lower_semantics(
+        [paged], limits=LIMITS, chrome=DEFAULT_CHROME, localization=NEUTRAL, session=PresentationState()
+    )
+
+    overflow = getattr(lowered.nodes[0], "overflow", None)
+    assert isinstance(overflow, Paginate)
+    footer = overflow.footer
+    assert footer is not None
+    assert footer(2, 3) == "page 2"

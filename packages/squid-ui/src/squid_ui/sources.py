@@ -330,7 +330,8 @@ def window_footer[ItemT](
     last = window.position.offset + len(window.items)
     if capabilities.count is CountPrecision.EXACT and capabilities.jumpable and window.total is not None:
         pages = max(1, (window.total + extent - 1) // extent)
-        return chrome.page_footer(window.position.offset // extent + 1, pages)
+        # Like a paginated text block, a list that fits on one page has no page number to show.
+        return chrome.page_footer(window.position.offset // extent + 1, pages) if pages > 1 else None
     if capabilities.count is CountPrecision.EXACT and window.total is not None:
         return chrome.total_range_footer(first, last, window.total)
     if capabilities.count is CountPrecision.APPROXIMATE and window.total is not None:

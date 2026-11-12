@@ -152,3 +152,15 @@ async def test_a_single_item_has_no_step_buttons() -> None:
     tree = engine.render_tree(browser)
     assert not {"browser.item-previous", "browser.item-next"} & set(engine.keys(tree))
     assert "browser.back" in engine.keys(tree)
+
+
+async def test_page_numbers_appear_only_when_there_is_more_than_one_page() -> None:
+    one_page_source, one_page = await _loaded((Entry("a", "A"), Entry("b", "B")))
+    single = _paged_browser(one_page_source)
+    single.window.replace(one_page)
+    two_page_source, two_pages = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
+    paged = _paged_browser(two_page_source)
+    paged.window.replace(two_pages)
+
+    assert not [text for text in engine.texts(engine.render_tree(single)) if "of 1" in text]
+    assert [text for text in engine.texts(engine.render_tree(paged)) if "1 of 2" in text]

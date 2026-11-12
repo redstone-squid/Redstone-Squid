@@ -555,23 +555,27 @@ def _card_fields(fields: Sequence[Field], context: LoweringContext) -> list[Card
     return entries
 
 
+def _localized_overflow(overflow: Overflow, context: LoweringContext) -> Overflow:
+    """Resolve a page footer's text when each page is drawn, as the chrome's own footer is."""
+    if not isinstance(overflow, Paginate) or overflow.footer is None:
+        return overflow
+    footer = overflow.footer
+    return replace(overflow, footer=lambda page, pages: _resolve(footer(page, pages), context))
+
+
 def _primitive(node: Node, context: LoweringContext) -> Node:
     """Resolve deferred author text on exact primitive nodes."""
     match node:
         case (
-            Text(content=content)
-            | PrimitiveHeading(content=content)
-            | Footer(content=content)
-            | PrimitiveCode(content=content)
+            Text(content=content, overflow=overflow)
+            | PrimitiveHeading(content=content, overflow=overflow)
+            | Footer(content=content, overflow=overflow)
+            | PrimitiveCode(content=content, overflow=overflow)
         ):
-            return replace(node, content=_resolve(content, context))
+            return replace(node, content=_resolve(content, context), overflow=_localized_overflow(overflow, context))
         case Lines(lines=lines, overflow=overflow):
             resolved_lines = tuple(line if isinstance(line, Alt) else _resolve(line, context) for line in lines)
-            if isinstance(overflow, Paginate) and overflow.footer is not None:
-                footer = overflow.footer
-                localized = lambda page, pages: _resolve(footer(page, pages), context)
-                overflow = replace(overflow, footer=localized)
-            return replace(node, lines=resolved_lines, overflow=overflow)
+            return replace(node, lines=resolved_lines, overflow=_localized_overflow(overflow, context))
         case Button(label=label) | LinkButton(label=label) | RoutedButton(label=label):
             return replace(node, label=None if label is None else _resolve(label, context))
         case Row(items=items) | PrimitiveActionGroup(items=items):
