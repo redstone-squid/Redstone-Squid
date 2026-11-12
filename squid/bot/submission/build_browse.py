@@ -188,22 +188,8 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._decision is not None:
             return (node, self._review_prompt(), self._decision)
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [node]
-        actions = self._detail_actions(build)
-        if actions is not None:
-            nodes.append(actions)
+        nodes.append(self._detail_actions(build))
         nodes.extend(self.controller.controls())
-        nodes.append(
-            sl.action_controls(
-                sl.action_control(
-                    tr(t"build-schematic-tools-hide = Hide schematic tools")
-                    if self._show_schematics
-                    else tr(t"build-schematic-tools-show = Schematic tools"),
-                    self._toggle_schematics,
-                    key="schematic-tools",
-                ),
-                key="schematic-toggle",
-            )
-        )
         if self._show_schematics:
             nodes.append(self.schematics)
         if self._asset is not None:
@@ -219,7 +205,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
         self._show_schematics = not self._show_schematics
 
-    def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None:
+    def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = []
         if self._capabilities.edit or (
             build.submission_status is Status.PENDING
@@ -257,7 +243,16 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     tr(t"bot-submission-build-browse-debug-download = Debug download"), self._debug, key="debug"
                 )
             )
-        return sl.action_controls(*actions, key="build-actions") if actions else None
+        actions.append(
+            sl.action_control(
+                tr(t"build-schematic-tools-hide = Hide schematic tools")
+                if self._show_schematics
+                else tr(t"build-schematic-tools-show = Schematic tools"),
+                self._toggle_schematics,
+                key="schematic-tools",
+            )
+        )
+        return sl.action_controls(*actions, key="build-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
 
     def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         action = self._pending_review or "review"
