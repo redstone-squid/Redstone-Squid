@@ -699,7 +699,7 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unexpected_failure_retries_then_dead_letters() -> None:
+async def test_unexpected_failure_retries_then_dead_letters(caplog: pytest.LogCaptureFixture) -> None:
     """Report the exception class without private detail; retry scheduling belongs to the repository."""
     payload = await _payload()
     jobs = FakeFinalizationJobs()
@@ -711,6 +711,11 @@ async def test_unexpected_failure_retries_then_dead_letters() -> None:
     await worker.process_batch(now=NOW)
 
     assert jobs.failures == ["RuntimeError"]
+    record = next(record for record in caplog.records if "Submission finalization failed" in record.message)
+    assert str(DRAFT_ID) in record.message
+    assert str(JOB_ID) in record.message
+    assert record.exc_info is not None
+    assert isinstance(record.exc_info[1], RuntimeError)
 
 
 async def test_attachment_wait_resumes_without_extending_retention() -> None:

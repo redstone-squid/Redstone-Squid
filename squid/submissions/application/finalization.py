@@ -6,6 +6,7 @@ claims that attempt and delegates build creation to a SubmissionExecutor. The
 stored attempt survives restarts, so clients can retrieve its progress or result.
 """
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -45,6 +46,7 @@ from squid.unit_of_work import UnitOfWorkFactory
 
 MAX_FINALIZATION_JOB_CLAIM = 32
 DEFAULT_FINALIZATION_ATTEMPTS = 3
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -432,6 +434,7 @@ class SubmissionFinalizationWorker:
         try:
             result = await self._executor.execute(job, now=now)
         except Exception as error:
+            logger.exception("Submission finalization failed for draft %s, job %s", job.draft_id, job.job_id)
             retry_at = now.add(seconds=_retry_delay(job.attempts))
             async with self._uow_factory() as uow:
                 await uow.finalization_jobs.fail(
