@@ -19,6 +19,7 @@ from squid.builds.domain import (
 )
 from squid.core.concurrency import run_all_awaitables
 from squid.messages.domain import MessageSnapshot
+from squid.versions.errors import InvalidVersionError
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +304,15 @@ class BuildInferenceService:
         build.normal_closing_time = parse_time_string(inferred.closing_time)
         build.creators_ign = inferred.creators
         build.version_spec = (inferred.version_spec or "").strip() or None
-        build.versions = await self._versions.resolve_spec(build.version_spec) if build.version_spec is not None else []
+        if build.version_spec is not None:
+            try:
+                build.versions = await self._versions.resolve_spec(build.version_spec)
+            except ValueError, InvalidVersionError:
+                # Keep the original claim available for correction instead of losing
+                # this build and every other candidate in the same model response.
+                logger.warning(
+                    "Could not resolve inferred version specification %r; retained for review", build.version_spec
+                )
+
         if inferred.author_note is not None:
             build.description = inferred.author_note

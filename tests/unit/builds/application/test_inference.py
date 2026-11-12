@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
@@ -15,6 +16,7 @@ from squid.builds.application import (
     InlineImage,
 )
 from squid.builds.domain import RestrictionTypeLiteral
+from squid.versions.errors import InvalidVersionError
 
 
 def inferred(**overrides: Any) -> InferredBuild:
@@ -183,3 +185,25 @@ async def test_missing_version_stays_unknown(version_spec: str | None) -> None:
     assert builds[0].version_spec is None
     assert builds[0].versions == []
     assert versions.resolved_specs == []
+
+
+@pytest.mark.parametrize("error", [ValueError("invalid number"), InvalidVersionError("invalid selection")])
+async def test_invalid_version_preserves_candidates_for_review(
+    error: Exception, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    versions = FakeVersions()
+    resolve = AsyncMock(side_effect=[error, ["Java 1.20.0"]])
+    monkeypatch.setattr(versions, "resolve_spec", resolve)
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(version_spec="Java unknown"), inferred()])),
+        FakeTaxonomy(),
+        versions,
+        "prompt",
+    )
+
+    builds = await service.infer(source(), model="model")
+
+    assert len(builds) == 2
+    assert builds[0].version_spec == "Java unknown"
+    assert builds[0].versions == []
+    assert builds[1].versions == ["Java 1.20.0"]

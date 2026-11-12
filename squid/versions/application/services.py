@@ -1,5 +1,7 @@
 """Minecraft version application services."""
 
+import re
+
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.ports import VersionUnitOfWork
 from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
@@ -52,7 +54,8 @@ class VersionService:
         """Resolve comma-separated version selections against the catalog.
 
         `1.19` selects every known patch in that release. `1.19 - 1.20` includes
-        both endpoints and every known patch of 1.20. `1.21+` selects 1.21.0 and
+        both endpoints and every known patch of 1.20. Tildes and typographic dashes
+        between numeric bounds are also accepted. `1.21+` selects 1.21.0 and
         later releases. A full version such as `1.21.4` selects only that entry.
 
         Prefix the selection with `Java` or `Bedrock`; Java is the default.
@@ -63,6 +66,7 @@ class VersionService:
         """
         edition = self._edition_from_spec(version_spec)
         normalized_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
+        normalized_spec = re.sub(r"(?<=\d)\s*[~\uff5e\u2013\u2014]\s*(?=\d)", " - ", normalized_spec)
         versions = await self.list_versions(edition)
         available = [(version.major, version.minor, version.patch) for version in versions]
         resolved: list[tuple[int, int, int]] = []

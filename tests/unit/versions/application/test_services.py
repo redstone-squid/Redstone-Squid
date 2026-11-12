@@ -75,3 +75,22 @@ async def test_version_service_reports_an_empty_catalog_as_infrastructure_failur
         await service.newest("Bedrock")
 
     assert exc_info.value.context == {"edition": "Bedrock"}
+
+
+@pytest.mark.parametrize("separator", ["~", "\uff5e", "\u2013", "\u2014", " - "])
+async def test_version_ranges_accept_message_separators(separator: str) -> None:
+    committed = CommittedState(FakeVersionRepository())
+    committed.value.versions = [
+        MinecraftVersion("Java", 1, 16, 4),
+        MinecraftVersion("Java", 1, 16, 5),
+        MinecraftVersion("Java", 1, 17, 0),
+        MinecraftVersion("Java", 1, 17, 1),
+        MinecraftVersion("Java", 1, 18, 0),
+    ]
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
+
+    assert await service.resolve_spec(f"Java 1.16.5{separator}1.17") == [
+        "Java 1.16.5",
+        "Java 1.17.0",
+        "Java 1.17.1",
+    ]
