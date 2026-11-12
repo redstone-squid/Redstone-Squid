@@ -14,6 +14,7 @@ from squid.media.application.jobs import (
 )
 from squid.media.domain import MediaKind
 from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
+from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.application.drafts import DraftActor, DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.domain import SubmissionAttentionIssue
@@ -64,6 +65,15 @@ class SubmissionAttachmentIntake:
         self._uow_factory = uow_factory
         self._schematics = schematics
         self._media = media
+
+    def max_file_bytes(self, filename: str, content_type: str | None) -> int:
+        """Return the download limit for the processor selected by the file metadata."""
+        kind = classify_supplied_file(filename, content_type)
+        if kind == "schematic":
+            return self._schematics.max_bytes
+        if kind in {"image", "video"} and self._media is not None:
+            return self._media.limits.max_source_bytes
+        return SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
     async def reserve(
         self, draft_id: UUID, actor: DraftActor, source_id: UUID, filename: str, content_type: str | None

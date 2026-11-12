@@ -14,6 +14,11 @@ from squid.submissions.domain.intake import IntakeStatus
 
 
 class Intake:
+    max_bytes: int = 500 * 1024 * 1024
+
+    def max_file_bytes(self, filename: str, content_type: str | None) -> int:
+        return self.max_bytes
+
     def __init__(self) -> None:
         self.events: list[str] = []
         self.data = b""
@@ -60,7 +65,7 @@ async def test_replacement_registers_bytes_before_discarding_original_requiremen
 
 
 async def test_oversized_upload_is_retained_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("squid.api.v1.submission_intake.SCHEMATIC_FILE_SCHEMA_MAX_BYTES", 3)
+    monkeypatch.setattr(Intake, "max_bytes", 3)
     intake = Intake()
     with pytest.raises(ValidationError):
         await upload_file(

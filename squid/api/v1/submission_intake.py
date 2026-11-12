@@ -21,7 +21,6 @@ from squid.api.idempotency import reserve_edit_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId
 from squid.core.errors import ValidationError
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.domain.intake import IntakeStatus
@@ -88,7 +87,7 @@ async def upload_file(
     try:
         with tempfile.TemporaryDirectory(prefix="squid-api-intake-") as directory:
             path = Path(directory) / "source"
-            await _receive(request, path)
+            await _receive(request, path, max_bytes=intake.max_file_bytes(filename, content_type))
             await intake.register_file(draft_id, account_id, source_id, path, content_type)
         if replaces is not None:
             await intake.discard(draft_id, account_id, replaces)
@@ -98,14 +97,14 @@ async def upload_file(
     return await list_files(draft_id, account_id, intake)
 
 
-async def _receive(request: Request, path: Path) -> None:
+async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
     """Stream a supplied file to disk within the size limit and a 60-second timeout."""
     size = 0
     with anyio.fail_after(60), path.open("wb") as output:
         async for chunk in request.stream():
             size += len(chunk)
-            if size > SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
-                message = "Supplied files are limited to 16 MiB."
+            if size > max_bytes:
+                message = f"This file exceeds the upload limit of {max_bytes} bytes."
                 raise ValidationError(message)
             output.write(chunk)
 

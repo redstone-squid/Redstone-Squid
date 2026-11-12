@@ -10,14 +10,15 @@ import logging
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
+from urllib.parse import urlparse
 from uuid import UUID, uuid5
 
+import aiohttp
 import anyio
 import discord
 
 from squid.core.errors import ValidationError
 from squid.runtime import BotServices
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.application.drafts import DraftActor
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
@@ -59,14 +60,15 @@ async def receive_attachment(
 async def _download_and_register(
     services: BotServices, draft_id: UUID, actor_id: int, source_id: UUID, attachment: discord.Attachment
 ) -> None:
-    if attachment.size > SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
-        message = "Discord submission attachments are limited to 16 MiB each."
+    max_bytes = services.submission_intake.max_file_bytes(attachment.filename, attachment.content_type)
+    if attachment.size > max_bytes:
+        message = f"This attachment exceeds the upload limit of {max_bytes} bytes."
         raise ValidationError(message)
     with tempfile.TemporaryDirectory(prefix="squid-submission-") as directory:
         path = Path(directory) / "source"
         with anyio.fail_after(60):
             await attachment.save(path)
-        if path.stat().st_size > SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
+        if path.stat().st_size > max_bytes:
             message = "Downloaded attachment exceeds the intake limit."
             raise ValidationError(message)
         await services.submission_intake.register_file(draft_id, actor_id, source_id, path, attachment.content_type)
@@ -75,14 +77,15 @@ async def _download_and_register(
 async def register_uploaded_file(
     services: BotServices, draft_id: UUID, actor_id: int, source_id: UUID, source: UploadedFile
 ) -> None:
-    if source.size > SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
-        message = "Files are limited to 16 MiB."
+    max_bytes = services.submission_intake.max_file_bytes(source.name, source.media_type)
+    if source.size > max_bytes:
+        message = f"This file exceeds the upload limit of {max_bytes} bytes."
         raise ValidationError(message)
     with tempfile.TemporaryDirectory(prefix="squid-retry-") as directory:
         path = Path(directory) / "source"
         with anyio.fail_after(60):
             data = await source.read()
-        if len(data) > SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
+        if len(data) > max_bytes:
             message = "Downloaded file exceeds the intake limit."
             raise ValidationError(message)
         path.write_bytes(data)
@@ -113,16 +116,13 @@ async def receive_retained_file(services: BotServices, draft_id: UUID, actor: Dr
 async def _download_retained_file(
     services: BotServices, draft_id: UUID, actor: DraftActor, source: SubmissionSourceFile
 ) -> None:
-    from urllib.parse import urlparse
-
-    import aiohttp
-
     url = urlparse(source.url)
     if url.scheme != "https" or url.hostname not in {"cdn.discordapp.com", "media.discordapp.net"}:
         message = "This retained download URL is not a Discord attachment source."
         raise ValidationError(message)
-    if source.size > SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
-        message = "Discord submission attachments are limited to 16 MiB each."
+    max_bytes = services.submission_intake.max_file_bytes(source.filename, source.content_type)
+    if source.size > max_bytes:
+        message = f"This attachment exceeds the upload limit of {max_bytes} bytes."
         raise ValidationError(message)
     with tempfile.TemporaryDirectory(prefix="squid-assignment-") as directory:
         path = Path(directory) / "source"
@@ -133,7 +133,7 @@ async def _download_retained_file(
                 with path.open("wb") as output:
                     async for chunk in response.content.iter_chunked(65536):
                         size += len(chunk)
-                        if size > SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
+                        if size > max_bytes:
                             message = "Downloaded source exceeds the intake limit."
                             raise ValidationError(message)
                         output.write(chunk)
