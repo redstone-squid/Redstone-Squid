@@ -15,6 +15,7 @@ from squid.accounts.application.edits import AccountEditorSnapshot
 from squid.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
 from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, MergeTicket
+from squid.api.revisions import RevisionRequiredError
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import (
     clear_profile,
@@ -259,6 +260,19 @@ class TestStaffClear:
         assert command.expected[0].target.key == "42"
         assert command.expected[0].value == 7
         assert actor.account_id == 1
+
+    async def test_clearing_requires_the_displayed_revision(self) -> None:
+        edits = AsyncMock()
+        with pytest.raises(RevisionRequiredError):
+            await clear_profile(
+                42,
+                _accounts(),
+                _caller(),
+                cast(Any, SimpleNamespace(edits=edits)),
+                Response(),
+                uuid4(),
+            )
+        edits.execute.assert_not_called()
 
 
 class TestMerge:

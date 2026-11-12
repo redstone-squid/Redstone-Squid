@@ -140,16 +140,22 @@ async def test_staff_clear_is_final_revision_checked_and_permanently_attributed(
         account = await uow.accounts.create(
             consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(991),)
         )
+        staff = await uow.accounts.create(
+            consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(992),)
+        )
         await uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="remove me", hidden=True))
         await uow.commit()
     command = EditCommand(PROFILE_CLEAR, (Revision(account_target(account.id), account.revision),), EditValues.of({}))
-    actor = Actor(account_id=account.id)
+    actor = Actor(account_id=staff.id)
     result = await executor.execute(command, actor)
     assert result.receipt is not None
     assert result.receipt.final
     with pytest.raises(RevisionConflictError):
         await executor.execute(EditCommand(PROFILE_CLEAR, command.expected, command.values), actor)
     await executor.execute(command, actor)
+    permissions.allows_in.return_value = False
+    with pytest.raises(AuthorizationError):
+        await executor.execute(EditCommand(PROFILE_CLEAR, result.outcome.revisions, command.values), actor)
     async with factory() as uow:
         profile = await uow.accounts.get_profile(account.id)
         assert profile is not None
