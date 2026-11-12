@@ -11,14 +11,14 @@ Rejected and Abandoned recording admission refusal and deliberate non-delivery.
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Any, TypedDict, Unpack, override
+from typing import Any, TypedDict, Unpack, cast, override
 
 import discord
 
 from squid_ui.chrome import Chrome
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui_discord.access import AccessPolicy
+from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.audience import Audience, Private
 from squid_ui_discord.contracts import FacadeContent
 from squid_ui_discord.delivery import DeliveryResult
@@ -94,6 +94,42 @@ class ResponseSpec:
             )
         values.update(overrides)
         return ResponseSpec(**values)  # pyrefly: ignore[bad-argument-type]
+
+    def resolve(self, actor_id: int | None) -> ResolvedResponse:
+        """Resolve inheritance and actor access once before constructing a presentation."""
+
+        def value[T](setting: Setting[T], *, fallback: T) -> T:
+            return fallback if setting is UNSET else cast(T, setting)
+
+        access = value(self.access, fallback=None)
+        if access is None or access is invoker_only:
+            access = None if actor_id is None else Owner(actor_id)
+        return ResolvedResponse(
+            audience=value(self.audience, fallback="public"),
+            access=cast(AccessPolicy | None, access),
+            timeout=value(self.timeout, fallback=180),
+            expiry=value(self.expiry, fallback=None),
+            live_updates=value(self.live_updates, fallback=False),
+            retain_routed_on_timeout=value(self.retain_routed_on_timeout, fallback=False),
+            session=value(self.session, fallback=None),
+            allowed_mentions=value(self.allowed_mentions, fallback=None),
+            chrome=value(self.chrome, fallback=None),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedResponse:
+    """Concrete presentation settings; no inheritance remains at the delivery boundary."""
+
+    audience: Audience
+    access: AccessPolicy | None
+    timeout: float | None
+    expiry: ExpiryPolicy | None
+    live_updates: bool
+    retain_routed_on_timeout: bool
+    session: SessionSpec | None
+    allowed_mentions: discord.AllowedMentions | None
+    chrome: Chrome | None
 
 
 DEFAULT_RESPONSE_SPEC = ResponseSpec(

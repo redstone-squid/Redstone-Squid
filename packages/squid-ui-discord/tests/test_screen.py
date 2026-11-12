@@ -414,12 +414,12 @@ def test_unspecified_operational_policy_inherits_runtime_defaults() -> None:
         def render(self) -> sl.LayoutNode:
             return sl.heading("Plain")
 
-    effective = ui._policy(Plain(), {})
+    effective = ui._policy(Plain(), {}, actor_id=7)
     assert effective.timeout == 75
     assert effective.live_updates is True
     assert effective.retain_routed_on_timeout is True
     assert effective.audience == "personal"
-    assert effective.access is sd.invoker_only
+    assert effective.access == sd.Owner(7)
 
 
 async def test_unnamed_session_opens_under_its_resolved_key() -> None:

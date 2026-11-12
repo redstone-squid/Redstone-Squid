@@ -212,7 +212,7 @@ from squid_ui_discord.runtime import (
 )
 from squid_ui_discord.screen import Screen
 from squid_ui_discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
-from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionOptions, SessionOptionsResolver, SessionSpec
+from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionSpec
 from squid_ui_discord.sessions import (
     AdmissionSpec,
     Reject,
@@ -353,8 +353,6 @@ __all__ = [
     "Sent",
     "SessionKey",
     "SessionManager",
-    "SessionOptions",
-    "SessionOptionsResolver",
     "SessionSpec",
     "StackNavigator",
     "SubmitEvent",

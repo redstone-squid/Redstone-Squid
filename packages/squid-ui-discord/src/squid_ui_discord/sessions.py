@@ -772,7 +772,7 @@ class SessionManager:
         changing the successful admission result.
         """
         if not isinstance(message_root, MessageRoot):
-            message = "SessionManager.open requires a MessageRoot; use MessageRootDefaults.mount or SessionSpec.open"
+            message = "SessionManager.open requires a MessageRoot; use MessageRootDefaults.mount"
             raise TypeError(message)
 
         async with self._lock_for(key) if key is not None else nullcontext():

@@ -7,7 +7,6 @@ not leave interactive panels calling back into it.
 """
 
 from collections.abc import Hashable, Sequence
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import anyio
@@ -16,7 +15,6 @@ import discord
 from squid_ui import paragraph
 from squid_ui.runtime.component import Component
 from squid_ui.text import Localization
-from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.audience import Audience
 from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
@@ -24,23 +22,21 @@ from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui_discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
-from squid_ui_discord.message_root_contracts import PauseUpdates, RenewEphemeral
+from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions, PauseUpdates, RenewEphemeral
 from squid_ui_discord.rendering import render_static
 from squid_ui_discord.request import Request, RequestOrigin, _resolve_request
 from squid_ui_discord.response import (
-    UNSET,
     Abandoned,
     Presented,
     Rejected,
+    ResolvedResponse,
     ResponseOverrides,
     ResponseResult,
     ResponseSpec,
     Sent,
-    Setting,
-    invoker_only,
 )
 from squid_ui_discord.screen import Screen
-from squid_ui_discord.session_specs import OpenContext, SessionOptions
+from squid_ui_discord.session_specs import OpenContext
 from squid_ui_discord.sessions import Opened, RejectionReason
 from squid_ui_discord.sessions import Rejected as SessionRejected
 
@@ -85,12 +81,14 @@ class Scope[OwnerT = Any]:
             message = "this Discord UI scope is closed"
             raise RuntimeError(message)
 
-    def _policy(self, content: FacadeContent, overrides: ResponseOverrides) -> ResponseSpec:
+    def _policy(
+        self, content: FacadeContent, overrides: ResponseOverrides, actor_id: int | None = None
+    ) -> ResolvedResponse:
         policy = self._runtime.response_defaults
         screen_spec = getattr(type(content), "__response_spec__", None)
         if isinstance(screen_spec, ResponseSpec):
             policy = policy.overlay(screen_spec)
-        return policy.overlay(None, **overrides)
+        return policy.overlay(None, **overrides).resolve(actor_id)
 
     async def request(self, source: RequestOrigin) -> Request[OwnerT]:
         """Resolve this owner's request, sharing the source's existing acknowledgement ledger.
@@ -147,14 +145,14 @@ class Scope[OwnerT = Any]:
         """
         self._require_live()
         policy = self._policy(content, overrides)
-        audience = self._setting(policy.audience, default="public")
+        audience = policy.audience
         if audience != "public":
             message = "out-of-band send requires a concrete destination and public audience policy"
             raise TypeError(message)
         localization = self._runtime.defaults.localization if locale is None else Localization(locale=locale)
         return await self._present(
             content,
-            destination=send_to(destination, files=files, allowed_mentions=self._mentions(policy)),
+            destination=send_to(destination, files=files, allowed_mentions=policy.allowed_mentions or no_mentions()),
             policy=policy,
             localization=localization,
             source=None,
@@ -177,7 +175,7 @@ class Scope[OwnerT = Any]:
         policy = self._policy(content, overrides)
         return await self._present(
             content,
-            destination=edit_to(target, files=files, allowed_mentions=self._mentions(policy)),
+            destination=edit_to(target, files=files, allowed_mentions=policy.allowed_mentions or no_mentions()),
             policy=policy,
             localization=self._runtime.defaults.localization,
             source=None,
@@ -195,9 +193,11 @@ class Scope[OwnerT = Any]:
         session_key: Hashable | None = None,
     ) -> ResponseResult:
         self._require_live()
-        policy = self._policy(content, overrides)
-        audience: Audience = self._setting(policy.audience, default="public")
-        destination = request.destination(audience, files=files, allowed_mentions=self._mentions(policy))
+        policy = self._policy(content, overrides, request.user.id)
+        audience: Audience = policy.audience
+        destination = request.destination(
+            audience, files=files, allowed_mentions=policy.allowed_mentions or no_mentions()
+        )
         return await self._present(
             content,
             destination=destination,
@@ -215,7 +215,7 @@ class Scope[OwnerT = Any]:
         content: FacadeContent,
         *,
         destination: MessageDestination,
-        policy: ResponseSpec,
+        policy: ResolvedResponse,
         localization: Localization,
         source: ResponseSource | None,
         actor_id: int | None,
@@ -258,7 +258,7 @@ class Scope[OwnerT = Any]:
         content: FacadeContent,
         *,
         destination: MessageDestination,
-        policy: ResponseSpec,
+        policy: ResolvedResponse,
         localization: Localization,
         source: ResponseSource | None,
         actor_id: int | None,
@@ -273,31 +273,33 @@ class Scope[OwnerT = Any]:
                 message = "session attachment and keys require live component content"
                 raise TypeError(message)
             return Sent(await destination(self.render(content, localization=localization)))
-        access = self._access(policy, actor_id)
-        options = self._root_options(policy, localization)
-        session_spec = self._setting(policy.session, default=None)
+        access = policy.access
+        if access is None:
+            message = "live delivery without an identifiable actor requires explicit access"
+            raise TypeError(message)
+        session_spec = policy.session
+        open_context = None
         if session_spec is None:
             if parent is not None or session_key is not None:
                 message = "parent= and session_key= require a response session policy"
                 raise TypeError(message)
-            root = self._runtime.mount(content, access=access, **options)
-            if isinstance(content, Screen):
-                content._screen_bind(root)
+        else:
+            if source is None:
+                message = "session delivery requires a source identifying its actor and guild"
+                raise TypeError(message)
+            open_context = OpenContext.of(source)
+            if parent is None and session_key is None:
+                session_key = session_spec.key(open_context)
+        root = self._runtime.mount(content, access=access, **self._root_options(policy, localization))
+        if isinstance(content, Screen):
+            content._screen_bind(root)
+        if session_spec is None:
             result = await root.send(destination)
             if isinstance(result, DeliveryAbandoned):
                 return Abandoned()
             self._runtime._track(self, root)
             return Presented(content, root, None, result.result)
-        if source is None:
-            message = "session delivery requires a source identifying its actor and guild"
-            raise TypeError(message)
-        open_context = OpenContext.of(source)
-        configured = replace(session_spec, access=lambda _context: access)
-        options = await configured._message_root_options(open_context, options)
-        root = self._runtime.mount(content, access=access, **options)
         parent_session = self._runtime.sessions.session_for(parent) if parent is not None else None
-        if isinstance(content, Screen):
-            content._screen_bind(root)
         captured: DeliveryResult | None = None
 
         async def capture(payload: MessagePayload) -> DeliveryResult:
@@ -309,12 +311,12 @@ class Scope[OwnerT = Any]:
             result = await self._runtime.sessions.open(
                 root,
                 capture,
-                key=configured.key(open_context) if session_key is None else session_key,
-                admission=configured.admission,
+                key=session_key,
+                admission=session_spec.admission,
                 actor_id=actor_id,
-                capacity=configured.capacity,
-                quota=configured.quota,
-                domain=configured.domain,
+                capacity=session_spec.capacity,
+                quota=session_spec.quota,
+                domain=session_spec.domain,
             )
         elif parent_session is None:
             return Rejected(RejectionReason.SESSION_FINISHED)
@@ -331,44 +333,22 @@ class Scope[OwnerT = Any]:
         self._runtime._track(self, root)
         return Presented(content, root, result.session, captured)
 
-    def _root_options(self, policy: ResponseSpec, localization: Localization) -> SessionOptions:
-        options: SessionOptions = {}
-        chrome = self._setting(policy.chrome, default=None)
+    def _root_options(self, policy: ResolvedResponse, localization: Localization) -> MessageRootBehaviorOptions:
+        options: MessageRootBehaviorOptions = {}
+        chrome = policy.chrome
         if chrome is not None:
             options["chrome"] = chrome
-        options["retain_routed_on_timeout"] = self._setting(policy.retain_routed_on_timeout, default=False)
-        options["timeout"] = self._setting(policy.timeout, default=180)
+        options["retain_routed_on_timeout"] = policy.retain_routed_on_timeout
+        options["timeout"] = policy.timeout
         options["localization"] = localization
-        scheduler = self._runtime.scheduler if self._setting(policy.live_updates, default=False) else None
+        scheduler = self._runtime.scheduler if policy.live_updates else None
         options["scheduler"] = scheduler
-        expiry = self._setting(policy.expiry, default=None)
+        expiry = policy.expiry
         if expiry is not None:
             if isinstance(expiry, RenewEphemeral) and scheduler is None:
                 expiry = PauseUpdates(expiry.warning)
             options["expiry"] = expiry
         return options
-
-    @staticmethod
-    def _setting[T](value: Setting[T], *, default: T) -> T:
-        return default if value is UNSET else cast(T, value)
-
-    @staticmethod
-    def _mentions(policy: ResponseSpec) -> discord.AllowedMentions:
-        mentions = policy.allowed_mentions
-        return no_mentions() if mentions is UNSET or mentions is None else cast(discord.AllowedMentions, mentions)
-
-    @staticmethod
-    def _access(policy: ResponseSpec, actor_id: int | None) -> AccessPolicy:
-        configured = policy.access
-        if configured is UNSET or configured is None or configured is invoker_only:
-            if actor_id is None:
-                message = "live delivery without an identifiable actor requires explicit access"
-                raise TypeError(message)
-            return Owner(actor_id)
-        if not callable(getattr(configured, "check", None)):
-            message = "response access is not an AccessPolicy"
-            raise TypeError(message)
-        return cast(AccessPolicy, configured)
 
     async def close(self, *, reason: CloseReason = CloseReason.SCOPE_CLOSED) -> None:
         """Finish roots and sessions opened by this scope, then unregister it."""

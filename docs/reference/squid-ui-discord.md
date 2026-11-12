@@ -116,10 +116,6 @@ through `Request.respond` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRootOptions
 
-::: squid_ui_discord.SessionOptions
-
-::: squid_ui_discord.SessionOptionsResolver
-
 ::: squid_ui_discord.owner_message_root
 
 ::: squid_ui_discord.message_roots

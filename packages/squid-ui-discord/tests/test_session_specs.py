@@ -7,36 +7,13 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
-from squid_i18n import tr
-from squid_ui.primitives import Heading
 from squid_ui_discord import (
     Everyone,
-    MessageRootDefaults,
     OpenContext,
-    Owner,
     ScopeKind,
-    SessionManager,
-    SessionOptionsResolver,
     SessionSpec,
 )
-from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected, RejectionReason
-from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, interaction_harness, message_harness
-
-
-class Panel(sl.Component[sl.ComponentsV2Target]):
-    @override
-    def render(self):
-        return [Heading("Panel")]
-
-
-def to_message() -> squid_ui_discord.MessageDestination:
-    async def send(
-        payload: squid_ui_discord.message_payload.MessagePayload,
-    ) -> squid_ui_discord.delivery.DeliveryResult:
-        message = message_harness()
-        return squid_ui_discord.delivery.DeliveryResult(message, squid_ui_discord.delivery.handle_for(message))
-
-    return send
+from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
 
 
 @pytest.mark.parametrize(
@@ -110,229 +87,31 @@ def test_open_context_reads_discord_identity() -> None:
     assert OpenContext.of(interaction) == OpenContext(7, 42)
 
 
-def test_session_spec_options_are_defensively_copied_and_read_only() -> None:
-    source: squid_ui_discord.SessionOptions = {"timeout": 20}
-    spec = SessionSpec("panel", options=source)
-    source["timeout"] = None
-
-    assert "timeout" in spec.options
-    assert spec.options["timeout"] == 20
-
-    options = cast(dict[str, object], spec.options)
-    with pytest.raises(TypeError):
-        options["timeout"] = None
-
-
-async def test_session_spec_applies_options_overrides_and_access() -> None:
-    on_error = AsyncCallRecorder()
-    manager = SessionManager(MessageRootDefaults(timeout=30, strict=True, on_error=on_error))
-    spec = SessionSpec("panel", access=lambda open_context: Everyone(), options={"timeout": 20})
-
-    result = await spec.open(Panel(), to_message(), sessions=manager, open_context=OpenContext(7), timeout=None)
-
-    assert isinstance(result, Opened)
-    assert result.session.root.access == Everyone()
-    assert result.session.root.timeout is None
-    assert result.session.root.strict is True
-    assert result.session.root.on_error is on_error
-    assert result.session.key == squid_ui_discord.SessionKey.user("panel", 7)
-    assert result.session.actor_for(result.session.root) == 7
-
-
-async def test_session_spec_preserves_a_collision_notice() -> None:
-    manager = SessionManager()
-    notice = tr(t"test-this-screen-is-already-open = This screen is already open.")
-    spec = SessionSpec("panel", admission=AdmissionSpec(collision=Reject(notice=notice)))
-
-    first = await spec.open(Panel(), to_message(), sessions=manager, open_context=OpenContext(7))
-    result = await spec.open(Panel(), to_message(), sessions=manager, open_context=OpenContext(7))
-
-    assert isinstance(first, Opened)
-    assert isinstance(result, Rejected)
-    assert result.notice is notice
-
-
-async def test_session_spec_resolves_options_once_between_static_options_and_overrides() -> None:
-    calls: list[OpenContext] = []
-
-    async def resolve(open_context: OpenContext) -> squid_ui_discord.MessageRootOptions:
-        calls.append(open_context)
-        return {"timeout": 10, "strict": False}
-
-    manager = SessionManager(MessageRootDefaults(timeout=30, strict=True))
-    spec = SessionSpec("panel", options={"timeout": 20}, resolve_options=resolve)
-
-    result = await spec.open(Panel(), to_message(), sessions=manager, open_context=OpenContext(7), strict=True)
-
-    assert isinstance(result, Opened)
-    assert calls == [OpenContext(7)]
-    assert result.session.root.timeout == 10
-    assert result.session.root.strict is True
-
-
-async def test_session_spec_resolver_failure_does_not_construct_or_deliver_a_root() -> None:
-    destination = AsyncCallRecorder()
-
-    async def fail(_open_context: OpenContext) -> squid_ui_discord.MessageRootOptions:
-        raise RuntimeError("cannot resolve spec")
-
-    spec = SessionSpec("panel", resolve_options=fail)
-
-    with pytest.raises(RuntimeError, match="cannot resolve spec"):
-        await spec.open(Panel(), destination, sessions=SessionManager(), open_context=OpenContext(7))
-
-    destination.assert_not_awaited()
-
-
-async def test_session_spec_respond_derives_identity_and_delivery_from_the_interaction() -> None:
-    manager = SessionManager(MessageRootDefaults(timeout=30))
-    interaction = interaction_harness(user_id=7)
-    interaction.guild_id = 42
-    spec = SessionSpec("panel", scope=ScopeKind.USER_GUILD)
-
-    result = await spec.respond(
-        Panel(),
-        interaction,
-        sessions=manager,
-        ephemeral=False,
-        wait=True,
-        timeout=None,
-    )
-
-    assert isinstance(result, Opened)
-    assert result.session.key == squid_ui_discord.SessionKey.user_guild("panel", 7, 42)
-    assert result.session.root.access == Owner(7)
-    assert result.session.root.timeout is None
-    assert result.session.actor_for(result.session.root) == 7
-    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is False
-    interaction.original_response.assert_awaited_once_with()
-
-
-async def test_session_spec_responds_with_an_attached_root() -> None:
-    manager = SessionManager()
-    root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await manager.open(root_root, to_message())
-    assert isinstance(root, Opened)
-    interaction = interaction_harness(user_id=7)
-    interaction.guild_id = None
-
-    attached = await SessionSpec("child").respond_attached(
-        Panel(),
-        interaction,
-        sessions=manager,
-        parent=root.session.root,
-        timeout=None,
-    )
-
-    assert isinstance(attached, Opened)
-    assert attached.session is root.session
-    assert attached.session.root is root.session.root
-    assert len(attached.session.message_roots) == 2
-
-
-async def test_session_spec_attaches_to_a_live_parent_session() -> None:
-    manager = SessionManager()
-    root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await manager.open(root_root, to_message())
-    assert isinstance(root, Opened)
-    spec = SessionSpec("child", options={"timeout": None})
-
-    attached = await spec.attach(
-        Panel(), to_message(), sessions=manager, open_context=OpenContext(7), parent=root.session.root
-    )
-
-    assert isinstance(attached, Opened)
-    assert attached.session is root.session
-    assert len(attached.session.message_roots) == 2
-    assert manager.get(spec.key(OpenContext(7))) == ()
-
-
-async def test_session_spec_rejects_an_unknown_parent_without_delivery() -> None:
-    manager = SessionManager()
-    unknown_parent = MessageRootDefaults(timeout=None).mount(Panel(), access=Owner(7))
-    spec = SessionSpec("child", options={"timeout": None})
-
-    destination = AsyncCallRecorder()
-    opened = await spec.attach(
-        Panel(), destination, sessions=manager, open_context=OpenContext(7), parent=unknown_parent
-    )
-
-    assert isinstance(opened, Rejected)
-    assert opened.occupants == ()
-    assert opened.reason is RejectionReason.SESSION_FINISHED
-    destination.assert_not_awaited()
-
-
-async def test_session_spec_rejects_a_finished_parent_without_delivery() -> None:
-    manager = SessionManager()
-    root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await manager.open(root_root, to_message())
-    assert isinstance(root, Opened)
-    await root.session.finish()
-    destination = AsyncCallRecorder()
-
-    opened = await SessionSpec("child").attach(
-        Panel(), destination, sessions=manager, open_context=OpenContext(7), parent=root_root
-    )
-
-    assert isinstance(opened, Rejected)
-    assert opened.reason is RejectionReason.SESSION_FINISHED
-    destination.assert_not_awaited()
-
-
-async def test_session_spec_rejects_a_detached_parent_without_delivery() -> None:
-    manager = SessionManager()
-    root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await manager.open(root_root, to_message())
-    assert isinstance(root, Opened)
-    child_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    child = await root.session.attach(child_root, to_message())
-    assert isinstance(child, Opened)
-    await child_root.finish()
-    destination = AsyncCallRecorder()
-
-    opened = await SessionSpec("grandchild").attach(
-        Panel(), destination, sessions=manager, open_context=OpenContext(7), parent=child_root
-    )
-
-    assert isinstance(opened, Rejected)
-    assert opened.reason is RejectionReason.SESSION_FINISHED
-    destination.assert_not_awaited()
-
-
-def test_session_spec_ergonomics_are_promoted_from_the_public_bundle() -> None:
-    assert squid_ui_discord.OpenContext is OpenContext
-    assert squid_ui_discord.ScopeKind is ScopeKind
-    assert squid_ui_discord.SessionOptionsResolver is SessionOptionsResolver
-    assert squid_ui_discord.StackNavigator is squid_ui_discord.navigation.StackNavigator
-
-
-async def test_a_session_spec_carries_its_capacity_into_the_session() -> None:
-    sessions = SessionManager()
-    spec = SessionSpec("lobby", scope=ScopeKind.GUILD, capacity=4, access=lambda open_context: Everyone())
-
-    opened = await spec.open(Panel(), to_message(), sessions=sessions, open_context=OpenContext(7, guild_id=5))
-
-    assert isinstance(opened, Opened)
-    assert opened.session.capacity == 4
-    assert opened.session.remaining_capacity == 3
-
-
-async def test_a_session_spec_carries_its_quota_and_domain() -> None:
-    sessions = SessionManager()
-    spec = SessionSpec("lobby", scope=ScopeKind.GUILD, quota=1, domain="game", access=lambda open_context: Everyone())
-
-    first = await spec.open(Panel(), to_message(), sessions=sessions, open_context=OpenContext(7, guild_id=5))
-    second = await spec.open(Panel(), to_message(), sessions=sessions, open_context=OpenContext(7, guild_id=6))
-
-    assert isinstance(first, Opened)
-    assert first.session.quota == 1
-    assert first.session.domain == "game"
-    assert isinstance(second, Rejected)
-    assert second.reason is RejectionReason.QUOTA_REACHED
-
-
 @pytest.mark.parametrize("name", [None, ""])
 def test_keys_require_a_resolved_nonempty_session_name(name: str | None) -> None:
     with pytest.raises(ValueError, match="resolved non-empty name"):
         SessionSpec(name).key(OpenContext(7, 42))
+
+
+async def test_session_policy_is_applied_through_the_scope_opening_path() -> None:
+    class Panel(squid_ui_discord.Screen):
+        policy = squid_ui_discord.ResponseSpec(
+            session=SessionSpec("lobby", capacity=4, quota=1, domain="games"),
+            access=Everyone(),
+            timeout=20,
+        )
+
+        @override
+        def render(self) -> sl.LayoutNode:
+            return sl.heading("Lobby")
+
+    async with squid_ui_discord.testing.stage(Panel(), owner=object(), user_id=7, timeout=None) as ui:
+        session = ui.result.session
+        assert session is not None
+        assert session.capacity == 4
+        assert session.remaining_capacity == 3
+        assert session.quota == 1
+        assert session.domain == "games"
+        assert session.key == squid_ui_discord.SessionKey.user("lobby", 7)
+        assert ui.root.access == Everyone()
+        assert ui.root.timeout is None

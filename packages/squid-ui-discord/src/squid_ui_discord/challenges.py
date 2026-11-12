@@ -12,24 +12,17 @@ be running when the approval arrives.
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import anyio
 
 from squid_ui.guards import ChallengeResolver
+from squid_ui_discord.access import Owner
 from squid_ui_discord.delivery import respond_to
 from squid_ui_discord.message_root_contracts import ChallengeRequest, ChallengeSupervisor, ResumedPress
-from squid_ui_discord.session_specs import OpenContext, SessionSpec
 from squid_ui_discord.sessions import SessionManager
 
 logger = logging.getLogger(__name__)
-
-CHALLENGE_SESSION_SPEC = SessionSpec("challenge")
-"""Owner-only by default, so only the actor who was asked can answer.
-
-Its session key rarely decides anything: a challenge uses the strict attachment entry point, so it attaches
-to the panel's own session and dies with it.
-"""
 
 
 class ChallengeRunner:
@@ -134,24 +127,26 @@ class DialogPresenter:
 
     sessions: SessionManager
     supervisor: ChallengeSupervisor
-    session_spec: SessionSpec = field(default=CHALLENGE_SESSION_SPEC)
 
     async def present(self, request: ChallengeRequest) -> None:
         """Open the dialog through the interaction that asked, and return."""
         resolver: ChallengeResolver = _Resolver(request, self.supervisor)
-        await self.session_spec.attach(
+        parent = request.message_root
+        session = self.sessions.session_for(parent)
+        if session is None:
+            return
+        root = self.sessions.defaults.mount(
             request.challenge.ask(resolver),
-            respond_to(request.interaction, ephemeral=True, wait=True),
-            sessions=self.sessions,
-            open_context=OpenContext.of(request.interaction),
-            parent=request.message_root,
-            # Locale is a fact about the reader, not about the host, so the question is asked
-            # in the language the panel that asked it is speaking -- chrome labels included.
-            localization=request.message_root.localization,
-            # The deadline is the dialog's whole life: an unanswered challenge dies with its
-            # mount, having written no approval, which is a decline with nothing to undo.
+            access=Owner(request.interaction.user.id),
+            localization=parent.localization,
             timeout=request.challenge.deadline,
+        )
+        await session.attach(
+            root,
+            respond_to(request.interaction, ephemeral=True, wait=True),
+            parent=parent,
+            actor_id=request.interaction.user.id,
         )
 
 
-__all__ = ["CHALLENGE_SESSION_SPEC", "ChallengeRunner", "DialogPresenter"]
+__all__ = ["ChallengeRunner", "DialogPresenter"]

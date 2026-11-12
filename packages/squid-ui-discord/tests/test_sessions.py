@@ -119,7 +119,7 @@ def test_message_root_defaults_apply_overrides_without_mutating_the_defaults() -
 async def test_registry_requires_a_constructed_root() -> None:
     manager = SessionManager()
 
-    with pytest.raises(TypeError, match=r"requires a MessageRoot; use MessageRootDefaults\.mount or SessionSpec\.open"):
+    with pytest.raises(TypeError, match=r"requires a MessageRoot; use MessageRootDefaults\.mount"):
         await manager.open(cast(Any, Panel()), to_message())
 
 

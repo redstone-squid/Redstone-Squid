@@ -1,46 +1,26 @@
-"""Derive a session's key, access policy, and mount options from its opener.
+"""Session identity and admission policy, independent of rendering and delivery.
 
-A SessionSpec is a reusable screen policy: for example, a user-scoped recipe named
-"settings" gives each user a separate session key while repeated opens by that user
-compete under the same admission policy. OpenContext supplies the user's and guild's
-identity. Opening constructs a message root and asks SessionManager to admit and deliver it.
-
-Session-key scope chooses which sessions compete. It is distinct from facade.Scope,
-which ties all panels opened by an application object to that object's lifetime.
+Session-key scope decides which openings compete. Application Scope owns presentation
+lifetimes. ResponseSpec supplies access and rendering policy.
 """
 
-from collections.abc import Awaitable, Callable, Hashable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Unpack
+from typing import Any
 
 import discord
 
-from squid_ui.runtime.component import Component
-from squid_ui.target_types import ComponentsV2Target
-from squid_ui_discord.access import AccessPolicy, Owner
-from squid_ui_discord.delivery import MessageDestination, Replyable, respond_to
-from squid_ui_discord.message_root import MessageRoot
-from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
+from squid_ui_discord.delivery import Replyable
 from squid_ui_discord.sessions import (
     DEFAULT_ADMISSION,
     AdmissionSpec,
     GlobalScope,
     GuildScope,
-    OpenResult,
-    Rejected,
-    RejectionReason,
     SessionKey,
-    SessionManager,
     SessionScope,
     UserGuildScope,
     UserScope,
 )
-
-if TYPE_CHECKING:
-    from squid_ui_discord.request import Request
-    from squid_ui_discord.runtime import RuntimeSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,36 +94,9 @@ class ScopeKind(StrEnum):
                 return open_context.global_()
 
 
-def _owner(open_context: OpenContext) -> AccessPolicy:
-    return Owner(open_context.user_id)
-
-
-def _manager(source: SessionManager | RuntimeSource) -> SessionManager:
-    """The manager itself, or the one belonging to the client runtime for `source`."""
-    if isinstance(source, SessionManager):
-        return source
-    # Imported here because a runtime installs a challenge presenter, which uses a session spec: the
-    # two modules are genuinely mutually recursive, and this is the one direction that is
-    # not needed at import time.
-    from squid_ui_discord.runtime import DiscordUIRuntime
-
-    return DiscordUIRuntime.of(source).sessions
-
-
-type SessionOptions = MessageRootBehaviorOptions
-"""Target-independent mount options allowed on a V2 session screen."""
-
-
-type SessionOptionsResolver = Callable[[OpenContext], Awaitable[SessionOptions]]
-
-
-def _empty_options() -> SessionOptions:
-    return {}
-
-
 @dataclass(frozen=True, slots=True)
 class SessionSpec:
-    """Reusable recipe shared by every opening of one logical screen."""
+    """Identity and admission rules shared by openings of one logical screen."""
 
     name: str | None = None
     """Stable session identity; a Screen supplies its qualified class name when omitted."""
@@ -168,13 +121,6 @@ class SessionSpec:
     Set it when several screens share one family -- a lobby and the match it becomes are one
     "game" for the purpose of "one game at a time".
     """
-    access: Callable[[OpenContext], AccessPolicy] = _owner
-    options: SessionOptions = field(default_factory=_empty_options)
-    resolve_options: SessionOptionsResolver | None = None
-
-    def __post_init__(self) -> None:
-        """Snapshot mount options into a read-only mapping."""
-        object.__setattr__(self, "options", MappingProxyType(dict(self.options)))
 
     def key(self, open_context: OpenContext) -> SessionKey:
         """Derive this screen's session key from an opener."""
@@ -182,111 +128,3 @@ class SessionSpec:
             message = "SessionSpec.key requires a resolved non-empty name"
             raise ValueError(message)
         return SessionKey(self.name, self.scope.resolve(open_context))
-
-    async def _message_root_options(self, open_context: OpenContext, overrides: SessionOptions) -> SessionOptions:
-        merged: SessionOptions = {}
-        merged.update(self.options)
-        if self.resolve_options is not None:
-            merged.update(await self.resolve_options(open_context))
-        merged.update(overrides)
-        return merged
-
-    async def open(
-        self,
-        component: Component[ComponentsV2Target, Request],
-        message_destination: MessageDestination,
-        *,
-        sessions: SessionManager | RuntimeSource,
-        open_context: OpenContext,
-        key: Hashable | None = None,
-        **overrides: Unpack[SessionOptions],
-    ) -> OpenResult:
-        """Construct and open a root mount using this screen's policy.
-
-        `sessions` is the registry, or anything an installed host can be found from -- the
-        interaction or command context the opening came from will do, which is what spares a
-        caller holding neither from dispatching over the two invocation surfaces itself.
-        """
-        sessions = _manager(sessions)
-        options = await self._message_root_options(open_context, overrides)
-        message_root = sessions.defaults.mount(component, access=self.access(open_context), **options)
-        return await sessions.open(
-            message_root,
-            message_destination,
-            key=self.key(open_context) if key is None else key,
-            admission=self.admission,
-            actor_id=open_context.user_id,
-            capacity=self.capacity,
-            quota=self.quota,
-            domain=self.domain,
-        )
-
-    async def attach(
-        self,
-        component: Component[ComponentsV2Target, Request],
-        message_destination: MessageDestination,
-        *,
-        sessions: SessionManager | RuntimeSource,
-        open_context: OpenContext,
-        parent: MessageRoot,
-        **overrides: Unpack[SessionOptions],
-    ) -> OpenResult:
-        """Construct a child mount under a known live parent's session.
-
-        The existing session supplies admission and membership policy. This recipe supplies
-        mount options and access, but does not open a separate session or apply its key limit,
-        capacity, quota, or domain.
-        """
-        sessions = _manager(sessions)
-        parent_session = sessions.session_for(parent)
-        if parent_session is None:
-            return Rejected((), RejectionReason.SESSION_FINISHED)
-        options = await self._message_root_options(open_context, overrides)
-        message_root = sessions.defaults.mount(component, access=self.access(open_context), **options)
-        return await parent_session.attach(
-            message_root, message_destination, actor_id=open_context.user_id, parent=parent
-        )
-
-    async def respond(
-        self,
-        component: Component[ComponentsV2Target, Request],
-        interaction: discord.Interaction[Any],
-        *,
-        sessions: SessionManager | RuntimeSource | None = None,
-        ephemeral: bool = True,
-        wait: bool = False,
-        **overrides: Unpack[SessionOptions],
-    ) -> OpenResult:
-        """Open this screen as an interaction response.
-
-        `sessions` defaults to the registry of the host installed on the interaction's
-        client. Name one only to reach a registry that is not this client's.
-        """
-        return await self.open(
-            component,
-            respond_to(interaction, ephemeral=ephemeral, wait=wait),
-            sessions=interaction if sessions is None else sessions,
-            open_context=OpenContext.of(interaction),
-            **overrides,
-        )
-
-    async def respond_attached(
-        self,
-        component: Component[ComponentsV2Target, Request],
-        interaction: discord.Interaction[Any],
-        *,
-        parent: MessageRoot,
-        sessions: SessionManager | RuntimeSource | None = None,
-        ephemeral: bool = True,
-        wait: bool = False,
-        **overrides: Unpack[SessionOptions],
-    ) -> OpenResult:
-        """Attach this screen as an interaction response below a live parent."""
-        return await self.attach(
-            component,
-            respond_to(interaction, ephemeral=ephemeral, wait=wait),
-            sessions=interaction if sessions is None else sessions,
-            open_context=OpenContext.of(interaction),
-            parent=parent,
-            **overrides,
-        )

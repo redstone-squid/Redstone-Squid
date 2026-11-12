@@ -303,7 +303,7 @@ layout nodes retain deferred `TextLike` values and resolve them when their root 
 
 `SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
 `admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
-builds the root policy from the open context. `SessionSpec.open`/`respond`, `SessionManager`, raw
+builds the root policy from the open context. `SessionManager`, raw
 `MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
 transport adapters. Application handlers normally enter through a `Request`, which derives destination, sessions,
 open context, and localization from one source.
