@@ -1,8 +1,8 @@
 CREATE TABLE public.doors (
     build_id bigint NOT NULL,
-    orientation text NOT NULL,
-    door_width integer NOT NULL,
-    door_height integer NOT NULL,
+    orientation text,
+    door_width integer,
+    door_height integer,
     door_depth integer,
     normal_opening_time bigint,
     normal_closing_time bigint,

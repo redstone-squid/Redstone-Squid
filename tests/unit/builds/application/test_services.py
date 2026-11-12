@@ -454,7 +454,7 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
 
     await service.save(build, actor="test", operation="edit", source="test")
 
-    assert build.versions == ["Java 1.21.0"]
+    assert build.versions == []
     assert build.embedding == [1.0, 2.0]
     assert repository.saved == [build]
     assert locks.acquisitions == [(42, True, 30)]

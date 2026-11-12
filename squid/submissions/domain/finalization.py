@@ -247,36 +247,30 @@ class ExtenderTiming:
 
 @dataclass(frozen=True, slots=True)
 class DoorSubmissionDetails:
-    """Normalized fields specific to a door submission.
-
-    The opening always has a width and height; its depth may be unknown.
-    """
+    """Normalized door facts; any opening dimension or orientation may be unknown."""
 
     opening: SubmissionDimensions
-    orientation: DoorOrientation
+    orientation: DoorOrientation | None
     pattern_keys: tuple[str, ...] = ()
     pattern_proposals: tuple[str, ...] = ()
     timing: DoorTiming = field(default_factory=DoorTiming)
 
     def __post_init__(self) -> None:
         _require_stable_keys(self.pattern_keys, "pattern")
-        if self.opening.width is None or self.opening.height is None:
-            msg = tr(t"submissions-door-opening-required = a door opening needs a width and a height")
-            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
 class ExtenderSubmissionDetails:
     """Normalized fields specific to an extender submission."""
 
-    orientation: ExtenderOrientation
-    extension_length: int
+    orientation: ExtenderOrientation | None
+    extension_length: int | None
     pattern_keys: tuple[str, ...] = ()
     pattern_proposals: tuple[str, ...] = ()
     timing: ExtenderTiming = field(default_factory=ExtenderTiming)
 
     def __post_init__(self) -> None:
-        if self.extension_length < 1:
+        if self.extension_length is not None and self.extension_length < 1:
             msg = tr(t"submissions-extender-length-positive = extender length must be positive")
             raise ValidationError(msg)
         _require_stable_keys(self.pattern_keys, "pattern")
@@ -329,11 +323,8 @@ class NormalizedSubmission:
         if self.schema_revision < 1 or not self.schema_id:
             msg = tr(t"submissions-normalized-submission-schema = normalized submission schema provenance is invalid")
             raise ValidationError(msg)
-        if not self.creators or self.source_version == "":
-            msg = tr(
-                t"submissions-normalized-creators-required = "
-                t"normalized submissions require creators, and a source version cannot be blank"
-            )
+        if self.source_version == "":
+            msg = tr(t"submissions-normalized-source-version-blank = normalized source versions cannot be blank")
             raise ValidationError(msg)
         compatible = (
             (self.category is SubmissionCategory.DOOR and isinstance(self.details, DoorSubmissionDetails))

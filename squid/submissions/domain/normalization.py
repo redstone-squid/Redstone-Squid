@@ -55,11 +55,11 @@ def normalize_submission(
     if category is SubmissionCategory.DOOR:
         details = DoorSubmissionDetails(
             opening=SubmissionDimensions(
-                _required_int(answers, "opening_width"),
-                _required_int(answers, "opening_height"),
+                _optional_int(answers, "opening_width"),
+                _optional_int(answers, "opening_height"),
                 _optional_int(answers, "opening_depth"),
             ),
-            orientation=DoorOrientation(_required_str(answers, "door_orientation")),
+            orientation=(DoorOrientation(value) if (value := _optional_str(answers, "door_orientation")) else None),
             pattern_keys=_string_tuple(answers, "patterns"),
             pattern_proposals=_string_tuple(answers, "pattern_proposals"),
             timing=DoorTiming(
@@ -71,8 +71,10 @@ def normalize_submission(
         )
     elif category is SubmissionCategory.EXTENDER:
         details = ExtenderSubmissionDetails(
-            orientation=ExtenderOrientation(_required_str(answers, "movement_orientation")),
-            extension_length=_required_int(answers, "extension_length"),
+            orientation=(
+                ExtenderOrientation(value) if (value := _optional_str(answers, "movement_orientation")) else None
+            ),
+            extension_length=_optional_int(answers, "extension_length"),
             pattern_keys=_string_tuple(answers, "patterns"),
             pattern_proposals=_string_tuple(answers, "pattern_proposals"),
             timing=ExtenderTiming(
@@ -144,15 +146,6 @@ def _optional_nonblank_str(answers: Mapping[str, JSONValue], field_id: str) -> s
         return None
     normalized = value.strip()
     return normalized or None
-
-
-def _required_int(answers: Mapping[str, JSONValue], field_id: str) -> int:
-    value = answers.get(field_id)
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise InvalidStateError(
-            tr(t"submissions-field-not-integer = validated field {(field_id_text := str(field_id))} is not an integer")  # noqa: F841
-        )
-    return value
 
 
 def _optional_int(answers: Mapping[str, JSONValue], field_id: str) -> int | None:

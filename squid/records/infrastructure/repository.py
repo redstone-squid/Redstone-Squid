@@ -568,7 +568,12 @@ class PostgresRecordRepository:
     async def _list_doors(self, session: AsyncSession) -> Sequence[CandidateBuild]:
         statement = (
             select(DoorBuild)
-            .where(DoorBuild.submission_status == Status.CONFIRMED)
+            .where(
+                DoorBuild.submission_status == Status.CONFIRMED,
+                DoorBuild.door_width.is_not(None),
+                DoorBuild.door_height.is_not(None),
+                DoorBuild.orientation.is_not(None),
+            )
             .options(
                 selectinload(DoorBuild.tags).options(*assignment_units()),
                 selectinload(DoorBuild.build_versions),
@@ -754,6 +759,8 @@ async def _extender_timings(
 
 
 def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...]) -> CandidateBuild:
+    # Incomplete builds can be saved, but cannot establish a comparable door category.
+    assert door.orientation is not None and door.door_width is not None and door.door_height is not None
     fallback_timing = TimingVariant(
         (
             door.normal_opening_time,

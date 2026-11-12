@@ -102,7 +102,7 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
             "opening_width": build.door_width,
             "opening_height": build.door_height,
             "opening_depth": build.door_depth,
-            "door_orientation": build.orientation.lower(),
+            "door_orientation": build.orientation.lower() if build.orientation is not None else None,
             "opening_time": build.normal_opening_time,
             "visible_opening_time": build.visible_opening_time,
             "closing_time": build.normal_closing_time,

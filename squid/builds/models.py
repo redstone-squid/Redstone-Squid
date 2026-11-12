@@ -356,9 +356,9 @@ class DoorBuild(Build, kw_only=True):
         init=False,
         compare=False,
     )
-    orientation: Mapped[DoorOrientationLiteral] = mapped_column(Text, nullable=False, default="Door")
-    door_width: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    door_height: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    orientation: Mapped[DoorOrientationLiteral | None] = mapped_column(Text, default=None)
+    door_width: Mapped[int | None] = mapped_column(Integer, default=None)
+    door_height: Mapped[int | None] = mapped_column(Integer, default=None)
     door_depth: Mapped[int | None] = mapped_column(Integer, default=None)
     # Timings are game ticks; None means the timing has not been supplied.
     normal_opening_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
@@ -367,8 +367,8 @@ class DoorBuild(Build, kw_only=True):
     visible_closing_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
 
     @property
-    def door_dimensions(self) -> tuple[int, int, int | None]:
-        """Width, height, and optional depth of the door opening, in blocks."""
+    def door_dimensions(self) -> tuple[int | None, int | None, int | None]:
+        """Width, height, and depth in blocks; None means that part is unknown."""
         return self.door_width, self.door_height, self.door_depth
 
 

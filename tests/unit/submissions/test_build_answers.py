@@ -13,7 +13,7 @@ OPTIONS = {
 
 
 def _door() -> DoorBuild:
-    door = DoorBuild(id=1, submission_status=Status.CONFIRMED, submitter_account_id=1)
+    door = DoorBuild(id=1, submission_status=Status.CONFIRMED, submitter_account_id=1, orientation="Door")
     door.door_width, door.door_height = 2, 2
     door.wiring_placement_restrictions = ["Seamless"]
     door.miscellaneous_restrictions = ["Hand-wired"]

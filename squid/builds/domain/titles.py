@@ -3,7 +3,6 @@
 import re
 from collections.abc import Iterable
 
-from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, UtilityBuild
 from squid.catalogue.domain import (
     DoorCategory,
@@ -38,7 +37,7 @@ def format_build_category(build: Build) -> FormattedTitle:
                     ),
                     size=_door_size(build),
                     types=(*build.patterns, *unresolved.patterns),
-                    orientation=_required(build.orientation, "Door orientation type"),
+                    orientation=build.orientation or "Door (orientation unknown)",
                     component_restrictions=(
                         *build.component_restrictions,
                         *unresolved.restriction_names("component_restrictions"),
@@ -60,8 +59,8 @@ def format_build_category(build: Build) -> FormattedTitle:
                         *build.wiring_placement_restrictions,
                         *unresolved.restriction_names("wiring_placement_restrictions"),
                     ),
-                    orientation=_required(build.orientation, "Extender orientation"),
-                    length=_required_positive(build.extension_length, "Extender length"),
+                    orientation=build.orientation or "Unknown direction",
+                    length=build.extension_length,
                     types=(
                         *(build.patterns or ([build.extender_type] if build.extender_type else [])),
                         *unresolved.patterns,
@@ -112,9 +111,11 @@ def format_build_display_title(build: Build, *, markdown: bool) -> str:
 
 
 def _door_size(build: DoorBuild) -> str:
+    width = str(build.door_width) if build.door_width is not None else "?"
+    height = str(build.door_height) if build.door_height is not None else "?"
     if build.door_depth and build.door_depth > 1:
-        return f"{build.door_width}x{build.door_height}x{build.door_depth}"
-    return f"{build.door_width}x{build.door_height}"
+        return f"{width}x{height}x{build.door_depth}"
+    return f"{width}x{height}"
 
 
 def _showcase_qualifiers(build: Build) -> Iterable[str]:
@@ -137,17 +138,3 @@ def _render_tokens(tokens: tuple[TitleToken, ...], *, markdown: bool) -> Iterabl
 
 def _italic(value: str) -> str:
     return f"*{value}*"
-
-
-def _required(value: str | None, label: str) -> str:
-    if value is None or not value.strip():
-        msg = f"{label} information is missing."
-        raise InvalidBuildError(msg)
-    return value
-
-
-def _required_positive(value: int | None, label: str) -> int:
-    if value is None or value <= 0:
-        msg = f"{label} information is missing."
-        raise InvalidBuildError(msg)
-    return value

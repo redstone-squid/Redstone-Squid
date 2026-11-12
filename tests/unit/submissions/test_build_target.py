@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from squid.builds.domain import BuildCategory, Status
+from squid.builds.domain.titles import format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import ValidationError
@@ -470,12 +471,38 @@ def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None
     assert build.versions == []
 
 
-def test_preview_waits_for_the_facts_the_title_is_made_from() -> None:
-    assert preview_build("door", {"opening_width": 2, "opening_height": 2}, {}) is None
-    assert preview_build("extender", {"movement_orientation": "horizontal"}, {}) is None
+def test_preview_accepts_unknown_title_facts() -> None:
+    assert preview_build("door", {"opening_width": 2, "opening_height": 2}, {}) is not None
+    assert preview_build("extender", {"movement_orientation": "horizontal"}, {}) is not None
     assert preview_build("other", {}, {}) is not None
 
 
-def test_a_door_opening_needs_width_and_height() -> None:
-    with pytest.raises(ValidationError):
-        DoorSubmissionDetails(SubmissionDimensions(2, None, 1), DoorOrientation.DOOR)
+def test_a_door_opening_can_have_unknown_dimensions() -> None:
+    details = DoorSubmissionDetails(SubmissionDimensions(2, None, 1), None)
+    assert details.opening.height is None
+    assert details.orientation is None
+
+
+@pytest.mark.parametrize("category", [SubmissionCategory.DOOR, SubmissionCategory.EXTENDER])
+async def test_unknown_metadata_survives_payload_build_and_title(category: SubmissionCategory) -> None:
+    details = (
+        DoorSubmissionDetails(SubmissionDimensions(None, None, None), None)
+        if category is SubmissionCategory.DOOR
+        else ExtenderSubmissionDetails(None, None)
+    )
+    submission = replace(
+        _submission(category),
+        creators=(),
+        source_version=None,
+        capture_dimensions=SubmissionDimensions(None, None, None),
+        details=details,
+    )
+    restored = decode_submission(encode_submission(submission))
+    assert restored == submission
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)
+    assert isinstance(build, DoorBuild | ExtenderBuild)
+    assert build.orientation is None
+    assert build.creators_ign == []
+    title = format_build_display_title(build, markdown=False)
+    assert "None" not in title
+    assert "?" in title

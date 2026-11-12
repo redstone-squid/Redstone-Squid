@@ -949,7 +949,7 @@ export type DoorDetails = {
     /**
      * Orientation
      */
-    orientation: string;
+    orientation: string | null;
     /**
      * Patterns
      */
@@ -3774,6 +3774,137 @@ export type VersionDetail = {
 };
 
 /**
+ * VideoCamera
+ */
+export type VideoCamera = {
+    /**
+     * Mode
+     */
+    mode?: 'fixed' | 'orbit';
+    /**
+     * Yaw
+     */
+    yaw?: number;
+    /**
+     * Pitch
+     */
+    pitch?: number;
+    /**
+     * Zoom
+     */
+    zoom?: number;
+    /**
+     * Orbit Degrees
+     */
+    orbit_degrees?: number;
+};
+
+export type VideoCoordinate = number;
+
+/**
+ * VideoCreateRequest
+ */
+export type VideoCreateRequest = {
+    /**
+     * Width
+     */
+    width?: number;
+    /**
+     * Height
+     */
+    height?: number;
+    /**
+     * Fps
+     */
+    fps?: number;
+    /**
+     * Duration Ticks
+     */
+    duration_ticks?: number;
+    simulation?: VideoSimulation;
+    camera?: VideoCamera;
+};
+
+/**
+ * VideoInteraction
+ *
+ * Right-click a control before stepping the specified game tick.
+ */
+export type VideoInteraction = {
+    /**
+     * Tick
+     */
+    tick: number;
+    position?: VideoPosition | null;
+};
+
+export type VideoPosition = [
+    VideoCoordinate,
+    VideoCoordinate,
+    VideoCoordinate
+];
+
+/**
+ * VideoResponse
+ */
+export type VideoResponse = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Build Id
+     */
+    build_id: number;
+    /**
+     * Schematic Id
+     */
+    schematic_id: number;
+    /**
+     * Status
+     */
+    status: 'queued' | 'running' | 'succeeded' | 'failed' | 'expired';
+    /**
+     * Expires At
+     */
+    expires_at?: string | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Input Candidates
+     */
+    input_candidates?: Array<[
+        number,
+        number,
+        number
+    ]>;
+    /**
+     * Status Url
+     */
+    status_url: string;
+    /**
+     * Download Url
+     */
+    download_url?: string | null;
+};
+
+/**
+ * VideoSimulation
+ */
+export type VideoSimulation = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Interactions
+     */
+    interactions?: Array<VideoInteraction>;
+};
+
+/**
  * VisibilityOperator
  *
  * Comparisons supported by conditional field visibility.
@@ -5880,6 +6011,10 @@ export type AccountProfileClearData = {
     body?: never;
     headers?: {
         /**
+         * If-Match
+         */
+        'if-match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -5910,9 +6045,17 @@ export type AccountProfileClearErrors = {
      */
     404: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ProblemDetail;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5933,6 +6076,56 @@ export type AccountProfileClearResponses = {
 };
 
 export type AccountProfileClearResponse = AccountProfileClearResponses[keyof AccountProfileClearResponses];
+
+export type AccountProfileReviewData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: number;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}/profile';
+};
+
+export type AccountProfileReviewErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountProfileReviewError = AccountProfileReviewErrors[keyof AccountProfileReviewErrors];
+
+export type AccountProfileReviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProfileDetail;
+};
+
+export type AccountProfileReviewResponse = AccountProfileReviewResponses[keyof AccountProfileReviewResponses];
 
 export type PaperInstallationsListData = {
     body?: never;
@@ -7360,6 +7553,168 @@ export type SchematicRenderContentGetResponses = {
      */
     200: unknown;
 };
+
+export type SchematicVideoCreateData = {
+    body: VideoCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Build Id
+         */
+        build_id: number;
+        /**
+         * Schematic Id
+         */
+        schematic_id: number;
+    };
+    query?: never;
+    url: '/v1/builds/{build_id}/schematics/{schematic_id}/videos';
+};
+
+export type SchematicVideoCreateErrors = {
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Content Too Large
+     */
+    413: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SchematicVideoCreateError = SchematicVideoCreateErrors[keyof SchematicVideoCreateErrors];
+
+export type SchematicVideoCreateResponses = {
+    /**
+     * Successful Response
+     */
+    202: VideoResponse;
+};
+
+export type SchematicVideoCreateResponse = SchematicVideoCreateResponses[keyof SchematicVideoCreateResponses];
+
+export type SchematicVideoStatusData = {
+    body?: never;
+    path: {
+        /**
+         * Video Id
+         */
+        video_id: number;
+    };
+    query?: never;
+    url: '/v1/schematic-videos/{video_id}';
+};
+
+export type SchematicVideoStatusErrors = {
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SchematicVideoStatusError = SchematicVideoStatusErrors[keyof SchematicVideoStatusErrors];
+
+export type SchematicVideoStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: VideoResponse;
+};
+
+export type SchematicVideoStatusResponse = SchematicVideoStatusResponses[keyof SchematicVideoStatusResponses];
+
+export type SchematicVideoContentData = {
+    body?: never;
+    path: {
+        /**
+         * Video Id
+         */
+        video_id: number;
+    };
+    query?: never;
+    url: '/v1/schematic-videos/{video_id}/content';
+};
+
+export type SchematicVideoContentErrors = {
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SchematicVideoContentError = SchematicVideoContentErrors[keyof SchematicVideoContentErrors];
+
+export type SchematicVideoContentResponses = {
+    /**
+     * Private schematic video
+     */
+    200: Blob | File;
+};
+
+export type SchematicVideoContentResponse = SchematicVideoContentResponses[keyof SchematicVideoContentResponses];
 
 export type SearchFieldsListData = {
     body?: never;
@@ -9552,6 +9907,77 @@ export type VoteSessionGetResponses = {
 };
 
 export type VoteSessionGetResponse = VoteSessionGetResponses[keyof VoteSessionGetResponses];
+
+export type VoteClearData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Vote Session Id
+         */
+        vote_session_id: number;
+    };
+    query: {
+        /**
+         * Guild Id
+         */
+        guild_id: number;
+    };
+    url: '/v1/vote-sessions/{vote_session_id}/votes';
+};
+
+export type VoteClearErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type VoteClearError = VoteClearErrors[keyof VoteClearErrors];
+
+export type VoteClearResponses = {
+    /**
+     * Successful Response
+     */
+    200: VoteSessionDetail;
+};
+
+export type VoteClearResponse = VoteClearResponses[keyof VoteClearResponses];
 
 export type VoteCastData = {
     body: VoteInput;

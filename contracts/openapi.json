@@ -21473,7 +21473,14 @@
             "$ref": "#/components/schemas/Dimensions"
           },
           "orientation": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Orientation"
           },
           "patterns": {

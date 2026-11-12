@@ -103,12 +103,12 @@ class TestBuildDraft:
         assert build.width == 3
         assert build.creators_ign == ["Alice"]
 
-    def test_finalize_applies_door_defaults_explicitly(self) -> None:
+    def test_finalize_preserves_unknown_door_facts(self) -> None:
         draft = BuildDraft(category=BuildCategory.DOOR)
         build = draft.finalize()
         assert isinstance(build, DoorBuild)
-        assert (build.door_width, build.door_height) == (1, 2)
-        assert build.orientation == "Door"
+        assert (build.door_width, build.door_height) == (None, None)
+        assert build.orientation is None
 
 
 class TestBuildTitle:
@@ -221,5 +221,5 @@ def replace_door(build: DoorBuild, **changes: object) -> DoorBuild:
 def test_attribute_types_resolve_mapped_fields_and_properties() -> None:
     build = DoorBuild()
     assert build.get_attr_type("width") == int | None
-    assert build.get_attr_type("door_width") is int
+    assert build.get_attr_type("door_width") == int | None
     assert build.get_attr_type("dimensions") == tuple[int | None, int | None, int | None]

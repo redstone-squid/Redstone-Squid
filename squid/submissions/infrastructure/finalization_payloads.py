@@ -89,7 +89,7 @@ class _DoorTimingPayload(_StrictPayloadModel):
 class _DoorDetailsPayload(_StrictPayloadModel):
     kind: Literal["door"]
     opening: _DimensionsPayload
-    orientation: str
+    orientation: str | None
     pattern_keys: list[str]
     pattern_proposals: list[str]
     timing: _DoorTimingPayload
@@ -97,7 +97,7 @@ class _DoorDetailsPayload(_StrictPayloadModel):
     def to_domain(self) -> DoorSubmissionDetails:
         return DoorSubmissionDetails(
             opening=self.opening.to_domain(),
-            orientation=DoorOrientation(self.orientation),
+            orientation=DoorOrientation(self.orientation) if self.orientation is not None else None,
             pattern_keys=tuple(self.pattern_keys),
             pattern_proposals=tuple(self.pattern_proposals),
             timing=DoorTiming(
@@ -116,15 +116,15 @@ class _ExtenderTimingPayload(_StrictPayloadModel):
 
 class _ExtenderDetailsPayload(_StrictPayloadModel):
     kind: Literal["extender"]
-    orientation: str
-    extension_length: int
+    orientation: str | None
+    extension_length: int | None
     pattern_keys: list[str]
     pattern_proposals: list[str]
     timing: _ExtenderTimingPayload
 
     def to_domain(self) -> ExtenderSubmissionDetails:
         return ExtenderSubmissionDetails(
-            orientation=ExtenderOrientation(self.orientation),
+            orientation=ExtenderOrientation(self.orientation) if self.orientation is not None else None,
             extension_length=self.extension_length,
             pattern_keys=tuple(self.pattern_keys),
             pattern_proposals=tuple(self.pattern_proposals),
@@ -296,7 +296,7 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
         details = {
             "kind": "door",
             "opening": _dimensions_document(submission.details.opening),
-            "orientation": submission.details.orientation.value,
+            "orientation": submission.details.orientation.value if submission.details.orientation is not None else None,
             "pattern_keys": list(submission.details.pattern_keys),
             "pattern_proposals": list(submission.details.pattern_proposals),
             "timing": {
@@ -309,7 +309,7 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
     elif isinstance(submission.details, ExtenderSubmissionDetails):
         details = {
             "kind": "extender",
-            "orientation": submission.details.orientation.value,
+            "orientation": submission.details.orientation.value if submission.details.orientation is not None else None,
             "extension_length": submission.details.extension_length,
             "pattern_keys": list(submission.details.pattern_keys),
             "pattern_proposals": list(submission.details.pattern_proposals),

@@ -207,15 +207,11 @@ class BuildEditPatch:
                 )
             if self.door_dimensions is not UNSET:
                 width, height, depth = self.door_dimensions
-                # Door width and height are required, so clearing restores their defaults.
-                door_fields_by_name = type(build).__dataclass_fields__
-                build.door_width = width if width is not None else cast(int, door_fields_by_name["door_width"].default)
-                build.door_height = (
-                    height if height is not None else cast(int, door_fields_by_name["door_height"].default)
-                )
+                build.door_width = width
+                build.door_height = height
                 build.door_depth = depth
-            if self.door_orientation_type is not UNSET and self.door_orientation_type is not None:
-                build.orientation = cast(DoorOrientationLiteral, self.door_orientation_type)
+            if self.door_orientation_type is not UNSET:
+                build.orientation = cast(DoorOrientationLiteral | None, self.door_orientation_type)
             if self.normal_closing_time is not UNSET:
                 build.normal_closing_time = self.normal_closing_time
             if self.normal_opening_time is not UNSET:

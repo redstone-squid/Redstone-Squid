@@ -55,7 +55,7 @@ from squid.core.i18n import tr
 from squid.runtime import BotServices
 from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
 from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
-from squid.submissions.application.build_target import PREVIEW_TITLE_FIELDS, preview_build
+from squid.submissions.application.build_target import preview_build
 from squid.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
 from squid.submissions.application.intake import SuppliedAttachment, classify_supplied_file
 from squid.submissions.domain import (
@@ -711,9 +711,7 @@ class BuildPreviewScreen(sd.Screen[None]):
             case sl.resources.Ready(value=card) if card is not None:
                 return (intro, card)
             case sl.resources.Ready():
-                ws = self.workspace
-                needed = field_names(ws.manifest, ws.category, PREVIEW_TITLE_FIELDS.get(ws.category, ()))
-                return (intro, sl.paragraph(tr(t"draft-editor-preview-needs = Fill in {needed} to see the preview.")))
+                return (intro, sl.paragraph(tr(t"draft-editor-preview-failed = The preview could not be drawn.")))
             case sl.resources.Failed(previous=None):
                 return (intro, sl.paragraph(tr(t"draft-editor-preview-failed = The preview could not be drawn.")))
             case sl.resources.Pending(previous=None):

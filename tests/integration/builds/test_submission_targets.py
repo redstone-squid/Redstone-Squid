@@ -23,7 +23,7 @@ from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.builds.models import Build, BuildLink
+from squid.builds.models import Build, BuildLink, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.events.models import DomainEvent
 from squid.minecraft_auth.domain.models import MinecraftClientOrigin
@@ -49,6 +49,7 @@ from squid.submissions.application.build_target import SubmissionBuildPreparatio
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.domain import (
     BuildSubmissionRejected,
+    DoorSubmissionDetails,
     DraftSnapshot,
     DraftStatus,
     FinalizationJobStatus,
@@ -56,6 +57,8 @@ from squid.submissions.domain import (
     NormalizedSubmission,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
+    SubmissionCategory,
+    SubmissionDimensions,
     SubmissionOrigin,
 )
 from squid.submissions.infrastructure.finalization_repository import (
@@ -1085,3 +1088,40 @@ async def test_account_merge_carries_permission_rules_and_keeps_the_stricter_eff
     assert pattern_author == survivor.id
     assert audit == (survivor.id, survivor.id)
     assert await transact(accounts, lambda uow: uow.accounts.get_by_id(absorbed.id)) is None
+
+
+async def test_imported_door_with_unknown_facts_commits_and_reloads(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    owner = await seed_account_and_version(migrated_session_factory)
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    versions = VersionService(uow_factory=factory)
+    builds = BuildService(
+        BuildLockService(uow_factory=factory),
+        RestrictionService(uow_factory=factory),
+        versions,
+        NoopEmbeddings(),
+        BuildTaxonomyService(uow_factory=factory),
+        uow_factory=factory,
+    )
+    payload = replace(
+        normalized_submission(owner, uuid.UUID(int=555), "Java 1.21.0"),
+        category=SubmissionCategory.DOOR,
+        origin=SubmissionOrigin.DISCORD,
+        creators=(),
+        capture_dimensions=SubmissionDimensions(None, None, None),
+        source_version=None,
+        details=DoorSubmissionDetails(SubmissionDimensions(None, 3, None), None),
+    )
+
+    result = await _execute_submission(
+        SubmissionBuildPreparation(builds, NoApprovedTags(), versions), migrated_session_factory, payload
+    )
+
+    assert isinstance(result, FinalizedBuild)
+    loaded = await transact(factory, lambda uow: uow.builds.get_by_id(result.build_id))
+    assert isinstance(loaded, DoorBuild)
+    assert loaded.door_dimensions == (None, 3, None)
+    assert loaded.orientation is None
+    assert loaded.creators_ign == []
+    assert loaded.versions == []

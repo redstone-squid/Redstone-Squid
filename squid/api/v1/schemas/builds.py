@@ -176,7 +176,7 @@ class DoorDetails(BaseModel):
 
     category: Literal["Door"] = "Door"
     door_dimensions: Dimensions
-    orientation: str
+    orientation: str | None
     patterns: list[str]
     visible_opening_time: int | None
     visible_closing_time: int | None

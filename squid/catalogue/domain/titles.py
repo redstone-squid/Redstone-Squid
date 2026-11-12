@@ -137,13 +137,13 @@ class ExtenderCategory:
 
     wiring_restrictions: tuple[str, ...]
     orientation: str
-    length: int
+    length: int | None
     types: tuple[str, ...]
     component_restrictions: tuple[str, ...] = ()
     miscellaneous_restrictions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.length <= 0:
+        if self.length is not None and self.length <= 0:
             msg = tr(t"catalogue-piston-extender-length = Piston extender length must be positive.")
             raise ValidationError(msg)
 
@@ -326,7 +326,7 @@ class RulesTitleFormatter:
         title_tokens = (
             *wiring,
             *orientation,
-            _fixed_token(str(category.length), TitleSection.LENGTH),
+            _fixed_token(str(category.length) if category.length is not None else "?", TitleSection.LENGTH),
             *types,
             _fixed_token("Piston Extender", TitleSection.FIXED_NOUN),
         )

@@ -418,9 +418,9 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
             case BuildCategory.DOOR:
                 return DoorBuild(
                     **common,
-                    orientation=self.door_orientation or "Door",
-                    door_width=self.door_width if self.door_width is not None else 1,
-                    door_height=self.door_height if self.door_height is not None else 2,
+                    orientation=self.door_orientation,
+                    door_width=self.door_width,
+                    door_height=self.door_height,
                     door_depth=self.door_depth,
                     normal_opening_time=self.normal_opening_time,
                     normal_closing_time=self.normal_closing_time,

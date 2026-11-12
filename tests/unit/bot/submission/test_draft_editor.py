@@ -25,7 +25,7 @@ from squid.bot.submission.ui.drafts import (
 )
 from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
 from squid.builds.application.input import parse_build_ticks
-from squid.builds.models import Build
+from squid.builds.models import Build, DoorBuild
 from squid.core.actors import Actor
 from squid.edits.domain import Revision, RevisionConflictError
 from squid.runtime import BotServices
@@ -489,7 +489,7 @@ async def test_editor_messages_lock_once_the_draft_is_submitted() -> None:
     assert not labels(child.render())
 
 
-async def test_preview_draws_the_card_once_its_title_can_be_formed() -> None:
+async def test_preview_draws_partial_facts_and_updates_as_they_are_filled() -> None:
     services, drafts = setup("door")
     drawn: list[Build] = []
 
@@ -500,7 +500,9 @@ async def test_preview_draws_the_card_once_its_title_can_be_formed() -> None:
     editor = await open_editor(services, drafts, render_card=render_card)
     preview = BuildPreviewScreen(editor.workspace)
     await preview.card.reload()
-    assert "Fill in Door size, Door type to see the preview." in rendered_text(preview)
+    assert "card" in rendered_text(preview)
+    assert isinstance(drawn[-1], DoorBuild)
+    assert drawn[-1].orientation is None
 
     with transaction():
         await editor.workspace.save_values(

@@ -358,8 +358,6 @@ class BuildService:
 
     async def _prepare_for_persistence(self, build: Build) -> None:
         """Resolve application-owned defaults and derived values before a relational write."""
-        if not build.versions:
-            build.versions = [await self._versions.newest("Java")]
         # Resolve the editable taxonomy strings into tag assignments here, at the
         # last application-owned step, so the repository persists build.tags
         # verbatim and unresolvable names are recorded before anything is saved.

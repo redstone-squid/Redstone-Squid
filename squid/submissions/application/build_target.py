@@ -159,8 +159,6 @@ class SubmissionBuildPreparation:
                 issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason.UNKNOWN_OPTION))
         if submission.display_name is not None and len(submission.display_name.strip()) > 120:
             issues.append(SubmissionAttentionIssue("display_name", SubmissionAttentionReason.TOO_LONG))
-        if not any(creator.strip() for creator in submission.creators):
-            issues.append(SubmissionAttentionIssue("creators", SubmissionAttentionReason.TOO_SHORT))
         if issues:
             return BuildSubmissionRejected(tuple(issues))
         return selected
@@ -219,14 +217,16 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     }
     if isinstance(submission.details, DoorSubmissionDetails):
         opening = submission.details.opening
-        # DoorSubmissionDetails rejects an opening without a width or height.
-        assert opening.width is not None and opening.height is not None
         return DoorBuild(
             **common,
             door_width=opening.width,
             door_height=opening.height,
             door_depth=opening.depth,
-            orientation=cast(DoorOrientationLiteral, submission.details.orientation.value.title()),
+            orientation=(
+                cast(DoorOrientationLiteral, submission.details.orientation.value.title())
+                if submission.details.orientation is not None
+                else None
+            ),
             patterns=pattern_names,
             normal_opening_time=submission.details.timing.opening,
             visible_opening_time=submission.details.timing.visible_opening,
@@ -236,7 +236,11 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     if isinstance(submission.details, ExtenderSubmissionDetails):
         return ExtenderBuild(
             **common,
-            orientation=_EXTENDER_ORIENTATION[submission.details.orientation],
+            orientation=(
+                _EXTENDER_ORIENTATION[submission.details.orientation]
+                if submission.details.orientation is not None
+                else None
+            ),
             extension_length=submission.details.extension_length,
             patterns=pattern_names,
             extender_type=pattern_names[0] if pattern_names else None,
@@ -302,13 +306,6 @@ def _sponsor_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue
     }
 
 
-PREVIEW_TITLE_FIELDS: Mapping[str, tuple[str, ...]] = {
-    SubmissionCategory.DOOR: ("opening_width", "opening_height", "door_orientation"),
-    SubmissionCategory.EXTENDER: ("movement_orientation", "extension_length"),
-}
-"""Answers a build title is generated from, by category; preview_build needs them all."""
-
-
 def preview_build(
     category: str,
     answers: Mapping[str, JSONValue],
@@ -324,12 +321,9 @@ def preview_build(
     Args:
         definitions: Approved tag definitions keyed by stable key, as public_definitions returns.
 
-    Returns:
-        The build, or None while the facts its title is made from are missing: a door's opening
-        width, height, and type, or an extender's direction and length. PREVIEW_TITLE_FIELDS lists them.
+    Unknown dimensions, orientation, and creators remain empty, just as they do
+    during finalization. The title formatter displays incomplete build facts.
     """
-    if any(answers.get(field_id) is None for field_id in PREVIEW_TITLE_FIELDS.get(category, ())):
-        return None
 
     def text(field_id: str) -> str | None:
         value = answers.get(field_id)
@@ -371,10 +365,12 @@ def preview_build(
     if category == SubmissionCategory.DOOR:
         build = DoorBuild(
             **common,
-            door_width=cast(int, integer("opening_width")),
-            door_height=cast(int, integer("opening_height")),
+            door_width=integer("opening_width"),
+            door_height=integer("opening_height"),
             door_depth=integer("opening_depth"),
-            orientation=cast(DoorOrientationLiteral, cast(str, text("door_orientation")).title()),
+            orientation=(
+                cast(DoorOrientationLiteral, value.title()) if (value := text("door_orientation")) is not None else None
+            ),
             patterns=pattern_names,
             normal_opening_time=integer("opening_time"),
             visible_opening_time=integer("visible_opening_time"),
