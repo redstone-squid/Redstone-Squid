@@ -347,6 +347,8 @@ class BuildBrowseScreen(sd.Screen):
             page_size=15,
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
             empty=tr(t"build-list-empty = No builds are available."),
+            # `_BuildSource` uses the default listing order: highest, so newest, build ID first.
+            chronology=sl.sources.Chronology.NEWEST_FIRST,
         )
 
     @override

@@ -192,6 +192,25 @@ async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
         assert "Back" in payload
 
 
+async def test_stepping_from_the_newest_report_goes_to_an_older_one() -> None:
+    # Reports are listed newest first, so the step after the first report leads to older ones.
+    async with running_execution_host() as execution_host:
+        browser = make_screen((make_report("newest"), make_report("older")))
+        message_root, _ = await message_root_browser(browser, execution_host=execution_host)
+        interaction = interaction_harness()
+
+        await open_report(message_root, interaction, "newest")
+
+        buttons = {
+            item.label: item.disabled
+            for item in interaction.response.edit_message.await_args.kwargs["view"].walk_children()
+            if isinstance(item, discord.ui.Button)
+        }
+        assert buttons["Newer"] is True
+        assert buttons["Older"] is False
+        assert not {"Earlier", "Later"} & set(buttons)
+
+
 async def test_a_long_traceback_is_readable_past_one_page() -> None:
     async with running_execution_host() as execution_host:
         frames = "\n".join(f"  File 'module{index}.py', line {index}, in frame{index}" for index in range(300))

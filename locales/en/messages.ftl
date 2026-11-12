@@ -1244,10 +1244,10 @@ bot-starboard-screen-value = Value
 # squid/bot/submission/build_browse.py:201
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/submission/build_browse.py:372
+# squid/bot/submission/build_browse.py:374
 bot-submission-build-browse-back-to-builds = Back to builds
 
-# squid/bot/submission/build_browse.py:358
+# squid/bot/submission/build_browse.py:360
 bot-submission-build-browse-browse = Browse
 
 # squid/bot/submission/build_browse.py:230
@@ -1256,10 +1256,10 @@ bot-submission-build-browse-build = { $action } build #{ $build_id_text }?
 # squid/bot/submission/build_browse.py:348
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:440
+# squid/bot/submission/build_browse.py:442
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/submission/build_browse.py:362
+# squid/bot/submission/build_browse.py:364
 bot-submission-build-browse-builds = Builds
 
 # squid/bot/submission/build_browse.py:246
@@ -1277,7 +1277,7 @@ bot-submission-build-browse-convert-schematic = Convert schematic
 # squid/bot/submission/build_browse.py:219
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:447
+# squid/bot/submission/build_browse.py:449
 bot-submission-build-browse-description-or-title = Description or title
 
 # squid/bot/submission/build_browse.py:177, squid/bot/submission/schematic_tools.py:56
@@ -1289,7 +1289,7 @@ bot-submission-build-browse-download-schematic = Download schematic
 # squid/bot/submission/build_browse.py:193
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/build_browse.py:359, squid/bot/submission/build_browse.py:444
+# squid/bot/submission/build_browse.py:361, squid/bot/submission/build_browse.py:446
 bot-submission-build-browse-find-build = Find build
 
 # squid/bot/submission/schematic_tools.py:234
@@ -1298,16 +1298,16 @@ bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 # squid/bot/submission/build_browse.py:161
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:378
+# squid/bot/submission/build_browse.py:380
 bot-submission-build-browse-loading-builds = Loading builds.
 
 # squid/bot/submission/schematic_tools.py:91
 bot-submission-build-browse-measure-timing = Measure timing
 
-# squid/bot/submission/build_browse.py:438
+# squid/bot/submission/build_browse.py:440
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:385
+# squid/bot/submission/build_browse.py:387
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/submission/schematic_tools.py:213
@@ -1322,7 +1322,7 @@ bot-submission-build-browse-render-schematic = Render schematic
 # squid/bot/submission/schematic_tools.py:69
 bot-submission-build-browse-schematic-info = Schematic info
 
-# squid/bot/submission/build_browse.py:391
+# squid/bot/submission/build_browse.py:393
 bot-submission-build-browse-search-by-meaning = Search by meaning
 
 # squid/bot/submission/consent_banner.py:70
@@ -2036,7 +2036,7 @@ build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
 
-# squid/bot/submission/build_browse.py:425
+# squid/bot/submission/build_browse.py:427
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:32
@@ -2102,7 +2102,7 @@ build-search-matching-mode-help = Use keyword matching or smart meaning-based ma
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/build_browse.py:431
+# squid/bot/submission/build_browse.py:433
 build-search-no-visible-match = No visible build matches that search.
 
 # squid/bot/submission/commands.py:131
@@ -2714,19 +2714,19 @@ core-state-invalid-operation = Application state is invalid for this operation.
 # squid/core/errors.py:182
 core-supplied-value-invalid = The supplied value is invalid.
 
-# squid/bot/diagnostics_view.py:374
+# squid/bot/diagnostics_view.py:377
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
 # squid/bot/diagnostics_view.py:37
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages } · the attachment has the whole report
 
-# squid/bot/diagnostics_view.py:313
+# squid/bot/diagnostics_view.py:316
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
-# squid/bot/diagnostics_view.py:44
+# squid/bot/diagnostics_view.py:46
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics_view.py:176
+# squid/bot/diagnostics_view.py:178
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
 # squid/diagnostics/domain.py:23
@@ -2735,91 +2735,91 @@ diagnostics-error-report-not-found = Error report not found
 # squid/diagnostics/application.py:63
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
-# squid/bot/diagnostics_view.py:210
+# squid/bot/diagnostics_view.py:212
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
 # squid/diagnostics/domain.py:22
 diagnostics-no-stored-error = No stored error matches that reference.
 
-# squid/bot/diagnostics_view.py:138
+# squid/bot/diagnostics_view.py:140
 diagnostics-path-privacy-warning = An error report names internal paths, so it is never posted in a channel.
 
-# squid/bot/diagnostics_view.py:106
+# squid/bot/diagnostics_view.py:108
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics_view.py:384
+# squid/bot/diagnostics_view.py:387
 diagnostics-shared-reference-note = { $count } reports share this reference; this is the newest.
 
-# squid/bot/diagnostics_view.py:101
+# squid/bot/diagnostics_view.py:103
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics_view.py:383
+# squid/bot/diagnostics_view.py:386
 diagnostics-view-ambiguous = Ambiguous
 
-# squid/bot/diagnostics_view.py:257
+# squid/bot/diagnostics_view.py:260
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics_view.py:174
+# squid/bot/diagnostics_view.py:176
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics_view.py:182
+# squid/bot/diagnostics_view.py:184
 diagnostics-view-delete-reports = Delete reports
 
-# squid/bot/diagnostics_view.py:227
+# squid/bot/diagnostics_view.py:230
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
-# squid/bot/diagnostics_view.py:45
+# squid/bot/diagnostics_view.py:47
 diagnostics-view-earlier = Earlier
 
-# squid/bot/diagnostics_view.py:275
+# squid/bot/diagnostics_view.py:278
 diagnostics-view-error = Error { $reference }
 
-# squid/bot/diagnostics_view.py:225
+# squid/bot/diagnostics_view.py:228
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics_view.py:367
+# squid/bot/diagnostics_view.py:370
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics_view.py:368
+# squid/bot/diagnostics_view.py:371
 diagnostics-view-full-id = Full ID
 
-# squid/bot/diagnostics_view.py:289
+# squid/bot/diagnostics_view.py:292
 diagnostics-view-full-report = Full report
 
-# squid/bot/diagnostics_view.py:46
+# squid/bot/diagnostics_view.py:48
 diagnostics-view-later = Later
 
-# squid/bot/diagnostics_view.py:242
+# squid/bot/diagnostics_view.py:245
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics_view.py:282
+# squid/bot/diagnostics_view.py:285
 diagnostics-view-log-tail = Log tail
 
-# squid/bot/diagnostics_view.py:271
+# squid/bot/diagnostics_view.py:274
 diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 
-# squid/bot/diagnostics_view.py:209
+# squid/bot/diagnostics_view.py:211
 diagnostics-view-recent-errors = Recent errors
 
-# squid/bot/diagnostics_view.py:123
+# squid/bot/diagnostics_view.py:125
 diagnostics-view-refresh-reports = Refresh reports
 
-# squid/bot/diagnostics_view.py:250
+# squid/bot/diagnostics_view.py:253
 diagnostics-view-show-all = Show all
 
-# squid/bot/diagnostics_view.py:252
+# squid/bot/diagnostics_view.py:255
 diagnostics-view-show-work-lost-only = Show work lost only
 
 # squid/bot/diagnostics_view.py:36
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics_view.py:363
+# squid/bot/diagnostics_view.py:366
 diagnostics-view-when = When
 
-# squid/bot/diagnostics_view.py:366
+# squid/bot/diagnostics_view.py:369
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics_view.py:373
+# squid/bot/diagnostics_view.py:376
 diagnostics-view-work-lost = Work lost
 
 # squid/bot/submission/ui/drafts.py:1169, squid/bot/submission/ui/drafts.py:488, squid/bot/submission/ui/drafts.py:791

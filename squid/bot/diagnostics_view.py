@@ -39,6 +39,8 @@ def _traceback_footer(page: int, pages: int) -> sl.TextLike:
     )
 
 
+# Earlier and Later page through a traceback, which opens at its last frame. The report list
+# is newest first and labels its own steps through the browser's chronology.
 ERROR_CHROME = dataclasses.replace(
     CHROME,
     not_yours=tr(t"diagnostics-controls-not-owner = These error controls belong to someone else."),
@@ -208,6 +210,7 @@ class ErrorReportScreen(sd.Screen[int]):
             page_size=10,
             title=tr(t"diagnostics-view-recent-errors = Recent errors"),
             empty=tr(t"diagnostics-no-recent-errors = Nothing has failed within the retention window."),
+            chronology=sl.sources.Chronology.NEWEST_FIRST,
         )
 
     @property
