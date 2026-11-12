@@ -128,8 +128,16 @@ def test_runtime_targets_install_only_their_declared_features(runtime_images: di
         if with_media:
             assert ffmpeg.stdout == FFMPEG_VERSION
 
-        drivers = _run_image(image, "/usr/bin/dpkg-query", "--show", "mesa-vulkan-drivers", check=False)
-        assert (drivers.returncode == 0) is with_software_gpu
+        drivers = _run_image(
+            image,
+            "/usr/bin/dpkg-query",
+            "--show",
+            "--showformat=${db:Status-Status}",
+            "mesa-vulkan-drivers",
+            check=False,
+        )
+        # dpkg can return success for an absent package referenced by another package.
+        assert (drivers.stdout == "installed") is with_software_gpu
         # FFmpeg also depends on the Vulkan loader; only Mesa supplies the software renderer.
         if with_software_gpu:
             _run_image(image, "/usr/bin/dpkg-query", "--show", "libvulkan1")
