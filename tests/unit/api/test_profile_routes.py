@@ -252,7 +252,15 @@ class TestStaffClear:
     async def test_clearing_targets_the_named_account(self) -> None:
         accounts = _accounts()
 
-        response = await clear_profile(42, accounts)
+        response = await clear_profile(
+            42,
+            accounts,
+            _caller(),
+            cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
+            Response(),
+            uuid4(),
+            '"account-42-r1"',
+        )
 
         assert accounts.clears == [42]
         assert response.display_name is None

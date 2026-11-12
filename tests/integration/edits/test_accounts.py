@@ -1,15 +1,19 @@
 """Profile receipts fence identity changes, consent, and final unlinking."""
 
 from functools import partial
+from unittest.mock import AsyncMock
 
 import anyio
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.application.edits import (
+    PROFILE_CLEAR,
     PROFILE_EDIT,
     UNLINK_EDIT,
     VISIBILITY_EDIT,
+    AccountProfileClear,
     AccountProfileEdit,
     AccountUnlinkEdit,
     AccountVisibilityEdit,
@@ -17,7 +21,7 @@ from squid.accounts.application.edits import (
 )
 from squid.accounts.domain import AccountConsent, ProfileUpdate
 from squid.accounts.errors import ConsentRequiredError, LastIdentityError
-from squid.accounts.models import AccountIdentity
+from squid.accounts.models import AccountIdentity, ProfileClearAudit
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditExecutor
@@ -78,7 +82,9 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
     with pytest.raises(ConsentRequiredError):
         await executor.execute(
             EditCommand(
-                PROFILE_EDIT, (Revision(account_target(account.id), current.revision),), EditValues.of({"bio": "New"})
+                PROFILE_EDIT,
+                (Revision(account_target(account.id), current.revision),),
+                EditValues.of({"bio": "New"}),
             ),
             actor,
         )
@@ -121,3 +127,37 @@ async def test_final_unlink_retains_profile_and_last_identity_guard(
             ),
             actor,
         )
+
+
+async def test_staff_clear_is_final_revision_checked_and_permanently_attributed(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    permissions = AsyncMock(spec=PermissionService)
+    permissions.allows_in.return_value = True
+    executor = EditExecutor(factory, {PROFILE_CLEAR: AccountProfileClear(permissions)})
+    async with factory() as uow:
+        account = await uow.accounts.create(
+            consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(991),)
+        )
+        await uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="remove me", hidden=True))
+        await uow.commit()
+    command = EditCommand(PROFILE_CLEAR, (Revision(account_target(account.id), account.revision),), EditValues.of({}))
+    actor = Actor(account_id=account.id)
+    result = await executor.execute(command, actor)
+    assert result.receipt is not None
+    assert result.receipt.final
+    with pytest.raises(RevisionConflictError):
+        await executor.execute(EditCommand(PROFILE_CLEAR, command.expected, command.values), actor)
+    await executor.execute(command, actor)
+    async with factory() as uow:
+        profile = await uow.accounts.get_profile(account.id)
+        assert profile is not None
+        assert profile.bio is None
+        assert not profile.hidden
+    async with migrated_session_factory() as session:
+        entries = list(await session.scalars(select(ProfileClearAudit)))
+    assert len(entries) == 1
+    assert entries[0].actor_account_id == actor.account_id
+    assert entries[0].account_id == account.id
+    assert entries[0].revision == result.outcome.revisions[0].value

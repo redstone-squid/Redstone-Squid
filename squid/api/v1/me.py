@@ -6,7 +6,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Response
 
 from squid.accounts.application import AccountService
-from squid.accounts.application.edits import PROFILE_EDIT, UNLINK_EDIT, VISIBILITY_EDIT, ProfileValues, account_target
+from squid.accounts.application.edits import (
+    PROFILE_CLEAR,
+    PROFILE_EDIT,
+    UNLINK_EDIT,
+    VISIBILITY_EDIT,
+    ProfileValues,
+    account_target,
+)
 from squid.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
@@ -22,7 +29,7 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.rate_limit import enforce_route_rate_limits
-from squid.api.revisions import expected_revision, revision_etag
+from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
 from squid.api.v1.schemas.consent import ConsentGrantRequest
@@ -341,25 +348,53 @@ async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) ->
     return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(account_id))
 
 
+@accounts_router.get(
+    "/{account_id}/profile",
+    response_model=ProfileDetail,
+    responses=responses(401, 403, 404, 503),
+    dependencies=[Depends(requires(ACCOUNT_PROFILE_MODERATE))],
+    operation_id="account_profile_review",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
+)
+async def review_profile(account_id: int, accounts: Accounts, response: Response) -> ProfileDetail:
+    """Read a profile and its revision for staff moderation."""
+    snapshot = await accounts.editor_snapshot(account_id)
+    response.headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
+    return ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities)
+
+
 @accounts_router.delete(
     "/{account_id}/profile",
     response_model=ProfileDetail,
-    responses=responses(401, 403, 404, 422, 503),
-    dependencies=[
-        Depends(requires(ACCOUNT_PROFILE_MODERATE)),
-        Depends(reserve_idempotent_request),
-    ],
+    responses=responses(401, 403, 404, 412, 422, 428, 503),
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="account_profile_clear",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
-async def clear_profile(account_id: int, accounts: Accounts) -> ProfileDetail:
-    """Clear another account's profile content, for staff handling abuse.
-
-    Reset profile visibility to public. Creator aliases and linked identities
-    are retained.
-    """
-    profile = await accounts.clear_profile(account_id)
-    return ProfileDetail.from_domain(profile, await accounts.list_identities(account_id))
+async def clear_profile(
+    account_id: int,
+    accounts: Accounts,
+    caller: Annotated[Caller, Depends(requires(ACCOUNT_PROFILE_MODERATE))],
+    services: Services,
+    response: Response,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
+) -> ProfileDetail:
+    """Clear profile content at the revision staff reviewed, retaining moderation attribution."""
+    if if_match is None:
+        raise RevisionRequiredError
+    await services.edits.execute(
+        EditCommand(
+            PROFILE_CLEAR,
+            (expected_revision(account_target(account_id), if_match),),
+            EditValues.of({}),
+            operation_id=operation_id,
+        ),
+        caller.to_actor(),
+    )
+    snapshot = await accounts.editor_snapshot(account_id)
+    response.headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
+    return ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities)
 
 
 @router.get(

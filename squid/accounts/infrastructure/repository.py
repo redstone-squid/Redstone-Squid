@@ -46,6 +46,7 @@ from squid.accounts.models import (
     AliasClaim,
     CreatorAlias,
     MergeTicket,
+    ProfileClearAudit,
     PublicCreatorRedirect,
 )
 from squid.accounts.models import VerificationAttempt as VerificationAttemptModel
@@ -351,6 +352,18 @@ class AccountRepository:
         account.revision += 1
         await session.flush()
         return model
+
+    async def record_profile_clear(
+        self, account_id: int, actor_account_id: int, operation_id: uuid.UUID, revision: int
+    ) -> None:
+        self._session().add(
+            ProfileClearAudit(
+                operation_id=operation_id,
+                account_id=account_id,
+                actor_account_id=actor_account_id,
+                revision=revision,
+            )
+        )
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
         """Clear profile content and avatar selection, resetting hidden to False."""

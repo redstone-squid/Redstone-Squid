@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, fields
 from typing import Protocol
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,8 +18,9 @@ from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit
 from squid.edits.fields import Aggregate, FieldCommand
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain.catalogue import ACCOUNT_SELF_MANAGE
+from squid.permissions.domain.catalogue import ACCOUNT_PROFILE_MODERATE, ACCOUNT_SELF_MANAGE
 
+PROFILE_CLEAR = "accounts.profile_clear"
 PROFILE_EDIT = "accounts.profile"
 VISIBILITY_EDIT = "accounts.visibility"
 UNLINK_EDIT = "accounts.unlink"
@@ -56,6 +58,10 @@ class AccountEditorSnapshot:
 
 
 class AccountEditStore(AccountRepository, Protocol):
+    async def record_profile_clear(
+        self, account_id: int, actor_account_id: int, operation_id: UUID, revision: int
+    ) -> None: ...
+
     async def has_current_consent(self, account_id: int) -> bool: ...
 
     async def lock_for_edit(self, account_id: int) -> Account: ...
@@ -163,3 +169,30 @@ class AccountUnlinkEdit(AccountEdits):
         assert isinstance(identity_id, int)
         await uow.accounts.unlink_identity(account.id, identity_id)
         return (await uow.accounts.flush_edit_revision(account, prepared.revisions[0]),)
+
+
+class AccountProfileClear(AccountEdits):
+    async def prepare(self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
+        if command.values.unpack() or command.purpose != "edit":
+            raise ValidationError
+        if actor.account_id is None or not await self._permissions.allows_in(uow, actor, ACCOUNT_PROFILE_MODERATE):
+            raise AuthorizationError
+        account = await self.aggregate.lock(uow, command)
+        # Even an empty profile records the staff action, without keeping erased content in a receipt.
+        return PreparedEdit(
+            EditValues.of({"cleared": False}),
+            EditValues.of({"cleared": True}),
+            final=True,
+            revisions=(Revision(command.expected[0].target, account.revision),),
+        )
+
+    async def apply(
+        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
+    ) -> tuple[Revision, ...]:
+        account = await self.aggregate.lock(uow, command)
+        await uow.accounts.clear_profile(account.id)
+        revision = await uow.accounts.flush_edit_revision(account, prepared.revisions[0])
+        await uow.accounts.record_profile_clear(
+            account.id, actor.require_account_id(), command.operation_id, revision.value
+        )
+        return (revision,)

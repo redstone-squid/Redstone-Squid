@@ -20,9 +20,11 @@ from whenever import Instant
 
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import (
+    PROFILE_CLEAR,
     PROFILE_EDIT,
     UNLINK_EDIT,
     VISIBILITY_EDIT,
+    AccountProfileClear,
     AccountProfileEdit,
     AccountUnlinkEdit,
     AccountVisibilityEdit,
@@ -388,6 +390,7 @@ class _ServiceGraph:
                 BUILD_STATUS_EDIT: BuildStatusEdit(self.permissions),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),
+                PROFILE_CLEAR: AccountProfileClear(self.permissions),
                 PROFILE_EDIT: AccountProfileEdit(self.permissions),
                 VISIBILITY_EDIT: AccountVisibilityEdit(self.permissions),
                 UNLINK_EDIT: AccountUnlinkEdit(self.permissions),

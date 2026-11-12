@@ -532,3 +532,14 @@ class MergeTicket(CreatedAtMixin, Base, kw_only=True):
     def is_live_at(self, now: Instant) -> bool:
         """Whether this ticket may still be redeemed."""
         return now < self.expires_at
+
+
+class ProfileClearAudit(CreatedAtMixin, Base, kw_only=True):
+    """Retain staff attribution without retaining the removed profile content."""
+
+    __tablename__ = "profile_clear_audit"
+
+    operation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[int] = mapped_column(Integer)
+    actor_account_id: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(BigInteger)

@@ -34,6 +34,8 @@ class AccountEditRecorder:
         values = command.values.unpack()
         before = EditValues.of({})
         match command.kind:
+            case "accounts.profile_clear":
+                await self.accounts.clear_profile(account_id)
             case "accounts.profile":
                 normalized = ProfileValues.model_validate(values)
                 update = ProfileUpdate(
