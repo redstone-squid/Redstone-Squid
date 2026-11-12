@@ -82,7 +82,7 @@ async def test_navigating_keeps_the_previous_window_visible_while_the_next_is_pe
     assert browser.window.status.previous == sl.resources.Ready(loaded)
     rendered = "\n".join(engine.texts(engine.render_tree(browser)) + engine.labels(engine.render_tree(browser)))
     assert "A" in rendered
-    assert "Loading" in rendered
+    assert "Loading" not in rendered
 
 
 async def test_the_overview_hook_receives_the_loaded_window() -> None:

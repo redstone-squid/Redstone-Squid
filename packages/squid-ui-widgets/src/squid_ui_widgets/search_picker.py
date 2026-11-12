@@ -250,11 +250,7 @@ class SearchPicker[ItemT](Component):
             case Ready(value=current):
                 body = self._loaded_nodes(current)
             case Pending(previous=previous):
-                body = (
-                    (note(self.copy.loading),)
-                    if previous is None
-                    else self._loaded_nodes(previous.value, status_text=self.copy.loading)
-                )
+                body = (note(self.copy.loading),) if previous is None else self._loaded_nodes(previous.value)
             case Failed(previous=previous):
                 body = (
                     self._failure()

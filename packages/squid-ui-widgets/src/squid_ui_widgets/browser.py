@@ -210,7 +210,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             case Pending(previous=previous):
                 if previous is None:
                     return self._status(self.copy.loading)
-                return self._render_loaded(previous.value, status_text=self.copy.loading)
+                return self._render_loaded(previous.value)
             case Failed(previous=previous):
                 if previous is None:
                     return self._status(self.copy.failed, retry=True)

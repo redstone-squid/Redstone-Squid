@@ -136,11 +136,9 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     interaction = interaction_harness()
     await message_root.dispatch("stream.next", interaction)
 
-    pending = interaction.response.edit_message.await_args.kwargs["view"]
-    assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(pending)
-    assert "-# Loading…" in _texts(pending)
-
-    edited = interaction.followup.edit_message.await_args.kwargs["view"]
+    edited = interaction.response.edit_message.await_args.kwargs["view"]
+    assert "-# Loading…" not in _texts(edited)
+    interaction.followup.edit_message.assert_not_awaited()
     assert source.requests[-1] == Position("Grace", 2, sl.sources.Direction.FORWARD)
     assert "3. **Edsger** — 10\n4. **Barbara** — 5" in _texts(edited)
     assert "-# Page 2 of 3" in _texts(edited)
@@ -167,7 +165,7 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
     failed_interaction = interaction_harness()
     await message_root.dispatch("stream.next", failed_interaction)
 
-    failed = failed_interaction.followup.edit_message.await_args.kwargs["view"]
+    failed = failed_interaction.response.edit_message.await_args.kwargs["view"]
     assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(failed)
     assert "-# Could not load entries." in _texts(failed)
     assert "Retry" in _labels(failed)
@@ -176,7 +174,7 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
     await message_root.dispatch("stream.retry", retry_interaction)
 
     pending = retry_interaction.response.edit_message.await_args.kwargs["view"]
-    assert "-# Loading…" in _texts(pending)
+    assert "-# Loading…" not in _texts(pending)
     settled = retry_interaction.followup.edit_message.await_args.kwargs["view"]
     assert source.requests[-1] == Position("Grace", 2, sl.sources.Direction.FORWARD)
     assert "3. **Edsger** — 10\n4. **Barbara** — 5" in _texts(settled)
@@ -200,10 +198,9 @@ async def test_a_jumpable_source_seeks_by_page() -> None:
 
     # Page 2 of a page_size=2 source is item offset 4, not item offset 2.
     assert source.requests[-1] == Position(offset=4)
-    pending = interaction.response.edit_message.await_args.kwargs["view"]
-    assert "-# Loading…" in _texts(pending)
-
-    edited = interaction.followup.edit_message.await_args.kwargs["view"]
+    edited = interaction.response.edit_message.await_args.kwargs["view"]
+    assert "-# Loading…" not in _texts(edited)
+    interaction.followup.edit_message.assert_not_awaited()
     assert "-# Page 3 of 3" in _texts(edited)
 
 
