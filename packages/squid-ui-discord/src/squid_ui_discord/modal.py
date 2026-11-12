@@ -8,35 +8,12 @@ raw control values; schema evaluation belongs to the caller.
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal, cast, override
+from typing import Any, override
 
 import discord
 
-from squid_ui.capabilities import Capability
-from squid_ui.entity import EntityKind, EntityRef, EntityType
-from squid_ui.errors import LayoutInvariantError
-from squid_ui.forms import (
-    BoolField,
-    ChoiceField,
-    ChoiceOption,
-    DateField,
-    DateTimeField,
-    DurationField,
-    ExtensionField,
-    FloatField,
-    FormField,
-    FormSpec,
-    FormText,
-    FormValueError,
-    IntField,
-    MultiChoiceField,
-    ScaleField,
-    TextAreaField,
-    TextField,
-    TimeField,
-    UploadedFile,
-    ZonedDateTimeField,
-)
+from squid_ui.entity import EntityType
+from squid_ui.forms import FormSpec, FormText, UploadedFile
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_ui.target_types import DiscordPyAdapter
@@ -44,107 +21,26 @@ from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.conformance import conform_modal
 from squid_ui_discord.emoji import discord_emoji
+from squid_ui_discord.form_fields import CheckboxGroupField as CheckboxGroupField
+from squid_ui_discord.form_fields import EntityField as EntityField
+from squid_ui_discord.form_fields import FileField as FileField
+from squid_ui_discord.form_planning import (
+    BooleanControl,
+    ChoiceControl,
+    DiscordFormPlan,
+    EntityControl,
+    FieldPlan,
+    FileControl,
+    StaticTextPlan,
+    TextControl,
+    plan_form,
+)
+from squid_ui_discord.form_planning import _entity_defaults as _entity_defaults
 
 logger = logging.getLogger(__name__)
 
 type SubmitHandler = Callable[[discord.Interaction, dict[str, str]], Awaitable[None]]
 type FormSubmitHandler = Callable[[discord.Interaction, dict[str, object]], Awaitable[None]]
-
-
-@dataclass(frozen=True, slots=True)
-class EntityField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](ExtensionField[object, RequiredT]):
-    """A Discord user, role, channel, or mentionable picker."""
-
-    entity_type: EntityType = EntityType.USER
-    minimum: int = 1
-    maximum: int = 1
-    placeholder: TextLike | None = None
-    capability: ClassVar[str] = Capability.FORMS_DISCORD_ENTITY
-
-    @override
-    def parse(self, raw: object) -> object | None:
-        values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
-        if not values:
-            if self.required:
-                message = "This field is required."
-                raise FormValueError(message)
-            return None if self.maximum == 1 else ()
-        return values[0] if self.maximum == 1 else values
-
-
-@dataclass(frozen=True, slots=True)
-class FileField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](ExtensionField[object, RequiredT]):
-    """Modal uploads represented as metadata and lazily readable file contents.
-
-    Parsing checks attachment counts. It does not download the bytes; callers explicitly
-    read each returned UploadedFile when needed.
-    """
-
-    minimum: int = 1
-    maximum: int = 1
-    capability: ClassVar[str] = Capability.FORMS_DISCORD_FILE
-
-    @override
-    def parse(self, raw: object) -> UploadedFile | tuple[UploadedFile, ...] | None:
-        values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
-        if not values:
-            if self.required:
-                message = "This field is required."
-                raise FormValueError(message)
-            return None if self.maximum == 1 else ()
-        if len(values) < self.minimum:
-            message = f"Upload at least {self.minimum} files."
-            raise FormValueError(message)
-        if len(values) > self.maximum:
-            message = f"Upload no more than {self.maximum} files."
-            raise FormValueError(message)
-        if not all(isinstance(value, UploadedFile) for value in values):
-            message = "Discord file adapter submitted a non-upload value"
-            raise TypeError(message)
-        # Established by the `all(...)` above; neither checker narrows a tuple through it.
-        uploads = cast(tuple[UploadedFile, ...], values)
-        return uploads[0] if self.maximum == 1 else uploads
-
-
-@dataclass(frozen=True, slots=True)
-class CheckboxGroupField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
-    ExtensionField[tuple[ValueT, ...], RequiredT]
-):
-    """A Discord-native group of typed checkbox choices."""
-
-    options: tuple[ChoiceOption[ValueT], ...] = ()
-    minimum: int = 0
-    maximum: int | None = None
-    capability: ClassVar[str] = Capability.FORMS_DISCORD_CHECKBOX_GROUP
-
-    def __post_init__(self) -> None:
-        if not 1 <= len(self.options) <= 10:
-            message = "CheckboxGroupField needs 1-10 options"
-            raise ValueError(message)
-        self._portable_field()
-
-    @override
-    def parse(self, raw: object) -> tuple[ValueT, ...]:
-        """Parse selected keys with the portable multi-choice contract."""
-        return self._portable_field().parse(raw)
-
-    @override
-    def format(self, value: object) -> tuple[str, ...]:
-        """Format a prefill with the portable multi-choice contract."""
-        return self._portable_field().format(value)
-
-    def _portable_field(self) -> MultiChoiceField[ValueT, RequiredT]:
-        """Build the portable value contract behind this native presentation."""
-        return MultiChoiceField(
-            label=self.label,
-            key=self.key,
-            description=self.description,
-            required=self.required,
-            default=self.default,
-            options=self.options,
-            minimum=self.minimum,
-            maximum=self.maximum,
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,27 +103,17 @@ class _SpecModal(discord.ui.Modal):
 
 
 class _FormModal(discord.ui.Modal):
-    def __init__(
-        self,
-        spec: FormSpec,
-        on_submit: FormSubmitHandler,
-        timeout: float | None,
-        localization: Localization,
-    ) -> None:
-        super().__init__(title=_resolve(spec.title, localization), timeout=timeout)
+    def __init__(self, plan: DiscordFormPlan, on_submit: FormSubmitHandler, timeout: float | None) -> None:
+        super().__init__(title=plan.title, timeout=timeout)
         self._handler = on_submit
         self._readers: dict[str, Callable[[], object]] = {}
-        for field in spec.items:
-            if isinstance(field, FormText):
-                self.add_item(discord.ui.TextDisplay(_resolve(field.content, localization)))
+        for item in plan.items:
+            if isinstance(item, StaticTextPlan):
+                self.add_item(discord.ui.TextDisplay(item.content))
                 continue
-            component, reader = _form_component(field, spec.prefill_for(field), localization)
-            label = _resolve(field.label, localization) if field.label is not None else field.key
-            description = _resolve(field.description, localization) if field.description is not None else None
-            if description is None and isinstance(field, ZonedDateTimeField):
-                description = field.timezone
-            self._readers[field.key] = reader
-            self.add_item(discord.ui.Label(text=label, description=description, component=component))
+            component, reader = _render_control(item)
+            self._readers[item.key] = reader
+            self.add_item(discord.ui.Label(text=item.label, description=item.description, component=component))
 
     @override
     async def on_submit(self, interaction: discord.Interaction) -> None:
@@ -238,235 +124,98 @@ def _resolve(value: TextLike, localization: Localization) -> str:
     return resolve_text(value, localization).content
 
 
-def _text_input(
-    field: TextField
-    | IntField
-    | FloatField
-    | DurationField
-    | DateField
-    | TimeField
-    | DateTimeField
-    | ZonedDateTimeField,
-    prefill: object,
-    localization: Localization,
-) -> discord.ui.TextInput:
-    placeholder = _resolve(field.placeholder, localization) if field.placeholder is not None else None
-    maximum = field.maximum if isinstance(field, TextField) else None
-    return discord.ui.TextInput(
-        custom_id=field.key,
-        style=discord.TextStyle.paragraph if isinstance(field, TextAreaField) else discord.TextStyle.short,
-        default=None if prefill is None else str(prefill),
-        placeholder=placeholder,
-        required=field.required,
-        min_length=field.minimum if isinstance(field, TextField) else None,
-        max_length=maximum,
-    )
-
-
-_ENTITY_DEFAULT_TYPES: dict[EntityKind, discord.SelectDefaultValueType] = {
-    EntityKind.USER: discord.SelectDefaultValueType.user,
-    EntityKind.ROLE: discord.SelectDefaultValueType.role,
-    EntityKind.CONVERSATION: discord.SelectDefaultValueType.channel,
-}
-
-_FIELD_DEFAULT_TYPES: dict[EntityType, discord.SelectDefaultValueType] = {
-    EntityType.USER: discord.SelectDefaultValueType.user,
-    EntityType.ROLE: discord.SelectDefaultValueType.role,
-    EntityType.CONVERSATION: discord.SelectDefaultValueType.channel,
-}
-
-
-def _entity_defaults(prefill: object, entity_type: EntityType) -> list[discord.SelectDefaultValue]:
-    """Narrow a stored entity prefill to the preselected values discord.py accepts.
-
-    `EntityField` is an `ExtensionField[object]`, so a prefill arrives as whatever the store
-    round-tripped: the discord entities the select handed back last time, portable `EntityRef`s,
-    or bare snowflake ids. Everything resolves to an explicit `SelectDefaultValue` rather than a
-    bare `discord.Object`, because discord.py can only infer a missing type from the select's own
-    kind and rejects an untyped object outright on a mentionable select. A value whose kind cannot
-    be determined is dropped: a preselection is a convenience, and guessing it wrong preselects the
-    wrong entity.
-    """
-    values = prefill if isinstance(prefill, list | tuple) else (() if prefill is None else (prefill,))
-    defaults: list[discord.SelectDefaultValue] = []
-    for value in values:
-        match value:
-            case discord.SelectDefaultValue():
-                defaults.append(value)
-            case EntityRef(id=int() as entity_id):
-                defaults.append(discord.SelectDefaultValue(id=entity_id, type=_ENTITY_DEFAULT_TYPES[value.kind]))
-            case discord.Role():
-                defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.role))
-            case discord.Member() | discord.User() | discord.ClientUser():
-                defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.user))
-            case discord.Thread() | discord.abc.GuildChannel():
-                defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.channel))
-            case int() if entity_type in _FIELD_DEFAULT_TYPES:
-                defaults.append(discord.SelectDefaultValue(id=value, type=_FIELD_DEFAULT_TYPES[entity_type]))
-            case _:
-                logger.warning("dropping unrecognized %s prefill of type %s", entity_type, type(value).__name__)
-    return defaults
-
-
-def _form_component(
-    field: FormField[Any],
-    prefill: object,
-    localization: Localization,
-) -> tuple[discord.ui.Item[Any], Callable[[], object]]:
-    if isinstance(
-        field,
-        TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField | ZonedDateTimeField,
-    ):
-        component = _text_input(field, prefill, localization)
+def _render_control(field: FieldPlan) -> tuple[discord.ui.Item[Any], Callable[[], object]]:
+    control = field.control
+    if isinstance(control, TextControl):
+        component = discord.ui.TextInput(
+            custom_id=field.key,
+            required=field.required,
+            style=discord.TextStyle.paragraph if control.paragraph else discord.TextStyle.short,
+            default=control.default,
+            placeholder=control.placeholder,
+            min_length=control.minimum,
+            max_length=control.maximum,
+        )
         return component, lambda: component.value
-    if isinstance(field, ScaleField):
-        points = field.points
-        prefilled = None if prefill is None else str(field.format(prefill))
-        if len(points) <= 10:
+    if isinstance(control, ChoiceControl):
+        if control.kind == "select":
+            component = discord.ui.Select(
+                custom_id=field.key,
+                required=field.required,
+                min_values=control.minimum,
+                max_values=control.maximum,
+                options=[
+                    discord.SelectOption(
+                        label=option.label,
+                        value=option.key,
+                        description=option.description,
+                        default=option.default,
+                        emoji=discord_emoji(option.emoji),
+                    )
+                    for option in control.options
+                ],
+            )
+            if control.multiple:
+                return component, lambda: component.values
+            return component, lambda: component.values[0] if component.values else None
+        if control.kind == "radio":
             component = discord.ui.RadioGroup(
                 custom_id=field.key,
                 required=field.required,
                 options=[
                     discord.RadioGroupOption(
-                        label=_resolve(field.label_for(point), localization),
-                        value=str(point),
-                        default=str(point) == prefilled,
+                        label=option.label,
+                        value=option.key,
+                        description=option.description,
+                        default=option.default,
                     )
-                    for point in points
+                    for option in control.options
                 ],
             )
             return component, lambda: component.value
-        # Wider than Discord's radio group allows, so the honest fallback is the number
-        # itself; `ScaleField.parse` reads the typed value exactly as it reads a picked one.
-        component = discord.ui.TextInput(
-            custom_id=field.key,
-            style=discord.TextStyle.short,
-            default=prefilled,
-            placeholder=f"{field.minimum}\N{EN DASH}{field.maximum}",
-            required=field.required,
-        )
-        return component, lambda: component.value
-    if isinstance(field, ChoiceField):
-        if not 1 <= len(field.options) <= 25:
-            message = f"Discord choice field {field.key!r} needs 1-25 options"
-            raise LayoutInvariantError(message)
-        selected = field.format(prefill)
-        # Selects also support option counts outside the radio group's 2-10 range.
-        if not 2 <= len(field.options) <= 10 or any(option.emoji is not None for option in field.options):
-            component = discord.ui.Select(
-                custom_id=field.key,
-                min_values=1 if field.required else 0,
-                max_values=1,
-                required=field.required,
-                options=[
-                    discord.SelectOption(
-                        label=_resolve(option.label, localization),
-                        value=option.key,
-                        description=(
-                            _resolve(option.description, localization) if option.description is not None else None
-                        ),
-                        default=option.key == selected,
-                        emoji=discord_emoji(option.emoji),
-                    )
-                    for option in field.options
-                ],
-            )
-            return component, lambda: component.values[0] if component.values else None
-        component = discord.ui.RadioGroup(
-            custom_id=field.key,
-            required=field.required,
-            options=[
-                discord.RadioGroupOption(
-                    label=_resolve(option.label, localization),
-                    value=option.key,
-                    description=(
-                        _resolve(option.description, localization) if option.description is not None else None
-                    ),
-                    default=option.key == selected,
-                )
-                for option in field.options
-            ],
-        )
-        return component, lambda: component.value
-    if isinstance(field, MultiChoiceField):
-        if not 1 <= len(field.options) <= 25:
-            message = f"Discord multi-choice field {field.key!r} needs 1-25 options"
-            raise LayoutInvariantError(message)
-        selected = set(field.format(prefill))
-        maximum = len(field.options) if field.maximum is None else field.maximum
-        component = discord.ui.Select(
-            custom_id=field.key,
-            min_values=field.minimum,
-            max_values=maximum,
-            required=field.required,
-            options=[
-                discord.SelectOption(
-                    label=_resolve(option.label, localization),
-                    value=option.key,
-                    description=(
-                        _resolve(option.description, localization) if option.description is not None else None
-                    ),
-                    default=option.key in selected,
-                    emoji=discord_emoji(option.emoji),
-                )
-                for option in field.options
-            ],
-        )
-        return component, lambda: component.values
-    if isinstance(field, CheckboxGroupField):
-        selected = set(field.format(prefill))
         component = discord.ui.CheckboxGroup(
             custom_id=field.key,
-            min_values=field.minimum,
-            max_values=len(field.options) if field.maximum is None else field.maximum,
             required=field.required,
+            min_values=control.minimum,
+            max_values=control.maximum,
             options=[
                 discord.CheckboxGroupOption(
-                    label=_resolve(option.label, localization),
+                    label=option.label,
                     value=option.key,
-                    description=(
-                        _resolve(option.description, localization) if option.description is not None else None
-                    ),
-                    default=option.key in selected,
+                    description=option.description,
+                    default=option.default,
                 )
-                for option in field.options
+                for option in control.options
             ],
         )
         return component, lambda: component.values
-    if isinstance(field, BoolField):
-        component = discord.ui.Checkbox(custom_id=field.key, default=bool(prefill))
+    if isinstance(control, BooleanControl):
+        component = discord.ui.Checkbox(custom_id=field.key, default=control.default)
         return component, lambda: component.value
-    if isinstance(field, EntityField):
+    if isinstance(control, EntityControl):
         select_type = {
             EntityType.USER: discord.ui.UserSelect,
             EntityType.ROLE: discord.ui.RoleSelect,
             EntityType.CONVERSATION: discord.ui.ChannelSelect,
             EntityType.MENTIONABLE: discord.ui.MentionableSelect,
-        }[field.entity_type]
-        placeholder = _resolve(field.placeholder, localization) if field.placeholder is not None else None
-        defaults = _entity_defaults(prefill, field.entity_type)
+        }[control.entity_type]
         component = select_type(
             custom_id=field.key,
-            placeholder=placeholder,
-            min_values=field.minimum,
-            max_values=field.maximum,
             required=field.required,
-            default_values=defaults,
+            placeholder=control.placeholder,
+            min_values=control.minimum,
+            max_values=control.maximum,
+            default_values=[discord.SelectDefaultValue(id=key, type=kind) for key, kind in control.defaults],
         )
         return component, lambda: component.values
-    if isinstance(field, FileField):
-        if not 0 <= field.minimum <= field.maximum <= 10:
-            message = f"Discord file field {field.key!r} needs 0-10 files"
-            raise LayoutInvariantError(message)
-        component = discord.ui.FileUpload(
-            custom_id=field.key,
-            required=field.required,
-            min_values=field.minimum,
-            max_values=field.maximum,
-        )
-        return component, lambda: tuple(_uploaded_file(attachment) for attachment in component.values)
-    message = f"Discord has no adapter for form field {type(field).__name__}"
-    raise LayoutInvariantError(message)
+    assert isinstance(control, FileControl)
+    component = discord.ui.FileUpload(
+        custom_id=field.key,
+        required=field.required,
+        min_values=control.minimum,
+        max_values=control.maximum,
+    )
+    return component, lambda: tuple(_uploaded_file(attachment) for attachment in component.values)
 
 
 def _uploaded_file(attachment: discord.Attachment) -> UploadedFile:
@@ -517,14 +266,17 @@ def build_form_modal(
     using them as validated application values; mounted form dispatch does this for you.
     """
     require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
-    adapted = spec.adapt(
-        frozenset(
-            {Capability.FORMS_MODAL, EntityField.capability, FileField.capability, CheckboxGroupField.capability}
-        ),
-        maximum_fields=limits.modal_components,
-    )
-    modal = _FormModal(adapted, on_submit, timeout, localization)
-    interventions = conform_modal(modal, strict=strict, limits=limits)
-    if interventions:
-        logger.warning("form modal clamped: %s", "; ".join(interventions))
-    return modal
+    plan = plan_form(spec, localization=localization, limits=limits, strict=strict)
+    return render_form_modal(plan, on_submit=on_submit, timeout=timeout)
+
+
+def render_form_modal(
+    plan: DiscordFormPlan,
+    *,
+    on_submit: FormSubmitHandler,
+    timeout: float | None = None,
+) -> discord.ui.Modal:
+    """Instantiate a validated plan with fresh controls and submission readers."""
+    if plan.interventions:
+        logger.warning("form modal clamped: %s", "; ".join(plan.interventions))
+    return _FormModal(plan, on_submit, timeout)
