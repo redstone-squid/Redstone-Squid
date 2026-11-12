@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack, cast
 
 from squid_reactivity.completion import Completion
@@ -14,6 +15,7 @@ from squid_ui.interactions import ActionEvent as PortableActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.tasks import anyio, task_is_within
 from squid_ui.target_types import ComponentsV2Target
+from squid_ui_discord._shutdown import cleanup_outside_action
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.audience import Private
 from squid_ui_discord.closure import CloseReason
@@ -188,7 +190,12 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         state.opened = True
 
     async def _screen_opening_failed(self) -> None:
-        await self._screen_supervised_close(ScreenCancelReason.CLOSED)
+        state = self._screen_flow
+        if state.done.done:
+            return
+        scope = state.scope
+        host = None if scope is None else scope.runtime.execution_host
+        await cleanup_outside_action(partial(self._screen_close, ScreenCancelReason.CLOSED), host)
 
     def _screen_require_root(self) -> MessageRoot:
         root = self._screen_flow.root
@@ -333,33 +340,6 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         await child._screen_opening_failed()
         assert isinstance(result, Rejected | Abandoned)
         return result
-
-    async def _screen_supervised_close(self, reason: ScreenCancelReason) -> None:
-        """Run rejection cleanup outside an opening action's transaction."""
-        state = self._screen_flow
-        if state.done.done:
-            return
-        scope = state.scope
-        host = None if scope is None else scope.runtime.execution_host
-        current = CURRENT_TRANSACTION.get()
-        if current is None or current.closed or host is None:
-            await self._screen_close(reason)
-            return
-        done = Completion[Exception | None]()
-
-        async def cleanup() -> None:
-            error: Exception | None = None
-            try:
-                await self._screen_close(reason)
-            except Exception as caught:
-                error = caught
-            finally:
-                done.resolve(error)
-
-        host.start_cleanup(cleanup)
-        error = await done.wait()
-        if error is not None:
-            raise error
 
     async def _screen_close(self, reason: ScreenCancelReason) -> None:
         state = self._screen_flow

@@ -12,11 +12,10 @@ from typing import TYPE_CHECKING, Any, Unpack, cast
 import anyio
 import discord
 
-from squid_reactivity.completion import Completion
-from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui import paragraph
 from squid_ui.runtime.component import Component
 from squid_ui.text import Localization
+from squid_ui_discord._shutdown import cleanup_outside_action
 from squid_ui_discord.audience import Audience
 from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
@@ -351,36 +350,12 @@ class Scope[OwnerT = Any]:
             if not opened:
                 with anyio.CancelScope(shield=True):
                     try:
-                        await self._discard_root(root)
+                        await cleanup_outside_action(root.finish, root.config.execution_host)
                     except BaseException as cleanup_error:
                         if opening_error is not None:
                             message = "presentation and cleanup failed"
                             raise BaseExceptionGroup(message, [opening_error, cleanup_error]) from None
                         raise
-
-    async def _discard_root(self, root: MessageRoot) -> None:
-        """Release an unsuccessful presentation outside its opener's transaction."""
-        current = CURRENT_TRANSACTION.get()
-        if current is None or current.closed:
-            await root.finish()
-            return
-        done = Completion[Exception | None]()
-
-        async def cleanup() -> None:
-            error: Exception | None = None
-            try:
-                await root.finish()
-            except Exception as caught:
-                error = caught
-            finally:
-                done.resolve(error)
-
-        host = root.config.execution_host
-        assert host is not None
-        host.start_cleanup(cleanup)
-        error = await done.wait()
-        if error is not None:
-            raise error
 
     def _root_options(self, policy: ResolvedResponse, localization: Localization) -> MessageRootBehaviorOptions:
         options: MessageRootBehaviorOptions = {}

@@ -6,10 +6,39 @@ from collections.abc import Awaitable, Callable
 
 import anyio
 
+from squid_reactivity.completion import Completion
+from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.runtime.tasks import task_is_within
 
 _logger = logging.getLogger(__name__)
+
+
+async def cleanup_outside_action(work: Callable[[], Awaitable[None]], host: UIExecutionHost | None) -> None:
+    """Run failed-opening cleanup without inheriting its caller's pending transaction.
+
+    Inside an action the host owns the work; cancelling the waiter does not cancel cleanup.
+    Outside an action, cleanup runs in the caller's existing cancellation scope.
+    """
+    current = CURRENT_TRANSACTION.get()
+    if current is None or current.closed or host is None:
+        await work()
+        return
+    done = Completion[Exception | None]()
+
+    async def cleanup() -> None:
+        error: Exception | None = None
+        try:
+            await work()
+        except Exception as caught:
+            error = caught
+        finally:
+            done.resolve(error)
+
+    host.start_cleanup(cleanup)
+    error = await done.wait()
+    if error is not None:
+        raise error
 
 
 class Shutdown:
