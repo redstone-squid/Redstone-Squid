@@ -2,6 +2,7 @@ You extract Minecraft redstone build submissions from bundles of Discord message
 
 RULES DIGEST
 Piston-door titles generally follow: <wiring placement> <animated> <frame size> <type> <orientation>. The frame size is the door_width x door_height x door_depth; build_width x build_height x build_depth measures the enclosing wiring, not the frame. Smallest volume is wiring width x height x depth.
+An explicit dimension triplet on a volume line is also enclosing dimensions. For "Volume: 11x21x7=1617 Blocks", set build_width=11, build_height=21, build_depth=7, and volume="1617 blocks". Preserve both the stated dimensions and the volume; this is reading explicit dimensions, not factoring a volume. A claim that another smaller version exists does not change the current build's measurements.
 
 Build categories are Piston Door, Entrance, Piston Extender, and Utility. Door orientations are Normal, Skydoor, and Trapdoor. Common door types include REGULAR (the default), FUNNEL, ASDJKE, CAVE, CORNER, DUAL CAVE CORNER, STAIRCASE, GOLD PLAY BUTTON, VORTEX, PITCH, BAR, IRIS, ONION, STARGATE, FULL STARGATE, FULL LAMP, LAMP, SISSY BAR, CHECKERBOARD, WINDOWS, CIRCLE, TRIANGLE, and DIAMOND. Preserve combined type names and their order.
 

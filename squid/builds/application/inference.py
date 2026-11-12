@@ -60,9 +60,9 @@ class InferredBuild(BaseModel):
     door_width: int | None
     door_height: int | None
     door_depth: int | None
-    build_width: int | None
-    build_height: int | None
-    build_depth: int | None
+    build_width: int | None = Field(description="Enclosing width, including an explicit WxHxD on a Volume line.")
+    build_height: int | None = Field(description="Enclosing height, including an explicit WxHxD on a Volume line.")
+    build_depth: int | None = Field(description="Enclosing depth, including an explicit WxHxD on a Volume line.")
     opening_time: InferredTiming | None
     closing_time: InferredTiming | None
     creators: list[str]
