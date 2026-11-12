@@ -347,11 +347,12 @@ def _form_component(
         )
         return component, lambda: component.value
     if isinstance(field, ChoiceField):
-        if not 2 <= len(field.options) <= 10:
-            message = f"Discord choice field {field.key!r} needs 2-10 options"
+        if not 1 <= len(field.options) <= 25:
+            message = f"Discord choice field {field.key!r} needs 1-25 options"
             raise LayoutInvariantError(message)
         selected = field.format(prefill)
-        if any(option.emoji is not None for option in field.options):
+        # Selects also support option counts outside the radio group's 2-10 range.
+        if not 2 <= len(field.options) <= 10 or any(option.emoji is not None for option in field.options):
             component = discord.ui.Select(
                 custom_id=field.key,
                 min_values=1 if field.required else 0,

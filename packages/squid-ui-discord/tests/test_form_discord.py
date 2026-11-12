@@ -1,7 +1,7 @@
 """Discord form presentation, submission funnel, and validation retry."""
 
 import asyncio
-from typing import cast, override
+from typing import Literal, cast, override
 from unittest.mock import AsyncMock, Mock
 
 import anyio
@@ -163,6 +163,62 @@ def test_modal_budget_rejects_implicit_chunking() -> None:
 
     with pytest.raises(sl.errors.LayoutInvariantError, match="1-5"):
         build_form_modal(spec, on_submit=_ignore_raw)
+
+
+@pytest.mark.parametrize("count", [1, 2, 10, 11, 25])
+@pytest.mark.parametrize("required", [False, True])
+async def test_choice_option_counts_preserve_defaults_and_submission[RequiredT: (Literal[True], Literal[False])](
+    count: int, required: RequiredT
+) -> None:
+    submitted: dict[str, object] = {}
+
+    async def capture(_interaction: discord.Interaction, values: dict[str, object]) -> None:
+        submitted.update(values)
+
+    field = sl.forms.ChoiceField(
+        key="setting",
+        label="Setting",
+        required=required,
+        options=tuple(sl.forms.ChoiceOption(f"choice-{index}", f"Choice {index}", index) for index in range(count)),
+    )
+    modal = build_form_modal(sl.forms.FormSpec("Settings", (field,), prefill={"setting": count - 1}), on_submit=capture)
+    component = _component(modal)
+    selected = f"choice-{count - 1}"
+    if 2 <= count <= 10:
+        assert isinstance(component, discord.ui.RadioGroup)
+        component._value = selected
+    else:
+        assert isinstance(component, discord.ui.Select)
+        assert component.min_values == int(required)
+        assert component.max_values == 1
+        component._values = [selected]
+    assert component.required is required
+    assert [option.value for option in component.options if option.default] == [selected]
+
+    await modal.on_submit(interaction_harness())
+
+    assert submitted == {"setting": selected}
+    assert field.parse(submitted["setting"]) == count - 1
+    if not required:
+        if isinstance(component, discord.ui.Select):
+            component._values = []
+        else:
+            component._value = None
+        await modal.on_submit(interaction_harness())
+        assert submitted == {"setting": None}
+        assert field.parse(submitted["setting"]) is None
+
+
+@pytest.mark.parametrize("count", [0, 26])
+def test_choice_rejects_unsupported_option_counts(count: int) -> None:
+    field = sl.forms.ChoiceField(
+        key="setting",
+        label="Setting",
+        options=tuple(sl.forms.ChoiceOption(str(index), f"Choice {index}", index) for index in range(count)),
+    )
+
+    with pytest.raises(sl.errors.LayoutInvariantError, match="1-25"):
+        build_form_modal(sl.forms.FormSpec("Settings", (field,)), on_submit=_ignore_raw)
 
 
 def test_multi_choice_builds_select_cardinality_and_defaults() -> None:
