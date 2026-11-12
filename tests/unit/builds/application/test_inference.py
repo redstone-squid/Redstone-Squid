@@ -16,6 +16,9 @@ from squid.builds.application import (
     InlineImage,
 )
 from squid.builds.domain import RestrictionTypeLiteral
+from squid.submissions.application.forms import build_submission_manifest
+from squid.submissions.application.prefill import project_submission
+from squid.submissions.domain import SubmissionOrigin
 from squid.versions.errors import InvalidVersionError
 
 
@@ -35,8 +38,8 @@ def inferred(**overrides: Any) -> InferredBuild:
         "build_width": 8,
         "build_height": 9,
         "build_depth": 10,
-        "opening_time": "1.0s",
-        "closing_time": "0.5s",
+        "opening_time": {"value": "1.0s", "qualifier": None},
+        "closing_time": {"value": "0.5s", "qualifier": None},
         "creators": ["BuilderOne", "BuilderTwo"],
         "version_spec": "1.20+",
         "author_note": "first line\nsecond line",
@@ -66,6 +69,9 @@ class FakeTextGenerator:
 
 
 class FakeTaxonomy:
+    async def inference_vocabulary(self) -> str:
+        return '{"component": ["No Observers"]}'
+
     async def validate_restrictions(
         self,
         restrictions: list[str],
@@ -111,7 +117,7 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
 
     assert len(builds) == 1
     build = builds[0]
-    assert generator.calls[0][0] == "system prompt"
+    assert generator.calls[0][0] == 'system prompt\n\nAPPROVED TAXONOMY\n{"component": ["No Observers"]}'
     assert '<message id="10" author="Builder"' in generator.calls[0][1]
     assert generator.calls[0][2:] == (InferenceResult, "test-model", (), "low")
     # Both primary messages are retained in submission order, each keeping its own
@@ -120,6 +126,7 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert [message.content for message in build.source_messages] == ["A redstone door", "and it is fast"]
     assert build.source_messages[0].channel_id == 30
     assert build.source_messages[0].guild_id == 40
+    assert str(build.source_messages[0].created_at) == "2026-01-01T00:00:00Z"
     assert build.category is not None
     assert build.category.value == "Door"
     assert build.door_dimensions == (3, 4, 1)
@@ -133,6 +140,8 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert build.version_spec == "1.20+"
     assert build.versions == ["Java 1.20.0", "Java 1.21.0"]
     assert build.description == "first line\nsecond line"
+    assert build.normal_opening_time == 20
+    assert build.normal_closing_time == 10
 
 
 async def test_infer_returns_multiple_or_no_builds() -> None:
@@ -207,3 +216,114 @@ async def test_invalid_version_preserves_candidates_for_review(
     assert builds[0].version_spec == "Java unknown"
     assert builds[0].versions == []
     assert builds[1].versions == ["Java 1.20.0"]
+
+
+async def test_qualified_timings_and_volume_survive_submission_prefill() -> None:
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        opening_time={"value": "1.05s", "qualifier": "no input delay"},
+                        closing_time={"value": "1.35s", "qualifier": "+ 3-gt input delay"},
+                        volume="936 blocks",
+                        completion_time="Feb 2, 2020",
+                        display_name="Smallest 1.05s Seamless 5x5 Piston Door",
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+
+    (build,) = await service.infer(source(), model="model")
+    prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+
+    assert prefill.answers["opening_time"] == 21
+    assert prefill.answers["closing_time"] == 27
+    assert prefill.answers["completion"] == "Feb 2, 2020"
+    assert prefill.answers["display_name"] == "Smallest 1.05s Seamless 5x5 Piston Door"
+    assert "Opening: 1.05s; no input delay" in str(prefill.answers["description"])
+    assert "Closing: 1.35s; + 3-gt input delay" in str(prefill.answers["description"])
+    assert "Reported volume: 936 blocks" in str(prefill.answers["description"])
+    assert "936 blocks" not in str(build.extra_info)
+
+
+async def test_unparseable_timings_and_ambiguous_claims_remain_reviewable() -> None:
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        opening_time={"value": "between 1 and 2 seconds", "qualifier": None},
+                        review_notes=["Unclear whether flush + funnel describes one build or two variants."],
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+
+    (build,) = await service.infer(source(), model="model")
+
+    assert build.normal_opening_time is None
+    assert build.description is not None
+    assert "Opening: between 1 and 2 seconds" in build.description
+    assert "Needs review: Unclear whether flush + funnel" in build.description
+
+
+async def test_source_links_survive_prefill_without_inventing_or_inheriting_urls() -> None:
+    url = "https://youtu.be/8j1c4iGM3yI"
+    reddit = "https://www.reddit.com/r/redstone/comments/example/"
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        links=[
+                            {"url": url, "media_type": "video"},
+                            {"url": url, "media_type": "video"},
+                            {"url": reddit, "media_type": None},
+                            {"url": "https://example.com/invented", "media_type": "image"},
+                        ],
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+    inputs = BuildInferenceInput.from_single_message(
+        author_name="Builder",
+        content=f"6x6 door\n{url}\n{reddit}",
+        message_id=10,
+        author_id=20,
+        channel_id=30,
+        server_id=40,
+    )
+
+    (build,) = await service.infer(inputs, model="model")
+    prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+
+    assert [(link.url, link.media_type) for link in build.links] == [(url, "video")]
+    assert str(prefill.answers["description"]).count(url) == 1
+    assert reddit in str(prefill.answers["description"])
+    assert "invented" not in str(prefill.answers["description"])
+
+
+async def test_utility_does_not_acquire_a_door_orientation() -> None:
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(build_category="Utility", door_orientation=None)])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+
+    (build,) = await service.infer(source(), model="model")
+
+    assert build.door_orientation is None

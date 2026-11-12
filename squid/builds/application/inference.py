@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from html import escape
 from typing import Literal, Protocol, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from whenever import Instant
 
 from squid.builds.domain import (
     BuildCategory,
@@ -17,11 +18,30 @@ from squid.builds.domain import (
     UnresolvedTaxonomy,
     parse_time_string,
 )
+from squid.builds.models import BuildLink
 from squid.core.concurrency import run_all_awaitables
 from squid.messages.domain import MessageSnapshot
 from squid.versions.errors import InvalidVersionError
 
 logger = logging.getLogger(__name__)
+
+
+class InferredTiming(BaseModel):
+    """One measured duration and any qualifications attached to that measurement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: str | None = Field(description="One duration with a unit, such as 1.35s or 27gt; no prose or arithmetic.")
+    qualifier: str | None = Field(description="Input delay, estimates, or other qualifications copied from the source.")
+
+
+class InferredLink(BaseModel):
+    """A source URL and its media type when the text establishes one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    media_type: Literal["image", "video", "world-download"] | None
 
 
 class InferredBuild(BaseModel):
@@ -43,12 +63,17 @@ class InferredBuild(BaseModel):
     build_width: int | None
     build_height: int | None
     build_depth: int | None
-    opening_time: str | None
-    closing_time: str | None
+    opening_time: InferredTiming | None
+    closing_time: InferredTiming | None
     creators: list[str]
     version_spec: str | None
     author_note: str | None
     confidence: Literal["high", "medium", "low"]
+    display_name: str | None = Field(default=None, description="An explicit build title or name from the source.")
+    volume: str | None = Field(default=None, description="Reported volume or size formula; never a restriction.")
+    completion_time: str | None = Field(default=None, description="Explicit completion/design date, not a record date.")
+    links: list[InferredLink] = Field(default_factory=list)
+    review_notes: list[str] = Field(default_factory=list, description="Unresolved interpretations requiring review.")
 
 
 class InferenceResult(BaseModel):
@@ -145,6 +170,8 @@ class BuildTaxonomy(Protocol):
 
     async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]: ...
 
+    async def inference_vocabulary(self) -> str: ...
+
 
 class VersionResolver(Protocol):
     """Resolve build version specifications."""
@@ -181,8 +208,9 @@ class BuildInferenceService:
         for review. A missing model result returns an empty list; provider and
         validation errors propagate to the caller.
         """
+        vocabulary = await self._taxonomy.inference_vocabulary()
         result = await self._generator.generate(
-            self._system_prompt,
+            f"{self._system_prompt}\n\nAPPROVED TAXONOMY\n{vocabulary}",
             self._render_user_message(source),
             InferenceResult,
             model=model,
@@ -215,6 +243,7 @@ class BuildInferenceService:
                         channel_id=source.channel_id,
                         author_id=message.author_id,
                         content=message.content,
+                        created_at=Instant.parse_iso(message.timestamp) if message.timestamp else None,
                     )
                     for message in resolved
                 ),
@@ -295,13 +324,22 @@ class BuildInferenceService:
         }
         build.category = categories[inferred.build_category] if inferred.build_category is not None else None
         orientation = inferred.door_orientation
-        build.door_orientation = (
-            "Door" if orientation is None or orientation == "Normal" else cast(DoorOrientationLiteral, orientation)
-        )
+        build.door_orientation = "Door" if orientation == "Normal" else cast(DoorOrientationLiteral | None, orientation)
         build.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
         build.dimensions = (inferred.build_width, inferred.build_height, inferred.build_depth)
-        build.normal_opening_time = parse_time_string(inferred.opening_time)
-        build.normal_closing_time = parse_time_string(inferred.closing_time)
+        notes = [inferred.author_note] if inferred.author_note else []
+        for label, timing, attribute in (
+            ("Opening", inferred.opening_time, "normal_opening_time"),
+            ("Closing", inferred.closing_time, "normal_closing_time"),
+        ):
+            if timing is None:
+                continue
+            parsed = parse_time_string(timing.value)
+            setattr(build, attribute, parsed)
+            if timing.qualifier or (timing.value is not None and parsed is None):
+                # Keep qualifications and unparseable measurements through form prefill,
+                # which carries the description but not arbitrary extra_info metadata.
+                notes.append(f"{label}: {'; '.join(part for part in (timing.value, timing.qualifier) if part)}")
         build.creators_ign = inferred.creators
         build.version_spec = (inferred.version_spec or "").strip() or None
         if build.version_spec is not None:
@@ -314,5 +352,18 @@ class BuildInferenceService:
                     "Could not resolve inferred version specification %r; retained for review", build.version_spec
                 )
 
-        if inferred.author_note is not None:
-            build.description = inferred.author_note
+        build.display_name = inferred.display_name
+        build.completion_time = inferred.completion_time
+        if inferred.volume:
+            notes.append(f"Reported volume: {inferred.volume}")
+        for link in inferred.links:
+            if not any(link.url in (message.content or "") for message in build.source_messages):
+                continue
+            if link.media_type is not None and all(existing.url != link.url for existing in build.links):
+                build.links.append(BuildLink(link.url, link.media_type))
+            # Submission forms collect uploaded media rather than external URLs, so
+            # retain references in the description as well as the candidate's links.
+            if not any(link.url in note for note in notes):
+                notes.append(f"Reference: {link.url}")
+        notes.extend(f"Needs review: {note}" for note in inferred.review_notes)
+        build.description = "\n".join(notes) or None

@@ -1,5 +1,6 @@
 """Read and validate official build taxonomy in short database scopes."""
 
+import json
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -7,6 +8,7 @@ from async_lru import alru_cache
 
 from squid.builds.application.taxonomy import TaxonomyResolution
 from squid.builds.domain import RestrictionTypeLiteral, normalize_tag_name
+from squid.core.concurrency import run_all_awaitables
 from squid.tags.models import TagDefinition
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
@@ -58,6 +60,14 @@ class BuildTaxonomyService:
     async def get_valid_door_types(self) -> Sequence[str]:
         async with self._uow_factory() as uow:
             return await uow.build_taxonomy.get_valid_door_types()
+
+    async def inference_vocabulary(self) -> str:
+        """Return the current approved names, grouped by the inference fields."""
+        types: tuple[RestrictionTypeLiteral, ...] = ("component", "wiring-placement", "animated", "miscellaneous")
+        results = await run_all_awaitables(
+            [*(self.get_valid_restrictions(type) for type in types), self.get_valid_door_types()]
+        )
+        return json.dumps(dict(zip((*types, "patterns"), results, strict=True)))
 
     async def resolve_official(
         self, *, build_kind: str | None, restrictions: Sequence[str], patterns: Sequence[str]
