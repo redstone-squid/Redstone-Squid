@@ -300,10 +300,19 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Register application-wide FastAPI exception handlers."""
-    from squid.api.idempotency import IdempotencyReplay, replay_response
+    from squid.api.idempotency import IdempotencyReplay, complete_failed_request, replay_response
 
     app.add_exception_handler(IdempotencyReplay, replay_response)
     app.add_exception_handler(SquidError, handle_squid_error)
     app.add_exception_handler(RequestValidationError, handle_request_validation_error)
     app.add_exception_handler(StarletteHTTPException, handle_http_error)
-    app.add_exception_handler(Exception, handle_unexpected_error)
+
+    async def unexpected_error(request: Request, exc: Exception) -> Response:
+        response = await handle_unexpected_error(request, exc)
+        try:
+            return await complete_failed_request(request, response)
+        except Exception:
+            logger.exception("Could not retain an idempotent failure response")
+            return response
+
+    app.add_exception_handler(Exception, unexpected_error)

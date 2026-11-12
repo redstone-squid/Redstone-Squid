@@ -472,3 +472,29 @@ def test_lost_edit_response_reuses_the_original_outcome_and_checks_if_match() ->
     assert attempts[0] == attempts[1]
     assert state.value.revision == 2
     assert len(state.value.outcomes) == 1
+
+
+@pytest.mark.parametrize("recoverable", [False, True])
+def test_unhandled_failure_replays_without_repeating_an_ordinary_write(recoverable: bool) -> None:
+    repository = MemoryIdempotencyRepository()
+    service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
+    app, _database = build_app(idempotency=service)
+    calls = 0
+
+    @app.post(
+        "/failing-write", dependencies=[Depends(reserve_edit_request if recoverable else reserve_idempotent_request)]
+    )
+    async def failing_write() -> None:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("failed after committing")
+
+    headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "failed-write"}
+    with TestClient(app, raise_server_exceptions=False) as client:
+        first = client.post("/failing-write", headers=headers)
+        second = client.post("/failing-write", headers=headers)
+    assert first.status_code == 500
+    assert second.status_code == 500
+    assert calls == (2 if recoverable else 1)
+    if not recoverable:
+        assert first.content == second.content

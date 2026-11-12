@@ -179,6 +179,21 @@ class CompleteIdempotentResponseMiddleware:
             await send(message)
 
 
+async def complete_failed_request(request: Request, response: Response) -> Response:
+    """Retain a terminal failure when an ordinary handler may already have committed."""
+    pending = getattr(request.state, _STATE_KEY, None)
+    if not isinstance(pending, IdempotencyReservationState) or pending.recoverable:
+        return response
+    stored = StoredResponse(
+        status_code=response.status_code,
+        headers=tuple((key, value) for key, value in response.headers.items() if key in _REPLAYED_HEADERS),
+        body=bytes(response.body),
+    )
+    with CancelScope(shield=True):
+        stored = await pending.service.complete(pending.request, stored)
+    return Response(content=stored.body, status_code=stored.status_code, headers=dict(stored.headers))
+
+
 def assert_idempotency_completion_installed(app: FastAPI) -> None:
     """Fail application construction when reservation has no completion middleware."""
     if not any(middleware.cls is CompleteIdempotentResponseMiddleware for middleware in app.user_middleware):
