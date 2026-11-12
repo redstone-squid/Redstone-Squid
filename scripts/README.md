@@ -14,6 +14,44 @@ The scripts in `migrations/` are used to provide additional information accompan
 
 `just dependency-report` exports a CycloneDX 1.5 software bill of materials from `uv.lock`. `just gha-analysis` analyzes GitHub Actions workflows with `zizmor` and requires an authenticated `gh` CLI. `just visualize-dependencies` writes an SVG dependency graph to `docs/dependencies.svg`.
 
+## Historical build-log imports
+
+`populate_db_with_logs_historical_messages.py` imports consenting authors' messages through
+retained inference and submission drafts. It uses the normal bot process configuration for
+Discord, the database, inference, and artifact storage. Without `--channel-id`, it reads the
+configured build-log channels; repeat the option to select multiple channels. The bot needs
+access to those channels and their message history, with Message Content enabled in Discord.
+
+Start with a bounded preview (replace the channel ID and dates):
+
+```sh
+uv run --locked python scripts/populate_db_with_logs_historical_messages.py \
+  --channel-id 123456789012345678 \
+  --after 2026-01-01T00:00:00Z --before 2026-02-01T00:00:00Z \
+  --limit 50 --concurrency 2 --dry-run
+```
+
+A dry run calls the configured model and logs inferred candidates, so it incurs inference
+costs, but saves no accounts, inference inputs, candidates, or drafts. `--no-images` disables
+visual inference inputs. Authors without current consent are skipped in both modes.
+
+Remove `--dry-run` to retain candidates and request shared finalization. Run the normal worker
+to finish queued submissions; ambiguous files or missing fields remain available for review.
+The `processed` count means intake returned successfully, not that a build was finalized.
+The script does not start the bot gateway or post progress messages to Discord.
+
+History is streamed oldest first. Consecutive messages from one author are grouped up to eight
+messages with gaps of at most five minutes; author changes and replies outside the group split
+it. The three preceding messages and reply ancestors provide context. `--group-window` and
+`--group-max-messages` adjust grouping. `--limit` counts all messages read, including bot posts.
+Bounds are exclusive and accept timezone-aware ISO timestamps or message snowflakes.
+
+Use fixed date bounds and the same grouping options and limit when retrying: ordered primary
+message IDs identify retained runs. Completed inference results are reused, failed inference is retried, and edited drafts are preserved. Changing bounds or grouping can create different bundles. Runs are subject to the
+normal retention period and capacity limits. When no retained run exists, already imported
+bundles are skipped; partially imported bundles fail for manual inspection and narrower bounds.
+Bundle failures are logged while other bundles continue, and cause a nonzero exit status.
+
 ## Termux
 
 From the repository root, run `sh scripts/termux.sh` to install the locked dependencies.
