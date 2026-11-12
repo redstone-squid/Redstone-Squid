@@ -8,6 +8,7 @@ from html import escape
 
 from squid_ui import scene
 from squid_ui.assets import Asset, InlineAsset, StoredAsset
+from squid_ui.entity import EntityKind, EntityRef
 from squid_ui.errors import DrawInvariantError
 from squid_ui.html._safety import attribute as _attribute
 from squid_ui.html._safety import safe_url as _safe_url
@@ -248,6 +249,35 @@ class DiscordPreviewRenderer:
                     f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
                     f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
                 )
+            case scene.EntitySelect(
+                entity_type=entity_type,
+                action=action,
+                placeholder=placeholder,
+                default_values=defaults,
+                min_values=minimum,
+                max_values=maximum,
+                disabled=disabled,
+                mode=mode,
+            ):
+                # Discord fills entity pickers from the guild, so the preview can only show the
+                # current values, written as the mentions Discord would display for them.
+                disabled_attribute = " disabled" if disabled else ""
+                multiple = " multiple" if maximum > 1 else ""
+                prompt = (
+                    f'<option value="" disabled{"" if defaults else " selected"}>{escape(placeholder)}</option>'
+                    if placeholder is not None
+                    else ""
+                )
+                rendered = "".join(
+                    f'<option value="{_attribute(str(ref.id))}" selected>{escape(_mention(ref))}</option>'
+                    for ref in defaults
+                )
+                return (
+                    f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
+                    f'data-squid-entity="{entity_type.value}" data-squid-mode="{mode.value}" '
+                    f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
+                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
+                )
             case scene.Thumbnail(url=url, description=description, spoiler=spoiler):
                 safe = _safe_url(url)
                 if safe is None:
@@ -270,3 +300,8 @@ class DiscordPreviewRenderer:
                 )
         message = f"DiscordPreviewRenderer cannot draw scene node {type(node).__name__}"
         raise DrawInvariantError(message)
+
+
+def _mention(ref: EntityRef) -> str:
+    prefix = {EntityKind.USER: "@", EntityKind.ROLE: "@&", EntityKind.CONVERSATION: "#"}[ref.kind]
+    return f"<{prefix}{ref.id}>"

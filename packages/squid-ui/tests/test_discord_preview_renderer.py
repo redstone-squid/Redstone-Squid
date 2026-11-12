@@ -6,6 +6,7 @@ from typing import cast
 import pytest
 
 from squid_ui import scene
+from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import DrawInvariantError
 from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.interactions import ActionMode
@@ -72,3 +73,21 @@ def test_standalone_preview_includes_discord_like_css() -> None:
 def test_html_preview_rejects_an_unknown_target_version() -> None:
     with pytest.raises(DrawInvariantError, match=r"target version 99"):
         DiscordPreviewRenderer().draw(replace(_scene(), target_version=99))
+
+
+def test_entity_select_shows_its_current_values_as_mentions() -> None:
+    from_guild = scene.EntitySelect(
+        EntityType.CONVERSATION,
+        "settings.channel",
+        placeholder="Choose a channel",
+        default_values=(EntityRef(EntityKind.CONVERSATION, 42),),
+    )
+    empty = scene.EntitySelect(EntityType.ROLE, "settings.role", placeholder="Choose a role")
+    document = replace(_scene(), body=scene.ComponentsV2((from_guild, empty)))
+
+    rendered = DiscordPreviewRenderer().draw(document)
+
+    assert '<option value="42" selected>&lt;#42&gt;</option>' in rendered
+    assert '<option value="" disabled>Choose a channel</option>' in rendered
+    assert '<option value="" disabled selected>Choose a role</option>' in rendered
+    assert 'data-squid-entity="role"' in rendered
