@@ -14,7 +14,7 @@ each message root's access policy still decides who may interact with it.
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Hashable, Iterator, Sequence
-from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum, StrEnum
@@ -775,24 +775,7 @@ class SessionManager:
             message = "SessionManager.open requires a MessageRoot; use MessageRootDefaults.mount or SessionSpec.open"
             raise TypeError(message)
 
-        if key is None:
-            return await self._open_locked(
-                message_root,
-                message_destination,
-                key=None,
-                admission=admission,
-                actor_id=actor_id,
-                durable=durable,
-                local=local,
-                snapshot=snapshot,
-                capacity=capacity,
-                quota=quota,
-                domain=domain,
-                remote_occupants=(),
-                before_registration=None,
-                session_type=Session,
-            )
-        async with self._lock_for(key):
+        async with self._lock_for(key) if key is not None else nullcontext():
             return await self._open_locked(
                 message_root,
                 message_destination,

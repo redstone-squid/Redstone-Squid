@@ -276,26 +276,18 @@ class Scope[OwnerT = Any]:
         access = self._access(policy, actor_id)
         options = self._root_options(policy, localization)
         session_spec = self._setting(policy.session, default=None)
-        captured: DeliveryResult | None = None
-
-        async def capture(payload: MessagePayload) -> DeliveryResult:
-            nonlocal captured
-            captured = await destination(payload)
-            return captured
-
         if session_spec is None:
             if parent is not None or session_key is not None:
                 message = "parent= and session_key= require a response session policy"
                 raise TypeError(message)
             root = self._runtime.mount(content, access=access, **options)
             if isinstance(content, Screen):
-                content._screen_bind(root, None)
-            result = await root.send(capture)
+                content._screen_bind(root)
+            result = await root.send(destination)
             if isinstance(result, DeliveryAbandoned):
                 return Abandoned()
             self._runtime._track(self, root)
-            assert captured is not None
-            return Presented(content, root, None, captured)
+            return Presented(content, root, None, result.result)
         if source is None:
             message = "session delivery requires a source identifying its actor and guild"
             raise TypeError(message)
@@ -305,7 +297,14 @@ class Scope[OwnerT = Any]:
         root = self._runtime.mount(content, access=access, **options)
         parent_session = self._runtime.sessions.session_for(parent) if parent is not None else None
         if isinstance(content, Screen):
-            content._screen_bind(root, parent_session)
+            content._screen_bind(root)
+        captured: DeliveryResult | None = None
+
+        async def capture(payload: MessagePayload) -> DeliveryResult:
+            nonlocal captured
+            captured = await destination(payload)
+            return captured
+
         if parent is None:
             result = await self._runtime.sessions.open(
                 root,

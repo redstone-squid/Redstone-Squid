@@ -167,8 +167,7 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         state.scope = scope
         state.opening = opening
 
-    def _screen_bind(self, root: MessageRoot, session: Session | None) -> None:
-        del session  # Session membership is indexed by the host before initial loading.
+    def _screen_bind(self, root: MessageRoot) -> None:
         state = self._screen_flow
         if not state.claimed or state.closing or state.root is not None:
             msg = "screen cannot bind another root or bind after closure"
