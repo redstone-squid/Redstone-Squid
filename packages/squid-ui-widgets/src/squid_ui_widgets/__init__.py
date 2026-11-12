@@ -68,6 +68,7 @@ from squid_ui_widgets.tally import TallyOption
 from squid_ui_widgets.wizard import (
     REVIEW_STEP,
     Wizard,
+    WizardActions,
     WizardAnswer,
     WizardAnswers,
     WizardFinishHandler,
@@ -139,6 +140,7 @@ __all__ = [
     "TransitionHandler",
     "TransitionRoute",
     "Wizard",
+    "WizardActions",
     "WizardAnswer",
     "WizardAnswers",
     "WizardFinishHandler",

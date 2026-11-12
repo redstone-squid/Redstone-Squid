@@ -1,17 +1,20 @@
 """Pure transitions and content for branching forms."""
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 from squid_ui.document import DocumentLike
-from squid_ui.factories import action_controls, field, fields, heading, progress, stack
+from squid_ui.factories import action_controls, field, fields, heading, note, progress, stack
 from squid_ui.forms import Form, FormField, FormLike, FormSpec
-from squid_ui.semantic import ActionControl, ControlDisplay, FormTrigger, LayoutNode, RoutedActionControl, Tone
+from squid_ui.semantic import ActionControl, ControlDisplay, LayoutNode, Link, RoutedActionControl, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import FormValues, MachineControls, TransitionEvent
+
+type WizardActions[ContextT = object] = Callable[[], Sequence[ActionControl[ContextT] | Link | RoutedActionControl]]
+"""Controls of the screen that hosts a wizard, called on each render."""
 
 REVIEW_STEP = "@review"
 """The reserved `WizardState.current` value naming the review screen rather than a step."""
@@ -36,6 +39,8 @@ class WizardReview[RenderTargetT: RenderTarget = RenderTarget, ContextT = object
     """Heading and control wording for the review destination; `None` uses chrome."""
     summarize: Callable[[WizardAnswers], ContentLike[RenderTargetT, ContextT]] | None = None
     """Replace the default per-step rows with content of your own."""
+    note: TextLike | None = None
+    """Shown just above Finish, for example to say that finishing cannot be undone."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +102,9 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     ``review=True`` adds a final overview with controls to revisit answers. An iterable of
     steps must be reusable across renders. Submissions must already be parsed and validated
     by the form pipeline.
+
+    ``actions`` adds the hosting screen's own controls, such as Undo or Cancel, after the
+    wizard's Back, Next, and Finish, so the screen keeps a single row of controls at the end.
     """
 
     def __init__(
@@ -106,8 +114,10 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         *,
         key: str = "wizard",
         review: WizardReview[RenderTargetT, ContextT] | bool = False,
+        actions: WizardActions[ContextT] | None = None,
     ) -> None:
         self.key = require_key(key, name="Wizard.key")
+        self.actions = actions
         self.title = title
         self.steps = steps
         self.review: WizardReview[RenderTargetT, ContextT] | None = (
@@ -308,6 +318,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             )
             if steps
             else None,
+            note(review.note) if review.note is not None else None,
             action_controls(
                 controls.action_control(
                     controls.chrome.finish,
@@ -316,10 +327,14 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
                     tone=Tone.SUCCESS,
                     available=self.answered(state),
                 ),
+                *self._host_actions(),
                 key=f"{self.key}.chrome",
                 display=ControlDisplay.INDIVIDUAL,
             ),
         )
+
+    def _host_actions(self) -> Sequence[ActionControl[ContextT] | Link | RoutedActionControl]:
+        return () if self.actions is None else self.actions()
 
     def render(
         self, state: WizardState, controls: MachineControls[WizardState, RenderTargetT, ContextT]
@@ -364,7 +379,6 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             progress(index + 1, maximum=len(live), label=f"Step {index + 1} of {len(live)}"),
             heading(current.label, level=3),
             *controls.content(current.content),
-            primary if isinstance(primary, FormTrigger) else None,
             action_controls(
                 controls.action_control(
                     controls.chrome.back,
@@ -372,7 +386,8 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
                     key=f"{self.key}.back",
                     available=index > 0 or editing,
                 ),
-                primary if isinstance(primary, ActionControl | RoutedActionControl) else None,
+                primary,
+                *self._host_actions(),
                 key=f"{self.key}.chrome",
                 display=ControlDisplay.INDIVIDUAL,
             ),

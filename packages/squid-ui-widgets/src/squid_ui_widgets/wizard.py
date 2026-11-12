@@ -8,6 +8,7 @@ from squid_ui_widgets.drivers import ComponentDriver, TransitionEvent
 from squid_ui_widgets.machines.wizard import REVIEW_STEP as REVIEW_STEP
 from squid_ui_widgets.machines.wizard import StepSource as StepSource
 from squid_ui_widgets.machines.wizard import Wizard as WizardMachine
+from squid_ui_widgets.machines.wizard import WizardActions as WizardActions
 from squid_ui_widgets.machines.wizard import WizardAnswer as WizardAnswer
 from squid_ui_widgets.machines.wizard import WizardAnswers as WizardAnswers
 from squid_ui_widgets.machines.wizard import WizardFinishHandler as WizardFinishHandler
@@ -39,10 +40,11 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
         *,
         key: str = "wizard",
         review: WizardReview[RenderTargetT, ContextT] | bool = False,
+        actions: WizardActions[ContextT] | None = None,
         initial_state: WizardState | None = None,
         on_finish: WizardFinishHandler | None = None,
     ) -> None:
-        machine = WizardMachine[RenderTargetT, ContextT](title, steps, key=key, review=review)
+        machine = WizardMachine[RenderTargetT, ContextT](title, steps, key=key, review=review, actions=actions)
 
         async def changed(event: TransitionEvent[WizardState]) -> None:
             if on_finish is not None and event.state.complete and not event.previous.complete:

@@ -292,3 +292,42 @@ async def test_completion_callback_runs_again_only_after_reopening() -> None:
 
     assert completed == [{"name": {"name": "Ada"}}, {"name": {"name": "Grace"}}]
     assert not harness.finished
+
+
+async def _leave(_event: sl.PressEvent) -> None: ...
+
+
+def _control_rows(rendered: object) -> list[list[str]]:
+    return [
+        [engine.labels(item)[0] for item in node.items]
+        for node in engine.walk(rendered)
+        if isinstance(node, sl.semantic.ActionControls)
+    ]
+
+
+def test_a_step_keeps_back_continue_and_the_screen_controls_in_one_row() -> None:
+    cancel = sl.action_control("Cancel", _leave, key="cancel")
+    wizard = sp.Wizard("Build", _review_steps, review=True, actions=lambda: (cancel,))
+
+    # The first step's primary control opens a form; it shares the row with Back.
+    assert _control_rows(wizard.render()) == [["Back", "Continue", "Cancel"]]
+
+
+def test_the_review_note_sits_just_above_finish_and_the_screen_controls() -> None:
+    review = sp.WizardReview(note="Finishing cannot be undone.")
+    wizard = WizardMachine("Build", _review_steps, review=review)
+    state = _answer(wizard, wizard.initial_state, "name", "Ada")
+    state = _answer(wizard, state, "kind", "basic")
+    cancel = sl.action_control("Cancel", _leave, key="cancel")
+
+    rendered = sp.Wizard("Build", _review_steps, review=review, initial_state=state, actions=lambda: (cancel,)).render()
+    nodes = list(engine.walk(rendered))
+    note_index = next(index for index, node in enumerate(nodes) if isinstance(node, sl.semantic.Note))
+    finish_row = next(
+        index
+        for index, node in enumerate(nodes)
+        if isinstance(node, sl.semantic.ActionControls) and node.key.endswith(".chrome")
+    )
+
+    assert note_index < finish_row
+    assert _control_rows(rendered)[-1] == ["Finish", "Cancel"]

@@ -25,6 +25,8 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.WizardFinishHandler
 
+::: squid_ui_widgets.WizardActions
+
 ::: squid_ui_widgets.REVIEW_STEP
 
 ::: squid_ui_widgets.Editor
