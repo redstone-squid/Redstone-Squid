@@ -36,7 +36,7 @@ from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootDefaults
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.request import Request, request
-from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC, Presented, ResponseSpec, Sent
+from squid_ui_discord.response import Presented, ResponseSpec, Sent
 from squid_ui_discord.sessions import SessionManager
 
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
@@ -308,7 +308,7 @@ def install[ClientT: discord.Client](
         challenges=challenges,
         scheduler=scheduler,
         localization=localization,
-        response_defaults=DEFAULT_RESPONSE_SPEC.overlay(selected.responses),
+        response_defaults=selected.responses,
         config=selected,
     )
     _INSTALLED[client] = runtime

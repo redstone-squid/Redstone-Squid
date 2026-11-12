@@ -132,19 +132,6 @@ class ResolvedResponse:
     chrome: Chrome | None
 
 
-DEFAULT_RESPONSE_SPEC = ResponseSpec(
-    audience="public",
-    access=None,
-    timeout=180,
-    expiry=None,
-    live_updates=False,
-    retain_routed_on_timeout=False,
-    session=None,
-    allowed_mentions=None,
-    chrome=None,
-)
-
-
 class Response[ContentT: FacadeContent = FacadeContent]:
     """Content paired with the call-level policy it should be delivered under.
 
@@ -221,7 +208,6 @@ type ResponseResult[
 
 
 __all__ = [
-    "DEFAULT_RESPONSE_SPEC",
     "UNSET",
     "Abandoned",
     "AccessSetting",
