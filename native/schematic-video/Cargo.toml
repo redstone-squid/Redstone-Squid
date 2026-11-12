@@ -1,0 +1,12 @@
+[package]
+name = "squid-schematic-video"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+nucleation = { git = "https://github.com/Schem-at/Nucleation.git", rev = "346733e9f47f50d0ecfac56160b9c6b9a597685f", default-features = false, features = ["rendering"] }
+mc-tick = { git = "https://github.com/Schem-at/Nucleation.git", rev = "346733e9f47f50d0ecfac56160b9c6b9a597685f" }
+mc-tick-trace = { git = "https://github.com/Schem-at/Nucleation.git", rev = "346733e9f47f50d0ecfac56160b9c6b9a597685f" }
