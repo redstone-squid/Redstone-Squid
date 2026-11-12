@@ -337,10 +337,14 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             action_controls(*entry_actions, key=f"{self.key}.entry-actions") if entry_actions else None,
             action_controls(
                 action_control(chrome.back, self._back, key=f"{self.key}.back"),
-                action_control(
+                # The step buttons stay in place, greyed out, at either end of a page; with only
+                # one item there is nowhere to step, so they are left out.
+                len(items) > 1
+                and action_control(
                     previous_label, self._previous_item, key=f"{self.key}.item-previous", available=index > 0
                 ),
-                action_control(
+                len(items) > 1
+                and action_control(
                     next_label,
                     self._next_item,
                     key=f"{self.key}.item-next",

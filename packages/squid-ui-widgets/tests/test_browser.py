@@ -140,3 +140,15 @@ async def test_stepping_between_items_follows_the_list_order_in_time() -> None:
 
     assert engine.labels(engine.find(tree, sl.semantic.ActionControl, key="browser.item-previous")) == ["Older"]
     assert engine.labels(engine.find(tree, sl.semantic.ActionControl, key="browser.item-next")) == ["Newer"]
+
+
+async def test_a_single_item_has_no_step_buttons() -> None:
+    source, loaded = await _loaded((Entry("a", "A"),))
+    browser = _paged_browser(source)
+    browser.window.replace(loaded)
+
+    await engine.choose(browser, "browser.open", "a")
+
+    tree = engine.render_tree(browser)
+    assert not {"browser.item-previous", "browser.item-next"} & set(engine.keys(tree))
+    assert "browser.back" in engine.keys(tree)
