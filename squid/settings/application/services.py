@@ -24,7 +24,7 @@ class SettingsService:
         self._runtime_defaults = runtime_defaults or RuntimeSettings()
 
     async def get_runtime(self) -> RuntimeSettings:
-        """Read current settings, persisting deployment defaults on first use."""
+        """Read current settings, persisting initial defaults on first use."""
         async with self._uow_factory() as uow:
             row = await uow.settings.runtime(self._runtime_defaults)
             result = RuntimeSettings.model_validate(row)

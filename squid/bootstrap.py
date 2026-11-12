@@ -368,20 +368,10 @@ class _ServiceGraph:
 
     @cached_property
     def settings(self) -> SettingsService:
-        return SettingsService(
-            uow_factory=self.uow_factory,
-            runtime_defaults=RuntimeSettings(
-                **self.config.community.model_dump(),
-                notification_retention_days=self.config.notifications.retention_days,
-            ),
-        )
+        return SettingsService(uow_factory=self.uow_factory)
 
     @cached_property
     def edits(self) -> EditExecutor[SqlAlchemyUnitOfWork]:
-        defaults = RuntimeSettings(
-            **self.config.community.model_dump(),
-            notification_retention_days=self.config.notifications.retention_days,
-        )
         return EditExecutor(
             self.uow_factory,
             {
@@ -400,7 +390,7 @@ class _ServiceGraph:
                 ROLE_DELETE: PermissionRoleDeletion(self.permission_admin),
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
                 BUILD_STATUS_EDIT: BuildStatusEdit(self.permissions),
-                RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
+                RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, RuntimeSettings()),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),
                 PROFILE_CLEAR: AccountProfileClear(self.permissions),
                 PROFILE_EDIT: AccountProfileEdit(self.permissions),
@@ -419,7 +409,6 @@ class _ServiceGraph:
     def notifications(self) -> NotificationService:
         return NotificationService(
             uow_factory=self.uow_factory,
-            retention_days=self.config.notifications.retention_days,
             runtime_settings=self.settings.get_runtime,
         )
 
@@ -874,8 +863,8 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         notifications=graph.notifications,
         welcome_relay=WelcomeRelayService(
             WelcomeRelayPolicy(
-                welcome_channel_id=config.community.welcome_channel_id,
-                forward_chance=1 / 10,
+                welcome_channel_id=RuntimeSettings().welcome_channel_id,
+                forward_chance=RuntimeSettings().welcome_forward_chance,
             )
         ),
     )

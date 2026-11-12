@@ -63,8 +63,11 @@ REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.
 
 Community routing, welcome forwarding, automation switches, vote threshold defaults, and notification
 retention live in `runtime_settings`. After applying migrations (`uv run --locked alembic upgrade head`),
-the first settings read seeds this singleton from the deployment configuration. Keep initial community
-and retention configuration consistent across processes; later environment edits do not override the row.
+the first settings read creates this singleton from the code defaults in
+`squid/settings/domain/runtime.py`. Existing database values are preserved. Remove the former
+`SQUID_COMMUNITY_*` and `SQUID_NOTIFICATION_RETENTION_DAYS` variables from your environment
+and `.env`; strict configuration checking rejects them. Configure routing for a new deployment
+through runtime settings before enabling community automation.
 Global administrators can inspect or edit settings without restarting. Discord supports both
 `/runtime-settings` and the prefix command:
 

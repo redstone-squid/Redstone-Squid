@@ -34,7 +34,6 @@ from squid.config import (
     BotProcessConfig,
     BuildConfig,
     CatboxConfig,
-    CommunityConfig,
     DatabaseConfig,
     NotificationConfig,
     load_bot_process_config,
@@ -62,7 +61,6 @@ type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 DEFAULT_BOT_IDENTITY = BotIdentityConfig()
 DEFAULT_CATBOX_CONFIG = CatboxConfig()
 DEFAULT_BUILD_CONFIG = BuildConfig()
-DEFAULT_COMMUNITY_CONFIG = CommunityConfig()
 DEFAULT_NOTIFICATION_CONFIG = NotificationConfig()
 CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation", "notification-deliveries"})
 # The layout runtime is supervised but deliberately not health-critical: `is_healthy`
@@ -121,7 +119,6 @@ class RedstoneSquid(Bot):
         *,
         catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
         build_config: BuildConfig = DEFAULT_BUILD_CONFIG,
-        community_config: CommunityConfig = DEFAULT_COMMUNITY_CONFIG,
         notification_config: NotificationConfig = DEFAULT_NOTIFICATION_CONFIG,
         database_config: DatabaseConfig | None = None,
         inference_model: str = "gpt-5.6-luna",
@@ -131,7 +128,6 @@ class RedstoneSquid(Bot):
         self.services = services
         self.build_config = build_config
         self.database_config = database_config
-        self.community_config = community_config
         self.notification_site_url = (
             None
             if notification_config.public_site_url is None
@@ -438,7 +434,6 @@ async def _run_bot(
             config=identity_config,
             catbox_config=config.catbox,
             build_config=config.build,
-            community_config=config.community,
             notification_config=config.notification,
             database_config=config.runtime.database,
             inference_model=config.openai.chat_model,

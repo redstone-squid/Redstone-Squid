@@ -55,4 +55,4 @@ Configured owner IDs remain staff recipients.
 
 Inbox notifications and their source events are retained for 90 days by default. Events with outstanding consumer
 deliveries are never removed by notification retention. `SQUID_NOTIFICATION_PUBLIC_SITE_URL` controls links in DMs,
-and `SQUID_NOTIFICATION_RETENTION_DAYS` changes the retention window.
+and the runtime setting `notification_retention_days` controls the retention window.

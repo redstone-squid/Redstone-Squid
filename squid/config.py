@@ -624,24 +624,6 @@ class WorkerConfig(_FrozenModel):
     _validate_log_file = field_validator("log_file")(_validate_relative_log_file)
 
 
-class CommunityConfig(_FrozenModel):
-    """Initial owner-guild routing used to seed runtime_settings on first access.
-
-    Once that database row exists, edit it through the owner runtime-settings command.
-    Environment changes no longer override its values.
-    """
-
-    redstoner_starboard_author_id: int = 700796664276844612
-    redstoner_starboard_channel_id: int = 1332630008270684241
-    redstoner_role_id: int = 433670432420397060
-    redstoner_corner_channel_id: int = 534945678850523138
-    redstoner_announcement_channel_id: int = 433643026204852224
-    welcome_channel_id: int = 1356094722531393680
-    welcome_relay_channel_id: int = 433618741528625155
-    version_tracker_channel_id: int = 1334168723170263122
-    build_log_channel_ids: tuple[int, ...] = (726156829629087814, 667401499554611210)
-
-
 class CatboxConfig(_FrozenModel):
     """Optional Catbox account configuration."""
 
@@ -946,11 +928,9 @@ class SubmissionConfig(_FrozenModel):
 
 
 class NotificationConfig(_FrozenModel):
-    """User notification links and retention policy."""
+    """Deployment URL for user notification links."""
 
     public_site_url: AnyHttpUrl | None = None
-    retention_days: int = Field(default=90, ge=1, le=3650)
-    """Initial retention used only when the runtime settings row is first created."""
 
     _empty_public_site_url = field_validator("public_site_url", mode="before")(_empty_to_none)
 
@@ -978,7 +958,6 @@ class RuntimeConfig(_FrozenModel):
     submissions: SubmissionConfig = SubmissionConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
-    community: CommunityConfig
     notifications: NotificationConfig
     verification_code_pepper: SecretStr
     api_key_pepper: SecretStr | None = None
@@ -1094,7 +1073,6 @@ class _ProcessSettings(_EnvironmentSettings):
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
     schematic: SchematicConfig = SchematicConfig()
-    community: CommunityConfig = CommunityConfig()
     notification: NotificationConfig = NotificationConfig()
     upstream_http: UpstreamHttpConfig = UpstreamHttpConfig()
     log: LogConfig = LogConfig()
@@ -1138,7 +1116,6 @@ class _ProcessSettings(_EnvironmentSettings):
             submissions=self.submissions,
             minecraft_auth=self.minecraft_auth,
             cli_auth=self.cli_auth,
-            community=self.community,
             notifications=self.notification,
             verification_code_pepper=self.verification.code_pepper,
             upstream_http=self.upstream_http,
@@ -1526,7 +1503,6 @@ __all__ = [
     "BotProcessConfig",
     "BuildConfig",
     "CatboxConfig",
-    "CommunityConfig",
     "DatabaseConfig",
     "DiagnosticsConfig",
     "EmbeddingConfig",

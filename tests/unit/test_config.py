@@ -165,7 +165,6 @@ def test_application_config_groups_and_resolves_settings(
         SQUID_BUILD_COMMIT_HASH="abcdef123456",
         SQUID_BUILD_COMMIT_MESSAGE="configuration rewrite",
         SQUID_NOTIFICATION_PUBLIC_SITE_URL="https://catalogue.example/",
-        SQUID_NOTIFICATION_RETENTION_DAYS="120",
         SQUID_OBSERVABILITY_ENABLED="true",
         SQUID_OBSERVABILITY_ENDPOINT="http://collector.example:4318",
         SQUID_OBSERVABILITY_HEADERS='{"Authorization":"secret-token"}',
@@ -201,7 +200,6 @@ def test_application_config_groups_and_resolves_settings(
     assert config.build.commit_hash == "abcdef123456"
     for process_config in (config.bot_process(), config.api_process(), config.worker_process()):
         assert str(process_config.notification.public_site_url) == "https://catalogue.example/"
-        assert process_config.notification.retention_days == 120
         assert process_config.observability.enabled is True
         assert str(process_config.observability.endpoint) == "http://collector.example:4318/"
         assert process_config.observability.headers["Authorization"].get_secret_value() == "secret-token"
@@ -415,26 +413,29 @@ def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPat
     assert config.runtime.embeddings.base_url == config.openai.base_url
 
 
-def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    _set_environment(
-        monkeypatch,
-        SQUID_DISCORD_TOKEN="discord-token",
-        SQUID_COMMUNITY_REDSTONER_STARBOARD_AUTHOR_ID="1",
-        SQUID_COMMUNITY_REDSTONER_STARBOARD_CHANNEL_ID="2",
-        SQUID_COMMUNITY_WELCOME_CHANNEL_ID="3",
-        SQUID_COMMUNITY_WELCOME_RELAY_CHANNEL_ID="4",
-        SQUID_COMMUNITY_VERSION_TRACKER_CHANNEL_ID="5",
-        SQUID_COMMUNITY_BUILD_LOG_CHANNEL_IDS="[6, 7]",
-    )
+@pytest.mark.parametrize(
+    "name",
+    [
+        "SQUID_COMMUNITY_REDSTONER_STARBOARD_AUTHOR_ID",
+        "SQUID_COMMUNITY_REDSTONER_STARBOARD_CHANNEL_ID",
+        "SQUID_COMMUNITY_REDSTONER_ROLE_ID",
+        "SQUID_COMMUNITY_REDSTONER_CORNER_CHANNEL_ID",
+        "SQUID_COMMUNITY_REDSTONER_ANNOUNCEMENT_CHANNEL_ID",
+        "SQUID_COMMUNITY_WELCOME_CHANNEL_ID",
+        "SQUID_COMMUNITY_WELCOME_RELAY_CHANNEL_ID",
+        "SQUID_COMMUNITY_VERSION_TRACKER_CHANNEL_ID",
+        "SQUID_COMMUNITY_BUILD_LOG_CHANNEL_IDS",
+        "SQUID_NOTIFICATION_RETENTION_DAYS",
+    ],
+)
+def test_runtime_settings_are_not_deployment_settings(monkeypatch: pytest.MonkeyPatch, dotenv: Path, name: str) -> None:
+    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_STRICT_UNKNOWN_KEYS="true")
+    monkeypatch.setenv(name, "123")
 
-    config = load_bot_process_config(dotenv_path=dotenv).runtime.community
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config(dotenv_path=dotenv)
 
-    assert config.redstoner_starboard_author_id == 1
-    assert config.redstoner_starboard_channel_id == 2
-    assert config.welcome_channel_id == 3
-    assert config.welcome_relay_channel_id == 4
-    assert config.version_tracker_channel_id == 5
-    assert config.build_log_channel_ids == (6, 7)
+    assert any(issue["field"] == name and issue["type"] == "unknown_key" for issue in _issues(exc_info.value))
 
 
 def test_schematic_duplicate_thresholds_load_from_flat_environment_names(

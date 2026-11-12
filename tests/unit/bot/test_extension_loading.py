@@ -25,7 +25,7 @@ from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
 from squid.bot.reactions import ReactionRouter
 from squid.bot.utils.permissions import AccountIdCache
-from squid.config import BuildConfig, CommunityConfig
+from squid.config import BuildConfig
 from squid.runtime import BackgroundTaskSupervisor
 from squid.voting.application import VoteService
 from squid.voting.application.ports import VoteActorResolver
@@ -70,7 +70,6 @@ class StubBot(commands.Bot):
         self.post_reconciler = unconfigured(PostReconciler)
         self.account_ids = AccountIdCache()
         self.build_config = BuildConfig()
-        self.community_config = CommunityConfig()
         self.catbox = unconfigured(CatboxClient)
         self.media_previews = unconfigured(MediaPreviewClient)
         self.development_mode = False
