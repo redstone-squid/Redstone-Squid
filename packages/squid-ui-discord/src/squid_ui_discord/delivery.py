@@ -552,24 +552,37 @@ def respond_to(
             fields["attachments"] = merged_files
             message = await interaction.edit_original_response(**fields)
             return DeliveryResult(message, _OriginalResponseHandle(interaction, message, mode=mode))
-        if interaction.response.is_done():
-            message = await interaction.followup.send(
-                files=merged_files,
-                ephemeral=ephemeral,
-                wait=wait,
-                allowed_mentions=mentions,
-                **payload._send_fields(),
-            )
-            if message is None:
-                return DeliveryResult(None, None)
-            return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
-        response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
-            files=merged_files, ephemeral=ephemeral, allowed_mentions=mentions, **payload._send_fields()
+        if not interaction.response.is_done():
+            try:
+                response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
+                    files=merged_files, ephemeral=ephemeral, allowed_mentions=mentions, **payload._send_fields()
+                )
+            except discord.InteractionResponded:
+                pass
+            except discord.HTTPException as error:
+                if error.code != 40060:
+                    raise
+                # The watchdog can defer while this initial response is in flight.
+                # Deliver through the webhook even if discord.py has not marked it done yet.
+            else:
+                callback_message = response.resource if isinstance(response.resource, discord.Message) else None
+                message = (
+                    await interaction.original_response() if wait and callback_message is None else callback_message
+                )
+                handle = _OriginalResponseHandle(interaction, message, mode=mode)
+                return DeliveryResult.from_callback(response, handle, fallback=message)
+            for file in merged_files:
+                file.reset()
+        message = await interaction.followup.send(
+            files=merged_files,
+            ephemeral=ephemeral,
+            wait=wait,
+            allowed_mentions=mentions,
+            **payload._send_fields(),
         )
-        callback_message = response.resource if isinstance(response.resource, discord.Message) else None
-        message = await interaction.original_response() if wait and callback_message is None else callback_message
-        handle = _OriginalResponseHandle(interaction, message, mode=mode)
-        return DeliveryResult.from_callback(response, handle, fallback=message)
+        if message is None:
+            return DeliveryResult(None, None)
+        return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
 
     return send
 

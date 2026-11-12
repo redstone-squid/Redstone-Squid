@@ -10,6 +10,7 @@ import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from typing import Any, cast, override
 
 import anyio
@@ -3177,6 +3178,63 @@ class TestEditHandles:
 
 
 class TestDestinations:
+    @pytest.mark.parametrize("remote", [False, True])
+    @pytest.mark.parametrize("wait", [False, True])
+    async def test_initial_response_losing_to_a_defer_sends_a_followup(self, remote: bool, wait: bool) -> None:
+        interaction = interaction_harness()
+        error = (
+            sd.http_error(400, code=40060, message="Interaction has already been acknowledged.")
+            if remote
+            else discord.InteractionResponded(interaction)
+        )
+        attachment = discord.File(BytesIO(b"editor attachment"), filename="editor.txt")
+        message = message_harness(message_id=42, ephemeral=True) if wait else None
+
+        async def initial_send(**fields: Any) -> None:
+            fields["files"][0].fp.read()
+            raise error
+
+        async def followup_send(**fields: Any) -> Any:
+            assert fields["files"][0].fp.read() == b"editor attachment"
+            return message
+
+        interaction.response.send_message.callback = initial_send
+        interaction.followup.send.callback = followup_send
+        component = Counter()
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+
+        sent = await message_root.send(delivery.respond_to(interaction, ephemeral=True, wait=wait, files=[attachment]))
+
+        assert isinstance(sent, delivery.Delivered)
+        assert sent.result.message is message
+        interaction.response.send_message.assert_awaited_once()
+        interaction.followup.send.assert_awaited_once_with(
+            **interaction.response.send_message.await_args.kwargs, wait=wait
+        )
+        interaction.original_response.assert_not_awaited()
+        assert not message_root.pending
+        if wait:
+            assert message_root.handle is not None and not message_root.handle.permanent
+            interaction.response._done = True
+            component.count += 1
+            await message_root.refresh()
+            assert interaction.followup.edit_message.await_args.args == (42,)
+            interaction.edit_original_response.assert_not_awaited()
+        else:
+            assert message_root.handle is None
+
+    async def test_initial_response_preserves_other_http_errors(self) -> None:
+        interaction = interaction_harness()
+        error = sd.http_error(400, code=50035)
+        interaction.response.send_message.error = error
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+
+        with pytest.raises(discord.HTTPException) as raised:
+            await message_root.send(delivery.respond_to(interaction))
+
+        assert raised.value is error
+        interaction.followup.send.assert_not_awaited()
+
     async def test_fresh_unwaited_response_commits_an_original_response_handle_without_fetching(self):
         interaction = interaction_harness()
         component = Counter()
