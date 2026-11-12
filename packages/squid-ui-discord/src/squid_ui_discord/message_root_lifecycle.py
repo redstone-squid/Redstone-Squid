@@ -71,9 +71,9 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self.dirty = False
         self.suppressed = 0
         self.behind = False
-        """Whether a failed edit left the message showing older state than this root holds.
+        """Whether an action committed state that the message has not presented yet.
 
-        Set when delivering an application render fails, and cleared when any application
+        Also set when delivering an application render fails, and cleared when any application
         render commits, including one suppressed because the message already matched it.
         While set, EXCLUSIVE presses repaint the message instead of running their handlers.
         """

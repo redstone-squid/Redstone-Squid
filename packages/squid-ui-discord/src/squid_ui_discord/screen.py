@@ -283,7 +283,7 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
 
         try:
             on_action_rollback(rolled_back)
-            responder._on_screen_success(accept, name=f"{type(self).__qualname__}.resolve")
+            responder.on_success(accept, name=f"{type(self).__qualname__}.resolve")
         except BaseException:
             state.pending = False
             raise

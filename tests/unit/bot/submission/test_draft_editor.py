@@ -585,7 +585,8 @@ async def test_pressing_edit_on_a_catalogue_section_opens_a_second_message() -> 
     async with sd.testing.stage(editor, owner=object()) as ui:
         harness = await ui.press("edit_patterns")
 
-        (child,) = editor._screen_flow.children
+        (child_root,) = ui.root._lifetime.roots()
+        child = child_root.component
         assert isinstance(child, SectionEditorScreen)
         # The child was sent as its own message; the panel kept its overview.
         harness.response.send_message.assert_awaited_once()
@@ -617,15 +618,17 @@ async def test_opening_another_editor_closes_the_first() -> None:
     editor = await open_editor(services, drafts)
     async with sd.testing.stage(editor, owner=object()) as ui:
         await ui.press("edit_patterns")
-        (first,) = editor._screen_flow.children
+        (first,) = ui.root._lifetime.roots()
         await ui.press("edit_taxonomy")
 
         with anyio.fail_after(2):
             await first.wait()
-        (second,) = editor._screen_flow.children
+        (second_root,) = ui.root._lifetime.roots()
+        second = second_root.component
         assert isinstance(second, SectionEditorScreen)
         assert second.section_id == "taxonomy"
-        assert rendered_text(first) == "Changes saved. You can dismiss this message."
+        assert isinstance(first.component, SectionEditorScreen)
+        assert rendered_text(first.component) == "Changes saved. You can dismiss this message."
 
 
 async def test_an_expired_panel_offers_to_reopen_the_draft(monkeypatch: pytest.MonkeyPatch) -> None:

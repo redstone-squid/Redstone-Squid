@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, override
 
 import discord
 
-from squid_reactivity.actions import ActionContext, current_action
+from squid_reactivity.actions import ActionCommit, ActionContext, current_action
 from squid_reactivity.operations import Cancelled
 from squid_reactivity.transactions import (
     on_action_commit,
@@ -47,7 +47,7 @@ class ActionResponder:
         self._finish_requested = False
         self._finish_accepted = False
         self._after_commit: list[PostCommitOperation[Any]] = []
-        self._screen_unlocked: asyncio.Event | None = None
+        self._committed: ActionCommit | None = None
 
     async def acknowledge(self) -> None:
         if not self.interaction.response.is_done():
@@ -203,24 +203,23 @@ class ActionResponder:
             callback,
             name=name or getattr(callback, "__qualname__", type(callback).__qualname__),
         )
-        on_action_commit(lambda commit: operation._commit(commit, host))
+        on_action_commit(self._record_commit)
         on_action_rollback(operation._discard)
         self._after_commit.append(operation)
         return operation
 
-    def _on_screen_success[ValueT](
-        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
-    ) -> PostCommitOperation[ValueT]:
-        """Run a screen continuation after commit and release of this action's lock."""
-        unlocked = self._screen_unlocked
-        if unlocked is None:
-            unlocked = self._screen_unlocked = asyncio.Event()
+    def _record_commit(self, commit: ActionCommit) -> None:
+        self._committed = commit
 
-        async def after_unlock() -> ValueT:
-            await unlocked.wait()
-            return await callback()
-
-        return self.on_success(after_unlock, name=name)
+    def _start_after_commit(self) -> None:
+        """Start accepted operations after dispatch has released its action lock."""
+        commit, self._committed = self._committed, None
+        if commit is None:
+            return
+        host = self.message_root.config.execution_host
+        assert host is not None
+        for operation in self._after_commit:
+            operation._commit(commit, host)
 
     async def _wait_after_commit(self) -> list[Exception]:
         errors: list[Exception] = []

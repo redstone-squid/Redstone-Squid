@@ -63,7 +63,7 @@ async def test_result_uses_parent_transaction_after_child_unlock_and_preserves_m
             assert CURRENT_TRANSACTION.get() is None
             observed.append(await parent._dispatch_screen_result(responder.interaction, completed))
 
-        responder._on_screen_success(publish)
+        responder.on_success(publish)
 
     child_panel = Panel(finish)
     child = MessageRoot(child_panel, access=Everyone())

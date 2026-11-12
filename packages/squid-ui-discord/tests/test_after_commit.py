@@ -19,7 +19,7 @@ from squid_reactivity.diagnostics import (
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.operations import Failed, Pending, Succeeded
 from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, Reactive, state
-from squid_ui.interactions import ActionMode
+from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import (
     ActionDiscardedError,
@@ -54,6 +54,86 @@ async def mount(handler: Callable[[Panel, ActionEvent], Awaitable[None]]) -> tup
     root = MessageRoot(panel, access=Everyone())
     await root.send(delivered_to(message_harness()))
     return panel, root
+
+
+async def test_continuation_can_dispatch_another_action_on_the_same_root() -> None:
+    calls = 0
+
+    async def again() -> None:
+        assert not root._action_lock.locked()
+        await root.dispatch("save", interaction_harness())
+
+    async def handler(panel: Panel, event: ActionEvent) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            event.on_success(again)
+        else:
+            panel.value = 1
+
+    panel, root = await mount(handler)
+    with anyio.fail_after(1):
+        await root.dispatch("save", interaction_harness())
+    assert calls == 2
+    assert panel.value == 1
+    await root.finish()
+
+
+async def test_exclusive_press_repaints_unpresented_commit_while_continuation_runs() -> None:
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def callback() -> None:
+        entered.set()
+        await release.wait()
+
+    async def handler(panel: Panel, event: ActionEvent) -> None:
+        panel.value += 1
+        event.on_success(callback)
+
+    panel, root = await mount(handler)
+    generation = root.generation
+    with anyio.fail_after(1):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(root.dispatch, "save", interaction_harness())
+            await entered.wait()
+            await root.dispatch("save", interaction_harness(), generation=generation)
+            assert panel.value == 1
+            assert root.generation > generation
+            release.set()
+    await root.finish()
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_committed_continuation_survives_failure_after_handler_returns(cancel: bool) -> None:
+    completed = asyncio.Event()
+    scope = anyio.CancelScope()
+
+    class FailAfter(ActionMiddleware):
+        @override
+        async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+            await proceed()
+            if cancel:
+                scope.cancel()
+                await anyio.lowlevel.checkpoint()
+            raise ValueError("middleware failed after commit")
+
+    async def callback() -> None:
+        assert not root._action_lock.locked()
+        assert panel.value == 1
+        completed.set()
+
+    async def handler(panel: Panel, event: ActionEvent) -> None:
+        panel.value = 1
+        event.on_success(callback)
+
+    panel = Panel(handler)
+    root = MessageRoot(panel, access=Everyone(), middleware=(FailAfter(),))
+    await root.send(delivered_to(message_harness()))
+    with scope:
+        await root.dispatch("save", interaction_harness())
+    with anyio.fail_after(1):
+        await completed.wait()
+    await root.finish()
 
 
 async def test_operation_observes_commit_and_shares_history_causality_without_replaying() -> None:

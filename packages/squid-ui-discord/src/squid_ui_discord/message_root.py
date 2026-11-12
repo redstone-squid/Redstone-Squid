@@ -290,10 +290,6 @@ def _wall_clock_now(scheduler: object) -> datetime:
     return value
 
 
-_ACTION_UNLOCK: ContextVar[tuple[object, Callable[[], None]] | None] = ContextVar(
-    "squid_ui_discord_action_unlock", default=None
-)
-
 _SCHEDULED_REFRESH: ContextVar[object | None] = ContextVar("squid_ui_discord_scheduled_refresh", default=None)
 
 _SETTLING_ROOT: ContextVar[object | None] = ContextVar("squid_ui_discord_settling_root", default=None)
@@ -1091,6 +1087,7 @@ class MessageRoot[
         # even when the existing tree and visible generation can be reused.
         if commit.patches:
             self._candidates.mark_dirty()
+            self._candidates.behind = True
 
     def _renderer(self, timeout: float | None) -> MountedRenderer[Any]:
         return self._binding.renderer(self, timeout)
@@ -1692,7 +1689,9 @@ class MessageRoot[
                         return
                     key = binding.key
 
-                async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
+                async def invoke(
+                    current: ActionBinding, rebased: bool, active_generation: int, release: Callable[[], None]
+                ) -> None:
                     await self._invoke(
                         current,
                         key,
@@ -1702,6 +1701,7 @@ class MessageRoot[
                         active_generation,
                         rebased,
                         profile,
+                        release,
                     )
 
                 await self._dispatch_binding(
@@ -1762,11 +1762,13 @@ class MessageRoot[
                 resumed=True,
             )
 
-            async def invoke(current: ActionBinding, rebased: bool, generation: int) -> None:
+            async def invoke(
+                current: ActionBinding, rebased: bool, generation: int, release: Callable[[], None]
+            ) -> None:
                 # Access and shutdown are checked after acquiring the parent's lock: either
                 # can change while another action holds it.
                 if await self._begin_dispatch(interaction, profile):
-                    await self._invoke(current, key, interaction, None, None, generation, rebased, profile)
+                    await self._invoke(current, key, interaction, None, None, generation, rebased, profile, release)
 
             await self._dispatch_binding(binding, key, interaction, None, invoke, profile)
             return completed and profile.action is ActionStatus.HANDLED
@@ -1891,7 +1893,9 @@ class MessageRoot[
                         spec=newest.spec,
                     )
 
-                async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
+                async def invoke(
+                    current: ActionBinding, rebased: bool, active_generation: int, release: Callable[[], None]
+                ) -> None:
                     resolved = (
                         current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
                     )
@@ -1905,6 +1909,7 @@ class MessageRoot[
                         active_generation,
                         rebased,
                         profile,
+                        release,
                     )
 
                 await self._dispatch_binding(
@@ -2167,12 +2172,20 @@ class MessageRoot[
         key: str,
         interaction: discord.Interaction,
         generation: int | None,
-        invoke: Callable[[ActionBinding, bool, int], Awaitable[None]],
+        invoke: Callable[[ActionBinding, bool, int, Callable[[], None]], Awaitable[None]],
         profile: _DispatchProfile,
         *,
         values: _SelectionValues = None,
         rebase: Callable[[], ActionBinding | None] | None = None,
     ) -> None:
+        locked = False
+
+        def release() -> None:
+            nonlocal locked
+            if locked:
+                locked = False
+                self._action_lock.release()
+
         if binding.mode in {ActionMode.IMMEDIATE, ActionMode.PARALLEL_READ}:
             rebased = False
             profile.decide_generation(self._candidates.generation)
@@ -2184,20 +2197,12 @@ class MessageRoot[
                 return
             if not admission.admitted:
                 return
-            await invoke(binding, rebased, self._candidates.generation)
+            await invoke(binding, rebased, self._candidates.generation, release)
             return
 
         with profile.operation.span("action_lock"):
             await self._action_lock.acquire()
         locked = True
-
-        def unlock() -> None:
-            nonlocal locked
-            if locked:
-                locked = False
-                self._action_lock.release()
-
-        unlock_token = _ACTION_UNLOCK.set((self, unlock))
         try:
             profile.decide_generation(self._candidates.generation)
             if binding.mode is ActionMode.EXCLUSIVE and generation not in {None, self._candidates.generation}:
@@ -2236,12 +2241,11 @@ class MessageRoot[
             if admission.challenge is None:
                 if not admission.admitted:
                     return
-                await invoke(binding, rebased, self._candidates.generation)
+                await invoke(binding, rebased, self._candidates.generation, release)
                 return
             challenged = admission.challenge
         finally:
-            _ACTION_UNLOCK.reset(unlock_token)
-            unlock()
+            release()
         # Only a challenge falls out of the block above rather than returning from inside it.
         # The dialog is opened with the lock released and the press already over, so every
         # other control on the panel stays live while the actor reads the question.
@@ -2282,6 +2286,7 @@ class MessageRoot[
         active_generation: int,
         rebased: bool,
         profile: _DispatchProfile,
+        release: Callable[[], None],
     ) -> None:
         busy = (
             None if binding.busy is None else _BusyPaint(self, key, binding.busy, interaction, resumed=profile.resumed)
@@ -2308,7 +2313,9 @@ class MessageRoot[
                 await self._run_action(binding, event, action_context)
 
             try:
-                handled = await self._run_middleware(request, handle, profile.operation)
+                handled = await self._execute_action(
+                    request, handle, profile.operation, cast(ActionResponder, event.responder), release
+                )
             except Exception as error:
                 profile.action = ActionStatus.FAILED
                 # Before the error hook: the failed action leaves no flush behind, so without
@@ -2336,6 +2343,7 @@ class MessageRoot[
         active_generation: int,
         rebased: bool,
         profile: _DispatchProfile,
+        release: Callable[[], None],
     ) -> None:
         async with self._interaction_tasks(interaction, profile):
             try:
@@ -2412,7 +2420,9 @@ class MessageRoot[
                 async def handle() -> None:
                     await self._run_action(binding, event, action_context)
 
-                handled = await self._run_middleware(request, handle, profile.operation)
+                handled = await self._execute_action(
+                    request, handle, profile.operation, cast(ActionResponder, event.responder), release
+                )
                 profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
             except Exception as error:
                 profile.action = ActionStatus.FAILED
@@ -2448,11 +2458,6 @@ class MessageRoot[
     async def _present_action_result(
         self, adapter: ActionResponder, interaction: discord.Interaction, profile: _DispatchProfile
     ) -> PresentationStatus:
-        if adapter._screen_unlocked is not None:
-            lease = _ACTION_UNLOCK.get()
-            if lease is not None and lease[0] is self:
-                lease[1]()
-            adapter._screen_unlocked.set()
         errors = await adapter._wait_after_commit()
         presentation = PresentationStatus.NOT_REQUIRED
         try:
@@ -2467,6 +2472,25 @@ class MessageRoot[
             message = "action committed, but its subsequent work failed"
             raise ExceptionGroup(message, errors)
         return presentation
+
+    async def _execute_action(
+        self,
+        request: ActionRequest,
+        handler: ActionProceed,
+        operation: OperationRecorder,
+        responder: ActionResponder,
+        release: Callable[[], None],
+    ) -> bool:
+        """Commit handler state, release serialization, then start committed continuations.
+
+        Middleware can fail or be cancelled after the handler commits. Accepted work still
+        belongs to the host in that case; releasing and starting it require no checkpoint.
+        """
+        try:
+            return await self._run_middleware(request, handler, operation)
+        finally:
+            release()
+            responder._start_after_commit()
 
     async def _run_action(self, binding: ActionBinding, event: ActionEvent, context: ActionContext) -> None:
         adapter = event.responder
