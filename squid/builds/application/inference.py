@@ -32,7 +32,9 @@ class InferredTiming(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     value: str | None = Field(description="One duration with a unit, such as 1.35s or 27gt; no prose or arithmetic.")
-    qualifier: str | None = Field(description="Input delay, estimates, or other qualifications copied from the source.")
+    qualifier: str | None = Field(
+        description="Source-stated input delay, estimates, or measurement caveats; not the same duration in another unit."
+    )
 
 
 class InferredLink(BaseModel):
@@ -67,13 +69,25 @@ class InferredBuild(BaseModel):
     closing_time: InferredTiming | None
     creators: list[str]
     version_spec: str | None
-    author_note: str | None
+    author_note: str | None = Field(
+        description=(
+            "Additional concrete build facts: revision changes, operating requirements, limitations, or credits. "
+            "Use concise factual prose. Omit praise, title analysis, wording or punctuation commentary, "
+            "and facts already captured in other fields. Null when there is nothing useful to add."
+        )
+    )
     confidence: Literal["high", "medium", "low"]
     display_name: str | None = Field(default=None, description="An explicit build title or name from the source.")
     volume: str | None = Field(default=None, description="Reported volume or size formula; never a restriction.")
     completion_time: str | None = Field(default=None, description="Explicit completion/design date, not a record date.")
     links: list[InferredLink] = Field(default_factory=list)
-    review_notes: list[str] = Field(default_factory=list, description="Unresolved interpretations requiring review.")
+    review_notes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Only concrete conflicts or ambiguities affecting build facts or attribution. "
+            "No comments about wording, hype, missing optional facts, or taxonomy membership. Empty when none."
+        ),
+    )
 
 
 class InferenceResult(BaseModel):
