@@ -7,7 +7,7 @@ from typing import Any
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
-from squid_ui.semantic import Choice, ControlDisplay, FormTrigger, Tone, fallback
+from squid_ui.semantic import Choice, ControlDisplay, Tone, fallback
 from squid_ui.text import TextLike
 from squid_ui_widgets._actions import (
     MachineKeySegment,
@@ -340,14 +340,9 @@ class MultiChoice:
         if len(self._choice_order) <= 25:
             modal = self.form_for(state, "modal")
             assert modal is not None
-            # fallback needs layout nodes, so wrap the routed form control in a container.
+            # fallback needs layout nodes, so wrap the form control in a container.
             trigger = controls.form(modal, "modal", key=f"{self.key}.modal", label="Select options")
-            alternate = (
-                trigger
-                if isinstance(trigger, FormTrigger)
-                else action_controls(trigger, key=f"{self.key}.modal-action")
-            )
-            selection = fallback(direct, alternate)
+            selection = fallback(direct, action_controls(trigger, key=f"{self.key}.modal-action"))
         else:
             selection = direct
         errors = self.errors(state)

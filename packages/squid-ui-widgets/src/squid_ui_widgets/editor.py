@@ -477,9 +477,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
                 stack(
                     heading(section.label, level=3),
                     paragraph(section.summary(value)),
-                    edit
-                    if isinstance(edit, FormTrigger)
-                    else action_controls(edit, key=f"{self.key}.{section.key}.actions"),
+                    action_controls(edit, key=f"{self.key}.{section.key}.actions"),
                 )
             )
 
