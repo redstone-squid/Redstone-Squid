@@ -128,9 +128,11 @@ def test_runtime_targets_install_only_their_declared_features(runtime_images: di
         if with_media:
             assert ffmpeg.stdout == FFMPEG_VERSION
 
-        for package in ("libvulkan1", "mesa-vulkan-drivers"):
-            query = _run_image(image, "/usr/bin/dpkg-query", "--show", package, check=False)
-            assert (query.returncode == 0) is with_software_gpu
+        drivers = _run_image(image, "/usr/bin/dpkg-query", "--show", "mesa-vulkan-drivers", check=False)
+        assert (drivers.returncode == 0) is with_software_gpu
+        # FFmpeg also depends on the Vulkan loader; only Mesa supplies the software renderer.
+        if with_software_gpu:
+            _run_image(image, "/usr/bin/dpkg-query", "--show", "libvulkan1")
 
 
 @pytest.mark.docker
