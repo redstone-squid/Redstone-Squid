@@ -454,13 +454,14 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         )
 
 
-async def test_video_form_is_available_without_expanding_schematic_tools() -> None:
+async def test_video_form_is_inside_schematic_tools() -> None:
     async with stage(_screen(schematics_available=True, video_enabled=True), owner=object()) as ui:
         assert "Schematic info" not in ui.texts()
-        await ui.press_for_form(ui.key_for("schematic-video"))
+        assert "Render video" not in ui.texts()
         await ui.press(ui.key_for("schematic-tools"))
         ui.control(ui.key_for("schematic-info"))
         ui.control(ui.key_for("schematic-video"))
+        await ui.press_for_form(ui.key_for("schematic-video"))
         await ui.press(ui.key_for("schematic-tools"))
         assert "Schematic info" not in ui.texts()
-        ui.control(ui.key_for("schematic-video"))
+        assert "Render video" not in ui.texts()

@@ -65,9 +65,9 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes = list(self._video_nodes())
         if self._show_details is not None and not self._show_details():
-            return tuple(nodes)
+            return ()
+        nodes = list(self._video_nodes())
         nodes.extend(self._schematic_nodes())
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
