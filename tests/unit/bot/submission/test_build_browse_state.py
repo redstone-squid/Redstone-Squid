@@ -41,6 +41,8 @@ def _screen(
     return BuildBrowseScreen(
         cast(BuildQueryService, queries),
         cast(BuildService, None),
+        AsyncMock(),
+        AsyncMock(),
         cast(SchematicService, schematics),
         topics=LocalTopicBus(),
         initial_id=initial_id,
@@ -118,7 +120,7 @@ async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
     assert detail is not None
 
     async def request_then_fail() -> None:
-        await detail._request_approve(press_event())
+        await detail._request_approve(1, press_event())
         raise RuntimeError("later failure")
 
     with pytest.raises(RuntimeError, match="later failure"), sl.runtime.transaction():

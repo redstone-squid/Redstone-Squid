@@ -8,6 +8,7 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.builds.domain import Status
 from squid.builds.history import BuildEditActor, HistoryOperation
 from squid.builds.models import Build
 from squid.permissions.application.ports import PermissionUnitOfWork
@@ -71,6 +72,8 @@ class BuildRepository(BuildEditing, Protocol):
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]: ...
 
     async def save(self, build: Build) -> None: ...
+
+    async def set_status(self, build: Build, status: Status) -> None: ...
 
     async def confirm(self, build: Build) -> None: ...
 

@@ -243,7 +243,7 @@ class BuildService:
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
     ) -> Build:
-        """Confirm a build under its lease and commit the new status."""
+        """Apply a vote approval under the build lease, ignoring builds already reviewed."""
         context = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
@@ -259,6 +259,8 @@ class BuildService:
             ),
         ):
             build = await self._get_for_update(uow, build_id)
+            if build.submission_status is not Status.PENDING:
+                return build
             await uow.builds.confirm(build)
             await uow.commit()
         return build
@@ -273,7 +275,7 @@ class BuildService:
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
     ) -> Build:
-        """Deny a build under its lease and commit the new status."""
+        """Apply a vote rejection under the build lease, ignoring builds already reviewed."""
         context = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
@@ -289,6 +291,8 @@ class BuildService:
             ),
         ):
             build = await self._get_for_update(uow, build_id)
+            if build.submission_status is not Status.PENDING:
+                return build
             await uow.builds.deny(build)
             await uow.commit()
         return build

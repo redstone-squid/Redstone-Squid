@@ -15,12 +15,12 @@ from squid.builds.application.edit_schema import BuildPatch
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.application.services import BuildEditor, BuildService
-from squid.builds.domain import Info, UnresolvedTaxonomy
+from squid.builds.domain import Info, Status, UnresolvedTaxonomy
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
+from squid.core.errors import AuthorizationError, DataIntegrityError, InvalidStateError, ValidationError
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import (
     EditCommand,
@@ -32,6 +32,11 @@ from squid.edits.domain import (
     RevisionConflictError,
     require_revision,
 )
+from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.application.services import PermissionService
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT
+
+BUILD_STATUS_EDIT = "build.status"
 
 BUILD_EDIT = "build.fields"
 
@@ -91,7 +96,7 @@ def build_values(build: Build) -> EditValues:
     return EditValues(json.dumps(patch.attributes() | {"unresolved_taxonomy": unresolved}))
 
 
-class BuildEditUnitOfWork(BuildUnitOfWork, EditUnitOfWork, Protocol):
+class BuildEditUnitOfWork(BuildUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
     pass
 
 
@@ -163,4 +168,63 @@ class BuildFieldsEdit:
             # save also persists the prepared vector in PostgreSQL; no separate
             # post-commit index write can overtake a newer build revision.
             await uow.builds.save(prepared.build)
+        return (Revision(command.expected[0].target, prepared.build.revision),)
+
+
+class BuildStatusEdit:
+    """Review a pending build, or reverse a review at its recorded revision."""
+
+    def __init__(self, permissions: PermissionService) -> None:
+        self._permissions = permissions
+
+    async def prepare(self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
+        if actor.account_id is None:
+            raise AuthorizationError
+        if len(command.expected) != 1 or command.expected[0].target.kind != "build":
+            raise ValidationError
+        values = command.values.unpack()
+        if values.keys() != {"submission_status"}:
+            raise ValidationError
+        try:
+            status = Status(values["submission_status"])
+        except (ValueError, TypeError) as error:
+            raise ValidationError from error
+        build_id = int(command.expected[0].target.key)
+        build = await uow.builds.get_for_update(build_id)
+        if build is None:
+            raise BuildNotFoundError(build_id)
+        expected = require_revision(command.expected[0], build.revision)
+        previous = build.submission_status
+        if command.purpose == "undo":
+            if status is not Status.PENDING or previous not in (Status.CONFIRMED, Status.DENIED):
+                raise InvalidStateError
+            decision = previous
+        else:
+            if previous is not Status.PENDING or status not in (Status.CONFIRMED, Status.DENIED):
+                raise InvalidStateError
+            decision = status
+        permission = BUILD_SUBMISSION_APPROVE if decision is Status.CONFIRMED else BUILD_SUBMISSION_REJECT
+        if not await self._permissions.allows_in(uow, actor, permission):
+            raise AuthorizationError
+        assert previous is not None
+        return PreparedBuildEdit(
+            EditValues.of({"submission_status": previous.value}),
+            EditValues.of({"submission_status": status.value}),
+            revisions=(expected,),
+            build=build,
+        )
+
+    async def apply(
+        self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
+    ) -> tuple[Revision, ...]:
+        assert isinstance(prepared, PreparedBuildEdit)
+        assert actor.account_id is not None
+        async with uow.builds.editing(
+            actor=actor.account_id,
+            source="versioned_review",
+            operation="moderation",
+            correlation_kind="edit_operation",
+            correlation_id=str(command.operation_id),
+        ):
+            await uow.builds.set_status(prepared.build, Status(prepared.after.unpack()["submission_status"]))
         return (Revision(command.expected[0].target, prepared.build.revision),)

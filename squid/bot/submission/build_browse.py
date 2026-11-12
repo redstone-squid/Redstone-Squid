@@ -4,6 +4,7 @@ import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 from typing import Any, cast, override
 
 import squid_ui as sl
@@ -11,13 +12,18 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.consent import with_consented_account
+from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.submission.schematic_tools import SchematicTools
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr
 from squid.builds.application import BuildQueryService, BuildService
+from squid.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.builds.domain import Status
 from squid.builds.models import Build
+from squid.core.actors import Actor
 from squid.core.pagination import PageSelector
+from squid.edits.application import EditRunner
+from squid.edits.domain import EditValues
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
@@ -106,6 +112,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         None, opaque=True
     )
+    _review: BoundEdit | None = sl.state(None, opaque=True)
     _pending_review: str | None = sl.state(None, persist=False)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
 
@@ -116,6 +123,8 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         changes: TopicHandle,
         queries: BuildQueryService,
         builds: BuildService,
+        edits: EditRunner,
+        actor: Callable[[], Awaitable[Actor]],
         schematics: SchematicService,
         render_build: BuildRenderer,
         capabilities: BuildCapabilities,
@@ -127,8 +136,11 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._changes = changes
         self._build_id = build.id
         self._seed: Build | None = build
+        self.controller = EditController(edits, actor, self._refresh_review)
         self._queries = queries
         self._builds = builds
+        self._edits = edits
+        self._actor = actor
         self.schematics = SchematicTools(
             build.id,
             schematics=schematics,
@@ -169,6 +181,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         actions = self._detail_actions(build)
         if actions is not None:
             nodes.append(actions)
+        nodes.extend(self.controller.controls())
         nodes.append(self.schematics)
         if self._asset is not None:
             nodes.append(
@@ -198,7 +211,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             actions.append(
                 sl.action_control(
                     tr(t"bot-submission-build-browse-approve = Approve"),
-                    self._request_approve,
+                    partial(self._request_approve, build.revision),
                     key="approve",
                     tone=sl.Tone.SUCCESS,
                 )
@@ -207,7 +220,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             actions.append(
                 sl.action_control(
                     tr(t"bot-submission-build-browse-reject = Reject"),
-                    self._request_reject,
+                    partial(self._request_reject, build.revision),
                     key="reject",
                     tone=sl.Tone.DANGER,
                 )
@@ -230,13 +243,14 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             ),
         )
 
-    async def _request_approve(self, _event: sl.PressEvent) -> None:
-        self._request_review("approve")
+    async def _request_approve(self, revision: int, _event: sl.PressEvent) -> None:
+        self._request_review("approve", revision)
 
-    async def _request_reject(self, _event: sl.PressEvent) -> None:
-        self._request_review("reject")
+    async def _request_reject(self, revision: int, _event: sl.PressEvent) -> None:
+        self._request_review("reject", revision)
 
-    def _request_review(self, action: str) -> None:
+    def _request_review(self, action: str, revision: int) -> None:
+        self._review = self.controller.bind(BUILD_STATUS_EDIT, build_target(self._build_id), revision)
         self._pending_review = action
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
             tr(t"build-review-state-warning = This changes the build's review state."),
@@ -249,6 +263,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     async def _decide_review(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
         action = self._pending_review
+        review = self._review
         self._pending_review = None
         self._decision = None
         if choice == "cancel" or action is None:
@@ -257,14 +272,16 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if not await self._may(event.source, node):
             return
 
-        async def apply_review(source: sd.ActionEvent, account_id: int) -> None:
+        async def apply_review(source: sd.ActionEvent, _account_id: int) -> None:
             if not await self._may(source, node):
                 return
-            if action == "approve":
-                await self._builds.confirm(self._build_id, actor=account_id, source="discord_review")
-            else:
-                await self._builds.deny(self._build_id, actor=account_id, source="discord_review")
-            await self._refresh_posts(self._build_id)
+            assert review is not None
+            await review.save(
+                EditValues.of(
+                    {"submission_status": (Status.CONFIRMED if action == "approve" else Status.DENIED).value}
+                ),
+                tr(t"build-review-state-updated = Build review state updated."),
+            )
             await source.notice(tr(t"build-review-state-updated = Build review state updated."))
 
         source = cast(sd.ActionEvent, event.source)
@@ -274,6 +291,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             await with_consented_account(
                 source, cast(RedstoneSquid, source.context.client).services.accounts, apply_review
             )
+
+    async def _refresh_review(self) -> None:
+        self.projection.invalidate()
+        await self._refresh_posts(self._build_id)
 
     async def _debug(self, event: sl.PressEvent) -> None:
         if not await self._may(event, BUILD_SUBMISSION_DEBUG):
@@ -311,6 +332,8 @@ class BuildBrowseScreen(sd.Screen):
         self,
         queries: BuildQueryService,
         builds: BuildService,
+        edits: EditRunner,
+        actor: Callable[[], Awaitable[Actor]],
         schematics: SchematicService,
         *,
         topics: TopicBus,
@@ -324,6 +347,8 @@ class BuildBrowseScreen(sd.Screen):
         self._topics = topics
         self._queries = queries
         self._builds = builds
+        self._edits = edits
+        self._actor = actor
         self._schematics = schematics
         self._initial_id = initial_id
         self._render_build = render_build
@@ -404,6 +429,8 @@ class BuildBrowseScreen(sd.Screen):
             changes=self._topics.topic("build", str(build.id)),
             queries=self._queries,
             builds=self._builds,
+            edits=self._edits,
+            actor=self._actor,
             schematics=self._schematics,
             render_build=self._render_build,
             capabilities=self._capabilities,

@@ -41,7 +41,7 @@ from squid.builds.application import (
     BuildService,
     RestrictionService,
 )
-from squid.builds.application.edits import BUILD_EDIT, BuildFieldsEdit
+from squid.builds.application.edits import BUILD_EDIT, BUILD_STATUS_EDIT, BuildFieldsEdit, BuildStatusEdit
 from squid.builds.application.locks import BuildLockService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel
@@ -385,6 +385,7 @@ class _ServiceGraph:
                 ROLE_CREATE: PermissionRoleCreation(self.permission_admin),
                 ROLE_DELETE: PermissionRoleDeletion(self.permission_admin),
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
+                BUILD_STATUS_EDIT: BuildStatusEdit(self.permissions),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),
                 PROFILE_EDIT: AccountProfileEdit(self.permissions),

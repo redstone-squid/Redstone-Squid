@@ -41,6 +41,9 @@ class FakeBuildRepository(FakeBuildEditing):
     async def save(self, build: Build) -> None:
         self.saved.append(build)
 
+    async def set_status(self, build: Build, status: Status) -> None:
+        build.submission_status = status
+
     async def confirm(self, build: Build) -> None:
         self.confirmed.append(build)
 
@@ -580,3 +583,15 @@ async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() ->
     assert build.component_restrictions == ["No Slime"]
     assert build.patterns == ["Spiral"]
     assert build.extra_info == {}
+
+
+@pytest.mark.parametrize("status", [Status.CONFIRMED, Status.DENIED])
+async def test_vote_outcome_leaves_an_existing_decision_unchanged(existing_build: DoorBuild, status: Status) -> None:
+    existing_build.submission_status = status
+    repository = FakeBuildRepository(existing_build)
+    service = build_service(repository)
+    await service.confirm(42, actor="vote_worker", source="vote_outcome")
+    await service.deny(42, actor="vote_worker", source="vote_outcome")
+    assert repository.confirmed == []
+    assert repository.denied == []
+    assert existing_build.submission_status is status

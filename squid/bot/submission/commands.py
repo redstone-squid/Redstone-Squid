@@ -18,7 +18,7 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import actor_for_interaction, allows
+from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_MEASURE_TIMING,
@@ -213,6 +213,8 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         return BuildBrowseScreen(
             self.queries,
             self.builds,
+            self.bot.services.edits,
+            lambda: current_edit_actor(request),
             self.bot.services.schematics,
             topics=self.bot.topic_bus,
             initial_id=build_id,

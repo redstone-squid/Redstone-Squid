@@ -768,6 +768,10 @@ class BuildRepository:
 
         await self._set_status(build, Status.DENIED, operation="deny")
 
+    async def set_status(self, build: Build, status: Status) -> None:
+        """Write a review status, including PENDING when undoing a decision."""
+        await self._set_status(build, status, operation="review")
+
     async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
         assert build.id is not None
         edited_time = Instant.now()

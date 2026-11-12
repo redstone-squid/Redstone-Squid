@@ -1,6 +1,7 @@
 """Build receipts preserve audit history and fence every aggregate change."""
 
 from functools import partial
+from unittest.mock import AsyncMock
 
 import anyio
 import pytest
@@ -9,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
 from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.application.edits import BUILD_EDIT, BuildFieldsEdit, build_target, build_values, patch_values
+from squid.builds.application.edits import (
+    BUILD_EDIT,
+    BUILD_STATUS_EDIT,
+    BuildFieldsEdit,
+    BuildStatusEdit,
+    build_target,
+    build_values,
+    patch_values,
+)
 from squid.builds.application.locks import BuildLockService
 from squid.builds.application.restrictions import RestrictionService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
@@ -19,7 +28,7 @@ from squid.builds.models import Build, OtherBuild
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditResult, LatestRevision, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditResult, EditValues, LatestRevision, Revision, RevisionConflictError
 from squid.permissions.application.services import PermissionService
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.application import VersionService
@@ -201,3 +210,41 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
     current = await service.get(build.id)
     assert current is not None
     assert current.description == "newer"
+
+
+async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    service, _, actor, build = await setup(sessions)
+    assert build.id is not None
+    permissions = AsyncMock(spec=PermissionService)
+    permissions.allows_in.return_value = True
+    executor = EditExecutor(partial(SqlAlchemyUnitOfWork, sessions), {BUILD_STATUS_EDIT: BuildStatusEdit(permissions)})
+    command = EditCommand(
+        BUILD_STATUS_EDIT,
+        (Revision(build_target(build.id), build.revision),),
+        EditValues.of({"submission_status": Status.CONFIRMED}),
+    )
+    result = await executor.execute(command, actor)
+    assert result.receipt is not None
+    current = await service.get(build.id)
+    assert current is not None
+    assert current.submission_status is Status.CONFIRMED
+    with pytest.raises(RevisionConflictError):
+        await executor.execute(
+            EditCommand(BUILD_STATUS_EDIT, command.expected, EditValues.of({"submission_status": Status.DENIED})), actor
+        )
+    undone = await executor.execute(result.receipt.undo(result.outcome.revisions), actor)
+    current = await service.get(build.id)
+    assert current is not None
+    assert current.submission_status is Status.PENDING
+    await executor.execute(result.receipt.redo(undone.outcome.revisions), actor)
+    current = await service.get(build.id)
+    assert current is not None
+    assert current.submission_status is Status.CONFIRMED
+    async with sessions() as session:
+        entries = list(
+            (await session.scalars(select(BuildHistoryEntry).where(BuildHistoryEntry.build_id == build.id))).all()
+        )
+        assert len(entries) == 4
