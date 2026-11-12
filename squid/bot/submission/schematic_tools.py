@@ -67,8 +67,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._show_details is not None and not self._show_details():
             return ()
-        nodes = list(self._video_nodes())
-        nodes.extend(self._schematic_nodes())
+        nodes = list(self._schematic_nodes())
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
         if self._asset is not None:
@@ -84,6 +83,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if not self._schematics.available:
             return ()
+        videos_enabled = self._schematics.videos is not None and self._schematics.videos.enabled
         return (
             sl.action_controls(
                 sl.action_control(
@@ -114,29 +114,21 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     key="timing",
                     on_submit=self._timing,
                 ),
-                key="schematic-actions",
-            ),
-        )
-
-    def _video_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        if not self._schematics.available or self._schematics.videos is None or not self._schematics.videos.enabled:
-            return ()
-        return (
-            sl.action_controls(
-                sl.form(
+                videos_enabled
+                and sl.form(
                     tr(t"schematic-video-action = Render video"),
                     _VideoForm().spec(),
                     key="schematic-video",
                     on_submit=self._video,
                 ),
-                self._video_job_id is not None
+                videos_enabled
+                and self._video_job_id is not None
                 and sl.action_control(
                     tr(t"schematic-video-refresh = Check video"),
                     self._refresh_video,
                     key="video-refresh",
                 ),
-                key="video-actions",
-                display=sl.semantic.ControlDisplay.INDIVIDUAL,
+                key="schematic-actions",
             ),
         )
 
