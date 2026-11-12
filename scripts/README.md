@@ -54,7 +54,23 @@ Use fixed date bounds and the same grouping options and limit when retrying: ord
 message IDs identify retained runs. Completed inference results are reused, failed inference is retried, and edited drafts are preserved. Changing bounds or grouping can create different bundles. Runs are subject to the
 normal retention period and capacity limits. When no retained run exists, already imported
 bundles are skipped; partially imported bundles fail for manual inspection and narrower bounds.
-Bundle failures are logged while other bundles continue, and cause a nonzero exit status.
+On any bundle failure (including exhausted model credits), the importer stops scheduling
+new work and lets in-flight groups finish. It exits nonzero and prints the earliest failed
+bundle's channel and first message ID, plus resume flags:
+
+```text
+--before <original-upper-bound> --resume-channel <channel-id> --resume-from <message-id>
+```
+
+Add those flags to the original command after fixing the failure. Keep the original channel
+order, `--after`, `--limit`, and grouping options. The importer freezes and logs `--before`
+when none is supplied. Resume skips completed channels, re-reads the stopped channel's
+history to reconstruct identical groups and context, and starts processing at the reported
+message (inclusive). Earlier groups make no model calls. Later channels run normally.
+Real imports reuse retained results for groups that completed out of order; dry runs have
+no retained results, so replaying those later groups calls the model again. The script
+reports the resume point in its output; it does not write a checkpoint file or recover a
+cursor after a process crash or forced termination.
 
 ## Termux
 

@@ -1,5 +1,6 @@
 """Historical imports preserve authors, bound work, and keep previews read-only."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -9,6 +10,8 @@ from uuid import uuid4
 
 import anyio
 import discord
+import httpx2
+import openai
 import pytest
 
 from scripts import populate_db_with_logs_historical_messages as importer
@@ -125,30 +128,32 @@ async def test_existing_builds_do_not_create_new_bundle_identities(
     ingest.assert_not_awaited()
 
 
-async def test_worker_pool_bounds_concurrency_and_continues_after_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    active = peak = calls = 0
+async def test_worker_pool_drains_in_flight_work_and_reports_earliest_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    later_failed = asyncio.Event()
+    calls: list[int] = []
 
-    async def ingest(*args: object, **kwargs: object) -> object:
-        nonlocal active, peak, calls
-        calls += 1
-        call = calls
-        active += 1
-        peak = max(peak, active)
-        await anyio.sleep(0)
-        active -= 1
-        if call == 1:
-            raise OSError
-        return uuid4()
+    async def process(
+        bundle: importer.MessageBundle, runtime: BotServices, options: importer.ImportOptions
+    ) -> importer.ImportSummary:
+        identifier = bundle.primary[0].id
+        calls.append(identifier)
+        if identifier == 1:
+            await later_failed.wait()
+            await anyio.sleep(0)
+        else:
+            later_failed.set()
+        return importer.ImportSummary(groups=1, failed=1)
 
-    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
+    monkeypatch.setattr(importer, "process_group", process)
     channel = Channel([message(i, i) for i in range(1, 21)])
-    result = await importer.process_channel(
-        cast(discord.TextChannel, channel), services(), importer.ImportOptions("x", concurrency=2)
-    )
-    assert result.groups == 20
-    assert result.processed + result.failed == 20
-    assert result.failed == 1
-    assert peak == 2
+    with pytest.raises(importer.ImportStopped) as stopped:
+        await importer.process_channel(
+            cast(discord.TextChannel, channel), services(), importer.ImportOptions("x", concurrency=2)
+        )
+    assert calls == [1, 2]
+    assert stopped.value.message_id == 1
+    assert stopped.value.channel_id == 42
+    assert stopped.value.summary.failed == 2
 
 
 @pytest.mark.parametrize(
@@ -209,3 +214,101 @@ async def test_channel_consent_allows_import_without_account_consent(
     else:
         ingest.assert_awaited_once()
         assemble.assert_not_awaited()
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+async def test_credit_exhaustion_stops_before_later_bundles(monkeypatch: pytest.MonkeyPatch, dry_run: bool) -> None:
+    response = httpx2.Response(402, request=httpx2.Request("POST", "https://example.invalid/chat"))
+    error = openai.APIStatusError("Insufficient credits", response=response, body={"code": 402})
+    infer = AsyncMock(side_effect=error)
+    runtime = services()
+    monkeypatch.setattr(importer, "assemble_bundle", AsyncMock(return_value=object()))
+    monkeypatch.setattr(importer, "ingest_message_bundle", infer)
+    monkeypatch.setattr(runtime.build_inference, "infer", infer)
+    channel = Channel([message(i, i) for i in range(1, 10)])
+    with pytest.raises(importer.ImportStopped) as stopped:
+        await importer.process_channel(
+            cast(discord.TextChannel, channel), runtime, importer.ImportOptions("x", concurrency=1, dry_run=dry_run)
+        )
+    assert stopped.value.message_id == 1
+    infer.assert_awaited_once()
+
+
+async def test_resume_keeps_original_grouping_context_and_history_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    channel = Channel([message(1), message(2), message(3, 2), message(4, 2), message(5)])
+    processed: list[importer.MessageBundle] = []
+
+    async def process(
+        bundle: importer.MessageBundle, runtime: BotServices, options: importer.ImportOptions
+    ) -> importer.ImportSummary:
+        processed.append(bundle)
+        return importer.ImportSummary(groups=1, processed=1)
+
+    monkeypatch.setattr(importer, "process_group", process)
+    options = importer.ImportOptions("x", resume_channel=42, resume_from=3, limit=5)
+    await importer.process_channel(cast(discord.TextChannel, channel), services(), options)
+    assert [[item.id for item in bundle.primary] for bundle in processed] == [[3, 4], [5]]
+    assert [item.id for item in processed[0].preceding] == [1, 2]
+    assert channel.history_options["limit"] == 5
+    assert channel.history_options["after"] is None
+
+
+@pytest.mark.parametrize("resume_from", [2, 99])
+async def test_resume_rejects_missing_or_changed_bundle_boundary(
+    monkeypatch: pytest.MonkeyPatch, resume_from: int
+) -> None:
+    process = AsyncMock()
+    monkeypatch.setattr(importer, "process_group", process)
+    channel = Channel([message(1), message(2), message(3, 2)])
+    with pytest.raises(ValueError, match="Resume message"):
+        await importer.process_channel(
+            cast(discord.TextChannel, channel),
+            services(),
+            importer.ImportOptions("x", resume_channel=42, resume_from=resume_from),
+        )
+    process.assert_not_awaited()
+
+
+@pytest.mark.parametrize("arguments", [["--resume-channel", "42"], ["--resume-from", "3"]])
+def test_resume_requires_both_channel_and_message(arguments: list[str]) -> None:
+    with pytest.raises(SystemExit):
+        importer.parse_args(arguments)
+
+
+async def test_resume_skips_completed_channels_and_continues_to_later_channels(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(importer.discord, "TextChannel", Channel)
+    channels = {identifier: Channel([]) for identifier in [41, 42, 43]}
+    for identifier, channel in channels.items():
+        channel.id = identifier
+    fetch = AsyncMock(side_effect=lambda identifier: channels[identifier])
+    client = cast(discord.Client, SimpleNamespace(fetch_channel=fetch))
+    process = AsyncMock(return_value=importer.ImportSummary(groups=1, processed=1))
+    monkeypatch.setattr(importer, "process_channel", process)
+
+    result = await importer.run_import(
+        client, services(), [41, 42, 43], importer.ImportOptions("x", resume_channel=42, resume_from=3)
+    )
+
+    assert [call.args[0] for call in fetch.await_args_list] == [42, 43]
+    assert result.processed == 2
+
+
+async def test_channel_failure_stops_later_channels(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(importer.discord, "TextChannel", Channel)
+    channel = Channel([])
+    fetch = AsyncMock(return_value=channel)
+    client = cast(discord.Client, SimpleNamespace(fetch_channel=fetch))
+    stopped = importer.ImportStopped(42, 3, importer.ImportSummary(groups=1, failed=1))
+    monkeypatch.setattr(importer, "process_channel", AsyncMock(side_effect=stopped))
+
+    with pytest.raises(importer.ImportStopped):
+        await importer.run_import(client, services(), [42, 43], importer.ImportOptions("x"))
+
+    fetch.assert_awaited_once_with(42)
+
+
+def test_resume_log_reports_inclusive_message_and_original_upper_bound(caplog: pytest.LogCaptureFixture) -> None:
+    importer.ImportStopped(42, 3, importer.ImportSummary(failed=1)).log_resume("2026-11-12T10:00:00+00:00")
+
+    assert "--before 2026-11-12T10:00:00+00:00 --resume-channel 42 --resume-from 3" in caplog.text
+    assert "Keep --after, --limit, channel order, and grouping unchanged" in caplog.text

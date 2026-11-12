@@ -12,7 +12,7 @@ import math
 import sys
 from collections import deque
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -45,6 +45,8 @@ class ImportOptions:
     include_images: bool = True
     dry_run: bool = False
     channel_consent: bool = False
+    resume_channel: int | None = None
+    resume_from: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +68,27 @@ class ImportSummary:
 class MessageBundle:
     primary: tuple[discord.Message, ...]
     preceding: tuple[discord.Message, ...]
+
+
+class ImportStopped(Exception):
+    """A failed channel has drained in-flight work and can resume at a bundle boundary."""
+
+    def __init__(self, channel_id: int, message_id: int, summary: ImportSummary) -> None:
+        self.channel_id = channel_id
+        self.message_id = message_id
+        self.summary = summary
+        super().__init__(f"Import stopped in channel {channel_id}; resume from message {message_id}.")
+
+    def log_resume(self, boundary: int | str) -> None:
+        logger.error("%s Summary: %s", self, self.summary)
+        logger.error(
+            "After fixing the failure, rerun the same command with the original options and "
+            "--before %s --resume-channel %s --resume-from %s. "
+            "Keep --after, --limit, channel order, and grouping unchanged.",
+            boundary,
+            self.channel_id,
+            self.message_id,
+        )
 
 
 async def iter_bundles(channel: discord.TextChannel, options: ImportOptions) -> AsyncIterator[MessageBundle]:
@@ -144,38 +167,80 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
 
 
 async def process_channel(channel: discord.TextChannel, services: BotServices, options: ImportOptions) -> ImportSummary:
-    """Process streamed history with a fixed worker pool and bounded queue."""
+    """Stop scheduling on failure, drain in-flight groups, and report a safe retry boundary."""
     summary = ImportSummary()
+    stopped = asyncio.Event()
+    first_failed: int | None = None
+    resume_from = options.resume_from if options.resume_channel == channel.id else None
+    found_resume = resume_from is None
+    resume_error: str | None = None
     send, receive = anyio.create_memory_object_stream[MessageBundle](options.concurrency)
 
     async def worker() -> None:
-        nonlocal summary
+        nonlocal summary, first_failed
         async with receive.clone() as queue:
             async for bundle in queue:
+                if stopped.is_set():
+                    continue
                 result = await process_group(bundle, services, options)
                 summary += result
+                if result.failed:
+                    message_id = bundle.primary[0].id
+                    first_failed = min(first_failed, message_id) if first_failed is not None else message_id
+                    if not stopped.is_set():
+                        logger.error("Stopping new work after a failed bundle; waiting for in-flight groups to finish.")
+                    stopped.set()
 
     async with send, receive, anyio.create_task_group() as tasks:
         for _ in range(options.concurrency):
             tasks.start_soon(worker)
         async with send:
             async for bundle in iter_bundles(channel, options):
+                if stopped.is_set():
+                    break
+                if not found_resume:
+                    assert resume_from is not None
+                    if bundle.primary[0].id < resume_from:
+                        continue
+                    if bundle.primary[0].id != resume_from:
+                        resume_error = (
+                            "Resume message is not a group boundary; restore the original bounds and grouping."
+                        )
+                        break
+                    found_resume = True
                 await send.send(bundle)
     logger.info("Processed channel %s: %s", channel.id, summary)
+    if resume_error is not None:
+        raise ValueError(resume_error)
+    if not found_resume:
+        msg = "Resume message was not found; restore the original channels, bounds, limit, and grouping."
+        raise ValueError(msg)
+    if first_failed is not None:
+        raise ImportStopped(channel.id, first_failed, summary)
     return summary
 
 
 async def run_import(
     client: discord.Client, services: BotServices, channel_ids: Sequence[int], options: ImportOptions
 ) -> ImportSummary:
-    """Import channels sequentially so concurrency is bounded across the whole run."""
+    """Import channels sequentially, starting at the requested resume channel when supplied."""
     summary = ImportSummary()
-    for channel_id in dict.fromkeys(channel_ids):
+    selected = list(dict.fromkeys(channel_ids))
+    if options.resume_channel is not None:
+        if options.resume_channel not in selected:
+            msg = "The resume channel must be among the selected build-log channels."
+            raise ValueError(msg)
+        selected = selected[selected.index(options.resume_channel) :]
+    for channel_id in selected:
         channel = await client.fetch_channel(channel_id)
         if not isinstance(channel, discord.TextChannel):
             msg = f"Discord channel {channel_id} is not a text channel."
             raise TypeError(msg)
-        summary += await process_channel(channel, services, options)
+        try:
+            summary += await process_channel(channel, services, options)
+        except ImportStopped as exc:
+            exc.summary = summary + exc.summary
+            raise
     return summary
 
 
@@ -228,7 +293,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Use the selected channels' collection policy instead of per-account consent for this import only.",
     )
+    parser.add_argument("--resume-channel", type=_positive_int, help="Channel reported by an interrupted import.")
+    parser.add_argument("--resume-from", type=_positive_int, help="Inclusive first message of the reported bundle.")
     arguments = parser.parse_args(argv)
+    if (arguments.resume_channel is None) != (arguments.resume_from is None):
+        parser.error("--resume-channel and --resume-from must be supplied together")
     if arguments.after is not None and arguments.before is not None:
         after = arguments.after.created_at if isinstance(arguments.after, discord.Object) else arguments.after
         before = arguments.before.created_at if isinstance(arguments.before, discord.Object) else arguments.before
@@ -251,6 +320,8 @@ async def main(arguments: argparse.Namespace) -> int:
         include_images=not arguments.no_images,
         dry_run=arguments.dry_run,
         channel_consent=arguments.channel_consent,
+        resume_channel=arguments.resume_channel,
+        resume_from=arguments.resume_from,
     )
     async with (
         create_bot_runtime(process_config.runtime) as runtime,
@@ -266,7 +337,16 @@ async def main(arguments: argparse.Namespace) -> int:
             logger.info("Using channel-policy consent for this import only: %s", channel_ids)
         # HTTP history only: no gateway listener or background bot activity is needed.
         await client.login(process_config.discord.token.get_secret_value())
-        summary = await run_import(client, runtime.services, channel_ids, options)
+        # Freeze the upper boundary so a retry cannot merge new posts into the last group.
+        if options.before is None:
+            options = replace(options, before=datetime.now().astimezone())
+        boundary = options.before.id if isinstance(options.before, discord.Object) else options.before.isoformat()
+        logger.info("History upper boundary: --before %s", boundary)
+        try:
+            summary = await run_import(client, runtime.services, channel_ids, options)
+        except ImportStopped as exc:
+            exc.log_resume(boundary)
+            return 1
     logger.info("Import complete: %s", summary)
     return 1 if summary.failed else 0
 
