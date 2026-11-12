@@ -885,6 +885,11 @@ class Router[BotT: discord.Client]:
             await interaction.response.defer()
         except discord.InteractionResponded:
             return False
+        except discord.HTTPException as error:
+            # The handler may reach Discord before discord.py records its response.
+            if error.code != 40060:
+                logger.exception("could not acknowledge %s", source)
+            return False
         except Exception:
             logger.exception("could not acknowledge %s", source)
             return False

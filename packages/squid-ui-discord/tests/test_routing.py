@@ -807,6 +807,83 @@ class TestMiddleware:
 
 
 class TestAcknowledgement:
+    @pytest.mark.parametrize("remote", [False, True])
+    async def test_watchdog_losing_to_an_inflight_response_does_not_log_failure(
+        self, remote: bool, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        responding = anyio.Event()
+        collided = anyio.Event()
+        interaction = interaction_harness()
+        router = Router(acknowledgement_timeout=0.01)
+
+        async def send(**fields: Any) -> None:
+            responding.set()
+            await collided.wait()
+            interaction.response._done = True
+
+        async def defer() -> None:
+            await responding.wait()
+            collided.set()
+            if remote:
+                raise sd.http_error(400, code=40060, message="Interaction has already been acknowledged.")
+            raise discord.InteractionResponded(interaction)
+
+        interaction.response.send_message.callback = send
+        interaction.response.defer.callback = defer
+
+        @router.route(POLL_CLOSE)
+        async def respond(current: discord.Interaction[Any]) -> None:
+            await current.response.send_message()
+
+        with anyio.fail_after(1):
+            await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_message.assert_awaited_once()
+        interaction.response.defer.assert_awaited_once()
+        assert not caplog.records
+
+    async def test_initial_response_losing_to_watchdog_delivers_the_payload(self) -> None:
+        deferred = anyio.Event()
+        interaction = interaction_harness()
+        profiler = MemoryProfiler()
+        router = Router(acknowledgement_timeout=0.01, profiler=profiler)
+        original_defer = interaction.response.defer.callback
+
+        async def defer() -> None:
+            await original_defer()
+            deferred.set()
+
+        async def send(**fields: Any) -> None:
+            await deferred.wait()
+            raise sd.http_error(400, code=40060, message="Interaction has already been acknowledged.")
+
+        interaction.response.defer.callback = defer
+        interaction.response.send_message.callback = send
+        interaction.followup.send.result = sd.message_harness(message_id=42, ephemeral=True)
+
+        @router.route(POLL_CLOSE)
+        async def respond(current: discord.Interaction[Any]) -> None:
+            destination = squid_ui_discord.respond_to(current, ephemeral=True, wait=True)
+            result = await destination(render_static([sl.paragraph("editor")]))
+            assert result.message_id == 42
+
+        with anyio.fail_after(1):
+            await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_message.assert_awaited_once()
+        interaction.response.defer.assert_awaited_once()
+        interaction.followup.send.assert_awaited_once()
+        assert interaction.followup.send.await_args.kwargs["ephemeral"]
+        assert profiler.snapshot().deadline_misses[0].result.status is TraceStatus.COMPLETED
+
+    async def test_acknowledgement_logs_other_http_errors(self, caplog: pytest.LogCaptureFixture) -> None:
+        interaction = interaction_harness()
+        interaction.response.defer.error = sd.http_error(400, code=50035)
+
+        assert not await Router()._acknowledge_safely(interaction, "route:test")
+
+        assert "could not acknowledge route:test" in caplog.text
+
     async def test_a_handler_that_returns_without_responding_is_acknowledged(self) -> None:
         interaction = interaction_harness()
         router = Router()
