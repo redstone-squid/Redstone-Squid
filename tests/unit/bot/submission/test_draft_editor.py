@@ -21,12 +21,9 @@ from squid.bot.submission.ui.drafts import (
     DraftEditorScreen,
     FilesEditorScreen,
     Phase,
-    SectionEditorScreen,
-    _DimensionsField,
-    _modal_chunks,
     draft_editor,
-    present_chunk_form,
 )
+from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
 from squid.builds.application.input import parse_build_ticks
 from squid.builds.models import Build
 from squid.core.actors import Actor
@@ -290,7 +287,7 @@ async def test_overview_is_one_card_within_discord_limits(category: str) -> None
     assert labels(editor.render()).count("Edit") == len(editor.workspace.sections)
     assert {"Add files", "Preview", "Submit"} <= set(labels(editor.render()))
     for section in editor.workspace.sections:
-        for chunk in _modal_chunks(section):
+        for chunk in modal_chunks(section):
             event = press()
             await present_chunk_form(editor.workspace, chunk, event)
             modal = build_form_modal(event.present_form.call_args.args[0], on_submit=AsyncMock())

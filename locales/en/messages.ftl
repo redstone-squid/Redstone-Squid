@@ -2849,313 +2849,313 @@ diagnostics-view-work-lost = Work lost
 # squid/bot/diagnostics_view.py:265
 diagnostics-view-work-lost-only = Work lost only
 
-# squid/bot/submission/ui/drafts.py:1169, squid/bot/submission/ui/drafts.py:488, squid/bot/submission/ui/drafts.py:791
+# squid/bot/submission/ui/drafts.py:476, squid/bot/submission/ui/drafts.py:632, squid/bot/submission/ui/drafts.py:875
 draft-editor-add-files = Add files
 
-# squid/bot/submission/ui/drafts.py:111
+# squid/bot/submission/ui/sections.py:75
 draft-editor-build-size = Build size
 
-# squid/bot/submission/ui/drafts.py:675
+# squid/bot/submission/ui/sections.py:239
 draft-editor-choose = Choose…
 
-# squid/bot/submission/ui/drafts.py:762
+# squid/bot/submission/ui/drafts.py:603
 draft-editor-choose-file = Choose a file to replace or remove…
 
-# squid/bot/submission/ui/drafts.py:906
+# squid/bot/submission/ui/sections.py:305
 draft-editor-detail-closed = Changes saved. You can dismiss this message.
 
-# squid/bot/submission/ui/drafts.py:908
+# squid/bot/submission/ui/sections.py:307
 draft-editor-detail-locked = This draft can no longer be edited here.
 
-# squid/bot/submission/ui/drafts.py:915, squid/bot/submission/ui/views.py:951
+# squid/bot/submission/ui/sections.py:314, squid/bot/submission/ui/views.py:951
 draft-editor-done = Done
 
-# squid/bot/submission/ui/drafts.py:116
+# squid/bot/submission/ui/sections.py:80
 draft-editor-door-size = Door size
 
-# squid/bot/submission/ui/drafts.py:486, squid/bot/submission/ui/drafts.py:630, squid/bot/submission/ui/editor.py:33
+# squid/bot/submission/ui/drafts.py:474, squid/bot/submission/ui/editor.py:33, squid/bot/submission/ui/sections.py:194
 draft-editor-edit = Edit
 
-# squid/bot/submission/ui/drafts.py:552
+# squid/bot/submission/ui/drafts.py:540
 draft-editor-edit-build = Edit build
 
-# squid/bot/submission/ui/drafts.py:451
+# squid/bot/submission/ui/drafts.py:439
 draft-editor-expired = This panel has closed. Your answers are saved.
 
-# squid/bot/submission/ui/drafts.py:389
+# squid/bot/submission/ui/drafts.py:377
 draft-editor-file-download-failed = The file could not be downloaded. Replace or remove it.
 
-# squid/bot/submission/ui/drafts.py:1087
+# squid/bot/submission/ui/drafts.py:829
 draft-editor-file-failed = ⚠️ Upload failed. Replace or remove it.
 
-# squid/bot/submission/ui/drafts.py:1089
+# squid/bot/submission/ui/drafts.py:831
 draft-editor-file-failed-final = ⚠️ Upload failed
 
-# squid/bot/submission/ui/drafts.py:1079
+# squid/bot/submission/ui/drafts.py:821
 draft-editor-file-kind-image = Image
 
-# squid/bot/submission/ui/drafts.py:1078
+# squid/bot/submission/ui/drafts.py:820
 draft-editor-file-kind-schematic = Schematic
 
-# squid/bot/submission/ui/drafts.py:1081
+# squid/bot/submission/ui/drafts.py:823
 draft-editor-file-kind-unknown = Unsupported file type
 
-# squid/bot/submission/ui/drafts.py:1080
+# squid/bot/submission/ui/drafts.py:822
 draft-editor-file-kind-video = Video
 
-# squid/bot/submission/ui/drafts.py:1091
+# squid/bot/submission/ui/drafts.py:833
 draft-editor-file-not-added = Not added yet. Choose it under Edit to use it.
 
-# squid/bot/submission/ui/drafts.py:1093
+# squid/bot/submission/ui/drafts.py:835
 draft-editor-file-not-used = Not used
 
-# squid/bot/submission/ui/drafts.py:1095
+# squid/bot/submission/ui/drafts.py:837
 draft-editor-file-uploading = Uploading…
 
-# squid/bot/submission/ui/drafts.py:1072
+# squid/bot/submission/ui/drafts.py:814
 draft-editor-files-empty = *No files yet. Add your schematic and any images or videos.*
 
-# squid/bot/submission/ui/drafts.py:370
+# squid/bot/submission/ui/drafts.py:358
 draft-editor-files-failed = { $failed } of the files could not be added. They are listed under Files so you can replace or remove them.
 
-# squid/bot/submission/ui/drafts.py:752
+# squid/bot/submission/ui/drafts.py:593
 draft-editor-files-heading = Files
 
-# squid/bot/submission/ui/drafts.py:1173
+# squid/bot/submission/ui/drafts.py:879
 draft-editor-files-label = Schematic, images, or videos
 
-# squid/bot/submission/ui/drafts.py:1074
+# squid/bot/submission/ui/drafts.py:816
 draft-editor-files-none = *No files.*
 
-# squid/bot/submission/ui/drafts.py:1068
+# squid/bot/submission/ui/drafts.py:810
 draft-editor-files-title = **Files**
 
-# squid/bot/submission/ui/drafts.py:1395
+# squid/bot/submission/ui/drafts.py:936
 draft-editor-issue-media-processing = Your images or videos are still being processed.
 
-# squid/bot/submission/ui/drafts.py:1397
+# squid/bot/submission/ui/drafts.py:938
 draft-editor-issue-media-rejected = A file could not be used. Replace or remove it under **Files**.
 
-# squid/bot/submission/ui/drafts.py:1411
+# squid/bot/submission/ui/drafts.py:952
 draft-editor-issue-permission = You no longer have permission to submit this draft.
 
-# squid/bot/submission/ui/drafts.py:1406
+# squid/bot/submission/ui/drafts.py:947
 draft-editor-issue-retry-exhausted = Creating the build failed several times. Press **Submit** to try again, or ask staff for help if it keeps failing.
 
-# squid/bot/submission/ui/drafts.py:1377
+# squid/bot/submission/ui/drafts.py:918
 draft-editor-issue-schema-unsupported = This draft uses an old version of the form. Start a new one with `/build submit`.
 
-# squid/bot/submission/ui/drafts.py:1390
+# squid/bot/submission/ui/drafts.py:931
 draft-editor-issue-schematic-primary = You added several schematics. Choose the main one under **Files**.
 
-# squid/bot/submission/ui/drafts.py:1384
+# squid/bot/submission/ui/drafts.py:925
 draft-editor-issue-schematic-processing = Your schematic is still being processed.
 
-# squid/bot/submission/ui/drafts.py:1386
+# squid/bot/submission/ui/drafts.py:927
 draft-editor-issue-schematic-rejected = Your schematic could not be read. Replace it under **Files**.
 
-# squid/bot/submission/ui/drafts.py:1382
+# squid/bot/submission/ui/drafts.py:923
 draft-editor-issue-schematic-required = Add a schematic under **Files**.
 
-# squid/bot/submission/ui/drafts.py:1401
+# squid/bot/submission/ui/drafts.py:942
 draft-editor-issue-sponsor = The Minecraft server credited for this build is no longer available for credit. Turn off server credit to continue.
 
-# squid/bot/submission/ui/drafts.py:1413
+# squid/bot/submission/ui/drafts.py:954
 draft-editor-issue-target-rejected = The build could not be created from these answers. Check them and press **Submit** again.
 
-# squid/bot/submission/ui/drafts.py:462
+# squid/bot/submission/ui/drafts.py:450
 draft-editor-loading = Loading your draft…
 
-# squid/bot/submission/ui/drafts.py:780
+# squid/bot/submission/ui/drafts.py:621
 draft-editor-main-schematic = Use as main schematic
 
-# squid/bot/submission/ui/drafts.py:690
+# squid/bot/submission/ui/sections.py:254
 draft-editor-next-page = Next page
 
-# squid/bot/submission/ui/drafts.py:1051, squid/bot/submission/ui/drafts.py:1207
+# squid/bot/submission/ui/sections.py:384, squid/bot/submission/ui/sections.py:458
 draft-editor-no = No
 
-# squid/bot/submission/ui/drafts.py:653
+# squid/bot/submission/ui/sections.py:217
 draft-editor-no-options = No options are available right now.
 
-# squid/bot/submission/ui/drafts.py:1019, squid/bot/submission/ui/drafts.py:1042
+# squid/bot/submission/ui/sections.py:352, squid/bot/submission/ui/sections.py:375
 draft-editor-not-set = *Not set*
 
-# squid/bot/submission/ui/drafts.py:650
+# squid/bot/submission/ui/sections.py:214
 draft-editor-nothing-chosen = *Nothing chosen yet.*
 
-# squid/bot/submission/ui/drafts.py:1251
+# squid/bot/submission/ui/sections.py:502
 draft-editor-one-per-line = One per line
 
-# squid/bot/submission/ui/drafts.py:667
+# squid/bot/submission/ui/sections.py:231
 draft-editor-picker-pages = -# Page { $page_number } of { $pages }.
 
-# squid/bot/submission/ui/drafts.py:662
+# squid/bot/submission/ui/sections.py:226
 draft-editor-picker-pages-multiple = -# Page { $page_number } of { $pages }. Choices on other pages are kept.
 
-# squid/bot/submission/ui/drafts.py:644
+# squid/bot/submission/ui/sections.py:208
 draft-editor-picker-required = **{ $label }** · Required
 
-# squid/bot/submission/ui/drafts.py:494, squid/bot/submission/ui/views.py:717
+# squid/bot/submission/ui/drafts.py:482, squid/bot/submission/ui/views.py:717
 draft-editor-preview = Preview
 
-# squid/bot/submission/ui/drafts.py:892
+# squid/bot/submission/ui/drafts.py:733
 draft-editor-preview-failed = The preview could not be drawn.
 
-# squid/bot/submission/ui/drafts.py:879
+# squid/bot/submission/ui/drafts.py:720
 draft-editor-preview-intro = **Preview** · This is the card others will see once you submit. It updates as you edit; images and schematics appear after submission.
 
-# squid/bot/submission/ui/drafts.py:894
+# squid/bot/submission/ui/drafts.py:735
 draft-editor-preview-loading = Drawing the preview…
 
-# squid/bot/submission/ui/drafts.py:890
+# squid/bot/submission/ui/drafts.py:731
 draft-editor-preview-needs = Fill in { $needed } to see the preview.
 
-# squid/bot/submission/ui/drafts.py:684
+# squid/bot/submission/ui/sections.py:248
 draft-editor-previous-page = Previous page
 
-# squid/bot/submission/ui/drafts.py:1332
+# squid/bot/submission/ui/sections.py:583
 draft-editor-problem-above-maximum = Too large
 
-# squid/bot/submission/ui/drafts.py:1330
+# squid/bot/submission/ui/sections.py:581
 draft-editor-problem-below-minimum = Too small
 
-# squid/bot/submission/ui/drafts.py:1326
+# squid/bot/submission/ui/sections.py:577
 draft-editor-problem-required = Required
 
-# squid/bot/submission/ui/drafts.py:1328
+# squid/bot/submission/ui/sections.py:579
 draft-editor-problem-required-value = Must be confirmed
 
-# squid/bot/submission/ui/drafts.py:1338
+# squid/bot/submission/ui/sections.py:589
 draft-editor-problem-too-few-items = Needs more entries
 
-# squid/bot/submission/ui/drafts.py:1336
+# squid/bot/submission/ui/sections.py:587
 draft-editor-problem-too-long = Too long
 
-# squid/bot/submission/ui/drafts.py:1340
+# squid/bot/submission/ui/sections.py:591
 draft-editor-problem-too-many-items = Too many entries
 
-# squid/bot/submission/ui/drafts.py:1334
+# squid/bot/submission/ui/sections.py:585
 draft-editor-problem-too-short = Too short
 
-# squid/bot/submission/ui/drafts.py:1344
+# squid/bot/submission/ui/sections.py:595
 draft-editor-problem-unknown-field = No longer part of the form
 
-# squid/bot/submission/ui/drafts.py:1342
+# squid/bot/submission/ui/sections.py:593
 draft-editor-problem-unknown-option = No longer available, choose again
 
-# squid/bot/submission/ui/drafts.py:1346
+# squid/bot/submission/ui/sections.py:597
 draft-editor-problem-wrong-type = Not a valid value, enter it again
 
-# squid/bot/submission/ui/drafts.py:515
+# squid/bot/submission/ui/drafts.py:503
 draft-editor-ready = Ready to submit.
 
-# squid/bot/submission/ui/drafts.py:501, squid/bot/submission/ui/drafts.py:543
+# squid/bot/submission/ui/drafts.py:489, squid/bot/submission/ui/drafts.py:531
 draft-editor-refresh = Refresh
 
-# squid/bot/submission/ui/drafts.py:773
+# squid/bot/submission/ui/drafts.py:614
 draft-editor-remove-file = Remove
 
-# squid/bot/submission/ui/drafts.py:454
+# squid/bot/submission/ui/drafts.py:442
 draft-editor-reopen = Reopen draft
 
-# squid/bot/submission/ui/drafts.py:771
+# squid/bot/submission/ui/drafts.py:612
 draft-editor-replace-file = Replace
 
-# squid/bot/submission/ui/drafts.py:839
+# squid/bot/submission/ui/drafts.py:680
 draft-editor-replace-title = Replace file
 
-# squid/bot/submission/ui/drafts.py:419
+# squid/bot/submission/ui/drafts.py:407
 draft-editor-replacement-failed = The replacement could not be added. Try again or remove it.
 
-# squid/bot/submission/ui/drafts.py:840
+# squid/bot/submission/ui/drafts.py:681
 draft-editor-replacement-label = New file
 
-# squid/bot/submission/ui/drafts.py:1017, squid/bot/submission/ui/drafts.py:1041
+# squid/bot/submission/ui/sections.py:350, squid/bot/submission/ui/sections.py:374
 draft-editor-required = ⚠️ *Required*
 
-# squid/bot/submission/ui/drafts.py:508
+# squid/bot/submission/ui/drafts.py:496
 draft-editor-required-left =
     { NUMBER($missing) ->
         [one] ⚠️ **{ NUMBER($missing) } required field is empty.** Fill it in to submit.
        *[other] ⚠️ **{ NUMBER($missing) } required fields are empty.** Fill them in to submit.
     }
 
-# squid/bot/submission/ui/drafts.py:989
+# squid/bot/submission/ui/sections.py:322
 draft-editor-section-empty = *Optional. Nothing added yet.*
 
-# squid/bot/submission/ui/drafts.py:615
+# squid/bot/submission/ui/sections.py:179
 draft-editor-section-gone = This section is no longer part of the form.
 
-# squid/bot/submission/ui/drafts.py:1278
+# squid/bot/submission/ui/sections.py:529
 draft-editor-size-format = Enter the size as width x height x depth, such as 5x7x4. Use ? for a value you don't know.
 
-# squid/bot/submission/ui/drafts.py:1300
+# squid/bot/submission/ui/sections.py:551
 draft-editor-size-help = Width x height x depth in blocks. Use ? for a value you don't know.
 
-# squid/bot/submission/ui/drafts.py:954
+# squid/bot/submission/ui/drafts.py:777
 draft-editor-status-creating = ⏳ Creating your build. This usually takes under a minute; this message updates when it is done.
 
-# squid/bot/submission/ui/drafts.py:961
+# squid/bot/submission/ui/drafts.py:784
 draft-editor-status-done = ✅ Your build was saved as **#{ $build_id_text }** and is now pending review. You can still edit it while it waits.
 
-# squid/bot/submission/ui/drafts.py:966
+# squid/bot/submission/ui/drafts.py:789
 draft-editor-status-done-unknown = ✅ Your build was saved and is now pending review.
 
-# squid/bot/submission/ui/drafts.py:937
+# squid/bot/submission/ui/drafts.py:760
 draft-editor-status-editing =
     Fill in each section, then press **Submit**. Your answers are saved as you go.
     -# Reopen this draft with `/build drafts` until { $expires }.
 
-# squid/bot/submission/ui/drafts.py:969
+# squid/bot/submission/ui/drafts.py:792
 draft-editor-status-expired = This draft expired before it was submitted. Start a new one with `/build submit`; your answers are listed below for reference.
 
-# squid/bot/submission/ui/drafts.py:949
+# squid/bot/submission/ui/drafts.py:772
 draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** Fix the problems below, then press **Submit** again.
 
-# squid/bot/submission/ui/drafts.py:943
+# squid/bot/submission/ui/drafts.py:766
 draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** The submission continues on its own once they are ready. If you edit anything now, press **Submit** again afterwards.
 
-# squid/bot/submission/ui/drafts.py:523
+# squid/bot/submission/ui/drafts.py:511
 draft-editor-submit = Submit
 
-# squid/bot/submission/ui/drafts.py:928
+# squid/bot/submission/ui/drafts.py:751
 draft-editor-title-creating = ## Submitting your build · { $category }
 
-# squid/bot/submission/ui/drafts.py:930
+# squid/bot/submission/ui/drafts.py:753
 draft-editor-title-done = ## Build submitted · { $category }
 
-# squid/bot/submission/ui/drafts.py:934
+# squid/bot/submission/ui/drafts.py:757
 draft-editor-title-editing = ## Submit a build · { $category }
 
-# squid/bot/submission/ui/drafts.py:932
+# squid/bot/submission/ui/drafts.py:755
 draft-editor-title-expired = ## Draft expired · { $category }
 
 # squid/bot/submission/submit.py:494
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
-# squid/bot/submission/ui/drafts.py:770
+# squid/bot/submission/ui/drafts.py:611
 draft-editor-use-file = Use this file
 
-# squid/bot/submission/ui/drafts.py:499
+# squid/bot/submission/ui/drafts.py:487
 draft-editor-waiting-hint = This message updates when your files are ready.
 
-# squid/bot/submission/ui/drafts.py:1051, squid/bot/submission/ui/drafts.py:1206
+# squid/bot/submission/ui/sections.py:384, squid/bot/submission/ui/sections.py:457
 draft-editor-yes = Yes
 
-# squid/bot/submission/ui/drafts.py:367
+# squid/bot/submission/ui/drafts.py:355
 draft-history-add-files = Add submission files
 
-# squid/bot/submission/ui/drafts.py:322
+# squid/bot/submission/ui/drafts.py:310
 draft-history-answers = Edit submission answers
 
-# squid/bot/submission/ui/drafts.py:397
+# squid/bot/submission/ui/drafts.py:385
 draft-history-primary = Choose primary schematic
 
-# squid/bot/submission/ui/drafts.py:381
+# squid/bot/submission/ui/drafts.py:369
 draft-history-remove-file = Remove submission file
 
-# squid/bot/submission/ui/drafts.py:425
+# squid/bot/submission/ui/drafts.py:413
 draft-history-replace-file = Replace submission file
 
 # squid/bot/edit_controller.py:261, squid/bot/edit_history.py:56
