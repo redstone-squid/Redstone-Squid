@@ -58,7 +58,8 @@ def _test_pack() -> VerifiedResourcePack:
     return VerifiedResourcePack.from_bytes(buffer.getvalue())
 
 
-async def test_worker_returns_a_playable_simulation_video(tmp_path: Path) -> None:
+@pytest.mark.parametrize(("static", "orbit"), [(False, 180), (False, 0), (True, 180), (True, 0)])
+async def test_worker_returns_a_playable_simulation_video(tmp_path: Path, *, static: bool, orbit: int) -> None:
     helper = Path("native/schematic-video/target/debug/squid-schematic-video").resolve()
     if not helper.is_file() or not shutil.which("ffprobe") or not shutil.which("ffmpeg"):
         pytest.skip("Build the native video helper and install FFmpeg to run this test.")
@@ -75,11 +76,14 @@ async def test_worker_returns_a_playable_simulation_video(tmp_path: Path) -> Non
         width=320,
         height=240,
         duration_ticks=40,
+        orbit_degrees=orbit,
         interactions=(
             VideoInteraction(tick=5, position=(0, 1, 0)),
             VideoInteraction(tick=25, position=(0, 1, 0)),
         ),
     )
+    if static:
+        request = request.model_copy(update={"simulation_enabled": False, "interactions": ()})
     pool = SchematicWorkerPool(SchematicConfig(workers=1, video_helper_path=helper))
     async with pool.running():
         content = await pool.render_video(data, request=request, resource_pack=_test_pack())
@@ -104,3 +108,13 @@ async def test_worker_returns_a_playable_simulation_video(tmp_path: Path) -> Non
     metadata = json.loads(probe.stdout)
     assert metadata["streams"][0] == {"codec_name": "h264", "width": 320, "height": 240, "nb_frames": "60"}
     assert float(metadata["format"]["duration"]) == 2.0
+
+    decoded = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(output), "-f", "framemd5", "-"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    frame_hashes = {line.rsplit(",", 1)[-1].strip() for line in decoded.stdout.splitlines() if not line.startswith("#")}
+    if not static or orbit:
+        assert len(frame_hashes) > 1

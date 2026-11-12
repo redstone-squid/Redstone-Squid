@@ -5,6 +5,13 @@ ARG PYTHON_IMAGE=python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c
 ARG DEBIAN_SNAPSHOT=20261110T000000Z
 ARG FFMPEG_VERSION=7:7.1.5-0+deb13u1
 
+FROM rust:1.99.0-trixie@sha256:81015672d6939b0265f09adf96d5de125482bb1330106076956b0518e74edc90 AS video-builder
+WORKDIR /build
+COPY native/schematic-video/ ./
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo build --locked --release
+
 FROM ${PYTHON_IMAGE} AS builder
 
 ARG WITH_SCHEMATICS=0
@@ -130,6 +137,9 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update \
     && /usr/bin/ffmpeg -version \
     && /usr/bin/ffprobe -version
 USER appuser
+
+FROM runtime-media-software-gpu AS runtime-video
+COPY --from=video-builder /build/target/release/squid-schematic-video /usr/local/bin/squid-schematic-video
 
 # Preserve the base image as the default target for local `docker build` callers.
 FROM runtime-base AS runtime

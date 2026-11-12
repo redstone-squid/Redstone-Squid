@@ -50,3 +50,5 @@ schema/
 cli/
 minecraft/
 web/
+
+native/**/target/
