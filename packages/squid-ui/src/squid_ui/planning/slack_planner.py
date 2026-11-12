@@ -229,14 +229,7 @@ class _Lowerer:
                     message = "Slack modal form intermediate has no root form schema"
                     raise LayoutInvariantError(message)
                 return self._form_blocks(self.modal_form, path)
-            submit = next(
-                (
-                    descendant
-                    for descendant in self._elements(node)
-                    if descendant.tag is scene.HtmlTag.BUTTON and descendant.action is not None
-                ),
-                None,
-            )
+            submit = self._form_submit(node)
             return () if submit is None else self._control_blocks((submit,), path)
         if node.tag is scene.HtmlTag.DETAILS and node.action is not None:
             summary = next(
@@ -260,20 +253,8 @@ class _Lowerer:
                 for block in self.node_blocks(child, f"{path}.{index}")
             )
             return (*self._control_blocks((control,), path), *content)
-        if node.tag is scene.HtmlTag.LABEL:
-            toggle = next(
-                (
-                    child
-                    for child in node.children
-                    if isinstance(child, scene.HtmlElement)
-                    and child.tag is scene.HtmlTag.INPUT
-                    and child.action is not None
-                ),
-                None,
-            )
-            if toggle is not None:
-                labelled = replace(toggle, children=(scene.HtmlText(_html_text(node)),))
-                return self._control_blocks((labelled,), path)
+        if node.tag is scene.HtmlTag.LABEL and (toggle := self._labelled_toggle(node)) is not None:
+            return self._control_blocks((toggle,), path)
         if node.tag in {scene.HtmlTag.BUTTON, scene.HtmlTag.A, scene.HtmlTag.SELECT} or (
             node.tag is scene.HtmlTag.INPUT and _attribute(node, scene.HtmlAttributeName.ENTITY_TYPE) is not None
         ):
@@ -282,11 +263,7 @@ class _Lowerer:
         if "squid-gallery" in classes:
             return self._gallery(node, path)
         if "squid-actions" in classes or "squid-grid" in classes or node.tag is scene.HtmlTag.NAV:
-            controls = tuple(
-                child
-                for child in self._elements(node)
-                if child.tag in {scene.HtmlTag.BUTTON, scene.HtmlTag.A, scene.HtmlTag.SELECT}
-            )
+            controls = self._controls(node)
             if controls:
                 return self._control_blocks(controls, path)
         if _attribute(node, scene.HtmlAttributeName.ROLE) == "status":
@@ -322,6 +299,54 @@ class _Lowerer:
         return tuple(
             block for index, child in enumerate(node.children) for block in self.node_blocks(child, f"{path}.{index}")
         )
+
+    @staticmethod
+    def _controls(node: scene.HtmlElement) -> tuple[scene.HtmlElement, ...]:
+        """The interactive controls inside `node`, in order, one per button, link, menu, form, or toggle.
+
+        A form contributes only its submit button and a toggle its checkbox, so their inner fields
+        never become separate actions.
+        """
+        controls: list[scene.HtmlElement] = []
+        for child in node.children:
+            if not isinstance(child, scene.HtmlElement):
+                continue
+            if child.tag in {scene.HtmlTag.BUTTON, scene.HtmlTag.A, scene.HtmlTag.SELECT}:
+                controls.append(child)
+            elif child.tag is scene.HtmlTag.FORM:
+                if (submit := _Lowerer._form_submit(child)) is not None:
+                    controls.append(submit)
+            elif child.tag is scene.HtmlTag.LABEL and (toggle := _Lowerer._labelled_toggle(child)) is not None:
+                controls.append(toggle)
+            else:
+                controls.extend(_Lowerer._controls(child))
+        return tuple(controls)
+
+    @staticmethod
+    def _form_submit(node: scene.HtmlElement) -> scene.HtmlElement | None:
+        return next(
+            (
+                descendant
+                for descendant in _Lowerer._elements(node)
+                if descendant.tag is scene.HtmlTag.BUTTON and descendant.action is not None
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _labelled_toggle(node: scene.HtmlElement) -> scene.HtmlElement | None:
+        """The checkbox inside a toggle's label, carrying the label text as its own."""
+        toggle = next(
+            (
+                child
+                for child in node.children
+                if isinstance(child, scene.HtmlElement)
+                and child.tag is scene.HtmlTag.INPUT
+                and child.action is not None
+            ),
+            None,
+        )
+        return None if toggle is None else replace(toggle, children=(scene.HtmlText(_html_text(node)),))
 
     @staticmethod
     def _elements(node: scene.HtmlElement) -> tuple[scene.HtmlElement, ...]:

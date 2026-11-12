@@ -13,6 +13,7 @@ from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
     _select_strategy,
 )
+from squid_ui.planning.semantic_adaptation.controls import form_button, toggle_button
 from squid_ui.planning.semantic_adaptation.decisions import (
     ACTIONS_ADAPTER_VERSION,
 )
@@ -68,12 +69,14 @@ from squid_ui.semantic import (
     ActionControls,
     ControlGroup,
     Emphasis,
+    FormTrigger,
     Grid,
     Link,
     Media,
     Roster,
     RoutedActionControl,
     Table,
+    Toggle,
     Tone,
 )
 from squid_ui.sources import Position
@@ -281,10 +284,46 @@ def _media(node: Media, path: str, context: LoweringContext) -> list[Node]:
 
 def _actions(node: ActionControls, path: str, context: LoweringContext) -> list[Node]:
     strategy = _select_strategy(_action_axis(node, path, context.limits, context.session), context)
+    result = _action_buttons(node, context) if strategy == "individual" else _folded_actions(node, path, context)
+    context.events.append(
+        PlanEvent(
+            code=f"actions.{strategy}",
+            path=path,
+            message=f"ActionControls {node.key!r} uses the {strategy} strategy",
+            severity=PlanSeverity.ADAPTATION,
+            after={"adapter_version": ACTIONS_ADAPTER_VERSION},
+        )
+    )
+    return result
+
+
+def _action_buttons(node: ActionControls, context: LoweringContext) -> list[Node]:
+    """Show every control as a button, in order, sharing rows except where a group starts."""
+    result: list[Node] = []
+    run: list[Button | LinkButton | RoutedButton] = []
+
+    def flush() -> None:
+        if run:
+            result.append(PrimitiveActionGroup(tuple(run)))
+            run.clear()
+
+    for item in node.items:
+        if isinstance(item, ControlGroup):
+            flush()
+            run.extend(_control_button(control, context) for control in item.controls)
+            flush()
+        else:
+            run.append(_control_button(item, context))
+    flush()
+    return result
+
+
+def _folded_actions(node: ActionControls, path: str, context: LoweringContext) -> list[Node]:
+    """Fold plain actions into select menus, one per group, and keep other controls as buttons."""
     groups: list[tuple[str, tuple[ActionControl, ...], str | None]] = []
-    # Links and routed controls carry no binding, so they can never be folded into a select
-    # menu the way a group of session actions can: they stay individual buttons.
-    direct: list[ActionControl | LinkButton | RoutedButton] = []
+    # Only session actions have a binding a select option can route to. Everything else stays a
+    # button, collected in order after the menus.
+    direct: list[Button | LinkButton | RoutedButton] = []
     implicit: list[ActionControl] = []
 
     def flush_implicit() -> None:
@@ -300,35 +339,35 @@ def _actions(node: ActionControls, path: str, context: LoweringContext) -> list[
                 if isinstance(control, ActionControl):
                     group_actions.append(control)
                 else:
-                    direct.append(_unbound_button(control, context))
+                    direct.append(_control_button(control, context))
             groups.append((item.key, tuple(group_actions), _resolve(item.label, context) if item.label else None))
         elif isinstance(item, ActionControl):
             implicit.append(item)
         else:
             flush_implicit()
-            direct.append(_unbound_button(item, context))
+            direct.append(_control_button(item, context))
     flush_implicit()
 
     result: list[Node] = []
-    if strategy == "individual":
-        for group_key, actions, _label in groups:
-            result.extend(_individual(actions, f"{node.key}.{group_key}", context))
-    else:
-        for group_key, actions, label in groups:
-            result.extend(_grouped(actions, f"{node.key}.{group_key}", label, path, context))
+    for group_key, actions, label in groups:
+        result.extend(_grouped(actions, f"{node.key}.{group_key}", label, path, context))
     if direct:
-        controls = tuple(_button(action, context) if isinstance(action, ActionControl) else action for action in direct)
-        result.append(PrimitiveActionGroup(controls))
-    context.events.append(
-        PlanEvent(
-            code=f"actions.{strategy}",
-            path=path,
-            message=f"ActionControls {node.key!r} uses the {strategy} strategy",
-            severity=PlanSeverity.ADAPTATION,
-            after={"adapter_version": ACTIONS_ADAPTER_VERSION},
-        )
-    )
+        result.append(PrimitiveActionGroup(tuple(direct)))
     return result
+
+
+def _control_button(
+    control: ActionControl | Link | RoutedActionControl | Toggle | FormTrigger, context: LoweringContext
+) -> Button | LinkButton | RoutedButton:
+    match control:
+        case ActionControl():
+            return _button(control, context)
+        case Toggle():
+            return toggle_button(control, context)
+        case FormTrigger():
+            return form_button(control, context)
+        case Link() | RoutedActionControl():
+            return _unbound_button(control, context)
 
 
 def _individual(actions: Sequence[ActionControl], key: str, context: LoweringContext) -> list[Node]:

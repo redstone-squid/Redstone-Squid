@@ -57,6 +57,15 @@ Node-vocabulary and typing cleanup, still pre-release:
 - `FormField.format` answers in `PrefillValue` rather than `object`. A stored value no
   control could be seeded with now yields no prefill instead of being passed through.
 
+Action layout, still pre-release:
+
+- `action_controls` accepts toggles and forms, and `ControlGroup` entries now pass its runtime
+  check as its signature already promised. Shown as buttons, the controls keep their order and
+  share rows; each `ControlGroup` starts a new row. Links and routed controls used to move to a
+  separate row after the actions. When actions fold into a picker, toggles, forms, links, and
+  routed controls stay buttons.
+- `DiscordPreviewRenderer` draws entity selects with their placeholder and current values.
+
 Late pre-release hardening, after the version was first aligned:
 
 - Every deliberate failure now derives from a per-distribution error root:

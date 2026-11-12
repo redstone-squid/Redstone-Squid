@@ -606,7 +606,23 @@ class ControlGroup[ContextT = object]:
 
 @dataclass(frozen=True, slots=True)
 class ActionControls[ContextT = object](Adaptable[RenderTarget, ContextT]):
-    items: tuple[ActionControl[ContextT] | Link | RoutedActionControl | ControlGroup[ContextT], ...]
+    """A set of controls that the planner lays out together.
+
+    Shown as buttons, the controls keep their order and share rows, so a toggle or form can sit
+    beside the actions it belongs with. Each `ControlGroup` starts on a new row. When space is
+    short, the planner may fold plain actions into a select menu; links, routed controls,
+    toggles, and forms always stay buttons.
+    """
+
+    items: tuple[
+        ActionControl[ContextT]
+        | Link
+        | RoutedActionControl
+        | Toggle[ContextT]
+        | FormTrigger[ContextT]
+        | ControlGroup[ContextT],
+        ...,
+    ]
     key: str
     display: ControlDisplay = ControlDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL

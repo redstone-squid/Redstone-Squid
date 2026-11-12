@@ -432,7 +432,10 @@ def action_axis(node: ActionControls, path: str, limits: MessageLimits, session:
     if not any(isinstance(item, ControlGroup) for item in node.items):
         forced_pager = len(actions) > 75
     available = ["grouped", "paged"] if forced_pager else ["individual", "grouped"]
-    if not individual_fits(len(actions), limits) and "individual" in available:
+    # Links, routed controls, toggles, and forms never fold into a menu, but they still take
+    # space when every control is a button.
+    buttons = sum(len(item.controls) if isinstance(item, ControlGroup) else 1 for item in node.items)
+    if not individual_fits(buttons, limits) and "individual" in available:
         available.remove("individual")
     preferred = {
         ControlDisplay.INDIVIDUAL: "individual",

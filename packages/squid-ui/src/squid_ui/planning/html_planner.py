@@ -637,21 +637,8 @@ class _Compiler:
                         action=action,
                     ),
                 )
-            case sem.Toggle(key=key, label=label, available=available):
-                on = toggle_state(node, self.presentation)
-                action = self.bind(key, FlipToggle(node, on, self.presentation), label=label)
-                checkbox = self.element(
-                    scene.HtmlTag.INPUT,
-                    attributes=_attributes(
-                        (scene.HtmlAttributeName.TYPE, "checkbox"),
-                        (scene.HtmlAttributeName.NAME, key),
-                        (scene.HtmlAttributeName.CHECKED, on if on else None),
-                        (scene.HtmlAttributeName.DISABLED, True if not available else None),
-                    ),
-                    action=action,
-                    form=scene.HtmlFormRef(key, key),
-                )
-                return (self.element(scene.HtmlTag.LABEL, checkbox, self.text(label)),)
+            case sem.Toggle():
+                return (self._toggle(node),)
             case sem.Download(key=key, label=label, asset=asset, description=description, spoiler=spoiler):
                 self._asset(asset)
                 title = self.text(self.chrome.download if label is None else label)
@@ -1055,9 +1042,30 @@ class _Compiler:
     def _optional_text(self, value: TextLike | None) -> str | None:
         return None if value is None else self._resolved(value)
 
+    def _toggle(self, node: sem.Toggle) -> scene.HtmlElement:
+        on = toggle_state(node, self.presentation)
+        action = self.bind(node.key, FlipToggle(node, on, self.presentation), label=node.label)
+        checkbox = self.element(
+            scene.HtmlTag.INPUT,
+            attributes=_attributes(
+                (scene.HtmlAttributeName.TYPE, "checkbox"),
+                (scene.HtmlAttributeName.NAME, node.key),
+                (scene.HtmlAttributeName.CHECKED, on if on else None),
+                (scene.HtmlAttributeName.DISABLED, True if not node.available else None),
+            ),
+            action=action,
+            form=scene.HtmlFormRef(node.key, node.key),
+        )
+        return self.element(scene.HtmlTag.LABEL, checkbox, self.text(node.label))
+
     def _action_item(
-        self, item: sem.ActionControl | sem.Link | sem.RoutedActionControl | sem.ControlGroup
+        self,
+        item: sem.ActionControl | sem.Link | sem.RoutedActionControl | sem.Toggle | sem.FormTrigger | sem.ControlGroup,
     ) -> scene.HtmlElement:
+        if isinstance(item, sem.Toggle):
+            return self._toggle(item)
+        if isinstance(item, sem.FormTrigger):
+            return self._form(item)
         if isinstance(item, sem.ControlGroup):
             children = tuple(self._action_item(control) for control in item.controls)
             if item.label is None:

@@ -270,6 +270,16 @@ def _map_many_at[RenderTargetT: RenderTarget, ContextT = object](
     return tuple(transformed)
 
 
+type _SemanticActionItem = (
+    SemanticActionControl
+    | SemanticLink
+    | SemanticRoutedActionControl
+    | SemanticToggle
+    | SemanticFormTrigger
+    | SemanticControlGroup
+)
+
+
 def _namespace[RenderTargetT: RenderTarget, ContextT = object](
     nodes: list[LayoutNode[RenderTargetT, ContextT]], prefix: str
 ) -> list[LayoutNode[RenderTargetT, ContextT]]:
@@ -296,16 +306,14 @@ def _namespace[RenderTargetT: RenderTarget, ContextT = object](
     ) -> SemanticActionControl | SemanticLink | SemanticRoutedActionControl:
         return replace(item, key=f"{prefix}.{item.key}")
 
-    def rewrite_semantic_action(
-        item: SemanticActionControl | SemanticLink | SemanticRoutedActionControl | SemanticControlGroup,
-    ) -> SemanticActionControl | SemanticLink | SemanticRoutedActionControl | SemanticControlGroup:
+    def rewrite_semantic_action(item: _SemanticActionItem) -> _SemanticActionItem:
         if isinstance(item, SemanticControlGroup):
             return replace(
                 item,
                 key=f"{prefix}.{item.key}",
                 controls=tuple(rewrite_semantic_control(control) for control in item.controls),
             )
-        return rewrite_semantic_control(item)
+        return replace(item, key=f"{prefix}.{item.key}")
 
     def rewrite(node: AnyLayoutNode) -> AnyLayoutNode:
         match node:

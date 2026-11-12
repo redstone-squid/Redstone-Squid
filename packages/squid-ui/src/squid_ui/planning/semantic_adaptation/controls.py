@@ -99,30 +99,28 @@ from squid_ui.sources import Position
 
 
 def _form(node: FormTrigger, context: LoweringContext) -> list[Node]:
+    return [PrimitiveActionGroup((form_button(node, context),))]
+
+
+def form_button(node: FormTrigger, context: LoweringContext) -> FormButton:
+    """The button that opens a form, standing alone or among other action controls."""
     if Capability.FORMS_MODAL not in context.capabilities:
         message = "target does not support forms"
         raise LayoutInvariantError(message)
     spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.components.modal_components)
-
-    return [
-        PrimitiveActionGroup(
-            (
-                FormButton(
-                    _resolve(node.label, context),
-                    PresentForm(spec, node.key, node.on_submit, node.mode, node.label, node.record),
-                    node.key,
-                    style=_button_style(node.tone, node.emphasis),
-                    mode=node.mode,
-                    # Guarding the press that opens the modal, not the submission: a stateful
-                    # guard checked twice would deny the reader's own filled-in form.
-                    guard=node.guard,
-                    # The adapted spec, not `node.spec`: it is what the reader will actually
-                    # be shown, and so what a late submission must be parsed against.
-                    form=FormBinding(node.key, spec, node.on_submit, node.mode, node.label, node.record),
-                ),
-            )
-        )
-    ]
+    return FormButton(
+        _resolve(node.label, context),
+        PresentForm(spec, node.key, node.on_submit, node.mode, node.label, node.record),
+        node.key,
+        style=_button_style(node.tone, node.emphasis),
+        mode=node.mode,
+        # Guarding the press that opens the modal, not the submission: a stateful
+        # guard checked twice would deny the reader's own filled-in form.
+        guard=node.guard,
+        # The adapted spec, not `node.spec`: it is what the reader will actually
+        # be shown, and so what a late submission must be parsed against.
+        form=FormBinding(node.key, spec, node.on_submit, node.mode, node.label, node.record),
+    )
 
 
 def _with_overflow(node: Node, overflow: Overflow) -> Node:
@@ -380,17 +378,21 @@ def _details(
 
 
 def _toggle(node: Toggle, context: LoweringContext) -> list[Node]:
+    return [Row((toggle_button(node, context),))]
+
+
+def toggle_button(node: Toggle, context: LoweringContext) -> Button:
+    """The button that flips a toggle, labelled with the toggle's current state."""
     on = toggle_state(node, context.session)
 
     state_label = node.on_label if on else node.off_label
     if state_label is None:
         state_label = context.chrome.on if on else context.chrome.off
     label = f"{_resolve(node.label, context)}: {_resolve(state_label, context)}"
-    button = Button(
+    return Button(
         label,
         FlipToggle(node, on, context.session),
         node.key,
         style=_button_style(node.tone, Emphasis.NORMAL),
         disabled=not node.available,
     )
-    return [Row((button,))]

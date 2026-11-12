@@ -346,7 +346,11 @@ under different version gates.
 
 Adapters choose among finite lossless strategies. Actions may be individual controls,
 grouped pickers, or a paged picker. Thirty-six ungrouped actions become 25 and 11 options;
-author-declared groups never merge. Choices, Items, and Navigation use keyed 25-option
+author-declared groups never merge. An `ActionControls` can also hold links, routed controls,
+toggles, and forms. As individual controls they keep the author's order and share rows, with
+each `ControlGroup` starting a new row; when actions fold into a picker, these stay buttons.
+Put a toggle or form inside `action_controls` when it belongs beside other actions: on its own
+it takes a whole row. Choices, Items, and Navigation use keyed 25-option
 windows. Cross-page multi-selection is rejected because a page-local Discord select cannot
 honestly express that domain operation without an explicit grouping or commit model.
 

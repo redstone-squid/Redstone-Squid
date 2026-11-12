@@ -749,14 +749,25 @@ def control_group[ContextT = object](
 
 
 def action_controls[ContextT = object](
-    *entries: Conditional[ActionControl[ContextT] | Link | RoutedActionControl | ControlGroup[ContextT]],
+    *entries: Conditional[
+        ActionControl[ContextT]
+        | Link
+        | RoutedActionControl
+        | Toggle[ContextT]
+        | FormTrigger[ContextT]
+        | ControlGroup[ContextT]
+    ],
     key: str,
     display: ControlDisplay = ControlDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> ActionControls[ContextT]:
-    """The controls offered by a view; ``key`` carries the chosen presentation."""
+    """The controls offered by a view, laid out in order; ``key`` carries the chosen presentation."""
     return ActionControls(
-        _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.action_controls()"),
+        _collect(
+            entries,
+            (ActionControl, Link, RoutedActionControl, Toggle, FormTrigger, ControlGroup),
+            "sl.action_controls()",
+        ),
         key,
         display,
         flexibility,
