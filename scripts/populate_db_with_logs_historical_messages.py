@@ -44,6 +44,7 @@ class ImportOptions:
     group_max_messages: int = 8
     include_images: bool = True
     dry_run: bool = False
+    channel_consent: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,9 +103,12 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
     """Check consent and existing builds before inference; isolate failures per bundle."""
     primary = bundle.primary
     try:
-        account = await services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(primary[0].author.id))
-        if account is None or account.id is None or account.needs_consent_refresh:
-            return ImportSummary(groups=1, skipped_consent=1)
+        if not options.channel_consent:
+            account = await services.accounts.get_account_by_identity(
+                IdentityProvider.DISCORD, str(primary[0].author.id)
+            )
+            if account is None or account.id is None or account.needs_consent_refresh:
+                return ImportSummary(groups=1, skipped_consent=1)
         retained = await services.submission_inference.public_status(message_bundle_run_id(primary))
         # A saved build may be only one candidate of a retained run. Resume its other
         # candidates before consulting the legacy source-message duplicate guard.
@@ -219,6 +223,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run", action="store_true", help="Call inference without retaining or submitting results."
     )
+    parser.add_argument(
+        "--channel-consent",
+        action="store_true",
+        help="Use the selected channels' collection policy instead of per-account consent for this import only.",
+    )
     arguments = parser.parse_args(argv)
     if arguments.after is not None and arguments.before is not None:
         after = arguments.after.created_at if isinstance(arguments.after, discord.Object) else arguments.after
@@ -241,6 +250,7 @@ async def main(arguments: argparse.Namespace) -> int:
         group_max_messages=arguments.group_max_messages,
         include_images=not arguments.no_images,
         dry_run=arguments.dry_run,
+        channel_consent=arguments.channel_consent,
     )
     async with (
         create_bot_runtime(process_config.runtime) as runtime,
@@ -252,6 +262,8 @@ async def main(arguments: argparse.Namespace) -> int:
         if not channel_ids:
             logger.error("No build-log channels configured; provide --channel-id")
             return 1
+        if options.channel_consent:
+            logger.info("Using channel-policy consent for this import only: %s", channel_ids)
         # HTTP history only: no gateway listener or background bot activity is needed.
         await client.login(process_config.discord.token.get_secret_value())
         summary = await run_import(client, runtime.services, channel_ids, options)

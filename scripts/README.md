@@ -33,7 +33,11 @@ uv run --locked python scripts/populate_db_with_logs_historical_messages.py \
 
 A dry run calls the configured model and logs inferred candidates, so it incurs inference
 costs, but saves no accounts, inference inputs, candidates, or drafts. `--no-images` disables
-visual inference inputs. Authors without current consent are skipped in both modes.
+visual inference inputs. Authors without current consent are skipped in both modes by default.
+For channels whose posting policy already permits collection, pass `--channel-consent` to
+use that policy for this import only. This works in dry runs and real imports, without
+recording account-wide consent or changing live ingestion. Real imports still create author
+identities as needed; dry runs do not.
 
 Remove `--dry-run` to retain candidates and request shared finalization. Run the normal worker
 to finish queued submissions; ambiguous files or missing fields remain available for review.

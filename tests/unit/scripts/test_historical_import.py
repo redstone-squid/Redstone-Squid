@@ -181,3 +181,31 @@ async def test_retained_run_resumes_even_when_a_candidate_is_already_saved(monke
     assert result.processed == 1
     lookup.assert_not_awaited()
     ingest.assert_awaited_once()
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+async def test_channel_consent_allows_import_without_account_consent(
+    monkeypatch: pytest.MonkeyPatch, dry_run: bool
+) -> None:
+    runtime = services(consent=False)
+    lookup = AsyncMock(side_effect=AssertionError("Channel consent must not read or update account consent"))
+    monkeypatch.setattr(runtime.accounts, "get_account_by_identity", lookup)
+    assemble = AsyncMock(return_value=object())
+    ingest = AsyncMock(return_value=uuid4())
+    monkeypatch.setattr(importer, "assemble_bundle", assemble)
+    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
+    arguments = importer.parse_args(["--channel-consent"])
+    options = importer.ImportOptions("x", dry_run=dry_run, channel_consent=arguments.channel_consent)
+
+    result = await importer.process_group(importer.MessageBundle((message(1),), ()), runtime, options)
+
+    assert result.processed == 1
+    assert result.skipped_consent == 0
+    lookup.assert_not_awaited()
+    if dry_run:
+        assert result.inferred_candidates == 2
+        assemble.assert_awaited_once()
+        ingest.assert_not_awaited()
+    else:
+        ingest.assert_awaited_once()
+        assemble.assert_not_awaited()
