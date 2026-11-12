@@ -349,13 +349,13 @@ async def test_a_failed_render_retains_the_committed_edit() -> None:
     assert panel.server.channel_id("Vote") == 3
 
 
-async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -> None:
+async def test_settings_offer_no_undo_after_a_change() -> None:
+    # A setting is reversed by changing it back, so the panel keeps its rows for the settings.
     panel, _, message_root = make_component_panel()
 
-    assert "Undo" not in _button_labels(commit_render(message_root))
     with sl.runtime.transaction():
         await panel.server.set_channel("Vote", 12)
-    assert "Undo" in _button_labels(commit_render(message_root))
+    assert not {"Undo", "Redo"} & set(_button_labels(commit_render(message_root)))
 
 
 async def test_undo_is_refused_when_the_permission_was_revoked() -> None:

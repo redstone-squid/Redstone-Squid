@@ -265,7 +265,7 @@ async def test_inbox_refresh_rechecks_staff_visibility() -> None:
     assert harness.notifications.inbox_reads[-1] == refreshed
 
 
-async def test_mounted_inbox_updates_summary_and_uses_shared_undo() -> None:
+async def test_mounted_inbox_updates_summary_without_undo() -> None:
     harness = make_screen()
     async with stage(harness.screen, owner=object()) as ui:
         inbox_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith(".inbox"))
@@ -276,7 +276,7 @@ async def test_mounted_inbox_updates_summary_and_uses_shared_undo() -> None:
         assert harness.screen.inbox.selected_inbox_ids == ("3",)
         assert harness.screen.subscriptions.selected_ids == ()
 
-        await ui.press("edit-undo")
-        assert harness.screen.inbox.unread_count == 1
-        assert any(key.endswith(".follow-creator") for key in ui.root.snapshot().handler_keys)
-        assert any(key.endswith(".web") for key in ui.root.snapshot().handler_keys)
+        handler_keys = ui.root.snapshot().handler_keys
+        assert not any(key.endswith(("edit-undo", "edit-redo")) for key in handler_keys)
+        assert any(key.endswith(".follow-creator") for key in handler_keys)
+        assert any(key.endswith(".web") for key in handler_keys)

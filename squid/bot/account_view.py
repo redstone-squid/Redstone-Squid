@@ -189,7 +189,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 key="page-actions",
             )
         )
-        nodes.extend(self.edits.controls())
+        nodes.extend(self.edits.refresh_controls())
         return tuple(nodes)
 
     async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
@@ -296,12 +296,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     tr(t"account-view-none-yet = _None yet._"),
                 )
             )
-        fields.append(
-            CardField(
-                tr(t"account-view-creator-page = Creator page"),
-                tr(t"account-view-hidden-2 = Hidden") if self.page_hidden else tr(t"account-view-public = Public"),
-            )
-        )
+        # The creator page's visibility is shown on its toggle, so it is not repeated here.
         return fields
 
     def identity_detail(self, identity: AccountIdentity) -> sl.TextLike:

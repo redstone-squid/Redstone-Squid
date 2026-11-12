@@ -85,12 +85,8 @@ class NotificationScreen(sd.Screen):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        on, off = tr(t"bot-notifications-view-on = On"), tr(t"bot-notifications-view-off = Off")
+        # Delivery settings are shown on their toggles, so the summary covers only the rest.
         fields = (
-            sl.field(tr(t"bot-notifications-view-web-inbox = Web inbox"), on if self.preferences.web_enabled else off),
-            sl.field(
-                tr(t"bot-notifications-view-discord-dms = Discord DMs"), on if self.preferences.dm_enabled else off
-            ),
             sl.field(tr(t"bot-notifications-view-following = Following"), self.subscriptions.summary()),
             sl.field(tr(t"bot-notifications-view-unread = Unread"), str(self.inbox.unread_count)),
         )
@@ -109,7 +105,7 @@ class NotificationScreen(sd.Screen):
             self.preferences,
             self.subscriptions,
             self.inbox,
-            *self.edits.controls(),
+            *self.edits.refresh_controls(),
         )
 
 
@@ -234,13 +230,33 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         actions = sl.action_controls(
             sl.form(
                 tr(t"bot-notifications-view-follow-creator = Follow creator"),
-                self._creator_form(),
+                # The explicit context stops Pyrefly from inferring this spec as FormSpec[object] from the
+                # still-unsolved action_controls call, which would then reject every request-typed entry.
+                sl.forms.FormSpec[sd.Request](
+                    tr(t"bot-notifications-view-follow-a-creator = Follow a creator"),
+                    (
+                        sl.forms.TextField(
+                            key="creator",
+                            label=tr(t"bot-notifications-view-creator-profile-id = Creator profile ID"),
+                            maximum=36,
+                        ),
+                    ),
+                ),
                 key="follow-creator",
                 on_submit=self._follow_creator,
             ),
             sl.form(
                 tr(t"bot-notifications-view-follow-record = Follow record"),
-                self._record_form(),
+                sl.forms.FormSpec[sd.Request](
+                    tr(t"bot-notifications-view-follow-a-record = Follow a record"),
+                    (
+                        sl.forms.TextField(
+                            key="record_title",
+                            label=tr(t"bot-notifications-view-record-title-id = Record title ID"),
+                            maximum=36,
+                        ),
+                    ),
+                ),
                 key="follow-record",
                 on_submit=self._follow_record,
             ),
@@ -361,34 +377,6 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
     def _optional_text(value: object) -> str | None:
         text = str(value).strip() if value is not None else ""
         return text or None
-
-    # The specs live outside render() because Pyrefly cannot infer a request context for a
-    # FormSpec built inline inside an action_controls entry, and falls back to `object`.
-    @staticmethod
-    def _creator_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"bot-notifications-view-follow-a-creator = Follow a creator"),
-            (
-                sl.forms.TextField(
-                    key="creator",
-                    label=tr(t"bot-notifications-view-creator-profile-id = Creator profile ID"),
-                    maximum=36,
-                ),
-            ),
-        )
-
-    @staticmethod
-    def _record_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"bot-notifications-view-follow-a-record = Follow a record"),
-            (
-                sl.forms.TextField(
-                    key="record_title",
-                    label=tr(t"bot-notifications-view-record-title-id = Record title ID"),
-                    maximum=36,
-                ),
-            ),
-        )
 
     @staticmethod
     def _filter_form() -> sl.forms.FormSpec:

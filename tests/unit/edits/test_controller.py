@@ -8,6 +8,7 @@ from squid.bot.edit_controller import EditController
 from squid.core.actors import Actor
 from squid.edits.application import EditExecutor
 from squid.edits.domain import EditCommitUncertainError, EditValues, RevisionConflictError
+from squid_ui.testing import keys
 from tests.support.unit_of_work import CommittedState
 from tests.unit.edits.test_executor import ACTOR, TARGET, Handler, Store, Work, command
 
@@ -111,6 +112,20 @@ async def test_refresh_failure_does_not_lose_a_committed_edit() -> None:
     assert len(controller.undoable) == 1
     assert await controller.undo() is not None
     assert state.value.values.unpack()["name"] == "Original"
+
+
+async def test_settings_screens_get_refresh_without_undo() -> None:
+    async def broken_refresh() -> None:
+        raise RuntimeError("rendering failed")
+
+    state = CommittedState(Store())
+    controller = EditController(EditExecutor(partial(Work, state), {"example": Handler()}), actor, broken_refresh)
+    assert controller.refresh_controls() == ()
+
+    await controller.execute(command(), "Edit")
+
+    assert keys(controller.refresh_controls()) == ["edit-refresh", "refresh-saved"]
+    assert {"edit-undo", "edit-redo", "refresh-saved"} <= set(keys(controller.controls()))
 
 
 async def test_a_stale_form_fails_without_dropping_history() -> None:

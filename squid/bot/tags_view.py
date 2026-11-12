@@ -213,7 +213,7 @@ class TagsScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-tags-view-loading-build-tags = Loading build tags.")),)
-        return (self._tabs, *self.edits.controls())
+        return (self._tabs, *self.edits.refresh_controls())
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:

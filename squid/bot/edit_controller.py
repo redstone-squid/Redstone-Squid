@@ -209,8 +209,8 @@ class EditController:
         self._signal.notify()
 
     def controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        """Render Undo and Redo, and a refresh button if reloading saved values failed."""
-        nodes = []
+        """Render Undo and Redo for editors, followed by `refresh_controls`."""
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         can_undo, can_redo = bool(self.undoable), bool(self.redoable)
         if can_undo or can_redo:
 
@@ -227,18 +227,27 @@ class EditController:
                     key="edit-history",
                 )
             )
-        if self.refresh_failed:
+        return (*nodes, *self.refresh_controls())
 
-            async def refresh(event: sl.PressEvent) -> None:
-                await self.refresh()
+    def refresh_controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        """Render a refresh button if reloading saved values after a save failed.
 
-            nodes.append(
-                sl.action_controls(
-                    sl.action_control(tr(t"edits-refresh = Refresh saved values"), refresh, key="refresh-saved"),
-                    key="edit-refresh",
-                )
-            )
-        return tuple(nodes)
+        Settings screens use this without Undo and Redo, because using a toggle or form again
+        reverses it. They still need the button: until a reload succeeds, the screen shows the
+        values from before the save.
+        """
+        if not self.refresh_failed:
+            return ()
+
+        async def refresh(event: sl.PressEvent) -> None:
+            await self.refresh()
+
+        return (
+            sl.action_controls(
+                sl.action_control(tr(t"edits-refresh = Refresh saved values"), refresh, key="refresh-saved"),
+                key="edit-refresh",
+            ),
+        )
 
     @staticmethod
     async def _notice(step: Callable[[], Awaitable[SavedEdit | None]]) -> TextLike:

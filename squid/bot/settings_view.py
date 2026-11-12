@@ -151,7 +151,7 @@ class SettingsPanel(sd.Screen):
                 actions.append(
                     sl.action_control(tr(t"bot-settings-view-voting = Voting"), self._show_voting, key="voting")
                 )
-        return (content, sl.action_controls(*actions, key="settings-navigation"), *self.edits.controls())
+        return (content, sl.action_controls(*actions, key="settings-navigation"), *self.edits.refresh_controls())
 
     async def _show_voting(self, event: sl.PressEvent) -> None:
         await self.open_voting()

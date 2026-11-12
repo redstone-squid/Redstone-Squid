@@ -140,7 +140,7 @@ class StarboardScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-starboard-screen-loading-starboards = Loading starboards.")),)
-        return (self._tabs, *self.edits.controls())
+        return (self._tabs, *self.edits.refresh_controls())
 
     def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (

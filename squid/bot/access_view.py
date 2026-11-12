@@ -157,7 +157,7 @@ class AccessScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"access-view-loading-access-controls = Loading access controls.")),)
-        return (self._tabs, *self.edits.controls())
+        return (self._tabs, *self.edits.refresh_controls())
 
     def _subject_browser(
         self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]
