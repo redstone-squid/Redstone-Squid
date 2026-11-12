@@ -1,6 +1,8 @@
 # Discord runtime simplification
 
-Status: complete. All five phases are implemented and validated.
+Status: complete. The original five phases and the deeper architectural follow-up are implemented.
+The original audit below records the behavior-preserving pass; the follow-up at the end supersedes
+its decisions to retain separate ownership graphs and the public opening wrappers.
 
 Simplify `squid-ui-discord` so opening a screen, handling an interaction, and closing a
 message can each be understood through a small sequence of operations with explicit owners.
@@ -243,3 +245,34 @@ Final validation passed all 2,833 tests across the Discord package, architecture
 bot unit tests. The service/integration-interface check passed 104 tests separately. Ruff,
 commit hooks, `git diff --check`, and the final whole-workspace typecheck passed. The full
 repository test suite remains for CI.
+
+## Deeper architectural follow-up
+
+The follow-up removes compatibility requirements and replaces three overlapping mechanisms:
+
+| Concern | Result |
+| --- | --- |
+| Presentation policy | `ResponseSpec.resolve` supplies concrete settings after installation, screen, and call overrides. `SessionSpec` contains identity and admission only. Its opening wrappers, option resolver, and `SessionOptions` types are removed. |
+| Ownership | One `Lifetime` tree connects scopes and roots. It replaces the scope root index, screen child set, session retiring graph, and root shutdown dependency list. Session membership keeps its own indexes but derives parentage from the tree. |
+| Action completion | Dispatch unwinds middleware and releases its action lock before starting committed continuations. Screen results use the same path as other continuations; the unlock event and context-variable handoff are removed. |
+
+A presentation has one parent. Conflicting parents, cycles, and transfers between application
+scopes are rejected before attachment delivery. Closing a parent joins children already closing.
+Completed roots leave the tree even after cleanup failure; their handles retain that failure for
+`wait()`, while later scope closure only joins roots still owned at that point.
+
+The facade owns roots before loading and releases unsuccessful openings, including cancellation
+and admission rejection. Provisional session indexes are removed unless registration commits.
+When attaching through the facade to a low-level session parent, its request scope first claims
+that parent. Screen result outcomes and session admission remain distinct from ownership.
+
+Continuations can dispatch another action on the same root. An exclusive press received while
+an earlier action's committed state is still unpresented repaints instead of running its handler.
+Committed work still starts if middleware fails or is cancelled after the handler returns.
+
+Validation passed 2,831 Discord package, architecture, and bot tests. Added coverage exercises
+conflicting parents and cycles, reentrant continuations, cancellation after commit, and unsuccessful
+opening cleanup with and without session admission. Whole-workspace Pyrefly reports zero errors.
+The final removal of the duplicate defaults constant passed 93 focused policy and architecture
+tests and a fresh workspace typecheck. Commit hooks cover formatting and linting; the full
+repository suite remains for CI.

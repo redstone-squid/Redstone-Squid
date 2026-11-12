@@ -24,7 +24,7 @@ composition and adapter contracts.
 | Resolve a listener in its cog scope | `Scope.request` |
 | Declare opening policy and typed screen results | `squid_ui_discord.Screen`, `ResponseSpec` |
 | Open an owned child screen | `Screen.open_child`, `Screen.complete`, `Screen.cancel` |
-| Compose dynamic session policy | `SessionSpec`, `SessionManager` |
+| Declare session identity and admission | `SessionSpec`, `SessionManager` |
 | Own one live message | `MessageRoot` |
 | Render Components V2 | `render_static`, `render_message`, `DISCORD_V2_DPY27` |
 | Render classic messages | `classic.render_static`, `classic.render_message`, `DISCORD_V1_DPY27` |

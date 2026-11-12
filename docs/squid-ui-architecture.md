@@ -89,14 +89,17 @@ flowchart TB
     subgraph discord_runtime[Discord live runtime]
         invocation[Owner-scoped Scope and Request<br/>source · audience · localization · acknowledgement]
         root[MessageRoot<br/>owns one message and one ComponentRuntime]
-        session[SessionManager and Session<br/>own a graph of roots]
+        session[SessionManager and Session<br/>index identity and membership]
+        lifetime[Lifetime tree<br/>scope and presentation ownership]
         router[Router and RouteGroup<br/>stateless durable route identity]
         dispatch[Dispatch boundary<br/>access · concurrency · stale checks · middleware · responder]
         handle[MessageDestination and EditHandle<br/>delivery and expiring write authority]
         discord_api[discord.py and Discord]
 
         invocation -->|respond · send · edit| root
-        session -->|owns| root
+        session -->|indexes| root
+        invocation -->|owns| lifetime
+        lifetime -->|owns| root
         root -->|delivers through| handle --> discord_api
         discord_api -->|component interaction| dispatch
         router -->|routed interaction| dispatch
@@ -265,6 +268,8 @@ topic following, routed-control retention, session recipe, mentions, and chrome.
 operational settings inherit installation defaults; explicit call keywords override the screen.
 Subclass policy values replace inherited values unless explicitly composed with `Base.policy.overlay`.
 Personal visibility and opener-only access are the screen defaults.
+The facade resolves these layers once into concrete settings, including the opening actor's access
+policy, before constructing a message root. Session admission uses that same opening path.
 
 A screen redraws for changes made elsewhere, such as a shared model written by another message, a
 topic published by a worker, or a managed service's resource, only with `live_updates=True`.
@@ -301,9 +306,10 @@ cannot wait for another screen's answer. Waiting does not cancel the screen when
 `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native modal API;
 layout nodes retain deferred `TextLike` values and resolve them when their root renders.
 
-`SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
-`admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
-builds the root policy from the open context. `SessionManager`, raw
+`SessionSpec` declares identity and admission: `scope` picks the collision key, `admission` decides
+what happens on collision, and `capacity`, `quota`, and `domain` bound membership. Put access,
+timeout, and other presentation settings in `ResponseSpec` or response call keywords.
+`SessionManager`, raw
 `MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
 transport adapters. Application handlers normally enter through a `Request`, which derives destination, sessions,
 open context, and localization from one source.
@@ -1057,8 +1063,10 @@ A refused edit creates the other case: the handler's state change commits before
 delivery, so the root's state moves ahead while the message still shows the previous
 render and its generation.
 
-`sd.MessageRoot` records that the message is behind when writing an application render
-fails or is cancelled, and clears the mark when any application render commits. While the
+`sd.MessageRoot` records that the message is behind when an action commits state changes,
+or when writing an application render fails or is cancelled. It clears the mark when any
+application render commits. This also covers a press arriving while the previous action's
+continuations are still running. While the
 message is behind, an EXCLUSIVE press does not run its handler. The root repaints the
 current state through that press's interaction and records the dispatch as `STALE`. For
 example:
@@ -1568,8 +1576,10 @@ async def save(self, event: ActionEvent) -> None:
     event.on_success(other_session.finish, name="Close editor")
 ```
 
-The callback runs outside the action's transaction under the host. It sees committed
-state and continues if the interaction stops waiting. The dispatcher normally waits for
+The dispatcher commits the handler transaction, unwinds middleware, releases the action lock,
+and starts committed callbacks under the host. Middleware must return before waiting for these
+operations. Callbacks see committed state and can dispatch another action on the same root.
+They continue if the interaction stops waiting, including cancellation after commit. The dispatcher normally waits for
 the operations and presents their resulting state. Each callback runs independently;
 combine dependent steps in one callback when their order matters. Callbacks should bound
 their own waits, just like service cleanup. They may outlive the panel and must not rely on
@@ -1601,14 +1611,23 @@ sessions use the same delivery scope: if registration cannot complete after a su
 the scope transfers the child to host-owned cleanup, including on cancellation. The session lock
 serializes attachments and membership changes, but closure does not take that lock. Delivery and
 durable promotion must therefore recheck the parent after awaiting external work. Recovered and
-new children share registration bookkeeping. A detached child remains a shutdown dependency until
-its cleanup and callbacks settle, then releases that reference even when cleanup failed.
+new children share registration bookkeeping.
 
-Message roots own dependency registration and release for both screens and sessions. They also
-run each owner's child cleanup once, in screen-before-session order, collecting failures before
-continuing with parent cleanup. Screen parentage and session membership remain separate; neither
-module edits the root's dependency collections. The root's `finished` property derives directly
-from accepted shutdown, while `wait()` observes completed cleanup.
+One lifetime tree connects the installed runtime, application scopes, and message roots. Screen
+children and session attachments use the same parent link; cycles, conflicting parents, and moves
+between application scopes are rejected. Sessions keep membership indexes and derive parentage
+from that tree. A low-level session parent without a scope is claimed by the request scope when
+the facade first attaches a child to it.
+
+Closure accepts direct children's shutdown before joining their cleanup, then continues with the
+parent's services and callbacks. Children remain attached until cleanup settles, including when it
+fails, and are then released. A later scope close does not replay a completed root's failure;
+callers holding the root can still observe it through `wait()`. The root's `finished` property
+derives directly from accepted shutdown, while `wait()` observes completed cleanup.
+
+The facade claims a root before loading or delivery. An unsuccessful presentation releases that
+root; session registration also removes provisional indexes on every unsuccessful exit. Screen
+outcomes remain separate from root ownership, so a rejected screen still resolves its own waiters.
 
 Replacement commits when the newcomer is registered. All selected incumbents are asked to close
 before their cleanup results are collected. Cleanup failures are logged and remain available from

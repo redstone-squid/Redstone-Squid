@@ -93,9 +93,14 @@ explicit names preserve shared or durable identity. `Screen[ResultT, OwnerT]` ex
 results and optional owner typing. Exact Discord layouts have factories under `sd.v2` and
 `sd.classic`, returning the existing primitive nodes.
 
+`SessionSpec` contains identity and admission settings. Access, timeout, and other presentation
+settings belong to `ResponseSpec`; open through `Request.respond` or `Scope.send`/`edit`.
+The former `SessionSpec` opening methods and `SessionOptions` types have been removed.
+
 Use `self.open_child(event, child, on_result=...)` to open a child with its own admission
 policy and a lifetime bounded by the parent. Children call `self.complete(event, value)` or
-`self.cancel(event)`; completion reaches a fresh parent action after the child's action commits.
+`self.cancel(event)`; completion reaches a fresh parent action after the child's action commits
+and releases its lock. All `event.on_success` continuations follow that same ordering.
 A failed result callback leaves the child available for retry. `on_cancel` receives a `Cancelled`
 reason without interaction authority. Commands can await `screen.wait()` for `Completed(value)`
 or `Cancelled`; waiting inside an active UI action transaction is rejected.
