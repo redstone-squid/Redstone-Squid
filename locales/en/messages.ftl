@@ -652,34 +652,52 @@ accounts-verification-attempts-exceeded = Too many incorrect verification codes.
 # squid/accounts/errors.py:140
 accounts-verification-code-invalid = The verification code is invalid or expired.
 
-# squid/bot/admin.py:280
+# squid/bot/admin.py:321
 admin-build-spreadsheet = Build spreadsheet
 
-# squid/bot/admin.py:290
+# squid/bot/admin.py:331
 admin-database = Database
 
-# squid/bot/admin.py:255
+# squid/bot/admin.py:296
 admin-globally = globally
 
-# squid/bot/admin.py:104
+# squid/bot/admin.py:145
 admin-message-archived = Message archived.
 
-# squid/bot/admin.py:292
+# squid/bot/admin.py:108
+admin-message-queued = Message selected. Run /paste in the destination channel to move it.
+
+# squid/bot/admin.py:333
 admin-open-database = Open database
 
-# squid/bot/admin.py:282
+# squid/bot/admin.py:323
 admin-open-spreadsheet = Open spreadsheet
 
-# squid/bot/admin.py:260
+# squid/bot/admin.py:130
+admin-paste-empty = Select a message with Apps → Archive Message first.
+
+# squid/bot/admin.py:139
+admin-paste-same-channel = Run /paste in a different channel to move this message.
+
+# squid/bot/admin.py:125
+admin-paste-server-only = Use /paste in a server channel.
+
+# squid/bot/admin.py:136
+admin-paste-source-hidden = You no longer have access to the source message.
+
+# squid/bot/admin.py:133
+admin-paste-source-unavailable = The source channel is unavailable.
+
+# squid/bot/admin.py:301
 admin-synced-commands = Synced { $count } commands { $scope }.
 
-# squid/bot/admin.py:273
+# squid/bot/admin.py:314
 admin-synced-the-tree-to = Synced the tree to { $synced }/{ $total }.
 
-# squid/bot/admin.py:102
+# squid/bot/admin.py:105
 admin-that-message-is-not-from-this-server = That message is not from this server.
 
-# squid/bot/admin.py:257
+# squid/bot/admin.py:298
 admin-to-the-current-guild = to the current guild
 
 # squid/api/errors.py:266
@@ -2345,7 +2363,7 @@ command-account-name = account
 # squid/bot/verify.py:46
 command-account-user-name = user
 
-# squid/bot/admin.py:94
+# squid/bot/admin.py:97
 command-archive-message-name = Archive Message
 
 # squid/bot/submission/commands.py:187
@@ -2501,6 +2519,12 @@ command-layout-workbench-name = workbench
 # squid/bot/notifications.py:50
 command-notifications-name = notifications
 
+# squid/bot/admin.py:113
+command-paste-help = Move your selected archive message into this channel
+
+# squid/bot/admin.py:112
+command-paste-name = paste
+
 # squid/bot/voting/vote.py:50
 command-poll-help = Create a multi-option poll through an ephemeral preview wizard.
 
@@ -2534,28 +2558,28 @@ command-redstoner-help = Inspect and deploy Redstoner automation
 # squid/bot/give_redstoner.py:162
 command-redstoner-name = redstoner
 
-# squid/bot/admin.py:150
+# squid/bot/admin.py:191
 command-runtime-settings-help = View or change global runtime settings
 
-# squid/bot/admin.py:149
+# squid/bot/admin.py:190
 command-runtime-settings-name = runtime-settings
 
-# squid/bot/admin.py:159
+# squid/bot/admin.py:200
 command-runtime-settings-revision-help = …
 
-# squid/bot/admin.py:154
+# squid/bot/admin.py:195
 command-runtime-settings-revision-name = revision
 
-# squid/bot/admin.py:160
+# squid/bot/admin.py:201
 command-runtime-settings-setting-help = …
 
-# squid/bot/admin.py:155
+# squid/bot/admin.py:196
 command-runtime-settings-setting-name = setting
 
-# squid/bot/admin.py:161
+# squid/bot/admin.py:202
 command-runtime-settings-value-help = …
 
-# squid/bot/admin.py:156
+# squid/bot/admin.py:197
 command-runtime-settings-value-name = value
 
 # squid/bot/submission/commands.py:113
@@ -2609,16 +2633,16 @@ command-starboard-help = Configure this server's starboards
 # squid/bot/starboard/cog.py:206
 command-starboard-name = starboard
 
-# squid/bot/admin.py:55
+# squid/bot/admin.py:58
 command-tags-build-id-help = …
 
-# squid/bot/admin.py:56
+# squid/bot/admin.py:59
 command-tags-build-id-name = build
 
-# squid/bot/admin.py:53
+# squid/bot/admin.py:56
 command-tags-help = Browse, apply, propose, and moderate build tags
 
-# squid/bot/admin.py:52
+# squid/bot/admin.py:55
 command-tags-name = tags
 
 # squid/bot/version_tracking.py:126

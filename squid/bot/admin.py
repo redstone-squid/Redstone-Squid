@@ -1,5 +1,6 @@
 """Various admin commands for the bot."""
 
+import asyncio
 import json
 import re
 from functools import partial
@@ -45,6 +46,8 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         super().__init__(bot)
         self.tags = bot.services.tags
         self.restrictions = bot.services.restrictions
+        self._pending_archives: dict[tuple[int, int], discord.Message] = {}
+        self._paste_lock = asyncio.Lock()
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
     @autocompletes(build_id="builds")
@@ -96,15 +99,53 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         default_permissions=discord.Permissions(manage_messages=True),
     )
     async def archive_message_context(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Archive the message selected through Discord's Apps menu."""
+        """Select a message to move with /paste in another channel."""
         await enforce(request, MESSAGE_ARCHIVE_CREATE)
         if request.guild is None or message.guild != request.guild:
             return text_node(tr(t"admin-that-message-is-not-from-this-server = That message is not from this server."))
-        await self._archive_message(message)
+        self._pending_archives[request.guild.id, request.user.id] = message
+        return text_node(
+            tr(t"admin-message-queued = Message selected. Run /paste in the destination channel to move it.")
+        )
+
+    @sd.command(
+        name=to_locale_str(tr(t"command-paste-name = paste")),
+        description=to_locale_str(tr(t"command-paste-help = Move your selected archive message into this channel")),
+        defer="private",
+    )
+    @app_commands.default_permissions(manage_messages=True)
+    @app_commands.guild_only()
+    async def paste(self, request: sd.Request[Self]) -> sd.CommandResult:
+        """Move the caller's selected message within the same server.
+
+        Selections last until used, replaced, or the bot restarts.
+        """
+        await enforce(request, MESSAGE_ARCHIVE_CREATE)
+        if request.guild is None or request.channel is None:
+            return text_node(tr(t"admin-paste-server-only = Use /paste in a server channel."))
+        key = (request.guild.id, request.user.id)
+        async with self._paste_lock:
+            message = self._pending_archives.get(key)
+            if message is None:
+                return text_node(tr(t"admin-paste-empty = Select a message with Apps → Archive Message first."))
+            member = await request.guild.fetch_member(request.user.id)
+            if not isinstance(message.channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
+                return text_node(tr(t"admin-paste-source-unavailable = The source channel is unavailable."))
+            permissions = message.channel.permissions_for(member)
+            if not permissions.view_channel or not permissions.read_message_history:
+                return text_node(tr(t"admin-paste-source-hidden = You no longer have access to the source message."))
+            if request.channel == message.channel:
+                return text_node(
+                    tr(t"admin-paste-same-channel = Run /paste in a different channel to move this message.")
+                )
+            current = await message.channel.fetch_message(message.id)
+            await self._archive_message(current, request.channel)
+            if self._pending_archives.get(key) is message:
+                del self._pending_archives[key]
         return text_node(tr(t"admin-message-archived = Message archived."))
 
-    async def _archive_message(self, message: discord.Message) -> None:
-        """Copy one message in place and remove the original."""
+    async def _archive_message(self, message: discord.Message, destination: discord.abc.Messageable) -> None:
+        """Send an attributed copy to the destination, then remove the original."""
         if isinstance(message.author, discord.User):
             user = message.author
         else:
@@ -117,7 +158,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if has_reactions:
             content += "\n" + " ".join(f"{reaction.emoji}:{reaction.count}" for reaction in reactions)
         content += "\nIf you are the author, you may delete this message by reacting with ❌."
-        sent_message = await message.channel.send(
+        sent_message = await destination.send(
             content=content,
             embeds=message.embeds,
             files=[await attachment.to_file() for attachment in message.attachments],
