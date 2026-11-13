@@ -1,10 +1,12 @@
 """`/build submit` as one request: the private defer is completed by the workspace."""
 
+from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any, cast, override
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
+import discord
 import pytest
 from whenever import Instant
 
@@ -18,10 +20,14 @@ from squid.bot.utils.permissions import AccountIdCache
 from squid.builds.application import BuildService
 from squid.core.actors import Actor
 from squid.messages.domain import MessageSnapshot
+from squid.permissions.application import PermissionService, SubjectRecords
+from squid.permissions.domain import Effect
+from squid.permissions.models import PermissionGrant
 from squid.schematics.application.services import SchematicService
 from squid.settings.application import SettingsService
 from squid.submissions.application import (
     AppliedDraftChange,
+    CheckedInFormManifestRegistry,
     FormOptionSet,
     StoredDraft,
     SubmissionDraftService,
@@ -33,8 +39,9 @@ from squid.submissions.application.drafts import DraftActor
 from squid.submissions.application.finalization import SubmissionRequestResult
 from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
-from squid.submissions.domain import DraftChange, DraftSnapshot, FormManifest, SubmissionOrigin
+from squid.submissions.domain import DraftChange, DraftSnapshot, DraftStatus, FormManifest, SubmissionOrigin
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.submissions.errors import DraftAccessDeniedError
 from squid_ui.text import source_text
 from squid_ui_discord.testing import InteractionHarness, iter_component_payloads, stage
 from tests.support.discord import make_layout_bot
@@ -345,3 +352,65 @@ async def test_saved_drafts_paginate_all_entries(
             await ui.press(next_key)
         assert len(seen) == len(expected)
         assert set(seen) == expected
+
+
+@pytest.mark.parametrize("bot_owner", [True, False], ids=["bot-owner", "discord-role"])
+async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: bool) -> None:
+    cog = _cog()
+    submitted = _screen(await _submit(cog))
+    assert isinstance(submitted, DraftEditorScreen)
+    draft = submitted.workspace.draft
+    draft = replace(draft, snapshot=replace(draft.snapshot, owner_account_id=99, status=DraftStatus.NEEDS_ATTENTION))
+    grant = PermissionGrant(
+        pattern="build.submission.edit", effect=int(Effect.ALLOW), subject_role_id=789, subject_guild_id=456
+    )
+
+    async def records(
+        *, account_id: int | None, discord_role_ids: Iterable[int], guild_id: int | None
+    ) -> SubjectRecords:
+        return SubjectRecords(epoch=1, grants=(grant,) if guild_id == 456 and 789 in discord_role_ids else ())
+
+    # Only persistence is mocked: the draft service and permission resolver enforce access.
+    uow = AsyncMock()
+    uow.__aenter__.return_value = uow
+    uow.permissions.load_for_subject.side_effect = records
+    uow.submission_drafts.get.return_value = draft
+    uow.submission_drafts.list_attention.return_value = (draft,)
+    permissions = PermissionService(uow_factory=lambda: uow)
+    drafts = SubmissionDraftService(CheckedInFormManifestRegistry(), permissions=permissions, uow_factory=lambda: uow)
+    cog.bot.services = replace(
+        cog.bot.services,
+        submission_drafts=drafts,
+        submission_inference=AsyncMock(list_active=AsyncMock(return_value=())),
+    )
+    cog.bot.account_ids = AccountIdCache()
+    cog.bot.is_owner = AsyncMock(return_value=bot_owner)
+    guild = Mock(id=456, owner_id=999)
+    member = Mock(spec=discord.Member, id=7, roles=[] if bot_owner else [Mock(id=789)], guild=guild)
+    member.guild_permissions = discord.Permissions.none()
+    guild.fetch_member = AsyncMock(return_value=member)
+    inbox = InteractionHarness(user_id=7, client=cog.bot)
+    inbox.user = member
+    inbox.guild = guild
+    await cast(Any, BuildSubmitCommands).saved_drafts.callback(cog, inbox.source, inbox=True)
+    assert isinstance(_screen(inbox), SavedDraftsScreen)
+
+    opened = InteractionHarness(user_id=7, client=cog.bot)
+    opened.user = member
+    opened.guild = guild
+    await build_controls.reopen_draft(opened.source, str(draft.snapshot.id))
+    opened.response.send_message.assert_awaited_once()
+    call = opened.response.send_message.await_args
+    assert call is not None
+    assert call.kwargs["ephemeral"] is True
+    editor = call.kwargs["view"]._root.component
+    assert isinstance(editor, DraftEditorScreen)
+    assert editor.workspace.draft.snapshot.owner_account_id == 99
+    assert await editor.workspace.may_edit()
+
+    # Resolving later actions must use the new member roles and bot ownership.
+    cog.bot.is_owner.return_value = False
+    member.roles = []
+    assert not await editor.workspace.may_edit()
+    with pytest.raises(DraftAccessDeniedError):
+        await build_controls.reopen_draft(opened.source, str(draft.snapshot.id))

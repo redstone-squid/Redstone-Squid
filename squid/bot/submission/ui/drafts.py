@@ -414,7 +414,13 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
 
     # live_updates redraws the panel for changes made elsewhere: editor messages, or finalization
     # through the draft's topic. retain_routed_on_timeout keeps Reopen usable after it expires.
-    policy = sd.ResponseSpec(audience="personal", timeout=600, live_updates=True, retain_routed_on_timeout=True)
+    policy = sd.ResponseSpec(
+        audience="personal",
+        timeout=600,
+        live_updates=True,
+        retain_routed_on_timeout=True,
+        session=sd.SessionSpec("draft"),
+    )
 
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace

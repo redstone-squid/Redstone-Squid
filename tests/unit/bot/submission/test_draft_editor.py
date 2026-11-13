@@ -16,6 +16,7 @@ from whenever import Instant
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.submission import draft_intake
 from squid.bot.submission.ui.drafts import (
     BuildPreviewScreen,
     DraftEditorScreen,
@@ -698,3 +699,51 @@ async def test_answer_history_reverses_saved_values_without_reverting_other_fiel
     assert drafts.current.snapshot.answers.get("display_name") is None
     assert await editor.workspace.edits.redo() is not None
     assert drafts.current.snapshot.answers["display_name"] == "Saved name"
+
+
+@pytest.mark.parametrize("operation", ["add", "replace", "use", "failed-add"])
+async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    services, drafts = setup()
+    services = replace(services, submission_uploads=Mock(stage=AsyncMock()))
+    actor = Actor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789}))
+    resolve_actor = AsyncMock(return_value=Actor(account_id=7))
+    draft_id = drafts.current.snapshot.id
+    ws = (
+        await draft_editor(
+            services,
+            draft_id,
+            changes=LocalTopicBus().topic("submission_draft", str(draft_id)),
+            resolve_actor=resolve_actor,
+        )
+    ).workspace
+    resolve_actor.return_value = actor
+    drafts.required_actor = actor
+    register = AsyncMock(side_effect=OSError("download failed") if operation == "failed-add" else None)
+    retained = AsyncMock()
+    fail = AsyncMock()
+    monkeypatch.setattr(draft_intake, "register_uploaded_file", register)
+    monkeypatch.setattr(draft_intake, "receive_retained_file", retained)
+    monkeypatch.setattr(services.submission_intake, "fail", fail)
+    # Attachment edit outcomes are covered by the edit service tests.
+    monkeypatch.setattr(ws.edits, "bind", Mock(return_value=Mock(save=AsyncMock())))
+    source = sl.forms.UploadedFile("file.png", "image/png", 4, "", AsyncMock(return_value=b"file"))
+    file_id = uuid4()
+    if operation in {"add", "failed-add"}:
+        await ws.add_files((source,))
+    elif operation == "replace":
+        assert await ws.replace_file(file_id, source) is not None
+    else:
+        await ws.use_file(file_id)
+
+    if operation == "use":
+        retained.assert_awaited_once_with(services, draft_id, actor, file_id)
+    else:
+        stage = services.submission_uploads.stage
+        assert isinstance(stage, AsyncMock)
+        assert stage.await_count == 1
+        assert stage.call_args.args[:2] == (draft_id, actor)
+        register.assert_awaited_once()
+        assert register.call_args.args[:3] == (services, draft_id, actor)
+    if operation == "failed-add":
+        fail.assert_awaited_once()
+        assert fail.call_args.args[:2] == (draft_id, actor)
