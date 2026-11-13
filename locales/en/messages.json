@@ -4416,7 +4416,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/commands.py:189"
+      "squid/bot/submission/commands.py:192"
     ]
   },
   "bot-submission-search-view-build-base-title": {
@@ -6716,7 +6716,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/commands.py:134",
-      "squid/bot/submission/commands.py:190"
+      "squid/bot/submission/commands.py:193"
     ]
   },
   "build-search-sort-help": {
@@ -7390,7 +7390,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/commands.py:187"
+      "squid/bot/submission/commands.py:188"
     ]
   },
   "command-build-browse-help": {
@@ -7409,6 +7409,15 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/commands.py:184"
+    ]
+  },
+  "command-build-browse-query-name": {
+    "fingerprint": "37013a3245fab0cbd15a0e9d9ea64397c32910decbd66f2aa3e5126366083f0f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/commands.py:189"
     ]
   },
   "command-build-drafts-help": {
@@ -7894,7 +7903,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/commands.py:203"
+      "squid/bot/submission/commands.py:206"
     ]
   },
   "command-records-name": {
@@ -7903,7 +7912,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/commands.py:202"
+      "squid/bot/submission/commands.py:205"
+    ]
+  },
+  "command-records-query-name": {
+    "fingerprint": "36c4fb83fcda5e9bab2e01fbf30af2e5045e535083d76802afad8a2609b7797b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/commands.py:208"
     ]
   },
   "command-recount-help": {
@@ -13660,7 +13678,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/commands.py:207"
+      "squid/bot/submission/commands.py:211"
     ]
   },
   "records-candidate-no-typed": {

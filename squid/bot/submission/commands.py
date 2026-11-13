@@ -184,7 +184,10 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         name=to_locale_str(tr(t"command-build-browse-name = browse")),
         description=to_locale_str(tr(t"command-build-browse-help = Browse builds and record holders.")),
     )
-    @app_commands.rename(build_id=to_locale_str(tr(t"command-build-browse-build-id-name = id")))
+    @app_commands.rename(
+        build_id=to_locale_str(tr(t"command-build-browse-build-id-name = id")),
+        query=to_locale_str(tr(t"command-build-browse-query-name = query")),
+    )
     @app_commands.describe(
         build_id=to_locale_str(tr(t"bot-submission-search-open-this-build-directly = Open this build directly.")),
         query=to_locale_str(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
@@ -202,6 +205,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         name=to_locale_str(tr(t"command-records-name = records")),
         description=to_locale_str(tr(t"command-records-browse-help = Browse records and their holder builds")),
     )
+    @app_commands.rename(query=to_locale_str(tr(t"command-records-query-name = query")))
     @app_commands.describe(
         query=to_locale_str(
             tr(t"record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.")

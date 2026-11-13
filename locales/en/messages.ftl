@@ -1318,7 +1318,7 @@ bot-submission-schematics-signs = **Signs**: { $text }
 # squid/bot/submission/schematics.py:101
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/commands.py:189
+# squid/bot/submission/commands.py:192
 bot-submission-search-open-this-build-directly = Open this build directly.
 
 # squid/bot/submission/search_view.py:266
@@ -2039,7 +2039,7 @@ build-search-matching-mode-help = Use keyword matching or smart meaning-based ma
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/commands.py:134, squid/bot/submission/commands.py:190
+# squid/bot/submission/commands.py:134, squid/bot/submission/commands.py:193
 build-search-query-help = Search text and filters, e.g. `width:5`.
 
 # squid/bot/submission/commands.py:141
@@ -2237,7 +2237,7 @@ command-account-user-name = user
 # squid/bot/admin.py:97
 command-archive-message-name = Archive Message
 
-# squid/bot/submission/commands.py:187
+# squid/bot/submission/commands.py:188
 command-build-browse-build-id-name = id
 
 # squid/bot/submission/commands.py:185
@@ -2245,6 +2245,9 @@ command-build-browse-help = Browse builds and record holders.
 
 # squid/bot/submission/commands.py:184
 command-build-browse-name = browse
+
+# squid/bot/submission/commands.py:189
+command-build-browse-query-name = query
 
 # squid/bot/submission/submit.py:304
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
@@ -2405,11 +2408,14 @@ command-poll-name = poll
 # squid/bot/submission/submit.py:394
 command-recalculate-build-name = Scan Build Message
 
-# squid/bot/submission/commands.py:203
+# squid/bot/submission/commands.py:206
 command-records-browse-help = Browse records and their holder builds
 
-# squid/bot/submission/commands.py:202
+# squid/bot/submission/commands.py:205
 command-records-name = records
+
+# squid/bot/submission/commands.py:208
+command-records-query-name = query
 
 # squid/bot/recount.py:55
 command-recount-help = Count the reactions on a vote or starboard message again.
@@ -4209,7 +4215,7 @@ record-browser-smallest = Smallest
 # squid/bot/submission/build_browse.py:572
 record-filter-hint = Toggle any record types; none selected means all types. Search keeps your selection.
 
-# squid/bot/submission/commands.py:207
+# squid/bot/submission/commands.py:211
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
 # squid/records/application/services.py:584, squid/records/application/services.py:613
