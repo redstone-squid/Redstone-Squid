@@ -14,17 +14,17 @@ license = "MIT"
 repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [workspace.dependencies]
-base64 = "0.22.1"
+base64 = "0.23.1"
 chacha20poly1305 = "=0.10.1"
 clap = { version = "4.5.32", features = ["derive"] }
 clap_complete = "4.5.46"
 crossterm = "=0.28.1"
-directories = "5.0.1"
+directories = "6.0.0"
 ed25519-dalek = { version = "2.1.1", features = ["rand_core", "zeroize"] }
 fs2 = "0.4.3"
 hex = "0.4.3"
 # Ratatui 0.29 permits newer releases whose MSRV exceeds this workspace.
-instability = "=0.3.7"
+instability = "=0.3.10"
 keyring = { version = "=3.6.3", default-features = false, features = [
     "apple-native",
     "crypto-rust",
@@ -34,7 +34,7 @@ keyring = { version = "=3.6.3", default-features = false, features = [
 ] }
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 ratatui = { version = "=0.29.0", default-features = false, features = ["crossterm"] }
-reqwest = { version = "=0.13.4", default-features = false, features = [
+reqwest = { version = "=0.13.5", default-features = false, features = [
     "blocking",
     "rustls",
 ] }
@@ -45,7 +45,7 @@ shell-words = "=1.1.1"
 squid-cli-core = { path = "crates/squid-cli-core" }
 tempfile = "3.19.1"
 thiserror = "2.0.12"
-toml = "0.8.20"
+toml = "0.9.8"
 # Keep this exact: newer URL/IDNA releases currently exceed the workspace's Rust 1.85 MSRV.
 url = { version = "=2.5.4", features = ["serde"] }
 uuid = { version = "1.16.0", features = ["serde", "v4"] }
