@@ -11,7 +11,7 @@ import inspect
 
 import pytest
 
-from squid.accounts.application.services import VERIFICATION_CODE_DIGITS, generate_verification_code
+from squid.accounts.application.services import generate_verification_code
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.bootstrap import _ServiceGraph
 
@@ -45,14 +45,28 @@ def test_the_digest_is_stable_and_hex(code: str) -> None:
     assert bytes.fromhex(digest)
 
 
-def test_the_generated_code_is_ten_digits() -> None:
+@pytest.mark.parametrize(
+    ("randbelow_result", "expected"),
+    [(0, 1_000_000_000), (8_999_999_999, 9_999_999_999)],
+)
+def test_the_generated_code_covers_ten_digit_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+    randbelow_result: int,
+    expected: int,
+) -> None:
     """Keep numeric codes compatible with the integer returned by the verification API."""
-    values = {generate_verification_code() for _ in range(2000)}
+    requested_bounds: list[int] = []
 
-    assert all(10 ** (VERIFICATION_CODE_DIGITS - 1) <= value < 10**VERIFICATION_CODE_DIGITS for value in values)
-    assert all(len(str(value)) == VERIFICATION_CODE_DIGITS for value in values)
-    # This probabilistic smoke check can fail on a real random collision; it is not an entropy proof.
-    assert len(values) == 2000
+    def fake_randbelow(bound: int) -> int:
+        requested_bounds.append(bound)
+        return randbelow_result
+
+    monkeypatch.setattr("squid.accounts.application.services.secrets.randbelow", fake_randbelow)
+
+    code = generate_verification_code()
+
+    assert requested_bounds == [9_000_000_000]
+    assert code == expected
 
 
 def test_bootstrap_installs_the_widened_factory() -> None:
