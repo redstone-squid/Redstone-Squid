@@ -97,6 +97,7 @@ from squid_ui.semantic import (
     PortableNode,
     ProgressBar,
     Quote,
+    Region,
     Roster,
     RoutedActionControl,
     RoutedChoices,
@@ -270,16 +271,18 @@ def _collect[ItemT](values: Iterable[Conditional[ItemT]], kinds: tuple[type, ...
 
 def group[RenderTargetT = RenderTarget, ContextT = object](
     *children: ChildLike[RenderTargetT, ContextT],
+    key: str | None = None,
 ) -> Group[RenderTargetT, ContextT]:
     """Related content with no layout opinion; lowers to its children in place."""
-    return Group(_children(children, "sl.group()"))
+    return Group(_children(children, "sl.group()"), key=key)
 
 
 def stack[RenderTargetT = RenderTarget, ContextT = object](
     *children: ChildLike[RenderTargetT, ContextT],
+    key: str | None = None,
 ) -> Stack[RenderTargetT, ContextT]:
     """Content read top to bottom."""
-    return Stack(_children(children, "sl.stack()"))
+    return Stack(_children(children, "sl.stack()"), key=key)
 
 
 def cluster[RenderTargetT = RenderTarget, ContextT = object](
@@ -297,10 +300,10 @@ def themed[RenderTargetT = RenderTarget, ContextT = object](
 
 
 def block[RenderTargetT = RenderTarget, ContextT = object](
-    *children: ChildLike[RenderTargetT, ContextT], accent: Accent = INHERIT
+    *children: ChildLike[RenderTargetT, ContextT], accent: Accent = INHERIT, key: str | None = None
 ) -> Block[RenderTargetT, ContextT]:
     """An untitled region; ``accent`` is a house-colour override."""
-    return Block(_children(children, "sl.block()"), accent)
+    return Block(_children(children, "sl.block()"), accent, key)
 
 
 def section[RenderTargetT = RenderTarget, ContextT = object](
@@ -308,9 +311,10 @@ def section[RenderTargetT = RenderTarget, ContextT = object](
     *children: ChildLike[RenderTargetT, ContextT],
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
+    key: str | None = None,
 ) -> Section[RenderTargetT, ContextT]:
     """A titled block of related content; see `Section` for accent and thumbnail options."""
-    return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
+    return Section(heading, _children(children, "sl.section()"), accent, thumbnail, key)
 
 
 def article[RenderTargetT = RenderTarget, ContextT = object](
@@ -414,9 +418,9 @@ def heading(content: TextValue, *, level: int = 2, importance: Importance = Impo
     return Heading(_text(content), level, importance)
 
 
-def paragraph(content: TextValue, *, importance: Importance = Importance.NORMAL) -> Paragraph:
+def paragraph(content: TextValue, *, importance: Importance = Importance.NORMAL, key: str | None = None) -> Paragraph:
     """A block of prose."""
-    return Paragraph(_text(content), importance)
+    return Paragraph(_text(content), importance, key)
 
 
 def status(content: TextValue, *, tone: Tone | Role = Tone.NEUTRAL, emphasis: Emphasis = Emphasis.NORMAL) -> Status:
@@ -1020,6 +1024,7 @@ __all__ = [
     "progress",
     "quote",
     "rating",
+    "region",
     "roster",
     "routed_action_control",
     "routed_choices",
@@ -1067,3 +1072,15 @@ class _RatingSelection[ContextT]:
                     context=event.context,
                 )
             )
+
+
+def region[RenderTargetT = RenderTarget, ContextT = object](
+    *children: ChildLike[RenderTargetT, ContextT],
+    key: str,
+    title: TextValue,
+    header: Sequence[LayoutNode[RenderTargetT, ContextT]] = (),
+    footer: Sequence[LayoutNode[RenderTargetT, ContextT]] = (),
+    page: PageOwnership = FIRST_PAGE,
+) -> Region[RenderTargetT, ContextT]:
+    """Let the planner allocate space jointly with sibling and nested regions."""
+    return Region(_children(children, "sl.region()"), key, _text(title), tuple(header), tuple(footer), page)

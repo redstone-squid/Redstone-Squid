@@ -32,6 +32,10 @@ class UnsolvableLayoutError(LayoutError):
         self.context: dict[str, object] = dict(context or {})
 
 
+class LayoutSearchExhaustedError(LayoutError):
+    """The bounded search ended without establishing a feasible layout."""
+
+
 class DrawInvariantError(LayoutError):
     """A renderer produced output that violates its target contract."""
 
@@ -58,6 +62,7 @@ __all__ = [
     "LayoutDegradedError",
     "LayoutError",
     "LayoutInvariantError",
+    "LayoutSearchExhaustedError",
     "LimitViolationError",
     "SquidUiError",
     "UnsolvableLayoutError",

@@ -173,6 +173,7 @@ from squid_ui.semantic import (
     Paragraph,
     ProgressBar,
     Quote,
+    Region,
     Roster,
     RoutedChoices,
     Section,
@@ -538,6 +539,9 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
             # `Panel` is claimed above because its children may carry semantic nodes to lower,
             # so this arm must stay after it.
             return [_primitive(node, context)]
+        case Region():
+            message = "regions must be planned through the joint region planner"
+            raise LayoutInvariantError(message)
         case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 
@@ -683,6 +687,9 @@ def _primitive(node: Node, context: LoweringContext) -> Node:
             # Nothing on these carries author text; stated by name so a new primitive that
             # does carry some cannot slip through unresolved.
             return node
+        case Region():
+            message = "regions must be planned through the joint region planner"
+            raise LayoutInvariantError(message)
         case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 

@@ -46,6 +46,7 @@ from squid_ui.semantic import (
     LayoutNode,
     OptionalContent,
     Paged,
+    Region,
     Section,
     Spilled,
     Stack,
@@ -161,6 +162,13 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget, ContextT = object](
     # closed Node union for planner matching. The suppressions preserve the caller's generic
     # child type while rebuilding those same runtime containers.
     match node:
+        case Region(children=children, header=header, footer=footer):
+            return replace(
+                node,
+                children=many(children, path, "children"),
+                header=many(header, f"{path}.header", "header"),
+                footer=many(footer, f"{path}.footer", "footer"),
+            )
         case (
             Group(children=children)
             | Stack(children=children)
@@ -323,7 +331,7 @@ def _namespace[RenderTargetT: RenderTarget, ContextT = object](
                     key=f"{prefix}.{key}",
                     items=tuple(rewrite_semantic_action(item) for item in items),
                 )
-            case SemanticDetails(key=key) | SemanticItems(key=key):
+            case SemanticDetails(key=key) | SemanticItems(key=key) | Region(key=key):
                 keyed = replace(node, key=f"{prefix}.{key}")
                 return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
             case (

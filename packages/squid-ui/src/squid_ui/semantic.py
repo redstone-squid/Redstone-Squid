@@ -199,10 +199,14 @@ class Adaptable[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rend
 class Group[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
+    key: str | None = None
+
 
 @dataclass(frozen=True, slots=True)
 class Stack[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
+
+    key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +229,8 @@ class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     accent: Accent = INHERIT
 
+    key: str | None = None
+
 
 @dataclass(frozen=True, slots=True)
 class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
@@ -241,6 +247,8 @@ class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     accent: Accent = INHERIT
     thumbnail: str | None = None
+
+    key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,6 +278,8 @@ class Heading(Adaptable[RenderTarget]):
 class Paragraph(Adaptable[RenderTarget]):
     content: TextLike
     importance: Importance = Importance.NORMAL
+
+    key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -828,6 +838,27 @@ class KeepWithNext[RenderTargetT = RenderTarget, ContextT = object](Adaptable[Re
 
 
 @dataclass(frozen=True, slots=True)
+class Region[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+    """A jointly allocated page region with persistent content and independent position.
+
+    Headers and footers repeat within this region. Nested regions retain their own
+    positions; their maximum page costs count against the containing region.
+    """
+
+    children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
+    key: str
+    title: TextLike
+    header: tuple[LayoutNode[RenderTargetT, ContextT], ...] = ()
+    footer: tuple[LayoutNode[RenderTargetT, ContextT], ...] = ()
+    page: PageOwnership = FIRST_PAGE
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            msg = "region key must not be empty"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True, slots=True)
 class Paged[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Paginate a keyed region's children, resolving `page` after measuring their sizes."""
 
@@ -906,6 +937,7 @@ type Adaptation[RenderTargetT = RenderTarget, ContextT = object] = (
     | Unbreakable[RenderTargetT, ContextT]
     | KeepWithNext[RenderTargetT, ContextT]
     | Paged[RenderTargetT, ContextT]
+    | Region[RenderTargetT, ContextT]
 )
 type AnyLayoutNode = LayoutNode[Any, Any]
 """A node whose dialect is deliberately not tracked.
@@ -1136,6 +1168,7 @@ __all__ = [
     "PortableNode",
     "ProgressBar",
     "Quote",
+    "Region",
     "Roster",
     "RoutedActionControl",
     "RoutedChoices",

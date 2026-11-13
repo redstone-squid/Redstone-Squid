@@ -354,6 +354,9 @@ class _Compiler:
                 | sem.FallbackContent()
             ):
                 return self._adapted(node, path)
+            case sem.Region():
+                message = "regions must be planned through the joint region planner"
+                raise LayoutInvariantError(message)
             case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
@@ -456,6 +459,9 @@ class _Compiler:
                         colour=self.palette.tone(tone),
                     ),
                 )
+            case sem.Region():
+                message = "regions must be planned through the joint region planner"
+                raise LayoutInvariantError(message)
             case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
@@ -624,6 +630,9 @@ class _Compiler:
                     time_ref=scene.HtmlTimeRef(value.instant.isoformat(), timezone=value.timezone),
                 )
                 return self._labelled_time(label, time_node)
+            case sem.Region():
+                message = "regions must be planned through the joint region planner"
+                raise LayoutInvariantError(message)
             case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
@@ -686,6 +695,9 @@ class _Compiler:
                 return (self._items(node, path),)
             case sem.Navigation():
                 return (self._navigation(node),)
+            case sem.Region():
+                message = "regions must be planned through the joint region planner"
+                raise LayoutInvariantError(message)
             case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
@@ -713,6 +725,9 @@ class _Compiler:
                 return self._paged(node, path)
             case sem.Unbreakable(node=child) | sem.KeepWithNext(node=child):
                 return self.compile(child, path)
+            case sem.Region():
+                message = "regions must be planned through the joint region planner"
+                raise LayoutInvariantError(message)
             case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 

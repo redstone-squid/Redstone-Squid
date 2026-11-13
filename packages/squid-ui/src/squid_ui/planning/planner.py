@@ -6,13 +6,14 @@ from typing import Any
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.document import DocumentLike, PortableDocumentLike
+from squid_ui.document import DocumentLike, PortableDocumentLike, as_document
 from squid_ui.handlers import bind_handlers
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.identity import has_routed_page
 from squid_ui.planning.navigation import PlannedNav
+from squid_ui.planning.regions import contains_regions, plan_regions
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult
@@ -84,7 +85,12 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
         cache = None
         memo = None
     backend = request.target.dialect.planner
-    result = backend.plan(rendered, request, cache=cache, memo=memo)
+    document = as_document(rendered)
+    result = (
+        plan_regions(document, request)
+        if contains_regions(document.children)
+        else backend.plan(rendered, request, cache=cache, memo=memo)
+    )
     frontend = request.target.adapter.frontend or request.target.adapter.name
     bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend)
     result = (

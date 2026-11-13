@@ -487,6 +487,8 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
                 search_fallback=cached.search_fallback,
             ),
             session_updates=cached.session_updates,
+            cost=cached.cost,
+            degradation=cached.degradation,
         )
 
     def _materialized(self, cached: CachedPlan[BodyT]) -> tuple[Node, ...] | None:
@@ -1004,6 +1006,8 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
             search_fallback=semantic.search_fallback,
         ),
         session_updates=updates,
+        cost=measured.cost,
+        degradation=measured.degradation,
     )
     if cache is not None and _cacheable(lowered):
         cache.put(
@@ -1018,6 +1022,8 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
                 selected.state.variants,
                 selected.state.fallbacks,
                 _compile_template(lowered, compilation.dynamic_values(planned)),
+                cost=measured.cost,
+                degradation=measured.degradation,
             ),
         )
         if incremental_key is not None and _certifies_incremental(selected) and not root_events:

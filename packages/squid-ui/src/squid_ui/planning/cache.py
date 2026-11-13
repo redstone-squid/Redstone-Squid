@@ -8,10 +8,12 @@ component's handler when a control is pressed.
 """
 
 from collections import OrderedDict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from squid_ui import scene
+from squid_ui.planning.degradation import DegradationProfile
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanReport, PlanResult, PlanReuse
 from squid_ui.presentation import PresentationState, SessionUpdate
 
@@ -30,6 +32,9 @@ class CachedPlan[BodyT: scene.Body = scene.Body]:
     """Fallback decisions for entries whose selected primitive tree could not be compiled."""
     lowered_template: object | None = None
     """Selected primitive tree with every process-local value replaced by a document slot."""
+
+    cost: ResourceCost = field(default=EMPTY_COST, kw_only=True)
+    degradation: DegradationProfile = field(default_factory=DegradationProfile, kw_only=True)
 
 
 class PlanCache[BodyT: scene.Body = Any]:

@@ -10,6 +10,8 @@ from enum import StrEnum
 
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
+from squid_ui.planning.degradation import DegradationProfile
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.presentation import SessionUpdate
 from squid_ui.scene.model import Body, Scene
 
@@ -40,10 +42,22 @@ class PlanEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class RegionReport:
+    """The selected allocation and reconciled position of a materialized region."""
+
+    key: str
+    allocation: ResourceCost
+    pages: int
+    page: int
+    anchor: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class PlanReport:
     events: tuple[PlanEvent, ...] = ()
     logical_fingerprint: str = ""
     scene_fingerprint: str = ""
+    regions: tuple[RegionReport, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +94,8 @@ class PlanResult[BodyT = Body]:
     """Adapter-owned presentation plans, prepared after frontend callbacks are bound."""
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
+    cost: ResourceCost = field(default=EMPTY_COST, kw_only=True)
+    degradation: DegradationProfile = field(default_factory=DegradationProfile, kw_only=True)
     session_updates: tuple[SessionUpdate, ...] = ()
     """Presentation changes to apply only after successful delivery.
 

@@ -99,6 +99,7 @@ from squid_ui.semantic import (
     Paragraph,
     ProgressBar,
     Quote,
+    Region,
     Roster,
     RoutedChoices,
     Section,
@@ -263,6 +264,9 @@ def nominate_decisions(
                 # above because its children may hold semantic nodes, and `Variants` ladders
                 # belong to frontier.py, not to semantic nomination.
                 return
+            case Region():
+                message = "regions must be planned through the joint region planner"
+                raise LayoutInvariantError(message)
             case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
