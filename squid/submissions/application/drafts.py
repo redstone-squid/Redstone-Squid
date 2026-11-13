@@ -12,8 +12,9 @@ from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.messages.domain import MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import PermissionNode
+from squid.permissions.domain import Decision, PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.permissions.errors import PermissionDeniedError
 from squid.submissions.application.forms import FormManifestRegistry
 from squid.submissions.domain import (
     DraftChange,
@@ -94,7 +95,7 @@ def _access_denied(
 class DraftPermissions(Protocol):
     """Live permission checks used for staff correction of account-owned drafts."""
 
-    async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool: ...
+    async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,10 +392,7 @@ class SubmissionDraftService:
         """Page correction work by stable ID after checking current staff permission."""
         async with self._uow_factory() as uow:
             draft_actor_id(actor)
-            if self._permissions is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT):
-                raise _access_denied(
-                    reason="permissions_unconfigured" if self._permissions is None else "staff_permission_required",
-                )
+            await self._require_staff(uow, actor)
             if not 1 <= limit <= 100:
                 message = "Draft inbox limit must be between 1 and 100."
                 raise InvalidStateError(message)
@@ -417,18 +415,24 @@ class SubmissionDraftService:
         if draft is None:
             raise DraftNotFoundError(draft_id)
         account_id = draft_actor_id(actor)
-        if draft.snapshot.owner_account_id != account_id and (
-            self._permissions is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
-        ):
-            raise _access_denied(
-                reason="permissions_unconfigured" if self._permissions is None else "staff_permission_required",
-            )
+        if draft.snapshot.owner_account_id != account_id:
+            await self._require_staff(uow, actor)
         if draft.snapshot.status is DraftStatus.EXPIRED or (
             draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
             and draft.expires_at <= self._now()
         ):
             raise DraftStateConflictError(DraftStatus.EXPIRED.value, operation="access")
         return draft
+
+    async def _require_staff(self, uow: DraftUnitOfWork, actor: Actor) -> None:
+        if self._permissions is None:
+            raise _access_denied(reason="permissions_unconfigured")
+        decision = await self._permissions.check_in(uow, actor, BUILD_SUBMISSION_EDIT)
+        if not decision.allowed:
+            explanation = PermissionDeniedError(decision)
+            raise _access_denied(
+                reason="staff_permission_required",
+            ).with_context(message=explanation.message, public_context=explanation.public_context)
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         """Delete an owned draft only while it remains user-editable."""

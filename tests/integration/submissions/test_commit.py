@@ -19,6 +19,7 @@ from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.messages.domain import MessageRef, MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.domain import Decision, Reason
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.submissions.application.commit import BuildSubmissionExecutor
@@ -209,8 +210,8 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     class Permissions:
         allowed = True
 
-        async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool:
-            return self.allowed
+        async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision:
+            return Decision(node.name, allowed=self.allowed, reason=Reason.DEFAULT)
 
     permissions = Permissions()
 

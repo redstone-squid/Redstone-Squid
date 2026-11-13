@@ -8,6 +8,8 @@ from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Origin, Reason
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.permissions.errors import PermissionDeniedError
 from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 from tests.support.permissions import permission_uow_factory
 
@@ -219,3 +221,37 @@ async def test_current_permission_rules_ignore_actor_capability_snapshots() -> N
     permissions, _ = service()
     actor = Actor(account_id=7, capabilities=frozenset({"record.entry.rebuild"}), highest_permission_rank=999)
     assert not await permissions.allows(actor, "record.entry.rebuild")
+
+
+@pytest.mark.parametrize("effect", [None, Effect.ALLOW, Effect.DENY, Effect.FORBID])
+@pytest.mark.parametrize("bot_owner", [False, True])
+async def test_transactional_explanations_preserve_acl_decisions(effect: Effect | None, bot_owner: bool) -> None:
+    grants = (
+        ()
+        if effect is None
+        else (PermissionGrant(pattern="build.submission.edit", effect=int(effect), subject_account_id=7),)
+    )
+    permissions, store = service(grants=grants)
+    subject = Actor(account_id=7, is_bot_owner=bot_owner)
+    async with permission_uow_factory(store)() as uow:
+        decision = await permissions.check_in(uow, subject, BUILD_SUBMISSION_EDIT)
+        assert decision.allowed is await permissions.allows_in(uow, subject, BUILD_SUBMISSION_EDIT)
+    assert decision.allowed is (bot_owner or effect is Effect.ALLOW)
+    assert store.loads == (0 if bot_owner else 2)
+    if decision.allowed:
+        with pytest.raises(ValueError, match="allowed permission decision"):
+            PermissionDeniedError(decision)
+        return
+    error = PermissionDeniedError(decision)
+    expected = {
+        None: ("missing_grant", "your current permissions do not grant it"),
+        Effect.DENY: ("explicit_deny", "an explicit deny rule blocks that permission"),
+        Effect.FORBID: ("forbidden", "an explicit forbid rule blocks that permission"),
+    }[effect]
+    assert error.public_context == {
+        "required_permission": "build.submission.edit",
+        "permission_reason": expected[0],
+    }
+    assert error.public_detail() == f"This action requires build.submission.edit, but {expected[1]}."
+    assert "account:7" not in error.public_detail()
+    assert error.decision is decision

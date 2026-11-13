@@ -126,6 +126,19 @@ class PermissionService:
         """Check one permission using the caller's transaction and current stored rules."""
         return node.name in await self.capabilities_in(uow, subject, (node,))
 
+    async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision:
+        """Retain the explanation from a permission check using current transactional rules."""
+        if subject.is_bot_owner:
+            rules: tuple[Rule, ...] = ()
+        else:
+            records = await uow.permissions.load_for_subject(
+                account_id=subject.account_id,
+                discord_role_ids=subject.discord_role_ids,
+                guild_id=subject.guild_id,
+            )
+            rules = self.assemble(records, subject)
+        return resolve(node, subject, rules, catalogue=self._catalogue)
+
     async def capabilities_in(
         self, uow: PermissionUnitOfWork, subject: Actor, nodes: Iterable[PermissionNode | str]
     ) -> frozenset[str]:

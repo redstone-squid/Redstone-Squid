@@ -10,6 +10,7 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.domain import Decision, Reason
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
@@ -694,8 +695,8 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
     class Permissions:
         allowed = True
 
-        async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool:
-            return subject.account_id == 8 and self.allowed
+        async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision:
+            return Decision(node.name, allowed=subject.account_id == 8 and self.allowed, reason=Reason.DEFAULT)
 
     permissions = Permissions()
     repository = FakeDraftRepository()
