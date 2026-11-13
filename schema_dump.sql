@@ -645,6 +645,27 @@ $$;
 
 
 --
+-- Name: idempotency_requests_mirror_caller(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.idempotency_requests_mirror_caller() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF NEW.caller IS NULL THEN
+        NEW.caller := NEW.principal;
+    ELSIF NEW.principal IS NULL THEN
+        NEW.principal := NEW.caller;
+    ELSIF NEW.caller <> NEW.principal THEN
+        RAISE EXCEPTION 'idempotency caller vocabulary columns disagree'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: power_set_max(text[], integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2317,6 +2338,8 @@ CREATE TABLE public.idempotency_requests (
     expires_at timestamp with time zone NOT NULL,
     response_body_key_id text,
     response_body_nonce bytea,
+    caller text NOT NULL,
+    CONSTRAINT idempotency_requests_method_check CHECK ((method = ANY (ARRAY['POST'::text, 'PUT'::text, 'PATCH'::text, 'DELETE'::text]))),
     CONSTRAINT idempotency_requests_response_state_check CHECK ((((state = 'in_progress'::text) AND (response_status IS NULL) AND (response_headers IS NULL) AND (response_body_ciphertext IS NULL) AND (response_body_key_id IS NULL) AND (response_body_nonce IS NULL) AND (completed_at IS NULL)) OR ((state = 'completed'::text) AND (response_status IS NOT NULL) AND (response_headers IS NOT NULL) AND (response_body_ciphertext IS NOT NULL) AND (response_body_key_id IS NOT NULL) AND (response_body_nonce IS NOT NULL) AND (completed_at IS NOT NULL)))),
     CONSTRAINT idempotency_requests_state_check CHECK ((state = ANY (ARRAY['in_progress'::text, 'completed'::text])))
 );
@@ -2341,6 +2364,13 @@ anchors, and a redeploy window, for a name no client ever sees. The same
 trade applies to the `principal` partition in `RateLimit-Policy` and to
 `SQUID_API_RATE_LIMIT_PRINCIPAL_REQUESTS`, both of which deployments and
 clients can observe. If the ban is meant repo-wide, that is its own commit.';
+
+
+--
+-- Name: COLUMN idempotency_requests.caller; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.idempotency_requests.caller IS 'The server-derived caller namespace a key is reserved in.';
 
 
 --
@@ -2413,7 +2443,7 @@ CREATE TABLE public.media_artifacts (
     height integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT media_artifacts_dimensions_by_role CHECK ((((role = 'report'::text) AND (width IS NULL) AND (height IS NULL)) OR ((role <> 'report'::text) AND (width > 0) AND (height > 0)))),
-    CONSTRAINT media_artifacts_role_check CHECK ((role = ANY (ARRAY['output'::text, 'poster'::text, 'report'::text]))),
+    CONSTRAINT media_artifacts_role_check CHECK ((role = ANY (ARRAY['output'::text, 'poster'::text, 'video_thumbnail'::text, 'report'::text]))),
     CONSTRAINT media_artifacts_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT media_artifacts_size_positive CHECK ((byte_size > 0))
 );
@@ -3260,6 +3290,7 @@ CREATE TABLE public.record_competitions (
     version_id smallint,
     category_key text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT record_competitions_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
     CONSTRAINT record_competitions_record_class_check CHECK ((record_class = ANY (ARRAY['first'::text, 'fastest'::text, 'smallest'::text, 'fastest_smallest'::text, 'smallest_fastest'::text]))),
     CONSTRAINT record_competitions_version_scope_check CHECK ((version_scope = ANY (ARRAY['all_time'::text, 'current'::text])))
 );
@@ -3286,6 +3317,7 @@ CREATE TABLE public.record_computation_runs (
     started_at timestamp with time zone DEFAULT now() NOT NULL,
     completed_at timestamp with time zone,
     error text,
+    CONSTRAINT record_computation_runs_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
     CONSTRAINT record_computation_runs_status_check CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])))
 );
 
@@ -3349,6 +3381,7 @@ CREATE TABLE public.record_definitions (
     subtitle text,
     title_diagnostics jsonb DEFAULT '[]'::jsonb NOT NULL,
     competition_id uuid NOT NULL,
+    CONSTRAINT record_definitions_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
     CONSTRAINT record_definitions_materialization_source_check CHECK ((materialization_source = ANY (ARRAY['eager'::text, 'seeded'::text, 'public_lookup'::text]))),
     CONSTRAINT record_definitions_record_class_check CHECK ((record_class = ANY (ARRAY['first'::text, 'fastest'::text, 'smallest'::text, 'fastest_smallest'::text, 'smallest_fastest'::text]))),
     CONSTRAINT record_definitions_version_scope_check CHECK ((version_scope = ANY (ARRAY['all_time'::text, 'current'::text])))
@@ -3429,7 +3462,8 @@ CREATE TABLE public.record_recompute_queue (
     locked_at timestamp with time zone,
     last_error text,
     available_at timestamp with time zone DEFAULT now() NOT NULL,
-    claim_token uuid
+    claim_token uuid,
+    CONSTRAINT record_recompute_queue_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text])))
 );
 
 
@@ -3667,6 +3701,22 @@ CREATE SEQUENCE public.schematic_jobs_id_seq
 --
 
 ALTER SEQUENCE public.schematic_jobs_id_seq OWNED BY public.schematic_jobs.id;
+
+
+--
+-- Name: schematic_preview_objects; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schematic_preview_objects (
+    object_key text NOT NULL,
+    byte_size bigint NOT NULL,
+    sha256 text,
+    ready_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT schematic_preview_objects_sha256_check CHECK (((sha256 IS NULL) OR (sha256 ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT schematic_preview_objects_size_positive CHECK ((byte_size > 0))
+);
 
 
 --
@@ -4320,11 +4370,11 @@ COMMENT ON TABLE public.submission_finalization_jobs IS 'A retained source-draft
 CREATE TABLE public.submission_finalization_results (
     job_id uuid NOT NULL,
     build_id bigint NOT NULL,
-    target_key text NOT NULL,
-    provenance jsonb NOT NULL,
+    target_key text,
+    provenance jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT submission_finalization_results_build_id_positive CHECK ((build_id > 0)),
-    CONSTRAINT submission_finalization_results_target_key_check CHECK ((target_key ~ '^[a-z][a-z0-9_]{0,63}$'::text))
+    CONSTRAINT submission_finalization_results_target_key_check CHECK (((target_key IS NULL) OR (target_key ~ '^[a-z][a-z0-9_]{0,63}$'::text)))
 );
 
 
@@ -5236,6 +5286,14 @@ ALTER TABLE ONLY public.guild_vote_role_weights
 
 
 --
+-- Name: idempotency_requests idempotency_requests_caller_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.idempotency_requests
+    ADD CONSTRAINT idempotency_requests_caller_key UNIQUE (caller, idempotency_key);
+
+
+--
 -- Name: idempotency_requests idempotency_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5401,6 +5459,14 @@ ALTER TABLE ONLY public.notification_profiles
 
 ALTER TABLE ONLY public.notification_subscriptions
     ADD CONSTRAINT notification_subscriptions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notifications notifications_id_account_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_id_account_key UNIQUE (id, account_id);
 
 
 --
@@ -5649,6 +5715,14 @@ ALTER TABLE ONLY public.schematic_files
 
 ALTER TABLE ONLY public.schematic_jobs
     ADD CONSTRAINT schematic_jobs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: schematic_preview_objects schematic_preview_objects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_preview_objects
+    ADD CONSTRAINT schematic_preview_objects_pkey PRIMARY KEY (object_key);
 
 
 --
@@ -6808,6 +6882,13 @@ CREATE INDEX schematic_jobs_ready_idx ON public.schematic_jobs USING btree (avai
 
 
 --
+-- Name: schematic_preview_objects_cleanup_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX schematic_preview_objects_cleanup_idx ON public.schematic_preview_objects USING btree (last_seen_at);
+
+
+--
 -- Name: schematic_render_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7246,6 +7327,13 @@ CREATE TRIGGER extenders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON publ
 --
 
 CREATE CONSTRAINT TRIGGER generic_vote_sessions_kind_subtype_check AFTER INSERT OR DELETE OR UPDATE ON public.generic_vote_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_vote_session_kind_subtype();
+
+
+--
+-- Name: idempotency_requests idempotency_requests_mirror_caller; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER idempotency_requests_mirror_caller BEFORE INSERT OR UPDATE OF caller, principal ON public.idempotency_requests FOR EACH ROW EXECUTE FUNCTION public.idempotency_requests_mirror_caller();
 
 
 --
@@ -7822,11 +7910,11 @@ ALTER TABLE ONLY public.notification_deliveries
 
 
 --
--- Name: notification_deliveries notification_deliveries_notification_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: notification_deliveries notification_deliveries_notification_owner_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notification_deliveries
-    ADD CONSTRAINT notification_deliveries_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES public.notifications(id) ON DELETE CASCADE;
+    ADD CONSTRAINT notification_deliveries_notification_owner_fkey FOREIGN KEY (notification_id, account_id) REFERENCES public.notifications(id, account_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
 
 
 --
@@ -8131,6 +8219,14 @@ ALTER TABLE ONLY public.schematic_render_queue
 
 ALTER TABLE ONLY public.schematic_renders
     ADD CONSTRAINT schematic_renders_build_schematic_id_fkey FOREIGN KEY (build_schematic_id) REFERENCES public.build_schematics(id) ON DELETE CASCADE;
+
+
+--
+-- Name: schematic_renders schematic_renders_object_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_renders
+    ADD CONSTRAINT schematic_renders_object_key_fkey FOREIGN KEY (object_key) REFERENCES public.schematic_preview_objects(object_key) ON DELETE RESTRICT;
 
 
 --
