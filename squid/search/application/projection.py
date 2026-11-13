@@ -2,7 +2,7 @@
 
 A search document is a searchable copy of a build, record, or metadata resource.
 Projection work rebuilds that copy from current data, or removes it when the
-resource is deleted or no longer eligible. The service commits document changes
+resource is deleted or no longer eligible. The application function commits document changes
 and queue acknowledgements together so a rollback leaves the work available.
 """
 
@@ -17,18 +17,14 @@ class SearchProjectionRepository(Protocol):
     async def process_batch(self, *, limit: int = 50) -> tuple[int, int]: ...
 
 
-class SearchProjectionService:
-    """Commit document refreshes and queue updates together."""
-
-    def __init__(self, *, uow_factory: UnitOfWorkFactory[SearchProjectionUnitOfWork]) -> None:
-        self._uow_factory = uow_factory
-
-    async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:
-        """Process at most limit items and return (succeeded, failed)."""
-        async with self._uow_factory() as uow:
-            result = await uow.search_projection.process_batch(limit=limit)
-            await uow.commit()
-            return result
+async def refresh_search_index(
+    uow_factory: UnitOfWorkFactory[SearchProjectionUnitOfWork], *, limit: int = 50
+) -> tuple[int, int]:
+    """Commit up to limit document refreshes and queue updates; return (succeeded, failed)."""
+    async with uow_factory() as uow:
+        result = await uow.search_projection.process_batch(limit=limit)
+        await uow.commit()
+        return result
 
 
 class SearchProjectionUnitOfWork(UnitOfWork, Protocol):

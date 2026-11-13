@@ -23,6 +23,16 @@ class VersionService:
             await uow.commit()
             return stored
 
+    async def data_version_for(self, version_label: str) -> int | None:
+        """Return the saved-data version, or None for an invalid, unknown, or unmapped release."""
+        async with self._uow_factory() as uow:
+            return await uow.versions.data_version_for(version_label)
+
+    async def label_for_data_version(self, data_version: int) -> str | None:
+        """Return the earliest matching catalogue release, or None if no release matches."""
+        async with self._uow_factory() as uow:
+            return await uow.versions.label_for_data_version(data_version)
+
     async def list_versions(self, edition: Edition) -> list[MinecraftVersion]:
         """Return catalog versions for one edition, from oldest to newest."""
         async with self._uow_factory() as uow:

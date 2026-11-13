@@ -35,7 +35,6 @@ from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewRepository
 from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.schematics.infrastructure.repository import PostgresSchematicRepository
-from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
 from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import PostgresSearchProjection
@@ -108,7 +107,6 @@ class SqlAlchemyUnitOfWork:
         self._schematic_renders = PostgresSchematicRenderJobRepository(self._active_session)
         self._schematic_previews = PostgresSchematicPreviewRepository(self._active_session)
         self._schematic_metadata = PostgresSchematicRepository(self._active_session)
-        self._schematic_versions = PostgresSchematicVersionResolver(self._active_session)
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
         self._cli_authorization = PostgresCliAuthorizationRepository(self._active_session)
@@ -353,11 +351,6 @@ class SqlAlchemyUnitOfWork:
     def schematic_metadata(self) -> PostgresSchematicRepository:
         self._active_session()
         return self._schematic_metadata
-
-    @property
-    def schematic_versions(self) -> PostgresSchematicVersionResolver:
-        self._active_session()
-        return self._schematic_versions
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

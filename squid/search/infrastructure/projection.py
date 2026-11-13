@@ -5,7 +5,7 @@ filter values called facets. The store replaces the document and its facets
 together. A document can have several values for one field, such as its creators.
 
 The worker processes each queued resource in a savepoint, so one failed refresh
-can be retried without losing the other refreshes in the batch. SearchProjectionService
+can be retried without losing the other refreshes in the batch. refresh_search_index
 commits the batch. Embedding jobs are queued here but run separately, because
 their model calls should not keep this database transaction open.
 """

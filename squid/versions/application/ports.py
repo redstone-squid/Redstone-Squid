@@ -15,6 +15,10 @@ class VersionRepository(Protocol):
         """Return versions ordered by major, minor, then patch number, ascending."""
         ...
 
+    async def data_version_for(self, version_label: str) -> int | None: ...
+
+    async def label_for_data_version(self, data_version: int) -> str | None: ...
+
 
 class VersionUnitOfWork(UnitOfWork, Protocol):
     """Transaction and repositories used by VersionService."""

@@ -113,13 +113,12 @@ from squid.schematics.application import (
 )
 from squid.schematics.application.preview_storage import SchematicPreviewStorage
 from squid.schematics.application.storage import SchematicStorageService
-from squid.schematics.application.versions import SchematicVersionService
 from squid.schematics.application.video_service import SchematicVideoService
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.search.application import SearchEmbeddingService, SearchService
-from squid.search.application.projection import SearchProjectionService
+from squid.search.application.projection import refresh_search_index
 from squid.settings.application import SettingsService
 from squid.settings.application.edits import GUILD_EDIT, RUNTIME_EDIT, GuildSettingsEdit, RuntimeSettingsEdit
 from squid.settings.domain.runtime import RuntimeSettings
@@ -211,7 +210,7 @@ def create_schematic_service(
         analyzer,
         store,
         previews,
-        SchematicVersionService(uow_factory=uow_factory),
+        VersionService(uow_factory=uow_factory),
         limits=SchematicLimits(
             max_upload_bytes=config.max_upload_bytes,
             max_inflated_bytes=config.max_inflated_bytes,
@@ -600,10 +599,6 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def search_projection(self) -> SearchProjectionService:
-        return SearchProjectionService(uow_factory=self.uow_factory)
-
-    @cached_property
     def suggestion_queries(self) -> SuggestionQueryService:
         return SuggestionQueryService(uow_factory=self.uow_factory)
 
@@ -903,7 +898,7 @@ def create_worker_services(
         media_cleanup=graph.media_cleanup,
         submission_finalization=graph.submission_finalization_worker,
         search_embeddings=graph.search_embeddings,
-        refresh_search_index=graph.search_projection.process_batch,
+        refresh_search_index=partial(refresh_search_index, graph.uow_factory),
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
         purge_idempotency=purge_mutation_outcomes,
         expire_submission_drafts=graph.submission_drafts.expire_due,

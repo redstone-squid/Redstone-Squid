@@ -21,6 +21,12 @@ class FakeVersionRepository:
     async def list(self, edition: Edition) -> list[MinecraftVersion]:
         return [version for version in self.versions if version.edition == edition]
 
+    async def data_version_for(self, version_label: str) -> int | None:
+        return None
+
+    async def label_for_data_version(self, data_version: int) -> str | None:
+        return None
+
 
 class FakeVersionUnitOfWork(FakeUnitOfWork[FakeVersionRepository]):
     @property
