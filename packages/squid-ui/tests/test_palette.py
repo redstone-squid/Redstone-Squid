@@ -54,7 +54,7 @@ def test_registry_rejects_empty_registration_and_unknown_resolution() -> None:
 @pytest.mark.parametrize("accent", [*sl.Tone, sl.AccentRole.BRAND, sl.INHERIT, None, 0x123456])
 def test_accent_roles_follow_the_active_palette(accent: sl.Accent) -> None:
     palette = Palette(brand=1, neutral=2, info=3, success=4, warning=5, danger=6)
-    expected = {
+    expected: dict[sl.Accent, int | None] = {
         sl.Tone.NEUTRAL: 2,
         sl.Tone.INFO: 3,
         sl.Tone.SUCCESS: 4,
@@ -64,8 +64,8 @@ def test_accent_roles_follow_the_active_palette(accent: sl.Accent) -> None:
         sl.INHERIT: 1,
         None: None,
         0x123456: 0x123456,
-    }[accent]
-    assert resolve_accent(accent, palette) == expected
+    }
+    assert resolve_accent(accent, palette) == expected[accent]
     if isinstance(accent, sl.Tone):
         assert resolve_accent(accent, Palette(neutral=None, info=None, success=None, warning=None, danger=None)) is None
 
