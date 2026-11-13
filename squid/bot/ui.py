@@ -203,7 +203,7 @@ def card_node(
     title: ui.TextLike,
     description: ui.TextLike | None = None,
     *,
-    accent_colour: int = DISCORD_GREEN,
+    accent_colour: ui.Accent = ui.Tone.SUCCESS,
     fields: Sequence[CardField] = (),
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
@@ -227,7 +227,7 @@ def card_node(
 
 
 def text_node(
-    content: ui.TextLike, *, accent_colour: int | None = None
+    content: ui.TextLike, *, accent_colour: ui.Accent = None
 ) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build a truncating text response for composition inside a component render."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
@@ -248,13 +248,13 @@ def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.Layout
     return card_node(
         title,
         _prefixed(":x: ", description or ""),
-        accent_colour=DISCORD_RED,
+        accent_colour=ui.Tone.DANGER,
     )
 
 
 def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build an informational card for composition inside a component render."""
-    return card_node(title, description, accent_colour=DISCORD_GREEN)
+    return card_node(title, description, accent_colour=ui.Tone.SUCCESS)
 
 
 def link_node(
@@ -269,5 +269,5 @@ def link_node(
         ui.heading(title),
         description and ui.paragraph(description).truncate(),
         ui.action_controls(ui.link(label, url, key="open-link"), key="link"),
-        accent=DISCORD_GREEN,
+        accent=ui.Tone.SUCCESS,
     )

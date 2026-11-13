@@ -48,7 +48,6 @@ from squid.bot.submission.ui.sections import (
     problem_text,
     section_text,
 )
-from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.core.errors import JSONValue, SquidError
@@ -444,14 +443,14 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         children: list[Any] = [_header(ws, phase), sd.v2.separator()]
         children.extend(self._overview(phase) if phase in EDITABLE_PHASES else self._summary(phase))
         accent = {
-            Phase.EDITING: DISCORD_BLUE,
-            Phase.WAITING_FOR_FILES: DISCORD_BLUE,
-            Phase.NEEDS_CHANGES: DISCORD_YELLOW,
-            Phase.CREATING: DISCORD_BLUE,
-            Phase.DONE: DISCORD_GREEN,
-            Phase.EXPIRED: DISCORD_RED,
+            Phase.EDITING: sl.AccentRole.BRAND,
+            Phase.WAITING_FOR_FILES: sl.AccentRole.BRAND,
+            Phase.NEEDS_CHANGES: sl.Tone.WARNING,
+            Phase.CREATING: sl.AccentRole.BRAND,
+            Phase.DONE: sl.Tone.SUCCESS,
+            Phase.EXPIRED: sl.Tone.DANGER,
         }[phase]
-        return (sd.v2.panel(*children, accent=accent), *ws.edits.controls())
+        return (sl.block(*children, accent=accent), *ws.edits.controls())
 
     def _overview(self, phase: Phase) -> list[Any]:
         """One row per section and the Files row, then the Submit row."""
@@ -626,7 +625,7 @@ class FilesEditorScreen(sd.Screen[None]):
                 ),
             )
         )
-        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *self.workspace.edits.controls())
+        return (sl.block(*children, accent=sl.AccentRole.BRAND), *self.workspace.edits.controls())
 
     def _selected_id(self) -> UUID | None:
         """The selected file, if it is still on the draft."""

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, override
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import DISCORD_GREEN, tr
+from squid.bot.ui import tr
 from squid.builds.models import Build
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
 from squid_i18n import md_tr
@@ -95,7 +95,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         detail = self._build_node or sl.section(
             sl.heading(self.hit.title),
             sl.paragraph(_detail_text(self.hit)).truncate(),
-            accent=DISCORD_GREEN,
+            accent=sl.Tone.SUCCESS,
         )
         build_id = _build_id(self.hit)
         return (

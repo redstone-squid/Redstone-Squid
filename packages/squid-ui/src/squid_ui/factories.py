@@ -309,7 +309,7 @@ def section[RenderTargetT = RenderTarget, ContextT = object](
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Section[RenderTargetT, ContextT]:
-    """A titled block of related content; ``accent`` is a house-colour override."""
+    """A titled block of related content; see `Section` for accent and thumbnail options."""
     return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 

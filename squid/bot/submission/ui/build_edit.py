@@ -26,7 +26,7 @@ from squid.bot.edit_controller import EditController
 from squid.bot.edit_history import history_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.sections import form_sections, problem_text, section_text
-from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, tr
+from squid.bot.ui import tr
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.application.edits import BUILD_EDIT, build_target, patch_values
 from squid.builds.domain import UnresolvedTaxonomy
@@ -334,7 +334,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 sl.action_controls(*self._actions(), key="build-edit-actions"),
             )
         )
-        nodes.append(sd.v2.panel(*children, accent=DISCORD_YELLOW if self.conflict or ws.notice else DISCORD_BLUE))
+        nodes.append(sl.block(*children, accent=sl.Tone.WARNING if self.conflict or ws.notice else sl.AccentRole.BRAND))
         nodes.extend(ws.history_controls())
         if self.controller.refresh_failed or (not ws.patch().attributes() and not ws.history.can_redo):
             nodes.extend(self.controller.controls())

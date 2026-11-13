@@ -11,10 +11,6 @@ from collections.abc import Sequence
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.ui import (
-    DISCORD_GREEN,
-    DISCORD_GREY,
-    DISCORD_RED,
-    DISCORD_YELLOW,
     truncate_display_text,
 )
 from squid.bot.utils.web import MediaPreviewClient
@@ -75,15 +71,15 @@ def _attachment_failure_summary(failures: Sequence[AttachmentFailureInfo]) -> st
     return truncate_display_text("\n".join(lines), _EVIDENCE_FIELD_MAX_CHARACTERS)
 
 
-def _status_colour(status: Status | None, *, build_id: int | None) -> int:
+def _status_tone(status: Status | None, *, build_id: int | None) -> sl.Tone:
     """Return an exhaustive build-status accent, reporting invalid persisted state."""
     match status:
         case Status.PENDING:
-            return DISCORD_YELLOW
+            return sl.Tone.WARNING
         case Status.CONFIRMED:
-            return DISCORD_GREEN
+            return sl.Tone.SUCCESS
         case Status.DENIED:
-            return DISCORD_RED
+            return sl.Tone.DANGER
         case _:
             raw_status = status.name if isinstance(status, Status) else str(status)
             logger.error(
@@ -95,7 +91,7 @@ def _status_colour(status: Status | None, *, build_id: int | None) -> int:
                 "squid.build.invalid_submission_status",
                 attributes={"squid.build.status": raw_status},
             )
-            return DISCORD_GREY
+            return sl.Tone.NEUTRAL
 
 
 async def render_build_card(
@@ -166,7 +162,7 @@ async def render_build_card(
         bool(extra_media) and sl.media(*extra_media, key="media"),
         sl.note(sl.plain(footer)),
         *rows,
-        accent=_status_colour(build.submission_status, build_id=build.id),
+        accent=_status_tone(build.submission_status, build_id=build.id),
         thumbnail=media[0] if media else None,
     )
 

@@ -8,7 +8,7 @@ from typing import cast
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_node, render_payload
+from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -81,19 +81,19 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
                 f"React with {primary_emoji(snapshot, VoteChoice.APPROVE)} to upvote or "
                 f"{primary_emoji(snapshot, VoteChoice.DENY)} to downvote."
             )
-            accent_colour = DISCORD_YELLOW
+            accent_colour = sl.Tone.WARNING
         case VoteSessionResult.APPROVED:
             title = "Vote to Delete Log: Passed"
             action = ""
-            accent_colour = DISCORD_GREEN
+            accent_colour = sl.Tone.SUCCESS
         case VoteSessionResult.DENIED:
             title = "Vote to Delete Log: Failed"
             action = ""
-            accent_colour = DISCORD_RED
+            accent_colour = sl.Tone.DANGER
         case _:
             title = "Vote to Delete Log: Closed"
             action = ""
-            accent_colour = DISCORD_YELLOW
+            accent_colour = sl.Tone.WARNING
 
     description = dedent(f"""
         {action}

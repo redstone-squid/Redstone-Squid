@@ -13,7 +13,7 @@ from squid.bot.submission import build_card as build_card_module
 from squid.bot.submission.build_card import build_description, build_metadata_fields, render_build_card
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui.build_edit import BuildEditScreen
-from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour, render_payload
+from squid.bot.ui import render_payload
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildService
 from squid.builds.application.edits import build_target
@@ -108,13 +108,13 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
 @pytest.mark.parametrize(
     ("status", "expected"),
     [
-        (Status.PENDING, DISCORD_YELLOW),
-        (Status.CONFIRMED, DISCORD_GREEN),
-        (Status.DENIED, DISCORD_RED),
+        (Status.PENDING, sl.Tone.WARNING),
+        (Status.CONFIRMED, sl.Tone.SUCCESS),
+        (Status.DENIED, sl.Tone.DANGER),
     ],
 )
-def test_build_statuses_have_exhaustive_named_colours(status: Status, expected: DiscordColour) -> None:
-    assert build_card_module._status_colour(status, build_id=7) is expected
+def test_build_statuses_have_exhaustive_tones(status: Status, expected: sl.Tone) -> None:
+    assert build_card_module._status_tone(status, build_id=7) is expected
 
 
 @pytest.mark.parametrize("status", [None, cast(Status, "legacy")])
@@ -130,9 +130,9 @@ def test_missing_or_unknown_build_status_is_neutral_and_reported(
         lambda name, *, attributes: metrics.append((name, attributes)),
     )
 
-    colour = build_card_module._status_colour(status, build_id=7)
+    colour = build_card_module._status_tone(status, build_id=7)
 
-    assert colour is DISCORD_GREY
+    assert colour is sl.Tone.NEUTRAL
     assert metrics == [
         (
             "squid.build.invalid_submission_status",

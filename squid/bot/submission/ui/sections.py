@@ -23,7 +23,6 @@ from typing import Any, Protocol, cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
-from squid.bot.ui import DISCORD_BLUE
 from squid.builds.application.input import parse_build_ticks
 from squid.core.errors import JSONValue
 from squid.core.i18n import tr
@@ -197,7 +196,7 @@ class SectionEditorScreen(sd.Screen[None]):
                     )
                 )
         children.extend((sd.v2.separator(), done_row(self._done)))
-        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *self.workspace.history_controls())
+        return (sl.block(*children, accent=sl.AccentRole.BRAND), *self.workspace.history_controls())
 
     def _picker(self, field: FormField, value: JSONValue) -> list[Any]:
         """A catalogue field's current choice and one page of its options."""

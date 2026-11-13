@@ -7,7 +7,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.layout_inspector import InspectablePanel
 from squid.bot.layout_workbench import history_outcome
-from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, tr
+from squid.bot.ui import tr
 
 
 @dataclass(frozen=True)
@@ -129,7 +129,7 @@ class ReviewerPanel(InspectablePanel):
             sl.note(self.notice),
             self.inspector(),
         )
-        return sl.section(heading, *children, accent=DISCORD_GREEN)
+        return sl.section(heading, *children, accent=sl.Tone.SUCCESS)
 
     @override
     def inspection_state(self) -> str:
@@ -221,7 +221,7 @@ class ReviewSummary(InspectablePanel):
             ),
             self.inspector(),
         )
-        return sl.section(heading, *children, accent=DISCORD_BLUE)
+        return sl.section(heading, *children, accent=sl.AccentRole.BRAND)
 
     @override
     def inspection_state(self) -> str:

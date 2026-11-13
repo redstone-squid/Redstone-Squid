@@ -12,7 +12,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_history import history_controls
 from squid.bot.layout_inspector import InspectablePanel
-from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, tr
+from squid.bot.ui import tr
 from squid_i18n import md_tr
 from squid_reactivity import transaction
 from squid_replication import LoroBackend, Replica
@@ -250,7 +250,7 @@ class Workbench(InspectablePanel):
             sl.note(self.notice),
             self.inspector(),
         )
-        return sl.section(heading, *children, accent=DISCORD_BLUE)
+        return sl.section(heading, *children, accent=sl.AccentRole.BRAND)
 
     @override
     def inspection_state(self) -> str:
@@ -355,7 +355,7 @@ class BuildPreview(InspectablePanel):
             ),
             self.inspector(),
         )
-        return sl.section(heading, *children, accent=DISCORD_GREEN)
+        return sl.section(heading, *children, accent=sl.Tone.SUCCESS)
 
     @override
     def inspection_state(self) -> str:
