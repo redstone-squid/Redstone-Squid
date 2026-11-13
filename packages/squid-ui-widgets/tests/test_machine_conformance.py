@@ -99,15 +99,10 @@ def test_the_initial_state_is_stable_across_reads(build: MachineFactory) -> None
 
 
 @machine
-def test_both_shells_render_something(build: MachineFactory) -> None:
-    assert wt.mounted(build()).nodes
-    assert wt.routed(build()).nodes
-
-
-@machine
-def test_no_two_controls_in_one_render_share_a_key(build: MachineFactory) -> None:
+def test_each_shell_renders_nonempty_nodes_with_unique_control_keys(build: MachineFactory) -> None:
     """Duplicate semantic keys make control identity ambiguous."""
     for nodes in (wt.mounted(build()).nodes, wt.routed(build()).nodes):
+        assert nodes
         keys = _control_keys(nodes)
 
         duplicates = {key for key in keys if keys.count(key) > 1}
@@ -116,31 +111,24 @@ def test_no_two_controls_in_one_render_share_a_key(build: MachineFactory) -> Non
 
 
 @machine
-def test_every_action_the_routed_shell_encodes_is_one_the_machine_accepts(
-    build: MachineFactory,
-) -> None:
+def test_routed_actions_have_typed_deterministic_transitions(build: MachineFactory) -> None:
     """Rendering and transition dispatch are separate; check that their action names agree.
 
-    Every emitted action must return the machine's state type. Widget-specific tests
+    Every emitted action must return the machine's state type, repeated dispatch must
+    agree, and every routed control must have exactly one route. Widget-specific tests
     check the resulting values and supply input for forms and pickers.
     """
     subject = build()
     render = wt.routed(subject)
 
-    for route in render.routes:
-        result = subject.transition(subject.initial_state, route.action)
-
-        assert isinstance(result, type(subject.initial_state))
-
-
-@machine
-def test_a_render_encodes_exactly_one_route_per_routed_control(
-    build: MachineFactory,
-) -> None:
-    """An unencoded control is dead; an encoded route with no control is an id nobody can reach."""
-    render = wt.routed(build())
-
     assert len(render.route_ids()) == len(render.routes)
+
+    for route in render.routes:
+        once = subject.transition(subject.initial_state, route.action)
+        twice = subject.transition(subject.initial_state, route.action)
+
+        assert isinstance(once, type(subject.initial_state))
+        assert once == twice, f"{route.action} is not deterministic"
 
 
 @machine
@@ -153,18 +141,6 @@ def test_an_unknown_action_is_the_identity_rather_than_an_error(
 
     assert subject.transition(initial, "no-such-action") == initial
     assert subject.transition(initial, "") == initial
-
-
-@machine
-def test_a_transition_is_deterministic(build: MachineFactory) -> None:
-    subject = build()
-    render = wt.routed(subject)
-
-    for route in render.routes:
-        once = subject.transition(subject.initial_state, route.action)
-        twice = subject.transition(subject.initial_state, route.action)
-
-        assert once == twice, f"{route.action} is not deterministic"
 
 
 @machine
