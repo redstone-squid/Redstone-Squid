@@ -23,26 +23,18 @@ def _repository() -> AccountRepository:
     return AccountRepository(None, PEPPER)  # type: ignore[arg-type]
 
 
-def test_the_digest_is_a_keyed_hmac_not_a_prefixed_hash() -> None:
-    digest = _repository().hash_verification_code("1234567890")
+@pytest.mark.parametrize("code", ["1234567890", "1000000000", "9999999999", "0", ""])
+def test_the_digest_is_a_keyed_hmac_not_a_prefixed_hash(code: str) -> None:
+    digest = _repository().hash_verification_code(code)
 
-    assert digest == hmac.digest(PEPPER.encode(), b"1234567890", hashlib.sha256).hex()
-    assert digest != hashlib.sha256(f"{PEPPER}1234567890".encode()).hexdigest()
+    assert digest == hmac.digest(PEPPER.encode(), code.encode(), hashlib.sha256).hex()
+    assert digest != hashlib.sha256(f"{PEPPER}{code}".encode()).hexdigest()
 
 
 def test_the_digest_depends_on_the_pepper() -> None:
     other = AccountRepository(None, "different-pepper")  # type: ignore[arg-type]
 
     assert other.hash_verification_code("1234567890") != _repository().hash_verification_code("1234567890")
-
-
-@pytest.mark.parametrize("code", ["1000000000", "9999999999", "0", ""])
-def test_the_digest_is_stable_and_hex(code: str) -> None:
-    digest = _repository().hash_verification_code(code)
-
-    assert digest == _repository().hash_verification_code(code)
-    assert len(digest) == 64
-    assert bytes.fromhex(digest)
 
 
 @pytest.mark.parametrize(

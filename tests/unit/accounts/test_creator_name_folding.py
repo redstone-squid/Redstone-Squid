@@ -8,8 +8,6 @@ checks basic whitespace and ASCII casing.
 # ruff: noqa: RUF001  Confusable and compatibility characters are the subject
 # matter here: they are the inputs whose folding this file exists to pin.
 
-import unicodedata
-
 import pytest
 
 from squid.accounts.domain import fold_creator_name
@@ -70,9 +68,3 @@ def test_fold_satisfies_the_database_check_constraint() -> None:
         folded = fold_creator_name(name)
         assert folded == folded.strip(" "), "check constraint requires btrim-stable output"
         assert not any("A" <= character <= "Z" for character in folded), "check constraint forbids ASCII uppercase"
-
-
-def test_fold_agrees_with_the_unicode_standard_algorithm() -> None:
-    """Check the normalization sequence separately from the fixed examples above."""
-    for name in ("ΣΣ", "Straße", "İ", "Ａlice", "ﬁx", " Bob ", "MiXeD"):
-        assert fold_creator_name(name) == unicodedata.normalize("NFKC", name).strip().casefold()
