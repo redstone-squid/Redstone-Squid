@@ -14,9 +14,9 @@ from squid.api.capabilities import API_FEATURES
 from squid.api.contract import ANONYMOUS, contract, transport_only, validate_contract
 from squid.api.errors import ProblemDetail
 from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
-from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
+from tests.unit.api.fakes import TEST_SYNERGY_SECRET
 
-_app, _database = build_app()
+_app = create_api_app()
 OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
 _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
