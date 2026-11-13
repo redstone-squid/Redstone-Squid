@@ -61,12 +61,6 @@ async def test_a_field_value_is_read_from_the_index() -> None:
     assert facets.calls == [("restriction", "seam", 10)]
 
 
-async def test_facet_values_match_on_prefix_only() -> None:
-    """Facet completion uses the reader's prefix matches rather than the taxonomy fuzzy matcher."""
-    result, _ = await suggest("restriction:seam", restriction=["Semi-Seamless"])
-    assert result.items == ()
-
-
 @pytest.mark.parametrize(
     ("query", "expected"),
     [

@@ -98,17 +98,11 @@ async def test_limit_is_clamped_to_discords_ceiling() -> None:
     assert len(result.items) == MAX_SUGGESTIONS
 
 
-async def test_query_is_truncated_before_reaching_a_provider() -> None:
-    provider = RecordingProvider()
-    service = service_for(SuggestionSource(id="restrictions", provider=provider))
-    await service.suggest(SuggestionRequest(source="restrictions", query="x" * 5_000))
-    assert len(provider.requests[0].query) == MAX_QUERY_LENGTH
-
-
-async def test_cursor_is_clamped_into_the_truncated_query() -> None:
+async def test_query_is_truncated_and_cursor_is_clamped_before_the_provider() -> None:
     provider = RecordingProvider()
     service = service_for(SuggestionSource(id="restrictions", provider=provider))
     await service.suggest(SuggestionRequest(source="restrictions", query="x" * 5_000, cursor=4_000))
+    assert len(provider.requests[0].query) == MAX_QUERY_LENGTH
     assert provider.requests[0].cursor == MAX_QUERY_LENGTH
 
 

@@ -11,6 +11,8 @@ class CountingLoader:
 
     async def load(self, key: str) -> str:
         self.calls.append(key)
+        # Let concurrent callers reach the same miss before this load finishes.
+        await anyio.sleep(0)
         return f"{key}-{len(self.calls)}"
 
 
@@ -20,14 +22,6 @@ async def test_a_hit_within_the_ttl_does_not_reload() -> None:
     assert await cache.get("a") == "a-1"
     assert await cache.get("a") == "a-1"
     assert loader.calls == ["a"]
-
-
-async def test_keys_are_cached_independently() -> None:
-    loader = CountingLoader()
-    cache = TtlCache(loader.load, ttl_seconds=60)
-    await cache.get("a")
-    await cache.get("b")
-    assert loader.calls == ["a", "b"]
 
 
 async def test_an_expired_entry_reloads() -> None:

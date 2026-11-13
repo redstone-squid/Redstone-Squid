@@ -86,10 +86,10 @@ class TestRowMapping:
 
 
 def test_every_resource_kind_maps_to_a_post_resource() -> None:
-    assert {resource.post_kind for resource in ReconciliationResource} == {
-        "build",
-        "vote_session",
-        "starboard_entry",
-        "inference_run",
-        "submission_draft",
+    assert {resource: resource.post_kind for resource in ReconciliationResource} == {
+        ReconciliationResource.BUILD: "build",
+        ReconciliationResource.VOTE_SESSION: "vote_session",
+        ReconciliationResource.STARBOARD_ENTRY: "starboard_entry",
+        ReconciliationResource.INFERENCE_RUN: "inference_run",
+        ReconciliationResource.SUBMISSION_DRAFT: "submission_draft",
     }

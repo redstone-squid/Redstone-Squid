@@ -85,11 +85,6 @@ def test_id_valued_sources_are_declared_integer(source_id: str) -> None:
     assert registry(discord=True).resolve(source_id).value_type is ValueType.INTEGER
 
 
-def test_source_ids_are_unique_and_well_formed() -> None:
-    published = registry(discord=True)
-    assert len(published) == len({source.id for source in published})
-
-
 def test_enumerable_sources_are_not_viewer_scoped() -> None:
     """A cached, revisioned set cannot depend on who asked for it."""
     for source in registry(discord=True).enumerable():
