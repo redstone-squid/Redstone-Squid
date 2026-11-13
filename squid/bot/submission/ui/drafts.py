@@ -40,13 +40,10 @@ from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.sections import (
     DETAIL_SESSION,
     DIMENSION_GROUPS,
-    SectionEditorScreen,
     closed_detail,
     dimension_groups,
     done_row,
     is_empty,
-    modal_chunks,
-    present_chunk_form,
     problem_text,
     section_text,
 )
@@ -416,7 +413,7 @@ class DraftWorkspace(sl.Reactive):
         return replacement.source_id
 
 
-class DraftEditorScreen(BuildEditorScreen[None]):
+class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
     """The draft panel: an overview of every section, then Submit.
 
     Before submission it lists answers with Edit buttons. Afterwards it shows progress and a
@@ -544,18 +541,6 @@ class DraftEditorScreen(BuildEditorScreen[None]):
                 )
             )
         return children
-
-    async def _edit_section(self, section_id: str, event: sd.PressEvent) -> None:
-        """Open the section's modal, or its own editor message if a modal cannot hold it."""
-        section = self.workspace.section(section_id)
-        if section is None:
-            return
-        chunks = modal_chunks(section)
-        if len(chunks) == 1 and len(chunks[0].fields) == len(section.fields):
-            await present_chunk_form(self.workspace, chunks[0], event)
-            return
-        await self.workspace.load_options(section.fields)
-        await self.open_child(event, SectionEditorScreen(self.workspace, section_id), on_result=self._child_closed)
 
     async def _open_files(self, event: sd.PressEvent) -> None:
         await self.open_child(event, FilesEditorScreen(self.workspace), on_result=self._child_closed)

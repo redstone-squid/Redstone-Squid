@@ -572,7 +572,7 @@ EDIT_SECTIONS: tuple[tuple[str, sl.TextLike, tuple[str, ...]], ...] = (
 )
 
 
-class BuildEditScreen(BuildEditorScreen[int]):
+class BuildEditScreen(BuildEditorScreen[int, Any]):
     """Stage local field changes, review them, and save one combined build patch.
 
     The loaded build follows topic updates, while staged fields keep their original
