@@ -35,6 +35,7 @@ from squid.api.v1.schemas.submission_media import (
     DraftMediaResponse,
 )
 from squid.api.v1.submissions import authenticated_account, get_submission_edits
+from squid.core.actors import Actor
 from squid.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
 from squid.media.errors import DraftMediaRequestError, MediaLimitExceededError
 from squid.submissions.application import StagedUpload
@@ -94,7 +95,7 @@ async def upload_draft_media(
     _require_non_nil(draft_id, reason="nil_draft_id")
     if upload_id is not None:
         _require_non_nil(upload_id, reason="nil_upload_id")
-    authority = await attachments.authorize_upload(draft_id, account_id, kind)
+    authority = await attachments.authorize_upload(draft_id, Actor(account_id=account_id), kind)
     _require_query_names(request, _UPLOAD_QUERY_NAMES)
     if kind is MediaKind.IMAGE and strip_audio:
         reason = "strip_audio_requires_video"
@@ -149,7 +150,7 @@ async def list_draft_media(
     response_headers: dict[str, str] = {}
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
-    snapshots = await attachments.list(draft_id, account_id)
+    snapshots = await attachments.list(draft_id, Actor(account_id=account_id))
     _prevent_storage(response_headers, attachments.limits)
     return Response(
         content=DraftMediaListResponse(
@@ -184,7 +185,7 @@ async def get_draft_media(
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     _require_non_nil(upload_id, reason="nil_upload_id")
-    snapshot = await attachments.get(draft_id, account_id, upload_id)
+    snapshot = await attachments.get(draft_id, Actor(account_id=account_id), upload_id)
     _prevent_storage(response_headers, attachments.limits)
     return Response(content=DraftMediaResponse.from_snapshot(snapshot), headers=response_headers, status_code=200)
 
@@ -371,7 +372,9 @@ async def attach_draft_media(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> DraftMediaResponse:
     """Reference a file supplied to another owned draft without duplicating its processing."""
-    return DraftMediaResponse.from_snapshot(await attachments.attach(source_draft_id, draft_id, account_id, upload_id))
+    return DraftMediaResponse.from_snapshot(
+        await attachments.attach(source_draft_id, draft_id, Actor(account_id=account_id), upload_id)
+    )
 
 
 router = Router(

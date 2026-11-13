@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
@@ -71,10 +72,10 @@ class FakeDrafts:
     """Record access checks and return the configured draft without evaluating actor permissions."""
 
     draft: StoredDraft
-    calls: list[tuple[UUID, int]]
+    calls: list[tuple[UUID, Actor]]
 
-    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft:
-        self.calls.append((draft_id, account_id))
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
+        self.calls.append((draft_id, actor))
         return self.draft
 
 
@@ -116,7 +117,7 @@ async def test_authorize_then_register_revalidates_owner_and_revision_and_consum
     drafts = FakeDrafts(_draft(revision=9), [])
     jobs = FakeJobs()
     service = DraftAttachmentService(drafts, jobs)
-    authority = await service.authorize_upload(DRAFT_ID, 7, MediaKind.IMAGE)
+    authority = await service.authorize_upload(DRAFT_ID, Actor(account_id=7), MediaKind.IMAGE)
     source = tmp_path / "source"
     source.write_bytes(b"png")
 
@@ -128,7 +129,7 @@ async def test_authorize_then_register_revalidates_owner_and_revision_and_consum
     )
 
     assert snapshot.upload.id == UPLOAD_ID
-    assert drafts.calls == [(DRAFT_ID, 7), (DRAFT_ID, 7)]
+    assert drafts.calls == [(DRAFT_ID, Actor(account_id=7)), (DRAFT_ID, Actor(account_id=7))]
     submission, authorization = jobs.submissions[0]
     assert submission.draft_id == DRAFT_ID
     assert submission.kind is MediaKind.IMAGE
@@ -149,7 +150,7 @@ async def test_register_cleans_staged_bytes_and_localizes_private_upload_conflic
 
     with pytest.raises(DraftMediaConflictError) as raised:
         await service.register(
-            DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE),
+            DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE, Actor(account_id=7)),
             StagedUpload(source, "image/png"),
             strip_audio=False,
             upload_id=UPLOAD_ID,
@@ -165,7 +166,7 @@ async def test_register_rejects_reused_staging_authority(tmp_path: Path) -> None
     source = tmp_path / "source"
     source.write_bytes(b"png")
     staged = StagedUpload(source, "image/png")
-    authority = DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE)
+    authority = DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE, Actor(account_id=7))
     await service.register(authority, staged, strip_audio=False, upload_id=UPLOAD_ID)
     second_source = tmp_path / "second-source"
     second_source.write_bytes(b"png")
@@ -195,7 +196,7 @@ async def test_cleanup_failure_does_not_mask_successful_registration(
     monkeypatch.setattr(Path, "unlink", fail_cleanup)
 
     snapshot = await service.register(
-        DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE),
+        DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE, Actor(account_id=7)),
         StagedUpload(source, "image/png"),
         strip_audio=False,
         upload_id=UPLOAD_ID,
@@ -211,11 +212,11 @@ async def test_get_and_discard_enforce_ownership_then_draft_association() -> Non
     service = DraftAttachmentService(drafts, jobs)
 
     with pytest.raises(DraftMediaNotFoundError):
-        await service.get(DRAFT_ID, 7, UPLOAD_ID)
+        await service.get(DRAFT_ID, Actor(account_id=7), UPLOAD_ID)
     with pytest.raises(DraftMediaNotFoundError):
-        await service.discard(DRAFT_ID, 7, UPLOAD_ID)
+        await service.discard(DRAFT_ID, Actor(account_id=7), UPLOAD_ID)
 
-    assert drafts.calls == [(DRAFT_ID, 7), (DRAFT_ID, 7)]
+    assert drafts.calls == [(DRAFT_ID, Actor(account_id=7)), (DRAFT_ID, Actor(account_id=7))]
     assert jobs.discarded == [(DRAFT_ID, UPLOAD_ID)]
 
 
@@ -223,10 +224,11 @@ async def test_staff_upload_authority_keeps_original_owner(tmp_path: Path) -> No
     drafts = FakeDrafts(_draft(), [])
     jobs = FakeJobs()
     service = DraftAttachmentService(drafts, jobs)
-    authority = await service.authorize_upload(DRAFT_ID, 99, MediaKind.IMAGE)
+    actor = Actor(account_id=99, guild_id=123, discord_role_ids=frozenset({456}), is_bot_owner=True)
+    authority = await service.authorize_upload(DRAFT_ID, actor, MediaKind.IMAGE)
     assert authority.account_id == drafts.draft.snapshot.owner_account_id
-    assert authority.actor_account_id == 99
+    assert authority.actor == actor
     source = tmp_path / "source"
     source.write_bytes(b"image")
     await service.register(authority, StagedUpload(source, "image/png"), strip_audio=False, upload_id=UPLOAD_ID)
-    assert drafts.calls == [(DRAFT_ID, 99), (DRAFT_ID, 99)]
+    assert drafts.calls == [(DRAFT_ID, actor), (DRAFT_ID, actor)]

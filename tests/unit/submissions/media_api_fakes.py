@@ -93,10 +93,10 @@ class FakeDrafts:
         self.events = events
         self.deny = deny
 
-    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
         self.events.append("owner")
         assert draft_id == DRAFT_ID
-        assert account_id == ACCOUNT_ID
+        assert actor.account_id == ACCOUNT_ID
         if self.deny:
             raise DraftAccessDeniedError
         return stored_draft(draft_id)
@@ -187,7 +187,7 @@ class MediaEditRecorder(EditRunner):
     async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         version = bound_revisions(command)[0]
         draft_id = UUID(version.target.key)
-        await self.drafts.get_accessible(draft_id, actor.require_account_id())
+        await self.drafts.get_accessible(draft_id, actor)
         values = AttachmentValues.model_validate_json(command.values.encoded)
         for item in values.files:
             assert not item.present

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.media.application.jobs import (
@@ -53,7 +54,7 @@ class DraftAttachmentJobs(Protocol):
 class DraftAttachmentOwnership(Protocol):
     """Resolve account-owned draft snapshots for attachment commands."""
 
-    async def get_accessible(self, draft_id: UUID, account_id: int, /) -> StoredDraft: ...
+    async def get_accessible(self, draft_id: UUID, actor: Actor, /) -> StoredDraft: ...
 
 
 @dataclass(slots=True)
@@ -64,7 +65,7 @@ class DraftUploadAuthority:
     account_id: int
     draft_revision: int
     kind: MediaKind
-    actor_account_id: int | None = None
+    actor: Actor
     _available: bool = field(default=True, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -126,12 +127,10 @@ class DraftAttachmentService:
         """Return the durable worker limits enforced for attachments."""
         return self._jobs.limits
 
-    async def authorize_upload(self, draft_id: UUID, account_id: int, kind: MediaKind) -> DraftUploadAuthority:
+    async def authorize_upload(self, draft_id: UUID, actor: Actor, kind: MediaKind) -> DraftUploadAuthority:
         """Issue revision-bound authority before a transport accepts request bytes."""
-        draft = await self._drafts.get_accessible(draft_id, account_id)
-        return DraftUploadAuthority(
-            draft_id, draft.snapshot.owner_account_id, draft.snapshot.revision, kind, account_id
-        )
+        draft = await self._drafts.get_accessible(draft_id, actor)
+        return DraftUploadAuthority(draft_id, draft.snapshot.owner_account_id, draft.snapshot.revision, kind, actor)
 
     async def register(
         self,
@@ -147,7 +146,7 @@ class DraftAttachmentService:
         failure; cleanup errors are logged without replacing the registration result.
         """
         try:
-            await self._drafts.get_accessible(authority.draft_id, authority.actor_account_id or authority.account_id)
+            await self._drafts.get_accessible(authority.draft_id, authority.actor)
             registered_id = await self._jobs.submit_staged(
                 StagedMediaUploadSubmission(
                     draft_id=authority.draft_id,
@@ -165,26 +164,26 @@ class DraftAttachmentService:
             staged.discard()
         return await self._owned_snapshot(authority.draft_id, registered_id)
 
-    async def list(self, draft_id: UUID, account_id: int) -> Sequence[MediaJobSnapshot]:
+    async def list(self, draft_id: UUID, actor: Actor) -> Sequence[MediaJobSnapshot]:
         """List attachment jobs after checking owner or staff access."""
-        await self._drafts.get_accessible(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, actor)
         return await self._jobs.list_for_draft(draft_id)
 
-    async def get(self, draft_id: UUID, account_id: int, upload_id: UUID) -> MediaJobSnapshot:
+    async def get(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> MediaJobSnapshot:
         """Return an attachment after checking draft access and association."""
-        await self._drafts.get_accessible(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, actor)
         return await self._owned_snapshot(draft_id, upload_id)
 
-    async def discard(self, draft_id: UUID, account_id: int, upload_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         """Discard an attachment after checking owner or staff access."""
-        await self._drafts.get_accessible(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, actor)
         if not await self._jobs.discard(draft_id, upload_id):
             raise DraftMediaNotFoundError(upload_id)
 
-    async def attach(self, source_id: UUID, target_id: UUID, account_id: int, upload_id: UUID) -> MediaJobSnapshot:
+    async def attach(self, source_id: UUID, target_id: UUID, actor: Actor, upload_id: UUID) -> MediaJobSnapshot:
         """Share a processed upload between accessible drafts without normalizing it again."""
-        await self._drafts.get_accessible(source_id, account_id)
-        await self._drafts.get_accessible(target_id, account_id)
+        await self._drafts.get_accessible(source_id, actor)
+        await self._drafts.get_accessible(target_id, actor)
         if not await self._jobs.attach(source_id, target_id, upload_id):
             raise DraftMediaNotFoundError(upload_id)
         return await self._owned_snapshot(target_id, upload_id)
