@@ -32,7 +32,7 @@ showing what coverage remains.
 | UI widgets | Conformance tests repeatedly render identical initial states. Combined shell checks and routed transition checks while retaining nonempty output, unique keys, route counts, result types, and deterministic transitions. Keep initial-state and arbitrary-action property checks. |
 | Application unit tests | Replaced short scheduling sleeps in core concurrency tests with deterministic synchronization. Removed the voting matrix that reasserts fixture discriminators and repeats existing owner-guild mapping coverage. |
 | Storage, replication, reactivity | Reviewed lifecycle and backend coverage; no deletion justified. Keep memory/SQLite cases, native-engine delivery-order permutations, and scheduler checkpoints. |
-| Architecture and deployment | No cleanup justified. Source parsing is already cached; import subprocesses need fresh interpreter state; Docker builds are module-scoped and shared across checks. |
+| Architecture and deployment | Removed duplicate catalog validation, overlapping import scans, and retired implementation-name guards after individual review. Keep fresh-process import boundaries, documented naming policies, and shared module-scoped Docker builds. |
 | Database integration | 178 test functions in 42 files directly request `migrated_session_factory`, which creates a database and runs all migrations per invocation. Investigate separately with PostgreSQL timings and isolation validation. |
 
 ## Follow-up queue
@@ -102,7 +102,7 @@ comparable with the earlier isolated Discord package runs.
 The follow-up reviews test bodies against production behavior and retained
 coverage. The [inventory](test-suite-audit-inventory.csv) records each file's
 status and decisions. Earlier area sampling does not count as individual review.
-The current checkpoint covers 137 of 635 tracked test files and 1,028 remaining
+The current checkpoint covers 542 of 636 tracked test files and 5,095 reviewed
 test declarations, including embedded Rust tests. Parameterized cases are not
 counted separately. Newly added tests remain pending until reviewed.
 
@@ -130,3 +130,42 @@ no additional suite-wide speedup has been measured. Extra boundary cases suggest
 by the Rust and Minecraft reviews are recorded as follow-ups, rather than added
 as part of this cleanup. Browser projects other than the focused Chromium case
 were not rerun.
+
+## Individual review checkpoint: application and Discord
+
+Completed body reviews now include application unit areas, UI core/state/storage,
+web/API/bot, schematic/media workers, and the first integration batches. Remaining
+files are explicitly pending in the inventory; reviewed files with newly added
+test names are partial. A file marked reviewed may retain a proposed cleanup
+pending parent review. This is a shared-worktree snapshot, not a guarantee that
+subsequent edits to an existing test body have been re-reviewed.
+
+Further accepted changes:
+
+- Remove duplicated catalog execution and architecture scans already covered by
+  broader retained checks; remove ineffective importlib module-shape assertions.
+- Remove unused build helper/constructor checks, fake-only suggestion filtering,
+  repeated refresh-formatting smoke tests, and configuration/registry echoes.
+- Preserve save/commit/index ordering, make the cache concurrency fake actually
+  yield, and verify exact enum-to-post mappings and committed configuration edits.
+- Repair vacuous Discord tests: use actual file assets, create the session whose
+  detail is asserted, finish the root before checking its stopped view, and put
+  fallback fields under real shared-budget pressure.
+- Retain the vote attachment test as a commit contract: replacing the fake list
+  makes a missing commit observable. Remove its repeated delegation call.
+- Remove the unused database sanity-check implementation and its entire test
+  module at the user's request. It had no callers outside its own tests.
+
+Recent focused checks passed: build/submission (355), bot/UI/i18n/widgets (152),
+notification/starboard/reaction/event/message/settings/sync/tag tests (113),
+suggestion/sync (84), and community/diagnostic/vote services (73). The repaired
+Discord files passed their focused runs, including real shared-budget overflow.
+The enum-name assertion removal in database integration was reviewed but that
+integration suite was not executed.
+
+The architecture/catalog check still reports stale generated English catalogs
+from concurrent UI changes; it failed before removal of the duplicate check too.
+The latest whole-project typecheck reports one error in the concurrently edited
+widget browsing test: a fixed two-element tuple inferred for `source.items` is
+later assigned one element. Previous typechecks passed; no suite-wide timing
+claim is made for these later cleanups.
