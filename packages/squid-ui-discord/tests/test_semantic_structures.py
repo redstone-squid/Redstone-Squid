@@ -199,6 +199,7 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
     assert isinstance(lead, scene.Section)
     assert lead.texts[0].content == "## Title"
     assert lead.accessory == scene.Thumbnail("https://example.invalid/lead.png")
+    assert panel.children[1] == scene.Text("body", markup=Markup.DISCORD_MARKDOWN)
     assert panel.children[-1] == scene.Text("-# Submission ID: 5", markup=Markup.DISCORD_MARKDOWN)
 
 
@@ -273,18 +274,6 @@ def test_palette_scope_is_dynamic_and_does_not_leak_to_siblings() -> None:
     panels = plan(document, target=DISCORD_V2_DPY27, palette=sl.Palette(info=0x111111)).scene.components_v2.children
 
     assert [panel.accent for panel in panels if isinstance(panel, scene.Panel)] == [0x111111, 0x222222, 0x111111]
-
-
-def test_a_lead_image_sits_beside_the_required_heading() -> None:
-    document = Section(sl.semantic.Heading("Title"), (Paragraph("body"),), thumbnail="https://example.invalid/lead.png")
-
-    panel = plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0]
-
-    assert isinstance(panel, scene.Panel)
-    assert panel.children[0] == scene.Section(
-        (scene.Text("## Title", markup=Markup.DISCORD_MARKDOWN),), scene.Thumbnail("https://example.invalid/lead.png")
-    )
-    assert panel.children[1] == scene.Text("body", markup=Markup.DISCORD_MARKDOWN)
 
 
 def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:

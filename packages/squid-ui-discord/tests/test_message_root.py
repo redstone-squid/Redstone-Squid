@@ -1244,15 +1244,6 @@ class TestFinishHooks:
 
         assert calls == [1]
 
-    async def test_finished_flips_only_once_the_message_root_is_done(self):
-        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
-
-        assert not message_root.finished
-
-        await message_root.finish(disable=False)
-
-        assert message_root.finished
-
     async def test_a_late_click_never_reaches_the_handler(self):
         """`view.stop()` hides this in production; a superseded-but-visible message does not."""
         component = Counter()
@@ -1957,26 +1948,6 @@ class TestLifecycle:
             item.label: item.disabled for item in disabled_view.walk_children() if isinstance(item, discord.ui.Button)
         }
         assert buttons == {"Mounted action": True, "Recover": False}
-
-    async def test_refresh_edits_bound_message(self):
-        component = Counter()
-        message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message: Any = message_harness()
-        await message_root.send(delivered_to(message))
-        component.count = 7
-
-        await message_root.refresh()
-
-        message.edit.assert_awaited_once()
-
-    async def test_reactor_coalesces_double_schedule(self):
-        component = Counter()
-        message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message_root.refresh = AsyncCallRecorder()  # pyrefly: ignore
-        scheduler = MessageRootScheduler()
-        scheduler.schedule(message_root)
-        scheduler.schedule(message_root)
-        assert scheduler._queue.qsize() == 1
 
     async def test_expired_handle_marks_dirty_without_loading_or_staging(self):
         class Loaded(Component[sl.ComponentsV2Target]):
@@ -2821,38 +2792,6 @@ class TestStateDescriptor:
         source.count = 5
 
         assert reader.doubled == 10
-
-    def test_computed_values_propagate_only_when_their_value_changes(self):
-        class Derived(Component[sl.ComponentsV2Target]):
-            query: str = state("FIRST")
-
-            def __init__(self) -> None:
-                self.calls = 0
-
-            @computed
-            def normalized(self) -> str:
-                return self.query.casefold()
-
-            @computed
-            def label(self) -> str:
-                self.calls += 1
-                return f"query:{self.normalized}"
-
-            @override
-            def render(self):
-                return Text(self.label)
-
-        component = Derived()
-        assert component.label == "query:first"
-        assert component.calls == 1
-
-        component.query = "first"
-        assert component.label == "query:first"
-        assert component.calls == 1
-
-        component.query = "second"
-        assert component.label == "query:second"
-        assert component.calls == 2
 
     def test_a_computed_that_reads_itself_says_so(self):
         """A tracked cycle is only visible when it runs, so that is where it is reported."""

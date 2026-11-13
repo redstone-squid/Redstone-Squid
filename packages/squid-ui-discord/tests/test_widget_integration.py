@@ -19,6 +19,7 @@ from squid_ui.planning.navigation import (
     page_select_nav,
 )
 from squid_ui.primitives import Paginate
+from squid_ui.profiling import ActionStatus, MemoryProfiler, OperationKind
 from squid_ui.semantic import ActionControl, Choices, FormTrigger
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
@@ -101,18 +102,13 @@ widget = pytest.mark.parametrize("build", [build for _name, build in WIDGETS], i
 
 
 @widget
-def test_it_draws_a_discord_view_at_all(build: Callable[[], sl.Component[sl.DiscordTarget]]) -> None:
-    message_root = MessageRoot(build(), access=Everyone(), timeout=None)
-
-    assert commit_render(message_root).to_components()
-
-
-@widget
 def test_what_it_draws_is_a_legal_discord_payload(build: Callable[[], sl.Component[sl.DiscordTarget]]) -> None:
     """Check the native payload against Discord limits after planning and drawing."""
     message_root = MessageRoot(build(), access=Everyone(), timeout=None)
 
-    assert_within_limits(commit_render(message_root))
+    view = commit_render(message_root)
+    assert view.to_components()
+    assert_within_limits(view)
 
 
 @widget
@@ -139,14 +135,15 @@ def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
 async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
     build: Callable[[], sl.Component[sl.DiscordTarget]],
 ) -> None:
-    """Dispatch a usable authored key and check that the interaction is acknowledged.
+    """Dispatch a usable authored key and require successful handler execution.
 
     Choose from the controls that were registered for this render, skipping disabled
     actions and supplying one value for a picker. This calls message-root dispatch directly;
     it does not exercise Discord custom-ID decoding or assert a widget state change.
     """
     component = build()
-    message_root = MessageRoot(component, access=Everyone(), timeout=None)
+    profiler = MemoryProfiler()
+    message_root = MessageRoot(component, access=Everyone(), timeout=None, profiler=profiler)
     commit_render(message_root)
     handlers = set(message_root.snapshot().handler_keys)
 
@@ -176,7 +173,10 @@ async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
     else:
         await message_root.dispatch(key, interaction, values)
 
-    assert interaction.response.is_done(), f"{key!r} reached no handler"
+    assert interaction.response.is_done()
+    trace = next(trace for trace in profiler.snapshot().recent if trace.operation is OperationKind.DISPATCH)
+    assert trace.result.dispatch is not None
+    assert trace.result.dispatch.action is ActionStatus.HANDLED, f"{key!r} did not complete a handler"
 
 
 async def test_a_ranked_list_pages_through_the_planner_with_the_host_navigation() -> None:

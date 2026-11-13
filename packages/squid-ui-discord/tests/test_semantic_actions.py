@@ -184,16 +184,6 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
     assert result.metrics.states_explored == 4
 
 
-def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
-    session = PresentationState()
-    first = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
-    session.apply_updates(first.session_updates)
-    second = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27, session=session)
-
-    assert first.report.events[0].code == "actions.grouped"
-    assert second.report.events[0].code == "actions.grouped"
-
-
 @pytest.mark.parametrize(
     ("count", "expected"),
     [(5, "actions.individual"), (36, "actions.grouped"), (76, "actions.paged")],

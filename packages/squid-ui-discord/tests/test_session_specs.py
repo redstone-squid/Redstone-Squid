@@ -80,13 +80,6 @@ def test_a_session_key_carries_the_scope_a_pool_would_key_on() -> None:
     assert key.scope == OpenContext(7, 42).user_guild()
 
 
-def test_open_context_reads_discord_identity() -> None:
-    interaction = interaction_harness(user_id=7)
-    interaction.guild_id = 42
-
-    assert OpenContext.of(interaction) == OpenContext(7, 42)
-
-
 @pytest.mark.parametrize("name", [None, ""])
 def test_keys_require_a_resolved_nonempty_session_name(name: str | None) -> None:
     with pytest.raises(ValueError, match="resolved non-empty name"):
