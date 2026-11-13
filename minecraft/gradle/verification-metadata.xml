@@ -4,6 +4,8 @@
       <verify-metadata>true</verify-metadata>
       <verify-signatures>false</verify-signatures>
       <trusted-artifacts>
+         <!-- Fabric Loom generates the merged Minecraft artifact locally; its checksum varies
+              across machines and cache states. Loom verifies the original downloads separately. -->
          <trust group="net.minecraft" name="minecraft-merged-.*" regex="true" reason="Generated locally by Fabric Loom; not a downloaded artifact"/>
       </trusted-artifacts>
    </configuration>
