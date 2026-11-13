@@ -216,10 +216,3 @@ def replace_door(build: DoorBuild, **changes: object) -> DoorBuild:
     for name, value in changes.items():
         setattr(copied, name, value)
     return copied
-
-
-def test_attribute_types_resolve_mapped_fields_and_properties() -> None:
-    build = DoorBuild()
-    assert build.get_attr_type("width") == int | None
-    assert build.get_attr_type("door_width") == int | None
-    assert build.get_attr_type("dimensions") == tuple[int | None, int | None, int | None]

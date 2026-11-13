@@ -38,8 +38,10 @@ class FakeBuildRepository(FakeBuildEditing):
         self.saved: list[Build] = []
         self.confirmed: list[Build] = []
         self.denied: list[Build] = []
+        self.events: list[str] = []
 
     async def save(self, build: Build) -> None:
+        self.events.append("save")
         self.saved.append(build)
 
     async def set_status(self, build: Build, status: Status) -> None:
@@ -103,6 +105,11 @@ class BuildScope(PublishingFakeUnitOfWork[FakeBuildRepository]):
         super().__init__(repository, clone=copy_repository)
         self.permissions = permissions or EmptyPermissions()
 
+    @override
+    async def commit(self) -> None:
+        await super().commit()
+        self.state.events.append("commit")
+
     @property
     def builds(self) -> FakeBuildRepository:
         return self.state
@@ -141,9 +148,10 @@ class FakeVersions:
 
 
 class FakeEmbeddings:
-    def __init__(self) -> None:
+    def __init__(self, events: list[str] | None = None) -> None:
         self.prepared: list[Build] = []
         self.indexed: list[Build] = []
+        self.events = events
 
     async def prepare(self, build: Build) -> None:
         self.prepared.append(build)
@@ -151,6 +159,8 @@ class FakeEmbeddings:
 
     async def index(self, build: Build) -> None:
         self.indexed.append(build)
+        if self.events is not None:
+            self.events.append("index")
 
 
 class FakeTaxonomyResolver:
@@ -462,7 +472,7 @@ async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> 
 
 async def test_save_prepares_defaults_then_indexes_after_relational_persistence() -> None:
     repository = FakeBuildRepository()
-    embeddings = FakeEmbeddings()
+    embeddings = FakeEmbeddings(repository.events)
     locks = FakeBuildLocks()
     service = BuildService(
         locks,
@@ -484,6 +494,7 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     assert locks.releases == [42]
     assert embeddings.prepared == [build]
     assert embeddings.indexed == [build]
+    assert repository.events == ["save", "commit", "index"]
 
 
 class TestAuthorizedEditing:

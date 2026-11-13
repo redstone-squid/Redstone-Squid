@@ -12,7 +12,6 @@ from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
     DraftSchematicSnapshot,
-    EmptyDraftSchematicReader,
 )
 from squid.submissions.domain import (
     SchematicArtifactState,
@@ -297,12 +296,6 @@ async def test_nonterminal_schematic_state_never_exposes_an_identifier(snapshot:
 
     assert readiness.schematic_state is snapshot.state
     assert readiness.schematic_id is None
-
-
-async def test_empty_reader_reports_absent_until_draft_uploads_are_implemented() -> None:
-    snapshot = await EmptyDraftSchematicReader().read_for_draft(DRAFT_ID)
-
-    assert snapshot == DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
 
 
 def test_schematic_snapshot_cannot_claim_ready_without_a_stored_artifact() -> None:

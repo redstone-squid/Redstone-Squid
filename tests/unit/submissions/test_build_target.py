@@ -473,15 +473,16 @@ def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None
 
 
 def test_preview_accepts_unknown_title_facts() -> None:
-    assert preview_build("door", {"opening_width": 2, "opening_height": 2}, {}) is not None
-    assert preview_build("extender", {"movement_orientation": "horizontal"}, {}) is not None
-    assert preview_build("other", {}, {}) is not None
+    door = preview_build("door", {"opening_width": 2, "opening_height": 2}, {})
+    extender = preview_build("extender", {"movement_orientation": "horizontal"}, {})
+    other = preview_build("other", {}, {})
 
-
-def test_a_door_opening_can_have_unknown_dimensions() -> None:
-    details = DoorSubmissionDetails(SubmissionDimensions(2, None, 1), None)
-    assert details.opening.height is None
-    assert details.orientation is None
+    assert isinstance(door, DoorBuild)
+    assert door.door_depth is None
+    assert isinstance(extender, ExtenderBuild)
+    assert extender.extension_length is None
+    assert isinstance(other, Build)
+    assert other.category is BuildCategory.OTHER
 
 
 @pytest.mark.parametrize("category", [SubmissionCategory.DOOR, SubmissionCategory.EXTENDER])

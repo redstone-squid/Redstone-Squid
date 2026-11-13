@@ -53,7 +53,7 @@ def _tag(
 
 
 @pytest.mark.asyncio
-async def test_option_catalog_uses_stable_keys_and_category_filters() -> None:
+async def test_option_catalog_uses_stable_keys_and_locale_independent_revision() -> None:
     catalog = ApprovedSubmissionOptionCatalog(FakeTags(), FakeVersions())
 
     door = await catalog.options("approved_restrictions", "door", locale="en")
