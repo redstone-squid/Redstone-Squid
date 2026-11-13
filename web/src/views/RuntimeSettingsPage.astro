@@ -17,7 +17,9 @@ const title = locale === "zh-CN" ? "全局设置" : "Global settings";
   noindex
 >
   <section class="page-shell">
-    <header class="page-heading"><h1>{title}</h1></header>
+    <header class="page-heading">
+      <h1>{title}</h1>
+    </header>
     <RuntimeSettings client:load locale={locale} config={getRuntimeConfig()} />
   </section>
 </BaseLayout>

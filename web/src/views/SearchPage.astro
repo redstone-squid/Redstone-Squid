@@ -51,54 +51,52 @@ if (q) {
       initialSort={sort ?? ""}
       initialMode={q && !Object.values(guided).some(Boolean) ? "advanced" : "guided"}
     />
-    {
-      error ? (
-        <ErrorState
-          locale={locale}
-          error={error}
-          retryHref={`${Astro.url.pathname}${Astro.url.search}`}
-        />
-      ) : !q ? (
-        <div class="empty-state">{translate(locale, "search.prompt")}</div>
-      ) : page!.items.length === 0 ? (
-        <div class="empty-state">{translate(locale, "search.empty")}</div>
-      ) : (
-        <section aria-labelledby="search-results-heading">
-          <h2 id="search-results-heading">{translate(locale, "search.results")}</h2>
-          <div class="search-results">
-            {page!.items.map((result) => {
-              if ("build" in result) return <BuildCard build={result.build} locale={locale} />;
-              if ("record" in result)
-                return (
-                  <article class="search-result">
-                    <span class="result-kind">{translate(locale, "search.resultRecord")}</span>
-                    <div>
-                      <h2>{result.record.title}</h2>
-                      <p>{result.record.subtitle ?? result.record.build_title}</p>
-                    </div>
-                    <a
-                      class="button"
-                      href={localizePath(`/records/${result.record.record_id}`, locale)}
-                    >
-                      {translate(locale, "common.viewRecord")}
-                    </a>
-                  </article>
-                );
+    {error ? (
+      <ErrorState
+        locale={locale}
+        error={error}
+        retryHref={`${Astro.url.pathname}${Astro.url.search}`}
+      />
+    ) : !q ? (
+      <div class="empty-state">{translate(locale, "search.prompt")}</div>
+    ) : page!.items.length === 0 ? (
+      <div class="empty-state">{translate(locale, "search.empty")}</div>
+    ) : (
+      <section aria-labelledby="search-results-heading">
+        <h2 id="search-results-heading">{translate(locale, "search.results")}</h2>
+        <div class="search-results">
+          {page!.items.map((result) => {
+            if ("build" in result) return <BuildCard build={result.build} locale={locale} />;
+            if ("record" in result)
               return (
                 <article class="search-result">
-                  <span class="result-kind">{translate(locale, "search.resultMetadata")}</span>
+                  <span class="result-kind">{translate(locale, "search.resultRecord")}</span>
                   <div>
-                    <h2>{result.metadata.title}</h2>
-                    <p>{result.metadata.description ?? result.metadata.aliases.join(" · ")}</p>
+                    <h2>{result.record.title}</h2>
+                    <p>{result.record.subtitle ?? result.record.build_title}</p>
                   </div>
-                  <span class="chip">{result.metadata.metadata_kind}</span>
+                  <a
+                    class="button"
+                    href={localizePath(`/records/${result.record.record_id}`, locale)}
+                  >
+                    {translate(locale, "common.viewRecord")}
+                  </a>
                 </article>
               );
-            })}
-          </div>
-          <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
-        </section>
-      )
-    }
+            return (
+              <article class="search-result">
+                <span class="result-kind">{translate(locale, "search.resultMetadata")}</span>
+                <div>
+                  <h2>{result.metadata.title}</h2>
+                  <p>{result.metadata.description ?? result.metadata.aliases.join(" · ")}</p>
+                </div>
+                <span class="chip">{result.metadata.metadata_kind}</span>
+              </article>
+            );
+          })}
+        </div>
+        <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
+      </section>
+    )}
   </div>
 </BaseLayout>

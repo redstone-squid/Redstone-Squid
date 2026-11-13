@@ -54,28 +54,26 @@ try {
       initialSort={sort ?? ""}
       initialMode={initialMode}
     />
-    {
-      error ? (
-        <ErrorState
-          locale={locale}
-          error={error}
-          retryHref={`${Astro.url.pathname}${Astro.url.search}`}
-        />
-      ) : page!.items.length > 0 ? (
-        <section aria-labelledby="catalogue-results">
-          <h2 id="catalogue-results">
-            {q ? translate(locale, "search.results") : translate(locale, "builds.latest")}
-          </h2>
-          <div class="card-grid">
-            {page!.items.map((build) => (
-              <BuildCard build={build} locale={locale} />
-            ))}
-          </div>
-          <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
-        </section>
-      ) : (
-        <div class="empty-state">{translate(locale, "builds.empty")}</div>
-      )
-    }
+    {error ? (
+      <ErrorState
+        locale={locale}
+        error={error}
+        retryHref={`${Astro.url.pathname}${Astro.url.search}`}
+      />
+    ) : page!.items.length > 0 ? (
+      <section aria-labelledby="catalogue-results">
+        <h2 id="catalogue-results">
+          {q ? translate(locale, "search.results") : translate(locale, "builds.latest")}
+        </h2>
+        <div class="card-grid">
+          {page!.items.map((build) => (
+            <BuildCard build={build} locale={locale} />
+          ))}
+        </div>
+        <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
+      </section>
+    ) : (
+      <div class="empty-state">{translate(locale, "builds.empty")}</div>
+    )}
   </div>
 </BaseLayout>

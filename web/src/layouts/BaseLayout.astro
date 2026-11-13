@@ -67,7 +67,9 @@ const jsonLd = Astro.props.structuredData
     {jsonLd && <script is:inline type="application/ld+json" set:html={jsonLd} />}
   </head>
   <body>
-    <a class="skip-link" href="#main-content">{translate(locale, "nav.skip")}</a>
+    <a class="skip-link" href="#main-content">
+      {translate(locale, "nav.skip")}
+    </a>
     <header class="site-header">
       <div class="nav-shell">
         <a
@@ -78,20 +80,18 @@ const jsonLd = Astro.props.structuredData
           <Brand locale={locale} />
         </a>
         <nav class="main-nav" aria-label="Primary">
-          {
-            navItems.map(([key, href]) => (
-              <a
-                href={localizePath(href, locale)}
-                aria-current={
-                  activePath === href || (href !== "/" && activePath.startsWith(`${href}/`))
-                    ? "page"
-                    : undefined
-                }
-              >
-                {translate(locale, key)}
-              </a>
-            ))
-          }
+          {navItems.map(([key, href]) => (
+            <a
+              href={localizePath(href, locale)}
+              aria-current={
+                activePath === href || (href !== "/" && activePath.startsWith(`${href}/`))
+                  ? "page"
+                  : undefined
+              }
+            >
+              {translate(locale, key)}
+            </a>
+          ))}
           <a class="language-link" href={languageHref} hreflang={otherLocale}>
             {translate(locale, "nav.language")}
           </a>
@@ -104,14 +104,18 @@ const jsonLd = Astro.props.structuredData
     <footer class="site-footer">
       <div class="footer-shell">
         <div>
-          <a class="brand" href={localizePath("/", locale)}><Brand locale={locale} /></a>
+          <a class="brand" href={localizePath("/", locale)}>
+            <Brand locale={locale} />
+          </a>
           <p>{translate(locale, "footer.note")}</p>
         </div>
         <div class="footer-links">
-          <a href={config.discordCommunityUrl} rel="noreferrer"
-            >{translate(locale, "footer.discord")}</a
-          >
-          <a href={config.botInviteUrl} rel="noreferrer">{translate(locale, "footer.invite")}</a>
+          <a href={config.discordCommunityUrl} rel="noreferrer">
+            {translate(locale, "footer.discord")}
+          </a>
+          <a href={config.botInviteUrl} rel="noreferrer">
+            {translate(locale, "footer.invite")}
+          </a>
         </div>
       </div>
     </footer>

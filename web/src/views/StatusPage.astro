@@ -21,9 +21,9 @@ const notFound = status === 404;
       <p class="error-detail">
         {translate(locale, notFound ? "error.notFoundBody" : "error.serviceBody")}
       </p>
-      <a class="button button--primary" href={localizePath("/", locale)}
-        >{translate(locale, "common.home")}</a
-      >
+      <a class="button button--primary" href={localizePath("/", locale)}>
+        {translate(locale, "common.home")}
+      </a>
     </section>
   </div>
 </BaseLayout>

@@ -24,22 +24,20 @@ const config = getRuntimeConfig();
       <p>{translate(locale, "about.recordsBody")}</p>
       <h2>{locale === "zh-CN" ? "管理" : "Administration"}</h2>
       <p>
-        <a href={localizePath("/admin/settings", locale)}
-          >{locale === "zh-CN" ? "全局设置" : "Global settings"}</a
-        >
-        {
-          locale === "zh-CN"
-            ? "供全局管理员管理机器人行为。"
-            : " lets global administrators configure bot behavior."
-        }
+        <a href={localizePath("/admin/settings", locale)}>
+          {locale === "zh-CN" ? "全局设置" : "Global settings"}
+        </a>
+        {locale === "zh-CN"
+          ? "供全局管理员管理机器人行为。"
+          : " lets global administrators configure bot behavior."}
       </p>
       <div class="footer-links">
-        <a class="button button--primary" href={config.discordCommunityUrl} rel="noreferrer"
-          >{translate(locale, "footer.discord")}</a
-        >
-        <a class="button" href={config.botInviteUrl} rel="noreferrer"
-          >{translate(locale, "footer.invite")}</a
-        >
+        <a class="button button--primary" href={config.discordCommunityUrl} rel="noreferrer">
+          {translate(locale, "footer.discord")}
+        </a>
+        <a class="button" href={config.botInviteUrl} rel="noreferrer">
+          {translate(locale, "footer.invite")}
+        </a>
       </div>
     </article>
   </div>

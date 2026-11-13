@@ -12,6 +12,7 @@ import type {
   RecordDetail,
   PublishedTitle,
   SearchSuggestions,
+  SuggestionPage,
 } from "../../src/generated/types.gen";
 
 // Deterministic public catalogue data for browser checks; this is not a full API emulator.
@@ -268,6 +269,17 @@ async function routeRequest(request: Request): Promise<Response> {
     return json({
       suggestions: ["door", "door type", "door seamless"],
     } satisfies SearchSuggestions);
+  }
+  if (url.pathname === "/v1/suggest/build_titles") {
+    const query = (url.searchParams.get("q") ?? "").toLowerCase();
+    return json({
+      source: "build_titles",
+      revision: null,
+      replacement: null,
+      items: ["door", "door type", "door seamless"]
+        .filter((value) => value.startsWith(query))
+        .map((value) => ({ value, label: value, description: null, kind: "text" })),
+    } satisfies SuggestionPage);
   }
   if (url.pathname === "/v1/search") {
     const query = url.searchParams.get("q") ?? "";

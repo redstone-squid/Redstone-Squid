@@ -35,19 +35,17 @@ try {
       <h1>{translate(locale, "records.title")}</h1>
       <p class="lede">{translate(locale, "records.intro")}</p>
     </header>
-    {
-      error ? (
-        <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
-      ) : page!.items.length > 0 ? (
-        <section class="card-grid" aria-label={translate(locale, "records.title")}>
-          {page!.items.map((record) => (
-            <RecordCard record={record} locale={locale} />
-          ))}
-        </section>
-      ) : (
-        <div class="empty-state">{translate(locale, "records.empty")}</div>
-      )
-    }
+    {error ? (
+      <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
+    ) : page!.items.length > 0 ? (
+      <section class="card-grid" aria-label={translate(locale, "records.title")}>
+        {page!.items.map((record) => (
+          <RecordCard record={record} locale={locale} />
+        ))}
+      </section>
+    ) : (
+      <div class="empty-state">{translate(locale, "records.empty")}</div>
+    )}
     {page && <Pagination locale={locale} next={page.next} prev={page.prev} url={Astro.url} />}
   </div>
 </BaseLayout>

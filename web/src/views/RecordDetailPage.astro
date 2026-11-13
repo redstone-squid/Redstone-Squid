@@ -32,85 +32,85 @@ const canonicalPath = recordId ? localizePath(`/records/${recordId}`, locale) : 
   locale={locale}
   canonicalPath={canonicalPath}
   noindex={Boolean(error)}
-  structuredData={record
-    ? {
-        "@context": "https://schema.org",
-        "@type": "ItemList",
-        name: record.title,
-        description: record.subtitle,
-        dateModified: record.computed_at,
-        itemListElement: record.holder_builds.map((build, index) => ({
-          "@type": "ListItem",
-          position: index + 1,
-          name: build.title,
-          url: localizePath(`/builds/${build.id}`, locale),
-        })),
-      }
-    : undefined}
+  structuredData={
+    record
+      ? {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: record.title,
+          description: record.subtitle,
+          dateModified: record.computed_at,
+          itemListElement: record.holder_builds.map((build, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            name: build.title,
+            url: localizePath(`/builds/${build.id}`, locale),
+          })),
+        }
+      : undefined
+  }
 >
-  {
-    error ? (
-      <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
-    ) : (
-      <div class="page-shell section-stack">
-        <header class="detail-header">
+  {error ? (
+    <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
+  ) : (
+    <div class="page-shell section-stack">
+      <header class="detail-header">
+        <div>
+          <div class="eyebrow">{translate(locale, "record.detail", { id: record!.id })}</div>
+          <h1>{record!.title}</h1>
+          {record!.subtitle && <p class="lede">{record!.subtitle}</p>}
+          <p class="kicker">
+            {translate(locale, "record.computed", {
+              date: formatDate(locale, record!.computed_at),
+            })}
+          </p>
+        </div>
+        <span class="chip">{translateTaxonomy(locale, record!.status)}</span>
+      </header>
+      <section class="surface">
+        <h2>{translate(locale, "build.specification")}</h2>
+        <dl class="spec-list">
           <div>
-            <div class="eyebrow">{translate(locale, "record.detail", { id: record!.id })}</div>
-            <h1>{record!.title}</h1>
-            {record!.subtitle && <p class="lede">{record!.subtitle}</p>}
-            <p class="kicker">
-              {translate(locale, "record.computed", {
-                date: formatDate(locale, record!.computed_at),
-              })}
+            <>
+              <dt>{translate(locale, "record.baseTitle")}</dt>
+              <dd>{translateTaxonomy(locale, record!.base_title)}</dd>
+            </>
+          </div>
+          <div>
+            <>
+              <dt>{translate(locale, "record.kind")}</dt>
+              <dd>{translateTaxonomy(locale, record!.build_kind)}</dd>
+            </>
+          </div>
+          <div>
+            <>
+              <dt>{translate(locale, "record.versionScope")}</dt>
+              <dd>{translateTaxonomy(locale, record!.version_scope)}</dd>
+            </>
+          </div>
+          <div>
+            <>
+              <dt>{translate(locale, "record.status")}</dt>
+              <dd>{translateTaxonomy(locale, record!.status)}</dd>
+            </>
+          </div>
+        </dl>
+      </section>
+      <section aria-labelledby="holders-heading">
+        <div class="section-heading">
+          <div>
+            <h2 id="holders-heading">{translate(locale, "record.holders")}</h2>
+            <p>
+              {translate(locale, "record.holderCount", { count: record!.holder_builds.length })}
             </p>
           </div>
-          <span class="chip">{translateTaxonomy(locale, record!.status)}</span>
-        </header>
-        <section class="surface">
-          <h2>{translate(locale, "build.specification")}</h2>
-          <dl class="spec-list">
-            <div>
-              <>
-                <dt>{translate(locale, "record.baseTitle")}</dt>
-                <dd>{translateTaxonomy(locale, record!.base_title)}</dd>
-              </>
-            </div>
-            <div>
-              <>
-                <dt>{translate(locale, "record.kind")}</dt>
-                <dd>{translateTaxonomy(locale, record!.build_kind)}</dd>
-              </>
-            </div>
-            <div>
-              <>
-                <dt>{translate(locale, "record.versionScope")}</dt>
-                <dd>{translateTaxonomy(locale, record!.version_scope)}</dd>
-              </>
-            </div>
-            <div>
-              <>
-                <dt>{translate(locale, "record.status")}</dt>
-                <dd>{translateTaxonomy(locale, record!.status)}</dd>
-              </>
-            </div>
-          </dl>
-        </section>
-        <section aria-labelledby="holders-heading">
-          <div class="section-heading">
-            <div>
-              <h2 id="holders-heading">{translate(locale, "record.holders")}</h2>
-              <p>
-                {translate(locale, "record.holderCount", { count: record!.holder_builds.length })}
-              </p>
-            </div>
-          </div>
-          <div class="card-grid">
-            {record!.holder_builds.map((build) => (
-              <BuildCard build={build} locale={locale} />
-            ))}
-          </div>
-        </section>
-      </div>
-    )
-  }
+        </div>
+        <div class="card-grid">
+          {record!.holder_builds.map((build) => (
+            <BuildCard build={build} locale={locale} />
+          ))}
+        </div>
+      </section>
+    </div>
+  )}
 </BaseLayout>

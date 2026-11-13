@@ -8,9 +8,13 @@ const { record, locale } = Astro.props;
 
 <article class="record-card">
   <div class="record-card__body">
-    <span class="kicker">#{record.id} / {translateTaxonomy(locale, record.base_title)}</span>
+    <span class="kicker">
+      #{record.id} / {translateTaxonomy(locale, record.base_title)}
+    </span>
     <h3>
-      <a class="card-link" href={localizePath(`/records/${record.id}`, locale)}>{record.title}</a>
+      <a class="card-link" href={localizePath(`/records/${record.id}`, locale)}>
+        {record.title}
+      </a>
     </h3>
     {record.subtitle && <p>{record.subtitle}</p>}
     <ul class="card-meta">
@@ -18,8 +22,8 @@ const { record, locale } = Astro.props;
       <li>{translateTaxonomy(locale, record.version_scope)}</li>
     </ul>
     <div class="holder-count">
-      {translate(locale, "record.holderCount", { count: record.holder_build_ids.length })}
-      · {formatDate(locale, record.computed_at)}
+      {translate(locale, "record.holderCount", { count: record.holder_build_ids.length })}·{" "}
+      {formatDate(locale, record.computed_at)}
     </div>
   </div>
 </article>

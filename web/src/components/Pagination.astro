@@ -20,19 +20,17 @@ const previousHref = link(prev);
 const nextHref = link(next);
 ---
 
-{
-  (previousHref || nextHref) && (
-    <nav class="pagination" aria-label="Pagination">
-      {previousHref && (
-        <a class="pagination-link" href={previousHref} rel="prev">
-          {translate(locale, "common.previous")}
-        </a>
-      )}
-      {nextHref && (
-        <a class="pagination-link" href={nextHref} rel="next">
-          {translate(locale, "common.loadMore")}
-        </a>
-      )}
-    </nav>
-  )
-}
+{(previousHref || nextHref) && (
+  <nav class="pagination" aria-label="Pagination">
+    {previousHref && (
+      <a class="pagination-link" href={previousHref} rel="prev">
+        {translate(locale, "common.previous")}
+      </a>
+    )}
+    {nextHref && (
+      <a class="pagination-link" href={nextHref} rel="next">
+        {translate(locale, "common.loadMore")}
+      </a>
+    )}
+  </nav>
+)}

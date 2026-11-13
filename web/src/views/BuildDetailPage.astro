@@ -108,229 +108,229 @@ const linkGroups = build
   canonicalPath={canonicalPath}
   image={media[0]?.url}
   noindex={Boolean(error)}
-  structuredData={build
-    ? {
-        "@context": "https://schema.org",
-        "@type": "CreativeWork",
-        name: build.title,
-        description: build.description,
-        creator: build.creators.map((name) => ({ "@type": "Person", name })),
-        sponsor: build.sponsor
-          ? {
-              "@type": "Organization",
-              name:
-                build.sponsor.display_name ??
-                build.sponsor.address ??
-                translate(locale, "build.sponsorFallback"),
-              url: build.sponsor.website_url,
-            }
-          : undefined,
-        image: media.map((item) => item.url),
-        dateCreated: build.created_at,
-        dateModified: build.updated_at,
-        url: canonicalPath,
-      }
-    : undefined}
+  structuredData={
+    build
+      ? {
+          "@context": "https://schema.org",
+          "@type": "CreativeWork",
+          name: build.title,
+          description: build.description,
+          creator: build.creators.map((name) => ({ "@type": "Person", name })),
+          sponsor: build.sponsor
+            ? {
+                "@type": "Organization",
+                name:
+                  build.sponsor.display_name ??
+                  build.sponsor.address ??
+                  translate(locale, "build.sponsorFallback"),
+                url: build.sponsor.website_url,
+              }
+            : undefined,
+          image: media.map((item) => item.url),
+          dateCreated: build.created_at,
+          dateModified: build.updated_at,
+          url: canonicalPath,
+        }
+      : undefined
+  }
 >
-  {
-    error ? (
-      <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
-    ) : (
-      <div class="page-shell section-stack">
-        <header class="detail-header">
-          <div>
-            <div class="eyebrow">{translate(locale, "build.detail", { id: build!.id })}</div>
-            <h1>{build!.title}</h1>
-            <ul class="card-meta">
-              <li>{translateTaxonomy(locale, build!.category)}</li>
-              <li>{translateTaxonomy(locale, build!.status)}</li>
-              {build!.updated_at && (
-                <li>
-                  {translate(locale, "build.updated", {
-                    date: formatDate(locale, build!.updated_at),
-                  })}
-                </li>
-              )}
-            </ul>
-          </div>
-          <span class="chip">REV {build!.revision}</span>
-        </header>
-
-        {media.length > 0 && (
-          <MediaGallery client:load items={media} locale={locale} title={build!.title} />
-        )}
-
-        <div class="detail-grid">
-          <div class="detail-main">
-            {build!.description && (
-              <section class="surface">
-                <h2>{translate(locale, "build.description")}</h2>
-                <p class="text-content">{build!.description}</p>
-              </section>
+  {error ? (
+    <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
+  ) : (
+    <div class="page-shell section-stack">
+      <header class="detail-header">
+        <div>
+          <div class="eyebrow">{translate(locale, "build.detail", { id: build!.id })}</div>
+          <h1>{build!.title}</h1>
+          <ul class="card-meta">
+            <li>{translateTaxonomy(locale, build!.category)}</li>
+            <li>{translateTaxonomy(locale, build!.status)}</li>
+            {build!.updated_at && (
+              <li>
+                {translate(locale, "build.updated", {
+                  date: formatDate(locale, build!.updated_at),
+                })}
+              </li>
             )}
+          </ul>
+        </div>
+        <span class="chip">REV {build!.revision}</span>
+      </header>
+
+      {media.length > 0 && (
+        <MediaGallery client:load items={media} locale={locale} title={build!.title} />
+      )}
+
+      <div class="detail-grid">
+        <div class="detail-main">
+          {build!.description && (
             <section class="surface">
-              <h2>{translate(locale, "build.specification")}</h2>
-              <dl class="spec-list">
-                {specifications.map(([label, value]) => (
+              <h2>{translate(locale, "build.description")}</h2>
+              <p class="text-content">{build!.description}</p>
+            </section>
+          )}
+          <section class="surface">
+            <h2>{translate(locale, "build.specification")}</h2>
+            <dl class="spec-list">
+              {specifications.map(([label, value]) => (
+                <div>
+                  <>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </>
+                </div>
+              ))}
+            </dl>
+          </section>
+          {restrictionGroups.length > 0 && (
+            <section class="surface">
+              <h2>{translate(locale, "build.restrictions")}</h2>
+              <div class="stack">
+                {restrictionGroups.map(([name, values]) => (
                   <div>
-                    <>
-                      <dt>{label}</dt>
-                      <dd>{value}</dd>
-                    </>
+                    <div class="spec-label">{translateTaxonomy(locale, name)}</div>
+                    <ul>
+                      {values.map((value) => (
+                        <li>{value}</li>
+                      ))}
+                    </ul>
                   </div>
                 ))}
+              </div>
+            </section>
+          )}
+          <section class="surface">
+            <h2>{translate(locale, "build.analysis")}</h2>
+            {schematics!.items.length > 0 ? (
+              <div class="stack">
+                {schematics!.items.map((schematic) => (
+                  <article>
+                    <h3>
+                      {schematic.format}{" "}
+                      {schematic.primary && (
+                        <span class="chip">{translate(locale, "build.primary")}</span>
+                      )}
+                    </h3>
+                    <ul class="card-meta">
+                      <li>{schematic.format}</li>
+                      <li>{formatDimensions(locale, schematic.dimensions)}</li>
+                      <li>
+                        {translate(locale, "build.blocks", {
+                          count: formatNumber(locale, schematic.block_count),
+                        })}
+                      </li>
+                      <li>
+                        {translate(locale, "build.bytes", {
+                          count: formatNumber(locale, schematic.byte_size),
+                        })}
+                      </li>
+                    </ul>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p>{translate(locale, "build.analysisEmpty")}</p>
+            )}
+          </section>
+        </div>
+
+        <aside class="detail-aside">
+          <section class="surface">
+            <h2>{translate(locale, "build.creators")}</h2>
+            <ul class="link-list">
+              {build!.creators.map((creator) => (
+                <li>
+                  <a href={localizePath(`/creators/${encodeURIComponent(creator)}`, locale)}>
+                    {creator}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+          {build!.sponsor && (
+            <section class="surface">
+              <h2>{translate(locale, "build.sponsor")}</h2>
+              <h3>
+                {build!.sponsor.display_name ??
+                  build!.sponsor.address ??
+                  translate(locale, "build.sponsorFallback")}
+              </h3>
+              {build!.sponsor.description && (
+                <p class="text-content">{build!.sponsor.description}</p>
+              )}
+              <dl class="spec-list">
+                {build!.sponsor.address && (
+                  <div>
+                    <dt>{translate(locale, "build.serverAddress")}</dt>
+                    <dd>{build!.sponsor.address}</dd>
+                  </div>
+                )}
+                {build!.sponsor.website_url && (
+                  <div>
+                    <dt>{translate(locale, "build.serverWebsite")}</dt>
+                    <dd>
+                      <a href={build!.sponsor.website_url} target="_blank" rel="noreferrer">
+                        {build!.sponsor.website_url}
+                      </a>
+                    </dd>
+                  </div>
+                )}
               </dl>
             </section>
-            {restrictionGroups.length > 0 && (
-              <section class="surface">
-                <h2>{translate(locale, "build.restrictions")}</h2>
-                <div class="stack">
-                  {restrictionGroups.map(([name, values]) => (
-                    <div>
-                      <div class="spec-label">{translateTaxonomy(locale, name)}</div>
-                      <ul>
-                        {values.map((value) => (
-                          <li>{value}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+          )}
+          {build!.versions.length > 0 && (
             <section class="surface">
-              <h2>{translate(locale, "build.analysis")}</h2>
-              {schematics!.items.length > 0 ? (
-                <div class="stack">
-                  {schematics!.items.map((schematic) => (
-                    <article>
-                      <h3>
-                        {schematic.format}{" "}
-                        {schematic.primary && (
-                          <span class="chip">{translate(locale, "build.primary")}</span>
-                        )}
-                      </h3>
-                      <ul class="card-meta">
-                        <li>{schematic.format}</li>
-                        <li>{formatDimensions(locale, schematic.dimensions)}</li>
-                        <li>
-                          {translate(locale, "build.blocks", {
-                            count: formatNumber(locale, schematic.block_count),
-                          })}
-                        </li>
-                        <li>
-                          {translate(locale, "build.bytes", {
-                            count: formatNumber(locale, schematic.byte_size),
-                          })}
-                        </li>
-                      </ul>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p>{translate(locale, "build.analysisEmpty")}</p>
-              )}
-            </section>
-          </div>
-
-          <aside class="detail-aside">
-            <section class="surface">
-              <h2>{translate(locale, "build.creators")}</h2>
-              <ul class="link-list">
-                {build!.creators.map((creator) => (
-                  <li>
-                    <a href={localizePath(`/creators/${encodeURIComponent(creator)}`, locale)}>
-                      {creator}
-                    </a>
-                  </li>
+              <h2>{translate(locale, "build.versions")}</h2>
+              <ul class="chip-list">
+                {build!.versions.map((version) => (
+                  <li class="chip">{version}</li>
                 ))}
               </ul>
             </section>
-            {build!.sponsor && (
-              <section class="surface">
-                <h2>{translate(locale, "build.sponsor")}</h2>
-                <h3>
-                  {build!.sponsor.display_name ??
-                    build!.sponsor.address ??
-                    translate(locale, "build.sponsorFallback")}
-                </h3>
-                {build!.sponsor.description && (
-                  <p class="text-content">{build!.sponsor.description}</p>
-                )}
-                <dl class="spec-list">
-                  {build!.sponsor.address && (
-                    <div>
-                      <dt>{translate(locale, "build.serverAddress")}</dt>
-                      <dd>{build!.sponsor.address}</dd>
-                    </div>
-                  )}
-                  {build!.sponsor.website_url && (
-                    <div>
-                      <dt>{translate(locale, "build.serverWebsite")}</dt>
-                      <dd>
-                        <a href={build!.sponsor.website_url} target="_blank" rel="noreferrer">
-                          {build!.sponsor.website_url}
-                        </a>
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              </section>
-            )}
-            {build!.versions.length > 0 && (
-              <section class="surface">
-                <h2>{translate(locale, "build.versions")}</h2>
-                <ul class="chip-list">
-                  {build!.versions.map((version) => (
-                    <li class="chip">{version}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {patterns.length > 0 && (
-              <section class="surface">
-                <h2>{translate(locale, "build.patterns")}</h2>
-                <ul class="chip-list">
-                  {patterns.map((pattern) => (
-                    <li class="chip">{pattern}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {build!.tags.length > 0 && (
-              <section class="surface">
-                <h2>{translate(locale, "build.tags")}</h2>
-                <ul class="chip-list">
-                  {build!.tags.map((tag) => (
-                    <li class="chip">{formatTag(locale, tag)}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {linkGroups.length > 0 && (
-              <section class="surface">
-                <h2>{translate(locale, "build.links")}</h2>
-                <div class="stack">
-                  {linkGroups.map(([label, links]) => (
-                    <div>
-                      <h3>{translate(locale, label)}</h3>
-                      <ul class="link-list">
-                        {links.map((link, index) => (
-                          <li>
-                            <a href={link} target="_blank" rel="noreferrer">
-                              {translate(locale, label)} {index + 1}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </aside>
-        </div>
+          )}
+          {patterns.length > 0 && (
+            <section class="surface">
+              <h2>{translate(locale, "build.patterns")}</h2>
+              <ul class="chip-list">
+                {patterns.map((pattern) => (
+                  <li class="chip">{pattern}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {build!.tags.length > 0 && (
+            <section class="surface">
+              <h2>{translate(locale, "build.tags")}</h2>
+              <ul class="chip-list">
+                {build!.tags.map((tag) => (
+                  <li class="chip">{formatTag(locale, tag)}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {linkGroups.length > 0 && (
+            <section class="surface">
+              <h2>{translate(locale, "build.links")}</h2>
+              <div class="stack">
+                {linkGroups.map(([label, links]) => (
+                  <div>
+                    <h3>{translate(locale, label)}</h3>
+                    <ul class="link-list">
+                      {links.map((link, index) => (
+                        <li>
+                          <a href={link} target="_blank" rel="noreferrer">
+                            {translate(locale, label)} {index + 1}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </aside>
       </div>
-    )
-  }
+    </div>
+  )}
 </BaseLayout>

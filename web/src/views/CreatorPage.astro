@@ -35,21 +35,19 @@ try {
       <h1>{translate(locale, "builds.byCreator", { name })}</h1>
       <p class="lede">{translate(locale, "builds.byCreatorIntro")}</p>
     </header>
-    {
-      error ? (
-        <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
-      ) : page!.items.length > 0 ? (
-        <>
-          <div class="card-grid">
-            {page!.items.map((build) => (
-              <BuildCard build={build} locale={locale} />
-            ))}
-          </div>
-          <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
-        </>
-      ) : (
-        <div class="empty-state">{translate(locale, "builds.empty")}</div>
-      )
-    }
+    {error ? (
+      <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
+    ) : page!.items.length > 0 ? (
+      <>
+        <div class="card-grid">
+          {page!.items.map((build) => (
+            <BuildCard build={build} locale={locale} />
+          ))}
+        </div>
+        <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
+      </>
+    ) : (
+      <div class="empty-state">{translate(locale, "builds.empty")}</div>
+    )}
   </div>
 </BaseLayout>

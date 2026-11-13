@@ -83,7 +83,10 @@ export default function SuggestField({
       fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } })
         .then(async (response) => {
           if (!response.ok) throw new Error(`Suggestion endpoint returned ${response.status}.`);
-          return (await response.json()) as { items: SuggestionItem[]; replacement: Replacement | null };
+          return (await response.json()) as {
+            items: SuggestionItem[];
+            replacement: Replacement | null;
+          };
         })
         .then((result) => {
           // A response without an items array behaves like an empty suggestion list.
@@ -197,7 +200,9 @@ export default function SuggestField({
           ))}
         </ul>
       )}
-      {enabled && failed && <span role="status">{translate(locale, "search.suggestionError")}</span>}
+      {enabled && failed && (
+        <span role="status">{translate(locale, "search.suggestionError")}</span>
+      )}
     </div>
   );
 }
