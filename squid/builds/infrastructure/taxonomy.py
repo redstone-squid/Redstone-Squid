@@ -108,6 +108,18 @@ class PostgresBuildTaxonomy:
             unknown_patterns=frozenset(unknown_patterns),
         )
 
+    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
+        session = self._session()
+        return (
+            await session.scalars(
+                select(TagDefinition).where(
+                    TagDefinition.stable_key.in_(keys),
+                    TagDefinition.semantic_kind == "showcase",
+                    TagDefinition.moderation_status == "approved",
+                )
+            )
+        ).all()
+
 
 async def _resolve_official_tag_rows(
     session: AsyncSession,

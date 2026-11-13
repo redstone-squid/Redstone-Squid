@@ -1,13 +1,14 @@
-"""Edit-time resolution of build taxonomy names into tag assignments."""
+"""Edit-time resolution of build taxonomy names and showcase keys into tag assignments."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 from squid.builds.domain import BuildCategory, UnresolvedTaxonomy
+from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build
-from squid.tags.domain import TagAuthority, TagSemanticKind
-from squid.tags.models import TagAssignment
+from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +35,10 @@ class BuildTaxonomyResolver(Protocol):
         restrictions: Sequence[str],
         patterns: Sequence[str],
     ) -> TaxonomyResolution: ...
+
+    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
+        """Return the approved showcase tags with these stable keys; unknown keys are left out."""
+        ...
 
 
 async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) -> None:
@@ -100,4 +105,41 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
     ]
     build.patterns = [
         definition.display_name for definition in resolved if definition.semantic_kind is TagSemanticKind.PATTERN
+    ]
+
+
+async def replace_showcase_tags(build: Build, keys: Sequence[str], resolver: BuildTaxonomyResolver) -> None:
+    """Make `keys` the build's showcase tags, in that order.
+
+    A showcase tag the build already has keeps its assignment, including its value and provenance.
+    A newly added key must name an approved showcase tag that takes no value, as for submissions,
+    because a key alone cannot supply one. Restriction and pattern tags are left alone.
+
+    Raises:
+        InvalidBuildError: If an added key names no such tag.
+    """
+    requested = list(dict.fromkeys(keys))
+    current = {
+        assignment.definition.stable_key: assignment
+        for assignment in build.tags
+        if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
+    }
+    added = [key for key in requested if key not in current]
+    definitions = {definition.stable_key: definition for definition in await resolver.showcase_definitions(added)}
+    invalid = sorted(
+        key for key in added if key not in definitions or definitions[key].value_type is not TagValueType.NONE
+    )
+    if invalid:
+        msg = f"Unknown showcase tags: {', '.join(invalid)}"
+        raise InvalidBuildError(msg, context={"showcase_tags": invalid}, public_context={"showcase_tags": invalid})
+    build.tags = [
+        *(
+            assignment
+            for assignment in build.tags
+            if assignment.definition.semantic_kind is not TagSemanticKind.SHOWCASE
+        ),
+        *(
+            current[key] if key in current else TagAssignment(definition=definitions[key], provenance="submitted")
+            for key in requested
+        ),
     ]

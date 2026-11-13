@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.builds.application.taxonomy import apply_build_taxonomy
+from squid.builds.application.taxonomy import apply_build_taxonomy, replace_showcase_tags
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, Status
 from squid.builds.infrastructure.repository import BuildRepository
@@ -126,6 +126,7 @@ async def _seed_catalogue(session_factory: async_sessionmaker[AsyncSession]) -> 
                     display_name="Full Lamp",
                     semantic_kind=TagSemanticKind.PATTERN,
                 ),
+                _official_tag(stable_key="compact", display_name="Compact", semantic_kind=TagSemanticKind.SHOWCASE),
                 # Two component restrictions sharing one alias: requesting the
                 # alias matches both, so resolution treats it as ambiguous.
                 _official_tag(
@@ -391,6 +392,7 @@ async def test_update_round_trip_preserves_category_fields(
         build.normal_opening_time = 20
     elif isinstance(build, ExtenderBuild):
         build.extension_length = 11
+        build.extension_time = 30
     await _resolve_and_save(migrated_session_factory, repository, build)
 
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
@@ -889,3 +891,28 @@ async def test_tracked_status_change_advances_the_revision_once(
         assert loaded is not None
         assert loaded.revision == previous_revision + 1
         assert loaded.submission_status is Status.CONFIRMED
+
+
+async def test_showcase_tags_are_replaced_by_key_beside_resolved_restrictions(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    build = _make_build(BuildCategory.UTILITY, account_id)
+    await _resolve_and_save(migrated_session_factory, repository, build)
+    assert build.id is not None
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert loaded is not None
+    restrictions = loaded.restrictions
+
+    taxonomy = BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    await replace_showcase_tags(loaded, ["compact"], taxonomy)
+    await _resolve_and_save(migrated_session_factory, repository, loaded)
+
+    reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert reloaded is not None
+    showcase = [
+        tag.definition.stable_key for tag in reloaded.tags if tag.definition.semantic_kind is TagSemanticKind.SHOWCASE
+    ]
+    assert showcase == ["compact"]
+    assert reloaded.restrictions == restrictions

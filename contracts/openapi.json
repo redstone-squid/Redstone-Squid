@@ -20108,6 +20108,36 @@
             ],
             "title": "Version Spec"
           },
+          "versions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versions"
+          },
+          "showcase_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Showcase Tags"
+          },
           "dimensions": {
             "anyOf": [
               {

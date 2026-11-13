@@ -35,6 +35,7 @@ from squid.edits.domain import (
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT
+from squid.tags.domain import TagSemanticKind
 
 BUILD_STATUS_EDIT = "build.status"
 
@@ -55,6 +56,12 @@ def build_values(build: Build) -> EditValues:
     patch = BuildEditPatch(
         display_name=build.display_name,
         version_spec=build.version_spec,
+        versions=list(build.versions),
+        showcase_tags=[
+            assignment.definition.stable_key
+            for assignment in build.tags
+            if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
+        ],
         dimensions=build.dimensions,
         door_type=list(build.patterns),
         wiring_placement_restrictions=list(build.wiring_placement_restrictions),

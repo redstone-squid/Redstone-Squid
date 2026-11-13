@@ -14,13 +14,14 @@ from squid.builds.application.ports import (
     DefaultVersionResolver,
 )
 from squid.builds.application.restrictions import RestrictionReader
-from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
+from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy, replace_showcase_tags
 from squid.builds.domain import BuildDraft, RestrictionTypeLiteral, Status, sort_restrictions
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError
+from squid.core.sentinel import UNSET
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.unit_of_work import UnitOfWorkFactory
@@ -170,8 +171,7 @@ class BuildService:
         build = await self._get_required(build_id)
         await self.authorize_edit(actor, build)
         self._check_revision(build, expected_revision)
-        patch.apply(build)
-        await self._prepare_for_persistence(build)
+        await self._apply_patch(build, patch)
         await self._persist_prepared(
             build,
             actor=actor,
@@ -182,8 +182,7 @@ class BuildService:
     async def _prepare_edit(self, build_id: int, patch: BuildEditPatch, *, expected_revision: int | None) -> Build:
         build = await self._get_required(build_id)
         self._check_revision(build, expected_revision)
-        patch.apply(build)
-        await self._prepare_for_persistence(build)
+        await self._apply_patch(build, patch)
         return build
 
     @staticmethod
@@ -229,8 +228,7 @@ class BuildService:
         the build; this preparation does not reserve the current revision.
         """
         await self.authorize_edit(actor, build)
-        patch.apply(build)
-        await self._prepare_for_persistence(build)
+        await self._apply_patch(build, patch)
         return build
 
     async def confirm(
@@ -355,6 +353,13 @@ class BuildService:
                 await uow.builds.save(build)
                 await uow.commit()
         await self._embeddings.index(build)
+
+    async def _apply_patch(self, build: Build, patch: BuildEditPatch) -> None:
+        """Apply a patch, including the showcase tags it cannot resolve itself, and prepare derived values."""
+        patch.apply(build)
+        if patch.showcase_tags is not UNSET:
+            await replace_showcase_tags(build, patch.showcase_tags, self._taxonomy)
+        await self._prepare_for_persistence(build)
 
     async def _prepare_for_persistence(self, build: Build) -> None:
         """Resolve application-owned defaults and derived values before a relational write."""

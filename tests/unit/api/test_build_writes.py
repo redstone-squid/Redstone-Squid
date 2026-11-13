@@ -158,6 +158,15 @@ def test_extender_patch_preserves_omission_and_clear_semantics() -> None:
         ExtenderPatch.model_validate({"retraction_time": -1})
 
 
+def test_versions_and_showcase_tags_replace_but_cannot_be_null() -> None:
+    patch = BuildPatch.model_validate({"versions": ["Java 1.21"], "showcase_tags": []})
+    assert patch.edit_attributes() == {"versions": ["Java 1.21"], "showcase_tags": []}
+    with pytest.raises(ValidationError):
+        BuildPatch.model_validate({"versions": None})
+    with pytest.raises(ValidationError):
+        BuildPatch.model_validate({"showcase_tags": None})
+
+
 def test_typed_extender_timings_travel_in_the_extender_object() -> None:
     patch = BuildPatch.from_patch(BuildEditPatch(extension_time=4, retraction_time=6))
 

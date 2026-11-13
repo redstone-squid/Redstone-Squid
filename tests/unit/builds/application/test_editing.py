@@ -20,6 +20,8 @@ def test_combine_preserves_every_typed_patch_field() -> None:
         visible_opening_time=3,
         visible_closing_time=4,
         version_spec="1.21",
+        versions=["Java 1.21"],
+        showcase_tags=["compact"],
         dimensions=(1, 2, 3),
         door_dimensions=(4, 5, 6),
         door_type=["Full lamp"],
@@ -106,6 +108,13 @@ def test_extender_edits_normalize_preserve_and_clear_geometry() -> None:
     assert build.extension_length == 3
     BuildEditPatch(extension_length=None).apply(build)
     assert build.extension_length is None
+
+
+def test_versions_are_replaced_and_showcase_tags_are_left_to_the_service() -> None:
+    build = DoorBuild(versions=["Java 1.20.4"])
+    BuildEditPatch(versions=["Java 1.21", "Java 1.21.1"], showcase_tags=["compact"]).apply(build)
+    assert build.versions == ["Java 1.21", "Java 1.21.1"]
+    assert build.tags == []
 
 
 def test_extender_timings_are_set_and_cleared() -> None:

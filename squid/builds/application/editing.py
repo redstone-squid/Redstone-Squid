@@ -27,6 +27,11 @@ class BuildEditPatch:
     None door orientation leaves the current orientation unchanged. Clearing a
     door width or height restores that category's default; empty lists remove
     all entries of that kind.
+
+    Versions are canonical names such as "Java 1.20.4"; saving rejects unknown ones.
+    Showcase tags are stable keys. `apply` cannot look them up, so it leaves tags
+    alone; BuildService resolves them with `replace_showcase_tags` when it applies
+    a patch.
     """
 
     extender_orientation: PatchValue[str | None] = UNSET
@@ -37,6 +42,8 @@ class BuildEditPatch:
     visible_opening_time: PatchValue[int | None] = UNSET
     visible_closing_time: PatchValue[int | None] = UNSET
     version_spec: PatchValue[str | None] = UNSET
+    versions: PatchValue[list[str]] = UNSET
+    showcase_tags: PatchValue[list[str]] = UNSET
     dimensions: PatchValue[Dimensions] = UNSET
     door_dimensions: PatchValue[Dimensions] = UNSET
     door_type: PatchValue[list[str]] = UNSET
@@ -77,6 +84,8 @@ class BuildEditPatch:
                 visible_opening_time=_latest(combined.visible_opening_time, patch.visible_opening_time),
                 visible_closing_time=_latest(combined.visible_closing_time, patch.visible_closing_time),
                 version_spec=_latest(combined.version_spec, patch.version_spec),
+                versions=_latest(combined.versions, patch.versions),
+                showcase_tags=_latest(combined.showcase_tags, patch.showcase_tags),
                 dimensions=_latest(combined.dimensions, patch.dimensions),
                 door_dimensions=_latest(combined.door_dimensions, patch.door_dimensions),
                 door_type=_latest(combined.door_type, patch.door_type),
@@ -148,6 +157,7 @@ class BuildEditPatch:
         direct_fields = (
             "display_name",
             "version_spec",
+            "versions",
             "wiring_placement_restrictions",
             "animated_restrictions",
             "component_restrictions",

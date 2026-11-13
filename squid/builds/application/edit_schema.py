@@ -90,6 +90,10 @@ class BuildPatch(BaseModel):
 
     display_name: str | None = Field(default=None, max_length=120)
     version_spec: str | None = Field(default=None, max_length=500)
+    versions: list[str] | None = Field(default=None, max_length=500)
+    """Canonical version names, such as "Java 1.20.4", replacing the build's versions."""
+    showcase_tags: list[str] | None = Field(default=None, max_length=50)
+    """Stable keys of approved showcase tags, replacing the build's showcase tags."""
     dimensions: InputDimensions | None = None
     door: DoorPatch | None = None
     extender: ExtenderPatch | None = None
@@ -114,6 +118,8 @@ class BuildPatch(BaseModel):
     @model_validator(mode="after")
     def _reject_invalid_clears(self) -> Self:
         non_nullable = {
+            "versions",
+            "showcase_tags",
             "dimensions",
             "door",
             "extender",

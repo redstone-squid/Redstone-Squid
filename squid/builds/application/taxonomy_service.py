@@ -23,6 +23,7 @@ class BuildTaxonomyRepository(Protocol):
     async def resolve_official(
         self, *, build_kind: str | None, restrictions: Sequence[str], patterns: Sequence[str]
     ) -> TaxonomyResolution: ...
+    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]: ...
 
 
 class BuildTaxonomyService:
@@ -76,6 +77,12 @@ class BuildTaxonomyService:
             return await uow.build_taxonomy.resolve_official(
                 build_kind=build_kind, restrictions=restrictions, patterns=patterns
             )
+
+    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
+        if not keys:
+            return ()
+        async with self._uow_factory() as uow:
+            return await uow.build_taxonomy.showcase_definitions(keys)
 
     async def validate_restrictions(
         self,

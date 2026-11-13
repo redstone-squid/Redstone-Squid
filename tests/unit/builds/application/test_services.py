@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from copy import copy
+from decimal import Decimal
 from functools import partial
 from typing import Literal, cast, override
 from uuid import UUID
@@ -18,7 +19,7 @@ from squid.builds.application.services import (
 )
 from squid.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
 from squid.builds.domain import BuildCategory, Status, normalize_tag_name
-from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
+from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError
@@ -235,6 +236,28 @@ class FakeTaxonomyResolver:
             unknown_restrictions=frozenset(unknown_restrictions),
             unknown_patterns=frozenset(unknown_patterns),
         )
+
+    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
+        return [definition for definition in SHOWCASE_TAGS.values() if definition.stable_key in keys]
+
+
+def _showcase(tag_id: int, key: str, value_type: TagValueType = TagValueType.NONE) -> TagDefinition:
+    return TagDefinition(
+        id=tag_id,
+        stable_key=key,
+        display_name=key.title(),
+        authority=TagAuthority.USER,
+        semantic_kind=TagSemanticKind.SHOWCASE,
+        value_type=value_type,
+        moderation_status=TagModerationStatus.APPROVED,
+    )
+
+
+SHOWCASE_TAGS = {
+    "compact": _showcase(2001, "compact"),
+    "tileable": _showcase(2002, "tileable"),
+    "speed": _showcase(2003, "speed", TagValueType.NUMERIC),
+}
 
 
 def build_service(
@@ -595,3 +618,33 @@ async def test_vote_outcome_leaves_an_existing_decision_unchanged(existing_build
     assert repository.confirmed == []
     assert repository.denied == []
     assert existing_build.submission_status is status
+
+
+async def test_showcase_tags_are_replaced_by_key_keeping_existing_assignments(existing_build: DoorBuild) -> None:
+    existing_build.tags = [
+        TagAssignment(SHOWCASE_TAGS["speed"], Decimal(3)),
+        TagAssignment(definition=SHOWCASE_TAGS["compact"], provenance="submitted"),
+    ]
+    repository = FakeBuildRepository(existing_build)
+
+    result = await build_service(repository).edit(
+        42, BuildEditPatch(showcase_tags=["tileable", "speed"]), actor="test", operation="edit", source="test"
+    )
+
+    showcase = [tag for tag in result.tags if tag.definition.semantic_kind is TagSemanticKind.SHOWCASE]
+    assert [tag.definition.stable_key for tag in showcase] == ["tileable", "speed"]
+    # A new assignment could not carry a value, so the kept value shows the old one survived.
+    assert showcase[1].value == Decimal(3)
+    # Restriction tags come from the build's names, which the patch did not touch.
+    assert {tag.definition.display_name for tag in result.tags} >= {"Locational", "Directional with fixes"}
+
+
+@pytest.mark.parametrize("key", ["unknown", "speed"])
+async def test_a_showcase_tag_can_only_be_added_if_approved_and_valueless(existing_build: DoorBuild, key: str) -> None:
+    repository = FakeBuildRepository(existing_build)
+
+    with pytest.raises(InvalidBuildError, match=key):
+        await build_service(repository).edit(
+            42, BuildEditPatch(showcase_tags=[key]), actor="test", operation="edit", source="test"
+        )
+    assert repository.saved == []
