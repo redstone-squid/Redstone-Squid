@@ -109,6 +109,8 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
         answers |= {
             "movement_orientation": _EXTENDER_DIRECTIONS.get(build.orientation or ""),
             "extension_length": build.extension_length,
+            "extension_time": build.extension_time,
+            "retraction_time": build.retraction_time,
         }
     return BuildAnswers(answers, unresolved)
 
@@ -133,6 +135,8 @@ def patch_from_answers(
         "version_compatibility": "version_spec",
         "completion": "completion_time",
         "extension_length": "extension_length",
+        "extension_time": "extension_time",
+        "retraction_time": "retraction_time",
         "opening_time": "normal_opening_time",
         "visible_opening_time": "visible_opening_time",
         "closing_time": "normal_closing_time",
