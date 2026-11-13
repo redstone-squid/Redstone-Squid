@@ -106,7 +106,7 @@ def fakes(*, builds: list[Build] | None = None, is_admin: bool = False) -> Fakes
 async def test_anonymous_status_filter_defaults_to_confirmed_only() -> None:
     graph = fakes(builds=[persisted_build(1, Status.CONFIRMED)])
 
-    await list_builds(
+    await list_builds.fn(
         graph.build_queries,
         cast(Any, None),
         graph.permissions,
@@ -121,7 +121,7 @@ async def test_pending_view_requires_an_authenticated_human() -> None:
     graph = fakes()
 
     with pytest.raises(AuthenticationError):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -138,7 +138,7 @@ async def test_a_service_key_without_the_node_cannot_read_unreviewed_submissions
     graph = fakes(is_admin=True)
 
     with pytest.raises(AuthorizationError):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -156,7 +156,7 @@ async def test_a_key_carrying_the_node_is_still_bounded_by_its_owner() -> None:
     owned = Caller(kind="service", subject="api-key:owned", nodes=UNBOUNDED, account_id=1)
 
     with pytest.raises(AuthorizationError):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -172,7 +172,7 @@ async def test_non_administrator_user_cannot_read_unreviewed_submissions() -> No
     graph = fakes(is_admin=False)
 
     with pytest.raises(AuthorizationError):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -185,7 +185,7 @@ async def test_non_administrator_user_cannot_read_unreviewed_submissions() -> No
 async def test_administrator_reads_the_pending_queue() -> None:
     graph = fakes(builds=[persisted_build(9)], is_admin=True)
 
-    page = await list_builds(
+    page = await list_builds.fn(
         graph.build_queries,
         cast(Any, None),
         graph.permissions,
@@ -202,7 +202,7 @@ async def test_status_and_query_are_mutually_exclusive() -> None:
     graph = fakes()
 
     with pytest.raises(ValidationError):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -217,7 +217,7 @@ async def test_id_anchors_address_the_pages_on_either_side() -> None:
     builds = [persisted_build(9, Status.CONFIRMED), persisted_build(8, Status.CONFIRMED)]
     graph = fakes(builds=builds, is_admin=True)
 
-    first = await list_builds(
+    first = await list_builds.fn(
         graph.build_queries,
         cast(Any, None),
         graph.permissions,
@@ -229,7 +229,7 @@ async def test_id_anchors_address_the_pages_on_either_side() -> None:
     assert first.next == PageAnchor(after_id=9)
     assert first.prev is None
 
-    back = await list_builds(
+    back = await list_builds.fn(
         graph.build_queries,
         cast(Any, None),
         graph.permissions,
@@ -248,7 +248,7 @@ async def test_pagination_parameters_are_mutually_exclusive() -> None:
     graph = fakes(is_admin=True)
 
     with pytest.raises(ValidationError, match="cannot be combined"):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -265,7 +265,7 @@ async def test_id_anchors_are_refused_when_the_order_is_not_by_id() -> None:
     graph = fakes(is_admin=True)
 
     with pytest.raises(ValidationError, match="require ordering by id"):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -281,7 +281,7 @@ async def test_id_anchors_are_refused_when_the_order_is_not_by_id() -> None:
 async def test_a_time_sorted_listing_pages_by_offset() -> None:
     graph = fakes(builds=[persisted_build(9, Status.CONFIRMED)], is_admin=True)
 
-    page = await list_builds(
+    page = await list_builds.fn(
         graph.build_queries,
         cast(Any, None),
         graph.permissions,
@@ -302,7 +302,7 @@ async def test_an_unlisted_sort_field_is_refused() -> None:
     graph = fakes(is_admin=True)
 
     with pytest.raises(ValidationError, match="not supported"):
-        await list_builds(
+        await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
@@ -315,7 +315,7 @@ async def test_an_unlisted_sort_field_is_refused() -> None:
 async def test_submitters_see_their_own_builds_in_every_status() -> None:
     graph = fakes(builds=[persisted_build(5), persisted_build(4, Status.DENIED)])
 
-    page = await list_my_builds(graph.build_queries, ACCOUNT)
+    page = await list_my_builds.fn(graph.build_queries, ACCOUNT)
 
     call = graph.build_queries.calls[-1]
     assert call.statuses == frozenset(Status)
@@ -328,7 +328,7 @@ async def test_an_account_submitter_can_list_builds_without_discord() -> None:
     graph = fakes(builds=[persisted_build(5)])
     minecraft_only = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
-    page = await list_my_builds(graph.build_queries, minecraft_only)
+    page = await list_my_builds.fn(graph.build_queries, minecraft_only)
 
     assert graph.build_queries.calls[-1].submitter_account_id == 7
     assert [item.id for item in page.items] == [5]
@@ -343,7 +343,7 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
     graph = fakes(builds=[persisted_build(5)])
     other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, account_id=2)
 
-    await list_my_builds(graph.build_queries, other, after_id=9)
+    await list_my_builds.fn(graph.build_queries, other, after_id=9)
 
     call = graph.build_queries.calls[-1]
     assert call.selector.after_id == 9
@@ -353,4 +353,4 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
 @pytest.mark.asyncio
 async def test_own_builds_reject_a_service_credential() -> None:
     with pytest.raises(AuthenticationError):
-        await list_my_builds(fakes().build_queries, SERVICE)
+        await list_my_builds.fn(fakes().build_queries, SERVICE)

@@ -16,7 +16,12 @@ NO_NATIVE_ENGINE = ("nucleation", "sqlalchemy", "discord")
     [
         # Problem details are safe to reuse from route modules as long as the import does not
         # initialize persistence or Discord transports.
-        pytest.param("squid.api.errors", ("sqlalchemy", "discord"), id="api-errors"),
+        # Litestar imports its installed ORM integration; application persistence stays unloaded.
+        pytest.param(
+            "squid.api.errors",
+            ("squid.persistence.engine", "squid.bootstrap", "squid.runtime", "discord"),
+            id="api-errors",
+        ),
         pytest.param("squid.posts.domain", ("sqlalchemy", "discord"), id="post-values"),
         pytest.param(
             "squid.posts.models",

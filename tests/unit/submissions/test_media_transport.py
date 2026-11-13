@@ -11,16 +11,17 @@ from uuid import UUID, uuid4
 
 import anyio
 import pytest
-from httpx import ASGITransport, AsyncClient
-from starlette.requests import ClientDisconnect, Request
-from starlette.responses import Response
-from starlette.types import Message
+from httpx import AsyncClient
+from litestar import Request
+from litestar.exceptions import InternalServerException
+from litestar.types import ReceiveMessage
 
 from squid.api.v1 import submission_media
 from squid.api.v1.submission_media import upload_draft_media
 from squid.media.domain import MediaKind
 from squid.media.errors import DraftMediaRequestError
 from squid.submissions.application import DraftAttachmentService
+from tests.support.litestar import asgi_transport, make_request
 from tests.unit.submissions.media_api_fakes import (
     ACCOUNT_ID,
     DRAFT_ID,
@@ -39,11 +40,12 @@ def raw_request(
     headers: list[tuple[bytes, bytes]],
     *,
     query_string: bytes = b"",
-    messages: Sequence[Message] = (),
+    messages: Sequence[ReceiveMessage] = (),
 ) -> Request:
     """Supply exact ASGI headers and receive messages without HTTP-client normalization."""
     scope = {
         "type": "http",
+        "route_handler": upload_draft_media,
         "http_version": "1.1",
         "method": "POST",
         "scheme": "https",
@@ -56,19 +58,18 @@ def raw_request(
     }
     pending = iter(messages)
 
-    async def receive() -> Message:
+    async def receive() -> ReceiveMessage:
         return next(pending)
 
-    return Request(scope, receive)
+    return make_request(scope, receive)
 
 
 async def upload_image(request: Request, media: FakeMedia | None = None) -> None:
     media = media or FakeMedia([])
-    await upload_draft_media(
+    await upload_draft_media.fn(
         draft_id=DRAFT_ID,
         kind=MediaKind.IMAGE,
         request=request,
-        response=Response(),
         attachments=DraftAttachmentService(FakeDrafts(media.events), media),
         account_id=ACCOUNT_ID,
         strip_audio=False,
@@ -87,7 +88,7 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
     media = FakeMedia(events)
     app = app_with_fakes(media, FakeDrafts(events))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{DRAFT_ID}/media/video",
             params={"strip_audio": "true", "upload_id": str(UPLOAD_ID)},
@@ -140,7 +141,7 @@ async def test_upload_rejects_ambiguous_or_over_limit_framing_before_registratio
     events: list[str] = []
     media = FakeMedia(events)
     app = app_with_fakes(media, FakeDrafts(events))
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{DRAFT_ID}/media/image",
             params=params,
@@ -194,7 +195,7 @@ async def test_unbounded_content_length_returns_structured_limit_error_without_i
     events: list[str] = []
     app = app_with_fakes(FakeMedia(events), FakeDrafts(events))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{DRAFT_ID}/media/image",
             headers={"Content-Type": "image/png", "Content-Length": "9" * 4301},
@@ -246,7 +247,7 @@ async def test_nil_upload_identifiers_are_rejected_before_draft_authorization(
     events: list[str] = []
     app = app_with_fakes(FakeMedia(events), FakeDrafts(events))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{draft_id}/media/image",
             params=params,
@@ -263,7 +264,7 @@ async def test_duplicate_query_parameter_is_rejected_after_authorization() -> No
     events: list[str] = []
     app = app_with_fakes(FakeMedia(events), FakeDrafts(events))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{DRAFT_ID}/media/image",
             params=[("strip_audio", "false"), ("strip_audio", "false")],
@@ -281,7 +282,7 @@ async def test_upload_checks_draft_ownership_before_inspecting_or_staging_body()
     media = FakeMedia(events)
     app = app_with_fakes(media, FakeDrafts(events, deny=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{DRAFT_ID}/media/video",
             headers={"Content-Type": "not a media type", "Content-Length": "4"},
@@ -337,7 +338,7 @@ async def test_upload_logs_cleanup_failure_without_changing_response(
     events: list[str] = []
     app = app_with_fakes(FakeMedia(events), FakeDrafts(events))
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
             response = await client.post(
                 f"/submissions/drafts/{DRAFT_ID}/media/image",
                 headers={"Content-Type": "image/png", "Content-Length": "4"},
@@ -365,7 +366,7 @@ async def test_upload_disconnect_closes_and_removes_partial_stage(staging_root: 
         ),
     )
 
-    with pytest.raises(ClientDisconnect):
+    with pytest.raises(InternalServerException, match="client disconnected"):
         await upload_image(request)
 
     assert list(staging_root.iterdir()) == []
@@ -465,7 +466,7 @@ async def test_cross_draft_lookup_and_missing_discard_are_not_visible() -> None:
     media.snapshots[UPLOAD_ID] = snapshot(draft_id=uuid4())
     app = app_with_fakes(media, FakeDrafts(events))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         get_response = await client.get(f"/submissions/drafts/{DRAFT_ID}/media/{UPLOAD_ID}")
         delete_response = await client.delete(
             f"/submissions/drafts/{DRAFT_ID}/media/{OTHER_UPLOAD_ID}", headers={"If-Match": f'"draft-{DRAFT_ID}-r0"'}

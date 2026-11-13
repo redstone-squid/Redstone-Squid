@@ -13,7 +13,7 @@ import type {
   BuildDetail,
   PageSearchResult as SearchPage,
   PageBuildSummary,
-  PageRecordSummary,
+  PagePublishedTitle,
   PageSchematicSummary,
   RecordDetail,
   SearchScope,
@@ -126,7 +126,7 @@ export type RecordQuery = PageQuery & {
 export async function fetchRecords(
   locale: Locale,
   query: RecordQuery = {},
-): Promise<PageRecordSummary> {
+): Promise<PagePublishedTitle> {
   const result = await recordsList({
     client: createCatalogueClient(locale),
     query: {

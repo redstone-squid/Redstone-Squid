@@ -75,4 +75,5 @@ async def test_control_routes_hide_from_callers_without_the_nonce() -> None:
 
 def _client() -> httpx.AsyncClient:
     app = create_fake_upstream_app(CONTROL_NONCE)
-    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fake.test")
+    # Litestar and httpx use different static scope types for the same ASGI protocol.
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fake.test")  # type: ignore[bad-argument-type]

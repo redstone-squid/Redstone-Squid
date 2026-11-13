@@ -3,11 +3,12 @@
 import hmac
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Annotated, Literal
+from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import Depends, Request, Response, Security
-from fastapi.security import APIKeyHeader
+from litestar import Request, Response
+from litestar.di import NamedDependency
+from litestar.params import SkipValidation
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
@@ -99,11 +100,10 @@ UNBOUNDED = frozenset({Pattern.parse("**")})
 
 ANONYMOUS = Caller(kind="anonymous", subject="anonymous", nodes=UNBOUNDED)
 """No credential restriction; the permission service still checks the anonymous subject."""
-_authorization = APIKeyHeader(name="Authorization", scheme_name="ApiCredential", auto_error=False)
 
 
 def requires(node: PermissionNode | str) -> Callable[[Request, Caller], Awaitable[Caller]]:
-    """Build a FastAPI dependency requiring one permission node.
+    """Build a named dependency requiring one permission node.
 
     Check both credential restrictions and account permissions through
     `Caller.allows`. Denial raises AuthenticationError for an anonymous caller
@@ -111,7 +111,8 @@ def requires(node: PermissionNode | str) -> Callable[[Request, Caller], Awaitabl
     """
     required = CATALOGUE[node] if isinstance(node, str) else node
 
-    async def check(request: Request, caller: Annotated[Caller, Depends(current_caller)]) -> Caller:
+    async def check(request: Request, current_identity: NamedDependency[SkipValidation[Caller]]) -> Caller:
+        caller = current_identity
         permissions = request.app.state.runtime.services.permissions
         if not await caller.allows(permissions, required):
             raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
@@ -120,10 +121,17 @@ def requires(node: PermissionNode | str) -> Callable[[Request, Caller], Awaitabl
     return check
 
 
-async def current_caller(
-    request: Request,
-    authorization: Annotated[str | None, Security(_authorization)],
-) -> Caller:
+async def current_caller(request: Request) -> Caller:
+    """Resolve credentials once per request, including calls from pre-handler hooks."""
+    cached = request.state.get("squid_caller")
+    if isinstance(cached, Caller):
+        return cached
+    caller = await _authenticate_caller(request)
+    request.state.squid_caller = caller
+    return caller
+
+
+async def _authenticate_caller(request: Request) -> Caller:
     """Resolve a browser session, API key, CLI session, or Minecraft player grant.
 
     An Authorization header takes precedence over the browser cookie. With
@@ -131,6 +139,7 @@ async def current_caller(
     CSRF cookie and header values. Invalid supplied credentials raise
     AuthenticationError rather than falling back to another credential.
     """
+    authorization = request.headers.get("Authorization")
     if authorization is None:
         session_token = request.cookies.get("__Host-squid_session")
         web_auth = request.app.state.runtime.services.web_auth
@@ -222,26 +231,28 @@ async def current_caller(
     )
 
 
-async def current_browser_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
+async def current_browser_account_id(current_identity: NamedDependency[SkipValidation[Caller]]) -> int:
     """Require a signed-in browser account with current privacy consent."""
+    caller = current_identity
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
     return caller.require_consented_account()
 
 
-BrowserAccountId = Annotated[int, Depends(current_browser_account_id)]
+BrowserAccountId = NamedDependency[int]
 
 
-async def prevent_credential_storage(response: Response) -> None:
+async def prevent_credential_storage(response: Response[Any]) -> Response[Any]:
     """Keep credential-bearing responses out of browser and intermediary caches."""
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
+    return response
 
 
-async def consented_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
+async def consented_account_id(current_identity: NamedDependency[SkipValidation[Caller]]) -> int:
     """Dependency form, for routes whose only precondition is a consented account."""
-    return caller.require_consented_account()
+    return current_identity.require_consented_account()
 
 
-ConsentedAccountId = Annotated[int, Depends(consented_account_id)]
+ConsentedAccountId = NamedDependency[int]
 """A signed-in account that has accepted the current notice."""

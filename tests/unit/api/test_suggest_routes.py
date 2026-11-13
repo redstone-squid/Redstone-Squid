@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import cast, override
 
 import pytest
-from fastapi import FastAPI, Request, Response
-from starlette.types import Scope
+from litestar import Litestar, Request
+from litestar.types import Scope
 
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.suggest import list_sources, suggest
@@ -80,9 +80,9 @@ class Runtime:
 
 
 def request_for(*, allowed: bool = False) -> Request:
-    app = FastAPI()
+    app = Litestar([])
     app.state.runtime = Runtime(Services(PermissionAnswer(allowed)))
-    scope = cast(Scope, {"type": "http", "app": app, "headers": []})
+    scope = cast(Scope, {"type": "http", "litestar_app": app, "headers": []})
 
     return Request(scope)
 
@@ -94,76 +94,70 @@ def caller(*, anonymous: bool = True) -> Caller:
 
 
 async def test_a_source_returns_ranked_items() -> None:
-    page = await suggest(
+    response = await suggest.fn(
         "approved_restrictions",
         request_for(),
-        Response(),
         service(restrictions_source()),
         caller(),
         q="seam",
     )
-    assert [item.value for item in page.items] == ["seamless", "semi_seamless"]
-    assert page.source == "approved_restrictions"
-    assert page.items[0].kind == "restriction"
+    assert [item.value for item in response.content.items] == ["seamless", "semi_seamless"]
+    assert response.content.source == "approved_restrictions"
+    assert response.content.items[0].kind == "restriction"
 
 
 async def test_an_unknown_source_is_a_not_found_because_it_is_a_bad_url() -> None:
     with pytest.raises(NotFoundError):
-        await suggest("nope", request_for(), Response(), service(restrictions_source()), caller())
+        await suggest.fn("nope", request_for(), service(restrictions_source()), caller())
 
 
 async def test_an_enumerable_source_carries_an_etag_a_client_can_cache_on() -> None:
-    response = Response()
-    page = await suggest(
+    response = await suggest.fn(
         "approved_restrictions",
         request_for(),
-        response,
         service(restrictions_source()),
         caller(),
     )
-    assert page.revision is not None
-    assert response.headers["ETag"] == f'"{page.revision:x}"'
+    assert response.content.revision is not None
+    assert response.headers["ETag"] == f'"{response.content.revision:x}"'
     assert "private" in response.headers["Cache-Control"]
 
 
 async def test_a_queried_source_is_not_cached() -> None:
-    response = Response()
     queried = SuggestionSource(id="builds", provider=StaticProvider.of(["1"]))
-    page = await suggest("builds", request_for(), response, service(queried), caller())
-    assert page.revision is None
+    response = await suggest.fn("builds", request_for(), service(queried), caller())
+    assert response.content.revision is None
     assert "ETag" not in response.headers
 
 
 async def test_a_gated_source_is_empty_for_an_anonymous_caller() -> None:
-    page = await suggest("builds_pending", request_for(), Response(), service(gated_source()), caller())
-    assert page.items == []
+    response = await suggest.fn("builds_pending", request_for(), service(gated_source()), caller())
+    assert response.content.items == []
 
 
 async def test_a_gated_source_is_served_to_a_caller_holding_the_node() -> None:
-    page = await suggest(
+    response = await suggest.fn(
         "builds_pending",
         request_for(allowed=True),
-        Response(),
         service(gated_source()),
         caller(anonymous=False),
     )
-    assert [item.value for item in page.items] == ["7"]
+    assert [item.value for item in response.content.items] == ["7"]
 
 
 async def test_the_limit_is_passed_through_and_bounded() -> None:
     provider = RecordingProvider()
     source = SuggestionSource(id="approved_restrictions", provider=provider)
-    await suggest("approved_restrictions", request_for(), Response(), service(source), caller(), q="s", limit=3)
+    await suggest.fn("approved_restrictions", request_for(), service(source), caller(), q="s", limit=3)
     assert provider.requests[0].limit == 3
 
 
 async def test_the_category_query_parameter_becomes_request_context() -> None:
     provider = RecordingProvider()
     source = SuggestionSource(id="approved_restrictions", provider=provider)
-    await suggest(
+    await suggest.fn(
         "approved_restrictions",
         request_for(),
-        Response(),
         service(source),
         caller(),
         q="s",
@@ -179,12 +173,12 @@ async def test_the_signed_in_account_reaches_viewer_scoped_providers() -> None:
         provider=provider,
         visibility=Visibility.VIEWER_SCOPED,
     )
-    await suggest("approved_restrictions", request_for(), Response(), service(source), caller(anonymous=False))
+    await suggest.fn("approved_restrictions", request_for(), service(source), caller(anonymous=False))
     assert provider.requests[0].viewer.account_id == 1
 
 
 async def test_sources_are_published_so_a_client_need_not_hardcode_them() -> None:
-    published = await list_sources(service(restrictions_source(), gated_source()))
+    published = await list_sources.fn(service(restrictions_source(), gated_source()))
     by_id = {item.id: item for item in published}
     assert by_id["approved_restrictions"].kind == "enumerable"
     assert by_id["approved_restrictions"].requires_authentication is False

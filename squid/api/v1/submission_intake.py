@@ -12,14 +12,16 @@ from typing import Annotated
 from uuid import UUID
 
 import anyio
-from fastapi import APIRouter, Depends, Query, Request, Response
+from litestar import Request, Response, Router, delete, get, put
+from litestar.di import NamedDependency, Provide
+from litestar.params import QueryParameter, SkipValidation
 from pydantic import BaseModel, ConfigDict
 
-from squid.api.attachment_edits import AttachmentEdit
+from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
-from squid.api.idempotency import reserve_edit_request
+from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.request_body import streams_own_body
-from squid.api.v1.submissions import AccountId
+from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
 from squid.core.errors import ValidationError
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.intake import SubmissionAttachmentIntake
@@ -40,28 +42,40 @@ def intake_service(request: Request) -> SubmissionAttachmentIntake:
     return request.app.state.runtime.services.submission_intake
 
 
-Intake = Annotated[SubmissionAttachmentIntake, Depends(intake_service)]
-router = APIRouter(prefix="/submissions/drafts/{draft_id}/supplied-files", tags=["submissions"])
+Intake = NamedDependency[SkipValidation[SubmissionAttachmentIntake]]
 _READ = contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only())
 _WRITE = contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only())
 
 
-@router.get("", operation_id="submission_supplied_file_list", openapi_extra=_READ)
+@get(
+    "/",
+    operation_id="submission_supplied_file_list",
+    opt=_READ,
+    status_code=200,
+    dependencies={
+        "account_id": Provide(authenticated_account),
+        "intake": Provide(intake_service, sync_to_thread=False),
+    },
+)
 async def list_files(draft_id: UUID, account_id: AccountId, intake: Intake) -> list[SuppliedFileResponse]:
     """List unresolved, registered, and explicitly discarded supplied files."""
     return [SuppliedFileResponse.model_validate(item) for item in await intake.list(draft_id, account_id)]
 
 
-@router.put(
-    "/{source_id}",
+@put(
+    "/{source_id:uuid}",
     operation_id="submission_supplied_file_upload",
     status_code=202,
-    openapi_extra={
+    opt={
         **_WRITE,
         "requestBody": {
             "required": True,
             "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}},
         },
+    },
+    dependencies={
+        "account_id": Provide(authenticated_account),
+        "intake": Provide(intake_service, sync_to_thread=False),
     },
 )
 @streams_own_body
@@ -71,7 +85,7 @@ async def upload_file(
     request: Request,
     account_id: AccountId,
     intake: Intake,
-    filename: Annotated[str, Query(min_length=1, max_length=255)],
+    filename: Annotated[str, QueryParameter(min_length=1, max_length=255)],
     replaces: UUID | None = None,
 ) -> list[SuppliedFileResponse]:
     """Register a supplied file, then discard the requirement it replaces if requested.
@@ -94,7 +108,7 @@ async def upload_file(
     except Exception:
         await intake.fail(draft_id, account_id, source_id)
         raise
-    return await list_files(draft_id, account_id, intake)
+    return await list_files.fn(draft_id, account_id, intake)
 
 
 async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
@@ -109,15 +123,41 @@ async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
             output.write(chunk)
 
 
-@router.delete(
-    "/{source_id}",
+@delete(
+    "/{source_id:uuid}",
     operation_id="submission_supplied_file_discard",
-    openapi_extra=_WRITE,
-    dependencies=[Depends(reserve_edit_request)],
+    opt=_WRITE,
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "account_id": Provide(authenticated_account),
+        "intake": Provide(intake_service, sync_to_thread=False),
+        "edit": Provide(attachment_edit_request, sync_to_thread=False),
+        "runner": Provide(get_submission_edits, sync_to_thread=False),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def discard_file(
-    draft_id: UUID, source_id: UUID, account_id: AccountId, intake: Intake, edit: AttachmentEdit, response: Response
-) -> list[SuppliedFileResponse]:
+    draft_id: UUID,
+    source_id: UUID,
+    account_id: AccountId,
+    intake: Intake,
+    edit: AttachmentEdit,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[list[SuppliedFileResponse]]:
     """Explicitly resolve a file that does not belong to this candidate."""
-    await edit.save(AttachmentValues(files=(FileMembership(source_id=source_id, present=False),)), response)
-    return await list_files(draft_id, account_id, intake)
+    response_headers: dict[str, str] = {}
+    response_headers["ETag"] = await edit.save(
+        AttachmentValues(files=(FileMembership(source_id=source_id, present=False),))
+    )
+    return Response(
+        content=await list_files.fn(draft_id, account_id, intake), headers=response_headers, status_code=200
+    )
+
+
+router = Router(
+    path="/submissions/drafts/{draft_id:uuid}/supplied-files",
+    tags=["submissions"],
+    route_handlers=[list_files, upload_file, discard_file],
+)

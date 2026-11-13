@@ -24,7 +24,7 @@ from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
+    from litestar import Litestar
 
     from squid.config import ObservabilityConfig
 
@@ -106,7 +106,7 @@ class _Telemetry:
     propagator: _Propagator
     current_span: Callable[[], _Span]
     error_status: Callable[[], object]
-    instrument_api_app: Callable[[FastAPI], None]
+    instrument_api_app: Callable[[Litestar], None]
 
 
 CORRELATION_REFERENCE_LENGTH = 12
@@ -322,8 +322,8 @@ def configure_observability(config: ObservabilityConfig, *, service_name: str) -
         return handle
 
 
-def instrument_api_app(app: FastAPI, config: ObservabilityConfig) -> None:
-    """Instrument one FastAPI application when observability is enabled and installed."""
+def instrument_api_app(app: Litestar, config: ObservabilityConfig) -> None:
+    """Instrument one Litestar application when observability is enabled and installed."""
     if not config.enabled:
         return
     telemetry = _telemetry()
@@ -490,8 +490,8 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
     from opentelemetry.instrumentation.aiohttp_client import (  # pyright: ignore[reportMissingImports]
         AioHttpClientInstrumentor,
     )
-    from opentelemetry.instrumentation.fastapi import (  # pyright: ignore[reportMissingImports]
-        FastAPIInstrumentor,
+    from opentelemetry.instrumentation.asgi import (  # pyright: ignore[reportMissingImports]
+        OpenTelemetryMiddleware,
     )
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor  # pyright: ignore[reportMissingImports]
     from opentelemetry.instrumentation.sqlalchemy import (  # pyright: ignore[reportMissingImports]
@@ -531,6 +531,11 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
         shutdown_on_exit=False,
     )
     metrics.set_meter_provider(metric_provider)
+
+    def instrument_app(app: Litestar) -> None:
+        # OpenTelemetry types ASGI scopes as mappings; Litestar uses the equivalent TypedDicts.
+        app.asgi_handler = OpenTelemetryMiddleware(app.asgi_handler)  # type: ignore[bad-assignment]
+
     active = _Telemetry(
         pid=os.getpid(),
         tracer=cast(_Tracer, trace.get_tracer("squid")),
@@ -539,7 +544,7 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
         propagator=propagate,
         current_span=cast(Callable[[], _Span], trace.get_current_span),
         error_status=lambda: Status(StatusCode.ERROR),
-        instrument_api_app=FastAPIInstrumentor.instrument_app,
+        instrument_api_app=instrument_app,
     )
     global _ACTIVE
     _ACTIVE = active

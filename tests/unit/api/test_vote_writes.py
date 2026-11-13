@@ -108,7 +108,7 @@ async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: in
     votes = VoteRecorder(session)
     members = MemberRecorder(actor)
 
-    response = await cast_vote(
+    response = await cast_vote.fn(
         12,
         VoteInput(guild_id=guild_id, option_id="approve"),
         votes,
@@ -135,7 +135,7 @@ async def test_a_cli_caller_with_no_discord_identity_can_vote() -> None:
         account_id=1,
     )
 
-    response = await cast_vote(12, VoteInput(guild_id=10, option_id="approve"), votes, members, cli)
+    response = await cast_vote.fn(12, VoteInput(guild_id=10, option_id="approve"), votes, members, cli)
 
     assert response.id == 12
     assert votes.cast_calls == [CastCall(12, actor, "approve")]
@@ -146,7 +146,7 @@ async def test_service_credentials_cannot_cast_ballots() -> None:
     service = Caller(kind="service", subject="api-key:test", nodes=credential_nodes("vote.poll.cast"))
 
     with pytest.raises(AuthenticationError):
-        await cast_vote(12, VoteInput(guild_id=10, option_id="approve"), VoteRecorder(snapshot()), None, service)
+        await cast_vote.fn(12, VoteInput(guild_id=10, option_id="approve"), VoteRecorder(snapshot()), None, service)
 
 
 _REJECTION_ERRORS: dict[VoteRejection, type[Exception]] = {
@@ -171,7 +171,7 @@ async def test_every_vote_rejection_maps_to_a_typed_api_error(
     members = MemberRecorder(Actor(account_id=1, discord_user_id=7, guild_id=10))
 
     with pytest.raises(error_type):
-        await cast_vote(
+        await cast_vote.fn(
             12,
             VoteInput(guild_id=10, option_id="approve"),
             votes,
@@ -184,6 +184,6 @@ async def test_clear_resolves_the_authenticated_member() -> None:
     actor = Actor(account_id=1, discord_user_id=7, guild_id=10)
     votes = VoteRecorder(snapshot())
     members = MemberRecorder(actor)
-    await clear_vote(12, 10, votes, members, account())
+    await clear_vote.fn(12, 10, votes, members, account())
     assert votes.cast_calls == [CastCall(12, actor, "clear")]
     assert members.calls == [(1, 10, VoteKind.BUILD)]

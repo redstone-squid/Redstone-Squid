@@ -1,9 +1,8 @@
 """Version 1 REST router assembly."""
 
-from fastapi import APIRouter, Depends
+from litestar import Router
 
-from squid.api.errors import responses
-from squid.api.rate_limit import enforce_route_rate_limits
+from squid.api.rate_limit import enforce_route_rate_limits_before_request
 from squid.api.v1.auth import router as auth_router
 from squid.api.v1.builds import router as builds_router
 from squid.api.v1.capabilities import router as capabilities_router
@@ -30,36 +29,37 @@ from squid.api.v1.tags import router as tags_router
 from squid.api.v1.versions import router as versions_router
 from squid.api.v1.votes import router as votes_router
 
-router = APIRouter(
-    prefix="/v1",
-    dependencies=[Depends(enforce_route_rate_limits)],
-    responses=responses(429),
+router = Router(
+    path="/v1",
+    before_request=enforce_route_rate_limits_before_request,
+    route_handlers=[
+        auth_router,
+        builds_router,
+        capabilities_router,
+        cli_auth_router,
+        consent_router,
+        diagnostics_router,
+        me_router,
+        me_accounts_router,
+        minecraft_auth_router,
+        notifications_router,
+        records_router,
+        schematics_router,
+        search_router,
+        settings_router,
+        submissions_router,
+        submission_media_router,
+        submission_schematics_router,
+        submission_recalculations_router,
+        submission_intake_router,
+        suggest_router,
+        tags_router,
+        creator_aliases_router,
+        profiles_router,
+        versions_router,
+        votes_router,
+    ],
 )
-router.include_router(auth_router)
-router.include_router(builds_router)
-router.include_router(capabilities_router)
-router.include_router(cli_auth_router)
-router.include_router(consent_router)
-router.include_router(diagnostics_router)
-router.include_router(me_router)
-router.include_router(me_accounts_router)
-router.include_router(minecraft_auth_router)
-router.include_router(notifications_router)
-router.include_router(records_router)
-router.include_router(schematics_router)
-router.include_router(search_router)
-router.include_router(settings_router)
-router.include_router(submissions_router)
-router.include_router(submission_media_router)
-router.include_router(submission_schematics_router)
-router.include_router(submission_recalculations_router)
-router.include_router(submission_intake_router)
-router.include_router(suggest_router)
-router.include_router(tags_router)
-router.include_router(creator_aliases_router)
-router.include_router(profiles_router)
-router.include_router(versions_router)
-router.include_router(votes_router)
 
 TAGS_METADATA = [
     {"name": "settings", "description": "Global runtime configuration for application administrators."},

@@ -1,23 +1,22 @@
 """Ballot-safe vote-session routes."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from litestar import Router, delete, get, post
+from litestar.di import Provide
+from litestar.params import FromPath, FromQuery, JSONBody
 from pydantic import BaseModel, ConfigDict, Field
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
 from squid.api.errors import responses
-from squid.api.idempotency import reserve_idempotent_request
-from squid.api.security import Caller, requires
+from squid.api.idempotency import reserve_idempotent_before_request
+from squid.api.security import requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthorizationError, ConflictError, ValidationError
 from squid.permissions.domain.catalogue import VOTE_POLL_CAST
 from squid.voting.domain import CastVoteResult, VoteRejection
 from squid.voting.errors import VoteSessionNotFoundError
 
-router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
-UserVoter = Annotated[Caller, Depends(requires(VOTE_POLL_CAST))]
+UserVoter = CurrentCaller
 
 
 class VoteInput(BaseModel):
@@ -29,15 +28,14 @@ class VoteInput(BaseModel):
     option_id: str = Field(min_length=1, max_length=200)
 
 
-@router.get(
-    "/{vote_session_id}",
-    response_model=VoteSessionDetail,
+@get(
+    "/{vote_session_id:int}",
     responses=responses(404, 422, 503),
     operation_id="vote_session_get",
-    openapi_extra=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
 )
 async def get_vote_session(
-    vote_session_id: int,
+    vote_session_id: FromPath[int],
     votes: Votes,
     caller: CurrentCaller,
 ) -> VoteSessionDetail:
@@ -48,17 +46,18 @@ async def get_vote_session(
     return VoteSessionDetail.from_domain(session, caller_account_id=caller.account_id)
 
 
-@router.post(
-    "/{vote_session_id}/votes",
-    response_model=VoteSessionDetail,
+@post(
+    "/{vote_session_id:int}/votes",
     responses=responses(400, 401, 403, 404, 409, 429, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    before_request=reserve_idempotent_before_request,
+    dependencies={"caller": Provide(requires(VOTE_POLL_CAST))},
     operation_id="vote_cast",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
 )
 async def cast_vote(
-    vote_session_id: int,
-    vote: VoteInput,
+    vote_session_id: FromPath[int],
+    data: JSONBody[VoteInput],
     votes: Votes,
     vote_members: VoteMembers,
     caller: UserVoter,
@@ -70,26 +69,27 @@ async def cast_vote(
         raise VoteSessionNotFoundError(vote_session_id)
     if vote_members is None:
         raise AuthorizationError
-    actor = await vote_members.member(account_id, vote.guild_id, session.kind)
+    actor = await vote_members.member(account_id, data.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
-    result = await votes.cast_vote(vote_session_id, actor, vote.option_id, toggle=False)
+    result = await votes.cast_vote(vote_session_id, actor, data.option_id, toggle=False)
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
     return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)
 
 
-@router.delete(
-    "/{vote_session_id}/votes",
-    response_model=VoteSessionDetail,
+@delete(
+    "/{vote_session_id:int}/votes",
     responses=responses(400, 401, 403, 404, 409, 429, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    before_request=reserve_idempotent_before_request,
+    dependencies={"caller": Provide(requires(VOTE_POLL_CAST))},
     operation_id="vote_clear",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
 )
 async def clear_vote(
-    vote_session_id: int,
-    guild_id: int,
+    vote_session_id: FromPath[int],
+    guild_id: FromQuery[int],
     votes: Votes,
     vote_members: VoteMembers,
     caller: UserVoter,
@@ -124,3 +124,6 @@ def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
             raise ValidationError(msg, resource="vote")
         case VoteRejection.WRONG_GUILD | VoteRejection.NOT_ELIGIBLE | VoteRejection.NOT_AUTHORIZED:
             raise AuthorizationError
+
+
+router = Router(path="/vote-sessions", tags=["vote sessions"], route_handlers=[get_vote_session, cast_vote, clear_vote])

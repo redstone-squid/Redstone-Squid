@@ -6,13 +6,13 @@ from typing import cast, override
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from litestar import Litestar, Request
+from litestar.di import Provide
+from litestar.testing import TestClient
 
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CreditedAlias, PublicCreatorProfile
 from squid.accounts.models import CreatorAlias
-from squid.api.dependencies import get_services
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
@@ -148,7 +148,7 @@ class PartialReadServices:
 
 
 def _override(
-    app: FastAPI,
+    app: Litestar,
     *,
     tags: TagService | None = None,
     versions: VersionService | None = None,
@@ -173,11 +173,16 @@ def _override(
             votes=votes,
         ),
     )
-    app.dependency_overrides[get_services] = lambda: fake_services
+
+    async def provide_services(request: Request) -> ApiServices:
+        return fake_services
+
+    provider = cast(Provide, app.dependencies["services"])
+    provider.dependency = provide_services
 
 
 def test_tag_and_version_collections_use_page_envelope(
-    app_factory: tuple[FastAPI, MockDatabaseManager],
+    app_factory: tuple[Litestar, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
     definition = TagDefinition(
@@ -220,7 +225,7 @@ def test_tag_and_version_collections_use_page_envelope(
 
 
 def test_creator_alias_never_exposes_linked_account(
-    app_factory: tuple[FastAPI, MockDatabaseManager],
+    app_factory: tuple[Litestar, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
     _override(app, accounts=AccountFake())
@@ -237,7 +242,7 @@ def test_creator_alias_never_exposes_linked_account(
     assert "user_id" not in response.text
 
 
-def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+def test_creator_profile_groups_public_aliases(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
     app, _database = app_factory
     _override(app, accounts=AccountFake())
 
@@ -264,7 +269,7 @@ def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockD
 
 
 def test_an_unpreviewable_build_answers_409_with_the_reason(
-    app_factory: tuple[FastAPI, MockDatabaseManager],
+    app_factory: tuple[Litestar, MockDatabaseManager],
 ) -> None:
     """A refusal is about the build's state, so it is a conflict rather than a 404 or a 500."""
     app, _database = app_factory
@@ -281,7 +286,7 @@ def test_an_unpreviewable_build_answers_409_with_the_reason(
 
 
 def test_a_render_rejects_a_camera_outside_the_supported_range(
-    app_factory: tuple[FastAPI, MockDatabaseManager],
+    app_factory: tuple[Litestar, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
     _override(app, build_queries=ConfirmedBuildFake(), schematics=RefusingRenderFake())
@@ -292,7 +297,7 @@ def test_a_render_rejects_a_camera_outside_the_supported_range(
     assert response.status_code == 422
 
 
-def test_schematic_render_content_is_immutable_png(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+def test_schematic_render_content_is_immutable_png(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
     app, _database = app_factory
     _override(app, schematics=SchematicFake())
 
@@ -306,7 +311,7 @@ def test_schematic_render_content_is_immutable_png(app_factory: tuple[FastAPI, M
 
 
 def test_hidden_vote_session_omits_ballots_and_live_tallies(
-    app_factory: tuple[FastAPI, MockDatabaseManager],
+    app_factory: tuple[Litestar, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
     session = poll_snapshot(

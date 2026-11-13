@@ -3,7 +3,10 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Response, status
+from litestar import Response, Router, delete, get, patch, post
+from litestar import status_codes as status
+from litestar.di import NamedDependency, Provide
+from litestar.params import HeaderParameter, JSONBody, SkipValidation
 
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import Notifications, Permissions, Services
@@ -40,8 +43,7 @@ from squid.notifications.edits import (
 from squid.notifications.errors import NotificationSubscriptionNotFoundError
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 
-router = APIRouter(prefix="/users/me/notifications", tags=["notifications"])
-UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
+UserCaller = NamedDependency[SkipValidation[Caller]]
 
 
 async def resolve_inbox_visibility(permissions: Permissions, caller: UserCaller) -> InboxVisibility:
@@ -51,99 +53,115 @@ async def resolve_inbox_visibility(permissions: Permissions, caller: UserCaller)
     )
 
 
-type InboxAccess = Annotated[InboxVisibility, Depends(resolve_inbox_visibility)]
+InboxAccess = NamedDependency[SkipValidation[InboxVisibility]]
 
 
-@router.get(
+@get(
     "/preferences",
-    response_model=NotificationPreferencesDetail,
     responses=responses(401, 403, 503),
     operation_id="notification_preferences_get",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
 )
-async def get_preferences(
-    notifications: Notifications, caller: UserCaller, response: Response
-) -> NotificationPreferencesDetail:
+async def get_preferences(notifications: Notifications, caller: UserCaller) -> Response[NotificationPreferencesDetail]:
     """Return channel preferences, with disabled defaults until privacy consent is accepted."""
+    response_headers: dict[str, str] = {}
     preferences = await notifications.preferences(_account_id(caller))
-    response.headers["ETag"] = revision_etag(
+    response_headers["ETag"] = revision_etag(
         Revision(notification_target(preferences.account_id), preferences.revision)
     )
-    return NotificationPreferencesDetail.from_domain(preferences)
+    return Response(
+        content=NotificationPreferencesDetail.from_domain(preferences), headers=response_headers, status_code=200
+    )
 
 
-@router.patch(
+@patch(
     "/preferences",
-    response_model=NotificationPreferencesDetail,
-    responses=responses(400, 401, 403, 412, 503),
-    dependencies=[Depends(reserve_edit_request)],
+    responses=responses(400, 401, 403, 412, 422, 503),
     operation_id="notification_preferences_update",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_READ)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def update_preferences(
-    request: NotificationPreferenceUpdate,
+    data: JSONBody[NotificationPreferenceUpdate],
     notifications: Notifications,
     caller: UserCaller,
     services: Services,
-    response: Response,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> NotificationPreferencesDetail:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[NotificationPreferencesDetail]:
     """Update both channels against the notification revision read by the caller."""
     account_id = _account_id(caller)
     await services.edits.execute(
         EditCommand(
             PREFERENCES_EDIT,
             (expected_revision(notification_target(account_id), if_match),),
-            EditValues.of(request.model_dump(mode="json")),
+            EditValues.of(data.model_dump(mode="json")),
             operation_id,
         ),
         caller.to_actor(),
     )
-    return await get_preferences(notifications, caller, response)
+    return await get_preferences.fn(notifications, caller)
 
 
-@router.get(
+@get(
     "/subscriptions",
-    response_model=list[NotificationSubscriptionDetail],
     responses=responses(401, 403, 503),
     operation_id="notification_subscriptions_list",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
 )
 async def list_subscriptions(
-    notifications: Notifications,
-    caller: UserCaller,
-    response: Response,
-) -> list[NotificationSubscriptionDetail]:
+    notifications: Notifications, caller: UserCaller
+) -> Response[list[NotificationSubscriptionDetail]]:
     """List enabled subscriptions owned by the caller."""
+    response_headers: dict[str, str] = {}
     snapshot = await notifications.editor_snapshot(_account_id(caller))
-    response.headers["ETag"] = revision_etag(
+    response_headers["ETag"] = revision_etag(
         Revision(notification_target(snapshot.preferences.account_id), snapshot.preferences.revision)
     )
-    return [NotificationSubscriptionDetail.from_domain(item) for item in snapshot.subscriptions]
+    return Response(
+        content=[NotificationSubscriptionDetail.from_domain(item) for item in snapshot.subscriptions],
+        headers=response_headers,
+        status_code=200,
+    )
 
 
-@router.post(
+@post(
     "/subscriptions",
-    response_model=NotificationSubscriptionDetail,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_subscription_create",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_READ)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def create_subscription(
-    request: NotificationSubscriptionCreate,
+    data: JSONBody[NotificationSubscriptionCreate],
     notifications: Notifications,
     caller: UserCaller,
     services: Services,
-    response: Response,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> NotificationSubscriptionDetail:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[NotificationSubscriptionDetail]:
     """Follow a creator, record, or filter against the notification settings revision."""
+    response_headers: dict[str, str] = {}
     account_id = _account_id(caller)
-    values = request.model_dump(mode="json")
+    values = data.model_dump(mode="json")
     values["record_filter"] = values.pop("filter")
     result = await services.edits.execute(
         EditCommand(
@@ -156,40 +174,54 @@ async def create_subscription(
     )
     if result.receipt is not None:
         subscription = SubscriptionsValues.model_validate(result.receipt.after.unpack()).subscriptions[0]
-        response.headers["ETag"] = revision_etag(result.outcome.revisions[0])
-        return NotificationSubscriptionDetail(
-            id=subscription.id,
-            kind=subscription.kind,
-            subject_id=subscription.subject_id,
-            filter=None if subscription.record_filter is None else dict(subscription.record_filter),
+        response_headers["ETag"] = revision_etag(result.outcome.revisions[0])
+        return Response(
+            content=NotificationSubscriptionDetail(
+                id=subscription.id,
+                kind=subscription.kind,
+                subject_id=subscription.subject_id,
+                filter=None if subscription.record_filter is None else dict(subscription.record_filter),
+            ),
+            headers=response_headers,
+            status_code=status.HTTP_201_CREATED,
         )
     row, revision = await notifications.subscription_snapshot(
         account_id,
-        kind=request.kind,
-        subject_id=request.subject_id,
-        record_filter=None if request.filter is None else request.filter.to_domain(),
+        kind=data.kind,
+        subject_id=data.subject_id,
+        record_filter=None if data.filter is None else data.filter.to_domain(),
     )
     if row is None:
         raise NotificationSubscriptionNotFoundError
-    response.headers["ETag"] = revision_etag(Revision(notification_target(account_id), revision))
-    return NotificationSubscriptionDetail.from_domain(row)
+    response_headers["ETag"] = revision_etag(Revision(notification_target(account_id), revision))
+    return Response(
+        content=NotificationSubscriptionDetail.from_domain(row),
+        headers=response_headers,
+        status_code=status.HTTP_201_CREATED,
+    )
 
 
-@router.delete(
-    "/subscriptions/{subscription_id}",
+@delete(
+    "/subscriptions/{subscription_id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_subscription_delete",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_READ)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def delete_subscription(
     subscription_id: int,
     services: Services,
     caller: UserCaller,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> Response:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[None]:
     """Disable one caller-owned subscription, retaining its identity for history."""
     result = await services.edits.execute(
         EditCommand(
@@ -201,16 +233,22 @@ async def delete_subscription(
         caller.to_actor(),
     )
     return Response(
-        status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
+        content=None,
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"ETag": revision_etag(result.outcome.revisions[0])},
     )
 
 
-@router.get(
+@get(
     "/inbox",
-    response_model=Page[InboxNotificationDetail],
-    responses=responses(400, 401, 403, 503),
+    responses=responses(400, 401, 403, 422, 503),
     operation_id="notification_inbox_list",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "caller": Provide(requires(ACCOUNT_SELF_READ)),
+        "visibility": Provide(resolve_inbox_visibility),
+    },
 )
 async def list_inbox(
     notifications: Notifications,
@@ -224,30 +262,31 @@ async def list_inbox(
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     account_id = _account_id(caller)
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
-    page = await notifications.inbox(
-        account_id,
-        selector=selector,
-        page_size=page_size,
-        visibility=visibility,
-    )
+    page = await notifications.inbox(account_id, selector=selector, page_size=page_size, visibility=visibility)
     return Page[InboxNotificationDetail].from_domain(page, InboxNotificationDetail.from_domain)
 
 
-@router.post(
-    "/inbox/{notification_id}/read",
+@post(
+    "/inbox/{notification_id:int}/read",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_inbox_mark_read",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_READ)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def mark_read(
     notification_id: int,
     services: Services,
     caller: UserCaller,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> Response:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[None]:
     """Mark one visible inbox item as read, checking its own revision."""
     _account_id(caller)
     result = await services.edits.execute(
@@ -260,25 +299,33 @@ async def mark_read(
         caller.to_actor(),
     )
     return Response(
-        status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
+        content=None,
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"ETag": revision_etag(result.outcome.revisions[0])},
     )
 
 
-@router.post(
-    "/inbox/{notification_id}/unread",
+@post(
+    "/inbox/{notification_id:int}/unread",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_inbox_mark_unread",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_READ)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def mark_unread(
     notification_id: int,
     services: Services,
     caller: UserCaller,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> Response:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[None]:
     """Mark one visible inbox item as unread, checking its own revision."""
     _account_id(caller)
     result = await services.edits.execute(
@@ -291,7 +338,9 @@ async def mark_unread(
         caller.to_actor(),
     )
     return Response(
-        status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
+        content=None,
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"ETag": revision_etag(result.outcome.revisions[0])},
     )
 
 
@@ -299,3 +348,19 @@ def _account_id(caller: Caller) -> int:
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
     return caller.account_id
+
+
+router = Router(
+    path="/users/me/notifications",
+    tags=["notifications"],
+    route_handlers=[
+        get_preferences,
+        update_preferences,
+        list_subscriptions,
+        create_subscription,
+        delete_subscription,
+        list_inbox,
+        mark_read,
+        mark_unread,
+    ],
+)

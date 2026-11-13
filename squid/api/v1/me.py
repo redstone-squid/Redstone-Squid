@@ -3,7 +3,9 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Response
+from litestar import Response, Router, delete, get, patch, post, put
+from litestar.di import NamedDependency, Provide
+from litestar.params import HeaderParameter, JSONBody, SkipValidation
 
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import (
@@ -28,7 +30,6 @@ from squid.api.pagination import (
     PageSizeParam,
     resolve_selector,
 )
-from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
@@ -56,31 +57,31 @@ from squid.permissions.domain.catalogue import (
     ACCOUNT_SELF_READ,
 )
 
-router = APIRouter(prefix="/users/me", tags=["users"])
-accounts_router = APIRouter(prefix="/accounts", tags=["users"])
-UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
-RefreshCaller = Annotated[Caller, Depends(requires(ACCOUNT_IDENTITY_REFRESH))]
-ManageCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_MANAGE))]
+UserCaller = NamedDependency[SkipValidation[Caller]]
+RefreshCaller = NamedDependency[SkipValidation[Caller]]
+ManageCaller = NamedDependency[SkipValidation[Caller]]
 _ALL_STATUSES = frozenset(Status)
 
 
-@router.get(
-    "",
-    response_model=UserMe,
+@get(
+    "/",
     responses=responses(401, 403, 404, 503),
     operation_id="account_get",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
 )
-async def get_me(accounts: Accounts, caller: UserCaller, response: Response) -> UserMe:
+async def get_me(accounts: Accounts, caller: UserCaller) -> Response[UserMe]:
     """Return the caller's account, linked identities, and profile.
 
     An account ID is required; the caller does not need a Discord identity.
     """
+    response_headers: dict[str, str] = {}
     if caller.account_id is None:
         raise AuthenticationError
     result = await _render_me(accounts, caller.account_id, consent_pending=caller.consent_pending)
-    response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), result.revision))
-    return result
+    response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), result.revision))
+    return Response(content=result, headers=response_headers, status_code=200)
 
 
 async def _render_me(accounts: AccountService, account_id: int, *, consent_pending: bool) -> UserMe:
@@ -89,18 +90,23 @@ async def _render_me(accounts: AccountService, account_id: int, *, consent_pendi
     return UserMe.from_domain(snapshot.account, snapshot.profile, consent_pending=consent_pending)
 
 
-@router.post(
+@post(
     "/consent",
-    response_model=UserMe,
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="account_consent_grant",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "caller": Provide(requires(ACCOUNT_SELF_READ)),
+    },
 )
 async def grant_consent(
     accounts: Accounts,
     caller: UserCaller,
-    body: ConsentGrantRequest | None = None,
+    data: JSONBody[ConsentGrantRequest | None] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> UserMe:
     """Accept the current privacy notice for future writes.
 
@@ -109,56 +115,67 @@ async def grant_consent(
     """
     if caller.account_id is None:
         raise AuthenticationError
-    if body is not None and body.version is not None and body.version != CURRENT_CONSENT_VERSION:
-        raise StaleConsentNoticeError(offered=body.version, current=CURRENT_CONSENT_VERSION)
+    if data is not None and data.version is not None and (data.version != CURRENT_CONSENT_VERSION):
+        raise StaleConsentNoticeError(offered=data.version, current=CURRENT_CONSENT_VERSION)
     await accounts.grant_current_consent(caller.account_id)
     return await _render_me(accounts, caller.account_id, consent_pending=False)
 
 
-@router.patch(
+@patch(
     "/profile",
-    response_model=ProfileDetail,
     responses=responses(400, 401, 403, 404, 412, 422, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_edit_request)],
     operation_id="account_profile_update",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def update_profile(
-    body: ProfileUpdateRequest,
+    data: JSONBody[ProfileUpdateRequest],
     accounts: Accounts,
     caller: ManageCaller,
     services: Services,
-    response: Response,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> ProfileDetail:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[ProfileDetail]:
     """Edit the caller's own public profile.
 
     Partial: an omitted field is left alone and an explicit `null` clears it, so a client that
     only knows about some fields cannot wipe the ones it has never heard of.
     """
+    response_headers: dict[str, str] = {}
     if caller.account_id is None:
         raise AuthenticationError
     await services.edits.execute(
         EditCommand(
             PROFILE_EDIT,
             (expected_revision(account_target(caller.account_id), if_match),),
-            ProfileValues.patch(body.to_domain()),
+            ProfileValues.patch(data.to_domain()),
             operation_id=operation_id,
         ),
         caller.to_actor(),
     )
     snapshot = await accounts.editor_snapshot(caller.account_id)
-    response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
-    return ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities)
+    response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
+    return Response(
+        content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
+        headers=response_headers,
+        status_code=200,
+    )
 
 
-@router.get(
+@get(
     "/identities",
-    response_model=list[IdentityDetail],
     responses=responses(401, 403, 404, 503),
     operation_id="account_identity_list",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
 )
 async def list_identities(accounts: Accounts, caller: UserCaller) -> list[IdentityDetail]:
     """List every identity linked to the caller's account, hidden ones included.
@@ -171,62 +188,71 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
     return [IdentityDetail.from_domain(identity) for identity in identities]
 
 
-@router.put(
-    "/identities/{identity_id}/visibility",
-    response_model=IdentityDetail,
+@put(
+    "/identities/{identity_id:int}/visibility",
     responses=responses(401, 403, 404, 412, 422, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="account_identity_visibility_set",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def set_identity_visibility(
     identity_id: int,
-    body: IdentityVisibilityRequest,
+    data: JSONBody[IdentityVisibilityRequest],
     accounts: Accounts,
     caller: ManageCaller,
     services: Services,
-    response: Response,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> IdentityDetail:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[IdentityDetail]:
     """Publish or withhold one linked identity on the public creator profile."""
+    response_headers: dict[str, str] = {}
     if caller.account_id is None:
         raise AuthenticationError
     await services.edits.execute(
         EditCommand(
             VISIBILITY_EDIT,
             (expected_revision(account_target(caller.account_id), if_match),),
-            EditValues.of({"identity_id": identity_id, "is_public": body.public}),
+            EditValues.of({"identity_id": identity_id, "is_public": data.public}),
             operation_id=operation_id,
         ),
         caller.to_actor(),
     )
     snapshot = await accounts.editor_snapshot(caller.account_id)
-    response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
+    response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
     identity = next((identity for identity in snapshot.account.identities if identity.id == identity_id), None)
     if identity is None:
         raise AccountIdentityNotFoundError(identity_id, account_id=caller.account_id)
-    return IdentityDetail.from_domain(identity)
+    return Response(content=IdentityDetail.from_domain(identity), headers=response_headers, status_code=200)
 
 
-@router.delete(
-    "/identities/{identity_id}",
+@delete(
+    "/identities/{identity_id:int}",
     status_code=204,
     responses=responses(401, 403, 404, 409, 412, 422, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="account_identity_unlink",
-    openapi_extra=contract(
-        security=[WEB_WRITE, DEVICE],
-        cli=cli_command("account.identity.unlink", interaction="direct"),
-    ),
+    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.identity.unlink", interaction="direct")),
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def unlink_identity(
     identity_id: int,
     caller: ManageCaller,
     services: Services,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> Response:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[None]:
     """Unlink one identity from the caller's account.
 
     Removing the last identity returns 409 so the account retains a sign-in method.
@@ -236,29 +262,26 @@ async def unlink_identity(
         raise AuthenticationError
     expected = expected_revision(account_target(caller.account_id), if_match)
     result = await services.edits.execute(
-        EditCommand(
-            UNLINK_EDIT,
-            (expected,),
-            EditValues.of({"identity_id": identity_id}),
-            operation_id=operation_id,
-        ),
+        EditCommand(UNLINK_EDIT, (expected,), EditValues.of({"identity_id": identity_id}), operation_id=operation_id),
         caller.to_actor(),
     )
-    return Response(status_code=204, headers={"ETag": revision_etag(result.outcome.revisions[0])})
+    return Response(content=None, status_code=204, headers={"ETag": revision_etag(result.outcome.revisions[0])})
 
 
-@router.post(
+@post(
     "/merge-code",
-    response_model=MergeCodeDetail,
     responses=responses(401, 403, 404, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_merge_code_create",
-    openapi_extra=contract(
-        security=[WEB_WRITE, DEVICE],
-        cli=cli_command("account.merge.code", interaction="direct"),
-    ),
+    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.merge.code", interaction="direct")),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
+    },
 )
-async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCodeDetail:
+async def create_merge_code(
+    accounts: Accounts, caller: ManageCaller, *, _reservation: NamedDependency[SkipValidation[None]]
+) -> MergeCodeDetail:
     """Create a code allowing another account to absorb this account.
 
     Create the code while signed in to the account being given up, then redeem it
@@ -271,57 +294,74 @@ async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCo
     return MergeCodeDetail(code=code, expires_at=ticket.expires_at)
 
 
-@router.post(
+@post(
     "/merge/preview",
-    response_model=MergePreviewDetail,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_merge_preview",
-    openapi_extra=contract(
-        security=[WEB_WRITE, DEVICE],
-        cli=cli_command("account.merge.preview", interaction="direct"),
-    ),
+    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.merge.preview", interaction="direct")),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
+    },
 )
-async def preview_merge(body: MergeRequest, accounts: Accounts, caller: ManageCaller) -> MergePreviewDetail:
+async def preview_merge(
+    data: JSONBody[MergeRequest],
+    accounts: Accounts,
+    caller: ManageCaller,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> MergePreviewDetail:
     """Describe what redeeming a merge code would move, without spending it.
 
     A merge cannot be undone, so this exists to be shown before the irreversible call.
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return MergePreviewDetail.from_domain(await accounts.preview_merge(caller.account_id, body.code))
+    return MergePreviewDetail.from_domain(await accounts.preview_merge(caller.account_id, data.code))
 
 
-@router.post(
+@post(
     "/merge",
-    response_model=AccountMergeDetail,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_merge_complete",
-    openapi_extra=contract(
-        security=[WEB_WRITE, DEVICE],
-        cli=cli_command("account.merge.complete", interaction="direct"),
-    ),
+    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.merge.complete", interaction="direct")),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
+    },
 )
-async def complete_merge(body: MergeRequest, accounts: Accounts, caller: ManageCaller) -> AccountMergeDetail:
+async def complete_merge(
+    data: JSONBody[MergeRequest],
+    accounts: Accounts,
+    caller: ManageCaller,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> AccountMergeDetail:
     """Absorb the account that minted this code into the caller's account.
 
     Irreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return AccountMergeDetail.from_domain(await accounts.complete_merge(caller.account_id, body.code))
+    return AccountMergeDetail.from_domain(await accounts.complete_merge(caller.account_id, data.code))
 
 
-@router.post(
+@post(
     "/minecraft/refresh",
-    response_model=MinecraftIdentityRefresh,
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_minecraft_refresh",
-    openapi_extra=contract(security=[ANONYMOUS], cli=cli_command("account.refresh", interaction="direct")),
+    opt=contract(security=[ANONYMOUS], cli=cli_command("account.refresh", interaction="direct")),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "caller": Provide(requires(ACCOUNT_IDENTITY_REFRESH)),
+    },
 )
-async def refresh_minecraft_identity(accounts: Accounts, caller: RefreshCaller) -> MinecraftIdentityRefresh:
+async def refresh_minecraft_identity(
+    accounts: Accounts, caller: RefreshCaller, *, _reservation: NamedDependency[SkipValidation[None]]
+) -> MinecraftIdentityRefresh:
     """Re-read the caller's linked Minecraft name and reconcile the creator credit.
 
     Rate limited and idempotency-gated because it reaches Mojang on every call.
@@ -331,56 +371,74 @@ async def refresh_minecraft_identity(accounts: Accounts, caller: RefreshCaller) 
     return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(caller.account_id))
 
 
-@accounts_router.post(
-    "/{account_id}/minecraft/refresh",
-    response_model=MinecraftIdentityRefresh,
+@post(
+    "/{account_id:int}/minecraft/refresh",
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[
-        Depends(requires(ACCOUNT_IDENTITY_REFRESH_ANY)),
-        Depends(enforce_route_rate_limits),
-        Depends(reserve_idempotent_request),
-    ],
     operation_id="account_minecraft_refresh_for",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "_permission": Provide(requires(ACCOUNT_IDENTITY_REFRESH_ANY)),
+        "_reservation": Provide(reserve_idempotent_request),
+    },
 )
-async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) -> MinecraftIdentityRefresh:
+async def refresh_minecraft_identity_for(
+    account_id: int,
+    accounts: Accounts,
+    *,
+    _permission: NamedDependency[SkipValidation[Caller]],
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> MinecraftIdentityRefresh:
     """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
     return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(account_id))
 
 
-@accounts_router.get(
-    "/{account_id}/profile",
-    response_model=ProfileDetail,
+@get(
+    "/{account_id:int}/profile",
     responses=responses(401, 403, 404, 503),
-    dependencies=[Depends(requires(ACCOUNT_PROFILE_MODERATE))],
     operation_id="account_profile_review",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={"_permission": Provide(requires(ACCOUNT_PROFILE_MODERATE))},
 )
-async def review_profile(account_id: int, accounts: Accounts, response: Response) -> ProfileDetail:
+async def review_profile(
+    account_id: int, accounts: Accounts, *, _permission: NamedDependency[SkipValidation[Caller]]
+) -> Response[ProfileDetail]:
     """Read a profile and its revision for staff moderation."""
+    response_headers: dict[str, str] = {}
     snapshot = await accounts.editor_snapshot(account_id)
-    response.headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
-    return ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities)
+    response_headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
+    return Response(
+        content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
+        headers=response_headers,
+        status_code=200,
+    )
 
 
-@accounts_router.delete(
-    "/{account_id}/profile",
-    response_model=ProfileDetail,
+@delete(
+    "/{account_id:int}/profile",
     responses=responses(401, 403, 404, 412, 422, 428, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="account_profile_clear",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "caller": Provide(requires(ACCOUNT_PROFILE_MODERATE)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def clear_profile(
     account_id: int,
     accounts: Accounts,
-    caller: Annotated[Caller, Depends(requires(ACCOUNT_PROFILE_MODERATE))],
+    caller: NamedDependency[SkipValidation[Caller]],
     services: Services,
-    response: Response,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header()] = None,
-) -> ProfileDetail:
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[ProfileDetail]:
     """Clear profile content at the revision staff reviewed, retaining moderation attribution."""
+    response_headers: dict[str, str] = {}
     if if_match is None:
         raise RevisionRequiredError
     await services.edits.execute(
@@ -393,16 +451,21 @@ async def clear_profile(
         caller.to_actor(),
     )
     snapshot = await accounts.editor_snapshot(account_id)
-    response.headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
-    return ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities)
+    response_headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
+    return Response(
+        content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
+        headers=response_headers,
+        status_code=200,
+    )
 
 
-@router.get(
+@get(
     "/builds",
-    response_model=Page[BuildSummary],
     responses=responses(400, 401, 403, 422, 503),
     operation_id="account_builds_list",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
 )
 async def list_my_builds(
     build_queries: BuildQueries,
@@ -423,9 +486,30 @@ async def list_my_builds(
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     statuses = _ALL_STATUSES if status is None else frozenset({status.to_domain()})
     page = await build_queries.list_page(
-        statuses=statuses,
-        submitter_account_id=caller.account_id,
-        selector=selector,
-        page_size=page_size,
+        statuses=statuses, submitter_account_id=caller.account_id, selector=selector, page_size=page_size
     )
     return Page[BuildSummary].from_domain(page, BuildSummary.from_domain)
+
+
+router = Router(
+    path="/users/me",
+    tags=["users"],
+    route_handlers=[
+        get_me,
+        grant_consent,
+        update_profile,
+        list_identities,
+        set_identity_visibility,
+        unlink_identity,
+        create_merge_code,
+        preview_merge,
+        complete_merge,
+        refresh_minecraft_identity,
+        list_my_builds,
+    ],
+)
+
+
+accounts_router = Router(
+    path="/accounts", tags=["users"], route_handlers=[refresh_minecraft_identity_for, review_profile, clear_profile]
+)

@@ -27,7 +27,7 @@ def test_protocol_interval_rejects_invalid_bounds() -> None:
 
 
 async def test_capabilities_keep_namespaces_independent() -> None:
-    response = await capabilities()
+    response = await capabilities.fn()
 
     assert response.api.semantic_version == API_VERSION
     assert response.features.identifiers == tuple(sorted(API_FEATURES))

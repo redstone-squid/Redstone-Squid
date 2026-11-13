@@ -8,7 +8,9 @@ from typing import Annotated
 from urllib.parse import parse_qs
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Request, Response
+from litestar import Litestar, Request, Response, get, post
+from litestar.exceptions import HTTPException
+from litestar.params import FromPath, HeaderParameter
 from pydantic import BaseModel
 
 from tests.fuzz.api.environment import CONTROL_NONCE_ENV, FAKE_BIND_HOST_ENV, FAKE_PORT_ENV
@@ -85,27 +87,25 @@ class FakeUpstreamState:
         self.requests.append(RequestObservation(request.method, request.url.path, scheme, digest))
 
 
-def create_fake_upstream_app(control_nonce: str) -> FastAPI:
+def create_fake_upstream_app(control_nonce: str) -> Litestar:
     """Create deterministic fake upstreams with a nonce-protected control plane."""
     state = FakeUpstreamState(control_nonce)
-    app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
-    app.state.fake_upstreams = state
 
-    @app.get("/__fuzz/ready")
+    @get("/__fuzz/ready")
     async def ready() -> dict[str, str]:
         return {"status": "ready"}
 
-    @app.post("/__fuzz/reset", status_code=204)
+    @post("/__fuzz/reset", status_code=204)
     async def reset(
-        nonce: Annotated[str | None, Header(alias=CONTROL_HEADER)] = None,
+        nonce: Annotated[str | None, HeaderParameter(name=CONTROL_HEADER)] = None,
     ) -> None:
         if not state.authorize_control(nonce):
             raise HTTPException(status_code=404)
         state.reset()
 
-    @app.get("/__fuzz/snapshot", response_model=SnapshotDocument)
+    @get("/__fuzz/snapshot")
     async def snapshot(
-        nonce: Annotated[str | None, Header(alias=CONTROL_HEADER)] = None,
+        nonce: Annotated[str | None, HeaderParameter(name=CONTROL_HEADER)] = None,
     ) -> SnapshotDocument:
         if not state.authorize_control(nonce):
             raise HTTPException(status_code=404)
@@ -113,24 +113,22 @@ def create_fake_upstream_app(control_nonce: str) -> FastAPI:
             requests=[ObservationDocument.model_validate(item, from_attributes=True) for item in state.requests]
         )
 
-    @app.get("/mojang/profile/{minecraft_uuid}")
-    async def mojang_profile(minecraft_uuid: str, request: Request, response: Response) -> dict[str, str] | None:
+    @get("/mojang/profile/{minecraft_uuid:str}")
+    async def mojang_profile(minecraft_uuid: FromPath[str], request: Request) -> Response[dict[str, str] | None]:
         state.observe(request)
         if minecraft_uuid != MINECRAFT_ALICE:
-            response.status_code = 204
-            return None
-        return {"id": minecraft_uuid.replace("-", ""), "name": "FuzzAlice"}
+            return Response(None, status_code=204)
+        return Response({"id": minecraft_uuid.replace("-", ""), "name": "FuzzAlice"})
 
-    @app.get("/discord/authorize")
+    @get("/discord/authorize")
     async def discord_authorize(request: Request) -> dict[str, str]:
         state.observe(request)
         return {"status": "synthetic"}
 
-    @app.post("/discord/api/oauth2/token")
+    @post("/discord/api/oauth2/token", status_code=200)
     async def discord_token(
         request: Request,
-        response: Response,
-    ) -> dict[str, str | int]:
+    ) -> Response[dict[str, str | int]]:
         state.observe(request)
         body = await request.body()
         try:
@@ -139,31 +137,41 @@ def create_fake_upstream_app(control_nonce: str) -> FastAPI:
         except UnicodeDecodeError:
             code = None
         if code != OAUTH_CODE_ALICE:
-            response.status_code = 400
-            return {"error": "invalid_grant"}
-        return {"access_token": OAUTH_TOKEN_ALICE, "token_type": "Bearer", "expires_in": 600}
+            return Response({"error": "invalid_grant"}, status_code=400)
+        return Response({"access_token": OAUTH_TOKEN_ALICE, "token_type": "Bearer", "expires_in": 600})
 
-    @app.get("/discord/api/users/@me")
-    async def discord_identity(request: Request, response: Response) -> dict[str, str]:
+    @get("/discord/api/users/@me")
+    async def discord_identity(request: Request) -> Response[dict[str, str]]:
         state.observe(request)
         if request.headers.get("authorization") != f"Bearer {OAUTH_TOKEN_ALICE}":
-            response.status_code = 401
-            return {"message": "Unauthorized"}
-        return {"id": str(DISCORD_ALICE), "username": "fuzz-alice"}
+            return Response({"message": "Unauthorized"}, status_code=401)
+        return Response({"id": str(DISCORD_ALICE), "username": "fuzz-alice"})
 
-    @app.get("/discord/api/guilds/{guild_id}/members/{discord_id}")
+    @get("/discord/api/guilds/{guild_id:int}/members/{discord_id:int}")
     async def discord_member(
-        guild_id: int,
-        discord_id: int,
+        guild_id: FromPath[int],
+        discord_id: FromPath[int],
         request: Request,
-        response: Response,
-    ) -> dict[str, list[str] | str]:
+    ) -> Response[dict[str, list[str] | str]]:
         state.observe(request)
         if guild_id != DISCORD_GUILD or discord_id != DISCORD_ALICE:
-            response.status_code = 404
-            return {"message": "Unknown Member"}
-        return {"roles": [str(DISCORD_TRUSTED_ROLE)]}
+            return Response({"message": "Unknown Member"}, status_code=404)
+        return Response({"roles": [str(DISCORD_TRUSTED_ROLE)]})
 
+    app = Litestar(
+        route_handlers=[
+            ready,
+            reset,
+            snapshot,
+            mojang_profile,
+            discord_authorize,
+            discord_token,
+            discord_identity,
+            discord_member,
+        ],
+        openapi_config=None,
+    )
+    app.state.fake_upstreams = state
     return app
 
 

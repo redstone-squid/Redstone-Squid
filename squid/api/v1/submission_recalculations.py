@@ -4,10 +4,11 @@ The routes live under `/submissions/revisions` and their operation IDs say `subm
 because clients already call them by those names. They serve the same recalculation proposals.
 """
 
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from litestar import Router, get, post
+from litestar.di import NamedDependency, Provide
+from litestar.params import JSONBody, SkipValidation
 from pydantic import BaseModel, Field
 
 from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
@@ -59,16 +60,24 @@ def recalculation_proposals(services: Services) -> RecalculationProposalService:
     return services.submission_recalculations
 
 
-Proposals = Annotated[RecalculationProposalService, Depends(recalculation_proposals)]
-router = APIRouter(
-    prefix="/submissions/revisions", tags=["submissions"], dependencies=[Depends(reserve_idempotent_request)]
-)
+Proposals = NamedDependency[SkipValidation[RecalculationProposalService]]
 _READ = contract(security=[WEB, DEVICE], cli=transport_only())
 _WRITE = contract(security=[WEB_WRITE, DEVICE], cli=transport_only())
 
 
-@router.get("/source/{message_id}", operation_id="submission_revision_history", openapi_extra=_READ)
-async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) -> list[RecalculationProposalResponse]:
+@get(
+    "/source/{message_id:int}",
+    operation_id="submission_revision_history",
+    opt=_READ,
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "proposals": Provide(recalculation_proposals, sync_to_thread=False),
+    },
+)
+async def history(
+    message_id: int, caller: CurrentCaller, proposals: Proposals, *, _reservation: NamedDependency[SkipValidation[None]]
+) -> list[RecalculationProposalResponse]:
     """List recalculation proposals for a source message after checking the caller's access."""
     caller.require_consented_account()
     return [
@@ -77,16 +86,45 @@ async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) 
     ]
 
 
-@router.get("/{proposal_id}", operation_id="submission_revision_get", openapi_extra=_READ)
-async def get_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RecalculationProposalResponse:
+@get(
+    "/{proposal_id:uuid}",
+    operation_id="submission_revision_get",
+    opt=_READ,
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "proposals": Provide(recalculation_proposals, sync_to_thread=False),
+    },
+)
+async def get_proposal(
+    proposal_id: UUID,
+    caller: CurrentCaller,
+    proposals: Proposals,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> RecalculationProposalResponse:
     """Return a recalculation proposal after checking the caller's access."""
     caller.require_consented_account()
     return RecalculationProposalResponse.from_domain(await proposals.get(proposal_id, caller.to_actor()))
 
 
-@router.post("/{proposal_id}/match", operation_id="submission_revision_match", openapi_extra=_WRITE)
+@post(
+    "/{proposal_id:uuid}/match",
+    operation_id="submission_revision_match",
+    opt=_WRITE,
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "proposals": Provide(recalculation_proposals, sync_to_thread=False),
+    },
+)
 async def match_proposal(
-    proposal_id: UUID, payload: RecalculationMatchRequest, caller: CurrentCaller, proposals: Proposals
+    proposal_id: UUID,
+    data: JSONBody[RecalculationMatchRequest],
+    caller: CurrentCaller,
+    proposals: Proposals,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> RecalculationProposalResponse:
     """Match a proposal to a source-linked build and capture the diff for review.
 
@@ -94,13 +132,26 @@ async def match_proposal(
     """
     caller.require_consented_account()
     return RecalculationProposalResponse.from_domain(
-        await proposals.match(proposal_id, payload.build_id, caller.to_actor(), renew=payload.renew)
+        await proposals.match(proposal_id, data.build_id, caller.to_actor(), renew=data.renew)
     )
 
 
-@router.post("/{proposal_id}/approve", operation_id="submission_revision_approve", openapi_extra=_WRITE)
+@post(
+    "/{proposal_id:uuid}/approve",
+    operation_id="submission_revision_approve",
+    opt=_WRITE,
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "proposals": Provide(recalculation_proposals, sync_to_thread=False),
+    },
+)
 async def approve_proposal(
-    proposal_id: UUID, caller: CurrentCaller, proposals: Proposals
+    proposal_id: UUID,
+    caller: CurrentCaller,
+    proposals: Proposals,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> RecalculationProposalResponse:
     """Apply the reviewed diff if the build still matches its expected revision.
 
@@ -108,3 +159,10 @@ async def approve_proposal(
     """
     caller.require_consented_account()
     return RecalculationProposalResponse.from_domain(await proposals.approve(proposal_id, caller.to_actor()))
+
+
+router = Router(
+    path="/submissions/revisions",
+    tags=["submissions"],
+    route_handlers=[history, get_proposal, match_proposal, approve_proposal],
+)

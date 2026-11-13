@@ -1,12 +1,14 @@
 """Call schematic route handlers directly to check attachment scoping and public response metadata."""
 
 from dataclasses import replace
-from typing import override
+from typing import cast, override
 
 import pytest
-from fastapi import FastAPI, Request
+from litestar import Litestar, Request, Router
+from litestar.types import HTTPScope
 from whenever import Instant
 
+from squid.api.dependencies import service_dependencies
 from squid.api.v1.schematics import (
     get_schematic_content,
     list_build_schematics,
@@ -33,15 +35,17 @@ from tests.unit.schematics.fakes import make_analysis
 
 
 def api_request(*, root_path: str = "", forwarded_host: str = "attacker.example") -> Request:
-    app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app = Litestar([Router(path="/v1", route_handlers=[router])], dependencies=service_dependencies())
     return Request(
-        {
-            "type": "http",
-            "app": app,
-            "root_path": root_path,
-            "headers": [(b"x-forwarded-host", forwarded_host.encode())],
-        }
+        cast(
+            HTTPScope,
+            {
+                "type": "http",
+                "litestar_app": app,
+                "root_path": root_path,
+                "headers": [(b"x-forwarded-host", forwarded_host.encode())],
+            },
+        )
     )
 
 
@@ -163,24 +167,24 @@ async def test_a_render_with_no_parameters_asks_for_the_deployment_recipe() -> N
     """Omitting every control has to hit the recipe the queue caches, not a route default."""
     schematics = RenderingSchematics()
 
-    response = await render_build_schematic(
+    response = await render_build_schematic.fn(
         7,
         ConfirmedBuilds(),
         schematics,
     )
 
     assert schematics.rendered == [schematics.configured]
-    assert response.body == b"\x89PNG\r\n\x1a\nrendered"
-    assert response.headers["content-type"] == "image/png"
-    assert response.headers["etag"] == f'"{"b" * 64}"'
-    assert response.headers["cache-control"] == "public, max-age=300"
-    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.content == b"\x89PNG\r\n\x1a\nrendered"
+    assert response.media_type == "image/png"
+    assert response.headers["ETag"] == f'"{"b" * 64}"'
+    assert response.headers["Cache-Control"] == "public, max-age=300"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
 
 
 async def test_a_render_applies_only_the_controls_the_caller_named() -> None:
     schematics = RenderingSchematics()
 
-    await render_build_schematic(
+    await render_build_schematic.fn(
         7,
         ConfirmedBuilds(),
         schematics,
@@ -195,7 +199,7 @@ async def test_a_render_refusal_names_the_reason_in_public_context() -> None:
     schematics = RenderingSchematics(refusal=RenderSkipReason.OVER_BLOCK_BUDGET)
 
     with pytest.raises(SchematicRenderRefusedError) as refusal:
-        await render_build_schematic(
+        await render_build_schematic.fn(
             7,
             ConfirmedBuilds(),
             schematics,
@@ -205,7 +209,7 @@ async def test_a_render_refusal_names_the_reason_in_public_context() -> None:
 
 
 async def test_public_metadata_omits_digest_and_original_filename() -> None:
-    page = await list_build_schematics(
+    page = await list_build_schematics.fn(
         7,
         api_request(),
         ConfirmedBuilds(),
@@ -223,7 +227,7 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
 
 
 async def test_public_download_links_follow_the_mounted_root_without_using_forwarded_host() -> None:
-    page = await list_build_schematics(
+    page = await list_build_schematics.fn(
         7,
         api_request(root_path="/catalogue", forwarded_host="untrusted.example"),
         ConfirmedBuilds(),
@@ -239,7 +243,7 @@ async def test_public_download_links_follow_the_mounted_root_without_using_forwa
 async def test_public_listing_pages_multiple_attachments_with_offset_anchors() -> None:
     schematics = PublicSchematics(count=3)
 
-    first = await list_build_schematics(
+    first = await list_build_schematics.fn(
         7,
         api_request(),
         ConfirmedBuilds(),
@@ -256,7 +260,7 @@ async def test_public_listing_pages_multiple_attachments_with_offset_anchors() -
     assert first.next.before_id is None
     assert first.prev is None
 
-    last = await list_build_schematics(
+    last = await list_build_schematics.fn(
         7,
         api_request(),
         ConfirmedBuilds(),
@@ -282,21 +286,21 @@ async def test_download_preserves_source_format_and_short_revalidation_cache(sou
         schematics.stored,
         analysis=replace(analysis, metrics=replace(analysis.metrics, source_format=source_format)),
     )
-    response = await get_schematic_content(
+    response = await get_schematic_content.fn(
         7,
         3,
         ConfirmedBuilds(),
         schematics,
     )
 
-    assert response.body == b"original-schematic"
-    assert response.headers["content-disposition"].endswith(f'.{source_format.value}"')
-    assert response.headers["content-type"] == "application/octet-stream"
+    assert response.content == b"original-schematic"
+    assert response.headers["Content-Disposition"].endswith(f'.{source_format.value}"')
+    assert response.media_type == "application/octet-stream"
     assert "x-schematic-license" not in response.headers
-    assert response.headers["cache-control"] == "public, max-age=300, must-revalidate"
+    assert response.headers["Cache-Control"] == "public, max-age=300, must-revalidate"
     # The standard Link header carries the license instead of a bespoke X- header.
-    assert 'rel="license"' in response.headers["link"]
-    assert "creativecommons.org/licenses/by/4.0/" in response.headers["link"]
+    assert 'rel="license"' in response.headers["Link"]
+    assert "creativecommons.org/licenses/by/4.0/" in response.headers["Link"]
     paths = {getattr(route, "path", None) for route in router.routes}
     assert "/schematics/{sha256}/content" not in paths
 
@@ -317,7 +321,7 @@ async def test_each_stored_format_downloads_under_its_own_extension(source_forma
         analysis=replace(analysis, metrics=replace(analysis.metrics, source_format=source_format)),
     )
 
-    response = await get_schematic_content(
+    response = await get_schematic_content.fn(
         7,
         3,
         ConfirmedBuilds(),
@@ -325,4 +329,4 @@ async def test_each_stored_format_downloads_under_its_own_extension(source_forma
     )
 
     expected = f'attachment; filename="build-7-schematic-3.{source_format.value}"'
-    assert response.headers["content-disposition"] == expected
+    assert response.headers["Content-Disposition"] == expected

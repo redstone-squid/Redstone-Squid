@@ -16,7 +16,6 @@ dependencies = [
     "discord-py[speed]>=2.7,<3",
     "gspread>=6.1.4",
     "jishaku>=2.6.0",
-    "fastapi>=0.115.6",
     "httpx>=0.28,<1",
     "uvicorn>=0.34.0",
     "pydantic-settings>=2.14,<3",
@@ -42,6 +41,9 @@ dependencies = [
     "whenever>=0.10.3",
     "python-json-logger>=3.2",
     "redis>=8,<9",
+    "litestar>=2.24,<3",
+    # Litestar 2.25 Headers subclasses CIMultiDictProxy, whose constructor changed in multidict 7.
+    "multidict<7",
 ]
 
 [project.optional-dependencies]
@@ -55,7 +57,7 @@ schematics = ["nucleation==0.12.0"]
 observability = [
     "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
     "opentelemetry-instrumentation-aiohttp-client>=0.65b0,<1",
-    "opentelemetry-instrumentation-fastapi>=0.65b0,<1",
+    "opentelemetry-instrumentation-asgi>=0.65b0,<1",
     "opentelemetry-instrumentation-httpx>=0.65b0,<1",
     "opentelemetry-instrumentation-sqlalchemy>=0.65b0,<1",
     "opentelemetry-sdk>=1.44,<2",

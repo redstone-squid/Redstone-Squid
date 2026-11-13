@@ -3,8 +3,8 @@
 import re
 from uuid import uuid4
 
-from starlette.datastructures import Headers, MutableHeaders
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from litestar.datastructures import Headers, MutableScopeHeaders
+from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.observability import active_trace_id, bind_correlation_id, unbind_correlation_id
 
@@ -58,23 +58,17 @@ class RequestContextMiddleware:
             await self._app(scope, receive, send)
             return
 
-        request_id = resolve_request_id(Headers(scope=scope))
+        request_id = resolve_request_id(Headers.from_scope(scope))
         token = bind_correlation_id(request_id)
 
         async def send_with_request_id(message: Message) -> None:
             if message["type"] == "http.response.start":
-                headers = MutableHeaders(raw=message["headers"])
+                headers = MutableScopeHeaders.from_message(message)
                 del headers[REQUEST_ID_HEADER]
-                headers.append(REQUEST_ID_HEADER, request_id)
+                headers.add(REQUEST_ID_HEADER, request_id)
             await send(message)
 
-        completed = False
         try:
             await self._app(scope, receive, send_with_request_id)
-            completed = True
         finally:
-            # Only reset on the normal path. When the app raises, Starlette's ServerErrorMiddleware
-            # renders the 500 response *outside* this middleware and reads the same bound id; the
-            # per-request task context is discarded afterwards, so the un-reset var cannot leak.
-            if completed:
-                unbind_correlation_id(token)
+            unbind_correlation_id(token)

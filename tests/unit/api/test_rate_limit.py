@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Any, cast, override
 
 import pytest
-from fastapi.testclient import TestClient
+from litestar.testing import TestClient
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError

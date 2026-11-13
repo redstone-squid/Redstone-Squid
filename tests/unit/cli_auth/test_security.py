@@ -5,9 +5,8 @@ from typing import cast, override
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from starlette.requests import Request
-from starlette.types import Scope
+from litestar import Litestar, Request
+from litestar.types import Scope
 
 from squid.api.security import current_caller
 from squid.cli_auth.application import CliAuthorizationService
@@ -53,7 +52,7 @@ def request_with_service(cli: FakeCliAuthorization) -> Request:
     class Runtime:
         services: Services
 
-    app = FastAPI()
+    app = Litestar(route_handlers=[])
     app.state.config = TEST_CONFIG
     app.state.runtime = Runtime(Services(cli))
     return Request(
@@ -63,8 +62,8 @@ def request_with_service(cli: FakeCliAuthorization) -> Request:
                 "type": "http",
                 "method": "GET",
                 "path": "/v1/submissions/drafts",
-                "headers": [],
-                "app": app,
+                "headers": [(b"authorization", f"Bearer {TOKEN}".encode())],
+                "litestar_app": app,
             },
         )
     )
@@ -73,7 +72,7 @@ def request_with_service(cli: FakeCliAuthorization) -> Request:
 async def test_cli_token_derives_account_device_and_session_caller() -> None:
     cli = FakeCliAuthorization()
 
-    caller = await current_caller(request_with_service(cli), f"Bearer {TOKEN}")
+    caller = await current_caller(request_with_service(cli))
 
     assert caller.kind == "cli"
     assert caller.account_id == 42
@@ -85,4 +84,4 @@ async def test_cli_token_derives_account_device_and_session_caller() -> None:
 
 async def test_invalid_cli_token_does_not_fall_through_to_api_key_authentication() -> None:
     with pytest.raises(AuthenticationError):
-        await current_caller(request_with_service(FakeCliAuthorization(valid=False)), f"Bearer {TOKEN}")
+        await current_caller(request_with_service(FakeCliAuthorization(valid=False)))

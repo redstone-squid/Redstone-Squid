@@ -6,11 +6,12 @@ link to. These declarations describe the API; route dependencies enforce access.
 Application construction checks the declarations before publishing OpenAPI.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Final, Literal
 
-from fastapi import FastAPI
-from fastapi.routing import APIRoute
+from litestar import Litestar
+from litestar.handlers import HTTPRouteHandler
+from litestar.routes import HTTPRoute
 
 from squid.api.capabilities import API_FEATURES
 
@@ -93,26 +94,26 @@ def contract(
     return extra
 
 
-def validate_contract(app: FastAPI) -> None:
+def validate_contract(app: Litestar) -> None:
     """Raise when route-declared contract metadata is missing or internally inconsistent.
 
     Runs on every app construction, so an unclassified route breaks the app rather than
     silently missing from the published contract.
     """
-    routes = [route for route in app.routes if isinstance(route, APIRoute) and route.include_in_schema]
+    routes = list(iter_contract_routes(app))
 
     operation_ids: list[str] = []
     commands: list[str] = []
     aliases: dict[str, str] = {}
-    for route in routes:
-        methods = route.methods or frozenset()
-        operation_id = route.operation_id
-        if not operation_id:
+    for route, handler in routes:
+        methods = set(handler.http_methods)
+        operation_id = handler.operation_id
+        if not isinstance(operation_id, str) or not operation_id:
             msg = f"Route {route.path!r} {sorted(methods)} has no explicit operation_id."
             raise ValueError(msg)
         operation_ids.append(operation_id)
 
-        extra = route.openapi_extra or {}
+        extra = handler.opt
         if SECURITY_PLACEHOLDER_KEY not in extra or "x-squid-cli" not in extra:
             msg = f"Operation {operation_id!r} has no declared contract() metadata."
             raise ValueError(msg)
@@ -152,11 +153,24 @@ def validate_contract(app: FastAPI) -> None:
             msg = f"Chained compatibility alias at {alias!r}."
             raise ValueError(msg)
 
-    for route in routes:
-        extra = route.openapi_extra or {}
+    for _route, handler in routes:
+        extra = handler.opt
         for response in extra.get("responses", {}).values():
             for link in response.get("links", {}).values():
                 target = link.get("operationId")
                 if target not in identifiers:
                     msg = f"Unknown OpenAPI response link target: {target!r}."
                     raise ValueError(msg)
+
+
+def iter_contract_routes(app: Litestar) -> Iterator[tuple[HTTPRoute, HTTPRouteHandler]]:
+    """Visit declared HTTP handlers once per route, excluding generated framework endpoints."""
+    for route in app.routes:
+        if not isinstance(route, HTTPRoute):
+            continue
+        seen: set[int] = set()
+        for handler, _ in route.route_handler_map.values():
+            if id(handler) in seen or not handler.resolve_include_in_schema():
+                continue
+            seen.add(id(handler))
+            yield route, handler

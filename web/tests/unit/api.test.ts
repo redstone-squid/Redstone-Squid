@@ -4,7 +4,8 @@ import type {
   BuildDetail,
   BuildSummary,
   PageBuildSummary,
-  PageRecordSummary,
+  PagePublishedTitle,
+  PublishedTitle,
   PageSchematicSummary,
   RecordDetail,
 } from "../../src/generated/types.gen";
@@ -61,7 +62,7 @@ const build: BuildDetail = {
   description: "A test build.",
   links: { images: [], videos: [], world_downloads: [], schematics: [], renders: [] },
 };
-const record: RecordDetail = {
+const record = {
   id: 3,
   definition_id: 2,
   title_id: "11111111-1111-1111-1111-111111111111",
@@ -70,11 +71,11 @@ const record: RecordDetail = {
   base_title: "fastest",
   build_kind: "door",
   version_scope: "all_time",
-  status: "active",
+  status: "resolved",
   holder_build_ids: [1],
   computed_at: "2026-08-10T00:00:00Z",
   holder_builds: [summary],
-};
+} satisfies RecordDetail & PublishedTitle;
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -168,7 +169,7 @@ describe("typed catalogue reads", () => {
   });
 
   it("loads build, record, record page, and schematic detail shapes", async () => {
-    const recordPage: PageRecordSummary = { items: [record], total: 1, next: null, prev: null };
+    const recordPage: PagePublishedTitle = { items: [record], total: 1, next: null, prev: null };
     const schematicPage: PageSchematicSummary = {
       items: [],
       total: 0,

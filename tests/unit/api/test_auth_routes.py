@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
+from litestar.testing import TestClient
 from pydantic import AnyHttpUrl, SecretStr
 
 from squid.accounts.domain import IdentityProvider
@@ -69,7 +69,7 @@ def login() -> Iterator[BrowserLogin]:
     credentials = OAuthClientCredentials(
         client_id="client",
         client_secret=SecretStr("secret"),
-        redirect_uri=AnyHttpUrl("https://test/v1/auth/discord/callback"),
+        redirect_uri=AnyHttpUrl("https://test.local/v1/auth/discord/callback"),
     )
     provider = DiscordOAuthProvider(credentials, upstream)
     sessions = SessionRepository()
@@ -83,12 +83,12 @@ def login() -> Iterator[BrowserLogin]:
     )
     app, database = build_app(web_auth=auth, idempotency=idempotency, config=config)
     # HTTPS keeps secure session cookies usable; redirects stay visible for OAuth assertions.
-    with TestClient(app, base_url="https://test", follow_redirects=False) as client:
+    with TestClient(app, base_url="https://test.local") as client:
+        client.follow_redirects = False
         try:
             yield BrowserLogin(client, sessions, accounts, auth, idempotency)
         finally:
-            assert client.portal is not None
-            client.portal.call(upstream.aclose)
+            client.blocking_portal.call(upstream.aclose)
     assert database.closed
 
 

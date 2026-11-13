@@ -49,7 +49,7 @@ async def test_a_visible_profile_serves_everything_it_publishes() -> None:
         identities=(IdentityDetails(IdentityProvider.JAVA, "x", "Notch"),),
     )
 
-    response = await get_creator_profile(CREATOR_ID, _accounts(profile))
+    response = await get_creator_profile.fn(CREATOR_ID, _accounts(profile))
 
     assert response.id == CREATOR_ID
     assert response.hidden is False
@@ -68,7 +68,7 @@ async def test_a_hidden_profile_still_serves_its_credits() -> None:
         aliases=(CreditedAlias("Notch", build_count=3),),
     )
 
-    response = await get_creator_profile(CREATOR_ID, _accounts(profile))
+    response = await get_creator_profile.fn(CREATOR_ID, _accounts(profile))
 
     assert response.hidden is True
     assert response.aliases[0].name == "Notch"
@@ -83,7 +83,7 @@ async def test_a_hidden_profile_still_serves_its_credits() -> None:
 async def test_a_merged_creator_reports_its_canonical_id() -> None:
     profile = PublicCreatorProfile(public_id=CREATOR_ID, hidden=False, canonical_public_id=CANONICAL_ID)
 
-    response = await get_creator_profile(CREATOR_ID, _accounts(profile))
+    response = await get_creator_profile.fn(CREATOR_ID, _accounts(profile))
 
     assert response.id == CREATOR_ID
     assert response.canonical_id == CANONICAL_ID
@@ -91,4 +91,4 @@ async def test_a_merged_creator_reports_its_canonical_id() -> None:
 
 async def test_an_unknown_creator_is_a_404() -> None:
     with pytest.raises(CreatorNotFoundError):
-        await get_creator_profile(CREATOR_ID, _accounts(None))
+        await get_creator_profile.fn(CREATOR_ID, _accounts(None))

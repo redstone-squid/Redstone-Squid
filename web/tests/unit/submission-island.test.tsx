@@ -229,7 +229,7 @@ function fakeApi(overrides: Partial<SubmissionApi> = {}): SubmissionApi {
       const answers = { ...serverDraft.answers };
       for (const operation of change.operations) {
         if (operation.kind === "unset") Reflect.deleteProperty(answers, operation.field_id);
-        else answers[operation.field_id] = operation.value;
+        else answers[operation.field_id] = operation.value ?? null;
       }
       serverDraft = { ...serverDraft, answers, revision: serverDraft.revision + 1 };
       return Promise.resolve({ draft: serverDraft, replayed: false });

@@ -4,12 +4,14 @@ import re
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from litestar import Response, Router, get, patch
+from litestar.di import NamedDependency, Provide
+from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, QueryParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import BuildQueries, CurrentCaller, Permissions, Search, Services
 from squid.api.errors import responses
-from squid.api.idempotency import edit_operation_id, reserve_edit_request
+from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -42,28 +44,30 @@ from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
-router = APIRouter(prefix="/builds", tags=["builds"])
-UserWriter = Annotated[Caller, Depends(requires(BUILD_SUBMISSION_CREATE))]
+UserWriter = CurrentCaller
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
 
 
-@router.patch(
-    "/{build_id}",
-    response_model=BuildDetail,
+@patch(
+    "/{build_id:int}",
     responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
-    dependencies=[Depends(reserve_edit_request)],
+    before_request=reserve_edit_before_request,
+    dependencies={
+        "caller": Provide(requires(BUILD_SUBMISSION_CREATE)),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
     operation_id="builds_update",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
 )
 async def edit_build(
-    build_id: int,
-    changes: BuildPatch,
-    response: Response,
+    build_id: FromPath[int],
+    data: JSONBody[BuildPatch],
     services: Services,
     caller: UserWriter,
-    operation_id: Annotated[UUID, Depends(edit_operation_id)],
-    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
-) -> BuildDetail:
+    operation_id: NamedDependency[UUID],
+    if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
+) -> Response[BuildDetail]:
     """Edit an owned pending build, or any build with `build.submission.edit`."""
     caller.require_consented_account()
     await services.edits.execute(
@@ -74,7 +78,7 @@ async def edit_build(
                 if if_match is None
                 else Revision(build_target(build_id), _expected_revision(build_id, if_match)),
             ),
-            patch_values(BuildEditPatch.from_attributes(changes.edit_attributes())),
+            patch_values(BuildEditPatch.from_attributes(data.edit_attributes())),
             operation_id,
         ),
         caller.to_actor(),
@@ -82,13 +86,11 @@ async def edit_build(
     build = await services.builds.get(build_id)
     if build is None:
         raise BuildNotFoundError(build_id)
-    response.headers["ETag"] = build_etag(build)
-    return BuildDetail.from_domain(build)
+    return Response(BuildDetail.from_domain(build), headers={"ETag": build_etag(build)})
 
 
-@router.get(
-    "/{build_id}",
-    response_model=BuildDetail,
+@get(
+    "/{build_id:int}",
     responses=responses(
         404,
         422,
@@ -96,34 +98,32 @@ async def edit_build(
         describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="builds_get",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
-async def get_build(build_id: int, response: Response, build_queries: BuildQueries) -> BuildDetail:
+async def get_build(build_id: FromPath[int], build_queries: BuildQueries) -> Response[BuildDetail]:
     """Return one confirmed public build.
 
     Pending and denied builds return 404, as do missing builds. This endpoint does
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id)
-    response.headers["ETag"] = build_etag(build)
-    return BuildDetail.from_domain(build)
+    return Response(BuildDetail.from_domain(build), headers={"ETag": build_etag(build)})
 
 
-@router.get(
-    "",
-    response_model=Page[BuildSummary],
+@get(
+    "/",
     responses=responses(400, 401, 403, 422, 503),
     operation_id="builds_list",
-    openapi_extra=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
 )
 async def list_builds(
     build_queries: BuildQueries,
     search_service: Search,
     permissions: Permissions,
     caller: CurrentCaller,
-    q: Annotated[str | None, Query(max_length=1_000)] = None,
-    status: BuildStatusFilter | None = None,
-    sort: Annotated[str | None, Query(max_length=80)] = None,
+    q: Annotated[str | None, QueryParameter(max_length=1_000)] = None,
+    status: FromQuery[BuildStatusFilter | None] = None,
+    sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
@@ -206,3 +206,6 @@ def _expected_revision(build_id: int, if_match: str | None) -> int:
     if match is None or int(match.group("build_id")) != build_id:
         raise BuildRevisionMismatchError(build_id, expected_revision=None)
     return int(match.group("revision"))
+
+
+router = Router(path="/builds", tags=["builds"], route_handlers=[edit_build, get_build, list_builds])

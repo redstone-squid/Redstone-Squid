@@ -5,10 +5,8 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from litestar.testing import TestClient
 
-from squid.api.errors import register_exception_handlers
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.revisions import revision_etag
 from squid.api.v1.submission_intake import intake_service
@@ -19,6 +17,7 @@ from squid.api.v1.submissions import authenticated_account, get_submission_edits
 from squid.edits.domain import LatestRevision, Revision
 from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
 from squid.submissions.application.edits import draft_target
+from tests.support.litestar import DependencyOverrides, route_app
 
 
 @pytest.mark.parametrize("conditional", [False, True])
@@ -26,24 +25,22 @@ from squid.submissions.application.edits import draft_target
 def test_attachment_routes_accept_optional_revision_and_return_the_committed_etag(
     route: str, conditional: bool
 ) -> None:
-    app = FastAPI()
-    register_exception_handlers(app)
-    app.include_router(schematics_router)
-    app.include_router(intake_router)
-    draft_id, source_id, operation_id = uuid4(), uuid4(), uuid4()
+    overrides: DependencyOverrides = {}
+    draft_id, source_id, operation_id = (uuid4(), uuid4(), uuid4())
     target = draft_target(draft_id)
     runner = SimpleNamespace(
         execute=AsyncMock(return_value=SimpleNamespace(outcome=SimpleNamespace(revisions=(Revision(target, 5),))))
     )
     queries = SimpleNamespace(list=AsyncMock(return_value=[]))
-    app.dependency_overrides[authenticated_account] = lambda: 7
-    app.dependency_overrides[get_submission_edits] = lambda: runner
-    app.dependency_overrides[schematic_service] = lambda: queries
-    app.dependency_overrides[intake_service] = lambda: queries
-    app.dependency_overrides[reserve_edit_request] = lambda: None
-    app.dependency_overrides[edit_operation_id] = lambda: operation_id
+    overrides[authenticated_account] = lambda: 7
+    overrides[get_submission_edits] = lambda: runner
+    overrides[schematic_service] = lambda: queries
+    overrides[intake_service] = lambda: queries
+    overrides[reserve_edit_request] = lambda: None
+    overrides[edit_operation_id] = lambda: operation_id
     primary = route.endswith("/primary")
     path = f"/submissions/drafts/{draft_id}/{route.split('/')[0]}/{source_id}" + ("/primary" if primary else "")
+    app = route_app([schematics_router, intake_router], overrides=overrides, handle_errors=True)
     with TestClient(app) as client:
         method = client.post if primary else client.delete
         assert (

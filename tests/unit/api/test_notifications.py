@@ -5,7 +5,6 @@ from typing import cast, override
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import Response
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
@@ -105,17 +104,17 @@ class PermissionAnswer(PermissionService):
 async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:
     """An empty preference request must send disabled values for both channels."""
     notifications = NotificationRecorder()
-
-    response = await update_preferences(
-        NotificationPreferenceUpdate(),
-        notifications,
-        ACCOUNT,
-        cast(ApiServices, SimpleNamespace(edits=NotificationEditRecorder(notifications))),
-        Response(),
-        uuid4(),
-        '"notification-settings-7-r0"',
-    )
-
+    response = (
+        await update_preferences.fn(
+            NotificationPreferenceUpdate(),
+            notifications,
+            ACCOUNT,
+            cast(ApiServices, SimpleNamespace(edits=NotificationEditRecorder(notifications))),
+            uuid4(),
+            '"notification-settings-7-r0"',
+            _reservation=None,
+        )
+    ).content
     assert response.consent_pending is False
     assert response.web_enabled is False
     assert response.dm_enabled is False
@@ -137,24 +136,21 @@ async def test_record_filter_subscription_preserves_presence_and_exact_predicate
         {
             "kind": "record_filter",
             "filter": {
-                "tags": [
-                    {"tag_id": 4, "operator": "present"},
-                    {"tag_id": 7, "operator": "exact", "value": "slim"},
-                ]
+                "tags": [{"tag_id": 4, "operator": "present"}, {"tag_id": 7, "operator": "exact", "value": "slim"}]
             },
         }
     )
-
-    response = await create_subscription(
-        request,
-        notifications,
-        ACCOUNT,
-        cast(ApiServices, SimpleNamespace(edits=NotificationEditRecorder(notifications))),
-        Response(),
-        uuid4(),
-        '"notification-settings-7-r0"',
-    )
-
+    response = (
+        await create_subscription.fn(
+            request,
+            notifications,
+            ACCOUNT,
+            cast(ApiServices, SimpleNamespace(edits=NotificationEditRecorder(notifications))),
+            uuid4(),
+            '"notification-settings-7-r0"',
+            _reservation=None,
+        )
+    ).content
     assert response.filter == record_filter.as_dict()
     assert notifications.subscription_calls == [(7, SubscriptionKind.RECORD_FILTER, None, record_filter)]
 
@@ -173,17 +169,12 @@ async def test_staff_inbox_access_follows_the_pending_submission_node(holds_node
     """
     notifications = NotificationRecorder()
     item = InboxNotification(
-        id=3,
-        kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-        payload={"build_id": 42},
-        created_at=Instant.now(),
+        id=3, kind=NotificationKind.STAFF_BUILD_SUBMITTED, payload={"build_id": 42}, created_at=Instant.now()
     )
     notifications.inbox_result = Page(items=(item,), total=1, next=None, prev=None)
     permissions = PermissionAnswer(holds_node)
-
     visibility = await resolve_inbox_visibility(permissions, ACCOUNT)
-    page = await list_inbox(notifications, ACCOUNT, visibility)
-
+    page = await list_inbox.fn(notifications, ACCOUNT, visibility)
     assert page.items[0].kind == "staff_build_submitted"
     assert notifications.inbox_reads == [(7, PageSelector(), 20, InboxVisibility(include_staff=holds_node))]
 
@@ -191,21 +182,16 @@ async def test_staff_inbox_access_follows_the_pending_submission_node(holds_node
 async def test_read_and_unread_routes_share_the_resolved_visibility() -> None:
     notifications = NotificationRecorder()
     visibility = InboxVisibility(include_staff=True)
-
     recorder = NotificationEditRecorder(notifications, visibility)
     services = cast(ApiServices, SimpleNamespace(edits=recorder))
-    assert (await mark_read(3, services, ACCOUNT, uuid4(), '"inbox-3-r1"')).status_code == 204
-    assert (await mark_unread(3, services, ACCOUNT, uuid4(), '"inbox-3-r2"')).status_code == 204
+    assert (await mark_read.fn(3, services, ACCOUNT, uuid4(), '"inbox-3-r1"', _reservation=None)).status_code == 204
+    assert (await mark_unread.fn(3, services, ACCOUNT, uuid4(), '"inbox-3-r2"', _reservation=None)).status_code == 204
     assert [command.expected[0].value for command in recorder.commands] == [1, 2]
-
-    assert notifications.read_changes == [
-        (7, 3, True, visibility),
-        (7, 3, False, visibility),
-    ]
+    assert notifications.read_changes == [(7, 3, True, visibility), (7, 3, False, visibility)]
 
 
 async def test_notification_writes_accept_latest_state() -> None:
     recorder = NotificationEditRecorder(NotificationRecorder())
     services = cast(ApiServices, SimpleNamespace(edits=recorder))
-    await mark_read(3, services, ACCOUNT, uuid4())
+    await mark_read.fn(3, services, ACCOUNT, uuid4(), _reservation=None)
     assert recorder.commands[0].expected[0].value is None

@@ -2,11 +2,15 @@
 
 from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
+from litestar import Litestar, Request, Response, get, post
+from litestar.config.cors import CORSConfig
+from litestar.di import NamedDependency, Provide
+from litestar.middleware import DefineMiddleware
+from litestar.openapi import OpenAPIConfig
+from litestar.openapi.spec import Tag
+from litestar.params import JSONBody
 from pydantic import BaseModel
 lazy import uvicorn
 
@@ -20,17 +24,22 @@ from squid.api.contract import (
     internal,
     transport_only,
 )
-from squid.api.dependencies import Accounts
-from squid.api.errors import register_exception_handlers, responses
+from squid.api.dependencies import Accounts, service_dependencies
+from squid.api.errors import capture_exception, exception_handlers, responses
 from squid.api.i18n import LocaleContextMiddleware
 from squid.api.idempotency import (
     CompleteIdempotentResponseMiddleware,
     assert_idempotency_completion_installed,
-    reserve_idempotent_request,
+    reserve_idempotent_before_request,
 )
-from squid.api.openapi import install_openapi_contract
+from squid.api.openapi import (
+    ApplicationValueSchemaPlugin,
+    ContractJsonRenderPlugin,
+    ContractSwaggerRenderPlugin,
+    install_openapi_contract,
+)
 from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
-from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
+from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter
 from squid.api.request_body import BoundedRequestBodyMiddleware
 from squid.api.request_context import RequestContextMiddleware
 from squid.api.security import Caller, requires
@@ -53,37 +62,37 @@ RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime[ApiServices]]
 ConfigFactory = Callable[[], ApiProcessConfig]
 
 
-router = APIRouter()
-
-
-@router.get(
+@get(
     "/livez",
     operation_id="health_live",
-    openapi_extra=contract(security=[ANONYMOUS], cli=internal("Process liveness probe.")),
+    opt=contract(security=[ANONYMOUS], cli=internal("Process liveness probe.")),
 )
 async def live() -> dict[str, str]:
     """Report only whether the API process can service requests."""
     return {"status": "ok"}
 
 
-@router.get(
-    "/health",
-    operation_id="health_ready_compatibility",
-    openapi_extra=contract(security=[ANONYMOUS], cli=compatibility_alias("health_ready")),
-)
-@router.get(
+@get(
     "/readyz",
     operation_id="health_ready",
-    openapi_extra=contract(security=[ANONYMOUS], cli=internal("Deployment readiness probe.")),
+    opt=contract(security=[ANONYMOUS], cli=internal("Deployment readiness probe.")),
 )
-async def ready(request: Request, response: Response) -> dict[str, str]:
+async def ready(request: Request) -> Response[dict[str, str]]:
     """Report whether required database state matches this release."""
     try:
         await request.app.state.runtime.ready()
     except Exception:
-        response.status_code = 503
-        return {"status": "not_ready"}
-    return {"status": "ready"}
+        return Response({"status": "not_ready"}, status_code=503)
+    return Response({"status": "ready"})
+
+
+@get(
+    "/health",
+    operation_id="health_ready_compatibility",
+    opt=contract(security=[ANONYMOUS], cli=compatibility_alias("health_ready")),
+)
+async def ready_compatibility(request: Request) -> Response[dict[str, str]]:
+    return await ready.fn(request)
 
 
 class User(BaseModel):
@@ -92,38 +101,40 @@ class User(BaseModel):
     uuid: UUID
 
 
-@router.post(
+@post(
+    "/v1/verify",
+    status_code=201,
+    responses=responses(401, 403, 404, 409, 422, 429, 503),
+    dependencies={"_caller": Provide(requires(ACCOUNT_VERIFY_RELAY))},
+    before_request=reserve_idempotent_before_request,
+    operation_id="verification_create",
+    tags=["users"],
+    opt=contract(security=[SERVICE, WEB_WRITE, DEVICE], cli=transport_only(), scopes=("account.verify.relay",)),
+)
+async def get_verification_code(data: JSONBody[User], accounts: Accounts, _caller: NamedDependency[Caller]) -> int:
+    """Generate a verification code for a user."""
+    return await accounts.generate_verification_code(data.uuid)
+
+
+@post(
     "/verify",
     status_code=201,
     responses=responses(401, 403, 404, 409, 422, 429, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
+    dependencies={"_caller": Provide(requires(ACCOUNT_VERIFY_RELAY))},
+    before_request=reserve_idempotent_before_request,
     operation_id="verification_create_compatibility",
-    openapi_extra=contract(
+    opt=contract(
         security=[SERVICE, WEB_WRITE, DEVICE],
         cli=compatibility_alias("verification_create"),
         scopes=("account.verify.relay",),
     ),
 )
-@router.post(
-    "/v1/verify",
-    status_code=201,
-    responses=responses(401, 403, 404, 409, 422, 429, 503),
-    tags=["users"],
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
-    operation_id="verification_create",
-    openapi_extra=contract(
-        security=[SERVICE, WEB_WRITE, DEVICE],
-        cli=transport_only(),
-        scopes=("account.verify.relay",),
-    ),
-)
-async def get_verification_code(
-    user: User,
+async def get_verification_code_compatibility(
+    data: JSONBody[User],
     accounts: Accounts,
-    _caller: Annotated[Caller, Depends(requires(ACCOUNT_VERIFY_RELAY))],
+    _caller: NamedDependency[Caller],
 ) -> int:
-    """Generate a verification code for a user."""
-    return await accounts.generate_verification_code(user.uuid)
+    return await accounts.generate_verification_code(data.uuid)
 
 
 def create_api_app(
@@ -131,7 +142,7 @@ def create_api_app(
     *,
     config: ApiProcessConfig | None = None,
     config_factory: ConfigFactory = load_api_process_config,
-) -> FastAPI:
+) -> Litestar:
     """Create the API and register its routes, middleware, and lifecycle.
 
     Configuration and services are loaded when the ASGI lifespan starts. The
@@ -140,7 +151,7 @@ def create_api_app(
     """
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: Litestar):
         resolved_config = config or config_factory()
         app.state.config = resolved_config
         limiter, policies = create_rate_limiter(resolved_config.rate_limit)
@@ -166,37 +177,9 @@ def create_api_app(
         finally:
             await limiter.aclose()
 
-    api = FastAPI(
-        title="Redstone Squid API",
-        version="1.0.0",
-        description=(
-            "Versioned public API for the Redstone Squid build catalog. Every response carries a "
-            "Request-Id header for correlation; send Request-Id or a W3C traceparent to have it "
-            "propagated."
-        ),
-        openapi_tags=TAGS_METADATA,
-        lifespan=lifespan,
-    )
-    register_exception_handlers(api)
-    api.include_router(router)
-    api.include_router(v1_router)
-    install_openapi_contract(api)
-    api.add_middleware(RateLimitMiddleware)
-    api.add_middleware(CompleteIdempotentResponseMiddleware)
-    assert_idempotency_completion_installed(api)
-    api.add_middleware(BoundedRequestBodyMiddleware, routes=api.routes)
-    api.add_middleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES)
-    # Wrap the rate limiter and replay middleware so their responses receive a
-    # Request-Id too. Inner handlers use the same ID when recording failures.
-    api.add_middleware(RequestContextMiddleware)
-    api.add_middleware(LocaleContextMiddleware)
-    resolved_for_middleware = config
-    cors_origins = (
-        resolved_for_middleware.api.cors_origins if isinstance(resolved_for_middleware, ApiProcessConfig) else ()
-    )
-    if cors_origins:
-        api.add_middleware(
-            CORSMiddleware,
+    cors_origins = config.api.cors_origins if config is not None else ()
+    cors_config = (
+        CORSConfig(
             allow_origins=list(cors_origins),
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -213,6 +196,46 @@ def create_api_app(
             ],
             expose_headers=["ETag", "RateLimit", "RateLimit-Policy", "Request-Id", "Retry-After"],
         )
+        if cors_origins
+        else None
+    )
+    api = Litestar(
+        route_handlers=[
+            live,
+            ready,
+            ready_compatibility,
+            get_verification_code,
+            get_verification_code_compatibility,
+            v1_router,
+        ],
+        dependencies=service_dependencies(),
+        plugins=[ApplicationValueSchemaPlugin()],
+        lifespan=[lifespan],
+        logging_config=None,
+        exception_handlers=exception_handlers(),
+        after_exception=[capture_exception],
+        cors_config=cors_config,
+        request_max_body_size=None,
+        openapi_config=OpenAPIConfig(
+            title="Redstone Squid API",
+            version="1.0.0",
+            description="Versioned public API for the Redstone Squid build catalog.",
+            tags=[Tag(name=tag["name"], description=tag["description"]) for tag in TAGS_METADATA],
+            use_handler_docstrings=True,
+            create_examples=False,
+            render_plugins=[ContractJsonRenderPlugin(), ContractSwaggerRenderPlugin()],
+        ),
+        middleware=[
+            DefineMiddleware(LocaleContextMiddleware),
+            DefineMiddleware(RequestContextMiddleware),
+            DefineMiddleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES),
+            DefineMiddleware(BoundedRequestBodyMiddleware),
+            DefineMiddleware(CompleteIdempotentResponseMiddleware),
+            DefineMiddleware(RateLimitMiddleware),
+        ],
+    )
+    install_openapi_contract(api)
+    assert_idempotency_completion_installed(api)
     if config is not None:
         instrument_api_app(api, config.observability)
     return api
@@ -231,7 +254,7 @@ def _run_api(config: ApiProcessConfig) -> None:
 
 
 def main(process_config: ApiProcessConfig | None = None) -> None:
-    """Run the FastAPI server with process-owned logging and telemetry."""
+    """Run the Litestar server with process-owned logging and telemetry."""
     resolved_config = process_config or load_or_exit(load_api_process_config)
     configure_api_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="api")

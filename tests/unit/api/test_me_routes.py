@@ -8,7 +8,6 @@ from typing import Any, cast, override
 from uuid import UUID
 
 import pytest
-from fastapi import Response
 from whenever import Instant
 
 from squid.accounts.domain import (
@@ -105,9 +104,7 @@ def _caller(kind: str = "account") -> Caller:
 async def test_a_cli_caller_can_read_its_own_account() -> None:
     """A Java-only account remains readable through its CLI credential."""
     accounts = _accounts(account=_account(discord=False))
-
-    response = await get_me(accounts, _caller("cli"), Response())
-
+    response = (await get_me.fn(accounts, _caller("cli"))).content
     assert accounts.account_reads == [1]
     assert response.id == 1
     assert response.creator_id == CREATOR_ID
@@ -117,20 +114,15 @@ async def test_a_cli_caller_can_read_its_own_account() -> None:
 
 async def test_the_response_lists_identities_rather_than_flattening_them() -> None:
     """The self view identifies each linked provider separately."""
-    response = await get_me(_accounts(), _caller(), Response())
-
-    assert [identity.provider for identity in response.identities] == [
-        IdentityProvider.DISCORD,
-        IdentityProvider.JAVA,
-    ]
+    response = (await get_me.fn(_accounts(), _caller())).content
+    assert [identity.provider for identity in response.identities] == [IdentityProvider.DISCORD, IdentityProvider.JAVA]
     assert _identity_of(response, IdentityProvider.DISCORD).subject == "7"
     assert all(identity.is_public for identity in response.identities)
 
 
 async def test_the_response_carries_the_profile() -> None:
     profile = AccountProfile(account_id=1, display_name="Steve", bio="I build", hidden=True)
-    response = await get_me(_accounts(profile=profile), _caller(), Response())
-
+    response = (await get_me.fn(_accounts(profile=profile), _caller())).content
     assert response.profile.display_name == "Steve"
     assert response.profile.bio == "I build"
     assert response.profile.hidden is True
@@ -139,8 +131,7 @@ async def test_the_response_carries_the_profile() -> None:
 
 async def test_the_response_renders_a_java_avatar_from_its_source_identity() -> None:
     profile = AccountProfile(account_id=1, avatar_identity_id=2)
-    response = await get_me(_accounts(profile=profile), _caller(), Response())
-
+    response = (await get_me.fn(_accounts(profile=profile), _caller())).content
     assert response.profile.avatar is not None
     assert response.profile.avatar.identity_id == 2
     assert response.profile.avatar.url == f"https://mc-heads.net/avatar/{JAVA_UUID}"
@@ -148,16 +139,13 @@ async def test_the_response_renders_a_java_avatar_from_its_source_identity() -> 
 
 async def test_a_caller_without_an_account_is_rejected() -> None:
     anonymous = Caller(kind="anonymous", subject="anonymous")
-
     with pytest.raises(AuthenticationError):
-        await get_me(_accounts(), anonymous, Response())
+        await get_me.fn(_accounts(), anonymous)
 
 
 async def test_consent_is_granted_by_account_not_discord_id() -> None:
     accounts = _accounts(account=_account(discord=False))
-
-    response = await grant_consent(accounts, _caller("cli"))
-
+    response = await grant_consent.fn(accounts, _caller("cli"), _reservation=None)
     assert accounts.consent_grants == [1]
     assert response.consent_pending is False
 
@@ -172,9 +160,7 @@ async def test_refresh_reports_a_rename_and_its_new_credit() -> None:
         retained_alias_names=("OldName",),
     )
     accounts = _accounts(refresh=refresh)
-
-    response = await refresh_minecraft_identity(accounts, _caller())
-
+    response = await refresh_minecraft_identity.fn(accounts, _caller(), _reservation=None)
     assert accounts.refreshes == [(1, None)]
     assert response.renamed is True
     assert response.previous_ign == "OldName"
@@ -197,9 +183,7 @@ async def test_refresh_reports_a_contested_name_without_claiming_it() -> None:
         ),
     )
     accounts = _accounts(refresh=refresh)
-
-    response = await refresh_minecraft_identity(accounts, _caller())
-
+    response = await refresh_minecraft_identity.fn(accounts, _caller(), _reservation=None)
     assert response.claimed_creator_name is None
     assert response.contested_creator_name == "Contested"
     assert response.pending_claim_id == 3
@@ -214,9 +198,7 @@ async def test_refresh_reports_an_unchanged_name() -> None:
         claimed_alias=CreatorAlias(id=5, name="Steve", account_id=1),
     )
     accounts = _accounts(refresh=refresh)
-
-    response = await refresh_minecraft_identity(accounts, _caller())
-
+    response = await refresh_minecraft_identity.fn(accounts, _caller(), _reservation=None)
     assert response.renamed is False
     assert response.previous_ign == "Steve"
 
@@ -224,8 +206,6 @@ async def test_refresh_reports_an_unchanged_name() -> None:
 async def test_staff_refresh_targets_the_named_account() -> None:
     refresh = IdentityRefresh(account_id=42, java_uuid=JAVA_UUID, current_name="Steve", previous_name="Steve")
     accounts = _accounts(refresh=refresh)
-
-    response = await refresh_minecraft_identity_for(42, accounts)
-
+    response = await refresh_minecraft_identity_for.fn(42, accounts, _permission=None, _reservation=None)
     assert accounts.refreshes == [(42, None)]
     assert response.ign == "Steve"

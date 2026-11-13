@@ -1,8 +1,8 @@
 """REST pagination parameters: what they accept, refuse, and serialize to."""
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from litestar import Litestar
+from litestar.testing import TestClient
 
 from squid.api.pagination import Page, PageAnchor, parse_page_sort, resolve_selector
 from squid.core.errors import ErrorCode, ValidationError
@@ -55,7 +55,7 @@ def test_rendering_carries_the_totals_and_anchors_through() -> None:
 
 
 def test_an_offset_past_the_clamp_is_rejected_before_it_reaches_the_database(
-    app_factory: tuple[FastAPI, MockDatabaseManager],
+    app_factory: tuple[Litestar, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
 

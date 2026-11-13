@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi import Response
-from fastapi.testclient import TestClient
+from litestar import Response
+from litestar.testing import TestClient
 from pydantic import ValidationError
 
 from squid.api.revisions import InvalidRevisionError, expected_revision
@@ -36,9 +36,9 @@ async def test_every_account_credential_audits_the_internal_account(kind: str, e
     )
     services = cast(Any, SimpleNamespace(edits=edits))
     caller = Caller(kind=cast(Any, kind), subject="test", nodes=UNBOUNDED, account_id=7)
-    response = Response()
-    await update_runtime_settings(
-        RuntimeSettingsPatch(welcome_forward_chance=0.5), services, caller, response, uuid4(), etag
+    response = Response(content=None)
+    response = await update_runtime_settings.fn(
+        RuntimeSettingsPatch(welcome_forward_chance=0.5), services, caller, uuid4(), etag, _reservation=None
     )
     command, actor = edits.execute.call_args.args
     assert command.expected == (LatestRevision(RUNTIME_TARGET) if etag is None else Revision(RUNTIME_TARGET, 1),)
@@ -50,12 +50,12 @@ async def test_every_account_credential_audits_the_internal_account(kind: str, e
 async def test_unowned_credentials_cannot_create_an_audit_entry() -> None:
     settings = SimpleNamespace(update_runtime=AsyncMock())
     with pytest.raises(AuthenticationError):
-        await update_runtime_settings(
+        await update_runtime_settings.fn(
             RuntimeSettingsPatch(welcome_enabled=False),
             cast(Any, SimpleNamespace(settings=settings)),
             ANONYMOUS,
-            Response(),
             uuid4(),
+            _reservation=None,
         )
     settings.update_runtime.assert_not_awaited()
 

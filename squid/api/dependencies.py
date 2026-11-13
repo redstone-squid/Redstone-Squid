@@ -1,8 +1,10 @@
-"""FastAPI dependencies shared by versioned routes."""
+"""Named Litestar dependencies shared by versioned routes."""
 
-from typing import Annotated, cast
+from typing import cast
 
-from fastapi import Depends, Request
+from litestar import Request
+from litestar.di import NamedDependency, Provide
+from litestar.params import SkipValidation
 
 from squid.accounts.application import AccountService
 from squid.api.security import Caller, current_caller
@@ -32,7 +34,7 @@ async def get_services(request: Request) -> ApiServices:
     return runtime.services
 
 
-type Services = Annotated[ApiServices, Depends(get_services)]
+Services = NamedDependency[SkipValidation[ApiServices]]
 
 
 def get_builds(services: Services) -> BuildService:
@@ -121,26 +123,69 @@ async def get_draft_attachments(services: Services) -> DraftAttachmentService:
     return attachments
 
 
-type Permissions = Annotated[PermissionService, Depends(get_permissions)]
-type ErrorReports = Annotated[ErrorReportService, Depends(get_error_reports)]
-type DraftAttachments = Annotated[DraftAttachmentService, Depends(get_draft_attachments)]
-type BuildCommands = Annotated[BuildService, Depends(get_builds)]
-type BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
-type CurrentCaller = Annotated[Caller, Depends(current_caller)]
-type Records = Annotated[RecordService, Depends(get_records)]
-type PublicRecords = Annotated[PublicRecordQueryService, Depends(get_public_records)]
-type Notifications = Annotated[NotificationService, Depends(get_notifications)]
-type Schematics = Annotated[SchematicService, Depends(get_schematics)]
-type Search = Annotated[SearchService, Depends(get_search)]
-type Suggestions = Annotated[SuggestionService, Depends(get_suggestions)]
-type Tags = Annotated[TagService, Depends(get_tags)]
-type Accounts = Annotated[AccountService, Depends(get_accounts)]
-type Versions = Annotated[VersionService, Depends(get_versions)]
-type VoteMembers = Annotated[InteractiveVoteActorResolver | None, Depends(get_vote_members)]
-type Votes = Annotated[VoteService, Depends(get_votes)]
-type WebAuth = Annotated[WebSessionService | None, Depends(get_web_auth)]
-type MinecraftInstallations = Annotated[InstallationCredentialService, Depends(get_minecraft_installations)]
-type MinecraftPlayerAuthorization = Annotated[
-    PlayerAuthorizationService,
-    Depends(get_minecraft_player_authorization),
-]
+Permissions = NamedDependency[SkipValidation[PermissionService]]
+ErrorReports = NamedDependency[SkipValidation[ErrorReportService]]
+DraftAttachments = NamedDependency[SkipValidation[DraftAttachmentService]]
+BuildCommands = NamedDependency[SkipValidation[BuildService]]
+BuildQueries = NamedDependency[SkipValidation[BuildQueryService]]
+CurrentCaller = NamedDependency[SkipValidation[Caller]]
+Records = NamedDependency[SkipValidation[RecordService]]
+PublicRecords = NamedDependency[SkipValidation[PublicRecordQueryService]]
+Notifications = NamedDependency[SkipValidation[NotificationService]]
+Schematics = NamedDependency[SkipValidation[SchematicService]]
+Search = NamedDependency[SkipValidation[SearchService]]
+Suggestions = NamedDependency[SkipValidation[SuggestionService]]
+Tags = NamedDependency[SkipValidation[TagService]]
+Accounts = NamedDependency[SkipValidation[AccountService]]
+Versions = NamedDependency[SkipValidation[VersionService]]
+VoteMembers = NamedDependency[SkipValidation[InteractiveVoteActorResolver | None]]
+Votes = NamedDependency[SkipValidation[VoteService]]
+WebAuth = NamedDependency[SkipValidation[WebSessionService | None]]
+MinecraftInstallations = NamedDependency[SkipValidation[InstallationCredentialService]]
+MinecraftPlayerAuthorization = NamedDependency[SkipValidation[PlayerAuthorizationService]]
+
+
+def get_caller(current_identity: NamedDependency[SkipValidation[Caller]]) -> Caller:
+    return current_identity
+
+
+def get_search_service(services: Services) -> SearchService:
+    return services.search
+
+
+def get_versions_service(services: Services) -> VersionService:
+    return services.versions
+
+
+def get_players(services: Services) -> PlayerAuthorizationService:
+    return get_minecraft_player_authorization(services)
+
+
+def service_dependencies() -> dict[str, Provide]:
+    """Bind application services by the argument names used in HTTP handlers."""
+    return {
+        "services": Provide(get_services),
+        "players": Provide(get_players, sync_to_thread=False),
+        "installations": Provide(get_minecraft_installations, sync_to_thread=False),
+        "authorization": Provide(get_minecraft_player_authorization, sync_to_thread=False),
+        "current_identity": Provide(current_caller),
+        "caller": Provide(get_caller, sync_to_thread=False),
+        "builds": Provide(get_builds, sync_to_thread=False),
+        "build_queries": Provide(get_build_queries, sync_to_thread=False),
+        "records": Provide(get_records, sync_to_thread=False),
+        "notifications": Provide(get_notifications, sync_to_thread=False),
+        "schematics": Provide(get_schematics, sync_to_thread=False),
+        "search": Provide(get_search, sync_to_thread=False),
+        "search_service": Provide(get_search_service, sync_to_thread=False),
+        "suggestions": Provide(get_suggestions, sync_to_thread=False),
+        "tags": Provide(get_tags, sync_to_thread=False),
+        "accounts": Provide(get_accounts, sync_to_thread=False),
+        "versions": Provide(get_versions, sync_to_thread=False),
+        "versions_service": Provide(get_versions_service, sync_to_thread=False),
+        "votes": Provide(get_votes, sync_to_thread=False),
+        "vote_members": Provide(get_vote_members, sync_to_thread=False),
+        "web_auth": Provide(get_web_auth, sync_to_thread=False),
+        "permissions": Provide(get_permissions, sync_to_thread=False),
+        "error_reports": Provide(get_error_reports, sync_to_thread=False),
+        "attachments": Provide(get_draft_attachments),
+    }

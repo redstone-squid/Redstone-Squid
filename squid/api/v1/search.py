@@ -4,7 +4,8 @@ import logging
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from litestar import Router, get
+from litestar.params import QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Search
@@ -26,19 +27,17 @@ from squid.core.errors import DataIntegrityError
 from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/search", tags=["search"])
 
 # Public search always restricts results to confirmed builds. This separate filter
 # also applies when the query itself asks for another status.
 PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
 
 
-@router.get(
+@get(
     "/fields",
-    response_model=list[SearchField],
     responses=responses(503),
     operation_id="search_fields_list",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def list_search_fields(search_service: Search) -> list[SearchField]:
     """Publish the effective allowlisted query-field registry."""
@@ -46,35 +45,33 @@ async def list_search_fields(search_service: Search) -> list[SearchField]:
     return [SearchField.from_domain(field) for field in registry.definitions]
 
 
-@router.get(
+@get(
     "/suggest",
-    response_model=SearchSuggestions,
     responses=responses(400, 422, 503),
     operation_id="search_terms_suggest",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def suggest_terms(
     search_service: Search,
-    q: Annotated[str, Query(max_length=1_000)],
-    limit: Annotated[int, Query(ge=1, le=25)] = 5,
+    q: Annotated[str, QueryParameter(max_length=1_000)],
+    limit: Annotated[int, QueryParameter(ge=1, le=25)] = 5,
 ) -> SearchSuggestions:
     """Suggest indexed terms completing a valid query."""
     return SearchSuggestions(suggestions=list(await search_service.suggest(q, limit=limit)))
 
 
-@router.get(
-    "",
-    response_model=Page[SearchResult],
+@get(
+    "/",
     responses=responses(400, 422, 503),
     operation_id="search_execute",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def search(
     search_service: Search,
     build_queries: BuildQueries,
-    q: Annotated[str, Query(max_length=1_000)],
-    scope: SearchScope = SearchScope.ALL,
-    sort: Annotated[str | None, Query(max_length=80)] = None,
+    q: Annotated[str, QueryParameter(max_length=1_000)],
+    search_scope: Annotated[SearchScope, QueryParameter(name="scope")] = SearchScope.ALL,
+    sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
 ) -> Page[SearchResult]:
@@ -82,7 +79,7 @@ async def search(
     result = await search_service.search(
         SearchRequest(
             query=q,
-            scope=scope,
+            scope=search_scope,
             mode=SearchMode.LEXICAL,
             page_size=page_size,
             offset=offset or 0,
@@ -140,3 +137,6 @@ async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[Search
     if missing:
         logger.warning("Search projection referenced missing builds", extra={"build_ids": missing})
     return summaries
+
+
+router = Router(path="/search", tags=["search"], route_handlers=[list_search_fields, suggest_terms, search])

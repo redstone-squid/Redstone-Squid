@@ -1,12 +1,15 @@
 """Public schema acceptance tests for submission media routes."""
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 
+from squid.api.app import create_api_app
+from squid.api.openapi import openapi_document
 from squid.api.v1.schemas.submission_media import DraftMediaListResponse, DraftMediaResponse
 from squid.media.application.jobs import StoredMediaArtifact
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from tests.support.litestar import asgi_transport
 from tests.unit.submissions.media_api_fakes import (
     DRAFT_ID,
     OTHER_UPLOAD_ID,
@@ -57,7 +60,7 @@ async def test_list_get_and_discard_keep_stable_states_without_private_artifacts
     media.snapshots[OTHER_UPLOAD_ID] = snapshot(upload_id=OTHER_UPLOAD_ID, status=MediaJobStatus.DEAD)
     app = app_with_fakes(media, FakeDrafts(events))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         list_response = await client.get(f"/submissions/drafts/{DRAFT_ID}/media")
         get_response = await client.get(f"/submissions/drafts/{DRAFT_ID}/media/{UPLOAD_ID}")
         delete_response = await client.delete(
@@ -115,9 +118,7 @@ async def test_media_dtos_reject_unknown_fields() -> None:
 
 async def test_openapi_advertises_streaming_binary_upload_without_a_json_wrapper() -> None:
     events: list[str] = []
-    operation = app_with_fakes(FakeMedia(events), FakeDrafts(events)).openapi()["paths"][
-        "/submissions/drafts/{draft_id}/media/{kind}"
-    ]["post"]
+    operation = openapi_document(create_api_app())["paths"]["/v1/submissions/drafts/{draft_id}/media/{kind}"]["post"]
 
     request_body = operation["requestBody"]
     assert request_body["required"] is True

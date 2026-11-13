@@ -3,8 +3,8 @@
 import re
 
 import httpx
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from litestar import Litestar, get
+from litestar.testing import TestClient
 from pytest_mock import MockerFixture
 
 from squid.accounts.errors import MinecraftServiceUnavailableError
@@ -93,16 +93,18 @@ def test_anonymous_frontend_cannot_fetch_a_csrf_token(client: httpx.Client) -> N
     assert "csrf_token" not in response.text
 
 
-def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+def test_internal_error_is_redacted_and_correlated(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
     app, _database = app_factory
 
-    @app.get("/boom")
+    @get("/boom")
     async def boom() -> None:
         raise InternalError(
             "Sensitive database detail.",
             context={"secret": "do-not-expose"},
             developer_action="Inspect the database.",
         )
+
+    app.register(boom)
 
     with TestClient(app, raise_server_exceptions=False) as internal_client:
         response = internal_client.get("/boom", headers={"Request-Id": "a" * 32})
@@ -116,15 +118,17 @@ def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, M
     assert response.headers["Request-Id"] == "a" * 32
 
 
-def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
     app, _database = app_factory
 
-    @app.get("/unavailable")
+    @get("/unavailable")
     async def unavailable() -> None:
         raise MinecraftServiceUnavailableError(
             "Mojang returned sensitive diagnostics.",
             context={"secret": "do-not-expose"},
         )
+
+    app.register(unavailable)
 
     with TestClient(app, raise_server_exceptions=False) as internal_client:
         response = internal_client.get("/unavailable")
@@ -139,16 +143,18 @@ def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, 
     assert re.fullmatch(r"[A-Za-z0-9._-]{8,128}", response.headers["Request-Id"])
 
 
-def test_unhandled_exception_still_carries_request_id(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+def test_unhandled_exception_still_carries_request_id(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
     """ServerErrorMiddleware renders bare exceptions outside the correlation middleware.
 
     The exception handler must still emit the caller's Request-Id after that middleware raises.
     """
     app, _database = app_factory
 
-    @app.get("/unhandled")
+    @get("/unhandled")
     async def unhandled() -> None:
         raise RuntimeError("boom")
+
+    app.register(unhandled)
 
     with TestClient(app, raise_server_exceptions=False) as internal_client:
         response = internal_client.get("/unhandled", headers={"Request-Id": "b" * 32})
@@ -163,13 +169,17 @@ def test_failures_are_captured_under_the_request_id_the_caller_sees() -> None:
     reports = MockErrorReports()
     app, _database = build_app(error_reports=reports)
 
-    @app.get("/boom")
+    @get("/boom")
     async def boom() -> None:
         raise InternalError("Sensitive database detail.")
 
-    @app.get("/unhandled")
+    app.register(boom)
+
+    @get("/unhandled")
     async def unhandled() -> None:
         raise RuntimeError("boom")
+
+    app.register(unhandled)
 
     with TestClient(app, raise_server_exceptions=False) as internal_client:
         internal_client.get("/boom", headers={"Request-Id": "c" * 32})
@@ -193,16 +203,20 @@ def test_a_validation_failure_is_not_captured() -> None:
     assert reports.calls == []
 
 
-def test_build_revision_errors_use_http_preconditions(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+def test_build_revision_errors_use_http_preconditions(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
     app, _database = app_factory
 
-    @app.get("/revision-required")
+    @get("/revision-required")
     async def revision_required() -> None:
         raise BuildRevisionRequiredError(42)
 
-    @app.get("/revision-mismatch")
+    app.register(revision_required)
+
+    @get("/revision-mismatch")
     async def revision_mismatch() -> None:
         raise BuildRevisionMismatchError(42, expected_revision=3, current_revision=4)
+
+    app.register(revision_mismatch)
 
     with TestClient(app, raise_server_exceptions=False) as internal_client:
         required = internal_client.get("/revision-required")

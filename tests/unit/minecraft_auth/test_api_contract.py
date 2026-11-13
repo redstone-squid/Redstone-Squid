@@ -5,15 +5,16 @@ from typing import override
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
+from litestar import Litestar
 from pydantic import AnyHttpUrl
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization
-from squid.api.errors import register_exception_handlers
+from squid.api.app import create_api_app
+from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization, get_players
+from squid.api.openapi import openapi_document
 from squid.api.security import ANONYMOUS, Caller, current_browser_account_id, current_caller
 from squid.api.v1.minecraft_auth import router
 from squid.api.v1.schemas.minecraft_auth import (
@@ -35,6 +36,7 @@ from squid.minecraft_auth.domain import (
 )
 from squid.minecraft_auth.errors import AuthorizationPendingError, InvalidInstallationCredentialError
 from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
+from tests.support.litestar import DependencyOverrides, asgi_transport, route_app
 from tests.unit.api.fakes import TEST_CONFIG
 
 pytestmark = pytest.mark.asyncio
@@ -266,7 +268,8 @@ def app_with_fakes(
     *,
     signed_in: bool = True,
     idempotency: RecordingIdempotency | None = None,
-) -> FastAPI:
+) -> Litestar:
+
     @dataclass(frozen=True, slots=True)
     class Services:
         idempotency: IdempotencyService | RecordingIdempotency | None
@@ -275,13 +278,7 @@ def app_with_fakes(
     class Runtime:
         services: Services
 
-    app = FastAPI()
-    app.state.runtime = Runtime(Services(idempotency))
-    app.state.config = TEST_CONFIG.model_copy(
-        update={"minecraft_auth": TEST_CONFIG.minecraft_auth.model_copy(update={"verification_uri": VERIFICATION_URI})}
-    )
-    register_exception_handlers(app)
-    app.include_router(router)
+    overrides: DependencyOverrides = {}
 
     async def installation_dependency() -> FakeInstallations:
         return installations
@@ -297,10 +294,16 @@ def app_with_fakes(
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
-    app.dependency_overrides[get_minecraft_installations] = installation_dependency
-    app.dependency_overrides[get_minecraft_player_authorization] = player_dependency
-    app.dependency_overrides[current_browser_account_id] = account_dependency
-    app.dependency_overrides[current_caller] = caller_dependency
+    overrides[get_minecraft_installations] = installation_dependency
+    overrides[get_minecraft_player_authorization] = player_dependency
+    overrides[get_players] = player_dependency
+    overrides[current_browser_account_id] = account_dependency
+    overrides[current_caller] = caller_dependency
+    app = route_app([router], overrides=overrides, handle_errors=True)
+    app.state.runtime = Runtime(Services(idempotency))
+    app.state.config = TEST_CONFIG.model_copy(
+        update={"minecraft_auth": TEST_CONFIG.minecraft_auth.model_copy(update={"verification_uri": VERIFICATION_URI})}
+    )
     return app
 
 
@@ -322,24 +325,22 @@ async def test_request_schemas_forbid_client_authority_and_unknown_fields() -> N
 
 
 async def test_openapi_declares_paper_headers_and_server_scoped_idempotency() -> None:
-    contract = app_with_fakes(FakeInstallations(), FakePlayers()).openapi()
-    paths = contract["paths"]
+    contract = openapi_document(create_api_app())
+    paths = {path.removeprefix("/v1"): item for path, item in contract["paths"].items()}
     paper_start = paths["/minecraft/auth/paper/challenges"]["post"]
     headers = {parameter["name"]: parameter for parameter in paper_start["parameters"] if parameter["in"] == "header"}
     header_names = headers.keys()
 
     assert {"Squid-Installation-ID", "Squid-Installation-Secret"} <= header_names
     assert headers["Squid-Installation-ID"]["schema"] == {
-        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "oneOf": [{"type": "string"}, {"type": "null"}],
         "minLength": 32,
         "maxLength": 45,
-        "title": "Squid-Installation-Id",
     }
     assert headers["Squid-Installation-Secret"]["schema"] == {
-        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "oneOf": [{"type": "string"}, {"type": "null"}],
         "minLength": 32,
         "maxLength": 512,
-        "title": "Squid-Installation-Secret",
     }
     assert "Idempotency-Key" in header_names
     mutations = (
@@ -371,7 +372,7 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
         "Squid-Installation-Secret": INSTALLATION_SECRET,
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         created = await client.post(
             "/minecraft/auth/paper/installations",
             json={
@@ -461,7 +462,7 @@ async def test_one_time_device_responses_use_server_derived_idempotency_namespac
         "Idempotency-Key": "paper-retry-key",
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         paper = await client.post(
             "/minecraft/auth/paper/challenges",
             headers=paper_headers,
@@ -485,7 +486,7 @@ async def test_one_time_device_responses_use_server_derived_idempotency_namespac
 async def test_invalid_paper_installation_headers_are_indistinguishable() -> None:
     app = app_with_fakes(FakeInstallations(), FakePlayers())
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         responses = [
             await client.post(
                 "/minecraft/auth/paper/challenges",
@@ -533,7 +534,7 @@ async def test_authorization_errors_map_to_stable_problem_context_without_secret
     players.fabric_error = AuthorizationPendingError()
     app = app_with_fakes(installations, players)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             "/minecraft/auth/fabric/challenges/exchange",
             json={"device_code": DEVICE_CODE, "pkce_verifier": PKCE_VERIFIER},

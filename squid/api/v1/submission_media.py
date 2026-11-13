@@ -18,20 +18,23 @@ from typing import Annotated
 from uuid import UUID
 
 import anyio.to_thread
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from litestar import Request, Response, Router, delete, get, post
+from litestar import status_codes as status
+from litestar.di import NamedDependency, Provide
+from litestar.params import QueryParameter, SkipValidation
 
-from squid.api.attachment_edits import AttachmentEdit
+from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
 from squid.api.dependencies import DraftAttachments
 from squid.api.errors import responses
-from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
+from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.schemas.submission_media import (
     DraftMediaLimitsResponse,
     DraftMediaListResponse,
     DraftMediaResponse,
 )
-from squid.api.v1.submissions import authenticated_account
+from squid.api.v1.submissions import authenticated_account, get_submission_edits
 from squid.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
 from squid.media.errors import DraftMediaRequestError, MediaLimitExceededError
 from squid.submissions.application import StagedUpload
@@ -57,39 +60,37 @@ _STREAMING_REQUEST_BODY = {
 logger = logging.getLogger(__name__)
 
 
-AccountId = Annotated[int, Depends(authenticated_account)]
-StripAudio = Annotated[bool, Query(description="Remove audio while normalizing a video.")]
-UploadId = Annotated[UUID | None, Query(description="Stable client-generated UUID for safe upload retries.")]
-
-router = APIRouter(prefix="/submissions/drafts/{draft_id}/media", tags=["submissions"])
+AccountId = NamedDependency[SkipValidation[int]]
+StripAudio = Annotated[bool, QueryParameter(description="Remove audio while normalizing a video.")]
+UploadId = Annotated[UUID | None, QueryParameter(description="Stable client-generated UUID for safe upload retries.")]
 
 
-@router.post(
-    "/{kind}",
-    response_model=DraftMediaResponse,
+@post(
+    "/{kind:str}",
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_media_upload",
-    openapi_extra={
+    opt={
         "requestBody": _STREAMING_REQUEST_BODY,
         **contract(
             security=[WEB_WRITE, DEVICE, MINECRAFT],
             cli=cli_command("media.upload", features=("submission-media",), interaction="direct"),
         ),
     },
+    dependencies={"account_id": Provide(authenticated_account)},
 )
 @streams_own_body
 async def upload_draft_media(
     draft_id: UUID,
     kind: MediaKind,
     request: Request,
-    response: Response,
     attachments: DraftAttachments,
     account_id: AccountId,
     strip_audio: StripAudio = False,
     upload_id: UploadId = None,
-) -> DraftMediaResponse:
+) -> Response[DraftMediaResponse]:
     """Stream one owned-draft upload through a private bounded staging file."""
+    response_headers: dict[str, str] = {}
     _require_non_nil(draft_id, reason="nil_draft_id")
     if upload_id is not None:
         _require_non_nil(upload_id, reason="nil_upload_id")
@@ -98,26 +99,22 @@ async def upload_draft_media(
     if kind is MediaKind.IMAGE and strip_audio:
         reason = "strip_audio_requires_video"
         raise DraftMediaRequestError(reason)
-
     content_type = _source_content_type(request, kind)
     content_length = _declared_content_length(request, attachments.limits.max_source_bytes)
     with _private_upload_directory() as directory:
         source_path = directory / "source"
         await _stream_to_private_file(
-            request,
-            source_path,
-            content_length=content_length,
-            max_bytes=attachments.limits.max_source_bytes,
+            request, source_path, content_length=content_length, max_bytes=attachments.limits.max_source_bytes
         )
         snapshot = await attachments.register(
-            authority,
-            StagedUpload(source_path, content_type),
-            strip_audio=strip_audio,
-            upload_id=upload_id,
+            authority, StagedUpload(source_path, content_type), strip_audio=strip_audio, upload_id=upload_id
         )
-
-    _prevent_storage(response, attachments.limits)
-    return DraftMediaResponse.from_snapshot(snapshot)
+    _prevent_storage(response_headers, attachments.limits)
+    return Response(
+        content=DraftMediaResponse.from_snapshot(snapshot),
+        headers=response_headers,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
 
 
 @contextmanager
@@ -134,71 +131,76 @@ def _private_upload_directory() -> Iterator[Path]:
             logger.warning("Unable to remove a private upload staging directory", exc_info=True)
 
 
-@router.get(
-    "",
-    response_model=DraftMediaListResponse,
+@get(
+    "/",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="submission_media_list",
-    openapi_extra=contract(
+    opt=contract(
         security=[WEB, DEVICE, MINECRAFT],
         cli=cli_command("media.list", features=("submission-media",), interaction="direct"),
     ),
+    status_code=200,
+    dependencies={"account_id": Provide(authenticated_account)},
 )
 async def list_draft_media(
-    draft_id: UUID,
-    request: Request,
-    response: Response,
-    attachments: DraftAttachments,
-    account_id: AccountId,
-) -> DraftMediaListResponse:
+    draft_id: UUID, request: Request, attachments: DraftAttachments, account_id: AccountId
+) -> Response[DraftMediaListResponse]:
     """List all retained states and safe normalized facts for an owned draft."""
+    response_headers: dict[str, str] = {}
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     snapshots = await attachments.list(draft_id, account_id)
-    _prevent_storage(response, attachments.limits)
-    return DraftMediaListResponse(
-        limits=DraftMediaLimitsResponse.from_domain(attachments.limits),
-        media=[DraftMediaResponse.from_snapshot(snapshot) for snapshot in snapshots],
+    _prevent_storage(response_headers, attachments.limits)
+    return Response(
+        content=DraftMediaListResponse(
+            limits=DraftMediaLimitsResponse.from_domain(attachments.limits),
+            media=[DraftMediaResponse.from_snapshot(snapshot) for snapshot in snapshots],
+        ),
+        headers=response_headers,
+        status_code=200,
     )
 
 
-@router.get(
-    "/{upload_id}",
-    response_model=DraftMediaResponse,
+@get(
+    "/{upload_id:uuid}",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="submission_media_get",
-    openapi_extra=contract(
+    opt=contract(
         security=[WEB, DEVICE, MINECRAFT],
         cli=cli_command("media.status", features=("submission-media",), interaction="direct"),
     ),
+    status_code=200,
+    dependencies={"account_id": Provide(authenticated_account)},
 )
 async def get_draft_media(
-    draft_id: UUID,
-    upload_id: UUID,
-    request: Request,
-    response: Response,
-    attachments: DraftAttachments,
-    account_id: AccountId,
-) -> DraftMediaResponse:
+    draft_id: UUID, upload_id: UUID, request: Request, attachments: DraftAttachments, account_id: AccountId
+) -> Response[DraftMediaResponse]:
     """Return one upload after enforcing both draft ownership and association."""
+    response_headers: dict[str, str] = {}
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     _require_non_nil(upload_id, reason="nil_upload_id")
     snapshot = await attachments.get(draft_id, account_id, upload_id)
-    _prevent_storage(response, attachments.limits)
-    return DraftMediaResponse.from_snapshot(snapshot)
+    _prevent_storage(response_headers, attachments.limits)
+    return Response(content=DraftMediaResponse.from_snapshot(snapshot), headers=response_headers, status_code=200)
 
 
-@router.delete(
-    "/{upload_id}",
+@delete(
+    "/{upload_id:uuid}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(reserve_edit_request)],
     operation_id="submission_media_discard",
-    openapi_extra=contract(
+    opt=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("media.discard", features=("submission-media",), interaction="direct"),
     ),
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "account_id": Provide(authenticated_account),
+        "edit": Provide(attachment_edit_request, sync_to_thread=False),
+        "runner": Provide(get_submission_edits, sync_to_thread=False),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
 )
 async def discard_draft_media(
     draft_id: UUID,
@@ -207,16 +209,21 @@ async def discard_draft_media(
     attachments: DraftAttachments,
     account_id: AccountId,
     edit: AttachmentEdit,
-) -> Response:
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[None]:
     """Withdraw one upload while retaining a stable discarded state."""
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     _require_non_nil(upload_id, reason="nil_upload_id")
     response = Response(
+        content=None,
         status_code=status.HTTP_204_NO_CONTENT,
         headers={"Cache-Control": _NO_STORE, _MAX_UPLOAD_HEADER: str(attachments.limits.max_source_bytes)},
     )
-    await edit.save(AttachmentValues(files=(FileMembership(source_id=upload_id, present=False),)), response)
+    response.headers["ETag"] = await edit.save(
+        AttachmentValues(files=(FileMembership(source_id=upload_id, present=False),))
+    )
     return response
 
 
@@ -332,20 +339,23 @@ def _require_non_nil(identifier: UUID, *, reason: str) -> None:
         raise DraftMediaRequestError(reason)
 
 
-def _prevent_storage(response: Response, limits: MediaLimits) -> None:
-    response.headers["Cache-Control"] = _NO_STORE
-    response.headers[_MAX_UPLOAD_HEADER] = str(limits.max_source_bytes)
+def _prevent_storage(headers: dict[str, str], limits: MediaLimits) -> None:
+    headers["Cache-Control"] = _NO_STORE
+    headers[_MAX_UPLOAD_HEADER] = str(limits.max_source_bytes)
 
 
-@router.post(
-    "/{upload_id}/attach",
-    response_model=DraftMediaResponse,
-    dependencies=[Depends(reserve_idempotent_request)],
+@post(
+    "/{upload_id:uuid}/attach",
     operation_id="submission_media_attach",
-    openapi_extra=contract(
+    opt=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("media.attach", features=("submission-media",), interaction="direct"),
     ),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "account_id": Provide(authenticated_account),
+    },
 )
 async def attach_draft_media(
     draft_id: UUID,
@@ -353,6 +363,15 @@ async def attach_draft_media(
     source_draft_id: UUID,
     attachments: DraftAttachments,
     account_id: AccountId,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> DraftMediaResponse:
     """Reference a file supplied to another owned draft without duplicating its processing."""
     return DraftMediaResponse.from_snapshot(await attachments.attach(source_draft_id, draft_id, account_id, upload_id))
+
+
+router = Router(
+    path="/submissions/drafts/{draft_id:uuid}/media",
+    tags=["submissions"],
+    route_handlers=[upload_draft_media, list_draft_media, get_draft_media, discard_draft_media, attach_draft_media],
+)

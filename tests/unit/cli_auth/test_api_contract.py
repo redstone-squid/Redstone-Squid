@@ -6,13 +6,12 @@ from typing import override
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
+from litestar import Litestar
 from pydantic import AnyHttpUrl
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.api.errors import register_exception_handlers
 from squid.api.security import Caller, current_browser_account_id, current_caller
 from squid.api.v1.cli_auth import (
     current_cli_identity,
@@ -25,6 +24,7 @@ from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSes
 from squid.cli_auth.errors import CliAuthorizationPendingError
 from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
 from squid.idempotency import IdempotencyService, PendingRequest
+from tests.support.litestar import DependencyOverrides, asgi_transport, route_app
 from tests.unit.api.fakes import TEST_CONFIG
 
 pytestmark = pytest.mark.asyncio
@@ -183,11 +183,8 @@ class RecordingIdempotency:
         return PendingRequest(uuid4())
 
 
-def app_with_fake(
-    cli: FakeCliAuthorization,
-    *,
-    idempotency: RecordingIdempotency | None = None,
-) -> FastAPI:
+def app_with_fake(cli: FakeCliAuthorization, *, idempotency: RecordingIdempotency | None = None) -> Litestar:
+
     @dataclass(frozen=True, slots=True)
     class Services:
         idempotency: IdempotencyService | RecordingIdempotency | None
@@ -196,13 +193,7 @@ def app_with_fake(
     class Runtime:
         services: Services
 
-    app = FastAPI()
-    app.state.runtime = Runtime(Services(idempotency))
-    app.state.config = TEST_CONFIG.model_copy(
-        update={"cli_auth": TEST_CONFIG.cli_auth.model_copy(update={"verification_uri": VERIFICATION_URI})}
-    )
-    register_exception_handlers(app)
-    app.include_router(router)
+    overrides: DependencyOverrides = {}
 
     async def service_dependency() -> FakeCliAuthorization:
         return cli
@@ -211,20 +202,20 @@ def app_with_fake(
         return ACCOUNT_ID
 
     async def identity_dependency() -> CliIdentity:
-        return CliIdentity(
-            account_id=ACCOUNT_ID,
-            device_id=DEVICE_ID,
-            session_id=SESSION_ID,
-            consent_pending=False,
-        )
+        return CliIdentity(account_id=ACCOUNT_ID, device_id=DEVICE_ID, session_id=SESSION_ID, consent_pending=False)
 
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
-    app.dependency_overrides[get_cli_authorization_service] = service_dependency
-    app.dependency_overrides[current_browser_account_id] = account_dependency
-    app.dependency_overrides[current_cli_identity] = identity_dependency
-    app.dependency_overrides[current_caller] = caller_dependency
+    overrides[get_cli_authorization_service] = service_dependency
+    overrides[current_browser_account_id] = account_dependency
+    overrides[current_cli_identity] = identity_dependency
+    overrides[current_caller] = caller_dependency
+    app = route_app([router], overrides=overrides, handle_errors=True)
+    app.state.runtime = Runtime(Services(idempotency))
+    app.state.config = TEST_CONFIG.model_copy(
+        update={"cli_auth": TEST_CONFIG.cli_auth.model_copy(update={"verification_uri": VERIFICATION_URI})}
+    )
     return app
 
 
@@ -244,7 +235,7 @@ async def test_enrollment_returns_fragment_approval_link_and_no_store() -> None:
     cli = FakeCliAuthorization()
     idempotency = RecordingIdempotency()
     app = app_with_fake(cli, idempotency=idempotency)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="https://api.test") as client:
         response = await client.post(
             "/cli/auth/enrollments",
             json={
@@ -268,7 +259,7 @@ async def test_enrollment_returns_fragment_approval_link_and_no_store() -> None:
 async def test_browser_previews_fingerprint_before_approval() -> None:
     cli = FakeCliAuthorization()
     app = app_with_fake(cli)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="https://api.test") as client:
         preview = await client.get("/cli/auth/enrollments/approval", params={"user_code": USER_CODE})
         approved = await client.post(
             "/cli/auth/enrollments/approval",
@@ -289,7 +280,7 @@ async def test_device_proofs_exchange_for_one_time_session_tokens() -> None:
     """Check proof decoding and token serialization; the fake does not enforce single-use exchange."""
     cli = FakeCliAuthorization()
     app = app_with_fake(cli)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="https://api.test") as client:
         enrollment_response = await client.post(
             "/cli/auth/enrollments/exchange",
             json={"device_code": DEVICE_CODE, "signature": SIGNATURE_TEXT},
@@ -319,7 +310,7 @@ async def test_pending_exchange_is_a_stable_conflict() -> None:
     cli = FakeCliAuthorization()
     cli.pending = True
     app = app_with_fake(cli)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="https://api.test") as client:
         response = await client.post(
             "/cli/auth/enrollments/exchange",
             json={"device_code": DEVICE_CODE, "signature": SIGNATURE_TEXT},
@@ -332,7 +323,7 @@ async def test_pending_exchange_is_a_stable_conflict() -> None:
 async def test_account_and_current_session_revocation_are_separately_scoped() -> None:
     cli = FakeCliAuthorization()
     app = app_with_fake(cli)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:
+    async with AsyncClient(transport=asgi_transport(app), base_url="https://api.test") as client:
         listed = await client.get("/cli/auth/devices")
         revoked_device = await client.delete(f"/cli/auth/devices/{DEVICE_ID}")
         revoked_session = await client.delete("/cli/auth/sessions/current")

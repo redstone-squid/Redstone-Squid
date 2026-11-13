@@ -177,7 +177,7 @@ async def test_record_detail_hydrates_holders_in_record_order() -> None:
     record = published_record(41, 42)
     records = PublicRecordFake(record, [catalogue_build(41), catalogue_build(42)])
 
-    detail = await get_record(7, records)
+    detail = await get_record.fn(7, records)
 
     assert detail.holder_build_ids == [41, 42]
     assert [build.id for build in detail.holder_builds] == [41, 42]

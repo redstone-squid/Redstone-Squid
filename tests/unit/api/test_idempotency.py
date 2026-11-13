@@ -5,15 +5,18 @@ import json
 from collections.abc import Iterator
 from dataclasses import replace
 from functools import partial
-from typing import Annotated, cast, override
+from typing import cast, override
 from uuid import UUID, uuid4
 
 import pytest
 from anyio import create_task_group
-from fastapi import Depends, FastAPI
-from fastapi.testclient import TestClient
-from starlette.responses import JSONResponse, Response, StreamingResponse
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from litestar import Litestar, Response, post
+from litestar.di import NamedDependency, Provide
+from litestar.exceptions import LitestarException
+from litestar.params import FromPath
+from litestar.response import Stream
+from litestar.testing import TestClient
+from litestar.types import ASGIApp, Message, Receive, ReceiveMessage, Scope, Send
 from whenever import Instant
 
 from squid.api.idempotency import (
@@ -22,9 +25,11 @@ from squid.api.idempotency import (
     IdempotencyReservationState,
     assert_idempotency_completion_installed,
     edit_operation_id,
-    reserve_edit_request,
+    reserve_edit_before_request,
+    reserve_idempotent_before_request,
     reserve_idempotent_request,
 )
+from squid.api.security import current_caller
 from squid.core.errors import ErrorCode
 from squid.edits.application import EditExecutor
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
@@ -154,7 +159,7 @@ async def run_completion_middleware(
         },
     )
 
-    async def receive() -> Message:
+    async def receive() -> ReceiveMessage:
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(message: Message) -> None:
@@ -170,7 +175,8 @@ def idempotent_client() -> Iterator[tuple[TestClient, CountingAccounts]]:
     repository = MemoryIdempotencyRepository()
     service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
     app, database = build_app(idempotency=service, accounts=accounts)
-    with TestClient(app, headers={"Authorization": TEST_SYNERGY_SECRET}) as client:
+    with TestClient(app) as client:
+        client.headers.update({"Authorization": TEST_SYNERGY_SECRET})
         yield client, accounts
     assert database.closed
 
@@ -215,11 +221,12 @@ def test_resource_path_is_part_of_the_request_fingerprint() -> None:
     app, _database = build_app(idempotency=service)
     mutations: list[int] = []
 
-    @app.post("/mutation/{resource_id}", dependencies=[Depends(reserve_idempotent_request)])
-    async def mutate(resource_id: int) -> dict[str, int]:
+    @post("/mutation/{resource_id:int}", before_request=reserve_idempotent_before_request, status_code=200)
+    async def mutate(resource_id: FromPath[int]) -> dict[str, int]:
         mutations.append(resource_id)
         return {"resource_id": resource_id}
 
+    app.register(mutate)
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "resource-mutation"}
     with TestClient(app) as client:
         first = client.post("/mutation/1", headers=headers)
@@ -415,29 +422,37 @@ def test_configured_response_body_limit_is_applied() -> None:
     )
     app, _database = build_app(idempotency=service, accounts=accounts, config=config)
 
-    with TestClient(app) as client, pytest.raises(RuntimeError, match="1-byte replay limit"):
+    with TestClient(app) as client, pytest.raises(LitestarException) as raised:
         client.post(
             "/v1/verify",
             json={"uuid": str(TEST_UUID)},
             headers={"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "small-cap"},
         )
+    # Litestar wraps send failures after response-start; the original limit failure is retained.
+    cause: BaseException = raised.value
+    while cause.__cause__ is not None:
+        cause = cause.__cause__
+    assert isinstance(cause, RuntimeError)
+    assert "1-byte replay limit" in str(cause)
 
 
 def test_streaming_idempotent_route_is_rejected_at_startup() -> None:
-    app = FastAPI()
-    app.add_middleware(CompleteIdempotentResponseMiddleware)
-
-    @app.post(
+    @post(
         "/stream",
-        dependencies=[Depends(reserve_idempotent_request)],
-        response_class=StreamingResponse,
+        dependencies={"_reservation": Provide(reserve_idempotent_request)},
+        response_class=Stream,
     )
-    async def stream() -> StreamingResponse:
+    async def stream(*, _reservation: NamedDependency[None]) -> Stream:
         async def body():
             yield b"chunk"
 
-        return StreamingResponse(body())
+        return Stream(body())
 
+    app = Litestar(
+        route_handlers=[stream],
+        middleware=[CompleteIdempotentResponseMiddleware],
+        dependencies={"caller": Provide(current_caller)},
+    )
     with pytest.raises(TypeError, match="cannot declare a streaming response"):
         assert_idempotency_completion_installed(app)
 
@@ -450,14 +465,20 @@ def test_lost_edit_response_reuses_the_original_outcome_and_checks_if_match() ->
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
     attempts = []
 
-    @app.post("/recoverable-edit", dependencies=[Depends(reserve_edit_request)])
-    async def mutate(operation_id: Annotated[UUID, Depends(edit_operation_id)]) -> Response:
+    @post(
+        "/recoverable-edit",
+        before_request=reserve_edit_before_request,
+        status_code=200,
+        dependencies={"operation_id": Provide(edit_operation_id, sync_to_thread=False)},
+    )
+    async def mutate(operation_id: NamedDependency[UUID]) -> Response:
         attempts.append(operation_id)
         result = await executor.execute(replace(command(), operation_id=operation_id), ACTOR)
         if len(attempts) == 1:
-            return JSONResponse({"error": "response rendering failed after commit"}, status_code=503)
-        return JSONResponse({"revision": result.outcome.revisions[0].value})
+            return Response({"error": "response rendering failed after commit"}, status_code=503)
+        return Response({"revision": result.outcome.revisions[0].value})
 
+    app.register(mutate)
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "edit-one", "If-Match": '"example-1-r1"'}
     with TestClient(app) as client:
         failed = client.post("/recoverable-edit", headers=headers)
@@ -481,14 +502,17 @@ def test_unhandled_failure_replays_without_repeating_an_ordinary_write(recoverab
     app, _database = build_app(idempotency=service)
     calls = 0
 
-    @app.post(
-        "/failing-write", dependencies=[Depends(reserve_edit_request if recoverable else reserve_idempotent_request)]
+    @post(
+        "/failing-write",
+        before_request=reserve_edit_before_request if recoverable else reserve_idempotent_before_request,
+        status_code=200,
     )
     async def failing_write() -> None:
         nonlocal calls
         calls += 1
         raise RuntimeError("failed after committing")
 
+    app.register(failing_write)
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "failed-write"}
     with TestClient(app, raise_server_exceptions=False) as client:
         first = client.post("/failing-write", headers=headers)

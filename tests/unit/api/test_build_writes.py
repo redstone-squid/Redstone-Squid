@@ -5,7 +5,6 @@ from typing import cast, override
 from uuid import uuid4
 
 import pytest
-from fastapi import Response
 from pydantic import ValidationError
 
 from squid.api.security import Caller
@@ -66,19 +65,17 @@ async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
     """The route supplies the actor and revision; the build service decides whether editing is allowed."""
     builds = BuildRecorder()
 
-    http_response = Response()
-    response = await edit_build(
+    response = await edit_build.fn(
         42,
         BuildPatch(extra_user_info="changed"),
-        http_response,
         builds.services(),
         ACCOUNT,
         uuid4(),
         '"build-42-r1"',
     )
 
-    assert response.id == 42
-    assert http_response.headers["etag"] == '"build-42-r2"'
+    assert response.content.id == 42
+    assert response.headers["ETag"] == '"build-42-r2"'
     command = builds.runner.commands[0]
     assert builds.runner.actors[0] == ACCOUNT.to_actor()
     assert command.expected[0].target.key == "42"
@@ -91,13 +88,13 @@ async def test_edit_surfaces_the_service_authorization_refusal() -> None:
     builds = BuildRecorder(edit_error=AuthorizationError())
 
     with pytest.raises(AuthorizationError):
-        await edit_build(42, BuildPatch(), Response(), builds.services(), ACCOUNT, uuid4(), '"build-42-r1"')
+        await edit_build.fn(42, BuildPatch(), builds.services(), ACCOUNT, uuid4(), '"build-42-r1"')
 
 
 @pytest.mark.asyncio
 async def test_edit_without_if_match_uses_latest_state() -> None:
     builds = BuildRecorder()
-    await edit_build(42, BuildPatch(extra_user_info="changed"), Response(), builds.services(), ACCOUNT, uuid4())
+    await edit_build.fn(42, BuildPatch(extra_user_info="changed"), builds.services(), ACCOUNT, uuid4())
     assert builds.runner.commands[0].expected[0].value is None
 
 

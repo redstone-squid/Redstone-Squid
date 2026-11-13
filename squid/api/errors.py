@@ -1,16 +1,17 @@
-"""RFC 9457 problem details and FastAPI exception handlers."""
+"""RFC 9457 problem details and Litestar exception handlers."""
 
 import logging
 from collections.abc import Mapping
 from http import HTTPStatus
-from typing import Any, cast
 
-from fastapi import FastAPI, Request, Response
-from fastapi.exceptions import RequestValidationError
+from litestar import Litestar, Request, Response
+from litestar.exceptions import HTTPException, ValidationException
+from litestar.openapi.datastructures import ResponseSpec
+from litestar.types import ExceptionHandlersMap, Scope
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from squid.api.i18n import locale_for_request
+from squid.api.request_context import resolve_request_id
 from squid.api.revisions import InvalidRevisionError, RevisionRequiredError
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import (
@@ -47,8 +48,7 @@ def _route_template(request: Request) -> str | None:
     The path template is low cardinality and groups every failure of one endpoint together;
     `str(request.url)` would put an id, and sometimes a query string, into the stored origin.
     """
-    route = request.scope.get("route")
-    path = getattr(route, "path", None)
+    path = request.scope.get("path_template")
     return path if isinstance(path, str) else None
 
 
@@ -102,22 +102,18 @@ _PINNED_REASON_PHRASES = {
 }
 
 
-def responses(*statuses: int, describe: Mapping[int, str] | None = None) -> dict[int | str, dict[str, Any]]:
-    """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata.
-
-    `describe` replaces a status's reason phrase where the generic one hides
-    something a client has to know -- most often that a 404 also covers a
-    resource the caller may not see.
-    """
+def responses(*statuses: int, describe: Mapping[int, str] | None = None) -> dict[int, ResponseSpec]:
+    """Declare the shared problem-details response for each failure status."""
     described = describe or {}
     return {
-        status: {
-            "model": ProblemDetail,
-            "content": {PROBLEM_DETAIL_MEDIA_TYPE: {"schema": {"$ref": "#/components/schemas/ProblemDetail"}}},
-            "description": described.get(
+        status: ResponseSpec(
+            generate_examples=False,
+            data_container=ProblemDetail,
+            media_type=PROBLEM_DETAIL_MEDIA_TYPE,
+            description=described.get(
                 status, _PINNED_REASON_PHRASES.get(HTTPStatus(status), HTTPStatus(status).phrase)
             ),
-        }
+        )
         for status in statuses
     }
 
@@ -132,7 +128,7 @@ def _problem_response(
     headers.update(extra_headers or {})
     return Response(
         status_code=problem.status,
-        content=problem.model_dump_json(exclude_none=True),
+        content=problem.model_dump_json(exclude_none=True).encode(),
         media_type=PROBLEM_DETAIL_MEDIA_TYPE,
         headers=headers,
     )
@@ -162,10 +158,10 @@ def _status_for_error(error: SquidError) -> int:
     return HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-async def handle_squid_error(request: Request, exc: Exception) -> Response:
+def handle_squid_error(request: Request, exc: Exception) -> Response:
     """Render a structured application exception."""
     if not isinstance(exc, SquidError):
-        return await handle_unexpected_error(request, exc)
+        return handle_unexpected_error(request, exc)
 
     locale = locale_for_request(request)
     status_code = _status_for_error(exc)
@@ -190,7 +186,6 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
     request_id = correlation_id()
     # Capture before logging, so the stored tail is what the request was doing before it failed
     # rather than an echo of the traceback the report already carries.
-    await _capture(request, exc, request_id)
     logger.error(
         "Application failure [request_id=%s code=%s context=%r]",
         request_id,
@@ -221,22 +216,25 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
     )
 
 
-async def handle_request_validation_error(request: Request, exc: Exception) -> Response:
-    """Render FastAPI request validation failures without submitted values."""
-    errors_method = getattr(exc, "errors", None)
-    if not callable(errors_method):
-        return await handle_unexpected_error(request, exc)
-
+def handle_request_validation_error(request: Request, exc: Exception) -> Response:
+    """Render request validation failures without submitted values."""
     locale = locale_for_request(request)
-    raw_errors = cast(list[dict[str, Any]], errors_method())
-    errors: list[JSONValue] = [
-        {
-            "location": [item if isinstance(item, int) else str(item) for item in error["loc"]],
-            "type": str(error["type"]),
-            "message": str(error["msg"]),
-        }
-        for error in raw_errors
-    ]
+    errors: list[JSONValue] = []
+    if isinstance(exc, ValidationException):
+        for error in exc.extra or []:
+            if not isinstance(error, dict):
+                continue
+            key = str(error.get("key", ""))
+            # Framework messages can embed submitted enum values, including credentials.
+            errors.append(
+                {
+                    "location": [getattr(error.get("source"), "value", error.get("source", "body")), *key.split(".")],
+                    "type": str(error.get("type", "validation_error")),
+                    "message": "Invalid value",
+                }
+            )
+    else:
+        return handle_unexpected_error(request, exc)
     with localization_scope(localization_for(locale)):
         title = tr(t"api-errors-invalid-request = Invalid request").resolve()
         detail = tr(t"api-request-validation-failed = The request did not pass validation.").resolve()
@@ -253,10 +251,10 @@ async def handle_request_validation_error(request: Request, exc: Exception) -> R
     )
 
 
-async def handle_http_error(request: Request, exc: Exception) -> Response:
+def handle_http_error(request: Request, exc: Exception) -> Response:
     """Render framework-level HTTP errors as problem details."""
-    if not isinstance(exc, StarletteHTTPException):
-        return await handle_unexpected_error(request, exc)
+    if not isinstance(exc, HTTPException):
+        return handle_unexpected_error(request, exc)
 
     locale = locale_for_request(request)
     try:
@@ -273,14 +271,14 @@ async def handle_http_error(request: Request, exc: Exception) -> Response:
             code=ErrorCode.NOT_FOUND if exc.status_code == HTTPStatus.NOT_FOUND else ErrorCode.INVALID_REQUEST,
         ),
         locale,
+        extra_headers={"Request-Id": resolve_request_id(request.headers)},
     )
 
 
-async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
+def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     """Log and redact an unexpected exception."""
     locale = locale_for_request(request)
     request_id = correlation_id()
-    await _capture(request, exc, request_id)
     logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc, extra=captured())
     with localization_scope(localization_for(locale)):
         title = tr(t"api-errors-internal-server-error = Internal server error").resolve()
@@ -298,21 +296,29 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     )
 
 
-def register_exception_handlers(app: FastAPI) -> None:
-    """Register application-wide FastAPI exception handlers."""
-    from squid.api.idempotency import IdempotencyReplay, complete_failed_request, replay_response
+async def capture_exception(exc: Exception, scope: Scope) -> None:
+    """Capture unexpected failures before the synchronous exception renderer runs."""
+    if isinstance(exc, (DomainError, HTTPException)):
+        return
+    from squid.api.idempotency import IdempotencyReplay
 
-    app.add_exception_handler(IdempotencyReplay, replay_response)
-    app.add_exception_handler(SquidError, handle_squid_error)
-    app.add_exception_handler(RequestValidationError, handle_request_validation_error)
-    app.add_exception_handler(StarletteHTTPException, handle_http_error)
+    if isinstance(exc, IdempotencyReplay):
+        return
+    await _capture(Request(scope), exc, correlation_id())
 
-    async def unexpected_error(request: Request, exc: Exception) -> Response:
-        response = await handle_unexpected_error(request, exc)
-        try:
-            return await complete_failed_request(request, response)
-        except Exception:
-            logger.exception("Could not retain an idempotent failure response")
-            return response
 
-    app.add_exception_handler(Exception, unexpected_error)
+def exception_handlers() -> ExceptionHandlersMap:
+    """Return the synchronous renderers used by Litestar's exception middleware."""
+    from squid.api.idempotency import IdempotencyReplay, replay_response
+
+    return {
+        IdempotencyReplay: replay_response,
+        SquidError: handle_squid_error,
+        ValidationException: handle_request_validation_error,
+        HTTPException: handle_http_error,
+        Exception: handle_unexpected_error,
+    }
+
+
+def register_exception_handlers(app: Litestar) -> None:
+    app.exception_handlers.update(exception_handlers())

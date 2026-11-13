@@ -6,7 +6,8 @@ same route and response model, so clients can discover it without a new endpoint
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, Response
+from litestar import Request, Response, Router, get
+from litestar.params import PathParameter, QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Suggestions
@@ -19,43 +20,38 @@ from squid.permissions.domain.catalogue import CATALOGUE
 from squid.suggestions.application import SuggestionService
 from squid.suggestions.domain import MAX_SUGGESTIONS, SourceKind, SuggestionRequest
 
-router = APIRouter(prefix="/suggest", tags=["suggest"])
-
-SourceId = Annotated[str, Query(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+SourceId = Annotated[str, PathParameter(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 CACHE_SECONDS = 30
 """Short enough that an approved tag shows up promptly, long enough to absorb a burst of typing."""
 
 
-@router.get(
-    "",
-    response_model=list[SuggestionSourceInfo],
+@get(
+    "/",
     responses=responses(503),
     operation_id="suggestion_sources_list",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def list_sources(suggestions: Suggestions) -> list[SuggestionSourceInfo]:
     """Publish the registered sources and how to drive each one."""
     return [SuggestionSourceInfo.from_domain(source) for source in sorted(suggestions.registry, key=lambda s: s.id)]
 
 
-@router.get(
-    "/{source}",
-    response_model=SuggestionPage,
+@get(
+    "/{source:str}",
     responses=responses(404, 422, 503),
     operation_id="suggestions_get",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def suggest(
-    source: Annotated[str, SourceId],
+    source: SourceId,
     request: Request,
-    response: Response,
     suggestions: Suggestions,
     caller: CurrentCaller,
-    q: Annotated[str, Query(max_length=200)] = "",
-    limit: Annotated[int, Query(ge=1, le=MAX_SUGGESTIONS)] = 10,
-    cursor: Annotated[int | None, Query(ge=0)] = None,
-    category: Annotated[str | None, Query(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = None,
-) -> SuggestionPage:
+    q: Annotated[str, QueryParameter(max_length=200)] = "",
+    limit: Annotated[int, QueryParameter(ge=1, le=MAX_SUGGESTIONS)] = 10,
+    cursor: Annotated[int | None, QueryParameter(ge=0)] = None,
+    category: Annotated[str | None, QueryParameter(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = None,
+) -> Response[SuggestionPage]:
     """Return ranked completions for a partially typed value.
 
     Unknown sources return 404. Sources hidden from the caller and provider
@@ -74,12 +70,13 @@ async def suggest(
         ),
         authorizer=_CallerAuthorizer(request, caller),
     )
+    headers: dict[str, str] = {}
     if definition.kind is SourceKind.ENUMERABLE and result.revision is not None:
         # Enumerable sets are content-addressed, so a client that already holds this revision can
         # skip re-rendering. Private because gated sources vary by caller.
-        response.headers["ETag"] = f'"{result.revision:x}"'
-        response.headers["Cache-Control"] = f"private, max-age={CACHE_SECONDS}"
-    return SuggestionPage.from_domain(source, result)
+        headers["ETag"] = f'"{result.revision:x}"'
+        headers["Cache-Control"] = f"private, max-age={CACHE_SECONDS}"
+    return Response(SuggestionPage.from_domain(source, result), headers=headers)
 
 
 class _CallerAuthorizer:
@@ -95,3 +92,6 @@ class _CallerAuthorizer:
 
 
 __all__ = ["SuggestionService", "router"]
+
+
+router = Router(path="/suggest", tags=["suggest"], route_handlers=[list_sources, suggest])

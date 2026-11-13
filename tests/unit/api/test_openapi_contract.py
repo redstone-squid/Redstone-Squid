@@ -6,15 +6,17 @@ from typing import Any
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from litestar import Litestar, get
+from litestar.testing import TestClient
 
 from scripts import export_openapi
 from squid.api.app import create_api_app
 from squid.api.capabilities import API_FEATURES
 from squid.api.contract import ANONYMOUS, contract, transport_only, validate_contract
 from squid.api.errors import ProblemDetail
+from squid.api.openapi import openapi_document
 from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
-from tests.unit.api.fakes import TEST_SYNERGY_SECRET
+from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app = create_api_app()
 OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
@@ -49,7 +51,7 @@ def test_api_never_errors_on_accept_language(client: httpx.Client) -> None:
 
 
 def test_catalogue_extensions_are_registered_in_openapi() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
     schemas = document["components"]["schemas"]
 
     assert {"preview", "version_spec", "versions", "opening_time", "closing_time"} <= set(
@@ -61,7 +63,7 @@ def test_catalogue_extensions_are_registered_in_openapi() -> None:
 
 
 def test_build_creation_requires_the_durable_submission_workflow() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
 
     assert "post" not in document["paths"]["/v1/builds"]
     assert "DoorSubmission" not in document["components"]["schemas"]
@@ -69,7 +71,7 @@ def test_build_creation_requires_the_durable_submission_workflow() -> None:
 
 
 def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
     streaming_retries = {
         ("/v1/submissions/drafts/{draft_id}/media/{kind}", "post"): ("query", "upload_id"),
         ("/v1/submissions/drafts/{draft_id}/schematics/{upload_id}", "put"): ("path", "upload_id"),
@@ -97,7 +99,7 @@ def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
 def test_committed_openapi_document_matches_application() -> None:
     committed = json.loads(OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
 
-    assert committed == _app.openapi()
+    assert committed == openapi_document(_app)
 
 
 def test_openapi_export_is_cwd_independent_and_byte_deterministic(
@@ -109,7 +111,7 @@ def test_openapi_export_is_cwd_independent_and_byte_deterministic(
 
     export_openapi.main()
 
-    expected = create_api_app().openapi()
+    expected = openapi_document(create_api_app())
     expected_bytes = (json.dumps(expected, ensure_ascii=False, indent=2) + "\n").encode()
     assert destination.read_bytes() == expected_bytes
     assert json.loads(destination.read_text(encoding="utf-8")) == expected
@@ -120,7 +122,7 @@ _CLASSIFICATIONS = frozenset({"command", "browser-only", "transport-only", "inte
 
 
 def test_every_operation_has_stable_cli_and_security_metadata() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
 
     identifiers: list[str] = []
     command_paths: list[str] = []
@@ -140,7 +142,7 @@ def test_every_operation_has_stable_cli_and_security_metadata() -> None:
 
 
 def test_every_operation_response_declares_the_request_id_header() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
     assert document["components"]["headers"]["RequestId"]["schema"]["pattern"] == "^[A-Za-z0-9._-]{8,128}$"
 
     for path, method, operation in _document_operations(document):
@@ -151,7 +153,7 @@ def test_every_operation_response_declares_the_request_id_header() -> None:
 
 
 def test_openapi_declares_authentication_alternatives_and_scopes() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
     schemes = document["components"]["securitySchemes"]
     assert {"ApiCredential", "WebSession", "CsrfToken", "DeviceSession"} <= schemes.keys()
     assert document["paths"]["/v1/capabilities"]["get"]["security"] == [{}]
@@ -161,7 +163,7 @@ def test_openapi_declares_authentication_alternatives_and_scopes() -> None:
 
 
 def test_openapi_declares_submission_draft_producer_links() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
     operation_locations = {
         operation["operationId"]: (path, method) for path, method, operation in _document_operations(document)
     }
@@ -175,34 +177,44 @@ def test_openapi_declares_submission_draft_producer_links() -> None:
 
 
 def test_validate_contract_rejects_a_route_without_an_operation_id() -> None:
-    app = FastAPI()
-    app.get("/bare")(lambda: {})
+    @get("/bare", sync_to_thread=False)
+    def bare() -> dict[str, str]:
+        return {}
+
+    app = Litestar(route_handlers=[bare])
 
     with pytest.raises(ValueError, match="no explicit operation_id"):
         validate_contract(app)
 
 
 def test_validate_contract_rejects_a_route_missing_contract_metadata() -> None:
-    app = FastAPI()
-    app.get("/bare", operation_id="bare_get")(lambda: {})
+    @get("/bare", operation_id="bare_get", sync_to_thread=False)
+    def bare() -> dict[str, str]:
+        return {}
+
+    app = Litestar(route_handlers=[bare])
 
     with pytest.raises(ValueError, match="no declared contract"):
         validate_contract(app)
 
 
 def test_validate_contract_accepts_a_route_declared_through_contract() -> None:
-    app = FastAPI()
-    app.get(
+    @get(
         "/bare",
         operation_id="bare_get",
-        openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
-    )(lambda: {})
+        opt=contract(security=[ANONYMOUS], cli=transport_only()),
+        sync_to_thread=False,
+    )
+    def bare() -> dict[str, str]:
+        return {}
+
+    app = Litestar(route_handlers=[bare])
 
     validate_contract(app)
 
 
 def test_cli_command_operations_have_untranslated_fixtures() -> None:
-    document = _app.openapi()
+    document = openapi_document(_app)
     fixture_path = OPENAPI_DOCUMENT.parent / "fixtures" / "cli-operations.json"
     fixtures = json.loads(fixture_path.read_text(encoding="utf-8"))
     commands = {
@@ -222,3 +234,43 @@ def test_cli_command_operations_have_untranslated_fixtures() -> None:
         if operation_id == "submission_media_upload":
             assert fixture["request"]["headers"]["Content-Type"] == "image/png"
             assert fixture["request"]["boundary"] == "raw request body is the exact file byte sequence"
+
+
+def test_served_openapi_matches_exported_contract() -> None:
+    app, _database = build_app()
+    with TestClient(app) as client:
+        response = client.get("/schema/openapi.json")
+    assert response.status_code == 200
+    assert response.json() == openapi_document(app)
+
+
+def test_validation_details_do_not_echo_submitted_values(client: httpx.Client) -> None:
+    response = client.get("/v1/builds", params={"status": "private-submitted-value"})
+    assert response.status_code == 422
+    assert "private-submitted-value" not in json.dumps(response.json()["context"])
+
+
+def test_versioned_routes_declare_rate_limits_and_input_validation() -> None:
+    document = openapi_document(_app)
+    for path, _method, operation in _document_operations(document):
+        if path.startswith("/v1/"):
+            assert "429" in operation["responses"]
+        if operation.get("parameters") or operation.get("requestBody"):
+            assert "422" in operation["responses"]
+    assert "429" not in document["paths"]["/livez"]["get"]["responses"]
+
+
+def test_domain_value_schemas_preserve_string_constraints_and_recursive_json() -> None:
+    schemas = openapi_document(_app)["components"]["schemas"]
+    change_key = schemas["DraftChangeRequest"]["properties"]["idempotency_key"]
+    assert change_key["type"] == "string"
+    assert change_key["minLength"] == 8
+    assert change_key["maxLength"] == 255
+    variants = schemas["JSONValue"]["anyOf"]
+    assert {variant["type"] for variant in variants} == {"null", "boolean", "number", "string", "array", "object"}
+    assert next(variant for variant in variants if variant["type"] == "array")["items"] == {
+        "$ref": "#/components/schemas/JSONValue"
+    }
+    assert next(variant for variant in variants if variant["type"] == "object")["additionalProperties"] == {
+        "$ref": "#/components/schemas/JSONValue"
+    }

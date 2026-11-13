@@ -7,15 +7,16 @@ import logging
 from typing import Any, cast
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from litestar import Litestar, get
+from litestar.middleware import DefineMiddleware
+from litestar.testing import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
 pytest.importorskip("opentelemetry.sdk")
 
 from opentelemetry import propagate, trace  # pyright: ignore[reportMissingImports]
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # pyright: ignore[reportMissingImports]
+from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware  # pyright: ignore[reportMissingImports]
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor  # pyright: ignore[reportMissingImports]
 from opentelemetry.sdk.metrics import MeterProvider  # pyright: ignore[reportMissingImports]
 from opentelemetry.sdk.metrics.export import (  # pyright: ignore[reportMissingImports]
@@ -53,19 +54,22 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    api = FastAPI()
-    FastAPIInstrumentor.instrument_app(api, tracer_provider=provider)
     SQLAlchemyInstrumentor().instrument(engine=engine, tracer_provider=provider, skip_dep_check=True)
 
-    @api.get("/probe")
+    @get(sync_to_thread=False, path="/probe")
     def probe() -> dict[str, int]:
         with engine.connect() as connection:
             return {"value": connection.execute(text("select 1")).scalar_one()}
 
-    @api.get("/correlation")
+    @get(sync_to_thread=False, path="/correlation")
     def correlation() -> dict[str, str]:
         return {"error_id": correlation_id()}
 
+    # Both middleware signatures implement ASGI; Litestar uses narrower TypedDict scopes.
+    api = Litestar(
+        [probe, correlation],
+        middleware=[DefineMiddleware(OpenTelemetryMiddleware, tracer_provider=provider)],  # type: ignore[bad-argument-type]
+    )
     try:
         with TestClient(api) as client:
             assert client.get("/probe").json() == {"value": 1}
@@ -89,7 +93,6 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
         ):
             pass
     finally:
-        FastAPIInstrumentor.uninstrument_app(api)
         SQLAlchemyInstrumentor().uninstrument()
         engine.dispose()
         provider.shutdown()
@@ -203,5 +206,5 @@ def _live_telemetry(
         propagator=cast(Any, propagate),
         current_span=cast(Any, trace.get_current_span),
         error_status=lambda: Status(StatusCode.ERROR),
-        instrument_api_app=cast(Any, FastAPIInstrumentor.instrument_app),
+        instrument_api_app=lambda app: None,
     )

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import cast, override
 from uuid import UUID
 
-from fastapi import FastAPI
+from litestar import Litestar
 
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CreatorProfile
@@ -837,7 +837,7 @@ def build_app(
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
-) -> tuple[FastAPI, MockDatabaseManager]:
+) -> tuple[Litestar, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
     services = build_services(

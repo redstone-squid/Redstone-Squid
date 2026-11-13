@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import Response
 from whenever import Instant
 
 from squid.accounts.application import AccountService
@@ -124,39 +123,40 @@ def _accounts(
 
 
 async def _update_profile(body: ProfileUpdateRequest, accounts: AccountRecorder, caller: Caller):
-    return await update_profile(
+    return await update_profile.fn(
         body,
         accounts,
         caller,
         cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
-        Response(),
         uuid4(),
         '"account-1-r1"',
+        _reservation=None,
     )
 
 
 async def _set_identity_visibility(
     identity_id: int, body: IdentityVisibilityRequest, accounts: AccountRecorder, caller: Caller
 ):
-    return await set_identity_visibility(
+    return await set_identity_visibility.fn(
         identity_id,
         body,
         accounts,
         caller,
         cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
-        Response(),
         uuid4(),
         '"account-1-r1"',
+        _reservation=None,
     )
 
 
 async def _unlink_identity(identity_id: int, accounts: AccountRecorder, caller: Caller):
-    return await unlink_identity(
+    return await unlink_identity.fn(
         identity_id,
         caller,
         cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
         uuid4(),
         '"account-1-r1"',
+        _reservation=None,
     )
 
 
@@ -194,9 +194,9 @@ class TestProfileUpdate:
 
         response = await _update_profile(ProfileUpdateRequest(), accounts, _caller())
 
-        assert response.display_name == "Steve"
-        assert response.avatar is not None
-        assert response.avatar.provider is IdentityProvider.JAVA
+        assert response.content.display_name == "Steve"
+        assert response.content.avatar is not None
+        assert response.content.avatar.provider is IdentityProvider.JAVA
 
     async def test_an_unauthenticated_caller_is_rejected(self) -> None:
         anonymous = Caller(kind="anonymous", subject="anonymous")
@@ -213,7 +213,7 @@ class TestIdentities:
     async def test_listing_includes_hidden_identities(self) -> None:
         accounts = _accounts(identities=(DISCORD, replace(JAVA, is_public=False)))
 
-        response = await list_identities(accounts, _caller())
+        response = await list_identities.fn(accounts, _caller())
 
         assert [identity.id for identity in response] == [1, 2]
         assert [identity.is_public for identity in response] == [True, False]
@@ -224,7 +224,7 @@ class TestIdentities:
         response = await _set_identity_visibility(2, IdentityVisibilityRequest(public=False), accounts, _caller())
 
         assert accounts.visibility_updates == [(1, 2, False)]
-        assert response.is_public is False
+        assert response.content.is_public is False
 
     async def test_unlink_returns_the_resulting_account_revision(self) -> None:
         accounts = _accounts()
@@ -246,14 +246,14 @@ class TestStaffClear:
     async def test_clearing_targets_the_named_account_and_displayed_revision(self) -> None:
         accounts = _accounts()
         edits = AsyncMock()
-        await clear_profile(
+        await clear_profile.fn(
             42,
             accounts,
             _caller(),
             cast(Any, SimpleNamespace(edits=edits)),
-            Response(),
             uuid4(),
             '"account-42-r7"',
+            _reservation=None,
         )
         command, actor = edits.execute.call_args.args
         assert command.kind == "accounts.profile_clear"
@@ -264,13 +264,8 @@ class TestStaffClear:
     async def test_clearing_requires_the_displayed_revision(self) -> None:
         edits = AsyncMock()
         with pytest.raises(RevisionRequiredError):
-            await clear_profile(
-                42,
-                _accounts(),
-                _caller(),
-                cast(Any, SimpleNamespace(edits=edits)),
-                Response(),
-                uuid4(),
+            await clear_profile.fn(
+                42, _accounts(), _caller(), cast(Any, SimpleNamespace(edits=edits)), uuid4(), _reservation=None
             )
         edits.execute.assert_not_called()
 
@@ -283,7 +278,7 @@ class TestMerge:
         """The account being absorbed issues the code that authorizes the merge."""
         accounts = self._merge_accounts()
 
-        response = await create_merge_code(accounts, _caller())
+        response = await create_merge_code.fn(accounts, _caller(), _reservation=None)
 
         assert accounts.merge_codes == [1]
         assert response.code == "ABCD2345"
@@ -291,7 +286,7 @@ class TestMerge:
     async def test_the_preview_names_what_would_move(self) -> None:
         accounts = self._merge_accounts()
 
-        response = await preview_merge(MergeRequest(code="ABCD2345"), accounts, _caller())
+        response = await preview_merge.fn(MergeRequest(code="ABCD2345"), accounts, _caller(), _reservation=None)
 
         assert response.absorbed_creator_id == ABSORBED_ID
         assert response.alias_names == ["Notch"]
@@ -300,7 +295,7 @@ class TestMerge:
     async def test_completing_reports_the_permanent_redirect(self) -> None:
         accounts = self._merge_accounts()
 
-        response = await complete_merge(MergeRequest(code="ABCD2345"), accounts, _caller())
+        response = await complete_merge.fn(MergeRequest(code="ABCD2345"), accounts, _caller(), _reservation=None)
 
         assert accounts.merges == [(1, "ABCD2345")]
         assert response.surviving_creator_id == SURVIVING_ID
@@ -310,13 +305,13 @@ class TestMerge:
         accounts = self._merge_accounts(merge_error=InvalidMergeCodeError())
 
         with pytest.raises(InvalidMergeCodeError):
-            await complete_merge(MergeRequest(code="NOPE"), accounts, _caller())
+            await complete_merge.fn(MergeRequest(code="NOPE"), accounts, _caller(), _reservation=None)
 
     async def test_an_unauthenticated_caller_cannot_mint(self) -> None:
         anonymous = Caller(kind="anonymous", subject="anonymous")
 
         with pytest.raises(AuthenticationError):
-            await create_merge_code(self._merge_accounts(), anonymous)
+            await create_merge_code.fn(self._merge_accounts(), anonymous, _reservation=None)
 
 
 @pytest.mark.parametrize("kind", ["profile", "visibility", "unlink"])
@@ -325,14 +320,14 @@ async def test_account_writes_accept_latest_state(kind: str) -> None:
     recorder = AccountEditRecorder(accounts)
     services = cast(Any, SimpleNamespace(edits=recorder))
     if kind == "profile":
-        operation = update_profile(
-            ProfileUpdateRequest(bio="new"), accounts, _caller(), services, Response(), uuid4(), None
+        operation = update_profile.fn(
+            ProfileUpdateRequest(bio="new"), accounts, _caller(), services, uuid4(), None, _reservation=None
         )
     elif kind == "visibility":
-        operation = set_identity_visibility(
-            2, IdentityVisibilityRequest(public=False), accounts, _caller(), services, Response(), uuid4(), None
+        operation = set_identity_visibility.fn(
+            2, IdentityVisibilityRequest(public=False), accounts, _caller(), services, uuid4(), None, _reservation=None
         )
     else:
-        operation = unlink_identity(2, _caller(), services, uuid4(), None)
+        operation = unlink_identity.fn(2, _caller(), services, uuid4(), None, _reservation=None)
     await operation
     assert recorder.commands[0].expected[0].value is None

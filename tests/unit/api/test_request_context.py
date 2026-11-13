@@ -3,7 +3,7 @@
 import re
 
 import httpx
-from starlette.datastructures import Headers
+from litestar.datastructures import Headers
 
 from squid.api.request_context import _traceparent_trace_id, resolve_request_id
 

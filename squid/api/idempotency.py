@@ -8,17 +8,22 @@ so clients must resend the same representation, not merely equivalent JSON.
 """
 
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Annotated, cast
 from uuid import UUID, uuid4
 
 from anyio import CancelScope
-from fastapi import Depends, Header, Request
-from fastapi.applications import FastAPI
-from fastapi.routing import APIRoute
-from starlette.responses import Response, StreamingResponse
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from litestar import Litestar, Request, Response
+from litestar.di import NamedDependency
+from litestar.exceptions import ValidationException
+from litestar.middleware import DefineMiddleware
+from litestar.params import HeaderParameter
+from litestar.response import Stream
+from litestar.response.base import ASGIResponse
+from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
+from squid.api.contract import iter_contract_routes
 from squid.api.security import Caller, current_caller
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 
@@ -30,8 +35,8 @@ MAX_IDEMPOTENT_RESPONSE_BYTES = 1024 * 1024
 
 IdempotencyKey = Annotated[
     str | None,
-    Header(
-        alias="Idempotency-Key",
+    HeaderParameter(
+        name="Idempotency-Key",
         min_length=1,
         max_length=255,
         pattern=r"^[\x21-\x7e]+$",
@@ -59,7 +64,7 @@ class IdempotencyReservationState:
 
 async def reserve_idempotent_request(
     request: Request,
-    caller: Annotated[Caller, Depends(current_caller)],
+    caller: NamedDependency[Caller],
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Reserve a caller key when an unsafe request supplies one."""
@@ -68,7 +73,7 @@ async def reserve_idempotent_request(
 
 async def reserve_edit_request(
     request: Request,
-    caller: Annotated[Caller, Depends(current_caller)],
+    caller: NamedDependency[Caller],
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Resume unfinished requests only for routes whose every write uses EditExecutor."""
@@ -90,8 +95,7 @@ async def reserve_idempotent_request_for(
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
-    route = request.scope.get("route")
-    route_path = cast(str, getattr(route, "path", request.url.path))
+    route_path = request.scope.get("path_template", request.url.path)
     reservation = await service.reserve(
         caller=caller,
         key=idempotency_key,
@@ -105,13 +109,13 @@ async def reserve_idempotent_request_for(
     setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation, recoverable))
 
 
-def edit_operation_id(request: Request) -> UUID:
+def edit_operation_id(request: Request, _reservation: NamedDependency[None] = None) -> UUID:
     """Share the reserved HTTP mutation identity with the application's outcome record."""
     reservation = getattr(request.state, _STATE_KEY, None)
     return reservation.request.request_id if isinstance(reservation, IdempotencyReservationState) else uuid4()
 
 
-async def replay_response(_request: Request, error: Exception) -> Response:
+def replay_response(_request: Request, error: Exception) -> Response:
     """Render a response stored by a completed equivalent request."""
     if not isinstance(error, IdempotencyReplay):
         raise error
@@ -169,7 +173,7 @@ class CompleteIdempotentResponseMiddleware:
             with CancelScope(shield=True):
                 stored = await pending.service.complete(pending.request, response)
             if stored != response:
-                await Response(content=stored.body, status_code=stored.status_code, headers=dict(stored.headers))(
+                await ASGIResponse(body=stored.body, status_code=stored.status_code, headers=dict(stored.headers))(
                     scope, receive, send
                 )
                 return
@@ -185,30 +189,50 @@ async def complete_failed_request(request: Request, response: Response) -> Respo
     if not isinstance(pending, IdempotencyReservationState) or pending.recoverable:
         return response
     stored = StoredResponse(
-        status_code=response.status_code,
+        status_code=response.status_code or 200,
         headers=tuple((key, value) for key, value in response.headers.items() if key in _REPLAYED_HEADERS),
-        body=bytes(response.body),
+        body=response.render(response.content, response.media_type or "application/json"),
     )
     with CancelScope(shield=True):
         stored = await pending.service.complete(pending.request, stored)
     return Response(content=stored.body, status_code=stored.status_code, headers=dict(stored.headers))
 
 
-def assert_idempotency_completion_installed(app: FastAPI) -> None:
+def assert_idempotency_completion_installed(app: Litestar) -> None:
     """Fail application construction when reservation has no completion middleware."""
-    if not any(middleware.cls is CompleteIdempotentResponseMiddleware for middleware in app.user_middleware):
+    if not any(
+        middleware is CompleteIdempotentResponseMiddleware
+        or (isinstance(middleware, DefineMiddleware) and middleware.middleware is CompleteIdempotentResponseMiddleware)
+        for middleware in app.middleware
+    ):
         msg = "Idempotent routes require CompleteIdempotentResponseMiddleware."
         raise RuntimeError(msg)
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        dependencies = {dependency.call for dependency in route.dependant.dependencies}
+    for route, handler in iter_contract_routes(app):
+        dependencies = {provider.dependency for provider in handler.resolve_dependencies().values()}
         if not dependencies.intersection({reserve_idempotent_request, reserve_edit_request}):
             continue
-        response_class = route.response_class
-        if isinstance(response_class, type) and issubclass(response_class, StreamingResponse):
+        response_class = handler.response_class
+        if isinstance(response_class, type) and issubclass(response_class, Stream):
             msg = f"Idempotent route {route.path} cannot declare a streaming response."
             raise TypeError(msg)
+
+
+async def reserve_idempotent_before_request(request: Request) -> None:
+    """Reserve an ordinary write after applying caller-specific quotas."""
+    from squid.api.rate_limit import enforce_route_rate_limits
+
+    caller = await current_caller(request)
+    await enforce_route_rate_limits(request, caller)
+    await reserve_idempotent_request_for(request, caller.subject, _idempotency_key(request))
+
+
+async def reserve_edit_before_request(request: Request) -> None:
+    """Reserve a recoverable edit after applying caller-specific quotas."""
+    from squid.api.rate_limit import enforce_route_rate_limits
+
+    caller = await current_caller(request)
+    await enforce_route_rate_limits(request, caller)
+    await reserve_idempotent_request_for(request, caller.subject, _idempotency_key(request), recoverable=True)
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:
@@ -235,7 +259,7 @@ async def _request_fingerprint(request: Request, route_path: str) -> bytes:
 
 
 def _response_limit(scope: Scope) -> int:
-    app = scope.get("app")
+    app = scope.get("litestar_app")
     config = getattr(getattr(app, "state", None), "config", None)
     return cast(int, getattr(getattr(config, "api", None), "idempotency_max_response_bytes", None)) or (
         MAX_IDEMPOTENT_RESPONSE_BYTES
@@ -259,3 +283,16 @@ def _stored_response(messages: list[Message], *, max_bytes: int) -> StoredRespon
         msg = f"An idempotent response exceeds the {max_bytes}-byte replay limit."
         raise RuntimeError(msg)
     return StoredResponse(status_code=start["status"], headers=headers, body=body)
+
+
+def _idempotency_key(request: Request) -> str | None:
+    """Apply the same header constraints when reservation runs as a request hook."""
+    key = request.headers.get("Idempotency-Key")
+    if key is not None and (not 1 <= len(key) <= 255 or re.fullmatch(r"[\x21-\x7e]+", key) is None):
+        raise ValidationException(
+            detail="Invalid Idempotency-Key header",
+            extra=[
+                {"source": "header", "key": "Idempotency-Key", "message": "Expected 1-255 visible ASCII characters"}
+            ],
+        )
+    return key

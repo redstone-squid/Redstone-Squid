@@ -114,7 +114,7 @@ export function sectionsForDraft(
 /** Copy answers and fill absent keys from form defaults without persisting those defaults. */
 export function materializedAnswers(
   sections: FormSectionResponse[],
-  answers: StoredDraftResponse["answers"],
+  answers: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
   const materialized = { ...answers };
   for (const section of sections) {

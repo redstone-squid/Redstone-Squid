@@ -1,12 +1,13 @@
 """Bound request buffering before validation and idempotency fingerprinting."""
 
+import re
 from collections.abc import Callable, Sequence
 from http import HTTPStatus
 
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.routing import BaseRoute, Route
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from litestar import Request
+from litestar.exceptions import HTTPException
+from litestar.routes import BaseRoute, HTTPRoute
+from litestar.types import ASGIApp, Receive, ReceiveMessage, Scope, Send
 
 from squid.api.errors import handle_http_error
 
@@ -19,8 +20,8 @@ def streams_own_body[EndpointT: Callable[..., object]](endpoint: EndpointT) -> E
     """Exempt one endpoint from buffering, because it bounds its own stream.
 
     Apply this decorator to endpoints that enforce their own upload limits.
-    The middleware discovers their paths when the application is built, so moving
-    an endpoint does not require a second path list to be updated.
+    The middleware reads this marker from the matched handler, so moving an
+    endpoint does not require a second path list to be updated.
     """
     setattr(endpoint, _STREAMS_OWN_BODY, True)
     return endpoint
@@ -38,7 +39,7 @@ class BoundedRequestBodyMiddleware:
         self,
         app: ASGIApp,
         *,
-        routes: Sequence[BaseRoute] = (),
+        routes: Sequence[BaseRoute] | None = None,
         max_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
     ) -> None:
         if max_bytes < 1:
@@ -47,9 +48,10 @@ class BoundedRequestBodyMiddleware:
         self._app = app
         self._max_bytes = max_bytes
         self._exempt = tuple(
-            route.path_regex
-            for route in routes
-            if isinstance(route, Route) and getattr(route.endpoint, _STREAMS_OWN_BODY, False)
+            re.compile(re.sub(r"\\{[^}]+\\}", "[^/]+", re.escape(route.path_format)))
+            for route in routes or ()
+            if isinstance(route, HTTPRoute)
+            and any(getattr(handler.fn, _STREAMS_OWN_BODY, False) for handler, _ in route.route_handler_map.values())
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -62,7 +64,7 @@ class BoundedRequestBodyMiddleware:
 
         next_message = 0
 
-        async def replay_receive() -> Message:
+        async def replay_receive() -> ReceiveMessage:
             nonlocal next_message
             if next_message < len(messages):
                 message = messages[next_message]
@@ -73,6 +75,10 @@ class BoundedRequestBodyMiddleware:
         await self._app(scope, replay_receive, send)
 
     def _must_bound(self, scope: Scope) -> bool:
+        # Litestar resolves the native handler before entering route middleware.
+        handler = scope.get("route_handler")
+        if handler is not None and getattr(handler.fn, _STREAMS_OWN_BODY, False):
+            return False
         return (
             scope["type"] == "http"
             and scope.get("method") in _UNSAFE_METHODS
@@ -90,8 +96,8 @@ class BoundedRequestBodyMiddleware:
                 continue
         return False
 
-    async def _read_bounded(self, receive: Receive) -> list[Message] | None:
-        messages: list[Message] = []
+    async def _read_bounded(self, receive: Receive) -> list[ReceiveMessage] | None:
+        messages: list[ReceiveMessage] = []
         received = 0
         while True:
             message = await receive()
@@ -111,5 +117,6 @@ class BoundedRequestBodyMiddleware:
             status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
             detail=f"Request bodies are limited to {self._max_bytes} bytes.",
         )
-        response = await handle_http_error(Request(scope, receive=receive), error)
-        await response(scope, receive, send)
+        request = Request(scope, receive=receive)
+        response = handle_http_error(request, error)
+        await response.to_asgi_response(request.app, request)(scope, receive, send)

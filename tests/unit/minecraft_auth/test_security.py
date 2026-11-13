@@ -5,9 +5,8 @@ from typing import cast, override
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from starlette.requests import Request
-from starlette.types import Scope
+from litestar import Litestar, Request
+from litestar.types import Scope
 
 from squid.api.security import current_caller
 from squid.core.errors import AuthenticationError
@@ -102,7 +101,7 @@ def request_with_services(
     class Runtime:
         services: Services
 
-    app = FastAPI()
+    app = Litestar(route_handlers=[])
     app.state.config = TEST_CONFIG
     app.state.runtime = Runtime(Services(players, installations))
     return Request(
@@ -112,8 +111,8 @@ def request_with_services(
                 "type": "http",
                 "method": "GET",
                 "path": "/v1/submissions/drafts/test",
-                "headers": list(headers),
-                "app": app,
+                "headers": [(b"authorization", f"Bearer {PLAYER_TOKEN}".encode()), *headers],
+                "litestar_app": app,
             },
         )
     )
@@ -123,7 +122,7 @@ async def test_fabric_player_token_derives_bound_caller_without_installation_hea
     players = FakePlayers()
     request = request_with_services(players, FakeInstallations())
 
-    caller = await current_caller(request, f"Bearer {PLAYER_TOKEN}")
+    caller = await current_caller(request)
 
     assert caller.kind == "minecraft_player"
     assert caller.account_id == 42
@@ -145,7 +144,7 @@ async def test_paper_player_token_requires_and_authenticates_both_installation_h
         ),
     )
 
-    caller = await current_caller(request, f"Bearer {PLAYER_TOKEN}")
+    caller = await current_caller(request)
 
     assert caller.minecraft_origin == "paper"
     assert caller.installation_id == INSTALLATION_ID
@@ -170,7 +169,7 @@ async def test_incomplete_or_oversized_paper_binding_fails_before_authentication
     installations = FakeInstallations()
 
     with pytest.raises(AuthenticationError):
-        await current_caller(request_with_services(players, installations, headers=headers), f"Bearer {PLAYER_TOKEN}")
+        await current_caller(request_with_services(players, installations, headers=headers))
 
     assert players.fabric_token is None
     assert players.paper_call is None

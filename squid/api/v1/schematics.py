@@ -2,12 +2,14 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from litestar import Request, Response, Router, get, post
+from litestar.openapi.datastructures import ResponseSpec
+from litestar.params import FromPath, JSONBody, PathParameter, QueryParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import BuildQueries, CurrentCaller, Permissions, Schematics
 from squid.api.errors import responses
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.links import relative_url_for
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
@@ -15,12 +17,9 @@ from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
 from squid.schematics.errors import SchematicSupportUnavailableError
 
-router = APIRouter(tags=["schematics"])
 
-
-@router.get(
-    "/builds/{build_id}/schematics",
-    response_model=Page[SchematicSummary],
+@get(
+    "/builds/{build_id:int}/schematics",
     responses=responses(
         400,
         404,
@@ -29,10 +28,10 @@ router = APIRouter(tags=["schematics"])
         describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="build_schematics_list",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def list_build_schematics(
-    build_id: int,
+    build_id: FromPath[int],
     request: Request,
     build_queries: BuildQueries,
     schematics: Schematics,
@@ -59,23 +58,27 @@ async def list_build_schematics(
     )
 
 
-@router.get(
-    "/builds/{build_id}/schematics/{schematic_id}/content",
+@get(
+    "/builds/{build_id:int}/schematics/{schematic_id:int}/content",
     name="build_schematic_content",
-    response_class=Response,
     responses={
         **responses(404, 422, 503),
-        200: {"content": {"application/octet-stream": {}}, "description": "Stored schematic content"},
+        200: ResponseSpec(
+            generate_examples=False,
+            data_container=bytes,
+            media_type="application/octet-stream",
+            description="Stored schematic content",
+        ),
     },
     operation_id="build_schematic_content_get",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_schematic_content(
-    build_id: int,
-    schematic_id: Annotated[int, Path(ge=1)],
+    build_id: FromPath[int],
+    schematic_id: Annotated[int, PathParameter(ge=1)],
     build_queries: BuildQueries,
     schematics: Schematics,
-) -> Response:
+) -> Response[bytes]:
     """Download explicitly published original bytes from a confirmed build."""
     await build_queries.get_public(build_id)
     download = await schematics.public_download(build_id, schematic_id)
@@ -94,9 +97,8 @@ async def get_schematic_content(
     )
 
 
-@router.get(
-    "/builds/{build_id}/schematics/render",
-    response_class=Response,
+@get(
+    "/builds/{build_id:int}/schematics/render",
     responses={
         **responses(
             404,
@@ -109,21 +111,26 @@ async def get_schematic_content(
                 503: "Previews are not configured on this instance, or the renderer is unavailable.",
             },
         ),
-        200: {"content": {"image/png": {}}, "description": "Rendered schematic preview"},
+        200: ResponseSpec(
+            generate_examples=False,
+            data_container=bytes,
+            media_type="image/png",
+            description="Rendered schematic preview",
+        ),
     },
     operation_id="build_schematic_render_get",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def render_build_schematic(
-    build_id: int,
+    build_id: FromPath[int],
     build_queries: BuildQueries,
     schematics: Schematics,
-    width: Annotated[int | None, Query(ge=MIN_RENDER_EXTENT, le=MAX_RENDER_EXTENT)] = None,
-    height: Annotated[int | None, Query(ge=MIN_RENDER_EXTENT, le=MAX_RENDER_EXTENT)] = None,
-    yaw: Annotated[float | None, Query(ge=-360, le=360)] = None,
-    pitch: Annotated[float | None, Query(ge=-90, le=90)] = None,
-    zoom: Annotated[float | None, Query(gt=0, le=16)] = None,
-) -> Response:
+    width: Annotated[int | None, QueryParameter(ge=MIN_RENDER_EXTENT, le=MAX_RENDER_EXTENT)] = None,
+    height: Annotated[int | None, QueryParameter(ge=MIN_RENDER_EXTENT, le=MAX_RENDER_EXTENT)] = None,
+    yaw: Annotated[float | None, QueryParameter(ge=-360, le=360)] = None,
+    pitch: Annotated[float | None, QueryParameter(ge=-90, le=90)] = None,
+    zoom: Annotated[float | None, QueryParameter(gt=0, le=16)] = None,
+) -> Response[bytes]:
     """Return a PNG preview of a confirmed build's primary schematic.
 
     Omitted camera parameters use deployment defaults. Reuse a stored preview
@@ -148,19 +155,23 @@ async def render_build_schematic(
     )
 
 
-@router.get(
-    "/schematic-renders/{recipe_hash}/content",
-    response_class=Response,
+@get(
+    "/schematic-renders/{recipe_hash:str}/content",
     responses={
         **responses(404, 422, 503),
-        200: {"content": {"image/png": {}}, "description": "Generated schematic preview"},
+        200: ResponseSpec(
+            generate_examples=False,
+            data_container=bytes,
+            media_type="image/png",
+            description="Generated schematic preview",
+        ),
     },
     operation_id="schematic_render_content_get",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_schematic_render_content(
-    recipe_hash: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
-) -> Response:
+    recipe_hash: Annotated[str, PathParameter(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
+) -> Response[bytes]:
     """Return a content-addressed PNG preview from private object storage."""
     content = await schematics.render_content(recipe_hash)
     return Response(
@@ -170,26 +181,24 @@ async def get_schematic_render_content(
     )
 
 
-@router.post(
-    "/builds/{build_id}/schematics/{schematic_id}/videos",
+@post(
+    "/builds/{build_id:int}/schematics/{schematic_id:int}/videos",
     status_code=202,
-    response_model=VideoResponse,
     operation_id="schematic_video_create",
     responses=responses(403, 404, 409, 413, 422, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
-    openapi_extra=contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only()),
+    before_request=reserve_idempotent_before_request,
+    opt=contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only()),
 )
 async def submit_schematic_video(
-    build_id: int,
-    schematic_id: int,
-    body: VideoCreateRequest,
+    build_id: FromPath[int],
+    schematic_id: FromPath[int],
+    data: JSONBody[VideoCreateRequest],
     build_queries: BuildQueries,
     schematics: Schematics,
     caller: CurrentCaller,
     permissions: Permissions,
     request: Request,
-    response: Response,
-) -> VideoResponse:
+) -> Response[VideoResponse]:
     """Queue a private MP4 of a stored schematic with timed input activations."""
     account_id = caller.require_consented_account()
     if schematics.videos is None:
@@ -198,35 +207,34 @@ async def submit_schematic_video(
     status = await schematics.videos.submit_video(
         build_id,
         schematic_id,
-        body.to_request(),
+        data.to_request(),
         account_id=account_id,
         can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
     )
     await build_queries.get_public(status.build_id)
-    response.headers["Cache-Control"] = "private, no-store"
-    return VideoResponse.from_status(
+    result = VideoResponse.from_status(
         status,
         status_url=relative_url_for(request, "get_schematic_video", video_id=status.id),
         download_url=relative_url_for(request, "get_schematic_video_content", video_id=status.id),
     )
+    return Response(result, status_code=202, headers={"Cache-Control": "private, no-store"})
 
 
-@router.get(
-    "/schematic-videos/{video_id}",
-    response_model=VideoResponse,
+@get(
+    "/schematic-videos/{video_id:int}",
     operation_id="schematic_video_status",
+    name="get_schematic_video",
     responses=responses(403, 404, 422, 503),
-    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    opt=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
 )
 async def get_schematic_video(
-    video_id: int,
+    video_id: FromPath[int],
     build_queries: BuildQueries,
     schematics: Schematics,
     caller: CurrentCaller,
     permissions: Permissions,
     request: Request,
-    response: Response,
-) -> VideoResponse:
+) -> Response[VideoResponse]:
     """Return only the requesting account's video status."""
     account_id = caller.require_consented_account()
     if schematics.videos is None:
@@ -237,31 +245,33 @@ async def get_schematic_video(
         can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
     )
     await build_queries.get_public(status.build_id)
-    response.headers["Cache-Control"] = "private, no-store"
-    return VideoResponse.from_status(
+    result = VideoResponse.from_status(
         status,
         status_url=relative_url_for(request, "get_schematic_video", video_id=status.id),
         download_url=relative_url_for(request, "get_schematic_video_content", video_id=status.id),
     )
+    return Response(result, headers={"Cache-Control": "private, no-store"})
 
 
-@router.get(
-    "/schematic-videos/{video_id}/content",
-    response_class=Response,
+@get(
+    "/schematic-videos/{video_id:int}/content",
     operation_id="schematic_video_content",
-    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    name="get_schematic_video_content",
+    opt=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
     responses={
         **responses(403, 404, 409, 422, 503),
-        200: {"content": {"video/mp4": {}}, "description": "Private schematic video"},
+        200: ResponseSpec(
+            generate_examples=False, data_container=bytes, media_type="video/mp4", description="Private schematic video"
+        ),
     },
 )
 async def get_schematic_video_content(
-    video_id: int,
+    video_id: FromPath[int],
     build_queries: BuildQueries,
     schematics: Schematics,
     caller: CurrentCaller,
     permissions: Permissions,
-) -> Response:
+) -> Response[bytes]:
     """Download a completed private video while its source remains accessible."""
     account_id = caller.require_consented_account()
     if schematics.videos is None:
@@ -286,3 +296,18 @@ async def get_schematic_video_content(
             "Content-Disposition": f'attachment; filename="schematic-video-{video_id}.mp4"',
         },
     )
+
+
+router = Router(
+    path="/",
+    tags=["schematics"],
+    route_handlers=[
+        list_build_schematics,
+        get_schematic_content,
+        render_build_schematic,
+        get_schematic_render_content,
+        submit_schematic_video,
+        get_schematic_video,
+        get_schematic_video_content,
+    ],
+)

@@ -6,24 +6,14 @@ export type ClientOptions = {
 
 /**
  * AccountMergeDetail
- *
- * The stable identities left behind by a completed merge.
  */
 export type AccountMergeDetail = {
-    /**
-     * Surviving Creator Id
-     */
     surviving_creator_id: string;
-    /**
-     * Redirected Creator Id
-     */
     redirected_creator_id: string;
 };
 
 /**
  * ApiCapabilities
- *
- * Namespaced compatibility facts for generated and handwritten clients.
  */
 export type ApiCapabilities = {
     api: ApiVersionCapabilities;
@@ -36,56 +26,40 @@ export type ApiCapabilities = {
 
 /**
  * ApiFeatureCapabilities
- *
- * Stable feature identifiers understood by this API deployment.
  */
 export type ApiFeatureCapabilities = {
-    /**
-     * Identifiers
-     */
     identifiers: Array<string>;
 };
 
 /**
  * ApiVersionCapabilities
- *
- * Version of the public HTTP API, independent of payload protocols.
  */
 export type ApiVersionCapabilities = {
-    /**
-     * Semantic Version
-     */
     semantic_version: string;
 };
 
 /**
  * AttachSchematicRequest
- *
- * Reference a file already supplied to another draft owned by the same account.
  */
 export type AttachSchematicRequest = {
-    /**
-     * Source Draft Id
-     */
     source_draft_id: string;
 };
 
 /**
  * AvatarDetail
- *
- * The linked identity a profile's avatar is rendered from.
  */
 export type AvatarDetail = {
-    /**
-     * Identity Id
-     */
     identity_id: number;
     provider: IdentityProvider;
-    /**
-     * Url
-     */
     url: string | null;
 };
+
+/**
+ * BaseTitle
+ *
+ * A metric by which records are classified.
+ */
+export type BaseTitle = 'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest';
 
 /**
  * BuildCategory
@@ -96,267 +70,110 @@ export type BuildCategory = 'Door' | 'Extender' | 'Utility' | 'Entrance' | 'Othe
 
 /**
  * BuildDetail
- *
- * A build summary with category-specific details, restrictions, and media links.
- *
- * Read details.category to determine which fields are available. For example,
- * a door has door_dimensions; utility builds have no category-specific fields.
  */
 export type BuildDetail = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Display Name
-     */
     display_name: string | null;
-    /**
-     * Status
-     */
     status: string;
-    /**
-     * Category
-     */
     category: string;
     dimensions: Dimensions;
-    /**
-     * Creators
-     */
     creators: Array<string>;
-    /**
-     * Tags
-     */
     tags: Array<BuildTag>;
     preview: BuildPreview | null;
-    /**
-     * Version Spec
-     */
     version_spec: string | null;
-    /**
-     * Versions
-     */
     versions: Array<string>;
-    /**
-     * Opening Time
-     */
     opening_time: number | null;
-    /**
-     * Closing Time
-     */
     closing_time: number | null;
-    /**
-     * Created At
-     */
     created_at: string | null;
-    /**
-     * Updated At
-     */
     updated_at: string | null;
-    details: BuildDetails;
-    /**
-     * Restrictions
-     */
+    details: DoorDetails | ExtenderDetails | GeneralDetails;
     restrictions: {
         [key: string]: Array<string>;
     };
-    /**
-     * Description
-     */
     description: string | null;
     links: BuildLinks;
     sponsor?: BuildSponsor | null;
 };
 
-export type BuildDetails = ({
-    category: 'Door';
-} & DoorDetails) | ({
-    category: 'Extender';
-} & ExtenderDetails) | ({
-    category: 'Entrance' | 'Other' | 'Utility';
-} & GeneralDetails);
+/**
+ * BuildKind
+ *
+ * A kind of redstone build recognized by the rules.
+ */
+export type BuildKind = 'door' | 'entrance' | 'extender' | 'utility';
 
 /**
  * BuildLinks
- *
- * Allowlisted public media links attached to a build.
  */
 export type BuildLinks = {
-    /**
-     * Images
-     */
     images: Array<string>;
-    /**
-     * Videos
-     */
     videos: Array<string>;
-    /**
-     * World Downloads
-     */
     world_downloads: Array<string>;
-    /**
-     * Schematics
-     */
     schematics: Array<string>;
-    /**
-     * Renders
-     */
     renders: Array<string>;
 };
 
 /**
  * BuildPatch
- *
- * A partial build edit which preserves omitted versus explicitly cleared fields.
  */
 export type BuildPatch = {
-    /**
-     * Display Name
-     */
     display_name?: string | null;
-    /**
-     * Version Spec
-     */
     version_spec?: string | null;
-    dimensions?: InputDimensions | null;
+    versions?: Array<string> | null;
+    showcase_tags?: Array<string> | null;
+    dimensions?: [
+        number | null,
+        number | null,
+        number | null
+    ] | null;
     door?: DoorPatch | null;
     extender?: ExtenderPatch | null;
-    /**
-     * Wiring Placement Restrictions
-     */
     wiring_placement_restrictions?: Array<string> | null;
-    /**
-     * Animated Restrictions
-     */
     animated_restrictions?: Array<string> | null;
-    /**
-     * Component Restrictions
-     */
     component_restrictions?: Array<string> | null;
-    /**
-     * Miscellaneous Restrictions
-     */
     miscellaneous_restrictions?: Array<string> | null;
-    /**
-     * Locationality
-     */
     locationality?: string | null;
-    /**
-     * Directionality
-     */
     directionality?: string | null;
-    /**
-     * Extra User Info
-     */
     extra_user_info?: string | null;
-    /**
-     * Creators Ign
-     */
     creators_ign?: Array<string> | null;
-    /**
-     * Image Urls
-     */
     image_urls?: Array<string> | null;
-    /**
-     * Video Urls
-     */
     video_urls?: Array<string> | null;
-    /**
-     * World Download Urls
-     */
     world_download_urls?: Array<string> | null;
-    /**
-     * Schematic Urls
-     */
     schematic_urls?: Array<string> | null;
-    /**
-     * Render Urls
-     */
     render_urls?: Array<string> | null;
-    /**
-     * Server Ip
-     */
     server_ip?: string | null;
-    /**
-     * Coordinates
-     */
     coordinates?: string | null;
-    /**
-     * Command To Get To Build
-     */
     command_to_get_to_build?: string | null;
-    /**
-     * Completion Time
-     */
     completion_time?: string | null;
 };
 
 /**
  * BuildPreview
- *
- * The preferred HTTPS image for a build card.
  */
 export type BuildPreview = {
-    /**
-     * Kind
-     */
     kind: 'render' | 'image';
-    /**
-     * Url
-     */
     url: string;
 };
 
 /**
  * BuildSearchResult
- *
- * A build match, hydrated from the authoritative record.
  */
 export type BuildSearchResult = {
-    /**
-     * Resource Kind
-     */
     resource_kind?: 'build';
-    /**
-     * Score
-     */
     score: number | null;
     build: BuildSummary;
 };
 
 /**
  * BuildSponsor
- *
- * Public sponsor details captured when the build was finalized.
  */
 export type BuildSponsor = {
-    /**
-     * Installation Id
-     */
     installation_id: string;
-    /**
-     * Display Name
-     */
     display_name: string | null;
-    /**
-     * Address
-     */
     address: string | null;
-    /**
-     * Description
-     */
     description: string | null;
-    /**
-     * Website Url
-     */
     website_url: string | null;
 };
 
@@ -369,436 +186,184 @@ export type BuildStatusFilter = 'pending' | 'confirmed' | 'denied';
 
 /**
  * BuildSummary
- *
- * Stable collection representation of a build.
  */
 export type BuildSummary = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Display Name
-     */
     display_name: string | null;
-    /**
-     * Status
-     */
     status: string;
-    /**
-     * Category
-     */
     category: string;
     dimensions: Dimensions;
-    /**
-     * Creators
-     */
     creators: Array<string>;
-    /**
-     * Tags
-     */
     tags: Array<BuildTag>;
     preview: BuildPreview | null;
-    /**
-     * Version Spec
-     */
     version_spec: string | null;
-    /**
-     * Versions
-     */
     versions: Array<string>;
-    /**
-     * Opening Time
-     */
     opening_time: number | null;
-    /**
-     * Closing Time
-     */
     closing_time: number | null;
-    /**
-     * Created At
-     */
     created_at: string | null;
-    /**
-     * Updated At
-     */
     updated_at: string | null;
 };
 
 /**
  * BuildTag
- *
- * A tag on a build, without who applied it or how.
  */
 export type BuildTag = {
-    /**
-     * Key
-     */
     key: string;
-    /**
-     * Name
-     */
     name: string;
-    /**
-     * Value
-     */
     value: string | boolean | null;
-    /**
-     * Unit
-     */
     unit: string | null;
 };
 
 /**
  * CategoryFormResponse
- *
- * A stable build category and its category-specific form sections.
  */
 export type CategoryFormResponse = {
-    /**
-     * Code
-     */
     code: string;
-    /**
-     * Label
-     */
     label: string;
-    /**
-     * Sections
-     */
     sections: Array<FormSectionResponse>;
 };
 
 /**
  * ChallengeApprovalRequest
- *
- * Approve a displayed user code as the signed-in account.
  */
 export type ChallengeApprovalRequest = {
-    /**
-     * User Code
-     */
     user_code: string;
 };
 
 /**
  * ChallengeApprovalResponse
- *
- * Non-secret confirmation of an exact-identity approval.
  */
 export type ChallengeApprovalResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Java Uuid
-     */
     java_uuid: string;
     origin: MinecraftClientOrigin;
-    /**
-     * Approved At
-     */
     approved_at: string;
 };
 
 /**
  * ChallengeCreateResponse
- *
- * One-time device-flow codes and their polling policy.
  */
 export type ChallengeCreateResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Device Code
-     */
     device_code: string;
-    /**
-     * User Code
-     */
     user_code: string;
-    /**
-     * Verification Uri
-     */
     verification_uri: string;
-    /**
-     * Verification Uri Complete
-     */
     verification_uri_complete: string;
-    /**
-     * Expires At
-     */
     expires_at: string;
-    /**
-     * Polling Interval Seconds
-     */
     polling_interval_seconds: number;
 };
 
 /**
  * ChoiceOptionResponse
- *
- * One stable selectable value and its localized display label.
  */
 export type ChoiceOptionResponse = {
-    /**
-     * Value
-     */
     value: string;
-    /**
-     * Label
-     */
     label: string;
 };
 
 /**
  * CliDeviceListResponse
- *
- * All CLI devices owned by the signed-in browser account.
  */
 export type CliDeviceListResponse = {
-    /**
-     * Devices
-     */
     devices: Array<CliDeviceResponse>;
 };
 
 /**
  * CliDeviceResponse
- *
- * Account-visible CLI device metadata without its public key.
  */
 export type CliDeviceResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Client Instance Id
-     */
     client_instance_id: string;
-    /**
-     * Label
-     */
     label: string;
-    /**
-     * Public Key Fingerprint
-     */
     public_key_fingerprint: string;
-    /**
-     * Created At
-     */
     created_at: string;
-    /**
-     * Last Used At
-     */
     last_used_at: string;
-    /**
-     * Revoked At
-     */
     revoked_at: string | null;
 };
 
 /**
  * CliEnrollmentApprovalRequest
- *
- * Approve a displayed CLI user code as the signed-in browser account.
  */
 export type CliEnrollmentApprovalRequest = {
-    /**
-     * User Code
-     */
     user_code: string;
 };
 
 /**
  * CliEnrollmentApprovalResponse
- *
- * Safe device identity shown before and after browser approval.
  */
 export type CliEnrollmentApprovalResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Client Instance Id
-     */
     client_instance_id: string;
-    /**
-     * Label
-     */
     label: string;
-    /**
-     * Public Key Fingerprint
-     */
     public_key_fingerprint: string;
-    /**
-     * Created At
-     */
     created_at: string;
-    /**
-     * Expires At
-     */
     expires_at: string;
-    /**
-     * Approved At
-     */
     approved_at: string | null;
 };
 
 /**
  * CliEnrollmentCreateRequest
- *
- * Enroll one client-held Ed25519 public key.
  */
 export type CliEnrollmentCreateRequest = {
-    /**
-     * Public Key
-     */
     public_key: string;
-    /**
-     * Client Instance Id
-     */
     client_instance_id: string;
-    /**
-     * Label
-     */
     label: string;
 };
 
 /**
  * CliEnrollmentExchangeRequest
- *
- * Prove the enrolled private key and exchange browser approval.
  */
 export type CliEnrollmentExchangeRequest = {
-    /**
-     * Device Code
-     */
     device_code: string;
-    /**
-     * Signature
-     */
     signature: string;
 };
 
 /**
  * CliEnrollmentResponse
- *
- * One-time browser approval codes and polling policy.
  */
 export type CliEnrollmentResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Device Code
-     */
     device_code: string;
-    /**
-     * User Code
-     */
     user_code: string;
-    /**
-     * Verification Uri
-     */
     verification_uri: string;
-    /**
-     * Verification Uri Complete
-     */
     verification_uri_complete: string;
-    /**
-     * Expires At
-     */
     expires_at: string;
-    /**
-     * Polling Interval Seconds
-     */
     polling_interval_seconds: number;
 };
 
 /**
  * CliSessionChallengeRequest
- *
- * Request a one-time signing nonce for an enrolled device.
  */
 export type CliSessionChallengeRequest = {
-    /**
-     * Device Id
-     */
     device_id: string;
 };
 
 /**
  * CliSessionChallengeResponse
- *
- * A one-time plaintext proof nonce.
  */
 export type CliSessionChallengeResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Device Id
-     */
     device_id: string;
-    /**
-     * Nonce
-     */
     nonce: string;
-    /**
-     * Expires At
-     */
     expires_at: string;
 };
 
 /**
  * CliSessionExchangeRequest
- *
- * Exchange an Ed25519-signed proof nonce for a short session.
  */
 export type CliSessionExchangeRequest = {
-    /**
-     * Device Id
-     */
     device_id: string;
-    /**
-     * Challenge Id
-     */
     challenge_id: string;
-    /**
-     * Nonce
-     */
     nonce: string;
-    /**
-     * Signature
-     */
     signature: string;
 };
 
 /**
  * ConsentGrantRequest
- *
- * Which notice version the client actually displayed before asking.
  */
 export type ConsentGrantRequest = {
-    /**
-     * Version
-     */
     version?: string | null;
 };
 
@@ -811,323 +376,147 @@ export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'durat
 
 /**
  * CreatorAliasDetail
- *
- * A public creator credit with no linked account information.
  */
 export type CreatorAliasDetail = {
-    /**
-     * Name
-     */
     name: string;
-    /**
-     * Claimed
-     */
     claimed: boolean;
-    /**
-     * Creator Id
-     */
     creator_id: string | null;
 };
 
 /**
  * CreatorProfileDetail
- *
- * A creator's public profile, including the destination of an account merge.
- *
- * A hidden profile still includes id, canonical_id, and aliases so existing build
- * credits remain usable. Other profile details are null or empty.
  */
 export type CreatorProfileDetail = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Canonical Id
-     */
     canonical_id: string | null;
-    /**
-     * Hidden
-     */
     hidden: boolean;
-    /**
-     * Aliases
-     */
     aliases: Array<CreditedAliasDetail>;
-    /**
-     * Display Name
-     */
     display_name: string | null;
-    /**
-     * Bio
-     */
     bio: string | null;
-    /**
-     * Pronouns
-     */
     pronouns: string | null;
-    /**
-     * Links
-     */
-    links: Array<ProfileLinkDetail>;
-    /**
-     * Avatar Url
-     */
+    links: Array<CreatorsProfileLinkDetail>;
     avatar_url: string | null;
-    /**
-     * Joined At
-     */
-    joined_at: string | null;
-    /**
-     * Identities
-     */
+    joined_at: unknown | null;
     identities: Array<PublicIdentityDetail>;
 };
 
 /**
  * CreditedAliasDetail
- *
- * One creator name held by this creator, and how many builds carry it.
  */
 export type CreditedAliasDetail = {
-    /**
-     * Name
-     */
     name: string;
-    /**
-     * Build Count
-     */
     build_count: number;
 };
 
 /**
  * CsrfTokenResponse
- *
- * A session-bound double-submit token, never a session credential.
  */
 export type CsrfTokenResponse = {
-    /**
-     * Csrf Token
-     */
     csrf_token: string;
 };
 
 /**
  * Dimensions
- *
- * A three-dimensional build measurement.
  */
 export type Dimensions = {
-    /**
-     * Width
-     */
     width: number | null;
-    /**
-     * Height
-     */
     height: number | null;
-    /**
-     * Depth
-     */
     depth: number | null;
 };
 
 /**
  * DoorDetails
- *
- * Measurements and patterns specific to doors.
- *
- * BuildSummary already includes opening_time and closing_time. This section
- * adds the visible timings and opening dimensions without repeating those fields.
  */
 export type DoorDetails = {
-    /**
-     * Category
-     */
     category?: 'Door';
     door_dimensions: Dimensions;
-    /**
-     * Orientation
-     */
     orientation: string | null;
-    /**
-     * Patterns
-     */
     patterns: Array<string>;
-    /**
-     * Visible Opening Time
-     */
     visible_opening_time: number | null;
-    /**
-     * Visible Closing Time
-     */
     visible_closing_time: number | null;
 };
 
 /**
  * DoorPatch
- *
- * A partial edit of the facts only a door has.
- *
- * Sending this for a build of another category is rejected: the category is
- * structural, so there is no field to set.
  */
 export type DoorPatch = {
-    door_dimensions?: InputDimensions | null;
-    /**
-     * Orientation
-     */
+    door_dimensions?: [
+        number | null,
+        number | null,
+        number | null
+    ] | null;
     orientation?: string | null;
-    /**
-     * Patterns
-     */
     patterns?: Array<string> | null;
-    /**
-     * Opening Time
-     */
     opening_time?: number | null;
-    /**
-     * Closing Time
-     */
     closing_time?: number | null;
-    /**
-     * Visible Opening Time
-     */
     visible_opening_time?: number | null;
-    /**
-     * Visible Closing Time
-     */
     visible_closing_time?: number | null;
 };
 
 /**
  * DraftChangeRequest
- *
- * A group of field edits applied against an expected draft revision.
- *
- * Reuse the same idempotency_key when retrying the same change. The base_revision
- * lets the service detect another edit made since the client read the draft.
  */
 export type DraftChangeRequest = {
-    /**
-     * Base Revision
-     */
     base_revision: number;
-    /**
-     * Client Instance Id
-     */
     client_instance_id: string;
-    /**
-     * Idempotency Key
-     */
     idempotency_key: string;
-    /**
-     * Operations
-     */
     operations: Array<FieldOperationRequest>;
 };
 
 /**
  * DraftChangeResponse
- *
- * The state produced by a draft change and whether it was a replay.
  */
 export type DraftChangeResponse = {
     draft: StoredDraftResponse;
-    /**
-     * Replayed
-     */
     replayed: boolean;
 };
 
 /**
  * DraftCreateRequest
- *
- * Request an empty account-owned draft pinned to the current form revision.
  */
 export type DraftCreateRequest = {
-    /**
-     * Category
-     */
     category: string;
     origin: SubmissionOrigin;
-    /**
-     * Client Capabilities
-     */
     client_capabilities?: Array<string>;
 };
 
 /**
  * DraftInboxResponse
- *
- * Bounded staff correction work; the last draft ID is the next exclusive cursor.
  */
 export type DraftInboxResponse = {
-    /**
-     * Drafts
-     */
     drafts: Array<DraftSummaryResponse>;
 };
 
 /**
  * DraftListResponse
- *
- * Bounded active drafts owned by one authenticated account.
  */
 export type DraftListResponse = {
-    /**
-     * Drafts
-     */
     drafts: Array<DraftSummaryResponse>;
 };
 
 /**
  * DraftManifestUpgradeRequest
- *
- * Move a draft to the next checked-in form revision.
  */
 export type DraftManifestUpgradeRequest = {
-    /**
-     * Base Revision
-     */
     base_revision: number;
-    /**
-     * Target Revision
-     */
     target_revision: number;
 };
 
 /**
  * DraftManifestUpgradeResponse
- *
- * The upgraded draft and whether the requested target was already current.
  */
 export type DraftManifestUpgradeResponse = {
     draft: StoredDraftResponse;
-    /**
-     * Replayed
-     */
     replayed: boolean;
 };
 
 /**
  * DraftMediaArtifactResponse
- *
- * Dimensions and media type of one normalized image, video, or thumbnail.
  */
 export type DraftMediaArtifactResponse = {
     role: DraftMediaArtifactRole;
-    /**
-     * Content Type
-     */
     content_type: string;
-    /**
-     * Width
-     */
     width: number;
-    /**
-     * Height
-     */
     height: number;
 };
 
@@ -1140,76 +529,34 @@ export type DraftMediaArtifactRole = 'output' | 'video_thumbnail';
 
 /**
  * DraftMediaLimitsResponse
- *
- * Server-enforced upload, batch, and decoder-work budgets.
  */
 export type DraftMediaLimitsResponse = {
-    /**
-     * Max Upload Bytes
-     */
     max_upload_bytes: number;
-    /**
-     * Max Images
-     */
     max_images: number;
-    /**
-     * Max Videos
-     */
     max_videos: number;
-    /**
-     * Max Output Bytes
-     */
     max_output_bytes: number;
-    /**
-     * Max Duration Milliseconds
-     */
     max_duration_milliseconds: number;
-    /**
-     * Max Pixels Per Frame
-     */
     max_pixels_per_frame: number;
-    /**
-     * Max Decoded Pixels Per Second
-     */
     max_decoded_pixels_per_second: number;
 };
 
 /**
  * DraftMediaListResponse
- *
- * The complete bounded media collection for one owned draft.
  */
 export type DraftMediaListResponse = {
     limits: DraftMediaLimitsResponse;
-    /**
-     * Media
-     */
     media: Array<DraftMediaResponse>;
 };
 
 /**
  * DraftMediaResponse
- *
- * Upload status and normalized output metadata, excluding storage keys and worker details.
  */
 export type DraftMediaResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Draft Id
-     */
     draft_id: string;
     kind: MediaKind;
     status: DraftMediaStatus;
-    /**
-     * Source Content Type
-     */
     source_content_type: string;
-    /**
-     * Artifacts
-     */
     artifacts: Array<DraftMediaArtifactResponse>;
 };
 
@@ -1222,58 +569,24 @@ export type DraftMediaStatus = 'processing' | 'completed' | 'dead' | 'discarded'
 
 /**
  * DraftPreparationResponse
- *
- * A finalization request waiting for files or corrections before an attempt can run.
  */
 export type DraftPreparationResponse = {
-    /**
-     * Draft Id
-     */
     draft_id: string;
-    /**
-     * Draft Revision
-     */
     draft_revision: number;
-    /**
-     * Status
-     */
     status: 'waiting_for_artifacts' | 'needs_attention';
-    /**
-     * Issues
-     */
     issues: Array<SubmissionAttentionIssueResponse>;
 };
 
 /**
  * DraftSchematicResponse
- *
- * Private source metadata without an object key or download URL.
  */
 export type DraftSchematicResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Filename
-     */
     filename: string;
-    /**
-     * Sha256
-     */
     sha256: string | null;
-    /**
-     * Byte Size
-     */
     byte_size: number | null;
     state: DraftSchematicState;
-    /**
-     * Primary
-     */
     primary: boolean;
-    /**
-     * Discarded
-     */
     discarded: boolean;
 };
 
@@ -1293,55 +606,20 @@ export type DraftStatus = 'editing' | 'processing' | 'needs_attention' | 'submit
 
 /**
  * DraftSummaryResponse
- *
- * Compact active-draft metadata safe for cross-client discovery.
  */
 export type DraftSummaryResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Owner Account Id
-     */
     owner_account_id: number;
-    /**
-     * Inferred
-     */
     inferred: boolean;
-    /**
-     * Schema Id
-     */
     schema_id: string;
-    /**
-     * Schema Revision
-     */
     schema_revision: number;
-    /**
-     * Category
-     */
     category: string;
-    /**
-     * Revision
-     */
     revision: number;
     status: DraftStatus;
     origin: SubmissionOrigin;
-    /**
-     * Display Name
-     */
     display_name: string | null;
-    /**
-     * Created At
-     */
     created_at: string;
-    /**
-     * Updated At
-     */
     updated_at: string;
-    /**
-     * Expires At
-     */
     expires_at: string;
 };
 
@@ -1354,210 +632,91 @@ export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' 
 
 /**
  * ErrorReportDetail
- *
- * One stored failure with everything kept about it.
- *
- * Only reachable with `diagnostics.error.read`: the message and traceback are the unredacted
- * internals that every other surface deliberately withholds from the user who triggered them.
  */
 export type ErrorReportDetail = {
-    /**
-     * Reference
-     */
     reference: string;
-    /**
-     * Correlation Id
-     */
     correlation_id: string;
-    /**
-     * Occurred At
-     */
     occurred_at: string;
-    /**
-     * Surface
-     */
     surface: string;
-    /**
-     * Origin
-     */
     origin?: string | null;
-    /**
-     * Exception Type
-     */
     exception_type: string;
     code?: ErrorCode | null;
-    /**
-     * Work Lost
-     */
     work_lost?: boolean;
-    /**
-     * Message
-     */
     message: string;
-    /**
-     * Traceback
-     */
     traceback: string;
-    /**
-     * Context
-     */
     context?: {
         [key: string]: JsonValue;
     };
-    /**
-     * Log Tail
-     */
     log_tail?: Array<string>;
-    /**
-     * Matching References
-     */
     matching_references?: number;
 };
 
 /**
  * ErrorReportSummary
- *
- * One stored failure, without its traceback or logs.
  */
 export type ErrorReportSummary = {
-    /**
-     * Reference
-     */
     reference: string;
-    /**
-     * Correlation Id
-     */
     correlation_id: string;
-    /**
-     * Occurred At
-     */
     occurred_at: string;
-    /**
-     * Surface
-     */
     surface: string;
-    /**
-     * Origin
-     */
     origin?: string | null;
-    /**
-     * Exception Type
-     */
     exception_type: string;
     code?: ErrorCode | null;
-    /**
-     * Work Lost
-     */
     work_lost?: boolean;
 };
 
 /**
  * ExtenderDetails
- *
- * Facts owned by piston extenders.
  */
 export type ExtenderDetails = {
-    /**
-     * Category
-     */
     category?: 'Extender';
-    /**
-     * Orientation
-     */
     orientation: string | null;
-    /**
-     * Patterns
-     */
     patterns: Array<string>;
-    /**
-     * Extension Length
-     */
     extension_length: number | null;
-    /**
-     * Extender Type
-     */
     extender_type: string | null;
+    extension_time: number | null;
+    retraction_time: number | null;
 };
 
 /**
  * ExtenderPatch
- *
- * Partial changes to an extender's direction and reach.
  */
 export type ExtenderPatch = {
-    /**
-     * Orientation
-     */
-    orientation?: 'Horizontal' | 'Up' | 'Down' | null;
-    /**
-     * Extension Length
-     */
+    orientation?: 'Horizontal' | 'Upward' | 'Downward' | null;
     extension_length?: number | null;
+    extension_time?: number | null;
+    retraction_time?: number | null;
 };
 
 /**
  * FabricChallengeCreateRequest
- *
- * Request player authorization from Fabric with an S256 PKCE commitment.
  */
 export type FabricChallengeCreateRequest = {
-    /**
-     * Java Uuid
-     */
     java_uuid: string;
-    /**
-     * Pkce S256 Challenge
-     */
     pkce_s256_challenge: string;
 };
 
 /**
  * FabricChallengeExchangeRequest
- *
- * Exchange an approved Fabric challenge with its PKCE verifier.
  */
 export type FabricChallengeExchangeRequest = {
-    /**
-     * Device Code
-     */
     device_code: string;
-    /**
-     * Pkce Verifier
-     */
     pkce_verifier: string;
 };
 
 /**
  * FieldConstraintsResponse
- *
- * Validation bounds interpreted the same way by clients and the server.
  */
 export type FieldConstraintsResponse = {
-    /**
-     * Minimum
-     */
     minimum: number | number | null;
-    /**
-     * Maximum
-     */
     maximum: number | number | null;
-    /**
-     * Min Length
-     */
     min_length: number | null;
-    /**
-     * Max Length
-     */
     max_length: number | null;
-    /**
-     * Min Items
-     */
     min_items: number | null;
-    /**
-     * Max Items
-     */
     max_items: number | null;
-    must_equal: JsonValue2;
+    must_equal: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
 };
 
 /**
@@ -1569,20 +728,14 @@ export type FieldOperationKind = 'set' | 'unset';
 
 /**
  * FieldOperationRequest
- *
- * Set or unset exactly one stable form field.
  */
 export type FieldOperationRequest = {
-    /**
-     * Operation Id
-     */
     operation_id: string;
-    /**
-     * Field Id
-     */
     field_id: string;
     kind: FieldOperationKind;
-    value?: JsonValue2;
+    value?: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
 };
 
 /**
@@ -1594,180 +747,73 @@ export type FinalizationJobStatus = 'pending' | 'claimed' | 'needs_attention' | 
 
 /**
  * FormFieldResponse
- *
- * One field that any supported submission renderer can present.
  */
 export type FormFieldResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Label
-     */
     label: string;
     control: ControlKind;
     value_kind: ValueKind;
-    /**
-     * Required
-     */
     required: boolean;
-    /**
-     * Help Text
-     */
     help_text: string | null;
     constraints: FieldConstraintsResponse;
-    /**
-     * Options
-     */
     options: Array<ChoiceOptionResponse>;
-    /**
-     * Option Source
-     */
     option_source: string | null;
     visible_when: VisibilityRuleResponse | null;
-    default: JsonValue2;
-    /**
-     * Repeatable
-     */
+    default: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
     repeatable: boolean;
-    /**
-     * Required Capability
-     */
     required_capability: string | null;
-    /**
-     * Origins
-     */
     origins: Array<SubmissionOrigin>;
 };
 
 /**
  * FormManifestResponse
- *
- * One immutable submission form revision, drawn however the client chooses.
  */
 export type FormManifestResponse = {
-    /**
-     * Schema Id
-     */
     schema_id: string;
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Minimum Protocol
-     */
     minimum_protocol: number;
-    /**
-     * Maximum Protocol
-     */
     maximum_protocol: number;
-    /**
-     * Common Sections
-     */
     common_sections: Array<FormSectionResponse>;
-    /**
-     * Categories
-     */
     categories: Array<CategoryFormResponse>;
 };
 
 /**
  * FormOptionSetResponse
- *
- * One revision of a category-aware dynamic option source.
  */
 export type FormOptionSetResponse = {
-    /**
-     * Source
-     */
     source: string;
-    /**
-     * Category
-     */
     category: string;
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Options
-     */
     options: Array<ChoiceOptionResponse>;
 };
 
 /**
  * FormSectionResponse
- *
- * An ordered group of related form fields.
  */
 export type FormSectionResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Fields
-     */
     fields: Array<FormFieldResponse>;
 };
 
 /**
  * GeneralDetails
- *
- * The categories that add no facts beyond the shared ones.
  */
 export type GeneralDetails = {
-    /**
-     * Category
-     */
     category: 'Utility' | 'Entrance' | 'Other';
 };
 
 /**
- * HTTPValidationError
- */
-export type HttpValidationError = {
-    /**
-     * Detail
-     */
-    detail?: Array<ValidationError>;
-};
-
-/**
  * IdentityDetail
- *
- * One identity linked to the caller's account.
- *
- * Use id when editing an identity. An account may have several identities from
- * the same provider after a merge, so the provider alone does not identify it.
  */
 export type IdentityDetail = {
-    /**
-     * Id
-     */
     id: number;
     provider: IdentityProvider;
-    /**
-     * Subject
-     */
     subject: string;
-    /**
-     * Display Name
-     */
     display_name: string | null;
-    /**
-     * Verified At
-     */
-    verified_at: string | null;
-    /**
-     * Is Public
-     */
+    verified_at: unknown | null;
     is_public: boolean;
 };
 
@@ -1780,111 +826,50 @@ export type IdentityProvider = 'discord' | 'java' | 'bedrock';
 
 /**
  * IdentityVisibilityRequest
- *
- * Whether one linked identity appears on the public creator profile.
  */
 export type IdentityVisibilityRequest = {
-    /**
-     * Public
-     */
     public: boolean;
 };
 
 /**
  * InboxNotificationDetail
- *
- * One web inbox item.
  */
 export type InboxNotificationDetail = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Kind
-     */
     kind: string;
-    /**
-     * Payload
-     */
     payload: {
         [key: string]: unknown;
     };
-    /**
-     * Created At
-     */
     created_at: string;
-    /**
-     * Read At
-     */
     read_at: string | null;
 };
 
-export type InputDimensions = [
-    number | null,
-    number | null,
-    number | null
-];
-
 /**
  * InstallationCreateRequest
- *
- * Register one account-owned Paper installation.
  */
 export type InstallationCreateRequest = {
-    /**
-     * Label
-     */
     label: string;
     profile?: ServerProfileSchema;
 };
 
 /**
  * InstallationListResponse
- *
- * All Paper installations owned by the signed-in account.
  */
 export type InstallationListResponse = {
-    /**
-     * Installations
-     */
     installations: Array<InstallationResponse>;
 };
 
 /**
  * InstallationResponse
- *
- * Account-visible installation metadata without its credential digest.
  */
 export type InstallationResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Label
-     */
     label: string;
-    /**
-     * Credential Version
-     */
     credential_version: number;
     profile: ServerProfileSchema;
-    /**
-     * Created At
-     */
     created_at: string;
-    /**
-     * Rotated At
-     */
     rotated_at: string | null;
-    /**
-     * Revoked At
-     */
     revoked_at: string | null;
 };
 
@@ -1897,72 +882,37 @@ export type IntakeStatus = 'pending' | 'ready' | 'failed' | 'discarded';
 
 /**
  * IssuedCliSessionResponse
- *
- * One-time CLI bearer token response from a verified device proof.
  */
 export type IssuedCliSessionResponse = {
     device: CliDeviceResponse;
-    /**
-     * Session Id
-     */
     session_id: string;
-    /**
-     * Token
-     */
     token: string;
-    /**
-     * Expires At
-     */
     expires_at: string;
 };
 
 /**
  * IssuedInstallationResponse
- *
- * Installation metadata and its one-time plaintext secret.
  */
 export type IssuedInstallationResponse = {
     installation: InstallationResponse;
-    /**
-     * Secret
-     */
     secret: string;
 };
 
 /**
  * IssuedPlayerGrantResponse
- *
- * One-time player bearer token response from a consumed challenge.
  */
 export type IssuedPlayerGrantResponse = {
-    /**
-     * Grant Id
-     */
     grant_id: string;
-    /**
-     * Token
-     */
     token: string;
-    /**
-     * Java Uuid
-     */
     java_uuid: string;
     origin: MinecraftClientOrigin;
-    /**
-     * Installation Id
-     */
     installation_id: string | null;
-    /**
-     * Expires At
-     */
     expires_at: string;
 };
 
-export type JsonValue = boolean | number | number | string | Array<JsonValue> | {
+export type JsonValue = null | boolean | number | string | Array<JsonValue> | {
     [key: string]: JsonValue;
-} | null;
-
-export type JsonValue2 = unknown;
+};
 
 /**
  * MediaKind
@@ -1973,100 +923,45 @@ export type MediaKind = 'image' | 'video';
 
 /**
  * MergeCodeDetail
- *
- * A new single-use merge code and its expiry.
- *
- * The account service stores only a digest. If the plaintext code is lost, create
- * a replacement rather than trying to retrieve it.
  */
 export type MergeCodeDetail = {
-    /**
-     * Code
-     */
     code: string;
-    /**
-     * Expires At
-     */
-    expires_at: string;
+    expires_at: unknown;
 };
 
 /**
  * MergePreviewDetail
- *
- * What completing a merge would move, shown before the irreversible call.
  */
 export type MergePreviewDetail = {
-    /**
-     * Absorbed Creator Id
-     */
     absorbed_creator_id: string;
-    /**
-     * Alias Names
-     */
     alias_names: Array<string>;
-    /**
-     * Identity Count
-     */
     identity_count: number;
-    /**
-     * Build Count
-     */
     build_count: number;
 };
 
 /**
  * MergeRequest
- *
- * A merge code, redeemed by the account that will survive.
  */
 export type MergeRequest = {
-    /**
-     * Code
-     */
     code: string;
 };
 
 /**
  * MetadataSearchEntry
- *
- * A matched taxonomy or version entry.
  */
 export type MetadataSearchEntry = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Metadata Kind
-     */
     metadata_kind: string;
-    /**
-     * Description
-     */
     description: string | null;
-    /**
-     * Aliases
-     */
     aliases: Array<string>;
 };
 
 /**
  * MetadataSearchResult
- *
- * A taxonomy or version match.
  */
 export type MetadataSearchResult = {
-    /**
-     * Resource Kind
-     */
     resource_kind?: 'metadata';
-    /**
-     * Score
-     */
     score: number | null;
     metadata: MetadataSearchEntry;
 };
@@ -2080,128 +975,53 @@ export type MinecraftClientOrigin = 'paper' | 'fabric';
 
 /**
  * MinecraftIdentityRefresh
- *
- * What re-reading the linked Minecraft name changed.
  */
 export type MinecraftIdentityRefresh = {
-    /**
-     * Minecraft Uuid
-     */
     minecraft_uuid: string;
-    /**
-     * Ign
-     */
     ign: string;
-    /**
-     * Previous Ign
-     */
     previous_ign: string | null;
-    /**
-     * Renamed
-     */
     renamed: boolean;
-    /**
-     * Claimed Creator Name
-     */
     claimed_creator_name: string | null;
-    /**
-     * Retained Creator Names
-     */
     retained_creator_names: Array<string>;
-    /**
-     * Contested Creator Name
-     */
     contested_creator_name: string | null;
-    /**
-     * Pending Claim Id
-     */
     pending_claim_id: number | null;
 };
 
 /**
  * NotificationPreferenceUpdate
- *
- * Replacement settings for the web inbox and Discord direct messages.
- *
- * An omitted channel defaults to disabled; this model is not a partial update.
  */
 export type NotificationPreferenceUpdate = {
-    /**
-     * Web Enabled
-     */
     web_enabled?: boolean;
-    /**
-     * Dm Enabled
-     */
     dm_enabled?: boolean;
 };
 
 /**
  * NotificationPreferencesDetail
- *
- * Channel preferences and the account's privacy-consent status.
- *
- * Consent_pending refers to the same notice as UserMe. Notifications do not have
- * a separate consent notice.
  */
 export type NotificationPreferencesDetail = {
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Consent Pending
-     */
     consent_pending: boolean;
-    /**
-     * Web Enabled
-     */
     web_enabled: boolean;
-    /**
-     * Dm Enabled
-     */
     dm_enabled: boolean;
-    /**
-     * Dm Suspended
-     */
     dm_suspended: boolean;
 };
 
 /**
  * NotificationSubscriptionCreate
- *
- * A subscription to a creator, a record title, or a record filter.
- *
- * Creator and record subscriptions require subject_id and forbid filter.
- * Record-filter subscriptions require filter and forbid subject_id.
  */
 export type NotificationSubscriptionCreate = {
     kind: SubscriptionKind;
-    /**
-     * Subject Id
-     */
     subject_id?: string | null;
     filter?: RecordFilterInput | null;
 };
 
 /**
  * NotificationSubscriptionDetail
- *
- * One enabled caller-owned subscription.
  */
 export type NotificationSubscriptionDetail = {
-    /**
-     * Id
-     */
     id: number;
     kind: SubscriptionKind;
-    /**
-     * Subject Id
-     */
     subject_id: string | null;
-    /**
-     * Filter
-     */
     filter: {
         [key: string]: unknown;
     } | null;
@@ -2209,33 +1029,17 @@ export type NotificationSubscriptionDetail = {
 
 /**
  * OwnVoteSelection
- *
- * The authenticated caller's own ballot selection.
  */
 export type OwnVoteSelection = {
-    /**
-     * Option Id
-     */
     option_id: string;
 };
 
 /**
  * PageAnchor
- *
- * Query-parameter values addressing an adjacent page. Exactly one field is set.
  */
 export type PageAnchor = {
-    /**
-     * Offset
-     */
     offset?: number | null;
-    /**
-     * After Id
-     */
     after_id?: number | null;
-    /**
-     * Before Id
-     */
     before_id?: number | null;
 };
 
@@ -2243,13 +1047,7 @@ export type PageAnchor = {
  * Page[BuildSummary]
  */
 export type PageBuildSummary = {
-    /**
-     * Items
-     */
     items: Array<BuildSummary>;
-    /**
-     * Total
-     */
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2259,13 +1057,7 @@ export type PageBuildSummary = {
  * Page[ErrorReportSummary]
  */
 export type PageErrorReportSummary = {
-    /**
-     * Items
-     */
     items: Array<ErrorReportSummary>;
-    /**
-     * Total
-     */
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2275,29 +1067,17 @@ export type PageErrorReportSummary = {
  * Page[InboxNotificationDetail]
  */
 export type PageInboxNotificationDetail = {
-    /**
-     * Items
-     */
     items: Array<InboxNotificationDetail>;
-    /**
-     * Total
-     */
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
 };
 
 /**
- * Page[RecordSummary]
+ * Page[PublishedTitle]
  */
-export type PageRecordSummary = {
-    /**
-     * Items
-     */
-    items: Array<RecordSummary>;
-    /**
-     * Total
-     */
+export type PagePublishedTitle = {
+    items: Array<PublishedTitle>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2307,13 +1087,7 @@ export type PageRecordSummary = {
  * Page[SchematicSummary]
  */
 export type PageSchematicSummary = {
-    /**
-     * Items
-     */
     items: Array<SchematicSummary>;
-    /**
-     * Total
-     */
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2323,13 +1097,7 @@ export type PageSchematicSummary = {
  * Page[SearchResult]
  */
 export type PageSearchResult = {
-    /**
-     * Items
-     */
-    items: Array<SearchResult>;
-    /**
-     * Total
-     */
+    items: Array<BuildSearchResult | RecordSearchResult | MetadataSearchResult>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2339,13 +1107,7 @@ export type PageSearchResult = {
  * Page[TagDetail]
  */
 export type PageTagDetail = {
-    /**
-     * Items
-     */
     items: Array<TagDetail>;
-    /**
-     * Total
-     */
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2355,13 +1117,7 @@ export type PageTagDetail = {
  * Page[VersionDetail]
  */
 export type PageVersionDetail = {
-    /**
-     * Items
-     */
     items: Array<VersionDetail>;
-    /**
-     * Total
-     */
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2369,25 +1125,15 @@ export type PageVersionDetail = {
 
 /**
  * PaperChallengeCreateRequest
- *
- * Request player authorization from an authenticated Paper server.
  */
 export type PaperChallengeCreateRequest = {
-    /**
-     * Java Uuid
-     */
     java_uuid: string;
 };
 
 /**
  * PaperChallengeExchangeRequest
- *
- * Exchange an approved Paper challenge on its authenticated installation.
  */
 export type PaperChallengeExchangeRequest = {
-    /**
-     * Device Code
-     */
     device_code: string;
 };
 
@@ -2400,62 +1146,25 @@ export type PollScope = 'guild' | 'network';
 
 /**
  * PrivacyNoticeDetail
- *
- * The current notice, its version, and the locale it was rendered in.
  */
 export type PrivacyNoticeDetail = {
-    /**
-     * Version
-     */
     version: string;
-    /**
-     * Locale
-     */
     locale: string;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Body
-     */
     body: string;
 };
 
 /**
  * ProblemDetail
- *
- * RFC 9457 problem detail response with application extensions.
  */
 export type ProblemDetail = {
-    /**
-     * Type
-     */
     type?: string;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Status
-     */
     status: number;
-    /**
-     * Detail
-     */
     detail?: string | null;
-    /**
-     * Instance
-     */
     instance?: string | null;
     code?: ErrorCode | null;
-    /**
-     * Resource
-     */
     resource?: string | null;
-    /**
-     * Context
-     */
     context?: {
         [key: string]: JsonValue;
     } | null;
@@ -2463,89 +1172,30 @@ export type ProblemDetail = {
 
 /**
  * ProfileDetail
- *
- * The caller's own profile, including anything it has chosen to hide.
  */
 export type ProfileDetail = {
-    /**
-     * Display Name
-     */
     display_name: string | null;
-    /**
-     * Bio
-     */
     bio: string | null;
-    /**
-     * Pronouns
-     */
     pronouns: string | null;
-    /**
-     * Links
-     */
-    links: Array<ProfileLinkDetail>;
-    /**
-     * Hidden
-     */
+    links: Array<MeProfileLinkDetail>;
     hidden: boolean;
     avatar: AvatarDetail | null;
 };
 
 /**
- * ProfileLinkDetail
- *
- * One external link published on a creator profile.
- */
-export type ProfileLinkDetail = {
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Url
-     */
-    url: string;
-};
-
-/**
  * ProfileUpdateRequest
- *
- * A partial profile edit.
- *
- * Omitted fields remain unchanged. Null clears text and avatar fields, empties
- * links, and sets hidden to false. Conversion uses model_fields_set to distinguish
- * omission from an explicit null.
  */
 export type ProfileUpdateRequest = {
-    /**
-     * Display Name
-     */
     display_name?: string | null;
-    /**
-     * Bio
-     */
     bio?: string | null;
-    /**
-     * Pronouns
-     */
     pronouns?: string | null;
-    /**
-     * Links
-     */
-    links?: Array<ProfileLinkDetail> | null;
-    /**
-     * Hidden
-     */
+    links?: Array<MeProfileLinkDetail> | null;
     hidden?: boolean | null;
-    /**
-     * Avatar Identity Id
-     */
     avatar_identity_id?: number | null;
 };
 
 /**
  * ProtocolCapabilities
- *
- * Compatibility intervals for protocols outside HTTP API SemVer.
  */
 export type ProtocolCapabilities = {
     submission: ProtocolInterval;
@@ -2553,306 +1203,130 @@ export type ProtocolCapabilities = {
 
 /**
  * ProtocolInterval
- *
- * Inclusive versions accepted for one independently versioned protocol.
  */
 export type ProtocolInterval = {
-    /**
-     * Minimum
-     */
     minimum: number;
-    /**
-     * Maximum
-     */
     maximum: number;
 };
 
 /**
  * PublicIdentityDetail
- *
- * A linked identity the creator has chosen to publish.
- *
- * Internal identity IDs and verification timestamps are omitted from this public
- * representation.
  */
 export type PublicIdentityDetail = {
     provider: IdentityProvider;
-    /**
-     * Subject
-     */
     subject: string;
-    /**
-     * Display Name
-     */
     display_name: string | null;
 };
 
 /**
+ * PublishedTitle
+ */
+export type PublishedTitle = {
+    id: number;
+    definition_id: number;
+    title_id: string;
+    title: string;
+    subtitle: string | null;
+    base_title: BaseTitle;
+    build_kind: BuildKind;
+    version_scope: VersionScope;
+    status: ResolutionStatus;
+    holder_build_ids: Array<number>;
+    computed_at: string;
+};
+
+/**
  * RecalculationFacts
- *
- * Retained inferred facts, before a reviewer chooses a target build.
  */
 export type RecalculationFacts = {
     category?: BuildCategory | null;
-    /**
-     * Version Spec
-     */
     version_spec?: string | null;
-    /**
-     * Width
-     */
     width?: number | null;
-    /**
-     * Height
-     */
     height?: number | null;
-    /**
-     * Depth
-     */
     depth?: number | null;
-    /**
-     * Door Width
-     */
     door_width?: number | null;
-    /**
-     * Door Height
-     */
     door_height?: number | null;
-    /**
-     * Door Depth
-     */
     door_depth?: number | null;
-    /**
-     * Door Orientation
-     */
     door_orientation?: string | null;
-    /**
-     * Normal Opening Time
-     */
     normal_opening_time?: number | null;
-    /**
-     * Normal Closing Time
-     */
     normal_closing_time?: number | null;
-    /**
-     * Patterns
-     */
     patterns?: Array<string>;
-    /**
-     * Creators Ign
-     */
     creators_ign?: Array<string>;
-    /**
-     * Wiring Placement Restrictions
-     */
     wiring_placement_restrictions?: Array<string>;
-    /**
-     * Animated Restrictions
-     */
     animated_restrictions?: Array<string>;
-    /**
-     * Component Restrictions
-     */
     component_restrictions?: Array<string>;
-    /**
-     * Miscellaneous Restrictions
-     */
     miscellaneous_restrictions?: Array<string>;
-    /**
-     * Description
-     */
     description?: string | null;
 };
 
 /**
  * RecalculationMatchRequest
- *
- * Choose a source-linked build; renewing review retains the old proposal.
  */
 export type RecalculationMatchRequest = {
-    /**
-     * Build Id
-     */
     build_id: number;
-    /**
-     * Renew
-     */
     renew?: boolean;
 };
 
 /**
  * RecalculationProposalResponse
- *
- * A private candidate, its retained diff, and any committed approval receipt.
  */
 export type RecalculationProposalResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Run Id
-     */
     run_id: string;
-    /**
-     * Source Message Id
-     */
     source_message_id: number;
     facts: RecalculationFacts;
-    /**
-     * Build Id
-     */
     build_id: number | null;
-    /**
-     * Expected Revision
-     */
     expected_revision: number | null;
-    /**
-     * Before
-     */
     before: {
         [key: string]: JsonValue;
     };
-    /**
-     * After
-     */
     after: {
         [key: string]: JsonValue;
     };
-    /**
-     * Expires At
-     */
     expires_at: string;
-    /**
-     * Applied Revision
-     */
     applied_revision: number | null;
 };
 
 /**
  * RecordDetail
- *
- * One published record result with its ordered holder builds.
  */
 export type RecordDetail = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Definition Id
-     */
     definition_id: number;
-    /**
-     * Title Id
-     */
     title_id: string;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Subtitle
-     */
     subtitle: string | null;
-    /**
-     * Base Title
-     */
     base_title: string;
-    /**
-     * Build Kind
-     */
     build_kind: string;
-    /**
-     * Version Scope
-     */
     version_scope: string;
-    /**
-     * Status
-     */
     status: string;
-    /**
-     * Holder Build Ids
-     */
     holder_build_ids: Array<number>;
-    /**
-     * Computed At
-     */
     computed_at: string;
-    /**
-     * Holder Builds
-     */
     holder_builds: Array<BuildSummary>;
 };
 
 /**
  * RecordFilterInput
- *
- * Broad structured predicates for record-gain subscriptions.
  */
 export type RecordFilterInput = {
-    /**
-     * Build Kinds
-     */
     build_kinds?: Array<'door' | 'entrance' | 'extender' | 'utility'>;
-    /**
-     * Base Titles
-     */
     base_titles?: Array<'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest'>;
-    /**
-     * Version Scopes
-     */
     version_scopes?: Array<'all_time' | 'up_to_date'>;
-    /**
-     * Tags
-     */
     tags?: Array<TagPredicateInput>;
 };
 
 /**
  * RecordSearchEntry
- *
- * Record facts copied from the search index.
- *
- * These values are returned without reloading the record or its holder build.
- * They reflect the last projection update and may lag behind current data.
  */
 export type RecordSearchEntry = {
-    /**
-     * Record Id
-     */
     record_id: number;
-    /**
-     * Title
-     */
     title: string;
-    /**
-     * Subtitle
-     */
     subtitle: string | null;
-    /**
-     * Build Id
-     */
     build_id: number;
-    /**
-     * Build Title
-     */
     build_title: string;
-    /**
-     * Base Title
-     */
     base_title: string;
-    /**
-     * Version Scope
-     */
     version_scope: string;
-    /**
-     * Tags
-     */
     tags: Array<string>;
-    /**
-     * Metrics
-     */
     metrics: {
         [key: string]: string | number | number | boolean;
     };
@@ -2860,384 +1334,124 @@ export type RecordSearchEntry = {
 
 /**
  * RecordSearchResult
- *
- * A computed record match.
  */
 export type RecordSearchResult = {
-    /**
-     * Resource Kind
-     */
     resource_kind?: 'record';
-    /**
-     * Score
-     */
     score: number | null;
     record: RecordSearchEntry;
 };
 
 /**
- * RecordSummary
- *
- * One published computed record result.
- */
-export type RecordSummary = {
-    /**
-     * Id
-     */
-    id: number;
-    /**
-     * Definition Id
-     */
-    definition_id: number;
-    /**
-     * Title Id
-     */
-    title_id: string;
-    /**
-     * Title
-     */
-    title: string;
-    /**
-     * Subtitle
-     */
-    subtitle: string | null;
-    /**
-     * Base Title
-     */
-    base_title: string;
-    /**
-     * Build Kind
-     */
-    build_kind: string;
-    /**
-     * Version Scope
-     */
-    version_scope: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Holder Build Ids
-     */
-    holder_build_ids: Array<number>;
-    /**
-     * Computed At
-     */
-    computed_at: string;
-};
-
-/**
  * RendererCapabilities
- *
- * Form controls and optional renderer features emitted by the API.
  */
 export type RendererCapabilities = {
-    /**
-     * Controls
-     */
-    controls: Array<RendererControl>;
-    /**
-     * Capability Identifiers
-     */
+    controls: Array<'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean'>;
     capability_identifiers: Array<string>;
 };
 
-export type RendererControl = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
+/**
+ * ResolutionStatus
+ *
+ * Whether a category produced an official result.
+ */
+export type ResolutionStatus = 'resolved' | 'unresolved' | 'no_candidate';
 
 /**
  * RuntimeSettingsDetail
- *
- * Current global defaults and owner-guild routing.
  */
 export type RuntimeSettingsDetail = {
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Welcome Forward Chance
-     */
     welcome_forward_chance: number;
-    /**
-     * Welcome Enabled
-     */
     welcome_enabled: boolean;
-    /**
-     * Redstoner Enabled
-     */
     redstoner_enabled: boolean;
-    /**
-     * Build Vote Pass Threshold
-     */
     build_vote_pass_threshold: number;
-    /**
-     * Build Vote Fail Threshold
-     */
     build_vote_fail_threshold: number;
-    /**
-     * Delete Vote Pass Threshold
-     */
     delete_vote_pass_threshold: number;
-    /**
-     * Delete Vote Fail Threshold
-     */
     delete_vote_fail_threshold: number;
-    /**
-     * Notification Retention Days
-     */
     notification_retention_days: number;
-    /**
-     * Redstoner Starboard Author Id
-     */
     redstoner_starboard_author_id: string;
-    /**
-     * Redstoner Starboard Channel Id
-     */
     redstoner_starboard_channel_id: string;
-    /**
-     * Redstoner Role Id
-     */
     redstoner_role_id: string;
-    /**
-     * Redstoner Corner Channel Id
-     */
     redstoner_corner_channel_id: string;
-    /**
-     * Redstoner Announcement Channel Id
-     */
     redstoner_announcement_channel_id: string;
-    /**
-     * Welcome Channel Id
-     */
     welcome_channel_id: string;
-    /**
-     * Welcome Relay Channel Id
-     */
     welcome_relay_channel_id: string;
-    /**
-     * Version Tracker Channel Id
-     */
     version_tracker_channel_id: string;
-    /**
-     * Build Log Channel Ids
-     */
     build_log_channel_ids: Array<string>;
 };
 
 /**
  * RuntimeSettingsPatch
- *
- * Only supplied fields change. Null is not a reset operation.
  */
 export type RuntimeSettingsPatch = {
-    /**
-     * Welcome Forward Chance
-     */
     welcome_forward_chance?: number | null;
-    /**
-     * Welcome Enabled
-     */
     welcome_enabled?: boolean | null;
-    /**
-     * Redstoner Enabled
-     */
     redstoner_enabled?: boolean | null;
-    /**
-     * Build Vote Pass Threshold
-     */
     build_vote_pass_threshold?: number | null;
-    /**
-     * Build Vote Fail Threshold
-     */
     build_vote_fail_threshold?: number | null;
-    /**
-     * Delete Vote Pass Threshold
-     */
     delete_vote_pass_threshold?: number | null;
-    /**
-     * Delete Vote Fail Threshold
-     */
     delete_vote_fail_threshold?: number | null;
-    /**
-     * Notification Retention Days
-     */
     notification_retention_days?: number | null;
-    /**
-     * Redstoner Starboard Author Id
-     */
     redstoner_starboard_author_id?: string | null;
-    /**
-     * Redstoner Starboard Channel Id
-     */
     redstoner_starboard_channel_id?: string | null;
-    /**
-     * Redstoner Role Id
-     */
     redstoner_role_id?: string | null;
-    /**
-     * Redstoner Corner Channel Id
-     */
     redstoner_corner_channel_id?: string | null;
-    /**
-     * Redstoner Announcement Channel Id
-     */
     redstoner_announcement_channel_id?: string | null;
-    /**
-     * Welcome Channel Id
-     */
     welcome_channel_id?: string | null;
-    /**
-     * Welcome Relay Channel Id
-     */
     welcome_relay_channel_id?: string | null;
-    /**
-     * Version Tracker Channel Id
-     */
     version_tracker_channel_id?: string | null;
-    /**
-     * Build Log Channel Ids
-     */
     build_log_channel_ids?: Array<string> | null;
 };
 
 /**
  * SanitizationCapabilities
- *
- * Supported artifact transformations advertised to clients.
  */
 export type SanitizationCapabilities = {
-    /**
-     * Media
-     */
     media?: 'normalization';
-    /**
-     * Schematics
-     */
     schematics?: 'unavailable';
 };
 
 /**
  * SchematicSize
- *
- * A schematic bounding-box size.
  */
 export type SchematicSize = {
-    /**
-     * Width
-     */
     width: number;
-    /**
-     * Height
-     */
     height: number;
-    /**
-     * Depth
-     */
     depth: number;
 };
 
 /**
  * SchematicSummary
- *
- * Allowlisted analysis metadata for one stored build schematic.
  */
 export type SchematicSummary = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Primary
-     */
     primary: boolean;
-    /**
-     * Format
-     */
     format: string;
-    /**
-     * Byte Size
-     */
     byte_size: number;
     dimensions: SchematicSize;
     allocated_dimensions: SchematicSize;
-    /**
-     * Block Count
-     */
     block_count: number;
-    /**
-     * Bounding Volume
-     */
     bounding_volume: number;
-    /**
-     * Entity Count
-     */
     entity_count: number;
-    /**
-     * Palette Size
-     */
     palette_size: number;
-    /**
-     * Source Data Version
-     */
     source_data_version: number | null;
-    /**
-     * Analyzer Version
-     */
     analyzer_version: string;
-    /**
-     * Analysis Schema Version
-     */
     analysis_schema_version: number;
-    /**
-     * License
-     */
     license: string;
-    /**
-     * License Url
-     */
     license_url: string;
-    /**
-     * Download Url
-     */
     download_url: string;
 };
 
 /**
  * SearchField
- *
- * One query field supported by the public search grammar.
  */
 export type SearchField = {
-    /**
-     * Name
-     */
     name: string;
-    /**
-     * Type
-     */
     type: string;
-    /**
-     * Supports Range
-     */
     supports_range: boolean;
-    /**
-     * Supports Sort
-     */
     supports_sort: boolean;
-    /**
-     * Aliases
-     */
     aliases: Array<string>;
 };
-
-export type SearchResult = ({
-    resource_kind: 'build';
-} & BuildSearchResult) | ({
-    resource_kind: 'record';
-} & RecordSearchResult) | ({
-    resource_kind: 'metadata';
-} & MetadataSearchResult);
 
 /**
  * SearchScope
@@ -3248,45 +1462,20 @@ export type SearchScope = 'records' | 'builds' | 'metadata' | 'all';
 
 /**
  * SearchSuggestions
- *
- * Indexed terms completing a partial query.
  */
 export type SearchSuggestions = {
-    /**
-     * Suggestions
-     */
     suggestions: Array<string>;
 };
 
 /**
  * ServerProfileSchema
- *
- * Explicit public listing and sponsor preferences for a Paper server.
  */
 export type ServerProfileSchema = {
-    /**
-     * Enabled
-     */
     enabled?: boolean;
-    /**
-     * Display Name
-     */
     display_name?: string | null;
-    /**
-     * Address
-     */
     address?: string | null;
-    /**
-     * Description
-     */
     description?: string | null;
-    /**
-     * Website Url
-     */
     website_url?: string | null;
-    /**
-     * Sponsor Opt In
-     */
     sponsor_opt_in?: boolean;
 };
 
@@ -3299,110 +1488,46 @@ export type SourceKind = 'enumerable' | 'queried';
 
 /**
  * StoredDraftResponse
- *
- * The compacted current state of one caller-owned draft.
  */
 export type StoredDraftResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Schema Id
-     */
     schema_id: string;
-    /**
-     * Schema Revision
-     */
     schema_revision: number;
-    /**
-     * Category
-     */
     category: string;
-    /**
-     * Revision
-     */
     revision: number;
     status: DraftStatus;
-    /**
-     * Answers
-     */
     answers: {
-        [key: string]: JsonValue2;
+        [key: string]: Array<unknown> | {
+            [key: string]: unknown;
+        } | string | boolean | number | number | null;
     };
     origin: SubmissionOrigin;
-    /**
-     * Created At
-     */
     created_at: string;
-    /**
-     * Updated At
-     */
     updated_at: string;
-    /**
-     * Expires At
-     */
     expires_at: string;
-    /**
-     * Source Installation Id
-     */
     source_installation_id?: string | null;
-    /**
-     * Preparation Issues
-     */
-    preparation_issues?: Array<SubmissionAttentionIssueResponse>;
-    /**
-     * Waiting For Artifacts
-     */
+    preparation_issues?: Array<unknown>;
     waiting_for_artifacts?: boolean;
 };
 
 /**
  * SubmissionAttemptResponse
- *
- * Owner-visible state of durable draft finalization.
  */
 export type SubmissionAttemptResponse = {
-    /**
-     * Draft Id
-     */
     draft_id: string;
-    /**
-     * Attempt Id
-     */
     attempt_id: string;
-    /**
-     * Attempt Number
-     */
     attempt_number: number;
-    /**
-     * Input Sha256
-     */
     input_sha256: string | null;
-    /**
-     * Draft Revision
-     */
     draft_revision: number;
     status: FinalizationJobStatus;
-    /**
-     * Issues
-     */
     issues: Array<SubmissionAttentionIssueResponse>;
-    /**
-     * Build Id
-     */
     build_id: number | null;
 };
 
 /**
  * SubmissionAttentionIssueResponse
- *
- * One stable field-level reason that a submitter can act on.
  */
 export type SubmissionAttentionIssueResponse = {
-    /**
-     * Field Id
-     */
     field_id: string;
     reason: SubmissionAttentionReason;
 };
@@ -3430,305 +1555,113 @@ export type SubscriptionKind = 'creator' | 'record' | 'record_filter';
 
 /**
  * SuggestionItem
- *
- * One candidate completion.
- *
- * `value` is what a client submits and `label` is what it shows. They differ wherever a command
- * or form field stores an identifier the user should never have to see.
  */
 export type SuggestionItem = {
-    /**
-     * Value
-     */
     value: string;
-    /**
-     * Label
-     */
     label: string;
-    /**
-     * Description
-     */
     description: string | null;
-    /**
-     * Kind
-     */
     kind: string;
 };
 
 /**
  * SuggestionPage
- *
- * Ranked completions for one partially typed value.
  */
 export type SuggestionPage = {
-    /**
-     * Source
-     */
     source: string;
-    /**
-     * Revision
-     */
     revision: number | null;
     replacement: SuggestionReplacement | null;
-    /**
-     * Items
-     */
     items: Array<SuggestionItem>;
 };
 
 /**
  * SuggestionReplacement
- *
- * The half-open range of the submitted query a value replaces.
  */
 export type SuggestionReplacement = {
-    /**
-     * Start
-     */
     start: number;
-    /**
-     * End
-     */
     end: number;
 };
 
 /**
  * SuggestionSourceInfo
- *
- * What a client needs to know to drive one source without hardcoding it.
  */
 export type SuggestionSourceInfo = {
-    /**
-     * Id
-     */
     id: string;
     kind: SourceKind;
     value_type: ValueType;
-    /**
-     * Context Keys
-     */
     context_keys: Array<string>;
-    /**
-     * Multi Value
-     */
     multi_value: string | null;
-    /**
-     * Requires Authentication
-     */
     requires_authentication: boolean;
 };
 
 /**
  * SuppliedFileResponse
- *
- * Retained requirement metadata, excluding private source URLs and storage keys.
  */
 export type SuppliedFileResponse = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Filename
-     */
     filename: string;
-    /**
-     * Kind
-     */
     kind: string;
     status: IntakeStatus;
 };
 
 /**
  * TagDetail
- *
- * A published tag clients may use in build and search views.
  */
 export type TagDetail = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Key
-     */
     key: string;
-    /**
-     * Name
-     */
     name: string;
-    /**
-     * Query Name
-     */
     query_name: string | null;
-    /**
-     * Authority
-     */
     authority: string;
-    /**
-     * Kind
-     */
     kind: string;
-    /**
-     * Value Type
-     */
     value_type: string;
-    /**
-     * Restriction Type
-     */
     restriction_type: string | null;
-    /**
-     * Record Operator
-     */
     record_operator: string | null;
-    /**
-     * Canonical Unit
-     */
     canonical_unit: string | null;
-    /**
-     * Display Unit
-     */
     display_unit: string | null;
-    /**
-     * Numeric Step
-     */
     numeric_step: string | null;
 };
 
 /**
  * TagPredicateInput
- *
- * A required tag presence or exact typed value.
  */
 export type TagPredicateInput = {
-    /**
-     * Tag Id
-     */
     tag_id: number;
-    /**
-     * Operator
-     */
     operator?: 'present' | 'exact';
-    /**
-     * Value
-     */
     value?: string | number | number | boolean | null;
 };
 
 /**
  * UploadCapabilities
- *
- * Upload, aggregate, and decoder-work limits enforced by the backend.
  */
 export type UploadCapabilities = {
-    /**
-     * Max Images
-     */
     max_images: number;
-    /**
-     * Max Videos
-     */
     max_videos: number;
-    /**
-     * Max Duration Milliseconds
-     */
     max_duration_milliseconds: number;
-    /**
-     * Max Source Bytes
-     */
     max_source_bytes: number;
-    /**
-     * Max Output Bytes
-     */
     max_output_bytes: number;
-    /**
-     * Max Pixels Per Frame
-     */
     max_pixels_per_frame: number;
-    /**
-     * Max Decoded Pixels Per Second
-     */
     max_decoded_pixels_per_second: number;
 };
 
 /**
  * User
- *
- * Minecraft Java UUID to associate with a verification code.
  */
 export type User = {
-    /**
-     * Uuid
-     */
     uuid: string;
 };
 
 /**
  * UserMe
- *
- * The caller's account, linked sign-in identities, and profile.
- *
- * Identities may include several entries from the same provider, or no entry from
- * a particular provider. Clients should not assume the account has Discord linked.
  */
 export type UserMe = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Revision
-     */
     revision: number;
-    /**
-     * Creator Id
-     */
     creator_id: string;
-    /**
-     * Created At
-     */
-    created_at: string | null;
-    /**
-     * Consent Version
-     */
+    created_at: unknown | null;
     consent_version: string | null;
-    /**
-     * Consent Pending
-     */
     consent_pending: boolean;
-    /**
-     * Identities
-     */
     identities: Array<IdentityDetail>;
     profile: ProfileDetail;
-};
-
-/**
- * ValidationError
- */
-export type ValidationError = {
-    /**
-     * Location
-     */
-    loc: Array<string | number>;
-    /**
-     * Message
-     */
-    msg: string;
-    /**
-     * Error Type
-     */
-    type: string;
-    /**
-     * Input
-     */
-    input?: unknown;
-    /**
-     * Context
-     */
-    ctx?: {
-        [key: string]: unknown;
-    };
 };
 
 /**
@@ -3747,79 +1680,40 @@ export type ValueType = 'string' | 'integer';
 
 /**
  * VersionDetail
- *
- * One recognized Minecraft release.
  */
 export type VersionDetail = {
-    /**
-     * Edition
-     */
     edition: string;
-    /**
-     * Major
-     */
     major: number;
-    /**
-     * Minor
-     */
     minor: number;
-    /**
-     * Patch
-     */
     patch: number;
-    /**
-     * Display Name
-     */
     display_name: string;
 };
+
+/**
+ * VersionScope
+ *
+ * The version population in which builds compete.
+ */
+export type VersionScope = 'all_time' | 'up_to_date';
 
 /**
  * VideoCamera
  */
 export type VideoCamera = {
-    /**
-     * Mode
-     */
     mode?: 'fixed' | 'orbit';
-    /**
-     * Yaw
-     */
     yaw?: number;
-    /**
-     * Pitch
-     */
     pitch?: number;
-    /**
-     * Zoom
-     */
     zoom?: number;
-    /**
-     * Orbit Degrees
-     */
     orbit_degrees?: number;
 };
-
-export type VideoCoordinate = number;
 
 /**
  * VideoCreateRequest
  */
 export type VideoCreateRequest = {
-    /**
-     * Width
-     */
     width?: number;
-    /**
-     * Height
-     */
     height?: number;
-    /**
-     * Fps
-     */
     fps?: number;
-    /**
-     * Duration Ticks
-     */
     duration_ticks?: number;
     simulation?: VideoSimulation;
     camera?: VideoCamera;
@@ -3827,66 +1721,32 @@ export type VideoCreateRequest = {
 
 /**
  * VideoInteraction
- *
- * Right-click a control before stepping the specified game tick.
  */
 export type VideoInteraction = {
-    /**
-     * Tick
-     */
     tick: number;
-    position?: VideoPosition | null;
+    position?: [
+        number,
+        number,
+        number
+    ] | null;
 };
-
-export type VideoPosition = [
-    VideoCoordinate,
-    VideoCoordinate,
-    VideoCoordinate
-];
 
 /**
  * VideoResponse
  */
 export type VideoResponse = {
-    /**
-     * Id
-     */
     id: number;
-    /**
-     * Build Id
-     */
     build_id: number;
-    /**
-     * Schematic Id
-     */
     schematic_id: number;
-    /**
-     * Status
-     */
     status: 'queued' | 'running' | 'succeeded' | 'failed' | 'expired';
-    /**
-     * Expires At
-     */
     expires_at?: string | null;
-    /**
-     * Error
-     */
     error?: string | null;
-    /**
-     * Input Candidates
-     */
     input_candidates?: Array<[
         number,
         number,
         number
     ]>;
-    /**
-     * Status Url
-     */
     status_url: string;
-    /**
-     * Download Url
-     */
     download_url?: string | null;
 };
 
@@ -3894,13 +1754,7 @@ export type VideoResponse = {
  * VideoSimulation
  */
 export type VideoSimulation = {
-    /**
-     * Enabled
-     */
     enabled?: boolean;
-    /**
-     * Interactions
-     */
     interactions?: Array<VideoInteraction>;
 };
 
@@ -3913,31 +1767,20 @@ export type VisibilityOperator = 'equals' | 'not_equals' | 'in';
 
 /**
  * VisibilityRuleResponse
- *
- * A condition controlling whether a field is shown, evaluated by any client.
  */
 export type VisibilityRuleResponse = {
-    /**
-     * Field Id
-     */
     field_id: string;
     operator: VisibilityOperator;
-    value: JsonValue2;
+    value: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
 };
 
 /**
  * VoteInput
- *
- * A stable option selection in one Discord guild.
  */
 export type VoteInput = {
-    /**
-     * Guild Id
-     */
     guild_id: number;
-    /**
-     * Option Id
-     */
     option_id: string;
 };
 
@@ -3950,77 +1793,35 @@ export type VoteKind = 'build' | 'delete_log' | 'generic';
 
 /**
  * VoteOptionSummary
- *
- * A stable vote option without Discord-specific reaction aliases.
  */
 export type VoteOptionSummary = {
-    /**
-     * Id
-     */
     id: string;
-    /**
-     * Label
-     */
     label: string | null;
-    /**
-     * Choice
-     */
     choice: string;
-    /**
-     * Position
-     */
     position: number;
 };
 
 /**
  * VotePollSummary
- *
- * Public generic-poll metadata.
  */
 export type VotePollSummary = {
-    /**
-     * Question
-     */
     question: string;
     visibility: VoteVisibility;
     scope: PollScope;
-    /**
-     * Deadline
-     */
     deadline: string;
 };
 
 /**
  * VoteSessionDetail
- *
- * Vote status, permitted totals, and the caller's own selection if present.
- *
- * Other voters' selections and identities are omitted. Tallies are null while
- * the session's visibility rules hide them.
  */
 export type VoteSessionDetail = {
-    /**
-     * Id
-     */
     id: number;
     kind: VoteKind;
     status: VoteStatus;
     result: VoteSessionResult;
-    /**
-     * Pass Threshold
-     */
     pass_threshold: number | null;
-    /**
-     * Fail Threshold
-     */
     fail_threshold: number | null;
-    /**
-     * Build Id
-     */
     build_id: number | null;
-    /**
-     * Options
-     */
     options: Array<VoteOptionSummary>;
     tallies: VoteTallies | null;
     poll: VotePollSummary | null;
@@ -4043,33 +1844,16 @@ export type VoteStatus = 'open' | 'closed';
 
 /**
  * VoteTallies
- *
- * Vote totals by option, with raw counts and weighted scores.
  */
 export type VoteTallies = {
-    /**
-     * Raw
-     */
     raw: {
         [key: string]: number;
     };
-    /**
-     * Weighted
-     */
     weighted: {
         [key: string]: number;
     };
-    /**
-     * Upvotes
-     */
     upvotes: number;
-    /**
-     * Downvotes
-     */
     downvotes: number;
-    /**
-     * Net
-     */
     net: number;
 };
 
@@ -4080,6 +1864,22 @@ export type VoteTallies = {
  */
 export type VoteVisibility = 'anonymous_live' | 'visible_live' | 'anonymous_hidden';
 
+/**
+ * ProfileLinkDetail
+ */
+export type CreatorsProfileLinkDetail = {
+    label: string;
+    url: string;
+};
+
+/**
+ * ProfileLinkDetail
+ */
+export type MeProfileLinkDetail = {
+    label: string;
+    url: string;
+};
+
 export type HealthLiveData = {
     body?: never;
     path?: never;
@@ -4089,9 +1889,7 @@ export type HealthLiveData = {
 
 export type HealthLiveResponses = {
     /**
-     * Response Health Live
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: {
         [key: string]: string;
@@ -4109,9 +1907,7 @@ export type HealthReadyData = {
 
 export type HealthReadyResponses = {
     /**
-     * Response Health Ready
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: {
         [key: string]: string;
@@ -4129,9 +1925,7 @@ export type HealthReadyCompatibilityData = {
 
 export type HealthReadyCompatibilityResponses = {
     /**
-     * Response Health Ready Compatibility
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: {
         [key: string]: string;
@@ -4144,8 +1938,6 @@ export type VerificationCreateData = {
     body: User;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4190,9 +1982,7 @@ export type VerificationCreateError = VerificationCreateErrors[keyof Verificatio
 
 export type VerificationCreateResponses = {
     /**
-     * Response Verification Create
-     *
-     * Successful Response
+     * Document created, URL follows
      */
     201: number;
 };
@@ -4203,8 +1993,6 @@ export type VerificationCreateCompatibilityData = {
     body: User;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4249,9 +2037,7 @@ export type VerificationCreateCompatibilityError = VerificationCreateCompatibili
 
 export type VerificationCreateCompatibilityResponses = {
     /**
-     * Response Verification Create Compatibility
-     *
-     * Successful Response
+     * Document created, URL follows
      */
     201: number;
 };
@@ -4284,7 +2070,7 @@ export type BrowserCsrfGetError = BrowserCsrfGetErrors[keyof BrowserCsrfGetError
 
 export type BrowserCsrfGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: CsrfTokenResponse;
 };
@@ -4295,8 +2081,6 @@ export type BrowserSessionRevokeData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4320,9 +2104,9 @@ export type BrowserSessionRevokeErrors = {
      */
     409: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4337,9 +2121,9 @@ export type BrowserSessionRevokeError = BrowserSessionRevokeErrors[keyof Browser
 
 export type BrowserSessionRevokeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type BrowserSessionRevokeResponse = BrowserSessionRevokeResponses[keyof BrowserSessionRevokeResponses];
@@ -4347,15 +2131,9 @@ export type BrowserSessionRevokeResponse = BrowserSessionRevokeResponses[keyof B
 export type BrowserAuthorizationStartData = {
     body?: never;
     path: {
-        /**
-         * Provider
-         */
         provider: string;
     };
     query?: {
-        /**
-         * Redirect To
-         */
         redirect_to?: string | null;
     };
     url: '/v1/auth/{provider}';
@@ -4371,9 +2149,9 @@ export type BrowserAuthorizationStartErrors = {
      */
     404: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Content
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4389,19 +2167,10 @@ export type BrowserAuthorizationStartError = BrowserAuthorizationStartErrors[key
 export type BrowserAuthorizationCallbackData = {
     body?: never;
     path: {
-        /**
-         * Provider
-         */
         provider: string;
     };
     query: {
-        /**
-         * Code
-         */
         code: string;
-        /**
-         * State
-         */
         state: string;
     };
     url: '/v1/auth/{provider}/callback';
@@ -4421,9 +2190,9 @@ export type BrowserAuthorizationCallbackErrors = {
      */
     404: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Content
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4439,9 +2208,6 @@ export type BrowserAuthorizationCallbackError = BrowserAuthorizationCallbackErro
 export type BuildsGetData = {
     body?: never;
     path: {
-        /**
-         * Build Id
-         */
         build_id: number;
     };
     query?: never;
@@ -4471,7 +2237,7 @@ export type BuildsGetError = BuildsGetErrors[keyof BuildsGetErrors];
 
 export type BuildsGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: BuildDetail;
 };
@@ -4481,21 +2247,13 @@ export type BuildsGetResponse = BuildsGetResponses[keyof BuildsGetResponses];
 export type BuildsUpdateData = {
     body: BuildPatch;
     headers?: {
-        /**
-         * If-Match
-         */
         'If-Match'?: string | null;
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Build Id
-         */
         build_id: number;
     };
     query?: never;
@@ -4545,7 +2303,7 @@ export type BuildsUpdateError = BuildsUpdateErrors[keyof BuildsUpdateErrors];
 
 export type BuildsUpdateResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: BuildDetail;
 };
@@ -4556,39 +2314,22 @@ export type BuildsListData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Q
-         */
         q?: string | null;
-        /**
-         * Status
-         */
         status?: BuildStatusFilter | null;
-        /**
-         * Sort
-         */
         sort?: string | null;
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
         /**
-         * After Id
-         *
          * Return the items after this identifier in display order. Excludes offset.
          */
         after_id?: number | null;
         /**
-         * Before Id
-         *
          * Return the items before this identifier in display order. Excludes offset.
          */
         before_id?: number | null;
@@ -4627,7 +2368,7 @@ export type BuildsListError = BuildsListErrors[keyof BuildsListErrors];
 
 export type BuildsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageBuildSummary;
 };
@@ -4652,7 +2393,7 @@ export type CapabilitiesGetError = CapabilitiesGetErrors[keyof CapabilitiesGetEr
 
 export type CapabilitiesGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: ApiCapabilities;
 };
@@ -4663,8 +2404,6 @@ export type CliEnrollmentStartData = {
     body: CliEnrollmentCreateRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4701,7 +2440,7 @@ export type CliEnrollmentStartError = CliEnrollmentStartErrors[keyof CliEnrollme
 
 export type CliEnrollmentStartResponses = {
     /**
-     * Successful Response
+     * Document created, URL follows
      */
     201: CliEnrollmentResponse;
 };
@@ -4712,8 +2451,6 @@ export type CliEnrollmentExchangeData = {
     body: CliEnrollmentExchangeRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4750,7 +2487,7 @@ export type CliEnrollmentExchangeError = CliEnrollmentExchangeErrors[keyof CliEn
 
 export type CliEnrollmentExchangeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: IssuedCliSessionResponse;
 };
@@ -4761,9 +2498,6 @@ export type CliEnrollmentPreviewData = {
     body?: never;
     path?: never;
     query: {
-        /**
-         * User Code
-         */
         user_code: string;
     };
     url: '/v1/cli/auth/enrollments/approval';
@@ -4804,7 +2538,7 @@ export type CliEnrollmentPreviewError = CliEnrollmentPreviewErrors[keyof CliEnro
 
 export type CliEnrollmentPreviewResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: CliEnrollmentApprovalResponse;
 };
@@ -4815,8 +2549,6 @@ export type CliEnrollmentApproveData = {
     body: CliEnrollmentApprovalRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4861,7 +2593,7 @@ export type CliEnrollmentApproveError = CliEnrollmentApproveErrors[keyof CliEnro
 
 export type CliEnrollmentApproveResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: CliEnrollmentApprovalResponse;
 };
@@ -4872,8 +2604,6 @@ export type CliSessionChallengeStartData = {
     body: CliSessionChallengeRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4914,7 +2644,7 @@ export type CliSessionChallengeStartError = CliSessionChallengeStartErrors[keyof
 
 export type CliSessionChallengeStartResponses = {
     /**
-     * Successful Response
+     * Document created, URL follows
      */
     201: CliSessionChallengeResponse;
 };
@@ -4925,8 +2655,6 @@ export type CliSessionExchangeData = {
     body: CliSessionExchangeRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -4967,7 +2695,7 @@ export type CliSessionExchangeError = CliSessionExchangeErrors[keyof CliSessionE
 
 export type CliSessionExchangeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: IssuedCliSessionResponse;
 };
@@ -5008,7 +2736,7 @@ export type CliDevicesListError = CliDevicesListErrors[keyof CliDevicesListError
 
 export type CliDevicesListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: CliDeviceListResponse;
 };
@@ -5019,16 +2747,11 @@ export type CliDeviceRevokeData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Device Id
-         */
         device_id: string;
     };
     query?: never;
@@ -5070,7 +2793,7 @@ export type CliDeviceRevokeError = CliDeviceRevokeErrors[keyof CliDeviceRevokeEr
 
 export type CliDeviceRevokeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
     204: void;
 };
@@ -5081,8 +2804,6 @@ export type CliSessionRevokeData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -5106,9 +2827,9 @@ export type CliSessionRevokeErrors = {
      */
     403: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Content
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5123,7 +2844,7 @@ export type CliSessionRevokeError = CliSessionRevokeErrors[keyof CliSessionRevok
 
 export type CliSessionRevokeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
     204: void;
 };
@@ -5152,7 +2873,7 @@ export type ConsentNoticeGetError = ConsentNoticeGetErrors[keyof ConsentNoticeGe
 
 export type ConsentNoticeGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PrivacyNoticeDetail;
 };
@@ -5163,8 +2884,6 @@ export type DiagnosticsErrorsClearData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -5197,9 +2916,9 @@ export type DiagnosticsErrorsClearError = DiagnosticsErrorsClearErrors[keyof Dia
 
 export type DiagnosticsErrorsClearResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type DiagnosticsErrorsClearResponse = DiagnosticsErrorsClearResponses[keyof DiagnosticsErrorsClearResponses];
@@ -5209,14 +2928,10 @@ export type DiagnosticsErrorsListData = {
     path?: never;
     query?: {
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Work Lost
-         *
          * Return only failures that permanently abandoned work, such as a dead-lettered job.
          */
         work_lost?: boolean;
@@ -5247,7 +2962,7 @@ export type DiagnosticsErrorsListError = DiagnosticsErrorsListErrors[keyof Diagn
 
 export type DiagnosticsErrorsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageErrorReportSummary;
 };
@@ -5258,8 +2973,6 @@ export type DiagnosticsErrorGetData = {
     body?: never;
     path: {
         /**
-         * Reference
-         *
          * The short reference a user was shown, or the full correlation ID from a Request-Id header.
          */
         reference: string;
@@ -5295,7 +3008,7 @@ export type DiagnosticsErrorGetError = DiagnosticsErrorGetErrors[keyof Diagnosti
 
 export type DiagnosticsErrorGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: ErrorReportDetail;
 };
@@ -5336,7 +3049,7 @@ export type AccountGetError = AccountGetErrors[keyof AccountGetErrors];
 
 export type AccountGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: UserMe;
 };
@@ -5344,14 +3057,9 @@ export type AccountGetResponses = {
 export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
 
 export type AccountConsentGrantData = {
-    /**
-     * Body
-     */
-    body?: ConsentGrantRequest | null;
+    body: ConsentGrantRequest | null;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -5379,9 +3087,9 @@ export type AccountConsentGrantErrors = {
      */
     409: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5396,7 +3104,7 @@ export type AccountConsentGrantError = AccountConsentGrantErrors[keyof AccountCo
 
 export type AccountConsentGrantResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: UserMe;
 };
@@ -5407,15 +3115,10 @@ export type AccountProfileUpdateData = {
     body: ProfileUpdateRequest;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path?: never;
     query?: never;
@@ -5461,7 +3164,7 @@ export type AccountProfileUpdateError = AccountProfileUpdateErrors[keyof Account
 
 export type AccountProfileUpdateResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: ProfileDetail;
 };
@@ -5502,9 +3205,7 @@ export type AccountIdentityListError = AccountIdentityListErrors[keyof AccountId
 
 export type AccountIdentityListResponses = {
     /**
-     * Response Account Identity List
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<IdentityDetail>;
 };
@@ -5515,20 +3216,12 @@ export type AccountIdentityVisibilitySetData = {
     body: IdentityVisibilityRequest;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Identity Id
-         */
         identity_id: number;
     };
     query?: never;
@@ -5570,7 +3263,7 @@ export type AccountIdentityVisibilitySetError = AccountIdentityVisibilitySetErro
 
 export type AccountIdentityVisibilitySetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: IdentityDetail;
 };
@@ -5581,20 +3274,12 @@ export type AccountIdentityUnlinkData = {
     body?: never;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Identity Id
-         */
         identity_id: number;
     };
     query?: never;
@@ -5640,9 +3325,9 @@ export type AccountIdentityUnlinkError = AccountIdentityUnlinkErrors[keyof Accou
 
 export type AccountIdentityUnlinkResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type AccountIdentityUnlinkResponse = AccountIdentityUnlinkResponses[keyof AccountIdentityUnlinkResponses];
@@ -5651,8 +3336,6 @@ export type AccountMergeCodeCreateData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -5676,9 +3359,9 @@ export type AccountMergeCodeCreateErrors = {
      */
     404: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5693,7 +3376,7 @@ export type AccountMergeCodeCreateError = AccountMergeCodeCreateErrors[keyof Acc
 
 export type AccountMergeCodeCreateResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: MergeCodeDetail;
 };
@@ -5704,8 +3387,6 @@ export type AccountMergePreviewData = {
     body: MergeRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -5750,7 +3431,7 @@ export type AccountMergePreviewError = AccountMergePreviewErrors[keyof AccountMe
 
 export type AccountMergePreviewResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: MergePreviewDetail;
 };
@@ -5761,8 +3442,6 @@ export type AccountMergeCompleteData = {
     body: MergeRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -5807,7 +3486,7 @@ export type AccountMergeCompleteError = AccountMergeCompleteErrors[keyof Account
 
 export type AccountMergeCompleteResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: AccountMergeDetail;
 };
@@ -5818,8 +3497,6 @@ export type AccountMinecraftRefreshData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -5847,9 +3524,9 @@ export type AccountMinecraftRefreshErrors = {
      */
     409: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5864,7 +3541,7 @@ export type AccountMinecraftRefreshError = AccountMinecraftRefreshErrors[keyof A
 
 export type AccountMinecraftRefreshResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: MinecraftIdentityRefresh;
 };
@@ -5875,31 +3552,20 @@ export type AccountBuildsListData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Status
-         */
         status?: BuildStatusFilter | null;
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
         /**
-         * After Id
-         *
          * Return the items after this identifier in display order. Excludes offset.
          */
         after_id?: number | null;
         /**
-         * Before Id
-         *
          * Return the items before this identifier in display order. Excludes offset.
          */
         before_id?: number | null;
@@ -5938,7 +3604,7 @@ export type AccountBuildsListError = AccountBuildsListErrors[keyof AccountBuilds
 
 export type AccountBuildsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageBuildSummary;
 };
@@ -5949,16 +3615,11 @@ export type AccountMinecraftRefreshForData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Account Id
-         */
         account_id: number;
     };
     query?: never;
@@ -5983,9 +3644,9 @@ export type AccountMinecraftRefreshForErrors = {
      */
     409: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6000,7 +3661,7 @@ export type AccountMinecraftRefreshForError = AccountMinecraftRefreshForErrors[k
 
 export type AccountMinecraftRefreshForResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: MinecraftIdentityRefresh;
 };
@@ -6011,20 +3672,12 @@ export type AccountProfileClearData = {
     body?: never;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Account Id
-         */
         account_id: number;
     };
     query?: never;
@@ -6070,7 +3723,7 @@ export type AccountProfileClearError = AccountProfileClearErrors[keyof AccountPr
 
 export type AccountProfileClearResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: ProfileDetail;
 };
@@ -6080,9 +3733,6 @@ export type AccountProfileClearResponse = AccountProfileClearResponses[keyof Acc
 export type AccountProfileReviewData = {
     body?: never;
     path: {
-        /**
-         * Account Id
-         */
         account_id: number;
     };
     query?: never;
@@ -6103,9 +3753,9 @@ export type AccountProfileReviewErrors = {
      */
     404: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6120,7 +3770,7 @@ export type AccountProfileReviewError = AccountProfileReviewErrors[keyof Account
 
 export type AccountProfileReviewResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: ProfileDetail;
 };
@@ -6161,7 +3811,7 @@ export type PaperInstallationsListError = PaperInstallationsListErrors[keyof Pap
 
 export type PaperInstallationsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: InstallationListResponse;
 };
@@ -6172,8 +3822,6 @@ export type PaperInstallationCreateData = {
     body: InstallationCreateRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -6214,7 +3862,7 @@ export type PaperInstallationCreateError = PaperInstallationCreateErrors[keyof P
 
 export type PaperInstallationCreateResponses = {
     /**
-     * Successful Response
+     * Document created, URL follows
      */
     201: IssuedInstallationResponse;
 };
@@ -6225,16 +3873,11 @@ export type PaperInstallationRotateData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Installation Id
-         */
         installation_id: string;
     };
     query?: never;
@@ -6276,7 +3919,7 @@ export type PaperInstallationRotateError = PaperInstallationRotateErrors[keyof P
 
 export type PaperInstallationRotateResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: IssuedInstallationResponse;
 };
@@ -6287,16 +3930,11 @@ export type PaperInstallationProfileUpdateData = {
     body: ServerProfileSchema;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Installation Id
-         */
         installation_id: string;
     };
     query?: never;
@@ -6338,7 +3976,7 @@ export type PaperInstallationProfileUpdateError = PaperInstallationProfileUpdate
 
 export type PaperInstallationProfileUpdateResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: InstallationResponse;
 };
@@ -6349,16 +3987,11 @@ export type PaperInstallationRevokeData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Installation Id
-         */
         installation_id: string;
     };
     query?: never;
@@ -6400,7 +4033,7 @@ export type PaperInstallationRevokeError = PaperInstallationRevokeErrors[keyof P
 
 export type PaperInstallationRevokeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
     204: void;
 };
@@ -6410,20 +4043,12 @@ export type PaperInstallationRevokeResponse = PaperInstallationRevokeResponses[k
 export type PaperChallengeStartData = {
     body: PaperChallengeCreateRequest;
     headers?: {
+        'Squid-Installation-ID'?: string | null;
+        'Squid-Installation-Secret'?: string | null;
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
-        /**
-         * Squid-Installation-Id
-         */
-        'Squid-Installation-ID'?: string | null;
-        /**
-         * Squid-Installation-Secret
-         */
-        'Squid-Installation-Secret'?: string | null;
     };
     path?: never;
     query?: never;
@@ -6461,7 +4086,7 @@ export type PaperChallengeStartError = PaperChallengeStartErrors[keyof PaperChal
 
 export type PaperChallengeStartResponses = {
     /**
-     * Successful Response
+     * Document created, URL follows
      */
     201: ChallengeCreateResponse;
 };
@@ -6471,20 +4096,12 @@ export type PaperChallengeStartResponse = PaperChallengeStartResponses[keyof Pap
 export type PaperChallengeExchangeData = {
     body: PaperChallengeExchangeRequest;
     headers?: {
+        'Squid-Installation-ID'?: string | null;
+        'Squid-Installation-Secret'?: string | null;
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
-        /**
-         * Squid-Installation-Id
-         */
-        'Squid-Installation-ID'?: string | null;
-        /**
-         * Squid-Installation-Secret
-         */
-        'Squid-Installation-Secret'?: string | null;
     };
     path?: never;
     query?: never;
@@ -6522,7 +4139,7 @@ export type PaperChallengeExchangeError = PaperChallengeExchangeErrors[keyof Pap
 
 export type PaperChallengeExchangeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: IssuedPlayerGrantResponse;
 };
@@ -6533,8 +4150,6 @@ export type FabricChallengeStartData = {
     body: FabricChallengeCreateRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -6571,7 +4186,7 @@ export type FabricChallengeStartError = FabricChallengeStartErrors[keyof FabricC
 
 export type FabricChallengeStartResponses = {
     /**
-     * Successful Response
+     * Document created, URL follows
      */
     201: ChallengeCreateResponse;
 };
@@ -6582,8 +4197,6 @@ export type FabricChallengeExchangeData = {
     body: FabricChallengeExchangeRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -6620,7 +4233,7 @@ export type FabricChallengeExchangeError = FabricChallengeExchangeErrors[keyof F
 
 export type FabricChallengeExchangeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: IssuedPlayerGrantResponse;
 };
@@ -6631,8 +4244,6 @@ export type MinecraftChallengeApproveData = {
     body: ChallengeApprovalRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -6677,7 +4288,7 @@ export type MinecraftChallengeApproveError = MinecraftChallengeApproveErrors[key
 
 export type MinecraftChallengeApproveResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: ChallengeApprovalResponse;
 };
@@ -6688,16 +4299,11 @@ export type MinecraftGrantRevokeData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Grant Id
-         */
         grant_id: string;
     };
     query?: never;
@@ -6739,7 +4345,7 @@ export type MinecraftGrantRevokeError = MinecraftGrantRevokeErrors[keyof Minecra
 
 export type MinecraftGrantRevokeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
     204: void;
 };
@@ -6776,7 +4382,7 @@ export type NotificationPreferencesGetError = NotificationPreferencesGetErrors[k
 
 export type NotificationPreferencesGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: NotificationPreferencesDetail;
 };
@@ -6787,15 +4393,10 @@ export type NotificationPreferencesUpdateData = {
     body: NotificationPreferenceUpdate;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path?: never;
     query?: never;
@@ -6820,9 +4421,9 @@ export type NotificationPreferencesUpdateErrors = {
      */
     412: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Content
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6837,7 +4438,7 @@ export type NotificationPreferencesUpdateError = NotificationPreferencesUpdateEr
 
 export type NotificationPreferencesUpdateResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: NotificationPreferencesDetail;
 };
@@ -6874,9 +4475,7 @@ export type NotificationSubscriptionsListError = NotificationSubscriptionsListEr
 
 export type NotificationSubscriptionsListResponses = {
     /**
-     * Response Notification Subscriptions List
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<NotificationSubscriptionDetail>;
 };
@@ -6887,15 +4486,10 @@ export type NotificationSubscriptionCreateData = {
     body: NotificationSubscriptionCreate;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path?: never;
     query?: never;
@@ -6945,7 +4539,7 @@ export type NotificationSubscriptionCreateError = NotificationSubscriptionCreate
 
 export type NotificationSubscriptionCreateResponses = {
     /**
-     * Successful Response
+     * Document created, URL follows
      */
     201: NotificationSubscriptionDetail;
 };
@@ -6956,20 +4550,12 @@ export type NotificationSubscriptionDeleteData = {
     body?: never;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Subscription Id
-         */
         subscription_id: number;
     };
     query?: never;
@@ -6998,9 +4584,9 @@ export type NotificationSubscriptionDeleteErrors = {
      */
     412: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7015,9 +4601,9 @@ export type NotificationSubscriptionDeleteError = NotificationSubscriptionDelete
 
 export type NotificationSubscriptionDeleteResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type NotificationSubscriptionDeleteResponse = NotificationSubscriptionDeleteResponses[keyof NotificationSubscriptionDeleteResponses];
@@ -7027,26 +4613,18 @@ export type NotificationInboxListData = {
     path?: never;
     query?: {
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
         /**
-         * After Id
-         *
          * Return the items after this identifier in display order. Excludes offset.
          */
         after_id?: number | null;
         /**
-         * Before Id
-         *
          * Return the items before this identifier in display order. Excludes offset.
          */
         before_id?: number | null;
@@ -7068,9 +4646,9 @@ export type NotificationInboxListErrors = {
      */
     403: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Content
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7085,7 +4663,7 @@ export type NotificationInboxListError = NotificationInboxListErrors[keyof Notif
 
 export type NotificationInboxListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageInboxNotificationDetail;
 };
@@ -7096,20 +4674,12 @@ export type NotificationInboxMarkReadData = {
     body?: never;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Notification Id
-         */
         notification_id: number;
     };
     query?: never;
@@ -7138,9 +4708,9 @@ export type NotificationInboxMarkReadErrors = {
      */
     412: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7155,9 +4725,9 @@ export type NotificationInboxMarkReadError = NotificationInboxMarkReadErrors[key
 
 export type NotificationInboxMarkReadResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type NotificationInboxMarkReadResponse = NotificationInboxMarkReadResponses[keyof NotificationInboxMarkReadResponses];
@@ -7166,20 +4736,12 @@ export type NotificationInboxMarkUnreadData = {
     body?: never;
     headers?: {
         /**
-         * If-Match
-         */
-        'if-match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Notification Id
-         */
         notification_id: number;
     };
     query?: never;
@@ -7208,9 +4770,9 @@ export type NotificationInboxMarkUnreadErrors = {
      */
     412: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7225,9 +4787,9 @@ export type NotificationInboxMarkUnreadError = NotificationInboxMarkUnreadErrors
 
 export type NotificationInboxMarkUnreadResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type NotificationInboxMarkUnreadResponse = NotificationInboxMarkUnreadResponses[keyof NotificationInboxMarkUnreadResponses];
@@ -7235,9 +4797,6 @@ export type NotificationInboxMarkUnreadResponse = NotificationInboxMarkUnreadRes
 export type RecordsGetData = {
     body?: never;
     path: {
-        /**
-         * Record Id
-         */
         record_id: number;
     };
     query?: never;
@@ -7271,7 +4830,7 @@ export type RecordsGetError = RecordsGetErrors[keyof RecordsGetErrors];
 
 export type RecordsGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: RecordDetail;
 };
@@ -7282,31 +4841,20 @@ export type RecordsListData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Sort
-         */
         sort?: string | null;
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
         /**
-         * After Id
-         *
          * Return the items after this identifier in display order. Excludes offset.
          */
         after_id?: number | null;
         /**
-         * Before Id
-         *
          * Return the items before this identifier in display order. Excludes offset.
          */
         before_id?: number | null;
@@ -7337,9 +4885,9 @@ export type RecordsListError = RecordsListErrors[keyof RecordsListErrors];
 
 export type RecordsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
-    200: PageRecordSummary;
+    200: PagePublishedTitle;
 };
 
 export type RecordsListResponse = RecordsListResponses[keyof RecordsListResponses];
@@ -7347,21 +4895,14 @@ export type RecordsListResponse = RecordsListResponses[keyof RecordsListResponse
 export type BuildSchematicsListData = {
     body?: never;
     path: {
-        /**
-         * Build Id
-         */
         build_id: number;
     };
     query?: {
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
@@ -7396,7 +4937,7 @@ export type BuildSchematicsListError = BuildSchematicsListErrors[keyof BuildSche
 
 export type BuildSchematicsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageSchematicSummary;
 };
@@ -7406,13 +4947,7 @@ export type BuildSchematicsListResponse = BuildSchematicsListResponses[keyof Bui
 export type BuildSchematicContentGetData = {
     body?: never;
     path: {
-        /**
-         * Build Id
-         */
         build_id: number;
-        /**
-         * Schematic Id
-         */
         schematic_id: number;
     };
     query?: never;
@@ -7452,31 +4987,13 @@ export type BuildSchematicContentGetResponse = BuildSchematicContentGetResponses
 export type BuildSchematicRenderGetData = {
     body?: never;
     path: {
-        /**
-         * Build Id
-         */
         build_id: number;
     };
     query?: {
-        /**
-         * Width
-         */
         width?: number | null;
-        /**
-         * Height
-         */
         height?: number | null;
-        /**
-         * Yaw
-         */
         yaw?: number | null;
-        /**
-         * Pitch
-         */
         pitch?: number | null;
-        /**
-         * Zoom
-         */
         zoom?: number | null;
     };
     url: '/v1/builds/{build_id}/schematics/render';
@@ -7511,15 +5028,14 @@ export type BuildSchematicRenderGetResponses = {
     /**
      * Rendered schematic preview
      */
-    200: unknown;
+    200: string;
 };
+
+export type BuildSchematicRenderGetResponse = BuildSchematicRenderGetResponses[keyof BuildSchematicRenderGetResponses];
 
 export type SchematicRenderContentGetData = {
     body?: never;
     path: {
-        /**
-         * Recipe Hash
-         */
         recipe_hash: string;
     };
     query?: never;
@@ -7551,27 +5067,21 @@ export type SchematicRenderContentGetResponses = {
     /**
      * Generated schematic preview
      */
-    200: unknown;
+    200: string;
 };
+
+export type SchematicRenderContentGetResponse = SchematicRenderContentGetResponses[keyof SchematicRenderContentGetResponses];
 
 export type SchematicVideoCreateData = {
     body: VideoCreateRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Build Id
-         */
         build_id: number;
-        /**
-         * Schematic Id
-         */
         schematic_id: number;
     };
     query?: never;
@@ -7613,7 +5123,7 @@ export type SchematicVideoCreateError = SchematicVideoCreateErrors[keyof Schemat
 
 export type SchematicVideoCreateResponses = {
     /**
-     * Successful Response
+     * Request accepted, processing continues off-line
      */
     202: VideoResponse;
 };
@@ -7623,9 +5133,6 @@ export type SchematicVideoCreateResponse = SchematicVideoCreateResponses[keyof S
 export type SchematicVideoStatusData = {
     body?: never;
     path: {
-        /**
-         * Video Id
-         */
         video_id: number;
     };
     query?: never;
@@ -7659,7 +5166,7 @@ export type SchematicVideoStatusError = SchematicVideoStatusErrors[keyof Schemat
 
 export type SchematicVideoStatusResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: VideoResponse;
 };
@@ -7669,9 +5176,6 @@ export type SchematicVideoStatusResponse = SchematicVideoStatusResponses[keyof S
 export type SchematicVideoContentData = {
     body?: never;
     path: {
-        /**
-         * Video Id
-         */
         video_id: number;
     };
     query?: never;
@@ -7738,9 +5242,7 @@ export type SearchFieldsListError = SearchFieldsListErrors[keyof SearchFieldsLis
 
 export type SearchFieldsListResponses = {
     /**
-     * Response Search Fields List
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<SearchField>;
 };
@@ -7751,13 +5253,7 @@ export type SearchTermsSuggestData = {
     body?: never;
     path?: never;
     query: {
-        /**
-         * Q
-         */
         q: string;
-        /**
-         * Limit
-         */
         limit?: number;
     };
     url: '/v1/search/suggest';
@@ -7786,7 +5282,7 @@ export type SearchTermsSuggestError = SearchTermsSuggestErrors[keyof SearchTerms
 
 export type SearchTermsSuggestResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: SearchSuggestions;
 };
@@ -7797,24 +5293,17 @@ export type SearchExecuteData = {
     body?: never;
     path?: never;
     query: {
-        /**
-         * Q
-         */
         q: string;
-        scope?: SearchScope;
         /**
-         * Sort
+         * Resources included in a search.
          */
+        scope?: SearchScope;
         sort?: string | null;
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
@@ -7845,7 +5334,7 @@ export type SearchExecuteError = SearchExecuteErrors[keyof SearchExecuteErrors];
 
 export type SearchExecuteResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageSearchResult;
 };
@@ -7882,7 +5371,7 @@ export type RuntimeSettingsGetError = RuntimeSettingsGetErrors[keyof RuntimeSett
 
 export type RuntimeSettingsGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: RuntimeSettingsDetail;
 };
@@ -7893,15 +5382,10 @@ export type RuntimeSettingsUpdateData = {
     body: RuntimeSettingsPatch;
     headers?: {
         /**
-         * If-Match
-         */
-        'If-Match'?: string | null;
-        /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
     };
     path?: never;
     query?: never;
@@ -7939,7 +5423,7 @@ export type RuntimeSettingsUpdateError = RuntimeSettingsUpdateErrors[keyof Runti
 
 export type RuntimeSettingsUpdateResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: RuntimeSettingsDetail;
 };
@@ -7950,13 +5434,7 @@ export type SubmissionCorrectionInboxData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * After
-         */
         after?: string | null;
-        /**
-         * Limit
-         */
         limit?: number;
     };
     url: '/v1/submissions/inbox';
@@ -7989,7 +5467,7 @@ export type SubmissionCorrectionInboxError = SubmissionCorrectionInboxErrors[key
 
 export type SubmissionCorrectionInboxResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: DraftInboxResponse;
 };
@@ -8026,7 +5504,7 @@ export type SubmissionDraftsListError = SubmissionDraftsListErrors[keyof Submiss
 
 export type SubmissionDraftsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: DraftListResponse;
 };
@@ -8037,8 +5515,6 @@ export type SubmissionDraftCreateData = {
     body: DraftCreateRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
@@ -8083,7 +5559,7 @@ export type SubmissionDraftCreateError = SubmissionDraftCreateErrors[keyof Submi
 
 export type SubmissionDraftCreateResponses = {
     /**
-     * Successful Response
+     * Document created, URL follows
      */
     201: StoredDraftResponse;
 };
@@ -8112,7 +5588,7 @@ export type SubmissionFormCurrentError = SubmissionFormCurrentErrors[keyof Submi
 
 export type SubmissionFormCurrentResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: FormManifestResponse;
 };
@@ -8122,13 +5598,7 @@ export type SubmissionFormCurrentResponse = SubmissionFormCurrentResponses[keyof
 export type SubmissionFormRevisionGetData = {
     body?: never;
     path: {
-        /**
-         * Schema Id
-         */
         schema_id: string;
-        /**
-         * Revision
-         */
         revision: number;
     };
     query?: never;
@@ -8158,7 +5628,7 @@ export type SubmissionFormRevisionGetError = SubmissionFormRevisionGetErrors[key
 
 export type SubmissionFormRevisionGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: FormManifestResponse;
 };
@@ -8168,15 +5638,9 @@ export type SubmissionFormRevisionGetResponse = SubmissionFormRevisionGetRespons
 export type SubmissionFormOptionsGetData = {
     body?: never;
     path: {
-        /**
-         * Source
-         */
         source: string;
     };
     query: {
-        /**
-         * Category
-         */
         category: string;
     };
     url: '/v1/submissions/form/options/{source}';
@@ -8209,7 +5673,7 @@ export type SubmissionFormOptionsGetError = SubmissionFormOptionsGetErrors[keyof
 
 export type SubmissionFormOptionsGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: FormOptionSetResponse;
 };
@@ -8220,16 +5684,11 @@ export type SubmissionDraftDeleteData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -8267,9 +5726,9 @@ export type SubmissionDraftDeleteError = SubmissionDraftDeleteErrors[keyof Submi
 
 export type SubmissionDraftDeleteResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type SubmissionDraftDeleteResponse = SubmissionDraftDeleteResponses[keyof SubmissionDraftDeleteResponses];
@@ -8277,9 +5736,6 @@ export type SubmissionDraftDeleteResponse = SubmissionDraftDeleteResponses[keyof
 export type SubmissionDraftGetData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -8317,7 +5773,7 @@ export type SubmissionDraftGetError = SubmissionDraftGetErrors[keyof SubmissionD
 
 export type SubmissionDraftGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: StoredDraftResponse;
 };
@@ -8327,21 +5783,13 @@ export type SubmissionDraftGetResponse = SubmissionDraftGetResponses[keyof Submi
 export type SubmissionDraftChangeData = {
     body: DraftChangeRequest;
     headers?: {
-        /**
-         * If-Match
-         */
         'If-Match'?: string | null;
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -8391,7 +5839,7 @@ export type SubmissionDraftChangeError = SubmissionDraftChangeErrors[keyof Submi
 
 export type SubmissionDraftChangeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: DraftChangeResponse;
 };
@@ -8402,16 +5850,11 @@ export type SubmissionDraftManifestUpgradeData = {
     body: DraftManifestUpgradeRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -8457,7 +5900,7 @@ export type SubmissionDraftManifestUpgradeError = SubmissionDraftManifestUpgrade
 
 export type SubmissionDraftManifestUpgradeResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: DraftManifestUpgradeResponse;
 };
@@ -8467,19 +5910,10 @@ export type SubmissionDraftManifestUpgradeResponse = SubmissionDraftManifestUpgr
 export type SubmissionAttemptsListData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: {
-        /**
-         * Before
-         */
         before?: number | null;
-        /**
-         * Limit
-         */
         limit?: number;
     };
     url: '/v1/submissions/drafts/{draft_id}/attempts';
@@ -8520,9 +5954,7 @@ export type SubmissionAttemptsListError = SubmissionAttemptsListErrors[keyof Sub
 
 export type SubmissionAttemptsListResponses = {
     /**
-     * Response Submission Attempts List
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<SubmissionAttemptResponse>;
 };
@@ -8533,16 +5965,11 @@ export type SubmissionFinalizationStartData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -8588,9 +6015,7 @@ export type SubmissionFinalizationStartError = SubmissionFinalizationStartErrors
 
 export type SubmissionFinalizationStartResponses = {
     /**
-     * Response Submission Finalization Start
-     *
-     * Successful Response
+     * Request accepted, processing continues off-line
      */
     202: SubmissionAttemptResponse | DraftPreparationResponse;
 };
@@ -8600,9 +6025,6 @@ export type SubmissionFinalizationStartResponse = SubmissionFinalizationStartRes
 export type SubmissionFinalizationGetData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -8640,9 +6062,7 @@ export type SubmissionFinalizationGetError = SubmissionFinalizationGetErrors[key
 
 export type SubmissionFinalizationGetResponses = {
     /**
-     * Response Submission Finalization Get
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: SubmissionAttemptResponse | DraftPreparationResponse;
 };
@@ -8652,13 +6072,7 @@ export type SubmissionFinalizationGetResponse = SubmissionFinalizationGetRespons
 export type SubmissionAttemptGetData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Attempt Id
-         */
         attempt_id: string;
     };
     query?: never;
@@ -8700,7 +6114,7 @@ export type SubmissionAttemptGetError = SubmissionAttemptGetErrors[keyof Submiss
 
 export type SubmissionAttemptGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: SubmissionAttemptResponse;
 };
@@ -8710,22 +6124,18 @@ export type SubmissionAttemptGetResponse = SubmissionAttemptGetResponses[keyof S
 export type SubmissionMediaUploadData = {
     body: Blob | File;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
+        /**
+         * A hosted media type accepted by a submission.
+         */
         kind: MediaKind;
     };
     query?: {
         /**
-         * Strip Audio
-         *
          * Remove audio while normalizing a video.
          */
         strip_audio?: boolean;
         /**
-         * Upload Id
-         *
          * Stable client-generated UUID for safe upload retries.
          */
         upload_id?: string | null;
@@ -8772,7 +6182,7 @@ export type SubmissionMediaUploadError = SubmissionMediaUploadErrors[keyof Submi
 
 export type SubmissionMediaUploadResponses = {
     /**
-     * Successful Response
+     * Request accepted, processing continues off-line
      */
     202: DraftMediaResponse;
 };
@@ -8782,9 +6192,6 @@ export type SubmissionMediaUploadResponse = SubmissionMediaUploadResponses[keyof
 export type SubmissionMediaListData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -8826,7 +6233,7 @@ export type SubmissionMediaListError = SubmissionMediaListErrors[keyof Submissio
 
 export type SubmissionMediaListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: DraftMediaListResponse;
 };
@@ -8837,24 +6244,13 @@ export type SubmissionMediaDiscardData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
-        /**
-         * If-Match
-         */
         'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Upload Id
-         */
         upload_id: string;
     };
     query?: never;
@@ -8896,9 +6292,9 @@ export type SubmissionMediaDiscardError = SubmissionMediaDiscardErrors[keyof Sub
 
 export type SubmissionMediaDiscardResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, nothing follows
      */
-    204: void;
+    204: null;
 };
 
 export type SubmissionMediaDiscardResponse = SubmissionMediaDiscardResponses[keyof SubmissionMediaDiscardResponses];
@@ -8906,13 +6302,7 @@ export type SubmissionMediaDiscardResponse = SubmissionMediaDiscardResponses[key
 export type SubmissionMediaGetData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Upload Id
-         */
         upload_id: string;
     };
     query?: never;
@@ -8954,7 +6344,7 @@ export type SubmissionMediaGetError = SubmissionMediaGetErrors[keyof SubmissionM
 
 export type SubmissionMediaGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: DraftMediaResponse;
 };
@@ -8965,26 +6355,15 @@ export type SubmissionMediaAttachData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Upload Id
-         */
         upload_id: string;
     };
     query: {
-        /**
-         * Source Draft Id
-         */
         source_draft_id: string;
     };
     url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}/attach';
@@ -8992,9 +6371,9 @@ export type SubmissionMediaAttachData = {
 
 export type SubmissionMediaAttachErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9005,7 +6384,7 @@ export type SubmissionMediaAttachError = SubmissionMediaAttachErrors[keyof Submi
 
 export type SubmissionMediaAttachResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: DraftMediaResponse;
 };
@@ -9015,9 +6394,6 @@ export type SubmissionMediaAttachResponse = SubmissionMediaAttachResponses[keyof
 export type SubmissionSchematicListData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -9026,9 +6402,9 @@ export type SubmissionSchematicListData = {
 
 export type SubmissionSchematicListErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9039,9 +6415,7 @@ export type SubmissionSchematicListError = SubmissionSchematicListErrors[keyof S
 
 export type SubmissionSchematicListResponses = {
     /**
-     * Response Submission Schematic List
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<DraftSchematicResponse>;
 };
@@ -9052,24 +6426,13 @@ export type SubmissionSchematicDiscardData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
-        /**
-         * If-Match
-         */
         'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Upload Id
-         */
         upload_id: string;
     };
     query?: never;
@@ -9078,9 +6441,9 @@ export type SubmissionSchematicDiscardData = {
 
 export type SubmissionSchematicDiscardErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9091,9 +6454,7 @@ export type SubmissionSchematicDiscardError = SubmissionSchematicDiscardErrors[k
 
 export type SubmissionSchematicDiscardResponses = {
     /**
-     * Response Submission Schematic Discard
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<DraftSchematicResponse>;
 };
@@ -9103,19 +6464,10 @@ export type SubmissionSchematicDiscardResponse = SubmissionSchematicDiscardRespo
 export type SubmissionSchematicUploadData = {
     body: Blob | File;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Upload Id
-         */
         upload_id: string;
     };
     query: {
-        /**
-         * Filename
-         */
         filename: string;
     };
     url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}';
@@ -9123,9 +6475,9 @@ export type SubmissionSchematicUploadData = {
 
 export type SubmissionSchematicUploadErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9136,7 +6488,7 @@ export type SubmissionSchematicUploadError = SubmissionSchematicUploadErrors[key
 
 export type SubmissionSchematicUploadResponses = {
     /**
-     * Successful Response
+     * Request accepted, processing continues off-line
      */
     202: DraftSchematicResponse;
 };
@@ -9147,24 +6499,13 @@ export type SubmissionSchematicPrimaryData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
-        /**
-         * If-Match
-         */
         'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Upload Id
-         */
         upload_id: string;
     };
     query?: never;
@@ -9173,9 +6514,9 @@ export type SubmissionSchematicPrimaryData = {
 
 export type SubmissionSchematicPrimaryErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9186,9 +6527,7 @@ export type SubmissionSchematicPrimaryError = SubmissionSchematicPrimaryErrors[k
 
 export type SubmissionSchematicPrimaryResponses = {
     /**
-     * Response Submission Schematic Primary
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<DraftSchematicResponse>;
 };
@@ -9199,20 +6538,12 @@ export type SubmissionSchematicAttachData = {
     body: AttachSchematicRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Upload Id
-         */
         upload_id: string;
     };
     query?: never;
@@ -9221,9 +6552,9 @@ export type SubmissionSchematicAttachData = {
 
 export type SubmissionSchematicAttachErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9234,9 +6565,7 @@ export type SubmissionSchematicAttachError = SubmissionSchematicAttachErrors[key
 
 export type SubmissionSchematicAttachResponses = {
     /**
-     * Response Submission Schematic Attach
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<DraftSchematicResponse>;
 };
@@ -9247,16 +6576,11 @@ export type SubmissionRevisionHistoryData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Message Id
-         */
         message_id: number;
     };
     query?: never;
@@ -9265,9 +6589,9 @@ export type SubmissionRevisionHistoryData = {
 
 export type SubmissionRevisionHistoryErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9278,9 +6602,7 @@ export type SubmissionRevisionHistoryError = SubmissionRevisionHistoryErrors[key
 
 export type SubmissionRevisionHistoryResponses = {
     /**
-     * Response Submission Revision History
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<RecalculationProposalResponse>;
 };
@@ -9291,16 +6613,11 @@ export type SubmissionRevisionGetData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Proposal Id
-         */
         proposal_id: string;
     };
     query?: never;
@@ -9309,9 +6626,9 @@ export type SubmissionRevisionGetData = {
 
 export type SubmissionRevisionGetErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9322,7 +6639,7 @@ export type SubmissionRevisionGetError = SubmissionRevisionGetErrors[keyof Submi
 
 export type SubmissionRevisionGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: RecalculationProposalResponse;
 };
@@ -9333,16 +6650,11 @@ export type SubmissionRevisionMatchData = {
     body: RecalculationMatchRequest;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Proposal Id
-         */
         proposal_id: string;
     };
     query?: never;
@@ -9351,9 +6663,9 @@ export type SubmissionRevisionMatchData = {
 
 export type SubmissionRevisionMatchErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9364,7 +6676,7 @@ export type SubmissionRevisionMatchError = SubmissionRevisionMatchErrors[keyof S
 
 export type SubmissionRevisionMatchResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: RecalculationProposalResponse;
 };
@@ -9375,16 +6687,11 @@ export type SubmissionRevisionApproveData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Proposal Id
-         */
         proposal_id: string;
     };
     query?: never;
@@ -9393,9 +6700,9 @@ export type SubmissionRevisionApproveData = {
 
 export type SubmissionRevisionApproveErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9406,7 +6713,7 @@ export type SubmissionRevisionApproveError = SubmissionRevisionApproveErrors[key
 
 export type SubmissionRevisionApproveResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: RecalculationProposalResponse;
 };
@@ -9416,9 +6723,6 @@ export type SubmissionRevisionApproveResponse = SubmissionRevisionApproveRespons
 export type SubmissionSuppliedFileListData = {
     body?: never;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
     };
     query?: never;
@@ -9427,9 +6731,9 @@ export type SubmissionSuppliedFileListData = {
 
 export type SubmissionSuppliedFileListErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9440,9 +6744,7 @@ export type SubmissionSuppliedFileListError = SubmissionSuppliedFileListErrors[k
 
 export type SubmissionSuppliedFileListResponses = {
     /**
-     * Response Submission Supplied File List
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<SuppliedFileResponse>;
 };
@@ -9453,24 +6755,13 @@ export type SubmissionSuppliedFileDiscardData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
-        /**
-         * If-Match
-         */
         'If-Match'?: string | null;
     };
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Source Id
-         */
         source_id: string;
     };
     query?: never;
@@ -9479,9 +6770,9 @@ export type SubmissionSuppliedFileDiscardData = {
 
 export type SubmissionSuppliedFileDiscardErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9492,9 +6783,7 @@ export type SubmissionSuppliedFileDiscardError = SubmissionSuppliedFileDiscardEr
 
 export type SubmissionSuppliedFileDiscardResponses = {
     /**
-     * Response Submission Supplied File Discard
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<SuppliedFileResponse>;
 };
@@ -9504,23 +6793,11 @@ export type SubmissionSuppliedFileDiscardResponse = SubmissionSuppliedFileDiscar
 export type SubmissionSuppliedFileUploadData = {
     body: Blob | File;
     path: {
-        /**
-         * Draft Id
-         */
         draft_id: string;
-        /**
-         * Source Id
-         */
         source_id: string;
     };
     query: {
-        /**
-         * Filename
-         */
         filename: string;
-        /**
-         * Replaces
-         */
         replaces?: string | null;
     };
     url: '/v1/submissions/drafts/{draft_id}/supplied-files/{source_id}';
@@ -9528,9 +6805,9 @@ export type SubmissionSuppliedFileUploadData = {
 
 export type SubmissionSuppliedFileUploadErrors = {
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9541,9 +6818,7 @@ export type SubmissionSuppliedFileUploadError = SubmissionSuppliedFileUploadErro
 
 export type SubmissionSuppliedFileUploadResponses = {
     /**
-     * Response Submission Supplied File Upload
-     *
-     * Successful Response
+     * Request accepted, processing continues off-line
      */
     202: Array<SuppliedFileResponse>;
 };
@@ -9572,9 +6847,7 @@ export type SuggestionSourcesListError = SuggestionSourcesListErrors[keyof Sugge
 
 export type SuggestionSourcesListResponses = {
     /**
-     * Response Suggestion Sources List
-     *
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: Array<SuggestionSourceInfo>;
 };
@@ -9584,27 +6857,12 @@ export type SuggestionSourcesListResponse = SuggestionSourcesListResponses[keyof
 export type SuggestionsGetData = {
     body?: never;
     path: {
-        /**
-         * Source
-         */
         source: string;
     };
     query?: {
-        /**
-         * Q
-         */
         q?: string;
-        /**
-         * Limit
-         */
         limit?: number;
-        /**
-         * Cursor
-         */
         cursor?: number | null;
-        /**
-         * Category
-         */
         category?: string | null;
     };
     url: '/v1/suggest/{source}';
@@ -9633,7 +6891,7 @@ export type SuggestionsGetError = SuggestionsGetErrors[keyof SuggestionsGetError
 
 export type SuggestionsGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: SuggestionPage;
 };
@@ -9645,14 +6903,10 @@ export type TagsListData = {
     path?: never;
     query?: {
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
@@ -9683,7 +6937,7 @@ export type TagsListError = TagsListErrors[keyof TagsListErrors];
 
 export type TagsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageTagDetail;
 };
@@ -9693,9 +6947,6 @@ export type TagsListResponse = TagsListResponses[keyof TagsListResponses];
 export type TagsGetData = {
     body?: never;
     path: {
-        /**
-         * Tag Id
-         */
         tag_id: number;
     };
     query?: never;
@@ -9725,7 +6976,7 @@ export type TagsGetError = TagsGetErrors[keyof TagsGetErrors];
 
 export type TagsGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: TagDetail;
 };
@@ -9735,9 +6986,6 @@ export type TagsGetResponse = TagsGetResponses[keyof TagsGetResponses];
 export type CreatorAliasGetData = {
     body?: never;
     path: {
-        /**
-         * Name
-         */
         name: string;
     };
     query?: never;
@@ -9767,7 +7015,7 @@ export type CreatorAliasGetError = CreatorAliasGetErrors[keyof CreatorAliasGetEr
 
 export type CreatorAliasGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: CreatorAliasDetail;
 };
@@ -9777,9 +7025,6 @@ export type CreatorAliasGetResponse = CreatorAliasGetResponses[keyof CreatorAlia
 export type CreatorProfileGetData = {
     body?: never;
     path: {
-        /**
-         * Creator Id
-         */
         creator_id: string;
     };
     query?: never;
@@ -9809,7 +7054,7 @@ export type CreatorProfileGetError = CreatorProfileGetErrors[keyof CreatorProfil
 
 export type CreatorProfileGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: CreatorProfileDetail;
 };
@@ -9821,14 +7066,10 @@ export type MinecraftVersionsListData = {
     path?: never;
     query?: {
         /**
-         * Page Size
-         *
          * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Offset
-         *
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
@@ -9859,7 +7100,7 @@ export type MinecraftVersionsListError = MinecraftVersionsListErrors[keyof Minec
 
 export type MinecraftVersionsListResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: PageVersionDetail;
 };
@@ -9869,9 +7110,6 @@ export type MinecraftVersionsListResponse = MinecraftVersionsListResponses[keyof
 export type VoteSessionGetData = {
     body?: never;
     path: {
-        /**
-         * Vote Session Id
-         */
         vote_session_id: number;
     };
     query?: never;
@@ -9901,7 +7139,7 @@ export type VoteSessionGetError = VoteSessionGetErrors[keyof VoteSessionGetError
 
 export type VoteSessionGetResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: VoteSessionDetail;
 };
@@ -9912,22 +7150,14 @@ export type VoteClearData = {
     body?: never;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Vote Session Id
-         */
         vote_session_id: number;
     };
     query: {
-        /**
-         * Guild Id
-         */
         guild_id: number;
     };
     url: '/v1/vote-sessions/{vote_session_id}/votes';
@@ -9955,9 +7185,9 @@ export type VoteClearErrors = {
      */
     409: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -9972,7 +7202,7 @@ export type VoteClearError = VoteClearErrors[keyof VoteClearErrors];
 
 export type VoteClearResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: VoteSessionDetail;
 };
@@ -9983,16 +7213,11 @@ export type VoteCastData = {
     body: VoteInput;
     headers?: {
         /**
-         * Idempotency-Key
-         *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
     path: {
-        /**
-         * Vote Session Id
-         */
         vote_session_id: number;
     };
     query?: never;
@@ -10021,9 +7246,9 @@ export type VoteCastErrors = {
      */
     409: ProblemDetail;
     /**
-     * Validation Error
+     * Unprocessable Entity
      */
-    422: HttpValidationError;
+    422: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -10038,7 +7263,7 @@ export type VoteCastError = VoteCastErrors[keyof VoteCastErrors];
 
 export type VoteCastResponses = {
     /**
-     * Successful Response
+     * Request fulfilled, document follows
      */
     200: VoteSessionDetail;
 };

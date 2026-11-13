@@ -16,17 +16,17 @@ from collections import OrderedDict, deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from time import monotonic
-from typing import Annotated, Protocol, cast, override
+from typing import Protocol, cast, override
 from uuid import uuid4
 
-from fastapi import Depends, Request
+from litestar import Request, Response
+from litestar.datastructures import MutableScopeHeaders
+from litestar.di import NamedDependency
+from litestar.types import ASGIApp, Message, Receive, Scope, Send
 from redis.asyncio import Redis
 from redis.asyncio.retry import Retry
 from redis.backoff import NoBackoff
 from redis.exceptions import RedisError, ResponseError
-from starlette.datastructures import MutableHeaders
-from starlette.responses import Response
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.errors import handle_squid_error
 from squid.api.security import Caller, current_caller
@@ -448,15 +448,15 @@ class RateLimitMiddleware:
         decision = await limiter.check((RateLimitRequest(policies.ip, _client_identity(request)),))
         request.state.rate_limit_states = list(decision.states)
         if not decision.allowed:
-            response = await handle_squid_error(request, RateLimitedError(decision.retry_after))
+            response = handle_squid_error(request, RateLimitedError(decision.retry_after))
             _set_rate_limit_headers(response, _states(request))
-            await response(scope, receive, send)
+            await response.to_asgi_response(request.app, request)(scope, receive, send)
             return
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = render_rate_limit_headers(_states(request))
-                mutable = MutableHeaders(scope=message)
+                mutable = MutableScopeHeaders.from_message(message)
                 if headers is not None:
                     mutable["RateLimit-Policy"] = headers.policy
                     mutable["RateLimit"] = headers.state
@@ -467,7 +467,7 @@ class RateLimitMiddleware:
 
 async def enforce_route_rate_limits(
     request: Request,
-    caller: Annotated[Caller, Depends(current_caller)],
+    caller: NamedDependency[Caller],
 ) -> None:
     """Apply caller quotas and any write, suggestion, render, or authorization quota for this route."""
     limiter, policies = _limiter_state(request)
@@ -475,8 +475,7 @@ async def enforce_route_rate_limits(
     identity = caller.subject if caller.kind != "anonymous" else _client_identity(request)
     if caller.kind != "anonymous":
         checks.append(RateLimitRequest(policies.caller, identity))
-    route = request.scope.get("route")
-    route_path = getattr(route, "path", None)
+    route_path = request.scope.get("path_template")
     request_path = request.url.path
     if request_path in _MINECRAFT_CHALLENGE_START_PATHS:
         checks.append(RateLimitRequest(policies.minecraft_challenge_start, identity))
@@ -568,3 +567,8 @@ def _set_rate_limit_headers(response: Response, states: Sequence[RateLimitState]
     if headers is not None:
         response.headers["RateLimit-Policy"] = headers.policy
         response.headers["RateLimit"] = headers.state
+
+
+async def enforce_route_rate_limits_before_request(request: Request) -> None:
+    """Apply authenticated route quotas from a native request hook."""
+    await enforce_route_rate_limits(request, await current_caller(request))

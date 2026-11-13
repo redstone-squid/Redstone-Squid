@@ -33,14 +33,12 @@ export const healthLive = <ThrowOnError extends boolean = false>(options?: Optio
 export const healthReady = <ThrowOnError extends boolean = false>(options?: Options<HealthReadyData, ThrowOnError>): RequestResult<HealthReadyResponses, unknown, ThrowOnError> => (options?.client ?? client).get<HealthReadyResponses, unknown, ThrowOnError>({ url: '/readyz', ...options });
 
 /**
- * Ready
- *
- * Report whether required database state matches this release.
+ * ReadyCompatibility
  */
 export const healthReadyCompatibility = <ThrowOnError extends boolean = false>(options?: Options<HealthReadyCompatibilityData, ThrowOnError>): RequestResult<HealthReadyCompatibilityResponses, unknown, ThrowOnError> => (options?.client ?? client).get<HealthReadyCompatibilityResponses, unknown, ThrowOnError>({ url: '/health', ...options });
 
 /**
- * Get Verification Code
+ * GetVerificationCode
  *
  * Generate a verification code for a user.
  */
@@ -68,9 +66,7 @@ export const verificationCreate = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Get Verification Code
- *
- * Generate a verification code for a user.
+ * GetVerificationCodeCompatibility
  */
 export const verificationCreateCompatibility = <ThrowOnError extends boolean = false>(options: Options<VerificationCreateCompatibilityData, ThrowOnError>): RequestResult<VerificationCreateCompatibilityResponses, VerificationCreateCompatibilityErrors, ThrowOnError> => (options.client ?? client).post<VerificationCreateCompatibilityResponses, VerificationCreateCompatibilityErrors, ThrowOnError>({
     security: [
@@ -96,7 +92,7 @@ export const verificationCreateCompatibility = <ThrowOnError extends boolean = f
 });
 
 /**
- * Csrf Token
+ * CsrfToken
  *
  * Return the session-bound write token to a credentialed CORS frontend.
  */
@@ -126,21 +122,21 @@ export const browserSessionRevoke = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Browser Authorization Start
+ * BrowserAuthorizationStart
  *
  * Begin authorization with PKCE and durable one-time state.
  */
 export const browserAuthorizationStart = <ThrowOnError extends boolean = false>(options: Options<BrowserAuthorizationStartData, ThrowOnError>): RequestResult<unknown, BrowserAuthorizationStartErrors, ThrowOnError> => (options.client ?? client).get<unknown, BrowserAuthorizationStartErrors, ThrowOnError>({ url: '/v1/auth/{provider}', ...options });
 
 /**
- * Browser Authorization Callback
+ * BrowserAuthorizationCallback
  *
  * Exchange an authorization code and set a revocable opaque session cookie.
  */
 export const browserAuthorizationCallback = <ThrowOnError extends boolean = false>(options: Options<BrowserAuthorizationCallbackData, ThrowOnError>): RequestResult<unknown, BrowserAuthorizationCallbackErrors, ThrowOnError> => (options.client ?? client).get<unknown, BrowserAuthorizationCallbackErrors, ThrowOnError>({ url: '/v1/auth/{provider}/callback', ...options });
 
 /**
- * Get Build
+ * GetBuild
  *
  * Return one confirmed public build.
  *
@@ -150,7 +146,7 @@ export const browserAuthorizationCallback = <ThrowOnError extends boolean = fals
 export const buildsGet = <ThrowOnError extends boolean = false>(options: Options<BuildsGetData, ThrowOnError>): RequestResult<BuildsGetResponses, BuildsGetErrors, ThrowOnError> => (options.client ?? client).get<BuildsGetResponses, BuildsGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}', ...options });
 
 /**
- * Edit Build
+ * EditBuild
  *
  * Edit an owned pending build, or any build with `build.submission.edit`.
  */
@@ -169,7 +165,7 @@ export const buildsUpdate = <ThrowOnError extends boolean = false>(options: Opti
 });
 
 /**
- * List Builds
+ * ListBuilds
  *
  * Search confirmed builds, or list builds with a selected moderation status.
  *
@@ -203,7 +199,7 @@ export const buildsList = <ThrowOnError extends boolean = false>(options?: Optio
 export const capabilitiesGet = <ThrowOnError extends boolean = false>(options?: Options<CapabilitiesGetData, ThrowOnError>): RequestResult<CapabilitiesGetResponses, CapabilitiesGetErrors, ThrowOnError> => (options?.client ?? client).get<CapabilitiesGetResponses, CapabilitiesGetErrors, ThrowOnError>({ url: '/v1/capabilities', ...options });
 
 /**
- * Start Enrollment
+ * StartEnrollment
  *
  * Start browser approval for a client-held Ed25519 public key.
  */
@@ -217,7 +213,7 @@ export const cliEnrollmentStart = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Exchange Enrollment
+ * ExchangeEnrollment
  *
  * Exchange browser approval after proving possession of the enrolled key.
  */
@@ -231,7 +227,7 @@ export const cliEnrollmentExchange = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Preview Enrollment
+ * PreviewEnrollment
  *
  * Show a device label and fingerprint before the browser grants access.
  */
@@ -246,7 +242,7 @@ export const cliEnrollmentPreview = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Approve Enrollment
+ * ApproveEnrollment
  *
  * Approve the previewed CLI device as the signed-in browser account.
  */
@@ -265,7 +261,7 @@ export const cliEnrollmentApprove = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Start Session Challenge
+ * StartSessionChallenge
  *
  * Issue a one-time nonce for an enrolled device to sign.
  */
@@ -279,7 +275,7 @@ export const cliSessionChallengeStart = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * Exchange Session Challenge
+ * ExchangeSessionChallenge
  *
  * Exchange a signed device nonce for a short-lived bearer session.
  */
@@ -293,7 +289,7 @@ export const cliSessionExchange = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * List Devices
+ * ListDevices
  *
  * List browser-account-owned devices without exposing public keys.
  */
@@ -308,7 +304,7 @@ export const cliDevicesList = <ThrowOnError extends boolean = false>(options?: O
 });
 
 /**
- * Revoke Device
+ * RevokeDevice
  *
  * Revoke an account-owned device and every session issued beneath it.
  */
@@ -323,7 +319,7 @@ export const cliDeviceRevoke = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Revoke Current Session
+ * RevokeCurrentSession
  *
  * Revoke the exact CLI bearer session authenticating this request.
  */
@@ -338,7 +334,7 @@ export const cliSessionRevoke = <ThrowOnError extends boolean = false>(options?:
 });
 
 /**
- * Get Notice
+ * GetNotice
  *
  * Return the privacy notice in the negotiated language.
  *
@@ -348,7 +344,7 @@ export const cliSessionRevoke = <ThrowOnError extends boolean = false>(options?:
 export const consentNoticeGet = <ThrowOnError extends boolean = false>(options?: Options<ConsentNoticeGetData, ThrowOnError>): RequestResult<ConsentNoticeGetResponses, ConsentNoticeGetErrors, ThrowOnError> => (options?.client ?? client).get<ConsentNoticeGetResponses, ConsentNoticeGetErrors, ThrowOnError>({ url: '/v1/consent/notice', ...options });
 
 /**
- * Clear Error Reports
+ * ClearErrorReports
  *
  * Delete every stored error report, expired or not.
  *
@@ -358,7 +354,7 @@ export const consentNoticeGet = <ThrowOnError extends boolean = false>(options?:
 export const diagnosticsErrorsClear = <ThrowOnError extends boolean = false>(options?: Options<DiagnosticsErrorsClearData, ThrowOnError>): RequestResult<DiagnosticsErrorsClearResponses, DiagnosticsErrorsClearErrors, ThrowOnError> => (options?.client ?? client).delete<DiagnosticsErrorsClearResponses, DiagnosticsErrorsClearErrors, ThrowOnError>({ url: '/v1/diagnostics/errors', ...options });
 
 /**
- * List Error Reports
+ * ListErrorReports
  *
  * List the most recent unexpired error reports, newest first.
  *
@@ -368,7 +364,7 @@ export const diagnosticsErrorsClear = <ThrowOnError extends boolean = false>(opt
 export const diagnosticsErrorsList = <ThrowOnError extends boolean = false>(options?: Options<DiagnosticsErrorsListData, ThrowOnError>): RequestResult<DiagnosticsErrorsListResponses, DiagnosticsErrorsListErrors, ThrowOnError> => (options?.client ?? client).get<DiagnosticsErrorsListResponses, DiagnosticsErrorsListErrors, ThrowOnError>({ url: '/v1/diagnostics/errors', ...options });
 
 /**
- * Get Error Report
+ * GetErrorReport
  *
  * Find a stored failure by its short reference or full correlation ID.
  *
@@ -378,7 +374,7 @@ export const diagnosticsErrorsList = <ThrowOnError extends boolean = false>(opti
 export const diagnosticsErrorGet = <ThrowOnError extends boolean = false>(options: Options<DiagnosticsErrorGetData, ThrowOnError>): RequestResult<DiagnosticsErrorGetResponses, DiagnosticsErrorGetErrors, ThrowOnError> => (options.client ?? client).get<DiagnosticsErrorGetResponses, DiagnosticsErrorGetErrors, ThrowOnError>({ url: '/v1/diagnostics/errors/{reference}', ...options });
 
 /**
- * Get Me
+ * GetMe
  *
  * Return the caller's account, linked identities, and profile.
  *
@@ -395,14 +391,14 @@ export const accountGet = <ThrowOnError extends boolean = false>(options?: Optio
 });
 
 /**
- * Grant Consent
+ * GrantConsent
  *
  * Accept the current privacy notice for future writes.
  *
  * If a notice version is supplied, it must match the current version. This lets
  * clients detect that the displayed notice has become outdated.
  */
-export const accountConsentGrant = <ThrowOnError extends boolean = false>(options?: Options<AccountConsentGrantData, ThrowOnError>): RequestResult<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError> => (options?.client ?? client).post<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError>({
+export const accountConsentGrant = <ThrowOnError extends boolean = false>(options: Options<AccountConsentGrantData, ThrowOnError>): RequestResult<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError> => (options.client ?? client).post<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: '__Host-squid_session',
@@ -412,12 +408,12 @@ export const accountConsentGrant = <ThrowOnError extends boolean = false>(option
     ...options,
     headers: {
         'Content-Type': 'application/json',
-        ...options?.headers
+        ...options.headers
     }
 });
 
 /**
- * Update Profile
+ * UpdateProfile
  *
  * Edit the caller's own public profile.
  *
@@ -439,7 +435,7 @@ export const accountProfileUpdate = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * List Identities
+ * ListIdentities
  *
  * List every identity linked to the caller's account, hidden ones included.
  *
@@ -456,7 +452,7 @@ export const accountIdentityList = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Set Identity Visibility
+ * SetIdentityVisibility
  *
  * Publish or withhold one linked identity on the public creator profile.
  */
@@ -475,7 +471,7 @@ export const accountIdentityVisibilitySet = <ThrowOnError extends boolean = fals
 });
 
 /**
- * Unlink Identity
+ * UnlinkIdentity
  *
  * Unlink one identity from the caller's account.
  *
@@ -501,7 +497,7 @@ export const accountIdentityUnlink = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Create Merge Code
+ * CreateMergeCode
  *
  * Create a code allowing another account to absorb this account.
  *
@@ -528,7 +524,7 @@ export const accountMergeCodeCreate = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Preview Merge
+ * PreviewMerge
  *
  * Describe what redeeming a merge code would move, without spending it.
  *
@@ -557,7 +553,7 @@ export const accountMergePreview = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Complete Merge
+ * CompleteMerge
  *
  * Absorb the account that minted this code into the caller's account.
  *
@@ -586,7 +582,7 @@ export const accountMergeComplete = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Refresh Minecraft Identity
+ * RefreshMinecraftIdentity
  *
  * Re-read the caller's linked Minecraft name and reconcile the creator credit.
  *
@@ -595,7 +591,7 @@ export const accountMergeComplete = <ThrowOnError extends boolean = false>(optio
 export const accountMinecraftRefresh = <ThrowOnError extends boolean = false>(options?: Options<AccountMinecraftRefreshData, ThrowOnError>): RequestResult<AccountMinecraftRefreshResponses, AccountMinecraftRefreshErrors, ThrowOnError> => (options?.client ?? client).post<AccountMinecraftRefreshResponses, AccountMinecraftRefreshErrors, ThrowOnError>({ url: '/v1/users/me/minecraft/refresh', ...options });
 
 /**
- * List My Builds
+ * ListMyBuilds
  *
  * List the caller's own submissions, including the ones still awaiting review.
  *
@@ -613,7 +609,7 @@ export const accountBuildsList = <ThrowOnError extends boolean = false>(options?
 });
 
 /**
- * Refresh Minecraft Identity For
+ * RefreshMinecraftIdentityFor
  *
  * Re-read another account's linked Minecraft name, for staff resolving a stale credit.
  */
@@ -628,7 +624,7 @@ export const accountMinecraftRefreshFor = <ThrowOnError extends boolean = false>
 });
 
 /**
- * Clear Profile
+ * ClearProfile
  *
  * Clear profile content at the revision staff reviewed, retaining moderation attribution.
  */
@@ -643,7 +639,7 @@ export const accountProfileClear = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Review Profile
+ * ReviewProfile
  *
  * Read a profile and its revision for staff moderation.
  */
@@ -658,7 +654,7 @@ export const accountProfileReview = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * List Installations
+ * ListInstallations
  *
  * List only the signed-in account's Paper installations, without secrets or digests.
  */
@@ -673,7 +669,7 @@ export const paperInstallationsList = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Create Installation
+ * CreateInstallation
  *
  * Register a Paper server and return its new plaintext secret.
  *
@@ -695,7 +691,7 @@ export const paperInstallationCreate = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Rotate Installation
+ * RotateInstallation
  *
  * Revoke an owned installation's old credential and return its replacement secret.
  */
@@ -710,7 +706,7 @@ export const paperInstallationRotate = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Update Installation Profile
+ * UpdateInstallationProfile
  *
  * Replace an owned server's explicit public-listing and sponsorship preferences.
  */
@@ -729,7 +725,7 @@ export const paperInstallationProfileUpdate = <ThrowOnError extends boolean = fa
 });
 
 /**
- * Revoke Installation
+ * RevokeInstallation
  *
  * Revoke an owned server and all pending or active authorization derived from it.
  */
@@ -744,7 +740,7 @@ export const paperInstallationRevoke = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Start Paper Challenge
+ * StartPaperChallenge
  *
  * Start player authorization bound to the authenticated Paper credential version.
  */
@@ -759,7 +755,7 @@ export const paperChallengeStart = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Exchange Paper Challenge
+ * ExchangePaperChallenge
  *
  * Exchange one approved Paper challenge on the same authenticated installation.
  */
@@ -774,7 +770,7 @@ export const paperChallengeExchange = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Start Fabric Challenge
+ * StartFabricChallenge
  *
  * Start Fabric authorization using the client's S256 PKCE challenge.
  *
@@ -791,7 +787,7 @@ export const fabricChallengeStart = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Exchange Fabric Challenge
+ * ExchangeFabricChallenge
  *
  * Exchange one approved Fabric challenge by proving its client-held PKCE verifier.
  */
@@ -805,7 +801,7 @@ export const fabricChallengeExchange = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Approve Challenge
+ * ApproveChallenge
  *
  * Approve only the Java UUID authoritatively attached to the signed-in account.
  */
@@ -824,7 +820,7 @@ export const minecraftChallengeApprove = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * Revoke Grant
+ * RevokeGrant
  *
  * Revoke one grant only when it belongs to the signed-in account.
  */
@@ -839,7 +835,7 @@ export const minecraftGrantRevoke = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Get Preferences
+ * GetPreferences
  *
  * Return channel preferences, with disabled defaults until privacy consent is accepted.
  */
@@ -854,7 +850,7 @@ export const notificationPreferencesGet = <ThrowOnError extends boolean = false>
 });
 
 /**
- * Update Preferences
+ * UpdatePreferences
  *
  * Update both channels against the notification revision read by the caller.
  */
@@ -873,7 +869,7 @@ export const notificationPreferencesUpdate = <ThrowOnError extends boolean = fal
 });
 
 /**
- * List Subscriptions
+ * ListSubscriptions
  *
  * List enabled subscriptions owned by the caller.
  */
@@ -888,7 +884,7 @@ export const notificationSubscriptionsList = <ThrowOnError extends boolean = fal
 });
 
 /**
- * Create Subscription
+ * CreateSubscription
  *
  * Follow a creator, record, or filter against the notification settings revision.
  */
@@ -907,7 +903,7 @@ export const notificationSubscriptionCreate = <ThrowOnError extends boolean = fa
 });
 
 /**
- * Delete Subscription
+ * DeleteSubscription
  *
  * Disable one caller-owned subscription, retaining its identity for history.
  */
@@ -922,7 +918,7 @@ export const notificationSubscriptionDelete = <ThrowOnError extends boolean = fa
 });
 
 /**
- * List Inbox
+ * ListInbox
  *
  * List the caller's web-visible inbox, hiding staff items after access revocation.
  */
@@ -937,7 +933,7 @@ export const notificationInboxList = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Mark Read
+ * MarkRead
  *
  * Mark one visible inbox item as read, checking its own revision.
  */
@@ -952,7 +948,7 @@ export const notificationInboxMarkRead = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * Mark Unread
+ * MarkUnread
  *
  * Mark one visible inbox item as unread, checking its own revision.
  */
@@ -967,35 +963,35 @@ export const notificationInboxMarkUnread = <ThrowOnError extends boolean = false
 });
 
 /**
- * Get Record
+ * GetRecord
  *
  * Return one result only while its computation run is active.
  */
 export const recordsGet = <ThrowOnError extends boolean = false>(options: Options<RecordsGetData, ThrowOnError>): RequestResult<RecordsGetResponses, RecordsGetErrors, ThrowOnError> => (options.client ?? client).get<RecordsGetResponses, RecordsGetErrors, ThrowOnError>({ url: '/v1/records/{record_id}', ...options });
 
 /**
- * List Records
+ * ListRecords
  *
  * List authoritative published record results.
  */
 export const recordsList = <ThrowOnError extends boolean = false>(options?: Options<RecordsListData, ThrowOnError>): RequestResult<RecordsListResponses, RecordsListErrors, ThrowOnError> => (options?.client ?? client).get<RecordsListResponses, RecordsListErrors, ThrowOnError>({ url: '/v1/records', ...options });
 
 /**
- * List Build Schematics
+ * ListBuildSchematics
  *
  * List analyzed schematics attached to a confirmed build.
  */
 export const buildSchematicsList = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicsListData, ThrowOnError>): RequestResult<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics', ...options });
 
 /**
- * Build Schematic Content
+ * GetSchematicContent
  *
  * Download explicitly published original bytes from a confirmed build.
  */
 export const buildSchematicContentGet = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicContentGetData, ThrowOnError>): RequestResult<BuildSchematicContentGetResponses, BuildSchematicContentGetErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicContentGetResponses, BuildSchematicContentGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics/{schematic_id}/content', ...options });
 
 /**
- * Render Build Schematic
+ * RenderBuildSchematic
  *
  * Return a PNG preview of a confirmed build's primary schematic.
  *
@@ -1005,14 +1001,14 @@ export const buildSchematicContentGet = <ThrowOnError extends boolean = false>(o
 export const buildSchematicRenderGet = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicRenderGetData, ThrowOnError>): RequestResult<BuildSchematicRenderGetResponses, BuildSchematicRenderGetErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicRenderGetResponses, BuildSchematicRenderGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics/render', ...options });
 
 /**
- * Get Schematic Render Content
+ * GetSchematicRenderContent
  *
  * Return a content-addressed PNG preview from private object storage.
  */
 export const schematicRenderContentGet = <ThrowOnError extends boolean = false>(options: Options<SchematicRenderContentGetData, ThrowOnError>): RequestResult<SchematicRenderContentGetResponses, SchematicRenderContentGetErrors, ThrowOnError> => (options.client ?? client).get<SchematicRenderContentGetResponses, SchematicRenderContentGetErrors, ThrowOnError>({ url: '/v1/schematic-renders/{recipe_hash}/content', ...options });
 
 /**
- * Submit Schematic Video
+ * SubmitSchematicVideo
  *
  * Queue a private MP4 of a stored schematic with timed input activations.
  */
@@ -1044,7 +1040,7 @@ export const schematicVideoCreate = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Get Schematic Video
+ * GetSchematicVideo
  *
  * Return only the requesting account's video status.
  */
@@ -1071,7 +1067,7 @@ export const schematicVideoStatus = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Get Schematic Video Content
+ * GetSchematicVideoContent
  *
  * Download a completed private video while its source remains accessible.
  */
@@ -1098,14 +1094,14 @@ export const schematicVideoContent = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * List Search Fields
+ * ListSearchFields
  *
  * Publish the effective allowlisted query-field registry.
  */
 export const searchFieldsList = <ThrowOnError extends boolean = false>(options?: Options<SearchFieldsListData, ThrowOnError>): RequestResult<SearchFieldsListResponses, SearchFieldsListErrors, ThrowOnError> => (options?.client ?? client).get<SearchFieldsListResponses, SearchFieldsListErrors, ThrowOnError>({ url: '/v1/search/fields', ...options });
 
 /**
- * Suggest Terms
+ * SuggestTerms
  *
  * Suggest indexed terms completing a valid query.
  */
@@ -1119,7 +1115,7 @@ export const searchTermsSuggest = <ThrowOnError extends boolean = false>(options
 export const searchExecute = <ThrowOnError extends boolean = false>(options: Options<SearchExecuteData, ThrowOnError>): RequestResult<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError> => (options.client ?? client).get<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError>({ url: '/v1/search', ...options });
 
 /**
- * Get Runtime Settings
+ * GetRuntimeSettings
  *
  * Read current global settings. Discord IDs are returned as decimal strings.
  */
@@ -1149,7 +1145,7 @@ export const runtimeSettingsGet = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Update Runtime Settings
+ * UpdateRuntimeSettings
  *
  * Patch current settings, or require a specific revision with If-Match.
  *
@@ -1186,7 +1182,7 @@ export const runtimeSettingsUpdate = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * List Correction Inbox
+ * ListCorrectionInbox
  *
  * List drafts needing staff correction, excluding attachment processing waits.
  */
@@ -1213,7 +1209,7 @@ export const submissionCorrectionInbox = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * List Drafts
+ * ListDrafts
  *
  * Return at most ten compact active drafts owned by the signed-in account.
  */
@@ -1240,7 +1236,7 @@ export const submissionDraftsList = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Create Draft
+ * CreateDraft
  *
  * Create an empty draft owned by the signed-in account.
  */
@@ -1272,28 +1268,28 @@ export const submissionDraftCreate = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Current Form
+ * CurrentForm
  *
  * Return the localized form and protocol bounds authored by this server.
  */
 export const submissionFormCurrent = <ThrowOnError extends boolean = false>(options?: Options<SubmissionFormCurrentData, ThrowOnError>): RequestResult<SubmissionFormCurrentResponses, SubmissionFormCurrentErrors, ThrowOnError> => (options?.client ?? client).get<SubmissionFormCurrentResponses, SubmissionFormCurrentErrors, ThrowOnError>({ url: '/v1/submissions/form/current', ...options });
 
 /**
- * Pinned Form
+ * PinnedForm
  *
  * Return an exact immutable schema revision retained for an unexpired draft.
  */
 export const submissionFormRevisionGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFormRevisionGetData, ThrowOnError>): RequestResult<SubmissionFormRevisionGetResponses, SubmissionFormRevisionGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFormRevisionGetResponses, SubmissionFormRevisionGetErrors, ThrowOnError>({ url: '/v1/submissions/form/schemas/{schema_id}/revisions/{revision}', ...options });
 
 /**
- * Form Options
+ * FormOptions
  *
  * Return one revisioned dynamic option source for a build category.
  */
 export const submissionFormOptionsGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFormOptionsGetData, ThrowOnError>): RequestResult<SubmissionFormOptionsGetResponses, SubmissionFormOptionsGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFormOptionsGetResponses, SubmissionFormOptionsGetErrors, ThrowOnError>({ url: '/v1/submissions/form/options/{source}', ...options });
 
 /**
- * Delete Draft
+ * DeleteDraft
  *
  * Immediately delete one caller-owned draft.
  */
@@ -1321,7 +1317,7 @@ export const submissionDraftDelete = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Get Draft
+ * GetDraft
  *
  * Return one draft after enforcing caller ownership.
  */
@@ -1348,7 +1344,7 @@ export const submissionDraftGet = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Change Draft
+ * ChangeDraft
  *
  * Apply an owned draft change; an optional If-Match must agree with base_revision.
  */
@@ -1380,7 +1376,7 @@ export const submissionDraftChange = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Upgrade Draft Manifest
+ * UpgradeDraftManifest
  *
  * Upgrade an owned draft to the next checked-in form revision.
  */
@@ -1412,7 +1408,7 @@ export const submissionDraftManifestUpgrade = <ThrowOnError extends boolean = fa
 });
 
 /**
- * List Draft Attempts
+ * ListDraftAttempts
  *
  * List retained attempts newest first; use the last attempt number as the next cursor.
  */
@@ -1439,7 +1435,7 @@ export const submissionAttemptsList = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Submit Draft
+ * SubmitDraft
  *
  * Validate a draft and request finalization.
  *
@@ -1470,7 +1466,7 @@ export const submissionFinalizationStart = <ThrowOnError extends boolean = false
 });
 
 /**
- * Get Draft Submission
+ * GetDraftSubmission
  *
  * Return retained finalization state after rechecking draft ownership.
  */
@@ -1497,7 +1493,7 @@ export const submissionFinalizationGet = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * Get Draft Attempt
+ * GetDraftAttempt
  *
  * Read one attempt without exposing execution credentials or its private payload.
  */
@@ -1524,7 +1520,7 @@ export const submissionAttemptGet = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Upload Draft Media
+ * UploadDraftMedia
  *
  * Stream one owned-draft upload through a private bounded staging file.
  */
@@ -1557,7 +1553,7 @@ export const submissionMediaUpload = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * List Draft Media
+ * ListDraftMedia
  *
  * List all retained states and safe normalized facts for an owned draft.
  */
@@ -1584,7 +1580,7 @@ export const submissionMediaList = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Discard Draft Media
+ * DiscardDraftMedia
  *
  * Withdraw one upload while retaining a stable discarded state.
  */
@@ -1612,7 +1608,7 @@ export const submissionMediaDiscard = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Get Draft Media
+ * GetDraftMedia
  *
  * Return one upload after enforcing both draft ownership and association.
  */
@@ -1639,7 +1635,7 @@ export const submissionMediaGet = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Attach Draft Media
+ * AttachDraftMedia
  *
  * Reference a file supplied to another owned draft without duplicating its processing.
  */
@@ -1667,7 +1663,7 @@ export const submissionMediaAttach = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * List Schematics
+ * ListSchematics
  *
  * List retained sources, including failures and explicit discards.
  */
@@ -1694,7 +1690,7 @@ export const submissionSchematicList = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Discard Schematic
+ * DiscardSchematic
  *
  * Discard one draft reference; other candidates keep their source.
  */
@@ -1722,7 +1718,7 @@ export const submissionSchematicDiscard = <ThrowOnError extends boolean = false>
 });
 
 /**
- * Upload Schematic
+ * UploadSchematic
  *
  * Upload or retry one stable source ID while keeping its bytes private.
  */
@@ -1755,7 +1751,7 @@ export const submissionSchematicUpload = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * Select Primary
+ * SelectPrimary
  *
  * Explicitly select the primary schematic for this draft.
  */
@@ -1783,7 +1779,7 @@ export const submissionSchematicPrimary = <ThrowOnError extends boolean = false>
 });
 
 /**
- * Attach Schematic
+ * AttachSchematic
  *
  * Assign an already supplied file to another candidate without another upload.
  */
@@ -1834,7 +1830,7 @@ export const submissionRevisionHistory = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * Get Proposal
+ * GetProposal
  *
  * Return a recalculation proposal after checking the caller's access.
  */
@@ -1853,7 +1849,7 @@ export const submissionRevisionGet = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Match Proposal
+ * MatchProposal
  *
  * Match a proposal to a source-linked build and capture the diff for review.
  *
@@ -1882,7 +1878,7 @@ export const submissionRevisionMatch = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Approve Proposal
+ * ApproveProposal
  *
  * Apply the reviewed diff if the build still matches its expected revision.
  *
@@ -1907,7 +1903,7 @@ export const submissionRevisionApprove = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * List Files
+ * ListFiles
  *
  * List unresolved, registered, and explicitly discarded supplied files.
  */
@@ -1934,7 +1930,7 @@ export const submissionSuppliedFileList = <ThrowOnError extends boolean = false>
 });
 
 /**
- * Discard File
+ * DiscardFile
  *
  * Explicitly resolve a file that does not belong to this candidate.
  */
@@ -1962,7 +1958,7 @@ export const submissionSuppliedFileDiscard = <ThrowOnError extends boolean = fal
 });
 
 /**
- * Upload File
+ * UploadFile
  *
  * Register a supplied file, then discard the requirement it replaces if requested.
  *
@@ -1998,7 +1994,7 @@ export const submissionSuppliedFileUpload = <ThrowOnError extends boolean = fals
 });
 
 /**
- * List Sources
+ * ListSources
  *
  * Publish the registered sources and how to drive each one.
  */
@@ -2015,28 +2011,28 @@ export const suggestionSourcesList = <ThrowOnError extends boolean = false>(opti
 export const suggestionsGet = <ThrowOnError extends boolean = false>(options: Options<SuggestionsGetData, ThrowOnError>): RequestResult<SuggestionsGetResponses, SuggestionsGetErrors, ThrowOnError> => (options.client ?? client).get<SuggestionsGetResponses, SuggestionsGetErrors, ThrowOnError>({ url: '/v1/suggest/{source}', ...options });
 
 /**
- * List Tags
+ * ListTags
  *
  * List published tag definitions.
  */
 export const tagsList = <ThrowOnError extends boolean = false>(options?: Options<TagsListData, ThrowOnError>): RequestResult<TagsListResponses, TagsListErrors, ThrowOnError> => (options?.client ?? client).get<TagsListResponses, TagsListErrors, ThrowOnError>({ url: '/v1/tags', ...options });
 
 /**
- * Get Tag
+ * GetTag
  *
  * Return one published tag definition.
  */
 export const tagsGet = <ThrowOnError extends boolean = false>(options: Options<TagsGetData, ThrowOnError>): RequestResult<TagsGetResponses, TagsGetErrors, ThrowOnError> => (options.client ?? client).get<TagsGetResponses, TagsGetErrors, ThrowOnError>({ url: '/v1/tags/{tag_id}', ...options });
 
 /**
- * Get Creator Alias
+ * GetCreatorAlias
  *
  * Return a creator credit without exposing its linked account.
  */
 export const creatorAliasGet = <ThrowOnError extends boolean = false>(options: Options<CreatorAliasGetData, ThrowOnError>): RequestResult<CreatorAliasGetResponses, CreatorAliasGetErrors, ThrowOnError> => (options.client ?? client).get<CreatorAliasGetResponses, CreatorAliasGetErrors, ThrowOnError>({ url: '/v1/creator-aliases/{name}', ...options });
 
 /**
- * Get Creator Profile
+ * GetCreatorProfile
  *
  * Return a creator's public profile, following account-merge redirects.
  *
@@ -2046,14 +2042,14 @@ export const creatorAliasGet = <ThrowOnError extends boolean = false>(options: O
 export const creatorProfileGet = <ThrowOnError extends boolean = false>(options: Options<CreatorProfileGetData, ThrowOnError>): RequestResult<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError> => (options.client ?? client).get<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError>({ url: '/v1/creators/{creator_id}', ...options });
 
 /**
- * List Versions
+ * ListVersions
  *
  * List recognized Java and Bedrock releases.
  */
 export const minecraftVersionsList = <ThrowOnError extends boolean = false>(options?: Options<MinecraftVersionsListData, ThrowOnError>): RequestResult<MinecraftVersionsListResponses, MinecraftVersionsListErrors, ThrowOnError> => (options?.client ?? client).get<MinecraftVersionsListResponses, MinecraftVersionsListErrors, ThrowOnError>({ url: '/v1/versions', ...options });
 
 /**
- * Get Vote Session
+ * GetVoteSession
  *
  * Return aggregate vote state without exposing ballot identities.
  */
@@ -2076,7 +2072,7 @@ export const voteSessionGet = <ThrowOnError extends boolean = false>(options: Op
 });
 
 /**
- * Clear Vote
+ * ClearVote
  *
  * Remove the authenticated member's ballot; repeating this keeps it absent.
  */
@@ -2091,7 +2087,7 @@ export const voteClear = <ThrowOnError extends boolean = false>(options: Options
 });
 
 /**
- * Cast Vote
+ * CastVote
  *
  * Cast the authenticated Discord member's weighted vote.
  */

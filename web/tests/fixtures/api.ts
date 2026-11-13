@@ -6,11 +6,11 @@ import type {
   BuildSummary,
   PageSearchResult as SearchPage,
   PageBuildSummary,
-  PageRecordSummary,
+  PagePublishedTitle,
   PageSchematicSummary,
   ProblemDetail,
   RecordDetail,
-  RecordSummary,
+  PublishedTitle,
   SearchSuggestions,
 } from "../../src/generated/types.gen";
 
@@ -121,7 +121,7 @@ const records = [
     base_title: "fastest_smallest",
     build_kind: "door",
     version_scope: "all_time",
-    status: "active",
+    status: "resolved",
     holder_build_ids: [1],
     computed_at: frozenDate,
   },
@@ -134,11 +134,11 @@ const records = [
     base_title: "smallest",
     build_kind: "extender",
     version_scope: "up_to_date",
-    status: "active",
+    status: "resolved",
     holder_build_ids: [3],
     computed_at: frozenDate,
   },
-] satisfies [RecordSummary, RecordSummary];
+] satisfies [PublishedTitle, PublishedTitle];
 
 const recordDetail: RecordDetail = { ...records[0], holder_builds: [builds[0]] };
 
@@ -187,7 +187,7 @@ function buildPage(url: URL): PageBuildSummary {
   };
 }
 
-function recordPage(url: URL): PageRecordSummary {
+function recordPage(url: URL): PagePublishedTitle {
   if (url.searchParams.get("after_id") === "1") {
     return {
       items: [records[1]],
@@ -255,7 +255,7 @@ async function routeRequest(request: Request): Promise<Response> {
   if (/^\/v1\/builds\/\d+(?:\/schematics)?$/.test(url.pathname))
     return problem(request, 404, "not_found");
 
-  if (url.pathname === "/v1/records") return json(recordPage(url) satisfies PageRecordSummary);
+  if (url.pathname === "/v1/records") return json(recordPage(url) satisfies PagePublishedTitle);
   if (url.pathname === "/v1/records/11") return json(recordDetail satisfies RecordDetail);
   if (/^\/v1\/records\/\d+$/.test(url.pathname)) return problem(request, 404, "not_found");
 

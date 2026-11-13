@@ -1,8 +1,8 @@
 """REST API locale negotiation and ambient request binding."""
 
-from fastapi import Request
-from starlette.datastructures import Headers
-from starlette.types import ASGIApp, Receive, Scope, Send
+from litestar import Request
+from litestar.datastructures import Headers
+from litestar.types import ASGIApp, Receive, Scope, Send
 
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale_candidates
 from squid_i18n import localization_scope
@@ -34,7 +34,7 @@ def _parse_accept_language(header: str) -> list[str]:
 
 
 def locale_for_request(request: Request) -> str:
-    """Resolve the response locale for a FastAPI request from `Accept-Language`."""
+    """Resolve the response locale for a HTTP request from `Accept-Language`."""
     header = request.headers.get("accept-language")
     if not header:
         return DEFAULT_LOCALE
@@ -55,7 +55,7 @@ class LocaleContextMiddleware:
             await self._app(scope, receive, send)
             return
 
-        header = Headers(scope=scope).get("accept-language")
+        header = Headers.from_scope(scope).get("accept-language")
         preferred = [] if not header else _parse_accept_language(header)
         locale = negotiate_locale_candidates(preferred) if preferred else DEFAULT_LOCALE
         with localization_scope(localization_for(locale)):

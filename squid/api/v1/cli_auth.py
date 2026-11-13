@@ -10,13 +10,16 @@ import hashlib
 from typing import Annotated, Protocol, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from litestar import Request, Router, delete, get, post
+from litestar import status_codes as status
+from litestar.di import NamedDependency, Provide
+from litestar.params import JSONBody, QueryParameter, SkipValidation
 from pydantic import AnyHttpUrl
 
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
-from squid.api.security import BrowserAccountId, Caller, current_caller, prevent_credential_storage
+from squid.api.security import BrowserAccountId, Caller, current_browser_account_id, prevent_credential_storage
 from squid.api.v1.schemas.cli_auth import (
     CliDeviceListResponse,
     CliDeviceResponse,
@@ -105,13 +108,13 @@ def get_cli_verification_uri(request: Request) -> AnyHttpUrl:
     return verification_uri
 
 
-async def current_cli_identity(caller: Annotated[Caller, Depends(current_caller)]) -> CliIdentity:
+async def current_cli_identity(caller: NamedDependency[SkipValidation[Caller]]) -> CliIdentity:
     """Require a CLI session and retain its account, device, and session IDs."""
     if (
         caller.kind != "cli"
         or caller.account_id is None
         or caller.cli_device_id is None
-        or caller.cli_session_id is None
+        or (caller.cli_session_id is None)
     ):
         raise AuthenticationError
     return CliIdentity(
@@ -136,106 +139,136 @@ async def enforce_anonymous_cli_idempotency(
     await reserve_idempotent_request_for(request, f"cli-anonymous:{peer_digest}", idempotency_key)
 
 
-CliAuthorization = Annotated[CliAuthorizationHttpService, Depends(get_cli_authorization_service)]
-CurrentCliIdentity = Annotated[CliIdentity, Depends(current_cli_identity)]
-VerificationUri = Annotated[AnyHttpUrl, Depends(get_cli_verification_uri)]
-
-router = APIRouter(prefix="/cli/auth", tags=["cli-authentication"], dependencies=[Depends(prevent_credential_storage)])
+CliAuthorization = NamedDependency[SkipValidation[CliAuthorizationHttpService]]
+CurrentCliIdentity = NamedDependency[SkipValidation[CliIdentity]]
+VerificationUri = NamedDependency[SkipValidation[AnyHttpUrl]]
 
 
-@router.post(
+@post(
     "/enrollments",
-    response_model=CliEnrollmentResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 409, 422, 429, 503),
-    dependencies=[Depends(enforce_anonymous_cli_idempotency)],
     operation_id="cli_enrollment_start",
-    openapi_extra=contract(
+    opt=contract(
         security=[ANONYMOUS],
         cli=cli_command("auth.login", features=("cli-device-auth",), interaction="browser-continuation"),
     ),
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "_reservation": Provide(enforce_anonymous_cli_idempotency),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
 async def start_enrollment(
-    payload: CliEnrollmentCreateRequest,
+    data: JSONBody[CliEnrollmentCreateRequest],
     cli: CliAuthorization,
     verification_uri: VerificationUri,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> CliEnrollmentResponse:
     """Start browser approval for a client-held Ed25519 public key."""
     issued = await cli.start_enrollment(
-        public_key=payload.public_key_bytes(),
-        client_instance_id=payload.client_instance_id,
-        label=payload.label,
+        public_key=data.public_key_bytes(), client_instance_id=data.client_instance_id, label=data.label
     )
     return CliEnrollmentResponse.from_domain(issued, verification_uri=verification_uri)
 
 
-@router.post(
+@post(
     "/enrollments/exchange",
-    response_model=IssuedCliSessionResponse,
     responses=responses(400, 409, 422, 503),
-    dependencies=[Depends(enforce_anonymous_cli_idempotency)],
     operation_id="cli_enrollment_exchange",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    status_code=200,
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "_reservation": Provide(enforce_anonymous_cli_idempotency),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
 async def exchange_enrollment(
-    payload: CliEnrollmentExchangeRequest,
+    data: JSONBody[CliEnrollmentExchangeRequest],
     cli: CliAuthorization,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> IssuedCliSessionResponse:
     """Exchange browser approval after proving possession of the enrolled key."""
-    issued = await cli.exchange_enrollment(device_code=payload.device_code, signature=payload.signature_bytes())
+    issued = await cli.exchange_enrollment(device_code=data.device_code, signature=data.signature_bytes())
     return IssuedCliSessionResponse.from_domain(issued)
 
 
-@router.get(
+@get(
     "/enrollments/approval",
-    response_model=CliEnrollmentApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
     operation_id="cli_enrollment_preview",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
 async def preview_enrollment(
-    cli: CliAuthorization,
-    _account_id: BrowserAccountId,
-    user_code: Annotated[UserCode, Query()],
+    cli: CliAuthorization, account_id: BrowserAccountId, user_code: Annotated[UserCode, QueryParameter()]
 ) -> CliEnrollmentApprovalResponse:
     """Show a device label and fingerprint before the browser grants access."""
     enrollment = await cli.preview_enrollment(user_code)
     return CliEnrollmentApprovalResponse.from_domain(enrollment)
 
 
-@router.post(
+@post(
     "/enrollments/approval",
-    response_model=CliEnrollmentApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="cli_enrollment_approve",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "_reservation": Provide(reserve_idempotent_request),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
 async def approve_enrollment(
-    payload: CliEnrollmentApprovalRequest,
+    data: JSONBody[CliEnrollmentApprovalRequest],
     cli: CliAuthorization,
     account_id: BrowserAccountId,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> CliEnrollmentApprovalResponse:
     """Approve the previewed CLI device as the signed-in browser account."""
-    enrollment = await cli.approve_enrollment(user_code=payload.user_code, account_id=account_id)
+    enrollment = await cli.approve_enrollment(user_code=data.user_code, account_id=account_id)
     return CliEnrollmentApprovalResponse.from_domain(enrollment)
 
 
-@router.post(
+@post(
     "/session-challenges",
-    response_model=CliSessionChallengeResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 404, 409, 422, 429, 503),
-    dependencies=[Depends(enforce_anonymous_cli_idempotency)],
     operation_id="cli_session_challenge_start",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "_reservation": Provide(enforce_anonymous_cli_idempotency),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
 async def start_session_challenge(
-    payload: CliSessionChallengeRequest,
+    data: JSONBody[CliSessionChallengeRequest],
     cli: CliAuthorization,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> CliSessionChallengeResponse:
     """Issue a one-time nonce for an enrolled device to sign."""
-    issued = await cli.start_session_challenge(payload.device_id)
+    issued = await cli.start_session_challenge(data.device_id)
     return CliSessionChallengeResponse(
         id=issued.challenge.id,
         device_id=issued.challenge.device_id,
@@ -244,79 +277,115 @@ async def start_session_challenge(
     )
 
 
-@router.post(
+@post(
     "/sessions",
-    response_model=IssuedCliSessionResponse,
     responses=responses(400, 404, 409, 422, 503),
-    dependencies=[Depends(enforce_anonymous_cli_idempotency)],
     operation_id="cli_session_exchange",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    status_code=200,
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "_reservation": Provide(enforce_anonymous_cli_idempotency),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
 async def exchange_session_challenge(
-    payload: CliSessionExchangeRequest,
+    data: JSONBody[CliSessionExchangeRequest],
     cli: CliAuthorization,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> IssuedCliSessionResponse:
     """Exchange a signed device nonce for a short-lived bearer session."""
     issued = await cli.exchange_session_challenge(
-        device_id=payload.device_id,
-        challenge_id=payload.challenge_id,
-        nonce=payload.nonce,
-        signature=payload.signature_bytes(),
+        device_id=data.device_id, challenge_id=data.challenge_id, nonce=data.nonce, signature=data.signature_bytes()
     )
     return IssuedCliSessionResponse.from_domain(issued)
 
 
-@router.get(
+@get(
     "/devices",
-    response_model=CliDeviceListResponse,
     responses=responses(400, 401, 403, 503),
     operation_id="cli_devices_list",
-    openapi_extra=contract(security=[WEB], cli=browser_only()),
+    opt=contract(security=[WEB], cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
-async def list_devices(
-    cli: CliAuthorization,
-    account_id: BrowserAccountId,
-) -> CliDeviceListResponse:
+async def list_devices(cli: CliAuthorization, account_id: BrowserAccountId) -> CliDeviceListResponse:
     """List browser-account-owned devices without exposing public keys."""
     devices = await cli.list_devices(account_id)
     return CliDeviceListResponse(devices=[CliDeviceResponse.from_domain(device) for device in devices])
 
 
-@router.delete(
-    "/devices/{device_id}",
+@delete(
+    "/devices/{device_id:uuid}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="cli_device_revoke",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "_reservation": Provide(reserve_idempotent_request),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+    },
 )
 async def revoke_device(
     device_id: UUID,
     cli: CliAuthorization,
     account_id: BrowserAccountId,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> None:
     """Revoke an account-owned device and every session issued beneath it."""
     if not await cli.revoke_device(device_id=device_id, account_id=account_id):
         raise NotFoundError
 
 
-@router.delete(
+@delete(
     "/sessions/current",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-    responses=responses(400, 401, 403, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    responses=responses(400, 401, 403, 422, 503),
     operation_id="cli_session_revoke",
-    openapi_extra=contract(
-        security=[DEVICE],
-        cli=cli_command("auth.logout", features=("cli-device-auth",), interaction="direct"),
+    opt=contract(
+        security=[DEVICE], cli=cli_command("auth.logout", features=("cli-device-auth",), interaction="direct")
     ),
+    dependencies={
+        "account_id": Provide(current_browser_account_id),
+        "_reservation": Provide(reserve_idempotent_request),
+        "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
+        "identity": Provide(current_cli_identity),
+        "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
+    },
 )
 async def revoke_current_session(
-    cli: CliAuthorization,
-    identity: CurrentCliIdentity,
+    cli: CliAuthorization, identity: CurrentCliIdentity, *, _reservation: NamedDependency[SkipValidation[None]]
 ) -> None:
     """Revoke the exact CLI bearer session authenticating this request."""
     if not await cli.revoke_current_session(identity):
         raise AuthenticationError
+
+
+router = Router(
+    path="/cli/auth",
+    tags=["cli-authentication"],
+    route_handlers=[
+        start_enrollment,
+        exchange_enrollment,
+        preview_enrollment,
+        approve_enrollment,
+        start_session_challenge,
+        exchange_session_challenge,
+        list_devices,
+        revoke_device,
+        revoke_current_session,
+    ],
+    after_request=prevent_credential_storage,
+)

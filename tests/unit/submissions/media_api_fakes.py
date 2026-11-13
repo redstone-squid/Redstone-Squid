@@ -5,11 +5,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI
+from litestar import Litestar
 from whenever import Instant
 
 from squid.api.dependencies import get_draft_attachments
-from squid.api.errors import register_exception_handlers
 from squid.api.security import Caller, current_caller
 from squid.api.v1.submission_media import router
 from squid.api.v1.submissions import authenticated_account, get_submission_edits
@@ -31,6 +30,7 @@ from squid.submissions.application.attachment_edits import AttachmentValues
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.errors import DraftAccessDeniedError
 from tests.support.edits import bound_revisions
+from tests.support.litestar import DependencyOverrides, route_app
 
 ACCOUNT_ID = 42
 DRAFT_ID = UUID("84ab2da9-c27e-4d37-98c6-973bcc92f5e4")
@@ -217,11 +217,9 @@ class DisabledMediaRuntime:
     services: DisabledMediaServices
 
 
-def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
+def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> Litestar:
     """Mount media routes with a fixed caller, bypassing authentication to isolate upload behavior."""
-    app = FastAPI()
-    register_exception_handlers(app)
-    app.include_router(router)
+    overrides: DependencyOverrides = {}
 
     async def attachment_dependency() -> DraftAttachmentService:
         return DraftAttachmentService(drafts, media)
@@ -232,8 +230,8 @@ def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
-    app.dependency_overrides[get_draft_attachments] = attachment_dependency
-    app.dependency_overrides[authenticated_account] = account_dependency
-    app.dependency_overrides[current_caller] = caller_dependency
-    app.dependency_overrides[get_submission_edits] = lambda: MediaEditRecorder(drafts, media)
-    return app
+    overrides[get_draft_attachments] = attachment_dependency
+    overrides[authenticated_account] = account_dependency
+    overrides[current_caller] = caller_dependency
+    overrides[get_submission_edits] = lambda: MediaEditRecorder(drafts, media)
+    return route_app([router], overrides=overrides, handle_errors=True)

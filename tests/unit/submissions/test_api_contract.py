@@ -7,8 +7,7 @@ from typing import override
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
@@ -24,7 +23,6 @@ from squid.api.v1.submissions import (
     SubmissionDraftCommands,
     SubmissionFinalizationCommands,
     SubmissionFormReader,
-    SubmissionFormRevisionNotFoundError,
     _submission_origin,
     authenticated_account,
     authenticated_submission_caller,
@@ -56,6 +54,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from tests.support.draft_edits import DraftEditRecorder
+from tests.support.litestar import DependencyOverrides, asgi_transport, make_request, route_app
 
 ACCOUNT_ID = 42
 JAVA_UUID = UUID("00000000-0000-4000-8000-000000000051")
@@ -353,8 +352,7 @@ def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_
 
 
 async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
-    app = FastAPI()
-    app.include_router(router)
+    overrides: DependencyOverrides = {}
     forms = FakeForms()
     drafts = FakeDrafts()
     finalization = FakeFinalization(drafts.current.snapshot.id)
@@ -374,33 +372,27 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
-    app.dependency_overrides[get_submission_edits] = lambda: DraftEditRecorder(drafts)
-    app.dependency_overrides[get_submission_forms] = form_dependency
-    app.dependency_overrides[get_submission_drafts] = draft_dependency
-    app.dependency_overrides[get_submission_finalization] = finalization_dependency
-    app.dependency_overrides[authenticated_account] = account_dependency
-    app.dependency_overrides[authenticated_submission_caller] = caller_dependency
-    app.dependency_overrides[current_caller] = caller_dependency
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    overrides[get_submission_edits] = lambda: DraftEditRecorder(drafts)
+    overrides[get_submission_forms] = form_dependency
+    overrides[get_submission_drafts] = draft_dependency
+    overrides[get_submission_finalization] = finalization_dependency
+    overrides[authenticated_account] = account_dependency
+    overrides[authenticated_submission_caller] = caller_dependency
+    overrides[current_caller] = caller_dependency
+    app = route_app([router], overrides=overrides, handle_errors=True)
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         manifest_response = await client.get("/submissions/form/current", headers={"Accept-Language": "zh-TW"})
         pinned_manifest_response = await client.get(
-            "/submissions/form/schemas/build_submission.v1/revisions/2",
-            headers={"Accept-Language": "zh-TW"},
+            "/submissions/form/schemas/build_submission.v1/revisions/2", headers={"Accept-Language": "zh-TW"}
         )
-        with pytest.raises(SubmissionFormRevisionNotFoundError):
-            await client.get("/submissions/form/schemas/build_submission.v1/revisions/999")
+        missing_revision = await client.get("/submissions/form/schemas/build_submission.v1/revisions/999")
+        assert missing_revision.status_code == 404
         options_response = await client.get(
-            "/submissions/form/options/approved_restrictions",
-            params={"category": "door"},
+            "/submissions/form/options/approved_restrictions", params={"category": "door"}
         )
         create_response = await client.post(
             "/submissions/drafts",
-            json={
-                "category": "door",
-                "origin": "web",
-                "client_capabilities": ["repeatable_text"],
-            },
+            json={"category": "door", "origin": "web", "client_capabilities": ["repeatable_text"]},
         )
         draft_id = create_response.json()["id"]
         change_response = await client.post(
@@ -410,18 +402,12 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
                 "client_instance_id": "paper:player-session",
                 "idempotency_key": "change-key-0001",
                 "operations": [
-                    {
-                        "operation_id": str(uuid4()),
-                        "field_id": "display_name",
-                        "kind": "set",
-                        "value": "Compact door",
-                    }
+                    {"operation_id": str(uuid4()), "field_id": "display_name", "kind": "set", "value": "Compact door"}
                 ],
             },
         )
         upgrade_response = await client.post(
-            f"/submissions/drafts/{draft_id}/manifest-upgrade",
-            json={"base_revision": 1, "target_revision": 2},
+            f"/submissions/drafts/{draft_id}/manifest-upgrade", json={"base_revision": 1, "target_revision": 2}
         )
         list_response = await client.get("/submissions/drafts")
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
@@ -432,29 +418,18 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         empty_history = await client.get(f"/submissions/drafts/{draft_id}/attempts?before=1")
         invalid_limit = await client.get(f"/submissions/drafts/{draft_id}/attempts?limit=101")
         delete_response = await client.delete(f"/submissions/drafts/{draft_id}")
-
     assert manifest_response.status_code == 200
     assert manifest_response.json()["schema_id"] == "build_submission.v1"
     assert forms.manifest_locales == ["zh-CN"]
     assert pinned_manifest_response.status_code == 200
     assert pinned_manifest_response.json()["revision"] == 2
-    assert forms.revision_calls == [
-        ("build_submission.v1", 2, "zh-CN"),
-        ("build_submission.v1", 999, "en"),
-    ]
+    assert forms.revision_calls == [("build_submission.v1", 2, "zh-CN"), ("build_submission.v1", 999, "en")]
     assert options_response.status_code == 200
     assert options_response.json()["options"] == [{"value": "slim", "label": "Slim"}]
     assert forms.option_calls == [("approved_restrictions", "door", "en")]
     assert create_response.status_code == 201
     assert create_response.json()["origin"] == "web"
-    assert drafts.created_with == (
-        ACCOUNT_ID,
-        "door",
-        SubmissionOrigin.WEB,
-        frozenset({"repeatable_text"}),
-        "en",
-        None,
-    )
+    assert drafts.created_with == (ACCOUNT_ID, "door", SubmissionOrigin.WEB, frozenset({"repeatable_text"}), "en", None)
     assert change_response.status_code == 200
     assert change_response.json()["draft"]["revision"] == 1
     assert change_response.json()["replayed"] is False
@@ -538,7 +513,7 @@ async def test_player_grant_derives_minecraft_origin() -> None:
         grant_id=GRANT_ID,
     )
 
-    actor = await authenticated_submission_caller(caller)
+    actor = await authenticated_submission_caller(make_request({"type": "http", "state": {"squid_caller": caller}}))
 
     assert actor is caller
     assert _submission_origin(actor) is SubmissionOrigin.PAPER
@@ -555,7 +530,7 @@ async def test_cli_session_derives_distinct_submission_origin() -> None:
         cli_session_id=session_id,
     )
 
-    actor = await authenticated_submission_caller(caller)
+    actor = await authenticated_submission_caller(make_request({"type": "http", "state": {"squid_caller": caller}}))
 
     assert actor is caller
     assert _submission_origin(actor) is SubmissionOrigin.CLI
@@ -614,4 +589,4 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
 )
 async def test_submission_caller_rejects_incomplete_or_inconsistent_provenance(caller: Caller) -> None:
     with pytest.raises(AuthenticationError):
-        await authenticated_submission_caller(caller)
+        await authenticated_submission_caller(make_request({"type": "http", "state": {"squid_caller": caller}}))

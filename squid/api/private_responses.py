@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 PRIVATE_API_PATH_PREFIXES = (
     "/v1/settings/runtime",

@@ -1,6 +1,6 @@
 """Public Minecraft-version read routes."""
 
-from fastapi import APIRouter
+from litestar import Router, get
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import Versions
@@ -9,15 +9,12 @@ from squid.api.pagination import OffsetParam, Page, PageSizeParam
 from squid.api.v1.schemas.versions import VersionDetail
 from squid.core.pagination import offset_page
 
-router = APIRouter(prefix="/versions", tags=["versions"])
 
-
-@router.get(
-    "",
-    response_model=Page[VersionDetail],
+@get(
+    "/",
     responses=responses(400, 422, 503),
     operation_id="minecraft_versions_list",
-    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    opt=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def list_versions(
     versions_service: Versions,
@@ -28,3 +25,6 @@ async def list_versions(
     versions = await versions_service.list_all()
     page = offset_page(versions, offset=offset or 0, page_size=page_size)
     return Page[VersionDetail].from_domain(page, VersionDetail.from_domain)
+
+
+router = Router(path="/versions", tags=["versions"], route_handlers=[list_versions])

@@ -1,9 +1,11 @@
 """REST API locale negotiation tests."""
 
+from typing import cast
+
 import httpx
 import pytest
-from starlette.requests import Request
-from starlette.types import Message, Receive, Scope, Send
+from litestar import Request
+from litestar.types import Message, Receive, ReceiveMessage, Scope, Send
 
 from squid.api.i18n import LocaleContextMiddleware, _parse_accept_language, locale_for_request
 from squid_ui.text import current_localization
@@ -12,7 +14,7 @@ from squid_ui.text import current_localization
 def _request_with_header(header: str | None) -> Request:
     headers = [(b"accept-language", header.encode())] if header is not None else []
     scope = {"type": "http", "headers": headers}
-    return Request(scope)
+    return Request(cast(Scope, scope))
 
 
 def test_parse_accept_language_orders_by_quality() -> None:
@@ -55,7 +57,7 @@ async def test_locale_middleware_binds_and_restores_the_request_localization() -
     middleware = LocaleContextMiddleware(app)
     scope = {"type": "http", "headers": [(b"accept-language", b"zh-CN")]}
 
-    async def receive() -> Message:
+    async def receive() -> ReceiveMessage:
         return {"type": "http.disconnect"}
 
     async def send(message: Message) -> None:

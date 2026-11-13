@@ -7,7 +7,7 @@ validates query parameters and converts those pages to JSON representations.
 from collections.abc import Callable
 from typing import Annotated, Self
 
-from fastapi import Query
+from litestar.params import QueryParameter
 from pydantic import BaseModel, ConfigDict
 
 from squid.core.errors import ErrorCode, ValidationError
@@ -15,18 +15,18 @@ from squid.core.pagination import MAX_PAGE_OFFSET, PageSelector
 from squid.core.pagination import Page as ResultPage
 from squid.core.pagination import PageAnchor as ResultPageAnchor
 
-type PageSizeParam = Annotated[int, Query(ge=1, le=50, description="Maximum number of items to return.")]
-type OffsetParam = Annotated[
+PageSizeParam = Annotated[int, QueryParameter(ge=1, le=50, description="Maximum number of items to return.")]
+OffsetParam = Annotated[
     int | None,
-    Query(ge=0, le=MAX_PAGE_OFFSET, description="Number of items to skip. Excludes after_id and before_id."),
+    QueryParameter(ge=0, le=MAX_PAGE_OFFSET, description="Number of items to skip. Excludes after_id and before_id."),
 ]
-type AfterIdParam = Annotated[
+AfterIdParam = Annotated[
     int | None,
-    Query(ge=1, description="Return the items after this identifier in display order. Excludes offset."),
+    QueryParameter(ge=1, description="Return the items after this identifier in display order. Excludes offset."),
 ]
-type BeforeIdParam = Annotated[
+BeforeIdParam = Annotated[
     int | None,
-    Query(ge=1, description="Return the items before this identifier in display order. Excludes offset."),
+    QueryParameter(ge=1, description="Return the items before this identifier in display order. Excludes offset."),
 ]
 
 

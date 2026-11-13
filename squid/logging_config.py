@@ -286,7 +286,7 @@ def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> Q
 
 
 def configure_api_logging(config: LoggingConfig, *, dev_mode: bool = False) -> None:
-    """Configure logging for the FastAPI and uvicorn process."""
+    """Configure logging for the Litestar and uvicorn process."""
     logging.config.dictConfig(
         build_logging_config(
             config=config,

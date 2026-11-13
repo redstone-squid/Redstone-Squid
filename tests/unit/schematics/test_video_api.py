@@ -3,12 +3,12 @@
 from unittest.mock import create_autospec
 
 import httpx
-from fastapi import FastAPI
+from litestar import Litestar, get, post
+from litestar.di import Provide
 
-from squid.api.dependencies import get_build_queries, get_permissions, get_schematics
-from squid.api.idempotency import reserve_idempotent_request
-from squid.api.security import Caller, current_caller
-from squid.api.v1.schematics import router
+from squid.api.errors import exception_handlers
+from squid.api.security import Caller
+from squid.api.v1.schematics import get_schematic_video, get_schematic_video_content, submit_schematic_video
 from squid.permissions.application import PermissionService
 from squid.schematics.application import SchematicService
 from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
@@ -27,16 +27,27 @@ async def test_video_http_flow_keeps_results_private_and_uses_mounted_links() ->
     caller.require_consented_account.return_value = 42
     caller.allows.return_value = False
     permissions = create_autospec(PermissionService, instance=True)
-    app = FastAPI()
-    app.include_router(router, prefix="/v1")
-    app.dependency_overrides[get_schematics] = lambda: schematics
-    app.dependency_overrides[get_build_queries] = ConfirmedBuilds
-    app.dependency_overrides[get_permissions] = lambda: permissions
-    app.dependency_overrides[current_caller] = lambda: caller
-    app.dependency_overrides[reserve_idempotent_request] = lambda: None
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app, root_path="/catalogue"), base_url="https://test"
-    ) as client:
+    app = Litestar(
+        [
+            post("/v1/builds/{build_id:int}/schematics/{schematic_id:int}/videos", status_code=202)(
+                submit_schematic_video.fn
+            ),
+            get("/v1/schematic-videos/{video_id:int}", name=get_schematic_video.name)(get_schematic_video.fn),
+            get("/v1/schematic-videos/{video_id:int}/content", name=get_schematic_video_content.name)(
+                get_schematic_video_content.fn
+            ),
+        ],
+        dependencies={
+            "schematics": Provide(lambda: schematics, sync_to_thread=False),
+            "build_queries": Provide(ConfirmedBuilds, sync_to_thread=False),
+            "permissions": Provide(lambda: permissions, sync_to_thread=False),
+            "caller": Provide(lambda: caller, sync_to_thread=False),
+        },
+        exception_handlers=exception_handlers(),
+    )
+    # Litestar annotates ASGI scopes more narrowly than httpx's mutable dictionaries.
+    transport = httpx.ASGITransport(app=app, root_path="/catalogue")  # type: ignore[bad-argument-type]
+    async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
         submitted = await client.post("/catalogue/v1/builds/7/schematics/3/videos", json={})
         assert submitted.status_code == 202
         assert submitted.headers["cache-control"] == "private, no-store"
