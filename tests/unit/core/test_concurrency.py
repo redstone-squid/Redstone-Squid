@@ -7,13 +7,20 @@ from squid.core.concurrency import run_all, run_all_awaitables, run_all_settled,
 
 
 async def test_run_all_returns_results_in_argument_order() -> None:
-    async def make(value: int, delay: float) -> int:
-        await anyio.sleep(delay)
+    completed: list[int] = []
+    completion_events = [anyio.Event() for _ in range(4)]
+
+    async def make(value: int) -> int:
+        if value < 3:
+            await completion_events[value + 1].wait()
+        completed.append(value)
+        completion_events[value].set()
         return value
 
-    # Longest first, so completion order is the reverse of argument order.
-    results = await run_all([lambda: make(1, 0.03), lambda: make(2, 0.02), lambda: make(3, 0.0)])
+    with anyio.fail_after(5):
+        results = await run_all([lambda: make(1), lambda: make(2), lambda: make(3)])
 
+    assert completed == [3, 2, 1]
     assert results == [1, 2, 3]
 
 
@@ -81,7 +88,7 @@ async def test_run_all_respects_the_concurrency_limit() -> None:
         nonlocal in_flight, peak
         in_flight += 1
         peak = max(peak, in_flight)
-        await anyio.sleep(0.01)
+        await anyio.sleep(0)
         in_flight -= 1
 
     await run_all([work] * 12, limit=3)
@@ -91,22 +98,22 @@ async def test_run_all_respects_the_concurrency_limit() -> None:
 
 async def test_settle_all_runs_every_branch_despite_a_failure() -> None:
     """Best-effort fan-out: one denied channel must not skip the others."""
-    completed: list[int] = []
+    completed: set[int] = set()
 
     def make(number: int):
         async def work() -> int:
             if number == 1:
                 msg = "denied"
                 raise PermissionError(msg)
-            await anyio.sleep(0.01)
-            completed.append(number)
+            await anyio.sleep(0)
+            completed.add(number)
             return number
 
         return work
 
     outcomes = await settle_all([make(n) for n in range(4)], limit=2)
 
-    assert completed == [0, 2, 3]
+    assert completed == {0, 2, 3}
     assert isinstance(outcomes[1], PermissionError)
     assert [outcomes[0], outcomes[2], outcomes[3]] == [0, 2, 3]
 
@@ -149,21 +156,31 @@ async def test_run_all_settled_finishes_every_operation_before_raising() -> None
 
     async def sibling(number: int) -> None:
         await started.wait()
-        await anyio.sleep(0.01)
+        await anyio.sleep(0)
         finished.append(number)
 
     with anyio.fail_after(5), pytest.raises(RuntimeError):
         await run_all_settled([lambda: failing(), lambda: sibling(1), lambda: sibling(2)])
 
-    assert finished == [1, 2]
+    assert sorted(finished) == [1, 2]
 
 
 async def test_run_all_settled_returns_results_in_argument_order() -> None:
-    async def make(value: int, delay: float) -> int:
-        await anyio.sleep(delay)
+    completed: list[int] = []
+    completion_events = [anyio.Event() for _ in range(3)]
+
+    async def make(value: int) -> int:
+        if value == 1:
+            await completion_events[2].wait()
+        completed.append(value)
+        completion_events[value].set()
         return value
 
-    assert await run_all_settled([lambda: make(1, 0.02), lambda: make(2, 0.0)]) == [1, 2]
+    with anyio.fail_after(5):
+        results = await run_all_settled([lambda: make(1), lambda: make(2)])
+
+    assert completed == [2, 1]
+    assert results == [1, 2]
 
 
 async def test_run_all_settled_groups_several_failures() -> None:
@@ -179,16 +196,19 @@ async def test_run_all_settled_groups_several_failures() -> None:
 async def test_task_group_raises_a_lone_child_failure_unwrapped() -> None:
     """A supervised child's failure has to stay matchable by its own type."""
 
+    child_started = anyio.Event()
+
     async def child() -> None:
+        child_started.set()
         msg = "boom"
         raise RuntimeError(msg)
 
     async def supervise() -> None:
         async with task_group() as tasks:
             tasks.start_soon(child)
-            await anyio.sleep(0.01)
+            await child_started.wait()
 
-    with pytest.raises(RuntimeError):
+    with anyio.fail_after(5), pytest.raises(RuntimeError):
         await supervise()
 
 
