@@ -13,7 +13,7 @@ not re-export testing helpers.
 import asyncio
 import hashlib
 import inspect
-from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from copy import copy
 from dataclasses import dataclass, field, replace
@@ -25,6 +25,7 @@ import discord
 from discord.ext import commands
 
 from squid_ui import scene
+from squid_ui.errors import LayoutError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
@@ -636,8 +637,17 @@ class StagedControl:
 class StagedForm:
     """A generated Discord modal whose authority ends after ``submit()``."""
 
-    def __init__(self, modal: discord.ui.Modal, *, client: discord.Client, user_id: int) -> None:
+    def __init__(
+        self,
+        modal: discord.ui.Modal,
+        *,
+        client: discord.Client,
+        user_id: int,
+        check: Callable[[], None] | None = None,
+    ) -> None:
         self.modal = modal
+        self._check = check
+        assert_within_limits(modal)
         self._client = client
         self._user_id = user_id
         self._submitted = False
@@ -668,6 +678,8 @@ class StagedForm:
         interaction = _interaction(self._client, self._user_id)
         self._submitted = True
         await self.modal.on_submit(cast(discord.Interaction, interaction.source))
+        if self._check is not None:
+            self._check()
         return interaction
 
     def assert_within_limits(self) -> None:
@@ -691,7 +703,9 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
         client: discord.Client,
         user_id: int,
         interaction: InteractionHarness,
+        layout_errors: list[LayoutError] | None = None,
     ) -> None:
+        self._layout_errors = layout_errors if layout_errors is not None else []
         self.result = result
         self.component = result.component
         self.root = result.root
@@ -742,6 +756,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
             cast(discord.Interaction, interaction.source),
             generation=self.root.generation,
         )
+        self.assert_within_limits()
         return interaction
 
     async def select(
@@ -763,6 +778,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
             list(values),
             generation=self.root.generation,
         )
+        self.assert_within_limits()
         return interaction
 
     async def press_for_form(self, key: str, *, user_id: int | None = None) -> StagedForm:
@@ -773,11 +789,15 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
         if len(records) != 1 or not records[0].args or not isinstance(records[0].args[0], discord.ui.Modal):
             message = f"control {key!r} did not open exactly one modal"
             raise AssertionError(message)
-        return StagedForm(records[0].args[0], client=self._client, user_id=actor)
+        return StagedForm(records[0].args[0], client=self._client, user_id=actor, check=self.assert_within_limits)
 
     def assert_within_limits(self) -> None:
         """Check the current view against the supported serialization size limits."""
-        assert_within_limits(self._view())
+        if self._layout_errors:
+            error = self._layout_errors.pop(0)
+            raise error
+        if not self.root.finished:
+            assert_within_limits(self._view())
 
     def _view(self) -> discord.ui.LayoutView:
         view = self.root._candidates.view  # pyrefly: ignore[missing-attribute]
@@ -826,7 +846,16 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request]](
     its message roots, even if an assertion fails.
     """
     client = commands.Bot(command_prefix="!", intents=discord.Intents.none())
-    runtime = install(client, _owner_config(owner, config))
+    configured = _owner_config(owner, config)
+    layout_errors: list[LayoutError] = []
+
+    async def observe(request: Request[Any], error: Exception, result: DeliveryResult | None) -> None:
+        if isinstance(error, LayoutError):
+            layout_errors.append(error)
+        if configured.errors.observe is not None:
+            await configured.errors.observe(request, error, result)
+
+    runtime = install(client, replace(configured, errors=replace(configured.errors, observe=observe)))
     client.ui = runtime  # type: ignore[attr-defined]
     scope = runtime.scope(owner)
     interaction = _interaction(client, user_id)
@@ -835,12 +864,19 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request]](
             await tasks.start(runtime.run)
             try:
                 result = await (await scope.request(interaction.source)).respond(content, **overrides)
+                if layout_errors:
+                    raise layout_errors.pop(0)
                 if not isinstance(result, Presented):
                     message = f"staging live content produced {type(result).__name__}"
                     raise TypeError(message)
                 staged = StagedUI(
-                    cast(Presented[ComponentT], result), client=client, user_id=user_id, interaction=interaction
+                    cast(Presented[ComponentT], result),
+                    client=client,
+                    user_id=user_id,
+                    interaction=interaction,
+                    layout_errors=layout_errors,
                 )
+                staged.assert_within_limits()
                 yield staged
             finally:
                 with anyio.CancelScope(shield=True):

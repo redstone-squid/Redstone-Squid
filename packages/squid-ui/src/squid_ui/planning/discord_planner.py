@@ -915,15 +915,20 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
             )
             message = f"{blown}; {remedy}"
             raise UnsolvableLayoutError(message, context={**failure_context, "reason": "root_pagination_unavailable"})
-        measured, root_pages = dialect.paginate(
-            lowered,
-            key=document.key,
-            capacities=capacities,
-            limits=limits,
-            chrome=chrome,
-            nav=nav,
-            broker=broker,
-        )
+        try:
+            measured, root_pages = dialect.paginate(
+                lowered,
+                key=document.key,
+                capacities=capacities,
+                limits=limits,
+                chrome=chrome,
+                nav=nav,
+                broker=broker,
+            )
+        except UnsolvableLayoutError as error:
+            error.context.update(failure_context)
+            error.context["reason"] = "root_pagination_failed"
+            raise
         root_events = (
             PlanEvent(
                 code="pagination.root",
@@ -939,7 +944,14 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
     hard_failures = measured.failures
     if hard_failures:
         message = "; ".join(note.message for note in hard_failures)
-        raise UnsolvableLayoutError(message)
+        raise UnsolvableLayoutError(
+            message,
+            context={
+                "document_key": document.key,
+                "pager_keys": tuple(pager.key for pager in (*broker.pagers, *measured.pagers)),
+                "reason": "constraint_failure",
+            },
+        )
     bindings = SceneBindings()
     body = dialect.body(measured.children, bindings)
     if not isinstance(body, target.body_type):

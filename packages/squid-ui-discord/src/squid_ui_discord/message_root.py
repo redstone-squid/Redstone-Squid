@@ -1720,6 +1720,8 @@ class MessageRoot[
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
+                if isinstance(error, UnsolvableLayoutError):
+                    error.context["action"] = key
                 profile.presentation = PresentationStatus.FAILED
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
                 raise
@@ -1927,6 +1929,8 @@ class MessageRoot[
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
+                if isinstance(error, UnsolvableLayoutError):
+                    error.context["action"] = key
                 profile.presentation = PresentationStatus.FAILED
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
                 raise

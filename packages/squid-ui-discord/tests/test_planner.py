@@ -172,8 +172,11 @@ def test_local_pagination_precedes_root_pagination_instead_of_nesting() -> None:
         key="root",
     )
 
-    with pytest.raises(UnsolvableLayoutError, match="Local and root pagination are never simultaneous"):
+    with pytest.raises(UnsolvableLayoutError, match="Local and root pagination are never simultaneous") as caught:
         plan(document, target=DISCORD_V2_DPY27, nav=_nav)
+    assert caught.value.context["reason"] == "local_pagination"
+    assert caught.value.context["document_key"] == "root"
+    assert caught.value.context["pager_keys"] == ("detail",)
 
 
 def test_exact_row_overflow_is_a_typed_planning_error() -> None:

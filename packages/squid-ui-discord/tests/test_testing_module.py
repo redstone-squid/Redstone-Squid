@@ -1,11 +1,16 @@
 """Recorded Discord calls and serialized-payload queries used by the test suite."""
 
 import discord
+import pytest
 
+import squid_ui as sl
+import squid_ui_discord as squid_discord
+from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.limits import LIMITS
 from squid_ui.primitives import Heading, Panel, RoutedButton, Row, Sep, Text
 from squid_ui_discord import testing as sd
+from squid_ui_discord.delivery import DeliveryResult
 
 
 class TestPayloadQueries:
@@ -85,3 +90,47 @@ class TestFailureInjection:
         stale = sd.stale_http_error()
 
         assert (stale.status, stale.code) == (404, 10015)
+
+
+class OverflowingScreen(squid_discord.Screen):
+    expanded: bool = sl.state(default=False)
+
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, squid_discord.Request], ...]:
+        if self.expanded:
+            return tuple(sl.paragraph(f"private content {index}") for index in range(41))
+        return (sl.action_controls(sl.action_control("Expand", self.expand, key="expand"), key="actions"),)
+
+    reported: bool = False
+
+    async def expand(self, _event: sl.PressEvent) -> None:
+        if self.reported:
+            raise UnsolvableLayoutError("no representation fits")
+        self.expanded = True
+
+
+@pytest.mark.parametrize("reported", [False, True])
+async def test_stage_surfaces_reported_overflow_and_preserves_live_handlers(reported: bool) -> None:
+    observed: list[Exception] = []
+
+    async def observe(
+        _request: squid_discord.Request,
+        error: Exception,
+        _result: DeliveryResult | None,
+    ) -> None:
+        observed.append(error)
+
+    config = squid_discord.Config(errors=squid_discord.ErrorPolicy(observe=observe))
+    screen = OverflowingScreen()
+    screen.reported = reported
+    async with sd.stage(screen, owner=object(), config=config) as ui:
+        before = ui.root.snapshot().handler_keys
+        generation = ui.root.generation
+        with pytest.raises(UnsolvableLayoutError) as caught:
+            await ui.press(ui.key_for("expand"))
+        screen.expanded = False
+        assert observed == ([caught.value] if reported else [])
+        assert str(caught.value.context["screen"]).endswith(".OverflowingScreen")
+        assert str(caught.value.context["action"]).endswith("expand")
+        assert "private content" not in repr(caught.value.context)
+        assert ui.root.snapshot().handler_keys == before
+        assert ui.root.generation == generation
