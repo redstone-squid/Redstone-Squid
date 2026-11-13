@@ -895,13 +895,18 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
         # both rather than come back round the loop to discover the second.
         blown = "; ".join(f"{spent} {axis} exceed target maximum {capacity}" for axis, spent, capacity in overspent)
         local_pagers = [*broker.pagers, *measured.pagers]
+        failure_context: dict[str, object] = {
+            "budgets": tuple((str(axis), spent, capacity) for axis, spent, capacity in overspent),
+            "document_key": document.key,
+            "pager_keys": tuple(pager.key for pager in local_pagers),
+        }
         if local_pagers:
             keys = ", ".join(repr(pager.key) for pager in local_pagers)
             message = (
                 f"{blown} after local pagination ({keys}). Local and root pagination are never simultaneous; "
                 "fold component groups, split the document, or move the long local collection onto its own screen."
             )
-            raise UnsolvableLayoutError(message)
+            raise UnsolvableLayoutError(message, context={**failure_context, "reason": "local_pagination"})
         if document.key is None or nav is None:
             remedy = (
                 "give Document an explicit key and plan with navigation controls to allow root pagination"
@@ -909,7 +914,7 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
                 else "plan with navigation controls or split the static document"
             )
             message = f"{blown}; {remedy}"
-            raise UnsolvableLayoutError(message)
+            raise UnsolvableLayoutError(message, context={**failure_context, "reason": "root_pagination_unavailable"})
         measured, root_pages = dialect.paginate(
             lowered,
             key=document.key,

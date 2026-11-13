@@ -26,6 +26,7 @@ from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError, JSONValue
 from squid.diagnostics.application import ErrorReportService
 from squid.observability import TraceSpan, bind_correlation_id, correlation_id, unbind_correlation_id
+from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.text import Localization, current_localization
 from tests.support.discord import make_command_interaction, make_interaction, make_layout_bot, make_message
 
@@ -389,3 +390,13 @@ async def test_saved_report_uses_the_reference_already_shown_to_the_user(mocker:
     reports.record.assert_awaited_once()
     assert reports.record.call_args.kwargs["reference"] == notice.reference
     assert reports.record.call_args.kwargs["correlation_id"] == notice.error_id
+
+
+async def test_layout_failure_metadata_is_saved(mocker: MockerFixture) -> None:
+    error = UnsolvableLayoutError("over budget", context={"screen": "Browser", "action": "action:help"})
+    reports = mocker.Mock(spec=ErrorReportService)
+    reports.record = mocker.AsyncMock()
+
+    await record_operation_error(error, locale=None, result=None, presented=False, reports=reports)
+
+    assert reports.record.call_args.kwargs["context"]["layout"] == error.context

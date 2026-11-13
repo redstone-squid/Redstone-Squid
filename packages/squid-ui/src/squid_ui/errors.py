@@ -22,7 +22,14 @@ class LayoutDegradedError(LayoutError):
 
 
 class UnsolvableLayoutError(LayoutError):
-    """No declared representation satisfies the selected target."""
+    """No declared representation satisfies the selected target.
+
+    Context contains layout metadata only, never rendered text or submitted values.
+    """
+
+    def __init__(self, message: str, *, context: dict[str, object] | None = None) -> None:
+        super().__init__(message)
+        self.context: dict[str, object] = dict(context or {})
 
 
 class DrawInvariantError(LayoutError):

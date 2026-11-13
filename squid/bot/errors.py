@@ -35,6 +35,7 @@ from squid.observability import (
 )
 from squid.permissions.domain import CATALOGUE
 from squid_i18n import NUMBER, Text, md_tr
+from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.text import NEUTRAL, TextLike, localization_scope
 
 logger = logging.getLogger(__name__)
@@ -324,6 +325,8 @@ async def _handle_discord_error(
 
     original = unwrap_error(error)
     notice = build_error_notice(original, locale)
+    if isinstance(original, UnsolvableLayoutError):
+        context = {**(context or {}), "layout": original.context}
     if notice.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
         safe_context = _safe_log_context(context)
@@ -460,10 +463,12 @@ async def record_operation_error(
         return
     original = unwrap_error(error)
     notice = build_error_notice(original, locale)
-    context = {
+    context: dict[str, object] = {
         "channel_id": result.message.channel.id if result is not None and result.message is not None else None,
         "message_id": result.message_id if result is not None else None,
     }
+    if isinstance(original, UnsolvableLayoutError):
+        context = {**(context or {}), "layout": original.context}
     if notice.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
         await _capture(

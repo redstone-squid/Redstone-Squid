@@ -40,7 +40,7 @@ from squid_reactivity.transactions import (
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
 from squid_ui.document import Document
-from squid_ui.errors import LayoutInvariantError
+from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.forms import FormSpec, FormValidationMode, SubmitHandler
 from squid_ui.guards import Challenge, GuardLedger, approvals
 from squid_ui.interactions import (
@@ -834,18 +834,22 @@ class MessageRoot[
                 raise TypeError(message)
         context = profile.span("planner") if profile is not None else nullcontext(None)
         with context as planner_span:
-            result = plan_document(
-                cast(Document[RenderTargetT, Any], self._document_for(tree)),
-                target=self.target,
-                chrome=self._chrome,
-                localization=self.localization,
-                palette=self.palette,
-                strict=self.strict,
-                nav=self.nav,
-                session=self.presentation,
-                cache=self.runtime.plan_cache,
-                memo=self.runtime.plan_memo,
-            )
+            try:
+                result = plan_document(
+                    cast(Document[RenderTargetT, Any], self._document_for(tree)),
+                    target=self.target,
+                    chrome=self._chrome,
+                    localization=self.localization,
+                    palette=self.palette,
+                    strict=self.strict,
+                    nav=self.nav,
+                    session=self.presentation,
+                    cache=self.runtime.plan_cache,
+                    memo=self.runtime.plan_memo,
+                )
+            except UnsolvableLayoutError as error:
+                error.context["screen"] = f"{type(self.component).__module__}.{type(self.component).__qualname__}"
+                raise
             if planner_span is not None:
                 planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
                 planner_span.set_attribute("reuse", result.metrics.reuse.value)
@@ -3017,6 +3021,9 @@ class MessageRoot[
         await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout, reason=CloseReason.TIMEOUT)
 
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
+        if isinstance(error, UnsolvableLayoutError):
+            error.context["screen"] = f"{type(self.component).__module__}.{type(self.component).__qualname__}"
+            error.context["action"] = source
         if self.finished:
             # An in-flight action can fail after its owner closes. Resolving another
             # scoped Request would revive closed authority and mask the original error.

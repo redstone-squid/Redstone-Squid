@@ -157,8 +157,12 @@ def test_a_cosmetic_note_does_not_fragment_root_pages() -> None:
 def test_root_paging_requires_an_explicit_document_key() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
 
-    with pytest.raises(UnsolvableLayoutError, match="give Document an explicit key"):
+    with pytest.raises(UnsolvableLayoutError, match="give Document an explicit key") as caught:
         plan(ControlGroup(buttons), target=DISCORD_V2_DPY27, nav=_nav)
+    assert caught.value.context["reason"] == "root_pagination_unavailable"
+    assert caught.value.context["document_key"] is None
+    assert caught.value.context["pager_keys"] == ()
+    assert caught.value.context["budgets"]
 
 
 def test_local_pagination_precedes_root_pagination_instead_of_nesting() -> None:
