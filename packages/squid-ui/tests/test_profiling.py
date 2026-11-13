@@ -696,7 +696,3 @@ def test_profiler_failure_isolation_preserves_application_behavior() -> None:
     snapshot = subject.snapshot()
     assert snapshot.active == ()
     assert snapshot.health.internal_failures >= 1
-
-
-def test_core_import_still_works_when_discord_and_anyio_missing() -> None:
-    testing.assert_imports_without(["squid_ui", "squid_ui.profiling"], "discord", "anyio")

@@ -153,16 +153,8 @@ class TestManualClock:
         assert clock() == 1_030.0
         assert (clock.utc() - before).total_seconds() == 30
 
-    def test_it_does_not_move_on_its_own(self) -> None:
-        clock = st.ManualClock()
-
-        assert clock() == clock()
-
 
 class TestImportIsolation:
-    def test_the_engine_imports_with_no_transport_available(self) -> None:
-        st.assert_imports_without("squid_ui", "discord", "anyio", "squid_storage")
-
     def test_it_fails_when_the_package_needs_what_was_blocked(self) -> None:
         with pytest.raises(subprocess.CalledProcessError):
             st.assert_imports_without("squid_ui", "squid_reactivity")

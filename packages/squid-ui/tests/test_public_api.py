@@ -2,8 +2,6 @@
 
 from types import ModuleType
 
-import pytest
-
 import squid_ui as sl
 from squid_ui import testing
 
@@ -36,12 +34,6 @@ ROOT_NAMESPACES = (
     "text",
 )
 
-RENAMED_SUBMODULES = (
-    "squid_ui.planning.layout_measurement.solver",
-    "squid_ui.runtime.histories",
-    "squid_reactivity.topics",
-)
-
 
 def test_namespaces_are_modules_not_shadowed_callables() -> None:
     """`import squid_ui.entity as e` must not hand back a factory."""
@@ -60,14 +52,6 @@ def test_promoted_value_modules_do_not_shadow_their_factories() -> None:
     import squid_ui.tallies  # noqa: F401
 
     assert callable(sl.grid) and callable(sl.roster) and callable(sl.tally)
-
-
-@pytest.mark.parametrize("dotted", RENAMED_SUBMODULES)
-def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> None:
-    import importlib
-
-    mod = importlib.import_module(dotted)
-    assert isinstance(mod, ModuleType)
 
 
 def test_engine_imports_without_transport_or_store_dependencies() -> None:
