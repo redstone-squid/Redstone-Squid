@@ -30,7 +30,6 @@ class IdempotencyRequest(Base, kw_only=True):
             "AND response_body_key_id IS NOT NULL AND response_body_nonce IS NOT NULL AND completed_at IS NOT NULL)",
             name="idempotency_requests_response_state_check",
         ),
-        UniqueConstraint("principal", "idempotency_key", name="idempotency_requests_principal_key"),
         UniqueConstraint("caller", "idempotency_key", name="idempotency_requests_caller_key"),
         Index("idempotency_requests_expires_at_idx", "expires_at"),
     )
@@ -38,14 +37,6 @@ class IdempotencyRequest(Base, kw_only=True):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default_factory=uuid.uuid4)
     caller: Mapped[str] = mapped_column(Text, nullable=False)
     """The server-derived caller namespace a key is reserved in."""
-    _legacy_principal: Mapped[str | None] = mapped_column(
-        "principal",
-        Text,
-        nullable=False,
-        init=False,
-        default=None,
-    )
-    """Legacy copy of caller, still written by the repository for the retained database column."""
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     request_fingerprint: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     method: Mapped[UnsafeHttpMethod] = mapped_column(

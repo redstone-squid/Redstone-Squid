@@ -66,7 +66,6 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
             .values(
                 id=candidate_id,
                 caller=caller,
-                principal=caller,
                 idempotency_key=key,
                 request_fingerprint=fingerprint,
                 method=method,

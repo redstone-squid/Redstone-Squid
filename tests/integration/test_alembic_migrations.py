@@ -811,6 +811,91 @@ def test_idempotency_caller_migration_dual_writes_and_downgrades(
         engine.dispose()
 
 
+def test_idempotency_caller_cleanup_preserves_reservations_and_downgrades(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    revision = "e34951e27320"
+    command.upgrade(config, f"{revision}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO idempotency_requests "
+                    "(id, caller, principal, idempotency_key, request_fingerprint, method, route, state, "
+                    "response_status, response_headers, response_body_ciphertext, response_body_key_id, "
+                    "response_body_nonce, completed_at, expires_at) VALUES "
+                    "(:id, 'account:old', 'account:old', 'saved', decode('01', 'hex'), 'POST', '/builds', "
+                    "'completed', 201, '{\"content-type\":\"application/json\"}'::jsonb, "
+                    "decode('02', 'hex'), 'test-key', decode('03', 'hex'), now(), now() + interval '1 day')"
+                ),
+                {"id": uuid4()},
+            )
+            saved = dict(connection.execute(text("SELECT * FROM idempotency_requests")).mappings().one())
+            saved.pop("principal")
+
+        command.upgrade(config, revision)
+        with engine.begin() as connection:
+            assert dict(connection.execute(text("SELECT * FROM idempotency_requests")).mappings().one()) == saved
+            connection.execute(
+                text(
+                    "INSERT INTO idempotency_requests "
+                    "(id, caller, idempotency_key, request_fingerprint, method, route, expires_at) VALUES "
+                    "(:id, 'account:new', 'saved', decode('04', 'hex'), 'PATCH', '/builds/1', "
+                    "now() + interval '1 day')"
+                ),
+                {"id": uuid4()},
+            )
+
+        # The surviving caller constraint must still exclude duplicate reservations.
+        with engine.connect() as connection:
+            with pytest.raises(DBAPIError, match="idempotency_requests_caller_key"):
+                connection.execute(
+                    text(
+                        "INSERT INTO idempotency_requests "
+                        "(id, caller, idempotency_key, request_fingerprint, method, route, expires_at) VALUES "
+                        "(:id, 'account:new', 'saved', decode('05', 'hex'), 'POST', '/builds', "
+                        "now() + interval '1 day')"
+                    ),
+                    {"id": uuid4()},
+                )
+            connection.rollback()
+
+        command.downgrade(config, f"{revision}-1")
+        with engine.connect() as connection:
+            rows = connection.execute(text("SELECT * FROM idempotency_requests ORDER BY caller")).mappings().all()
+            assert len(rows) == 2
+            assert all(row["principal"] == row["caller"] for row in rows)
+            restored = dict(rows[1])
+            restored.pop("principal")
+            assert restored == saved
+            assert (
+                connection.execute(
+                    text(
+                        "SELECT is_nullable FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'idempotency_requests' "
+                        "AND column_name = 'principal'"
+                    )
+                ).scalar_one()
+                == "NO"
+            )
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM pg_constraint WHERE conname = 'idempotency_requests_principal_key'")
+                ).scalar_one()
+                == 1
+            )
+
+        command.upgrade(config, revision)
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT count(*) FROM idempotency_requests")).scalar_one() == 2
+    finally:
+        engine.dispose()
+
+
 def test_finalization_result_metadata_migration_expands_and_downgrades(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
