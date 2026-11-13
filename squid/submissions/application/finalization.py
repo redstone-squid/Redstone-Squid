@@ -14,11 +14,11 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue
 from squid.core.i18n import tr
 from squid.submissions.application.drafts import (
     DEFAULT_DRAFT_RETENTION_DAYS,
-    DraftActor,
     DraftUnitOfWork,
     StoredDraft,
     SubmissionDraftService,
@@ -230,7 +230,7 @@ class SubmissionFinalizationService:
     async def submit(
         self,
         draft_id: UUID,
-        account_id: DraftActor,
+        actor: Actor,
         *,
         locale: str | None,
         now: Instant | None = None,
@@ -241,11 +241,11 @@ class SubmissionFinalizationService:
         artifact processing remains, retain a wait that the worker can recheck.
         Other preparation issues are retained for correction before resubmission.
         """
-        current = await self._drafts.get_accessible(draft_id, account_id)
-        return await self._submit(current, account_id, locale=locale, now=now or Instant.now(), refresh_retention=True)
+        current = await self._drafts.get_accessible(draft_id, actor)
+        return await self._submit(current, actor, locale=locale, now=now or Instant.now(), refresh_retention=True)
 
     async def _submit(
-        self, current: StoredDraft, account_id: DraftActor, *, locale: str | None, now: Instant, refresh_retention: bool
+        self, current: StoredDraft, actor: Actor, *, locale: str | None, now: Instant, refresh_retention: bool
     ) -> SubmissionRequestResult:
         draft_id = current.snapshot.id
         if current.snapshot.status is DraftStatus.PROCESSING:
@@ -275,7 +275,7 @@ class SubmissionFinalizationService:
             else current.expires_at
         )
         try:
-            validated = await self._drafts.validate_for_finalization(draft_id, account_id, locale=locale)
+            validated = await self._drafts.validate_for_finalization(draft_id, actor, locale=locale)
             if validated.draft.snapshot.revision != current.snapshot.revision:
                 raise DraftRevisionConflictError(
                     expected=current.snapshot.revision, actual=validated.draft.snapshot.revision
@@ -283,25 +283,25 @@ class SubmissionFinalizationService:
         except DraftValidationError as error:
             issues = _manifest_issues(error.public_context)
             async with self._uow_factory() as uow:
-                await self._drafts.get_accessible_in(uow, draft_id, account_id)
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
                 result = await uow.finalization_jobs.record_preparation_attention(
                     current,
                     issues,
                     now=touched_at,
                     expires_at=expires_at,
-                    actor_account_id=draft_actor_id(account_id),
+                    actor_account_id=draft_actor_id(actor),
                 )
                 await uow.commit()
                 return result
         except DraftSchemaUnsupportedError:
             async with self._uow_factory() as uow:
-                await self._drafts.get_accessible_in(uow, draft_id, account_id)
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
                 result = await uow.finalization_jobs.record_preparation_attention(
                     current,
                     (SubmissionAttentionIssue("submission", SubmissionAttentionReason.SCHEMA_UNSUPPORTED),),
                     now=touched_at,
                     expires_at=expires_at,
-                    actor_account_id=draft_actor_id(account_id),
+                    actor_account_id=draft_actor_id(actor),
                 )
                 await uow.commit()
                 return result
@@ -309,25 +309,25 @@ class SubmissionFinalizationService:
         preparation = await self._preparation.prepare(validated)
         if isinstance(preparation, PreparationRejected | PreparationWaiting):
             async with self._uow_factory() as uow:
-                await self._drafts.get_accessible_in(uow, draft_id, account_id)
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
                 result = await uow.finalization_jobs.record_preparation_attention(
                     validated.draft,
                     preparation.issues,
                     now=touched_at,
                     expires_at=expires_at,
                     waiting_for_artifacts=isinstance(preparation, PreparationWaiting),
-                    actor_account_id=draft_actor_id(account_id),
+                    actor_account_id=draft_actor_id(actor),
                 )
                 await uow.commit()
                 return result
         async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, account_id)
+            await self._drafts.get_accessible_in(uow, draft_id, actor)
             result = await uow.finalization_jobs.enqueue(
                 validated.draft,
                 preparation.value,
                 now=touched_at,
                 expires_at=expires_at,
-                actor_account_id=draft_actor_id(account_id),
+                actor_account_id=draft_actor_id(actor),
             )
             await uow.commit()
             return result
@@ -341,7 +341,7 @@ class SubmissionFinalizationService:
             try:
                 await self._submit(
                     draft,
-                    draft.submission_actor_account_id or draft.snapshot.owner_account_id,
+                    Actor(account_id=draft.submission_actor_account_id or draft.snapshot.owner_account_id),
                     locale=None,
                     now=now,
                     refresh_retention=False,
@@ -360,31 +360,31 @@ class SubmissionFinalizationService:
                 # Edits, deletion, expiry, or account merges invalidate this reservation.
                 continue
 
-    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
         """Return retained finalization state after checking owner or staff access."""
         async with self._uow_factory() as uow:
-            draft = await self._drafts.get_accessible_in(uow, draft_id, account_id)
+            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
             if draft.preparation_issues:
                 return DraftPreparationSnapshot(
                     draft_id, draft.snapshot.revision, draft.preparation_issues, draft.preparation_retry_at is not None
                 )
             return await uow.finalization_jobs.get(draft_id)
 
-    async def attempt(self, draft_id: UUID, account_id: DraftActor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
         """Read a retained attempt only within its accessible parent draft."""
         async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, account_id)
+            await self._drafts.get_accessible_in(uow, draft_id, actor)
             return await uow.finalization_jobs.get_attempt(draft_id, attempt_id)
 
     async def attempts(
-        self, draft_id: UUID, account_id: DraftActor, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
         """Read newest-first history with a stable exclusive attempt-number cursor."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 100 or (before is not None and before < 1):
                 message = "Invalid attempt history cursor or limit."
                 raise InvalidStateError(message)
-            await self._drafts.get_accessible_in(uow, draft_id, account_id)
+            await self._drafts.get_accessible_in(uow, draft_id, actor)
             return await uow.finalization_jobs.list_attempts(draft_id, before=before, limit=limit)
 
 

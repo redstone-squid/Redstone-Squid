@@ -13,17 +13,17 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.submissions.application.drafts import AppliedDraftChange, DraftActor, StoredDraft
+from squid.submissions.application.drafts import AppliedDraftChange, StoredDraft
 from squid.submissions.application.edits import answer_change, captured_answers
 from squid.submissions.domain import DraftChange
 from tests.support.edits import bound_revisions
 
 
 class RecordedDrafts(Protocol):
-    async def get_accessible(self, draft_id: UUID, actor: DraftActor, /) -> StoredDraft: ...
+    async def get_accessible(self, draft_id: UUID, actor: Actor, /) -> StoredDraft: ...
 
     async def apply_change(
-        self, draft_id: UUID, actor: DraftActor, change: DraftChange, /, *, locale: str | None
+        self, draft_id: UUID, actor: Actor, change: DraftChange, /, *, locale: str | None
     ) -> AppliedDraftChange: ...
 
 

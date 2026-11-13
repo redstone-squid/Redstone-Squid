@@ -17,9 +17,9 @@ import aiohttp
 import anyio
 import discord
 
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.runtime import BotServices
-from squid.submissions.application.drafts import DraftActor
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui.forms import UploadedFile
@@ -28,37 +28,37 @@ logger = logging.getLogger(__name__)
 
 
 async def receive_attachments(
-    services: BotServices, draft_id: UUID, actor_id: int, attachments: Sequence[discord.Attachment]
+    services: BotServices, draft_id: UUID, actor: Actor, attachments: Sequence[discord.Attachment]
 ) -> None:
     """Reserve every source before downloading so an interrupted bundle stays incomplete."""
     for attachment in attachments:
         await services.submission_intake.reserve(
-            draft_id, actor_id, uuid5(draft_id, str(attachment.id)), attachment.filename, attachment.content_type
+            draft_id, actor, uuid5(draft_id, str(attachment.id)), attachment.filename, attachment.content_type
         )
     for attachment in attachments:
-        await receive_attachment(services, draft_id, actor_id, uuid5(draft_id, str(attachment.id)), attachment)
+        await receive_attachment(services, draft_id, actor, uuid5(draft_id, str(attachment.id)), attachment)
 
 
 async def receive_attachment(
-    services: BotServices, draft_id: UUID, actor_id: int, source_id: UUID, attachment: discord.Attachment
+    services: BotServices, draft_id: UUID, actor: Actor, source_id: UUID, attachment: discord.Attachment
 ) -> None:
     """Receive an already reserved source, skipping it if it is ready.
 
     Download and registration failures are recorded and logged instead of raised,
     allowing the rest of an attachment bundle to continue. Cancellation propagates.
     """
-    retained = next(item for item in await services.submission_intake.list(draft_id, actor_id) if item.id == source_id)
+    retained = next(item for item in await services.submission_intake.list(draft_id, actor) if item.id == source_id)
     if retained.status is IntakeStatus.READY:
         return
     try:
-        await _download_and_register(services, draft_id, actor_id, source_id, attachment)
+        await _download_and_register(services, draft_id, actor, source_id, attachment)
     except Exception:
-        await services.submission_intake.fail(draft_id, actor_id, source_id)
+        await services.submission_intake.fail(draft_id, actor, source_id)
         logger.warning("Submission attachment intake failed for source %s", source_id, exc_info=True)
 
 
 async def _download_and_register(
-    services: BotServices, draft_id: UUID, actor_id: int, source_id: UUID, attachment: discord.Attachment
+    services: BotServices, draft_id: UUID, actor: Actor, source_id: UUID, attachment: discord.Attachment
 ) -> None:
     max_bytes = services.submission_intake.max_file_bytes(attachment.filename, attachment.content_type)
     if attachment.size > max_bytes:
@@ -71,11 +71,11 @@ async def _download_and_register(
         if path.stat().st_size > max_bytes:
             message = "Downloaded attachment exceeds the intake limit."
             raise ValidationError(message)
-        await services.submission_intake.register_file(draft_id, actor_id, source_id, path, attachment.content_type)
+        await services.submission_intake.register_file(draft_id, actor, source_id, path, attachment.content_type)
 
 
 async def register_uploaded_file(
-    services: BotServices, draft_id: UUID, actor_id: DraftActor, source_id: UUID, source: UploadedFile
+    services: BotServices, draft_id: UUID, actor: Actor, source_id: UUID, source: UploadedFile
 ) -> None:
     max_bytes = services.submission_intake.max_file_bytes(source.name, source.media_type)
     if source.size > max_bytes:
@@ -89,10 +89,10 @@ async def register_uploaded_file(
             message = "Downloaded file exceeds the intake limit."
             raise ValidationError(message)
         path.write_bytes(data)
-        await services.submission_intake.register_file(draft_id, actor_id, source_id, path, source.media_type)
+        await services.submission_intake.register_file(draft_id, actor, source_id, path, source.media_type)
 
 
-async def receive_retained_file(services: BotServices, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
+async def receive_retained_file(services: BotServices, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
     """Download a retained Discord source after the user assigns it to a draft.
 
     Ready and discarded sources need no work. Download failures are recorded and
@@ -114,7 +114,7 @@ async def receive_retained_file(services: BotServices, draft_id: UUID, actor: Dr
 
 
 async def _download_retained_file(
-    services: BotServices, draft_id: UUID, actor: DraftActor, source: SubmissionSourceFile
+    services: BotServices, draft_id: UUID, actor: Actor, source: SubmissionSourceFile
 ) -> None:
     url = urlparse(source.url)
     if url.scheme != "https" or url.hostname not in {"cdn.discordapp.com", "media.discordapp.net"}:

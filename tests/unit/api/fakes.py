@@ -81,7 +81,7 @@ from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage, SearchRequest
 from squid.search.domain.query import SearchQuery
 from squid.submissions.application import FormOptionSet, SubmissionFormService, build_submission_manifest
-from squid.submissions.application.drafts import DraftActor, StoredDraft, SubmissionDraftService
+from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
 from squid.submissions.application.finalization import (
     FinalizationJobSnapshot,
     SubmissionFinalizationService,
@@ -624,12 +624,12 @@ class MockSubmissionDrafts(SubmissionDraftService):
 
     @override
     async def attention_inbox(
-        self, actor: DraftActor, *, after: UUID | None = None, limit: int = 20
+        self, actor: Actor, *, after: UUID | None = None, limit: int = 20
     ) -> tuple[StoredDraft, ...]:
         return ()
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
         raise DraftNotFoundError(draft_id)
 
     @override
@@ -644,16 +644,16 @@ class MockSubmissionFinalization(SubmissionFinalizationService):
         """Hold no queue; nothing here enqueues an attempt."""
 
     @override
-    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def attempt(self, draft_id: UUID, account_id: DraftActor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
         raise DraftNotFoundError(draft_id)
 
     @override
     async def attempts(
-        self, draft_id: UUID, account_id: DraftActor, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
         raise DraftNotFoundError(draft_id)
 
@@ -665,18 +665,18 @@ class MockSubmissionSchematics(DraftSchematicService):
         self.max_bytes = SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
     @override
-    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[DraftSchematic, ...]:
+    async def list(self, draft_id: UUID, actor: Actor) -> tuple[DraftSchematic, ...]:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def reserve(self, draft_id: UUID, actor: DraftActor, *, filename: str, upload_id: UUID) -> DraftSchematic:
+    async def reserve(self, draft_id: UUID, actor: Actor, *, filename: str, upload_id: UUID) -> DraftSchematic:
         raise DraftNotFoundError(draft_id)
 
     @override
     async def upload(
         self,
         draft_id: UUID,
-        actor: DraftActor,
+        actor: Actor,
         *,
         filename: str,
         data: bytes,
@@ -685,19 +685,19 @@ class MockSubmissionSchematics(DraftSchematicService):
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def fail(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def select_primary(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def select_primary(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def discard(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def attach(self, source_id: UUID, destination_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def attach(self, source_id: UUID, destination_id: UUID, actor: Actor, upload_id: UUID) -> None:
         raise DraftNotFoundError(destination_id)
 
 
@@ -733,14 +733,14 @@ class MockSubmissionIntake(SubmissionAttachmentIntake):
         """Hold no repository; nothing here reaches one."""
 
     @override
-    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
         raise DraftNotFoundError(draft_id)
 
     @override
     async def reserve(
         self,
         draft_id: UUID,
-        actor: DraftActor,
+        actor: Actor,
         source_id: UUID,
         filename: str,
         content_type: str | None,
@@ -751,7 +751,7 @@ class MockSubmissionIntake(SubmissionAttachmentIntake):
     async def register_file(
         self,
         draft_id: UUID,
-        actor: DraftActor,
+        actor: Actor,
         source_id: UUID,
         path: Path,
         content_type: str | None,
@@ -759,11 +759,11 @@ class MockSubmissionIntake(SubmissionAttachmentIntake):
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def discard(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def fail(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
+from squid.core.actors import Actor
 from squid.core.errors import ConflictError, NotFoundError, ValidationError
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
@@ -15,7 +16,7 @@ from squid.media.application.jobs import (
 from squid.media.domain import MediaKind
 from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.submissions.application.drafts import DraftActor, DraftUnitOfWork, StoredDraft, SubmissionDraftService
+from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.domain import SubmissionAttentionIssue
 from squid.submissions.domain.intake import IntakeStatus
@@ -76,7 +77,7 @@ class SubmissionAttachmentIntake:
         return SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
     async def reserve(
-        self, draft_id: UUID, actor: DraftActor, source_id: UUID, filename: str, content_type: str | None
+        self, draft_id: UUID, actor: Actor, source_id: UUID, filename: str, content_type: str | None
     ) -> SuppliedAttachment:
         """Record the supplied file before the client adapter downloads it."""
         async with self._uow_factory() as uow:
@@ -90,7 +91,7 @@ class SubmissionAttachmentIntake:
             return attachment
 
     async def register_file(
-        self, draft_id: UUID, actor: DraftActor, source_id: UUID, path: Path, content_type: str | None
+        self, draft_id: UUID, actor: Actor, source_id: UUID, path: Path, content_type: str | None
     ) -> None:
         """Pass downloaded bytes to the media or schematic service and record the outcome."""
         async with self._uow_factory() as uow:
@@ -115,7 +116,7 @@ class SubmissionAttachmentIntake:
     async def _register(
         self,
         draft: StoredDraft,
-        actor: DraftActor,
+        actor: Actor,
         attachment: SuppliedAttachment,
         path: Path,
         content_type: str | None,
@@ -153,19 +154,19 @@ class SubmissionAttachmentIntake:
             message = "This file type cannot currently be processed; retry or explicitly discard it."
             raise ValidationError(message)
 
-    async def fail(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
         """Retain a download failure for explicit retry or discard."""
         async with self._uow_factory() as uow:
             await self._drafts.get_accessible_in(uow, draft_id, actor)
             await uow.attachment_intake.set_status(draft_id, source_id, IntakeStatus.FAILED)
             await uow.commit()
 
-    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
         async with self._uow_factory() as uow:
             await self._drafts.get_accessible_in(uow, draft_id, actor)
             return await uow.attachment_intake.list(draft_id)
 
-    async def discard(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
         """Discard processor references before resolving the supplied-file requirement."""
         attachment = next((item for item in await self.list(draft_id, actor) if item.id == source_id), None)
         if attachment is None:

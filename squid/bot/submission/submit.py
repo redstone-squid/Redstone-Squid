@@ -272,12 +272,13 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             locale=None,
         )
         unresolved: tuple[str, ...] = ()
+        actor = await current_edit_actor(request)
         if stored.snapshot.revision == 0:
             prefill = await prefill_submission(draft, services.submission_forms, origin=SubmissionOrigin.DISCORD)
             unresolved = prefill.unresolved
             await services.submission_drafts.apply_change(
                 draft_id,
-                uploader_account_id,
+                actor,
                 DraftChange(
                     0,
                     "discord-intake",
@@ -292,7 +293,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         await receive_attachments(
             services,
             draft_id,
-            uploader_account_id,
+            actor,
             tuple(attachment for attachment in (file, file_2, file_3, file_4) if attachment is not None),
         )
         return await draft_editor(

@@ -35,7 +35,6 @@ from squid.submissions.application import (
     SubmissionFormService,
     build_submission_manifest,
 )
-from squid.submissions.application.drafts import DraftActor
 from squid.submissions.application.finalization import SubmissionRequestResult
 from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
@@ -145,7 +144,7 @@ class Drafts(SubmissionDraftService):
     async def apply_change(
         self,
         draft_id: UUID,
-        account_id: DraftActor,
+        actor: Actor,
         change: DraftChange,
         *,
         locale: str | None,
@@ -156,7 +155,7 @@ class Drafts(SubmissionDraftService):
         return AppliedDraftChange(self.current)
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
         assert self.current is not None
         return self.current
 
@@ -166,7 +165,7 @@ class Finalization(SubmissionFinalizationService):
         pass
 
     @override
-    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
         return None
 
 
@@ -175,7 +174,7 @@ class Intake(SubmissionAttachmentIntake):
         pass
 
     @override
-    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
         return ()
 
 

@@ -53,12 +53,13 @@ INGESTION_OPTIONAL_FIELDS = frozenset(
     }
 )
 
-type DraftActor = int | Actor
 
-
-def draft_actor_id(actor: DraftActor) -> int:
-    """Return the account ID from an integer or permission subject; reject anonymous actors."""
-    identifier = actor if isinstance(actor, int) else actor.account_id
+def draft_actor_id(actor: Actor) -> int:
+    """Require an identified permission subject without converting bare account IDs."""
+    if not isinstance(actor, Actor):
+        message = "Draft authorization requires an Actor."
+        raise TypeError(message)
+    identifier = actor.account_id
     if identifier is None or identifier < 1:
         raise DraftAccessDeniedError
     return identifier
@@ -251,7 +252,10 @@ class SubmissionDraftService:
     draft to be resumed even after the current form changes. Incomplete answers
     are allowed while editing; validate_for_finalization checks required fields.
 
-    Access checks allow the owner or staff with submission-edit permission.
+    Access checks require an Actor and allow the owner or staff with submission-edit
+    permission. Transports construct that subject once and preserve it through service
+    calls; an account ID cannot substitute for Discord roles or bot ownership. Methods
+    explicitly limited to ownership (get_owned, delete, upgrade_manifest) accept an ID.
     Writes use the draft repository's revision and replay checks, and this service
     commits them. SubmissionFinalizationService handles the later step of turning
     a completed draft into a queued build submission.
@@ -353,7 +357,7 @@ class SubmissionDraftService:
 
     async def attention_inbox(
         self,
-        actor: DraftActor,
+        actor: Actor,
         *,
         after: UUID | None = None,
         limit: int = 20,
@@ -361,8 +365,7 @@ class SubmissionDraftService:
         """Page correction work by stable ID after checking current staff permission."""
         async with self._uow_factory() as uow:
             draft_actor_id(actor)
-            subject = Actor(account_id=actor) if isinstance(actor, int) else actor
-            if self._permissions is None or not await self._permissions.allows_in(uow, subject, BUILD_SUBMISSION_EDIT):
+            if self._permissions is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT):
                 raise DraftAccessDeniedError
             if not 1 <= limit <= 100:
                 message = "Draft inbox limit must be between 1 and 100."
@@ -371,25 +374,25 @@ class SubmissionDraftService:
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
         """Return one unexpired draft under strict owner authority."""
-        draft = await self.get_accessible(draft_id, account_id)
+        draft = await self.get_accessible(draft_id, Actor(account_id=account_id))
         self._require_owner(draft, account_id)
         return draft
 
-    async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
         """Return one unexpired draft after checking owner or current staff authority."""
         async with self._uow_factory() as uow:
             return await self.get_accessible_in(uow, draft_id, actor)
 
-    async def get_accessible_in(self, uow: DraftUnitOfWork, draft_id: UUID, actor: DraftActor) -> StoredDraft:
+    async def get_accessible_in(self, uow: DraftUnitOfWork, draft_id: UUID, actor: Actor) -> StoredDraft:
         """Check draft access within the caller's read or write operation."""
         draft = await uow.submission_drafts.get(draft_id)
         if draft is None:
             raise DraftNotFoundError(draft_id)
         account_id = draft_actor_id(actor)
-        if draft.snapshot.owner_account_id != account_id:
-            subject = Actor(account_id=actor) if isinstance(actor, int) else actor
-            if self._permissions is None or not await self._permissions.allows_in(uow, subject, BUILD_SUBMISSION_EDIT):
-                raise DraftAccessDeniedError
+        if draft.snapshot.owner_account_id != account_id and (
+            self._permissions is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
+        ):
+            raise DraftAccessDeniedError
         if draft.snapshot.status is DraftStatus.EXPIRED or (
             draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
             and draft.expires_at <= self._now()
@@ -400,7 +403,7 @@ class SubmissionDraftService:
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         """Delete an owned draft only while it remains user-editable."""
         async with self._uow_factory() as uow:
-            current = await self.get_accessible_in(uow, draft_id, account_id)
+            current = await self.get_accessible_in(uow, draft_id, Actor(account_id=account_id))
             self._require_owner(current, account_id)
             if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
                 raise DraftStateConflictError(current.snapshot.status.value, operation="delete")
@@ -421,7 +424,7 @@ class SubmissionDraftService:
     async def apply_change(
         self,
         draft_id: UUID,
-        account_id: DraftActor,
+        actor: Actor,
         change: DraftChange,
         *,
         locale: str | None,
@@ -434,16 +437,16 @@ class SubmissionDraftService:
         manifest, then permissions and revision are checked again before commit.
         """
         async with self._uow_factory() as uow:
-            current = await self.get_accessible_in(uow, draft_id, account_id)
+            current = await self.get_accessible_in(uow, draft_id, actor)
             owner_id = current.snapshot.owner_account_id
             replayed = await uow.submission_drafts.replayed_change(
-                draft_id, owner_id, change, actor_account_id=draft_actor_id(account_id)
+                draft_id, owner_id, change, actor_account_id=draft_actor_id(actor)
             )
             if replayed is not None:
                 return replayed
         await self.validate_change(current, change, locale=locale)
         async with self._uow_factory() as uow:
-            result = await self.persist_change_in(uow, current, account_id, change, now=now)
+            result = await self.persist_change_in(uow, current, actor, change, now=now)
             await uow.commit()
             return result
 
@@ -462,7 +465,7 @@ class SubmissionDraftService:
         self,
         uow: DraftUnitOfWork,
         current: StoredDraft,
-        actor: DraftActor,
+        actor: Actor,
         change: DraftChange,
         *,
         now: Instant | None = None,
@@ -509,7 +512,7 @@ class SubmissionDraftService:
         answers = self._revision_migration.migrate(current, source, target)
         touched_at = now or self._now()
         async with self._uow_factory() as uow:
-            latest = await self.get_accessible_in(uow, draft_id, account_id)
+            latest = await self.get_accessible_in(uow, draft_id, Actor(account_id=account_id))
             self._require_owner(latest, account_id)
             result = await uow.submission_drafts.upgrade_manifest(
                 draft_id,
@@ -526,7 +529,7 @@ class SubmissionDraftService:
     async def validate_for_finalization(
         self,
         draft_id: UUID,
-        account_id: DraftActor,
+        actor: Actor,
         *,
         locale: str | None,
     ) -> ValidatedDraft:
@@ -535,7 +538,7 @@ class SubmissionDraftService:
         The finalization service performs backend-owned artifact checks and atomically
         changes the draft state while enqueuing its durable job.
         """
-        current = await self.get_accessible(draft_id, account_id)
+        current = await self.get_accessible(draft_id, actor)
         manifest = await self._pinned_manifest(current, locale)
         # Ingestion provenance is set by the server, not by the form's origin or
         # AI checkbox. Normal Discord submissions retain the pinned requirements.

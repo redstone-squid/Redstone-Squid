@@ -19,7 +19,7 @@ from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.core.actors import Actor
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
-from squid.submissions.application.drafts import INGESTION_OPTIONAL_FIELDS, DraftActor
+from squid.submissions.application.drafts import INGESTION_OPTIONAL_FIELDS
 from squid.submissions.application.finalization import DraftPreparationSnapshot
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
@@ -74,7 +74,7 @@ async def ingest_message_bundle(
             reasoning_effort=reasoning_effort,
             source_files=source_files,
         )
-    await admit_candidates(services, candidates, retry_failed=retry_failed)
+    await admit_candidates(services, candidates, actor=Actor(account_id=owner), retry_failed=retry_failed)
     return run_id
 
 
@@ -82,7 +82,7 @@ async def admit_candidates(
     services: BotServices,
     candidates: tuple[InferenceCandidate, ...],
     *,
-    actor: DraftActor | None = None,
+    actor: Actor,
     retry_failed: bool = False,
 ) -> None:
     """Try to submit untouched inferred drafts while preserving edits and unresolved files.
@@ -96,9 +96,8 @@ async def admit_candidates(
         if candidate.facts.category is None:
             continue
         try:
-            authority = actor if actor is not None else candidate.owner_account_id
             draft = await materialize_candidate(
-                candidate, services.submission_drafts, services.submission_forms, actor=authority
+                candidate, services.submission_drafts, services.submission_forms, actor=actor
             )
             # Replayed deliveries must not submit a draft that the owner has since corrected.
             metadata_retry = (
@@ -134,10 +133,10 @@ async def admit_candidates(
             if not (len(candidates) > 1 and candidate.source_files):
                 for source in candidate.source_files:
                     try:
-                        await receive_retained_file(services, candidate.id, authority, source.id)
+                        await receive_retained_file(services, candidate.id, actor, source.id)
                     except Exception:
                         logger.warning("Could not receive inferred source %s", source.id, exc_info=True)
-            outcome = await services.submission_finalization.submit(candidate.id, authority, locale=None)
+            outcome = await services.submission_finalization.submit(candidate.id, actor, locale=None)
             if isinstance(outcome, DraftPreparationSnapshot):
                 logger.warning(
                     "Candidate %s needs attention: %s",

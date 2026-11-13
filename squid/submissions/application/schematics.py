@@ -13,13 +13,13 @@ from uuid import UUID, uuid4
 import anyio
 
 from squid.artifacts import ArtifactStore
+from squid.core.actors import Actor
 from squid.core.errors import DataIntegrityError, InvalidStateError, NotFoundError, ValidationError
 from squid.schematics.application import IngestedSchematic, IngestRequest
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError, SchematicWorkerCrashedError
 from squid.submissions.application.artifact_readiness import DraftSchematicSnapshot
 from squid.submissions.application.drafts import (
-    DraftActor,
     DraftUnitOfWork,
     StoredDraft,
     SubmissionDraftService,
@@ -84,7 +84,7 @@ class DraftSchematicService:
         self._artifacts = artifacts
         self.max_bytes = max_bytes
 
-    async def reserve(self, draft_id: UUID, actor: DraftActor, *, filename: str, upload_id: UUID) -> DraftSchematic:
+    async def reserve(self, draft_id: UUID, actor: Actor, *, filename: str, upload_id: UUID) -> DraftSchematic:
         """Retain a source slot before downloading, so failed downloads remain actionable."""
         async with self._uow_factory() as uow:
             if not filename.strip() or len(filename) > 255 or upload_id.int == 0:
@@ -99,7 +99,7 @@ class DraftSchematicService:
             await uow.commit()
             return result
 
-    async def fail(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         """Record a failed source download without dropping the attachment from the draft."""
         async with self._uow_factory() as uow:
             await self._drafts.get_accessible_in(uow, draft_id, actor)
@@ -111,7 +111,7 @@ class DraftSchematicService:
     async def upload(
         self,
         draft_id: UUID,
-        actor: DraftActor,
+        actor: Actor,
         *,
         filename: str,
         data: bytes,
@@ -148,13 +148,13 @@ class DraftSchematicService:
             await self._finish_upload(source.id, succeeded=True)
         return next(item for item in await self.list(draft_id, actor) if item.id == source.id)
 
-    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[DraftSchematic, ...]:
+    async def list(self, draft_id: UUID, actor: Actor) -> tuple[DraftSchematic, ...]:
         """Read private source metadata after checking current access."""
         async with self._uow_factory() as uow:
             await self._drafts.get_accessible_in(uow, draft_id, actor)
             return await uow.draft_schematics.list(draft_id)
 
-    async def select_primary(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def select_primary(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         """Choose one retained source explicitly when several schematics are attached."""
         async with self._uow_factory() as uow:
             await uow.draft_schematics.select_primary(
@@ -162,13 +162,13 @@ class DraftSchematicService:
             )
             await uow.commit()
 
-    async def discard(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         """Remove one draft's reference while preserving references from other drafts."""
         async with self._uow_factory() as uow:
             await uow.draft_schematics.discard(await self._drafts.get_accessible_in(uow, draft_id, actor), upload_id)
             await uow.commit()
 
-    async def attach(self, source_id: UUID, destination_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
+    async def attach(self, source_id: UUID, destination_id: UUID, actor: Actor, upload_id: UUID) -> None:
         """Share a supplied file only between drafts the caller can currently access."""
         async with self._uow_factory() as uow:
             source = await self._drafts.get_accessible_in(uow, source_id, actor)

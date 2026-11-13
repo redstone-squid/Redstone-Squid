@@ -4,8 +4,9 @@ from dataclasses import replace
 from uuid import uuid4
 
 from squid.builds.domain import BuildCategory
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.submissions.application.drafts import DraftActor, StoredDraft, SubmissionDraftService
+from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
 from squid.submissions.application.forms import SubmissionFormService
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.prefill import prefill_submission
@@ -18,7 +19,7 @@ async def materialize_candidate(
     forms: SubmissionFormService,
     *,
     category: BuildCategory | None = None,
-    actor: DraftActor | None = None,
+    actor: Actor,
 ) -> StoredDraft:
     """Open a draft using the candidate ID and prefill it only at revision zero.
 
@@ -56,7 +57,7 @@ async def materialize_candidate(
     if stored.snapshot.revision == 0:
         await drafts.apply_change(
             candidate.id,
-            actor if actor is not None else candidate.owner_account_id,
+            actor,
             DraftChange(
                 0,
                 "inference",
@@ -68,4 +69,4 @@ async def materialize_candidate(
             ),
             locale=None,
         )
-    return await drafts.get_accessible(candidate.id, actor if actor is not None else candidate.owner_account_id)
+    return await drafts.get_accessible(candidate.id, actor)

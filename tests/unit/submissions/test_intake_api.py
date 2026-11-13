@@ -8,6 +8,7 @@ import pytest
 from litestar import Request
 
 from squid.api.v1.submission_intake import upload_file
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.domain.intake import IntakeStatus
@@ -25,20 +26,20 @@ class Intake:
         self.data = b""
         self.source = SuppliedAttachment(uuid4(), "image.png", "image", IntakeStatus.READY)
 
-    async def reserve(self, draft: UUID, actor: int, source: UUID, filename: str, mime: str | None) -> None:
+    async def reserve(self, draft: UUID, actor: Actor, source: UUID, filename: str, mime: str | None) -> None:
         self.events.append("reserve")
 
-    async def register_file(self, draft: UUID, actor: int, source: UUID, path: Path, mime: str | None) -> None:
+    async def register_file(self, draft: UUID, actor: Actor, source: UUID, path: Path, mime: str | None) -> None:
         self.data = path.read_bytes()
         self.events.append("register")
 
-    async def discard(self, draft: UUID, actor: int, source: UUID) -> None:
+    async def discard(self, draft: UUID, actor: Actor, source: UUID) -> None:
         self.events.append("discard")
 
-    async def fail(self, draft: UUID, actor: int, source: UUID) -> None:
+    async def fail(self, draft: UUID, actor: Actor, source: UUID) -> None:
         self.events.append("fail")
 
-    async def list(self, draft: UUID, actor: int) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
         return (self.source,)
 
 

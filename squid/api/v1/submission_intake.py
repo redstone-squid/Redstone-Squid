@@ -22,6 +22,7 @@ from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, tran
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
@@ -56,7 +57,7 @@ _WRITE = contract(cli=transport_only())
 )
 async def list_files(draft_id: FromPath[UUID], account_id: AccountId, intake: Intake) -> list[SuppliedAttachment]:
     """List unresolved, registered, and explicitly discarded supplied files."""
-    return list(await intake.list(draft_id, account_id))
+    return list(await intake.list(draft_id, Actor(account_id=account_id)))
 
 
 @put(
@@ -95,16 +96,17 @@ async def upload_file(
         message = "A replacement requires a new source identifier."
         raise ValidationError(message)
     content_type = request.headers.get("content-type")
-    await intake.reserve(draft_id, account_id, source_id, filename, content_type)
+    actor = Actor(account_id=account_id)
+    await intake.reserve(draft_id, actor, source_id, filename, content_type)
     try:
         with tempfile.TemporaryDirectory(prefix="squid-api-intake-") as directory:
             path = Path(directory) / "source"
             await _receive(request, path, max_bytes=intake.max_file_bytes(filename, content_type))
-            await intake.register_file(draft_id, account_id, source_id, path, content_type)
+            await intake.register_file(draft_id, actor, source_id, path, content_type)
         if replaces is not None:
-            await intake.discard(draft_id, account_id, replaces)
+            await intake.discard(draft_id, actor, replaces)
     except Exception:
-        await intake.fail(draft_id, account_id, source_id)
+        await intake.fail(draft_id, actor, source_id)
         raise
     return await list_files.fn(draft_id, account_id, intake)
 

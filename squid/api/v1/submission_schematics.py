@@ -15,6 +15,7 @@ from squid.api.dependencies import get_schematics
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.schematics import DraftSchematicService
@@ -65,7 +66,7 @@ async def list_schematics(
     draft_id: FromPath[UUID], account_id: AccountId, schematics: Schematics
 ) -> list[DraftSchematic]:
     """List retained sources, including failures and explicit discards."""
-    return list(await schematics.list(draft_id, account_id))
+    return list(await schematics.list(draft_id, Actor(account_id=account_id)))
 
 
 @put(
@@ -95,15 +96,16 @@ async def upload_schematic(
     filename: Annotated[str, QueryParameter(min_length=1, max_length=255)],
 ) -> DraftSchematic:
     """Upload or retry one stable source ID while keeping its bytes private."""
-    await schematics.reserve(draft_id, account_id, filename=filename, upload_id=upload_id)
+    actor = Actor(account_id=account_id)
+    await schematics.reserve(draft_id, actor, filename=filename, upload_id=upload_id)
     data = bytearray()
     try:
         async for chunk in request.stream():
             _check_size(len(data) + len(chunk), schematics.max_bytes)
             data.extend(chunk)
-        source = await schematics.upload(draft_id, account_id, filename=filename, data=bytes(data), upload_id=upload_id)
+        source = await schematics.upload(draft_id, actor, filename=filename, data=bytes(data), upload_id=upload_id)
     except Exception:
-        await schematics.fail(draft_id, account_id, upload_id)
+        await schematics.fail(draft_id, actor, upload_id)
         raise
     return source
 
@@ -196,7 +198,7 @@ async def attach_schematic(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> list[DraftSchematic]:
     """Assign an already supplied file to another candidate without another upload."""
-    await schematics.attach(data.source_draft_id, draft_id, account_id, upload_id)
+    await schematics.attach(data.source_draft_id, draft_id, Actor(account_id=account_id), upload_id)
     return await list_schematics.fn(draft_id, account_id, schematics)
 
 

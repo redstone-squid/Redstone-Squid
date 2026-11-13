@@ -40,7 +40,6 @@ from squid.submissions.application import (
     SubmissionFormService,
     build_submission_manifest,
 )
-from squid.submissions.application.drafts import DraftActor
 from squid.submissions.application.edits import draft_target
 from squid.submissions.application.finalization import SubmissionRequestResult
 from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
@@ -81,12 +80,12 @@ class Drafts(SubmissionDraftService):
 
     def __init__(self, draft: StoredDraft) -> None:
         self.current = draft
-        self.actors: list[DraftActor] = []
+        self.actors: list[Actor] = []
         self.changes: list[DraftChange] = []
         self.required_actor: Actor | None = None
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         if self.required_actor is not None and actor != self.required_actor:
             raise DraftAccessDeniedError
@@ -97,13 +96,13 @@ class Drafts(SubmissionDraftService):
     async def apply_change(
         self,
         draft_id: UUID,
-        account_id: DraftActor,
+        actor: Actor,
         change: DraftChange,
         *,
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftChange:
-        self.actors.append(account_id)
+        self.actors.append(actor)
         self.changes.append(change)
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         return AppliedDraftChange(self.current)
@@ -132,7 +131,7 @@ class Intake(SubmissionAttachmentIntake):
         self.files: tuple[SuppliedAttachment, ...] = ()
 
     @override
-    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
         return self.files
 
 
@@ -160,7 +159,7 @@ class Finalization(SubmissionFinalizationService):
         self.result: SubmissionRequestResult | None = None
 
     @override
-    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
         return self.result
 
 

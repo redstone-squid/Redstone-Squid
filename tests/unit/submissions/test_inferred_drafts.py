@@ -8,6 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.builds.domain import BuildCategory, BuildDraft
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.messages.domain import MessageSnapshot
 from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
@@ -39,12 +40,12 @@ class Drafts:
             )
         return self.current
 
-    async def apply_change(self, identifier: object, owner: int, change: DraftChange, **kwargs: Any) -> None:
+    async def apply_change(self, identifier: object, actor: Actor, change: DraftChange, **kwargs: Any) -> None:
         assert self.current is not None
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         self.changes += 1
 
-    async def get_accessible(self, identifier: object, owner: int) -> StoredDraft:
+    async def get_accessible(self, identifier: object, actor: Actor) -> StoredDraft:
         assert self.current is not None
         return self.current
 
@@ -64,7 +65,7 @@ async def test_materialization_reuses_identity_without_overwriting_corrections()
         uuid4(), uuid4(), 7, BuildDraft(category=BuildCategory.DOOR, door_width=3, source_messages=(source,))
     )
     first = await materialize_candidate(
-        candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms())
+        candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms()), actor=Actor(account_id=7)
     )
     assert first.snapshot.id == candidate.id
     assert first.source_messages == (source,)
@@ -73,7 +74,7 @@ async def test_materialization_reuses_identity_without_overwriting_corrections()
     assert "opening_height" not in first.snapshot.answers
     assert "source_version" not in first.snapshot.answers
     replay = await materialize_candidate(
-        candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms())
+        candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms()), actor=Actor(account_id=7)
     )
     assert replay == first
     assert drafts.changes == 1
@@ -84,13 +85,17 @@ async def test_unknown_category_requires_explicit_selection() -> None:
     candidate = InferenceCandidate(uuid4(), uuid4(), 7, BuildDraft())
     with pytest.raises(ValidationError):
         await materialize_candidate(
-            candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms())
+            candidate,
+            cast(SubmissionDraftService, drafts),
+            cast(SubmissionFormService, Forms()),
+            actor=Actor(account_id=7),
         )
     assert drafts.current is None
     result = await materialize_candidate(
         candidate,
         cast(SubmissionDraftService, drafts),
         cast(SubmissionFormService, Forms()),
+        actor=Actor(account_id=7),
         category=BuildCategory.EXTENDER,
     )
     assert result.snapshot.category == "extender"

@@ -93,13 +93,13 @@ class SubmissionDraftCommands(Protocol):
 
     async def attention_inbox(
         self,
-        actor: int,
+        actor: Actor,
         *,
         after: FromQuery[UUID | None] = None,
         limit: int = 20,
     ) -> tuple[StoredDraft, ...]: ...
 
-    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft: ...
 
     async def upgrade_manifest(
         self,
@@ -120,17 +120,17 @@ class SubmissionFinalizationCommands(Protocol):
     async def submit(
         self,
         draft_id: UUID,
-        account_id: int,
+        actor: Actor,
         *,
         locale: str | None,
     ) -> SubmissionRequestResult: ...
 
-    async def status(self, draft_id: UUID, account_id: int) -> SubmissionRequestResult | None: ...
+    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None: ...
 
-    async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
+    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
 
     async def attempts(
-        self, draft_id: UUID, account_id: int, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]: ...
 
 
@@ -307,7 +307,9 @@ async def list_correction_inbox(
     limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
 ) -> DraftInboxResponse:
     """List drafts needing staff correction, excluding attachment processing waits."""
-    return DraftInboxResponse.from_domain(await drafts.attention_inbox(account_id, after=after, limit=limit))
+    return DraftInboxResponse.from_domain(
+        await drafts.attention_inbox(Actor(account_id=account_id), after=after, limit=limit)
+    )
 
 
 @get(
@@ -436,7 +438,7 @@ async def create_draft(
 async def get_draft(draft_id: FromPath[UUID], drafts: Drafts, account_id: AccountId) -> Response[StoredDraftResponse]:
     """Return one draft after enforcing caller ownership."""
     response_headers: dict[str, str] = {}
-    draft = await drafts.get_accessible(draft_id, account_id)
+    draft = await drafts.get_accessible(draft_id, Actor(account_id=account_id))
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
     return Response(content=StoredDraftResponse.from_domain(draft), headers=response_headers, status_code=200)
 
@@ -473,8 +475,9 @@ async def change_draft(
     command = change_command(draft_id, data.to_domain())
     if if_match is not None and expected_revision(draft_target(draft_id), if_match) != command.expected[0]:
         raise InvalidRevisionError
-    result = await edits.execute(command, Actor(account_id=account_id))
-    draft = await drafts.get_accessible(draft_id, account_id)
+    actor = Actor(account_id=account_id)
+    result = await edits.execute(command, actor)
+    draft = await drafts.get_accessible(draft_id, actor)
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
     return Response(
         content=DraftChangeResponse(draft=StoredDraftResponse.from_domain(draft), replayed=result.replayed),
@@ -547,7 +550,7 @@ async def submit_draft(
     If files are still processing or fields need correction, return preparation
     state. Otherwise return the durable attempt that performs finalization.
     """
-    snapshot = await finalization.submit(draft_id, account_id, locale=locale_for_request(request))
+    snapshot = await finalization.submit(draft_id, Actor(account_id=account_id), locale=locale_for_request(request))
     if isinstance(snapshot, DraftPreparationSnapshot):
         return DraftPreparationResponse.from_domain(snapshot)
     return SubmissionAttemptResponse.from_domain(snapshot)
@@ -571,7 +574,7 @@ async def get_draft_submission(
     draft_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
 ) -> SubmissionAttemptResponse | DraftPreparationResponse:
     """Return retained finalization state after rechecking draft ownership."""
-    snapshot = await finalization.status(draft_id, account_id)
+    snapshot = await finalization.status(draft_id, Actor(account_id=account_id))
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
     if isinstance(snapshot, DraftPreparationSnapshot):
@@ -599,7 +602,7 @@ async def list_draft_attempts(
     limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
 ) -> list[SubmissionAttemptResponse]:
     """List retained attempts newest first; use the last attempt number as the next cursor."""
-    snapshots = await finalization.attempts(draft_id, account_id, before=before, limit=limit)
+    snapshots = await finalization.attempts(draft_id, Actor(account_id=account_id), before=before, limit=limit)
     return [SubmissionAttemptResponse.from_domain(snapshot) for snapshot in snapshots]
 
 
@@ -619,7 +622,7 @@ async def get_draft_attempt(
     draft_id: FromPath[UUID], attempt_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
 ) -> SubmissionAttemptResponse:
     """Read one attempt without exposing execution credentials or its private payload."""
-    snapshot = await finalization.attempt(draft_id, account_id, attempt_id)
+    snapshot = await finalization.attempt(draft_id, Actor(account_id=account_id), attempt_id)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
     return SubmissionAttemptResponse.from_domain(snapshot)

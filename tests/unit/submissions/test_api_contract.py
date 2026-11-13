@@ -32,6 +32,7 @@ from squid.api.v1.submissions import (
     get_submission_forms,
     router,
 )
+from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError
 from squid.submissions.application import (
     AppliedDraftChange,
@@ -41,7 +42,7 @@ from squid.submissions.application import (
     StoredDraft,
     build_submission_manifest,
 )
-from squid.submissions.application.drafts import DraftActor, draft_actor_id
+from squid.submissions.application.drafts import draft_actor_id
 from squid.submissions.domain import (
     ChoiceOption,
     DraftChange,
@@ -150,7 +151,7 @@ class FakeDrafts(SubmissionDraftCommands):
     @override
     async def attention_inbox(
         self,
-        actor: int,
+        actor: Actor,
         *,
         after: UUID | None = None,
         limit: int = 20,
@@ -164,21 +165,21 @@ class FakeDrafts(SubmissionDraftCommands):
         return (self.current,)
 
     @override
-    async def get_accessible(self, draft_id: UUID, account_id: DraftActor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
-        assert draft_actor_id(account_id) == ACCOUNT_ID
+        assert draft_actor_id(actor) == ACCOUNT_ID
         return self.current
 
     async def apply_change(
         self,
         draft_id: UUID,
-        account_id: DraftActor,
+        actor: Actor,
         change: DraftChange,
         *,
         locale: str | None,
     ) -> AppliedDraftChange:
         assert draft_id == self.current.snapshot.id
-        assert draft_actor_id(account_id) == ACCOUNT_ID
+        assert draft_actor_id(actor) == ACCOUNT_ID
         assert locale is None
         self.change_seen = change
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
@@ -226,35 +227,35 @@ class FakeFinalization(SubmissionFinalizationCommands):
             attention_at=NOW,
             issues=(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
         )
-        self.submit_calls: list[tuple[UUID, int, str | None]] = []
-        self.status_calls: list[tuple[UUID, int]] = []
+        self.submit_calls: list[tuple[UUID, Actor, str | None]] = []
+        self.status_calls: list[tuple[UUID, Actor]] = []
 
     @override
     async def submit(
         self,
         draft_id: UUID,
-        account_id: int,
+        actor: Actor,
         *,
         locale: str | None,
     ) -> FinalizationJobSnapshot:
-        self.submit_calls.append((draft_id, account_id, locale))
+        self.submit_calls.append((draft_id, actor, locale))
         return self.snapshot
 
     @override
-    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
-        self.status_calls.append((draft_id, account_id))
+    async def status(self, draft_id: UUID, actor: Actor) -> FinalizationJobSnapshot | None:
+        self.status_calls.append((draft_id, actor))
         return self.snapshot
 
     @override
-    async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None:
-        assert account_id == ACCOUNT_ID
+    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        assert actor.account_id == ACCOUNT_ID
         return self.snapshot if draft_id == self.snapshot.draft_id and attempt_id == self.snapshot.job_id else None
 
     @override
     async def attempts(
-        self, draft_id: UUID, account_id: int, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
-        assert account_id == ACCOUNT_ID
+        assert actor.account_id == ACCOUNT_ID
         assert draft_id == self.snapshot.draft_id
         return (self.snapshot,)[:limit] if before is None or before > self.snapshot.attempt_number else ()
 
@@ -476,8 +477,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert detail_response.json() == submit_response.json()
     assert empty_history.json() == []
     assert invalid_limit.status_code == 422
-    assert finalization.submit_calls == [(UUID(draft_id), ACCOUNT_ID, "en")]
-    assert finalization.status_calls == [(UUID(draft_id), ACCOUNT_ID)]
+    assert finalization.submit_calls == [(UUID(draft_id), Actor(account_id=ACCOUNT_ID), "en")]
+    assert finalization.status_calls == [(UUID(draft_id), Actor(account_id=ACCOUNT_ID))]
     assert delete_response.status_code == 204
     assert drafts.deleted == (UUID(draft_id), ACCOUNT_ID)
 

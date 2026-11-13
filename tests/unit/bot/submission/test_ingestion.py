@@ -13,7 +13,7 @@ from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.actors import Actor
 from squid.runtime import BotServices
-from squid.submissions.application.drafts import DraftActor, StoredDraft
+from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
     DraftPreparationSnapshot,
     FinalizationJobSnapshot,
@@ -70,12 +70,12 @@ class FinalizationRecorder(SubmissionFinalizationService):
     async def submit(
         self,
         draft_id: UUID,
-        account_id: DraftActor,
+        actor: Actor,
         *,
         locale: str | None,
         now: Instant | None = None,
     ) -> FinalizationJobSnapshot:
-        await self.submit_calls(draft_id, account_id, locale=locale)
+        await self.submit_calls(draft_id, actor, locale=locale)
         return FinalizationJobSnapshot(uuid4(), draft_id, 1, FinalizationJobStatus.PENDING, 0, now or Instant.now())
 
 
@@ -149,7 +149,7 @@ async def test_complete_candidate_uses_shared_finalization(monkeypatch: pytest.M
     h = setup(monkeypatch, (item,))
     await ingestion.ingest_message_bundle([message()], [], h.services, model="test")
     h.materialize.assert_awaited_once()
-    h.finalization.submit_calls.assert_awaited_once_with(item.id, 7, locale=None)
+    h.finalization.submit_calls.assert_awaited_once_with(item.id, Actor(account_id=7), locale=None)
 
 
 async def test_unknown_category_is_retained_without_inventing_a_door(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -221,7 +221,7 @@ async def test_explicit_retry_resubmits_a_dead_job_without_another_model_call(mo
 
     h.inference.infer_calls.assert_not_awaited()
     cast(Any, ingestion.assemble_bundle).assert_not_awaited()
-    h.finalization.submit_calls.assert_awaited_once_with(item.id, 7, locale=None)
+    h.finalization.submit_calls.assert_awaited_once_with(item.id, Actor(account_id=7), locale=None)
 
 
 @pytest.mark.parametrize(
@@ -247,7 +247,7 @@ async def test_retry_preserves_edits_and_missing_facts(
         issues=(SubmissionAttentionIssue("submission", reason),),
     )
 
-    await ingestion.admit_candidates(h.services, (item,), retry_failed=retry_failed)
+    await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7), retry_failed=retry_failed)
 
     h.finalization.submit_calls.assert_not_awaited()
 
@@ -267,7 +267,7 @@ async def test_missing_facts_are_reported_in_intake_logs(
         ),
     )
 
-    await ingestion.admit_candidates(h.services, (item,))
+    await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7))
 
     assert str(item.id) in caplog.text
     assert "needs attention: opening_width: required" in caplog.text
@@ -286,6 +286,6 @@ async def test_retry_resubmits_ingested_drafts_blocked_on_old_metadata_requireme
     stored = h.materialize.return_value
     h.materialize.return_value = replace(stored, inferred=True, inference_run_id=item.run_id)
 
-    await ingestion.admit_candidates(h.services, (item,), retry_failed=True)
+    await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7), retry_failed=True)
 
-    h.finalization.submit_calls.assert_awaited_once_with(item.id, 7, locale=None)
+    h.finalization.submit_calls.assert_awaited_once_with(item.id, Actor(account_id=7), locale=None)

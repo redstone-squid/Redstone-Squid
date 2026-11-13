@@ -13,11 +13,11 @@ import discord
 import pytest
 
 from squid.bot.submission.draft_intake import receive_attachments, receive_retained_file, register_uploaded_file
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.media.application.jobs import MediaNormalizationJobService
 from squid.media.domain import MediaLimits
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.submissions.application.drafts import DraftActor
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.domain.intake import IntakeStatus
@@ -35,24 +35,24 @@ class Intake(SubmissionAttachmentIntake):
 
     @override
     async def reserve(
-        self, draft_id: UUID, actor: DraftActor, source_id: UUID, filename: str, content_type: str | None
+        self, draft_id: UUID, actor: Actor, source_id: UUID, filename: str, content_type: str | None
     ) -> SuppliedAttachment:
         self.files[source_id] = SuppliedAttachment(source_id, filename, "image", IntakeStatus.PENDING)
         return self.files[source_id]
 
     @override
-    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
         return tuple(self.files.values())
 
     @override
     async def register_file(
-        self, draft_id: UUID, actor: DraftActor, source_id: UUID, path: Path, content_type: str | None
+        self, draft_id: UUID, actor: Actor, source_id: UUID, path: Path, content_type: str | None
     ) -> None:
         self.registered.append(path.read_bytes())
         self.files[source_id] = replace(self.files[source_id], status=IntakeStatus.READY)
 
     @override
-    async def fail(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
         self.files[source_id] = replace(self.files[source_id], status=IntakeStatus.FAILED)
 
 
@@ -82,7 +82,7 @@ async def test_reserves_all_files_before_download_and_retains_partial_failure() 
         Attachment(1, intake, fails=True, expected_reservations=2),
         Attachment(2, intake, expected_reservations=2),
     ]
-    await receive_attachments(services, uuid4(), 7, cast(list[discord.Attachment], attachments))
+    await receive_attachments(services, uuid4(), Actor(account_id=7), cast(list[discord.Attachment], attachments))
     assert [item.status for item in intake.files.values()] == [IntakeStatus.FAILED, IntakeStatus.READY]
     assert intake.registered == [b"file"]
 
@@ -91,7 +91,9 @@ async def test_reserves_all_files_before_download_and_retains_partial_failure() 
 async def test_oversized_source_is_retained_without_downloading(size: int) -> None:
     intake = Intake()
     services = bot_services(submission_intake=intake)
-    await receive_attachments(services, uuid4(), 7, cast(list[discord.Attachment], [Attachment(1, intake, size=size)]))
+    await receive_attachments(
+        services, uuid4(), Actor(account_id=7), cast(list[discord.Attachment], [Attachment(1, intake, size=size)])
+    )
     assert [item.status for item in intake.files.values()] == [IntakeStatus.FAILED]
     assert intake.registered == []
 
@@ -104,7 +106,7 @@ async def test_download_uses_limit_for_file_type(filename: str) -> None:
         1, intake, filename=filename, content_type="application/octet-stream", size=len(data), data=data
     )
     await receive_attachments(
-        bot_services(submission_intake=intake), uuid4(), 7, [cast(discord.Attachment, attachment)]
+        bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), [cast(discord.Attachment, attachment)]
     )
     expected = IntakeStatus.FAILED if filename.endswith(".schem") else IntakeStatus.READY
     assert [item.status for item in intake.files.values()] == [expected]
@@ -128,7 +130,7 @@ async def test_retained_download_enforces_configured_limit(monkeypatch: pytest.M
     monkeypatch.setattr("squid.bot.submission.draft_intake.aiohttp.ClientSession", session)
 
     with pytest.raises(ValidationError, match="limit"):
-        await receive_retained_file(bot_services(submission_intake=intake), uuid4(), 7, source.id)
+        await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
 
     assert intake.files[source.id].status is IntakeStatus.FAILED
     assert intake.registered == []
@@ -148,7 +150,7 @@ async def test_retained_video_larger_than_schematic_limit_is_registered(monkeypa
     session.return_value.__aenter__.return_value = client
     monkeypatch.setattr("squid.bot.submission.draft_intake.aiohttp.ClientSession", session)
 
-    await receive_retained_file(bot_services(submission_intake=intake), uuid4(), 7, source.id)
+    await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
 
     assert intake.files[source.id].status is IntakeStatus.READY
     assert intake.registered == [data]
@@ -163,6 +165,8 @@ async def test_uploaded_video_larger_than_schematic_limit_is_registered() -> Non
         return data
 
     source = UploadedFile("clip.mp4", "video/mp4", len(data), "", read)
-    await intake.reserve(draft_id, 7, source_id, source.name, source.media_type)
-    await register_uploaded_file(bot_services(submission_intake=intake), draft_id, 7, source_id, source)
+    await intake.reserve(draft_id, Actor(account_id=7), source_id, source.name, source.media_type)
+    await register_uploaded_file(
+        bot_services(submission_intake=intake), draft_id, Actor(account_id=7), source_id, source
+    )
     assert intake.registered == [data]

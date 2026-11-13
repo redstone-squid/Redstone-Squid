@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from dataclasses import replace
 from functools import partial
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -404,8 +405,8 @@ async def test_change_is_idempotent_even_after_revision_advances() -> None:
         draft_id=DRAFT_ID,
     )
 
-    first = await service.apply_change(DRAFT_ID, 7, _change(), locale="en", now=NOW)
-    replay = await service.apply_change(DRAFT_ID, 7, _change(), locale="en", now=NOW)
+    first = await service.apply_change(DRAFT_ID, Actor(account_id=7), _change(), locale="en", now=NOW)
+    replay = await service.apply_change(DRAFT_ID, Actor(account_id=7), _change(), locale="en", now=NOW)
 
     assert first.replayed is False
     assert replay.replayed is True
@@ -439,9 +440,9 @@ async def test_expired_draft_is_inaccessible_even_to_replayed_mutations() -> Non
     with pytest.raises(DraftStateConflictError) as access_error:
         await service.get_owned(DRAFT_ID, 7)
     with pytest.raises(DraftStateConflictError):
-        await service.apply_change(DRAFT_ID, 7, _change(), locale="en")
+        await service.apply_change(DRAFT_ID, Actor(account_id=7), _change(), locale="en")
     with pytest.raises(DraftStateConflictError):
-        await service.validate_for_finalization(DRAFT_ID, 7, locale="en")
+        await service.validate_for_finalization(DRAFT_ID, Actor(account_id=7), locale="en")
     with pytest.raises(DraftStateConflictError):
         await service.delete(DRAFT_ID, 7)
 
@@ -505,7 +506,7 @@ async def test_finalization_validation_uses_complete_pinned_answers() -> None:
     )
     validated = await service.validate_for_finalization(
         DRAFT_ID,
-        7,
+        Actor(account_id=7),
         locale="en",
     )
 
@@ -532,7 +533,7 @@ async def test_processing_reports_field_errors_for_incomplete_web_draft() -> Non
     with pytest.raises(DraftValidationError) as error:
         await service.validate_for_finalization(
             DRAFT_ID,
-            7,
+            Actor(account_id=7),
             locale="en",
         )
     assert error.value.public_context["field_errors"]
@@ -725,3 +726,23 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
     with pytest.raises(DraftAccessDeniedError):
         await service.attention_inbox(Actor(account_id=8))
     assert repository.actors == [8]
+
+
+async def test_draft_access_requires_actor_even_when_account_owns_the_draft() -> None:
+    service = SubmissionDraftService(
+        CheckedInFormManifestRegistry(), now=lambda: NOW, uow_factory=partial(DraftScope, FakeDraftRepository())
+    )
+    draft = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        draft_id=DRAFT_ID,
+    )
+    assert await service.get_accessible(DRAFT_ID, Actor(account_id=7)) == draft
+    # A dynamically typed caller must not restore the old implicit account-to-actor conversion.
+    with pytest.raises(TypeError, match="requires an Actor"):
+        await service.get_accessible(DRAFT_ID, cast(Actor, 7))
+    with pytest.raises(DraftAccessDeniedError):
+        await service.get_accessible(DRAFT_ID, Actor())

@@ -7,6 +7,7 @@ from whenever import Instant
 
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.models import Build
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.application.finalization import ClaimedFinalizationJob
@@ -126,9 +127,9 @@ class BuildSubmissionExecutor:
         return result
 
     async def _authorized(self, job: ClaimedFinalizationJob, uow: DraftUnitOfWork | None = None) -> bool:
-        actor = job.requested_by_account_id or job.payload.owner_account_id
+        actor = Actor(account_id=job.requested_by_account_id or job.payload.owner_account_id)
         if self._drafts is None:
-            return actor == job.payload.owner_account_id
+            return actor.account_id == job.payload.owner_account_id
         try:
             if uow is None:
                 await self._drafts.get_accessible(job.draft_id, actor)
