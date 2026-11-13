@@ -156,7 +156,13 @@ def compile_template(strings: tuple[str, ...], expressions: tuple[str, ...], key
         if re.match(r"\s*[a-zA-Z][a-zA-Z0-9_-]*\s*=", source):
             msg = "Supply the translation key either in the declaration or with key=, not both"
             raise DeclarationError(msg)
-        source = key + " =\n" + indent(dedent(source).strip(), "    ")
+        body = dedent(source).strip()
+        # Fluent treats a leading '*' on a continuation line as a variant marker.
+        # Keep the first value line beside '=' just as an embedded declaration does.
+        if re.match(r"\.[a-zA-Z][a-zA-Z0-9_-]*\s*=", body):
+            source = key + " =\n" + indent(body, "    ")
+        else:
+            source = key + " = " + indent(body, "    ").removeprefix("    ")
     resource = parse_resource(dedent(source).strip() + "\n")
     entries = [node for node in resource.body if isinstance(node, ast.Message | ast.Term)]
     if len(entries) != 1 or not isinstance(entries[0], ast.Message):
