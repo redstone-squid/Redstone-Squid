@@ -30,7 +30,10 @@ async def test_every_queue_reports_including_consumers_with_no_outstanding_work(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A registered consumer with an empty delivery table still reports zero."""
-    assert set(await _health(migrated_session_factory)) == EXPECTED_QUEUES
+    health = await _health(migrated_session_factory)
+    assert set(health) == EXPECTED_QUEUES
+    # This queue has no dead-letter state but must still report the same series.
+    assert health["record_recomputation"].dead_letters == 0
 
 
 async def test_a_claim_moves_a_queue_from_ready_to_in_flight(
@@ -51,7 +54,7 @@ async def test_a_claim_moves_a_queue_from_ready_to_in_flight(
     assert (after.ready, after.in_flight) == (0, 1)
 
 
-async def test_a_backed_off_row_ages_from_when_it_was_enqueued(
+async def test_a_backed_off_row_is_neither_ready_nor_in_flight(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A retry waiting for its availability deadline is neither ready, in flight, nor dead-lettered."""
@@ -63,11 +66,3 @@ async def test_a_backed_off_row_ages_from_when_it_was_enqueued(
 
     row = (await _health(migrated_session_factory))["discord_sync"]
     assert (row.ready, row.in_flight, row.dead_letters) == (0, 0, 0)
-
-
-async def test_a_queue_without_dead_lettering_reports_a_constant_zero(
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """`record_recompute_queue` has no `dead_at`, so the series stays comparable."""
-    row = (await _health(migrated_session_factory))["record_recomputation"]
-    assert row.dead_letters == 0

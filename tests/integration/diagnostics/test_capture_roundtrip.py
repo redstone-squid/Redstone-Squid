@@ -108,9 +108,8 @@ async def test_the_log_buffer_supplies_the_tail_a_report_stores(service: ErrorRe
     assert report.origin == "schematic-jobs"
 
 
-async def test_a_reference_outside_the_retention_window_is_indistinguishable_from_a_typo(
+async def test_an_unknown_reference_reports_not_found(
     service: ErrorReportService,
 ) -> None:
-    """Unknown references share the not-found error used for expired reports."""
     with pytest.raises(ErrorReportNotFoundError):
         await service.lookup("ffffffffffff")

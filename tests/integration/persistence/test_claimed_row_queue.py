@@ -303,15 +303,14 @@ async def test_completing_with_values_retains_the_row(
         assert await queue.claim(limit=10, session=session) == ()
 
 
-@pytest.mark.parametrize("attempts", range(13))
 async def test_the_sql_and_python_backoff_agree(
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-    attempts: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Single-row and batch failures must calculate the same retry delay."""
-    async with migrated_session_factory() as session:
-        in_postgres = await session.scalar(select(retry_delay_sql(literal(attempts))))
-    assert in_postgres == retry_delay(attempts)
+    """Compare every backoff step without migrating an unused application schema."""
+    attempts = range(13)
+    async with async_session_factory() as session:
+        in_postgres = (await session.execute(select(*(retry_delay_sql(literal(count)) for count in attempts)))).one()
+    assert tuple(in_postgres) == tuple(retry_delay(count) for count in attempts)
 
 
 async def test_batch_and_single_retries_use_each_rows_incremented_attempt_count(
