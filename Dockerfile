@@ -5,7 +5,7 @@ ARG PYTHON_IMAGE=python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c
 ARG DEBIAN_SNAPSHOT=20261110T000000Z
 ARG FFMPEG_VERSION=7:7.1.5-0+deb13u1
 
-FROM rust:1.99.0-trixie@sha256:81015672d6939b0265f09adf96d5de125482bb1330106076956b0518e74edc90 AS video-builder
+FROM rust:1.100.0-trixie@sha256:e19840879045c951c905d0eaa9887f3439c62000e429963371b376bac8d38c31 AS video-builder
 WORKDIR /build
 COPY native/schematic-video/ ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -36,7 +36,7 @@ RUN sed -ri \
       git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c,source=/uv,target=/bin/uv \
+RUN --mount=from=ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
