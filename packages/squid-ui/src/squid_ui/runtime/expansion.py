@@ -113,7 +113,9 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
             # Atomic state is never rendered while pending. Keep the resource observation from
             # the aborted discovery pass so the frontend can settle it before retrying.
             self.observed_bindings.append(pending.resource)
-            nodes = ()
+            return ComponentTree(
+                (), self.components, async_bindings=unique_async_bindings(self.observed_bindings), suspended=True
+            )
         if spliced is not None:
             return self._spliced_tree(spliced)
         # A deferred render has no complete root expansion, so there is no topology to carry.

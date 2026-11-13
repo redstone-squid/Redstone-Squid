@@ -126,3 +126,35 @@ def test_deferred_discovery_can_expand_the_child_on_retry() -> None:
     complete = runtime.render(reuse_committed=True)
     assert not complete.deferred
     assert testing.texts(complete.nodes) == ["3"]
+
+
+@pytest.mark.parametrize("nested", [False, True])
+async def test_new_atomic_resource_suspends_without_accepting_an_old_render(nested: bool) -> None:
+    class Model(ui.Reactive):
+        shown: bool = ui.state(default=False)
+
+    model = Model()
+
+    class Detail(ui.Component):
+        @ui.resource(pending=ui.resources.PendingMode.ATOMIC)
+        async def content(self) -> str:
+            return "detail"
+
+        @override
+        def render(self) -> ui.LayoutNode:
+            return ui.paragraph(self.content.value if model.shown else "overview")
+
+    detail = Detail()
+    runtime = ComponentRuntime(Root(detail) if nested else detail)
+    commit(runtime)
+    model.shown = True
+    pending = runtime.render(reuse_committed=True)
+    assert pending.suspended
+    assert pending.async_bindings == (detail.content,)
+    with pytest.raises(ui.errors.LayoutInvariantError, match="discovery"):
+        runtime.commit(pending)
+    await detail.content._load()
+    ready = runtime.render(reuse_committed=True)
+    assert not ready.suspended
+    assert testing.texts(ready.nodes) == ["detail"]
+    runtime.commit(ready)

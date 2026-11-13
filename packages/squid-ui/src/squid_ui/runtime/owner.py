@@ -40,7 +40,7 @@ class RenderCandidate[RenderTargetT: RenderTarget = RenderTarget]:
     def commit(self) -> None:
         """Adopt a delivered tree before running its mount and unmount hooks."""
         self._require_pending()
-        if self.tree.deferred:
+        if self.tree.deferred or self.tree.suspended:
             message = "a discovery render cannot be committed"
             raise LayoutInvariantError(message)
         self.settled = True
@@ -278,6 +278,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 retained.update(self._staged.tree.deferred)
             self._release_unused_claims(retained)
             raise
+        if tree.suspended:
+            # The incomplete pass has no replacement render snapshot for the component
+            # that suspended. Retrying must not reuse its old subtree or clear its cause.
+            self._cache.require_full_render()
+            self._cached_tree = None
+            return tree
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
         self._cache.rendered()

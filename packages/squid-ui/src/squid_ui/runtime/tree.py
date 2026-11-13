@@ -50,6 +50,9 @@ class ComponentTree(Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported
     _removed_components: tuple[tuple[str, AnyComponent], ...] = field(default=(), compare=False, repr=False)
     _added_components: tuple[tuple[str, AnyComponent], ...] = field(default=(), compare=False, repr=False)
 
+    suspended: bool = False
+    """An atomic resource interrupted expansion; load it and render again before planning."""
+
 
 @dataclass(slots=True)
 class _ComponentRender[RenderTargetT: RenderTarget, ContextT = object]:
