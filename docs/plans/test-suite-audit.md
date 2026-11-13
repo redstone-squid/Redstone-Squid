@@ -37,9 +37,10 @@ showing what coverage remains.
 
 ## Follow-up queue
 
-1. Diagnose the API test stall before claiming repository-wide timing gains. The
-   default local suite collected 6,901 tests but stopped making progress near
-   `tests/unit/api/test_app.py`; it was interrupted. No full-suite pass is claimed.
+1. Run thread-using tests outside the restrictive sandbox in this environment.
+   Both the API and S3 tests stalled inside it; the focused group passed all nine
+   tests in 0.41 s outside it. This is an execution-environment issue, not grounds
+   to remove the tests. A fresh full-suite run is used for final validation.
 2. Measure database setup separately from test bodies. A migrated template may
    reduce setup cost, but must preserve per-test isolation, triggers, constraints,
    and real commits. Do not replace migrations with `create_all` merely for speed.
@@ -57,3 +58,41 @@ Batch validation: 153 focused tests passed, whole-project Pyrefly reported zero
 errors, and installed Ruff commit hooks passed. The focused run uses
 `HYPOTHESIS_STORAGE_DIRECTORY=/tmp/squid-audit-hypothesis` because the repository
 cache directory is not writable in this session.
+
+## Second application pass
+
+Three smaller-model agents reviewed bot tests, API tests, and application domain
+coverage. Parent review accepted these changes:
+
+- Accounts: replace 2,000 random verification-code draws and a probabilistic
+  collision assertion with deterministic lower/upper boundary cases. Check the
+  requested RNG range and exact outputs.
+- Builds: remove 18 parser input/output pairs already exercised by the shared
+  duration fixture. Keep Python `None` and four additional grammar/error cases.
+- Bot: remove the command collision inventory scan. The retained all-extensions
+  loading test exercises discord.py registration, which rejects duplicate names
+  and aliases before the inventory could be inspected.
+- API: create the OpenAPI-only app without unused fake database/service setup.
+  Its lifespan is never entered; HTTP behavior tests retain their runtime fakes.
+
+The second batch passed 62 focused tests and whole-project Pyrefly. Review kept
+the help entrypoint/query matrix, localized permission-node hashability check,
+and request-ID helper/wire checks: each protects behavior that a superficial
+similarity or self-comparison heuristic would miss.
+
+## Broad validation and remaining costs
+
+The default suite completed outside the sandbox: 6,852 passed, one skipped, and
+one failed in 125.61 s, without coverage. The failure reproduced in isolation:
+`test_service_graphs` incorrectly required the optional `schematic_summaries=None`
+field to be an unconfigured stand-in. The assertion now checks its explicit
+absence while retaining the checks on every other service. Its focused rerun
+passed all eight tests. The full suite was not rerun after this isolated test fix.
+Integration and Docker suites were reviewed but not executed in this pass.
+
+The slowest full-run tests were the Discord render-cache comparison (8.90 s) and
+change-scenario benchmark (5.29 s), followed by two catalog validation checks
+(2.68 s and 2.48 s). The benchmark probes already request two samples; investigate
+setup and garbage-collection costs under a fully loaded test process before
+reducing their meaningful cache-path assertions. These timings are not directly
+comparable with the earlier isolated Discord package runs.
