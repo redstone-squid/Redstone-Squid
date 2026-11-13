@@ -8,6 +8,7 @@ from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike, PortableDocumentLike
 from squid_ui.handlers import bind_handlers
+from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.identity import has_routed_page
@@ -18,7 +19,6 @@ from squid_ui.planning.result import PlanResult
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.sources import Position
 from squid_ui.text import NEUTRAL, Localization
 
 
@@ -31,7 +31,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_COST,
-    positions: Mapping[str, Position] | None = None,
+    positions: Mapping[str, PagePosition] | None = None,
     nav: PlannedNav | None = None,
     session: PresentationState | None = None,
     cache: PlanCache[BodyT] | None = None,

@@ -331,7 +331,8 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.scene` | Immutable resolved scenes and protocol serialization. |
 | `squid_ui.semantic` | Frontend-neutral semantic layout vocabulary. |
 | `squid_ui.slack` | Slack Block Kit target identities and hard limits. |
-| `squid_ui.sources` | Position tokens and asynchronous window loading. |
+| `squid_ui.sources` | Source addresses, continuations, and asynchronous window loading. |
+| `squid_ui.pages` | Layout page positions and keyed-entry reveal requests. |
 | `squid_ui.temporal` | Portable exact-time values and local-time resolution. |
 | `squid_ui.testing` | Tree queries, frontend doubles, and determinism controls for tests. |
 | `squid_ui.text` | Resolved text values and explicit Markdown interpolation. |

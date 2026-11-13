@@ -26,6 +26,7 @@ from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome, localize_chrome
 from squid_ui.document import Document, DocumentLike, as_document
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.pages import PagePosition
 from squid_ui.palette import Palette
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
@@ -93,7 +94,6 @@ from squid_ui.primitives.nodes import Heading as PrimitiveHeading
 from squid_ui.primitives.nodes import Text as PrimitiveText
 from squid_ui.semantic import Code as SemanticCode
 from squid_ui.semantic import Paragraph as SemanticParagraph
-from squid_ui.sources import Position
 from squid_ui.text import Localization
 
 
@@ -149,7 +149,7 @@ def _program_dynamic_values(
     localization: Localization,
     palette: Palette,
     presentation: PresentationState,
-    positions: Mapping[str, Position] | None,
+    positions: Mapping[str, PagePosition] | None,
     nav: PagerNav | None,
     capabilities: frozenset[str],
     planned: scene.Scene[Any],
@@ -432,7 +432,7 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
         return self.request.presentation
 
     @property
-    def positions(self) -> Mapping[str, Position] | None:
+    def positions(self) -> Mapping[str, PagePosition] | None:
         return self.request.positions
 
     @property
@@ -1017,13 +1017,14 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
     Repositioning rewrites visible text and controls within existing character
     allowances, avoiding another allocation pass.
     """
-    positions: dict[str, Position] = {}
+    positions: dict[str, PagePosition] = {}
     for pager in measured.pagers:
         request = MaterializedCursorRequest(
             key=pager.key,
             extent=pager.pages,
             fingerprint=content_fingerprint(pager.fragments),
             owner=pager.owner,
+            anchors=pager.anchors,
         )
         grant = broker.grant(request)
         broker.record(request, grant.position)

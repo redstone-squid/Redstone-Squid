@@ -28,12 +28,12 @@ from squid_ui.forms import (
     ZonedDateTimeField,
 )
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
+from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.limits import Axis
 from squid_ui.planning.result import PlanResult
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.runtime.presentation_state import PresentationState, SelectionState
-from squid_ui.sources import Position
 from squid_ui.target_types import HtmlTarget, Renderable
 from squid_ui.temporal import ZonedDateTime
 
@@ -287,7 +287,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
         key="manual",
         chars=5,
     )
-    second = sl.planning.plan(paged, target=sl.html.target(), positions={"manual": Position(offset=1)})
+    second = sl.planning.plan(paged, target=sl.html.target(), positions={"manual": PagePosition(page=1)})
     assert second.scene.pagers[0].page == 1
     assert "bbbb" in [
         node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
@@ -439,3 +439,19 @@ def test_custom_roles_preserve_builtin_target_behavior(base: sl.Tone) -> None:
     builtin = sl.planning.plan(document(base), target=sl.html.target())
     custom = sl.planning.plan(document(sl.Role("app.custom", base)), target=sl.html.target())
     assert custom.scene == builtin.scene
+
+
+def test_html_list_reveal_is_consumed_by_the_delivered_cursor() -> None:
+    presentation = PresentationState()
+    document = sl.bullets(
+        *(sl.bullet(str(index), key=str(index)) for index in range(6)),
+        key="entries",
+        page_size=2,
+        page=sl.pages.RevealPage(anchor="4", request="visit"),
+    )
+    planned = sl.planning.plan(document, target=sl.html.target(), session=presentation)
+    assert planned.scene.pagers[0].page == 2
+    presentation.apply_updates(planned.session_updates)
+    presentation.move_cursor("entries", PagePosition(page=0))
+    manual = sl.planning.plan(document, target=sl.html.target(), session=presentation)
+    assert manual.scene.pagers[0].page == 0

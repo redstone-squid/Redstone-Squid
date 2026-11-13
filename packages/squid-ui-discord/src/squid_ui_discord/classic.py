@@ -19,6 +19,7 @@ from squid_ui.assets import Asset
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
 from squid_ui.errors import ExistingLayoutError
+from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache, PlanMemo
@@ -42,7 +43,6 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import Color
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
-from squid_ui.sources import Position
 from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import NEUTRAL, Localization, TextLike
@@ -233,7 +233,7 @@ def contribute(
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
-    positions: Mapping[str, Position] | None = None,
+    positions: Mapping[str, PagePosition] | None = None,
 ) -> AttachedClassicContribution:
     """Plan a region into what a host-owned classic message leaves unspent, and place it.
 

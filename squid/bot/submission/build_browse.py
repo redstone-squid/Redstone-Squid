@@ -97,15 +97,12 @@ class _BuildSource:
             selector=PageSelector(offset=position.offset),
             page_size=extent,
         )
+        # This source exposes offset jumps; the service may return ID links at offset zero.
         return sl.sources.Window(
             sl.sources.Position(str(page.items[0].id) if page.items else None, position.offset),
             page.items,
-            previous=sl.sources.Position(offset=page.prev.offset)
-            if page.prev is not None and page.prev.offset is not None
-            else None,
-            next=sl.sources.Position(offset=page.next.offset)
-            if page.next is not None and page.next.offset is not None
-            else None,
+            previous=sl.sources.Position(offset=max(0, position.offset - extent)) if page.prev is not None else None,
+            next=sl.sources.Position(offset=position.offset + len(page.items)) if page.next is not None else None,
             total=page.total,
         )
 
@@ -646,7 +643,6 @@ class BuildBrowseScreen(sd.Screen):
         browser = sp.Browser(
             session,
             key="linked-build",
-            identity=lambda item: str(item.id),
             label=lambda item: f"#{item.id} {item.title}",
             detail=self._detail,
             chronology=sl.sources.Chronology.NEWEST_FIRST,

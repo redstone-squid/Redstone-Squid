@@ -4,7 +4,7 @@ Menu, Decision, and the editors separate their transition rules from event
 delivery. Call ``build_component`` to keep their state in a ComponentDriver, or use
 RouteDriver to encode state into routed controls for a host to recover on each click.
 Tabs and Wizard are directly mountable; their pure definitions live in ``machines``.
-Browser, SearchPicker, and SourceRankedList are components that load data through resources;
+Browser, SearchPicker, and SourceRankedList share operation-backed browsing sessions;
 Agreement is a component that collects approvals from named participants.
 
 Widget commits accept values within the widget's state. Application callbacks decide how

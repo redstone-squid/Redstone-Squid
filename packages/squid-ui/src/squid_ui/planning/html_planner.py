@@ -26,7 +26,7 @@ from squid_ui.factories import is_builtin_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
-from squid_ui.ownership import Uncontrolled
+from squid_ui.pages import PagePosition
 from squid_ui.palette import Palette, Role
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
@@ -71,13 +71,11 @@ from squid_ui.planning.text_allocation import truncate_text
 from squid_ui.planning.text_nodes import html_text
 from squid_ui.presentation import (
     ActivePagers,
-    CursorState,
     CursorUpdate,
     PresentationState,
     SessionUpdate,
 )
 from squid_ui.primitives.constraints import PageOwnership, RoutedPage
-from squid_ui.sources import Position
 from squid_ui.target_types import HtmlTarget
 from squid_ui.text import Localization, TextLike, resolve_text
 
@@ -208,7 +206,7 @@ class _Compiler:
     localization: Localization
     palette: Palette
     presentation: PresentationState
-    positions: Mapping[str, Position] | None
+    positions: Mapping[str, PagePosition] | None
     strict: bool
     bindings: dict[str, ActionBinding] = field(default_factory=dict)
     form_bindings: dict[str, FormBinding] = field(default_factory=dict)
@@ -476,10 +474,16 @@ class _Compiler:
                 controls: tuple[scene.HtmlNode, ...] = ()
                 if node.page_size is not None:
                     extent = max(1, (len(items) + node.page_size - 1) // node.page_size)
-                    position = self._page_position(node.key, extent, stable_fingerprint(items), node.page)
-                    start = position.offset * node.page_size
+                    position = self._page_position(
+                        node.key,
+                        extent,
+                        stable_fingerprint(items),
+                        node.page,
+                        anchors={item.key: index // node.page_size for index, item in enumerate(items) if item.key},
+                    )
+                    start = position.page * node.page_size
                     items = items[start : start + node.page_size]
-                    controls = self._page_controls(node.key, position.offset, extent, node.page)
+                    controls = self._page_controls(node.key, position.page, extent, node.page)
                 return (
                     self.element(
                         scene.HtmlTag.OL if node.ordered else scene.HtmlTag.UL,
@@ -1305,13 +1309,15 @@ class _Compiler:
             ),
         )
 
-    def _page_position(self, key: str, extent: int, fingerprint: str, owner: PageOwnership) -> Position:
-        request = MaterializedCursorRequest(key, extent, fingerprint, owner=owner)
-        position = CursorCoordinator(self.presentation, self.chrome, overrides=self.positions).grant(request).position
-        if extent > 1:
-            self.pagers.append(scene.Pager(key, position.offset, extent, fingerprint))
-            if isinstance(owner, Uncontrolled):
-                self.updates.append(CursorUpdate(key, CursorState(position, extent, fingerprint)))
+    def _page_position(
+        self, key: str, extent: int, fingerprint: str, owner: PageOwnership, *, anchors: Mapping[str, int] | None = None
+    ) -> PagePosition:
+        request = MaterializedCursorRequest(key, extent, fingerprint, anchors=anchors, owner=owner)
+        coordinator = CursorCoordinator(self.presentation, self.chrome, overrides=self.positions)
+        position = coordinator.grant(request).position
+        coordinator.record(request, position)
+        self.pagers.extend(coordinator.pagers)
+        self.updates.extend(update for update in coordinator.updates if isinstance(update, CursorUpdate))
         return position
 
     def _page_controls(
@@ -1324,7 +1330,7 @@ class _Compiler:
     ) -> tuple[scene.HtmlNode, ...]:
         if extent <= 1:
             return () if footer is None else (self.element(scene.HtmlTag.SMALL, self.text(footer(1, 1))),)
-        state = materialized_navigation_state(key, Position(offset=page), extent, self.chrome)
+        state = materialized_navigation_state(key, PagePosition(page=page), extent, self.chrome)
         commit = None if isinstance(owner, RoutedPage) else PageCommit(owner, key, extent, self.presentation)
         controls: list[scene.HtmlNode] = [
             self.element(scene.HtmlTag.SMALL, self.text((footer or self.chrome.page_footer)(page + 1, extent)))
@@ -1396,8 +1402,8 @@ class _Compiler:
         fingerprint = stable_fingerprint((compiled,))
         extent = len(pages)
         position = self._page_position(node.key, extent, fingerprint, node.page)
-        selected = tuple(item for group in pages[position.offset] for item in group)
-        selected += self._page_controls(node.key, position.offset, extent, node.page, node.footer)
+        selected = tuple(item for group in pages[position.page] for item in group)
+        selected += self._page_controls(node.key, position.page, extent, node.page, node.footer)
         return (
             self.element(
                 scene.HtmlTag.DIV,

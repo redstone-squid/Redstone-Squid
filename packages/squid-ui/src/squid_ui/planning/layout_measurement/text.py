@@ -206,3 +206,29 @@ def split_text_node(
     if isinstance(node, Lines):
         return tuple(Text(fragment, overflow=Never(), priority=node.priority) for fragment in fragments)
     return tuple(replace(node, content=fragment, overflow=Never()) for fragment in fragments)
+
+
+def entry_page_anchors(unit: TextUnit) -> dict[str, int]:
+    """Locate keyed entry starts in lossless fragments after text allocation.
+
+    Page breaks omit separators. Find fragments in order in the original text so
+    duplicate entry text and oversized entries retain their actual start positions.
+    """
+    if not isinstance(unit.node, Lines) or not unit.node.keys or unit.fragments is None:
+        return {}
+    starts: list[int] = []
+    offset = 0
+    for fragment in unit.fragments:
+        start = unit.content.index(fragment, offset)
+        starts.append(start)
+        offset = start + len(fragment)
+    anchors: dict[str, int] = {}
+    offset = 0
+    for key, entry in zip(unit.node.keys, unit.node.lines, strict=True):
+        content = entry.steps[0] if isinstance(entry, Alt) else resolved_text(entry)
+        if not content:
+            continue
+        if key:
+            anchors.setdefault(key, max(index for index, start in enumerate(starts) if start <= offset))
+        offset += len(content) + len(unit.join)
+    return anchors

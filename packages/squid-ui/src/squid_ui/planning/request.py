@@ -6,6 +6,7 @@ from typing import Any, TypedDict, override
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.identity import stable_value
 from squid_ui.planning.navigation import PlannedNav
@@ -13,7 +14,6 @@ from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target, TargetIdentity
 from squid_ui.presentation import PresentationState
-from squid_ui.sources import Position
 from squid_ui.text import NEUTRAL, Localization
 
 
@@ -53,7 +53,7 @@ class PlanOptions(StaticPlanOptions, total=False):
     value the planner sees; this is only how a caller's keywords reach it.
     """
 
-    positions: Mapping[str, Position] | None
+    positions: Mapping[str, PagePosition] | None
     session: PresentationState | None
     search_budget: int
 
@@ -78,7 +78,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     palette: Palette = DEFAULT_PALETTE
     strict: bool = False
     reservation: ResourceCost = EMPTY_COST
-    positions: Mapping[str, Position] | None = None
+    positions: Mapping[str, PagePosition] | None = None
     nav: PlannedNav | None = None
     session: PresentationState | None = None
     search_budget: int = DEFAULT_SEARCH_BUDGET

@@ -372,7 +372,11 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                 Alt(f"{marker(index)} {_resolve(item.content, context)}", priority=int(item.importance))
                 for index, item in enumerate(items)
             )
-            return [Lines(lines, overflow=Paginate(key=key, per=page_size, page=page))]
+            return [
+                Lines(
+                    lines, overflow=Paginate(key=key, per=page_size, page=page), keys=tuple(item.key for item in items)
+                )
+            ]
         case Fields(fields=fields):
             embeds = context.limits.embeds
             if Capability.LAYOUT_EMBED_FIELDS in context.capabilities and embeds is not None:

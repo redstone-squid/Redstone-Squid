@@ -1,12 +1,10 @@
 """An explicitly asynchronous ranking component backed by a window source."""
 
 from collections.abc import Callable
+from functools import partial
 from typing import override
 
-from squid_reactivity.core import (
-    state,
-)
-from squid_reactivity.resources import Failed, Pending, Ready, resource
+from squid_reactivity.operations import Failed, Pending
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, heading, note, stack
@@ -24,7 +22,6 @@ from squid_ui.sources import (
     CountPrecision,
     LoadedWindow,
     Position,
-    WindowLoader,
     WindowSource,
     window_footer,
 )
@@ -35,11 +32,9 @@ from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
     LoadingCopy,
-    WindowRequest,
-    last_ready,
-    load_window,
     source_navigation_state,
 )
+from squid_ui_widgets.browsing import BrowseSession, Movement
 
 type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = (
     ContentLike[RenderTargetT, ContextT] | Callable[[int | None], ContentLike[RenderTargetT, ContextT]]
@@ -54,8 +49,6 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
     The source's absolute offset determines row numbers. Header and footer callbacks
     receive None when the source does not supply a total count.
     """
-
-    _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
 
     def __init__(
         self,
@@ -84,40 +77,25 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
         self.header = header
         self.footer = footer
         self.empty = normalize_content(empty, name="SourceRankedList.empty")
-        self.loader = WindowLoader(source, page_size, self.rows.identity_of, initial=initial_position)
+        self.session = BrowseSession(
+            source, page_size=page_size, identity=self.rows.identity_of, initial_position=initial_position
+        )
 
         self.copy = copy
 
-    @resource
-    async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
-        """Load the requested ranked source window."""
-        return await load_window(
-            self.loader,
-            self._request,
-            previous=last_ready(self.loaded.status),
-            subject="source",
-        )
-
     async def refresh(self) -> None:
-        """Refresh around the currently visible anchor."""
-        self._request = WindowRequest()
-        await self.loaded._load()
+        self.session.move("refresh", revision=self.session.revision)
+        if self.session.operation is not None:
+            await self.session.operation
 
-    async def _previous(self, _event: ActionEvent) -> None:
-        """Request the previous source window."""
-        self._request = WindowRequest("previous")
+    async def _move(self, movement: Movement, revision: int, _event: ActionEvent) -> None:
+        self.session.move(movement, revision=revision)
 
-    async def _next(self, _event: ActionEvent) -> None:
-        """Request the next source window."""
-        self._request = WindowRequest("next")
+    async def _seek(self, revision: int, _event: ActionEvent, page: int) -> None:
+        self.session.move("seek", revision=revision, position=Position(offset=page * self.page_size))
 
-    async def _seek(self, _event: ActionEvent, page: int) -> None:
-        """Jump to a zero-based page. Only bound when the source declared it can."""
-        self._request = WindowRequest("seek", Position(offset=page * self.page_size))
-
-    async def _retry(self, _event: ActionEvent) -> None:
-        """Retry the current window request."""
-        self._request = WindowRequest(self._request.operation, self._request.position)
+    async def _retry(self, revision: int, _event: ActionEvent) -> None:
+        self.session.retry(revision=revision)
 
     def _hook(
         self, hook: SourceContentHook[RenderTargetT, ContextT], total: int | None, *, name: str
@@ -129,18 +107,14 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render ready, pending, or failed ranking state."""
-        # Match each status before inspecting previous so type checkers can prove exhaustiveness.
-        match self.loaded.status:
-            case Ready(value=loaded):
-                return self._render_loaded(loaded)
-            case Pending(previous=previous):
-                if previous is None:
-                    return self._status(self.copy.loading)
-                return self._render_loaded(previous.value)
-            case Failed(previous=previous):
-                if previous is None:
-                    return self._status(self.copy.failed, retry=True)
-                return self._render_loaded(previous.value, status=self.copy.failed, retry=True)
+        current = self.session.snapshot
+        operation = self.session.operation
+        status = None if operation is None else operation.status
+        failed = isinstance(status, Failed)
+        message = self.copy.failed if failed else self.copy.loading if isinstance(status, Pending) else None
+        if current is None:
+            return self._status(message or self.copy.loading, retry=failed)
+        return self._render_loaded(current.loaded, status=message, retry=failed)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT, ContextT]:
         """Render a source status without a stale ranking window."""
@@ -148,7 +122,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
             heading(self.title) if self.title is not None else None,
             note(message),
             action_controls(
-                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"),
+                action_control(self.copy.retry, partial(self._retry, self.session.revision), key=f"{self.key}.retry"),
                 key=f"{self.key}.load-actions",
             )
             if retry
@@ -184,9 +158,9 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
             nav(
                 NavigationContext(
                     navigation_state,
-                    self._previous,
-                    self._next,
-                    self._seek if navigation_state.extent is not None else None,
+                    partial(self._move, "previous", self.session.revision),
+                    partial(self._move, "next", self.session.revision),
+                    partial(self._seek, self.session.revision) if navigation_state.extent is not None else None,
                 )
             )
             if navigation_state is not None
@@ -202,7 +176,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
             *(self._hook(self.footer, total, name="footer") if self.footer is not None else ()),
             note(status) if status is not None else None,
             action_controls(
-                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"),
+                action_control(self.copy.retry, partial(self._retry, self.session.revision), key=f"{self.key}.retry"),
                 key=f"{self.key}.load-actions",
             )
             if retry

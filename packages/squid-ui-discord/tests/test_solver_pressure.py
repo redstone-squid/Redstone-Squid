@@ -139,7 +139,7 @@ class TestRegionPagination:
 
         first = sl.planning.plan(document, target=DISCORD_V2_DPY27)
         second = sl.planning.plan(
-            document, target=DISCORD_V2_DPY27, positions={"report": sl.sources.Position(offset=1)}
+            document, target=DISCORD_V2_DPY27, positions={"report": sl.pages.PagePosition(page=1)}
         )
 
         assert first.scene.pagers[0].pages == 3
@@ -160,7 +160,7 @@ class TestRegionPagination:
 
         first = sl.planning.plan(document, target=DISCORD_V2_DPY27)
         second = sl.planning.plan(
-            document, target=DISCORD_V2_DPY27, positions={"chapters": sl.sources.Position(offset=1)}
+            document, target=DISCORD_V2_DPY27, positions={"chapters": sl.pages.PagePosition(page=1)}
         )
 
         assert "## Next" not in self._texts(first)
@@ -180,7 +180,7 @@ class TestRegionPagination:
         document = sl.paged(sl.block(sl.paragraph("x" * 120)), key="prose", chars=50)
 
         pages = [
-            sl.planning.plan(document, target=DISCORD_V2_DPY27, positions={"prose": sl.sources.Position(offset=index)})
+            sl.planning.plan(document, target=DISCORD_V2_DPY27, positions={"prose": sl.pages.PagePosition(page=index)})
             for index in range(3)
         ]
 
@@ -196,7 +196,7 @@ class TestRegionPagination:
             widows=3,
         )
 
-        last = sl.planning.plan(document, target=DISCORD_V2_DPY27, positions={"widows": sl.sources.Position(offset=1)})
+        last = sl.planning.plan(document, target=DISCORD_V2_DPY27, positions={"widows": sl.pages.PagePosition(page=1)})
 
         assert self._texts(last)[:3] == ["2" * 20, "3" * 20, "4" * 20]
 

@@ -9,6 +9,7 @@ from squid_i18n import tr
 from squid_ui import Document, scene, zoned_timestamp
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.primitives import (
@@ -26,7 +27,6 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
-from squid_ui.sources import Position
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Localization, Markup
 from squid_ui_discord import DISCORD_V2_DPY27
@@ -133,7 +133,7 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
             document,
             target=DISCORD_V2_DPY27,
             nav=_nav,
-            positions={"toolbar": Position(offset=page_index)},
+            positions={"toolbar": PagePosition(page=page_index)},
         )
         visible.update(key for key in page_result.bindings if key.startswith("b"))
     assert visible == {f"b{index}" for index in range(41)}
@@ -209,7 +209,7 @@ def test_scene_reports_every_independent_pager() -> None:
             Lines(tuple(f"right {index}" for index in range(6)), overflow=Paginate(key="right", per=2)),
         ),
         target=DISCORD_V2_DPY27,
-        positions={"left": Position(offset=1), "right": Position(offset=2)},
+        positions={"left": PagePosition(page=1), "right": PagePosition(page=2)},
     )
 
     assert [(pager.key, pager.page, pager.pages) for pager in result.scene.pagers] == [

@@ -11,6 +11,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.testing import submit_event
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, interaction_harness
 
@@ -63,7 +64,7 @@ async def test_lookup_searches_picks_resolved_items_and_removes_them() -> None:
 
     await _search(message_root, lookup, "a")
 
-    assert isinstance(lookup.results.status, sl.resources.Ready)
+    assert lookup.session is not None and lookup.session.snapshot is not None
     commit_render(message_root)
     await message_root.dispatch("lookup.results.a", interaction_harness())
     assert lookup.picked == (Entry("a", "Alpha"),)
@@ -105,8 +106,8 @@ async def test_lookup_pages_with_the_query_source_and_renders_no_results() -> No
     await _search(message_root, lookup, "a")
     commit_render(message_root)
     await message_root.dispatch("lookup.next", interaction_harness())
-    assert isinstance(lookup.results.status, sl.resources.Ready)
-    assert lookup.results.value.loaded.window.items == (Entry("c", "Gamma"),)
+    assert lookup.session is not None and lookup.session.snapshot is not None
+    assert lookup.session.snapshot.loaded.window.items == (Entry("c", "Gamma"),)
 
     await _search(message_root, lookup, "missing")
     assert "No results" in str(lookup.render())
@@ -148,20 +149,22 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
     )
 
     async def settle_new() -> None:
-        await lookup.results._load()
+        assert lookup.session is not None and lookup.session.operation is not None
+        await lookup.session.operation
         new_settled.set()
 
-    lookup.query = "old"
+    await lookup._searched(submit_event({"query": "old"}))
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(lookup.results._load)
+        assert lookup.session is not None and lookup.session.operation is not None
+        tasks.start_soon(lookup.session.operation._load)
         await entered["old"].wait()
-        lookup.query = "new"
+        await lookup._searched(submit_event({"query": "new"}))
         tasks.start_soon(settle_new)
         await entered["new"].wait()
         release["new"].set()
         await new_settled.wait()
         release["old"].set()
 
-    assert isinstance(lookup.results.status, sl.resources.Ready)
-    assert lookup.results.value.query == "new"
-    assert lookup.results.value.loaded.window.items == (Entry("new", "new"),)
+    assert lookup.session is not None and lookup.session.snapshot is not None
+    assert lookup.query == "new"
+    assert lookup.session.snapshot.loaded.window.items == (Entry("new", "new"),)

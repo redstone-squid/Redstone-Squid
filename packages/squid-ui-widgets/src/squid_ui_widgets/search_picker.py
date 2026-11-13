@@ -1,16 +1,15 @@
 """Search-then-pick interaction for non-platform domain entities."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
-from typing import Literal, override
+from functools import partial
+from typing import override
 
 from squid_reactivity.core import (
     state,
 )
-from squid_reactivity.resources import Failed, Pending, Ready, resource
+from squid_reactivity.operations import Failed, Pending
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
-from squid_ui.errors import LayoutInvariantError
 from squid_ui.factories import (
     ChildLike,
     action_control,
@@ -28,31 +27,14 @@ from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import ChoiceEvent, ControlDisplay, LayoutNode, Tone
-from squid_ui.sources import LoadedWindow, WindowLoader, WindowSource, window_footer
+from squid_ui.sources import WindowSource, window_footer
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import require_key
 from squid_ui_widgets._window import LoadingCopy
+from squid_ui_widgets.browsing import BrowseSession, BrowseSnapshot, Movement
 
 type SearchProvider[ItemT] = Callable[[str], WindowSource[ItemT]]
 type SearchPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]
-
-
-@dataclass(frozen=True, slots=True)
-class _LookupRequest:
-    """A reload-triggering search window operation."""
-
-    operation: Literal["refresh", "previous", "next"] = "refresh"
-    generation: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class _LookupWindow[ItemT]:
-    """The source, loader, and result retained for one query."""
-
-    query: str
-    source: WindowSource[ItemT]
-    loader: WindowLoader[ItemT]
-    loaded: LoadedWindow[ItemT]
 
 
 SEARCH_LOADING_COPY = LoadingCopy(failed="Could not load results.")
@@ -68,7 +50,7 @@ class SearchPicker[ItemT](Component):
 
     query: str | None = state(None)
     picked: tuple[ItemT, ...] = state((), persist=False, opaque=True)
-    _request: _LookupRequest = state(default=_LookupRequest(), persist=False)
+    session: BrowseSession[ItemT] | None = state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -111,69 +93,30 @@ class SearchPicker[ItemT](Component):
         self.page_size = page_size
         self.copy = copy
 
-    @resource
-    async def results(self) -> _LookupWindow[ItemT]:
-        """Load or move within the current query's source."""
-        query = self.query
-        if query is None:
-            message = "SearchPicker.results was observed before a query was submitted"
-            raise LayoutInvariantError(message)
-        # Read before the branch, not inside it: the request selects the operation on every
-        # run, so a run that happens not to consult it still depends on it.
-        request = self._request
-        current = self.results.status
-        previous = current.previous.value if isinstance(current, Pending | Failed) and current.previous else None
-        if previous is None or previous.query != query:
-            source = self.search(query)
-            loader = WindowLoader(source, self.page_size, self.identity)
-            loaded = await loader.load()
-        else:
-            source = previous.source
-            loader = previous.loader
-            match request.operation:
-                case "previous":
-                    loaded = await loader.previous(previous.loaded)
-                case "next":
-                    loaded = await loader.next(previous.loaded)
-                case _:
-                    loaded = await loader.load(previous=previous.loaded)
-        if loaded is None:
-            message = "lookup window request was superseded before it loaded"
-            raise LayoutInvariantError(message)
-        return _LookupWindow(query, source, loader, loaded)
-
     async def _searched(self, event: SubmitEvent) -> None:
-        """Adopt the trimmed query and request a reload, including for repeated queries."""
         query = str(event.values["query"]).strip()
+        source = self.search(query)
         self.query = query
-        self._request = _LookupRequest(generation=self._request.generation + 1)
+        if self.session is None:
+            self.session = BrowseSession(source, identity=self.identity, page_size=self.page_size)
+        else:
+            self.session.reset(source)
 
-    async def _previous(self, _event: ActionEvent) -> None:
-        """Request the previous result window."""
-        self._request = _LookupRequest("previous", self._request.generation + 1)
+    async def _move(self, movement: Movement, revision: int, _event: ActionEvent) -> None:
+        if self.session is not None:
+            self.session.move(movement, revision=revision)
 
-    async def _next(self, _event: ActionEvent) -> None:
-        """Request the next result window."""
-        self._request = _LookupRequest("next", self._request.generation + 1)
+    async def _retry(self, revision: int, _event: ActionEvent) -> None:
+        if self.session is not None:
+            self.session.retry(revision=revision)
 
-    async def _retry(self, _event: ActionEvent) -> None:
-        """Retry the current result operation."""
-        self._request = _LookupRequest(self._request.operation, self._request.generation + 1)
-
-    def _visible(self) -> _LookupWindow[ItemT] | None:
-        """Return the current or stale result window available for input."""
-        current = self.results.status
-        if isinstance(current, Ready):
-            return current.value
-        if isinstance(current, Pending | Failed) and current.previous is not None:
-            return current.previous.value
-        return None
-
-    async def _selected(self, event: ChoiceEvent) -> None:
+    async def _selected(self, revision: int, event: ChoiceEvent) -> None:
         """Add the single visible selection within configured bounds."""
         if len(event.selected) != 1:
             return
-        current = self._visible()
+        if self.session is None or self.session.revision != revision:
+            return
+        current = self.session.snapshot
         if current is None:
             return
         item = next(
@@ -242,41 +185,41 @@ class SearchPicker[ItemT](Component):
             key=f"{self.key}.search",
             on_submit=self._searched,
         )
-        if self.query is None:
+        if self.session is None:
             return stack(heading(chrome.search), *self._picked_nodes(), search_control)
 
-        # Match each status before inspecting previous so type checkers can prove exhaustiveness.
-        match self.results.status:
-            case Ready(value=current):
-                body = self._loaded_nodes(current)
-            case Pending(previous=previous):
-                body = (note(self.copy.loading),) if previous is None else self._loaded_nodes(previous.value)
-            case Failed(previous=previous):
-                body = (
-                    self._failure()
-                    if previous is None
-                    else self._loaded_nodes(previous.value, status_text=self.copy.failed, retry=True)
-                )
+        current = self.session.snapshot
+        operation = self.session.operation
+        status = None if operation is None else operation.status
+        failed = isinstance(status, Failed)
+        message = self.copy.failed if failed else self.copy.loading if isinstance(status, Pending) else None
+        if current is None:
+            body = self._failure() if failed else (note(self.copy.loading),)
+        else:
+            body = self._loaded_nodes(current, status_text=message, retry=failed)
         return stack(heading(chrome.search), *self._picked_nodes(), search_control, *body)
 
     def _failure(self) -> tuple[LayoutNode, ...]:
         """Render a failed search with no stale results."""
+        assert self.session is not None
         return (
             note(self.copy.failed),
             action_controls(
-                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, partial(self._retry, self.session.revision), key=f"{self.key}.retry"),
+                key=f"{self.key}.retry-row",
             ),
         )
 
     def _loaded_nodes(
         self,
-        current: _LookupWindow[ItemT],
+        current: BrowseSnapshot[ItemT],
         *,
         status_text: TextLike | None = None,
         retry: bool = False,
     ) -> tuple[ChildLike, ...]:
         """Render one result window with navigation and status."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
+        assert self.session is not None
         window = current.loaded.window
         entries = tuple(
             choice(
@@ -290,7 +233,7 @@ class SearchPicker[ItemT](Component):
             choices(
                 *entries,
                 key=f"{self.key}.results",
-                selection=controlled((), self._selected),
+                selection=controlled((), partial(self._selected, self.session.revision)),
                 minimum=1,
                 maximum=1,
             )
@@ -301,23 +244,29 @@ class SearchPicker[ItemT](Component):
             action_controls(
                 action_control(
                     chrome.previous,
-                    self._previous,
+                    partial(self._move, "previous", self.session.revision),
                     key=f"{self.key}.previous",
-                    available=current.source.capabilities.backward and window.has_previous,
+                    available=self.session.source.capabilities.backward and window.has_previous,
                 ),
-                action_control(chrome.next, self._next, key=f"{self.key}.next", available=window.has_next),
+                action_control(
+                    chrome.next,
+                    partial(self._move, "next", self.session.revision),
+                    key=f"{self.key}.next",
+                    available=window.has_next,
+                ),
                 key=f"{self.key}.navigation",
             )
             if window.has_previous or window.has_next
             else None
         )
-        footer = window_footer(chrome, current.source, current.loaded, self.page_size)
+        footer = window_footer(chrome, self.session.source, current.loaded, self.page_size)
         return (
             picker,
             navigation,
             note(status_text) if status_text is not None else None,
             action_controls(
-                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, partial(self._retry, self.session.revision), key=f"{self.key}.retry"),
+                key=f"{self.key}.retry-row",
             )
             if retry
             else None,

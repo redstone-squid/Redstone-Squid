@@ -16,7 +16,7 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
-from squid.core.pagination import Page, PageSelector
+from squid.core.pagination import Page, PageAnchor, PageSelector
 from squid.permissions.domain import PermissionNode
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle, RecordGap
@@ -464,3 +464,30 @@ async def test_video_form_is_inside_schematic_tools() -> None:
         await ui.press(ui.key_for("schematic-tools"))
         assert "Schematic info" not in ui.texts()
         assert "Render video" not in ui.texts()
+
+
+async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offset_source() -> None:
+    screen = _screen(initial_id=None)
+    queries = cast(AsyncMock, screen._queries)
+    queries.list_page.side_effect = (
+        Page(
+            items=tuple(
+                DoorBuild(id=identifier, submission_status=Status.CONFIRMED) for identifier in range(20, 12, -1)
+            ),
+            total=9,
+            next=PageAnchor(after_id=13),
+            prev=None,
+        ),
+        Page(
+            items=(DoorBuild(id=12, submission_status=Status.CONFIRMED),), total=9, next=None, prev=PageAnchor(offset=0)
+        ),
+    )
+    queries.get.side_effect = lambda identifier: DoorBuild(id=identifier, submission_status=Status.CONFIRMED)
+    async with stage(screen, owner=object()) as ui:
+        await ui.select(ui.key_for("builds.open"), ["13"])
+        assert "Build #13" in ui.texts()
+        await ui.press(ui.key_for("builds.item-next"))
+        assert "Build #12" in ui.texts()
+        queries.list_page.assert_awaited_with(
+            statuses=frozenset({Status.CONFIRMED, Status.PENDING}), selector=PageSelector(offset=8), page_size=8
+        )

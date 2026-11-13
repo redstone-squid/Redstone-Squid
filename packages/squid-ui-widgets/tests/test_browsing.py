@@ -134,3 +134,78 @@ async def test_forward_only_sources_still_allow_local_previous_item() -> None:
     session.move("previous-item", revision=session.revision)
     assert session.focused_item == "a"
     assert not session.can_step(-1)
+
+
+@pytest.mark.parametrize("page_size", [1, 2, 4])
+@pytest.mark.parametrize("size", [0, 1, 7])
+async def test_traversal_visits_each_item_once_in_both_directions(size: int, page_size: int) -> None:
+    items = tuple(str(index) for index in range(size))
+    session = BrowseSession(list_source(items), identity=str, page_size=page_size)
+    await settle(session)
+    if not items:
+        assert session.focus is None
+        assert not session.can_step(-1) and not session.can_step(1)
+        return
+    session.open(items[0], revision=session.revision)
+    forward = [session.focused_item]
+    while session.can_step(1):
+        session.move("next-item", revision=session.revision)
+        await settle(session)
+        forward.append(session.focused_item)
+    backward = [session.focused_item]
+    while session.can_step(-1):
+        session.move("previous-item", revision=session.revision)
+        await settle(session)
+        backward.append(session.focused_item)
+    assert forward == list(items)
+    assert backward == list(reversed(items))
+
+
+async def test_refresh_retains_the_detail_visit_until_the_focused_item_is_removed() -> None:
+    class MutableSource:
+        capabilities = SourceCapabilities(backward=True, offsets=True)
+        items: tuple[str, ...] = ("a", "b")
+
+        async def fetch(self, position: Position, extent: int) -> Window[str]:
+            return Window(Position(), self.items)
+
+    source = MutableSource()
+    session = BrowseSession(source, identity=str)
+    await settle(session)
+    session.open("b", revision=session.revision)
+    visit = session.visit
+    session.move("refresh", revision=session.revision)
+    await settle(session)
+    assert session.focused_item == "b" and session.visit == visit
+    source.items = ("a",)
+    session.move("refresh", revision=session.revision)
+    await settle(session)
+    assert session.snapshot is not None
+    assert session.snapshot.focus is None and session.snapshot.notice == "removed"
+
+
+@pytest.mark.parametrize("result", ["next", "end", "cycle", "overlap"])
+async def test_boundary_fetches_handle_empty_and_overlapping_windows(result: str) -> None:
+    class SparseSource:
+        capabilities = SourceCapabilities()
+
+        async def fetch(self, position: Position, extent: int) -> Window[str]:
+            if position.anchor is None:
+                return Window(Position(), ("a",), next=Position("gap"))
+            if position.anchor == "gap":
+                continuation = None if result == "end" else Position("gap" if result == "cycle" else "b")
+                return Window(Position("gap"), ("a",) if result == "overlap" else (), next=continuation)
+            return Window(Position("b"), ("b",))
+
+    session = BrowseSession(SparseSource(), identity=str)
+    await settle(session)
+    session.open("a", revision=session.revision)
+    session.move("next-item", revision=session.revision)
+    if result == "cycle":
+        with pytest.raises(ValueError, match="repeated an address"):
+            await settle(session)
+        assert session.focused_item == "a"
+    else:
+        await settle(session)
+        assert session.focused_item == ("a" if result == "end" else "b")
+        assert not session.can_step(1)

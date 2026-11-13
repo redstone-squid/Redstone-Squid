@@ -7,12 +7,12 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
 from squid_ui.ownership import Controlled, Uncontrolled
+from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, Target, plan
 from squid_ui.planning.navigation import default_nav, page_select_nav
 from squid_ui.presentation import CursorUpdate, PresentationState
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import RoutedPage
-from squid_ui.sources import Position
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
 from squid_ui_widgets import testing as wt
 
@@ -21,7 +21,7 @@ from squid_ui_widgets import testing as wt
 @pytest.mark.parametrize("page, expected", [(0, 0), (99, 2), (-1, 2)])
 def test_routed_pages_ignore_session_positions_and_round_trip(target: Target, page: int, expected: int) -> None:
     session = PresentationState()
-    session.move_cursor("rows", Position(offset=1))
+    session.move_cursor("rows", PagePosition(page=1))
     result = plan(
         sl.bullets(
             *(f"entry {index}" for index in range(5)),
@@ -32,7 +32,7 @@ def test_routed_pages_ignore_session_positions_and_round_trip(target: Target, pa
         ),
         target=target,
         session=session,
-        positions={"rows": Position(offset=1)},
+        positions={"rows": PagePosition(page=1)},
         nav=page_select_nav,
     )
     assert result.scene.pagers[0].page == expected

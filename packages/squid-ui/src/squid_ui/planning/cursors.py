@@ -16,6 +16,7 @@ from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ownership import Controlled
+from squid_ui.pages import PagePosition, PagePositionPolicy, RevealPage, resolve_page_position
 from squid_ui.planning.navigation import PagerNav
 from squid_ui.presentation import (
     ActivePagers,
@@ -26,7 +27,6 @@ from squid_ui.presentation import (
 )
 from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership, RoutedPage, resolve_page
 from squid_ui.primitives.nodes import Footer, Node
-from squid_ui.sources import Direction, Position, PositionPolicy, resolve_position
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +42,7 @@ class MaterializedCursorRequest:
 
 @dataclass(frozen=True, slots=True)
 class CursorGrant:
-    position: Position
+    position: PagePosition
     extent: int
 
 
@@ -67,8 +67,8 @@ class CursorCoordinator:
     session: PresentationState
     chrome: Chrome
     nav: PagerNav | None = None
-    overrides: Mapping[str, Position] | None = None
-    policy: PositionPolicy = resolve_position
+    overrides: Mapping[str, PagePosition] | None = None
+    policy: PagePositionPolicy = resolve_page_position
     _pagers: list[scene.Pager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)
@@ -81,16 +81,21 @@ class CursorCoordinator:
         extent = max(1, request.extent)
         owner = request.owner
         if isinstance(owner, Controlled | RoutedPage):
-            return CursorGrant(Position(offset=resolve_page(owner.value, extent)), extent)
+            return CursorGrant(PagePosition(page=resolve_page(owner.value, extent)), extent)
         cursor = self.session.cursor(request.key)
         anchor = cursor.position.anchor
-        anchored_offset = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
+        anchored_page = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
+        override = None if self.overrides is None else self.overrides.get(request.key)
+        if isinstance(owner, RevealPage) and owner.request != cursor.reveal_request and request.anchors is not None:
+            revealed = request.anchors.get(owner.anchor)
+            if revealed is not None and override is None:
+                override = PagePosition(owner.anchor, revealed)
         position = self.policy(
-            override=None if self.overrides is None else self.overrides.get(request.key),
-            anchored=Position(anchor, anchored_offset) if anchored_offset is not None else None,
+            override=override,
+            anchored=PagePosition(anchor, anchored_page) if anchored_page is not None else None,
             stale=bool(cursor.fingerprint and cursor.fingerprint != request.fingerprint),
             stored=cursor.position if request.key in self.session.cursors else None,
-            initial=Position(offset=resolve_page(owner.initial, extent)),
+            initial=PagePosition(page=resolve_page(owner.initial, extent)),
             upper_bound=extent - 1,
         )
         return CursorGrant(position, extent)
@@ -98,7 +103,7 @@ class CursorCoordinator:
     def record(
         self,
         request: MaterializedCursorRequest,
-        position: Position,
+        position: PagePosition,
         *,
         anchor: str | None = None,
     ) -> None:
@@ -108,20 +113,31 @@ class CursorCoordinator:
             raise LayoutInvariantError(message)
         self._granted.add(request.key)
         extent = max(1, request.extent)
-        if extent <= 1:
+        if extent <= 1 and not isinstance(request.owner, RevealPage):
             return
-        resolved = Position(anchor, position.offset, Direction.AROUND)
-        self._pagers.append(scene.Pager(request.key, resolved.offset, extent, request.fingerprint))
+        resolved = PagePosition(anchor, position.page)
+        if extent > 1:
+            self._pagers.append(scene.Pager(request.key, resolved.page, extent, request.fingerprint))
         if not isinstance(request.owner, Controlled | RoutedPage):
-            self._updates.append(CursorUpdate(request.key, CursorState(resolved, extent, request.fingerprint)))
+            self._updates.append(
+                CursorUpdate(
+                    request.key,
+                    CursorState(
+                        resolved,
+                        extent,
+                        request.fingerprint,
+                        request.owner.request if isinstance(request.owner, RevealPage) else None,
+                    ),
+                )
+            )
 
-    def controls(self, key: str, position: Position, extent: int, owner: PageOwnership = FIRST_PAGE) -> list[Node]:
+    def controls(self, key: str, position: PagePosition, extent: int, owner: PageOwnership = FIRST_PAGE) -> list[Node]:
         """Build mandatory numeric chrome and optional navigation for a cursor."""
         if extent <= 1:
             return []
-        result: list[Node] = [Footer(self.chrome.page_footer(position.offset + 1, extent), overflow=Never())]
+        result: list[Node] = [Footer(self.chrome.page_footer(position.page + 1, extent), overflow=Never())]
         if self.nav is not None:
-            result.extend(self.nav(key, position.offset, extent, self.chrome, owner))
+            result.extend(self.nav(key, position.page, extent, self.chrome, owner))
         return result
 
     @property

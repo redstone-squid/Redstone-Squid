@@ -7,7 +7,7 @@ requests into fetches and discards results overtaken by a newer request.
 """
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import blake2s
 from typing import Protocol
@@ -38,54 +38,6 @@ class Position:
 
 
 ORIGIN = Position()
-
-
-def resolve_position(
-    *,
-    override: Position | None = None,
-    anchored: Position | None = None,
-    stale: bool = False,
-    stored: Position | None = None,
-    initial: Position = ORIGIN,
-    fallback: Position = ORIGIN,
-    upper_bound: int | None = None,
-) -> Position:
-    """Choose a position, then clamp its offset to the available bounds.
-
-    An override wins over an anchor. Otherwise stale content uses the fallback;
-    unchanged content uses the stored position or the initial position.
-    """
-    if override is not None:
-        selected = override
-    elif anchored is not None:
-        selected = anchored
-    elif stale:
-        selected = fallback
-    elif stored is not None:
-        selected = stored
-    else:
-        selected = initial
-
-    offset = max(0, selected.offset)
-    if upper_bound is not None:
-        offset = min(offset, max(0, upper_bound))
-    return replace(selected, offset=offset)
-
-
-class PositionPolicy(Protocol):
-    """A callable selecting a position for navigation or content changes."""
-
-    def __call__(
-        self,
-        *,
-        override: Position | None = None,
-        anchored: Position | None = None,
-        stale: bool = False,
-        stored: Position | None = None,
-        initial: Position = ORIGIN,
-        fallback: Position = ORIGIN,
-        upper_bound: int | None = None,
-    ) -> Position: ...
 
 
 class Chronology(StrEnum):
@@ -246,7 +198,6 @@ class WindowLoader[ItemT]:
         identity: Callable[[ItemT], str],
         *,
         initial: Position = ORIGIN,
-        policy: PositionPolicy = resolve_position,
     ) -> None:
         if extent < 1:
             message = "WindowLoader.extent must be at least 1"
@@ -254,8 +205,7 @@ class WindowLoader[ItemT]:
         self.source = source
         self.extent = extent
         self.identity = identity
-        self.initial = policy(initial=initial)
-        self.policy = policy
+        self.initial = initial
         self._request_token = 0
 
     async def load(
@@ -269,13 +219,7 @@ class WindowLoader[ItemT]:
         Validate the latest result against the requested extent and source capabilities.
         The source's resolved position is authoritative, including when its anchor moved.
         """
-        previous_position = None if previous is None else previous.position
-        requested = self.policy(
-            override=position,
-            anchored=previous_position if position is None and previous_position is not None else None,
-            stored=previous_position,
-            initial=self.initial,
-        )
+        requested = position if position is not None else previous.position if previous is not None else self.initial
         self._request_token += 1
         token = self._request_token
         fetched = await self.source.fetch(requested, self.extent)
@@ -284,16 +228,6 @@ class WindowLoader[ItemT]:
         self._validate(fetched)
 
         fingerprint = window_fingerprint(fetched.items, self.identity)
-        if position is None and previous is not None:
-            identities = tuple(self.identity(item) for item in fetched.items)
-            resolved = self.policy(
-                anchored=fetched.position if previous.position.anchor in identities else None,
-                stale=fingerprint != previous.fingerprint,
-                stored=fetched.position,
-                initial=fetched.position,
-                fallback=fetched.position,
-            )
-            fetched = replace(fetched, position=resolved)
         return LoadedWindow(fetched, fingerprint)
 
     async def next(self, current: LoadedWindow[ItemT]) -> LoadedWindow[ItemT] | None:
@@ -361,11 +295,9 @@ __all__ = [
     "Direction",
     "LoadedWindow",
     "Position",
-    "PositionPolicy",
     "SourceCapabilities",
     "Window",
     "WindowLoader",
     "WindowSource",
     "list_source",
-    "resolve_position",
 ]

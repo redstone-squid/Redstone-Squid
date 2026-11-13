@@ -1,4 +1,4 @@
-"""Resource-backed master-detail browsing."""
+"""Present a browsing session as an overview or focused detail."""
 
 from collections.abc import Callable, Sequence
 from functools import partial
@@ -22,12 +22,14 @@ from squid_ui.factories import (
     stack,
 )
 from squid_ui.interactions import ActionEvent
+from squid_ui.pages import RevealPage
 from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     MountNavNode,
     NavigationContext,
     default_nav,
 )
+from squid_ui.primitives.constraints import FIRST_PAGE
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
@@ -74,7 +76,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         source: WindowSource[ItemT] | BrowseSession[ItemT],
         *,
         key: str = "browser",
-        identity: Callable[[ItemT], str],
+        identity: Callable[[ItemT], str] | None = None,
         label: Callable[[ItemT], TextLike],
         detail: BrowserDetail[ItemT, RenderTargetT, ContextT],
         summary: Callable[[ItemT], TextLike] | None = None,
@@ -87,14 +89,16 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         chronology: Chronology | None = None,
     ) -> None:
         self.key = require_key(key, name="Browser.key")
-        if page_size < 1 or page_size > 25:
+        if isinstance(source, BrowseSession):
+            self.session = source
+        else:
+            if identity is None:
+                message = "Browser requires identity when given a source"
+                raise ValueError(message)
+            self.session = BrowseSession(source, identity=identity, page_size=page_size)
+        if not 1 <= self.session.page_size <= 25:
             message = "Browser.page_size must be between 1 and 25"
             raise ValueError(message)
-        self.session = (
-            source
-            if isinstance(source, BrowseSession)
-            else BrowseSession(source, identity=identity, page_size=page_size)
-        )
         self.identity = self.session.identity
         self.label = label
         self.detail = detail
@@ -195,8 +199,17 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         if items:
             listing = (
                 bullets(
-                    *(bullet(self.summary(item) if self.summary is not None else self.label(item)) for item in items),
+                    *(
+                        bullet(
+                            self.summary(item) if self.summary is not None else self.label(item),
+                            key=self.identity(item),
+                        )
+                        for item in items
+                    ),
                     key=f"{self.key}.items",
+                    page=RevealPage(anchor=current.reveal, request=str(self.session.visit))
+                    if (current := self.session.snapshot) is not None and current.reveal is not None
+                    else FIRST_PAGE,
                 ),
             )
             picker = choices(

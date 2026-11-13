@@ -57,6 +57,7 @@ class BrowseSession[ItemT](Reactive):
         identity: Callable[[ItemT], str],
         page_size: int = 10,
         initial: LoadedWindow[ItemT] | None = None,
+        initial_position: Position | None = None,
     ) -> None:
         if page_size < 1:
             msg = "BrowseSession.page_size must be positive"
@@ -65,7 +66,7 @@ class BrowseSession[ItemT](Reactive):
         self.identity = identity
         self.page_size = page_size
         if initial is None:
-            self.move("refresh", revision=self.revision)
+            self._start(_Request(source, None, "refresh", initial_position))
         else:
             self.replace(initial)
 

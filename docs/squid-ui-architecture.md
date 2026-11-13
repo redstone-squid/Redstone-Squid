@@ -600,13 +600,27 @@ comes from the event, and `ActionMode.EXCLUSIVE` serializes approval and withdra
 hosts should mount it under `sd.Users(...)`; the component repeats membership validation
 as a frontend-neutral safety boundary and calls its resolution hook once at the threshold.
 
-`SourceRankedList` is intentionally outside the two-shell catalogue. It is an async component whose
-visible resource owns one immutable `LoadedWindow`; `WindowLoader` owns source-position ordering. Its
-`SourceCapabilities` determine whether navigation is backward, whether numeric ranges are meaningful,
-and whether totals are absent, approximate, or exact. A source always returns its resolved `Position`,
-so anchor fallback is explicit. The message root's one `NavigationContext` factory renders controls for both
-these windows and materialized planner cursors. Pending navigation retains the previous window, and a
-failed request renders that stale window with retry chrome.
+`Browser`, `SourceRankedList`, and `SearchPicker` share `BrowseSession`. Its accepted
+snapshot owns a loaded source window and optional focused identity. Movement commands
+carry the displayed revision; an operation fetches a candidate, then publishes it in a
+fresh action only if that revision is still current. Back, opening another item, or
+resetting the collection supersedes outstanding work. Pending and failed movements retain
+the accepted window; retry keeps the original destination. Search picks remain separate
+from focus and survive query changes.
+
+Sources return their resolved `Position` and explicit `previous`/`next` addresses.
+`WindowLoader` follows those addresses without reconstructing them from item counts.
+Capabilities determine which directions, numeric ranges, totals, and jumps are supported.
+A new source instance represents changed filters or ordering. Mutable sources own anchor
+recovery and consistency; stable item keys alone do not provide snapshot isolation.
+
+`Browser` prepares detail content through an atomic resource for each focus visit.
+Its detail factory must be safe to retry. Refreshing the same focus retains the detail
+component, which owns refresh of its domain data. The planner only slices already loaded
+content. `pages.PagePosition` addresses layout pages; it is distinct from a source address.
+For keyed lists, `pages.RevealPage(anchor=..., request=...)` requests the page containing an
+entry after measurement. Change the request token for a new reveal. Consumption is staged
+with the cursor for successful delivery, so later manual page turns are retained.
 
 Route state still has to fit the target's custom-id budget. Large domain drafts should be represented
 by a compact stored identifier; the shell deliberately does not hide a database or persistence
@@ -1113,9 +1127,8 @@ All use the same `NavFactory`.
 A `NavFactory` receives `on_previous`, `on_next`, and `on_seek`. `on_seek` takes a zero-based
 page and is present only where the cursor can address one: always for a materialized cursor,
 and for a source window only when it declares `SourceCapabilities.jumpable` with an exact count.
-It is a page rather than a `Position` because `NavigationState.position.offset` is a page index
-for a materialized cursor but an item offset for a source window; `NavigationState.page` is the
-comparable one, and pairs with `extent`. The stock `default_nav` draws no jump control, since a
+`NavigationState.page` is a page number and pairs with `extent`. Source addresses remain
+with the browsing session and never enter the navigation factory. The stock `default_nav` draws no jump control, since a
 select costs a whole component row on every paginator in the process; `sd.page_select_nav`
 opts into one, offering every page when there are at most 25 and an evenly spaced ladder across
 the whole range beyond that.

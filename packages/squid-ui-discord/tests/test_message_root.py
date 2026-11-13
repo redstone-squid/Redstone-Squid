@@ -809,7 +809,7 @@ class TestRenderAndWire:
 
         assert message_root.presentation.cursor("toolbar").extent > 1
         await message_root.dispatch("__cursor_next.toolbar", interaction_harness())
-        assert message_root.presentation.cursor("toolbar").position.offset == 1
+        assert message_root.presentation.cursor("toolbar").position.page == 1
 
     async def test_click_mutates_state_and_edits(self):
         component = Counter()
@@ -2051,7 +2051,7 @@ class TestDeliveryAtomicity:
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
         commit_render(message_root)
         await message_root.dispatch("__cursor_next.entries", interaction_harness())
-        assert message_root.presentation.cursor("entries").position.offset == 1
+        assert message_root.presentation.cursor("entries").position.page == 1
 
         live_generation = message_root.generation
         # Compare mapping identity: snapshot handler keys would miss a premature replacement.
@@ -2068,7 +2068,7 @@ class TestDeliveryAtomicity:
         assert message_root._candidates.handlers is live_handlers
         assert message_root.pending
         assert mounted == []
-        assert message_root.presentation.cursor("entries").position.offset == 1
+        assert message_root.presentation.cursor("entries").position.page == 1
         # Discarded planning updates must leave strategy state unchanged along with cursors.
         assert message_root.presentation.strategies == live_strategies
 
@@ -2086,7 +2086,7 @@ class TestDeliveryAtomicity:
         interaction = interaction_harness()
         await message_root.dispatch("__cursor_next.entries", interaction, generation=live_generation)
 
-        assert message_root.presentation.cursor("entries").position.offset == 1
+        assert message_root.presentation.cursor("entries").position.page == 1
         written = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
         assert "Page 2 of 3" in written
         assert not message_root.pending

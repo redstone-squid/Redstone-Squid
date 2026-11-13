@@ -31,6 +31,7 @@ from squid_storage import (
     TopicBridgeSnapshot,
 )
 from squid_ui.errors import SquidUiError
+from squid_ui.pages import PagePosition
 from squid_ui.runtime.component import AnyComponent, render_component_tree
 from squid_ui.runtime.presentation_state import (
     CursorState,
@@ -39,7 +40,6 @@ from squid_ui.runtime.presentation_state import (
     SelectionState,
     StrategyState,
 )
-from squid_ui.sources import Direction, Position
 from squid_ui_discord.message_root import AnyMessageRoot, MessageRoot
 from squid_ui_discord.sessions import SessionKey
 from squid_ui_discord.target import DISCORD_V2_DPY27
@@ -391,11 +391,12 @@ def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
             key: {
                 "position": {
                     "anchor": cursor.position.anchor,
-                    "offset": cursor.position.offset,
-                    "direction": cursor.position.direction.value,
+                    "offset": cursor.position.page,
+                    "direction": "around",
                 },
                 "extent": cursor.extent,
                 "fingerprint": cursor.fingerprint,
+                "reveal_request": cursor.reveal_request,
             }
             for key, cursor in state.cursors.items()
         },
@@ -421,7 +422,7 @@ def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
     return PresentationSnapshot(
         cursors={
             key: CursorState(
-                Position(
+                PagePosition(
                     optional_string(
                         position := require_object(
                             (item := require_object(value, "cursor state")).get("position"), "cursor position"
@@ -430,10 +431,10 @@ def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
                         description="cursor position field",
                     ),
                     require_integer(position, "offset", description="cursor position field"),
-                    Direction(require_string(position, "direction", description="cursor position field")),
                 ),
                 require_integer(item, "extent", description="cursor field"),
                 require_string(item, "fingerprint", description="cursor field"),
+                optional_string(item, "reveal_request", description="cursor field"),
             )
             for key, value in cursors.items()
         },

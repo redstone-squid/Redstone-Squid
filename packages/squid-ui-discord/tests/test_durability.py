@@ -11,8 +11,8 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import Component, state
+from squid_ui.pages import PagePosition
 from squid_ui.primitives import Lines, Paginate, Text
-from squid_ui.sources import Position
 from squid_ui_discord import Everyone, MessageRoot, SessionKey
 from squid_ui_discord.durability import (
     ComponentRegistry,
@@ -189,7 +189,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     root.count = 7
     root.child.entries = (*root.child.entries, "entry 6")
     commit_render(message_root)
-    message_root.presentation.move_cursor("child.items", Position(offset=2))
+    message_root.presentation.move_cursor("child.items", PagePosition(page=2))
 
     snapshot = _registry().capture(message_root, "counter")
     encoded = MessageRootStateCodec.dumps(snapshot)
@@ -200,7 +200,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     assert isinstance(restored_root, DurableRoot)
     assert restored_root.count == 7
     assert restored_root.child.entries[-1] == "entry 6"
-    assert restored.presentation.cursor("child.items").position.offset == 2
+    assert restored.presentation.cursor("child.items").position.page == 2
     assert "transient" not in next(component.state for component in snapshot.components if component.path == "$")
     assert encoded == MessageRootStateCodec.dumps(MessageRootStateCodec.loads(encoded))
 
@@ -355,7 +355,7 @@ def _shared_snapshot(*, shared: bool = True) -> MessageRootState:
     root.left.entries = ("saved", "two", "three", "four")
     message_root = MessageRoot(root, access=Everyone(), timeout=None)
     commit_render(message_root)
-    message_root.presentation.move_cursor("left.items", Position(offset=1))
+    message_root.presentation.move_cursor("left.items", PagePosition(page=1))
     registry = ComponentRegistry()
     registry.register("shared", version=1, factory=SharedDurableRoot)
     snapshot = registry.capture(message_root, "shared")
@@ -377,8 +377,8 @@ def test_shared_state_and_independent_cursors_round_trip() -> None:
     assert isinstance(restored.component, SharedDurableRoot)
     assert restored.component.left is restored.component.right
     assert restored.component.left.entries[0] == "saved"
-    assert restored.presentation.cursor("left.items").position.offset == 1
-    assert restored.presentation.cursor("right.items").position.offset == 0
+    assert restored.presentation.cursor("left.items").position.page == 1
+    assert restored.presentation.cursor("right.items").position.page == 0
     restored.runtime.finish()
 
 

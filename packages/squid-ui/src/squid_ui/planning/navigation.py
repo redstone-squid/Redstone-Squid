@@ -20,6 +20,7 @@ from squid_ui.context import ContextKey
 from squid_ui.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions import ActionEvent, PressEvent, SelectionEvent
 from squid_ui.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
+from squid_ui.pages import PagePosition
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.constraints import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
@@ -35,7 +36,7 @@ from squid_ui.primitives.nodes import (
     Sep,
     Thumbnail,
 )
-from squid_ui.sources import CountPrecision, Position
+from squid_ui.sources import CountPrecision
 from squid_ui.text import TextLike
 
 MATERIALIZED_PREVIOUS_KEY = "__cursor_previous"
@@ -75,7 +76,7 @@ class PageCommit(_HandlerComposition):
             case Uncontrolled():
                 # No explicit acknowledgement: the frontend answers the press by editing the
                 # message in place, so a page turn costs one response instead of two.
-                self.session.move_cursor(self.key, Position(offset=page))
+                self.session.move_cursor(self.key, PagePosition(page=page))
                 event.invalidate()
 
 
@@ -124,7 +125,6 @@ class NavigationState:
     """Proven cursor facts with no interaction handlers."""
 
     key: str
-    position: Position
     has_previous: bool
     has_next: bool
     backward: bool
@@ -135,11 +135,7 @@ class NavigationState:
     extent: int | None = None
     """How many pages there are, when that is known."""
     page: int | None = None
-    """Which page is visible, zero-based.
-
-    Not `position.offset`: that is a page index for a materialized cursor but an *item*
-    offset for a source window, so only this is comparable against `extent`.
-    """
+    """Zero-based page number, when known; source addresses remain with their owner."""
     visible_range: tuple[int, int] | None = None
     total: int | None = None
     count: CountPrecision = CountPrecision.NONE
@@ -167,10 +163,6 @@ class NavigationContext:
     @property
     def key(self) -> str:
         return self.state.key
-
-    @property
-    def position(self) -> Position:
-        return self.state.position
 
     @property
     def has_previous(self) -> bool:
@@ -269,20 +261,19 @@ def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     return (navigation_controls(context),) if control is None else (navigation_controls(context), control)
 
 
-def materialized_navigation_state(key: str, position: Position, extent: int, chrome: Chrome) -> NavigationState:
+def materialized_navigation_state(key: str, position: PagePosition, extent: int, chrome: Chrome) -> NavigationState:
     """Build the navigation facts shared by every materialized slicer."""
     return NavigationState(
         key=key,
-        position=position,
-        has_previous=position.offset > 0,
-        has_next=position.offset < extent - 1,
+        has_previous=position.page > 0,
+        has_next=position.page < extent - 1,
         backward=True,
         previous_label=chrome.previous,
         next_label=chrome.next,
         previous_key=f"{MATERIALIZED_PREVIOUS_KEY}.{key}",
         next_key=f"{MATERIALIZED_NEXT_KEY}.{key}",
         extent=extent,
-        page=position.offset,
+        page=position.page,
         seek_key=f"{MATERIALIZED_SEEK_KEY}.{key}",
         seek_label=chrome.jump_to_page,
         page_option=chrome.page_option,
@@ -300,7 +291,7 @@ class PagerNav:
         self, key: str, page: int, extent: int, chrome: Chrome, owner: PageOwnership = FIRST_PAGE
     ) -> Sequence[NavNode]:
         """Return controls for ``page`` of ``extent`` that send page turns to ``owner``."""
-        state = materialized_navigation_state(key, Position(offset=page), extent, chrome)
+        state = materialized_navigation_state(key, PagePosition(page=page), extent, chrome)
         if isinstance(owner, RoutedPage):
             return self.factory(
                 NavigationContext(

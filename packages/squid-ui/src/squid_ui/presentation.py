@@ -9,16 +9,17 @@ frontends apply those updates after successful delivery.
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from squid_ui.sources import ORIGIN, Direction, Position, resolve_position
+from squid_ui.pages import FIRST_POSITION, PagePosition, resolve_page_position
 
 
 @dataclass(frozen=True, slots=True)
 class CursorState:
     """A position in keyed presentation content."""
 
-    position: Position = ORIGIN
+    position: PagePosition = FIRST_POSITION
     extent: int = 1
     fingerprint: str = ""
+    reveal_request: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,14 +76,15 @@ class PresentationState:
     def cursor(self, key: str) -> CursorState:
         return self.cursors.get(key, CursorState())
 
-    def move_cursor(self, key: str, position: Position) -> None:
+    def move_cursor(self, key: str, position: PagePosition) -> None:
         """Store one resolved position within the cursor's known extent."""
         current = self.cursor(key)
-        selected = resolve_position(override=position, upper_bound=current.extent - 1)
+        selected = resolve_page_position(override=position, upper_bound=current.extent - 1)
         updated = CursorState(
-            Position(selected.anchor, selected.offset, Direction.AROUND),
+            PagePosition(selected.anchor, selected.page),
             extent=current.extent,
             fingerprint=current.fingerprint,
+            reveal_request=current.reveal_request,
         )
         if updated != current:
             self.cursors[key] = updated

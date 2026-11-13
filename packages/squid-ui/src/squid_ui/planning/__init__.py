@@ -9,6 +9,7 @@ adapter profile describing the renderer library's supported behavior. Limits and
 reservations tell the planner how much space that particular display can use.
 """
 
+from squid_ui.pages import PagePosition, PagePositionPolicy, resolve_page_position
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.dialect import TargetDialect
@@ -42,7 +43,6 @@ from squid_ui.planning.search import (
     iter_assignments,
 )
 from squid_ui.planning.target import PreparedExtension, Target
-from squid_ui.sources import Position, PositionPolicy, resolve_position
 from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
@@ -78,6 +78,8 @@ __all__ = [
     "HtmlTarget",
     "LayoutOverflowError",
     "MeasuredLayout",
+    "PagePosition",
+    "PagePositionPolicy",
     "PlanCache",
     "PlanEvent",
     "PlanMemo",
@@ -86,8 +88,6 @@ __all__ = [
     "PlanResult",
     "PlanReuse",
     "PlanSeverity",
-    "Position",
-    "PositionPolicy",
     "PreparedExtension",
     "RenderTarget",
     "Renderable",
@@ -115,5 +115,5 @@ __all__ = [
     "iter_assignments",
     "measure",
     "plan",
-    "resolve_position",
+    "resolve_page_position",
 ]

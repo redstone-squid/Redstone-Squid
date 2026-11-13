@@ -7,6 +7,7 @@ from squid_ui.capabilities import Capability
 from squid_ui.entity import EntityRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
+from squid_ui.pages import PagePosition
 from squid_ui.planning.semantic_adaptation.common import (
     _button_style,
     _literal,
@@ -96,7 +97,6 @@ from squid_ui.semantic import (
     Toggle,
     Uncontrolled,
 )
-from squid_ui.sources import Position
 
 
 def _form(node: FormTrigger, context: LoweringContext) -> list[Node]:
@@ -194,7 +194,7 @@ def _choices(node: Choices, path: str, context: LoweringContext) -> list[Node]:
             max_values=min(node.maximum, len(options)),
         )
     ]
-    result.extend(context.pages.controls(page_key, Position(offset=page), pages))
+    result.extend(context.pages.controls(page_key, PagePosition(page=page), pages))
     return result
 
 
@@ -310,7 +310,7 @@ def _items(
             placeholder="Choose an item",
         ),
     ]
-    result.extend(context.pages.controls(page_key, Position(offset=page), pages))
+    result.extend(context.pages.controls(page_key, PagePosition(page=page), pages))
     return result
 
 
@@ -340,7 +340,7 @@ def _navigation(node: Navigation, path: str, context: LoweringContext) -> list[N
                 node.key,
             )
         ]
-        result.extend(context.pages.controls(page_key, Position(offset=page), pages))
+        result.extend(context.pages.controls(page_key, PagePosition(page=page), pages))
         return result
     buttons = [
         Button(

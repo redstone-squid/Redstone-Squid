@@ -62,7 +62,7 @@ def _page_items[T](
         anchors=anchors,
     )
     grant = context.pages.grant(request)
-    index = grant.position.offset
+    index = grant.position.page
     visible = tuple(items[index * per : (index + 1) * per])
     context.pages.record(request, grant.position, anchor=identity(visible[0]) if visible else None)
     return visible, index, grant.extent

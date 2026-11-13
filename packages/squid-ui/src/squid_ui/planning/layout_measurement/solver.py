@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, replace
 from squid_ui.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ownership import Controlled
+from squid_ui.pages import PagePosition, RevealPage
 from squid_ui.planning.adapter import EMPTY_COST, ResourceCost
 from squid_ui.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_ui.planning.layout_measurement.allocation import (
@@ -43,7 +44,7 @@ from squid_ui.planning.layout_measurement.model import (
     Realized,
 )
 from squid_ui.planning.layout_measurement.realization import Builder
-from squid_ui.planning.layout_measurement.text import TextUnit
+from squid_ui.planning.layout_measurement.text import TextUnit, entry_page_anchors
 from squid_ui.planning.limits import LIMITS, Axis, MessageLimits
 from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resolved import text as resolved_text
@@ -52,7 +53,6 @@ from squid_ui.primitives.nodes import (
     Lines,
     Node,
 )
-from squid_ui.sources import Position
 from squid_ui.text import NEUTRAL, Localization
 
 
@@ -85,7 +85,7 @@ class MeasuredLayout:
         """Constraint failures that make this solution unusable without another rung."""
         return tuple(note for note in self.notes if note.severity is SolveNoteSeverity.FAILURE)
 
-    def reposition(self, positions: Mapping[str, Position]) -> None:
+    def reposition(self, positions: Mapping[str, PagePosition]) -> None:
         """Rewrite visible pager pages without reallocating text.
 
         Page counts become known during fitting, so stored positions can only be
@@ -100,7 +100,7 @@ class MeasuredLayout:
             position = positions.get(pager.key)
             if position is None:
                 continue
-            shown = pager.select(position.offset)
+            shown = pager.select(position.page)
             if self.nav is None or pager.nav_host is None:
                 continue
             window = slice(pager.nav_at, pager.nav_at + pager.nav_count)
@@ -148,7 +148,7 @@ def _footer_cost(footer: Callable[[int, int], str], content_len: int) -> int:
     return len(PAGE_FOOTER_PREFIX) + len(footer(widest, widest))
 
 
-type PositionState = Mapping[str, Position] | Position | None
+type PositionState = Mapping[str, PagePosition] | PagePosition | None
 
 
 def measure(
@@ -255,10 +255,10 @@ def _insert_pager(
     return None
 
 
-def _requested_position(state: PositionState, key: str, *, first: bool) -> Position | None:
+def _requested_position(state: PositionState, key: str, *, first: bool) -> PagePosition | None:
     if isinstance(state, Mapping):
         return state.get(key)
-    if isinstance(state, Position) and first:
+    if isinstance(state, PagePosition) and first:
         return state
     return None
 
@@ -341,10 +341,14 @@ def _measure_once(
     text_used = final.text_used
     pagers: list[Pager] = []
     for unit in final.paginate_units:
-        if unit.fragments is None or len(unit.fragments) <= 1:
-            continue
         policy = unit.overflow
         assert isinstance(policy, Paginate)
+        if unit.fragments is None or len(unit.fragments) <= 1:
+            if not isinstance(policy.page, RevealPage) or unit.slot.dropped:
+                continue
+            # A reveal on a single page still needs a staged consumption marker,
+            # but contributes no footer or navigation to the message.
+            unit.fragments = [unit.content]
         key = final.keys[unit.index]
         footer_slot = MeasuredText()
         pager = Pager(
@@ -356,15 +360,19 @@ def _measure_once(
             footer_slot=footer_slot,
             footer=final.footers[unit.index],
             owner=policy.page,
+            anchors=entry_page_anchors(unit),
             axis=unit.axis,
         )
+        if pager.pages == 1:
+            pagers.append(pager)
+            continue
         # A controlled page comes from the application, so a stored position must not override it.
         owner = policy.page
         requested = (
             None if isinstance(owner, Controlled | RoutedPage) else _requested_position(position, key, first=not pagers)
         )
         opening = owner.value if isinstance(owner, Controlled | RoutedPage) else owner.initial
-        shown = pager.select(resolve_page(opening, pager.pages) if requested is None else requested.offset)
+        shown = pager.select(resolve_page(opening, pager.pages) if requested is None else requested.page)
         # Embed description blocks are separated by two newlines.
         separator = 2 if unit.axis is Axis.EMBED_TEXT else 0
         text_used[unit.axis] = text_used.get(unit.axis, 0) + len(footer_slot.content) + separator

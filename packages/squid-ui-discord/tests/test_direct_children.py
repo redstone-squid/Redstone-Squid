@@ -115,9 +115,9 @@ async def test_shared_child_has_independent_page_cursors() -> None:
 
     async with stage(Shared(), owner=object()) as ui:
         await ui.press("__cursor_next.left.items")
-        assert ui.root.presentation.cursor("left.items").position.offset == 1
-        assert ui.root.presentation.cursor("right.items").position.offset == 0
+        assert ui.root.presentation.cursor("left.items").position.page == 1
+        assert ui.root.presentation.cursor("right.items").position.page == 0
         await ui.press("__cursor_next.right.items")
         await ui.press("__cursor_next.right.items")
-        assert ui.root.presentation.cursor("left.items").position.offset == 1
-        assert ui.root.presentation.cursor("right.items").position.offset == 2
+        assert ui.root.presentation.cursor("left.items").position.page == 1
+        assert ui.root.presentation.cursor("right.items").position.page == 2

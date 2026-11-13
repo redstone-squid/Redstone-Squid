@@ -13,6 +13,7 @@ import squid_ui as sl
 from squid_ui import Component, field, fields, paragraph, section, truncate
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.pages import PagePosition, resolve_page_position
 from squid_ui.planning import SolveNoteCode, measure
 from squid_ui.planning.layout_measurement.costing import component_count
 from squid_ui.planning.layout_measurement.model import MeasuredText
@@ -32,10 +33,9 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime import PresentationState
 from squid_ui.semantic import Item, Items, Paragraph
-from squid_ui.sources import Direction, Position, resolve_position
 from squid_ui.text import NEUTRAL
+from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
 from squid_ui_discord import V2_LIMITS as LIMITS
-from squid_ui_discord import Everyone, MessageRoot, conform
 from squid_ui_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
@@ -75,42 +75,38 @@ class TestPositionPolicy:
         [
             (
                 {
-                    "override": Position("override", 8, Direction.FORWARD),
-                    "anchored": Position("anchor", 7),
+                    "override": PagePosition("override", 8),
+                    "anchored": PagePosition("anchor", 7),
                     "stale": True,
-                    "stored": Position("stored", 6),
-                    "initial": Position(offset=5),
+                    "stored": PagePosition("stored", 6),
+                    "initial": PagePosition(page=5),
                 },
-                Position("override", 8, Direction.FORWARD),
+                PagePosition("override", 8),
             ),
             (
                 {
-                    "anchored": Position("anchor", 7),
+                    "anchored": PagePosition("anchor", 7),
                     "stale": True,
-                    "stored": Position("stored", 6),
-                    "initial": Position(offset=5),
+                    "stored": PagePosition("stored", 6),
+                    "initial": PagePosition(page=5),
                 },
-                Position("anchor", 7),
+                PagePosition("anchor", 7),
             ),
             (
-                {"stale": True, "stored": Position("stored", 6), "fallback": Position("fallback", 4)},
-                Position("fallback", 4),
+                {"stale": True, "stored": PagePosition("stored", 6), "fallback": PagePosition("fallback", 4)},
+                PagePosition("fallback", 4),
             ),
-            ({"stored": Position("stored", 6), "initial": Position(offset=5)}, Position("stored", 6)),
-            ({"initial": Position("initial", 5)}, Position("initial", 5)),
+            ({"stored": PagePosition("stored", 6), "initial": PagePosition(page=5)}, PagePosition("stored", 6)),
+            ({"initial": PagePosition("initial", 5)}, PagePosition("initial", 5)),
         ],
     )
     def test_precedence(self, kwargs, expected) -> None:
-        assert resolve_position(**kwargs) == expected
+        assert resolve_page_position(**kwargs) == expected
 
     def test_clamps_only_the_offset(self) -> None:
-        policy = resolve_position
-        assert policy(override=Position("item", -3, Direction.BACKWARD), upper_bound=8) == Position(
-            "item", 0, Direction.BACKWARD
-        )
-        assert policy(override=Position("item", 20, Direction.FORWARD), upper_bound=8) == Position(
-            "item", 8, Direction.FORWARD
-        )
+        policy = resolve_page_position
+        assert policy(override=PagePosition("item", -3), upper_bound=8) == PagePosition("item", 0)
+        assert policy(override=PagePosition("item", 20), upper_bound=8) == PagePosition("item", 8)
 
 
 class TestSolvePagination:
@@ -141,13 +137,13 @@ class TestSolvePagination:
                 Text("a" * 3000, overflow=Paginate(key="alpha")),
                 Text("b" * 3000, overflow=Paginate(key="beta")),
             ],
-            position={"alpha": Position(offset=0), "beta": Position(offset=1)},
+            position={"alpha": PagePosition(page=0), "beta": PagePosition(page=1)},
         )
         assert [(pager.key, pager.page) for pager in solved.pagers] == [("alpha", 0), ("beta", 1)]
 
     def test_a_position_token_is_an_explicit_page_override(self):
         body = "\n".join(f"line {index:04d}" for index in range(1000))
-        solved = measure([Code(body, overflow=Paginate(key="entries"))], position={"entries": Position(offset=2)})
+        solved = measure([Code(body, overflow=Paginate(key="entries"))], position={"entries": PagePosition(page=2)})
 
         assert solved.pager is not None and solved.pager.page == 2
 
@@ -324,7 +320,7 @@ class TestMountPagination:
         message_root = MessageRoot(catalog, access=Everyone(), timeout=None)
         commit_render(message_root)
         await message_root.dispatch("__cursor_next.catalog.items", interaction_harness())
-        assert message_root.presentation.cursor("catalog.items").position.offset == 1
+        assert message_root.presentation.cursor("catalog.items").position.page == 1
 
         catalog.lead = ("new",)
         view = commit_render(message_root)
@@ -355,7 +351,7 @@ class TestMountPagination:
 
     async def test_a_custom_nav_factory_replaces_the_stock_controls(self):
         def nav(context):
-            label = f"{context.position.offset + 1}/{context.state.extent}"
+            label = f"{context.page + 1}/{context.state.extent}"
             return (Row((Button(label=label, on_click=context.on_next, key="jump"),)),)
 
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=nav)
@@ -366,7 +362,7 @@ class TestMountPagination:
 
         await message_root.dispatch("jump", interaction_harness())
 
-        assert message_root.presentation.cursor("entries").position.offset == 1
+        assert message_root.presentation.cursor("entries").position.page == 1
 
     async def test_a_materialized_cursor_seeks_to_a_page(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
@@ -376,7 +372,7 @@ class TestMountPagination:
 
         await message_root.dispatch("__cursor_seek.entries", interaction_harness(), ["3"])
 
-        assert message_root.presentation.cursor("entries").position.offset == 3
+        assert message_root.presentation.cursor("entries").position.page == 3
 
     async def test_seeking_past_the_end_clamps_to_the_last_page(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
@@ -385,7 +381,7 @@ class TestMountPagination:
 
         await message_root.dispatch("__cursor_seek.entries", interaction_harness(), ["9999"])
 
-        assert message_root.presentation.cursor("entries").position.offset == extent - 1
+        assert message_root.presentation.cursor("entries").position.page == extent - 1
 
     async def test_seeking_to_the_visible_page_is_a_clean_noop(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
@@ -417,7 +413,7 @@ class TestMountPagination:
 
         await message_root.dispatch("__cursor_next.left", interaction_harness())
 
-        assert {key: cursor.position.offset for key, cursor in message_root.presentation.cursors.items()} == {
+        assert {key: cursor.position.page for key, cursor in message_root.presentation.cursors.items()} == {
             "left": 1,
             "right": 0,
         }
@@ -433,7 +429,7 @@ class TestMountPagination:
         message_root.invalidate()
         commit_render(message_root)
 
-        assert {key: cursor.position.offset for key, cursor in message_root.presentation.cursors.items()} == {
+        assert {key: cursor.position.page for key, cursor in message_root.presentation.cursors.items()} == {
             "left": 0,
             "right": 1,
         }
@@ -495,14 +491,14 @@ class TestSolverNav:
         assert not any(isinstance(child, Row) for child in solved.children)
 
     def test_the_page_is_clamped_and_reported(self):
-        assert measure(self._paginated(), position=Position(offset=999)).page == measure(self._paginated()).pages - 1
-        assert measure(self._paginated(), position=Position(offset=-5)).page == 0
+        assert measure(self._paginated(), position=PagePosition(page=999)).page == measure(self._paginated()).pages - 1
+        assert measure(self._paginated(), position=PagePosition(page=-5)).page == 0
 
     def test_a_text_bearing_nav_factory_is_rejected(self):
         # `NavNode` rejects this statically; the runtime guard is for callers without a
         # type checker, so the suppression here is the test doing its job.
         with pytest.raises(ValueError, match="component-bearing"):
-            text_nav = PagerNav(lambda context: [Text(f"position {context.position.offset}")], PresentationState())  # type: ignore
+            text_nav = PagerNav(lambda context: [Text(f"position {context.page}")], PresentationState())  # type: ignore
             measure(self._paginated(), nav=text_nav)
 
 
@@ -523,8 +519,8 @@ class TestRepage:
         before = solved.cost.get(Axis.COMPONENTS)
         pager = solved.pager
         assert pager is not None and solved.pages > 2
-        solved.reposition({"lines": Position(offset=2)})
-        direct = measure(self._paginated(), nav=self._nav, position=Position(offset=2)).pager
+        solved.reposition({"lines": PagePosition(page=2)})
+        direct = measure(self._paginated(), nav=self._nav, position=PagePosition(page=2)).pager
         assert direct is not None
         assert pager.page == 2
         assert pager.slot.content == direct.slot.content
@@ -534,7 +530,7 @@ class TestRepage:
         solved = measure(self._paginated(), nav=self._nav)
         previous = self._previous_button(solved)
         assert previous.disabled  # on page 0
-        solved.reposition({"lines": Position(offset=1)})
+        solved.reposition({"lines": PagePosition(page=1)})
         assert not self._previous_button(solved).disabled
 
     @staticmethod
@@ -547,18 +543,18 @@ class TestRepage:
 
     def test_repage_clamps_like_the_solver_does(self):
         solved = measure(self._paginated(), nav=self._nav)
-        solved.reposition({"lines": Position(offset=999)})
+        solved.reposition({"lines": PagePosition(page=999)})
         assert solved.page == solved.pages - 1
-        solved.reposition({"lines": Position(offset=-5)})
+        solved.reposition({"lines": PagePosition(page=-5)})
         assert solved.page == 0
 
     def test_a_nav_factory_that_hides_controls_between_pages_is_rejected(self):
         def hiding(context):
-            return default_nav(context) if context.position.offset else []
+            return default_nav(context) if context.page else []
 
         solved = measure(self._paginated(), nav=PagerNav(hiding, PresentationState()))
         with pytest.raises(LayoutInvariantError, match="changed shape between pages"):
-            solved.reposition({"lines": Position(offset=1)})
+            solved.reposition({"lines": PagePosition(page=1)})
 
 
 class TestBuildModal:
@@ -625,3 +621,33 @@ def test_the_solver_counts_the_nav_it_realized():
     view = commit_render(MessageRoot(Browser(), access=Everyone(), timeout=None))
     solved = measure(Browser().render(), nav=PagerNav(default_nav, PresentationState()))
     assert component_count(solved.children) == len(list(view.walk_children()))
+
+
+@pytest.mark.parametrize("oversized", [False, True])
+def test_reveal_resolves_after_measurement_and_is_consumed_only_on_delivery(oversized: bool) -> None:
+    presentation = PresentationState()
+    entries = tuple(sl.bullet("same " * (900 if oversized else 250), key=str(index)) for index in range(5))
+    document = sl.bullets(*entries, key="entries", page=sl.pages.RevealPage(anchor="3", request="visit-1"))
+    first = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
+    assert first.scene.pagers[0].page > 0
+    assert not presentation.cursors
+    retry = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
+    assert retry.scene.pagers[0].page == first.scene.pagers[0].page
+    presentation.apply_updates(first.session_updates)
+    assert presentation.cursor("entries").reveal_request == "visit-1"
+    presentation.move_cursor("entries", PagePosition(page=0))
+    manual = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
+    assert manual.scene.pagers[0].page == 0
+
+
+def test_single_page_reveal_is_consumed_without_navigation_chrome() -> None:
+    presentation = PresentationState()
+    document = sl.bullets(
+        sl.bullet("Only entry", key="one"), key="entries", page=sl.pages.RevealPage(anchor="one", request="visit-1")
+    )
+    planned = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
+    assert not planned.scene.pagers
+    assert not presentation.cursors
+    presentation.apply_updates(planned.session_updates)
+    assert presentation.cursor("entries").reveal_request == "visit-1"
+    assert presentation.cursor("entries").extent == 1

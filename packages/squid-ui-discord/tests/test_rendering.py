@@ -830,7 +830,7 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
     message_root = MessageRoot(PagedPair(), access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    assert {key: cursor.position.offset for key, cursor in message_root.presentation.cursors.items()} == {
+    assert {key: cursor.position.page for key, cursor in message_root.presentation.cursors.items()} == {
         "left.items": 0,
         "right.items": 0,
     }

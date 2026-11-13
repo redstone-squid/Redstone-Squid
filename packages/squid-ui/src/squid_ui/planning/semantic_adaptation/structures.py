@@ -6,6 +6,7 @@ from squid_ui.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.grids import GridCell
 from squid_ui.interactions import ActionBinding
+from squid_ui.pages import PagePosition
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.planning.semantic_adaptation.common import (
@@ -81,7 +82,6 @@ from squid_ui.semantic import (
     Toggle,
     Tone,
 )
-from squid_ui.sources import Position
 
 
 def _table(node: Table, path: str, context: LoweringContext) -> list[Node]:
@@ -191,7 +191,7 @@ def _grid(node: Grid, path: str, context: LoweringContext) -> list[Node]:
     visible, index, pages = _page_items(available, f"{node.key}.cells", context, identity=lambda item: item[1].key)
     return [
         _grid_select(visible, node, f"{node.key}.page", context),
-        *context.pages.controls(f"{node.key}.cells", Position(offset=index), pages),
+        *context.pages.controls(f"{node.key}.cells", PagePosition(page=index), pages),
     ]
 
 
@@ -427,7 +427,7 @@ def _paged_picker(
     chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
     return [
         _picker(chunk, f"{key}.page", label, context),
-        *context.pages.controls(key, Position(offset=index), pages),
+        *context.pages.controls(key, PagePosition(page=index), pages),
     ]
 
 

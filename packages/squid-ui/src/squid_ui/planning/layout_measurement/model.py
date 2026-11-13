@@ -7,7 +7,7 @@ they are not the serializable scene delivered to a renderer.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from squid_ui.planning.limits import Axis
@@ -148,6 +148,7 @@ class Pager:
     """The text pool this pager's body and footer draw from."""
     owner: PageOwnership = FIRST_PAGE
     """Who keeps this pager's page, copied from its `Paginate` policy."""
+    anchors: dict[str, int] = field(default_factory=dict)
     page: int = 0
     nav_host: list[Realized] | None = None
     """The realized list holding this pager's navigation, replaced in place when repositioning."""

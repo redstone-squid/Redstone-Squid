@@ -356,7 +356,7 @@ def _paged_region(
     )
     grant = context.pages.grant(request)
     context.pages.record(request, grant.position)
-    selected = [primitive for item in pages[grant.position.offset] for primitive in item.nodes]
+    selected = [primitive for item in pages[grant.position.page] for primitive in item.nodes]
     budgeted = Budget(
         tuple(selected),
         minimum,
@@ -366,7 +366,7 @@ def _paged_region(
     )
     controls = context.pages.controls(node.key, grant.position, grant.extent, node.page)
     if controls and node.footer is not None:
-        controls[0] = Footer(_resolve(node.footer(grant.position.offset + 1, grant.extent), context), overflow=Never())
+        controls[0] = Footer(_resolve(node.footer(grant.position.page + 1, grant.extent), context), overflow=Never())
     if grant.extent > 1:
         context.events.append(
             PlanEvent(

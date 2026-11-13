@@ -7,6 +7,7 @@ import pytest
 from squid_ui import fallback, scene, truncate
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.interactions import ActionEvent, ActionMode
+from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_ui.runtime import PresentationState
@@ -25,7 +26,6 @@ from squid_ui.semantic import (
     Paragraph,
     Stack,
 )
-from squid_ui.sources import Position
 from squid_ui_discord import DISCORD_V2_DPY27
 
 
@@ -250,7 +250,7 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     document = ActionControls(_actions(76), key="demo")
     first = plan(document, target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(first.session_updates)
-    session.move_cursor("demo.default", Position(offset=1))
+    session.move_cursor("demo.default", PagePosition(page=1))
     second = plan(document, target=DISCORD_V2_DPY27, session=session)
 
     first_select = next(node for node in first.scene.components_v2.children if isinstance(node, scene.Select))

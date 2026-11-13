@@ -73,7 +73,9 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.BrowserDetail
 
-::: squid_ui_widgets.BrowserOpenHandler
+::: squid_ui_widgets.BrowseSession
+
+::: squid_ui_widgets.BrowseSnapshot
 
 ::: squid_ui_widgets.SearchPicker
 

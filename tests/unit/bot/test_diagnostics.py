@@ -15,8 +15,8 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics_view import ERROR_CHROME, ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.models import ErrorReport
+from squid_ui.pages import PagePosition
 from squid_ui.runtime import UIExecutionHost
-from squid_ui.sources import Position
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
@@ -134,7 +134,8 @@ async def message_root_browser(
     bot = make_layout_bot()
     message_root = bot.ui.mount(browser, access=Owner(1), chrome=ERROR_CHROME, execution_host=execution_host)
     if browser._browser is not None:
-        await browser._browser.window._load()
+        assert browser._browser.session.operation is not None
+        await browser._browser.session.operation
     return message_root, commit_render(message_root)
 
 
@@ -163,7 +164,7 @@ def _code_pages(message_root: MessageRoot) -> list[str]:
         if next_button.disabled:
             return pages
         cursor = message_root.presentation.cursor("traceback")
-        message_root.presentation.move_cursor("traceback", Position(offset=cursor.position.offset + 1))
+        message_root.presentation.move_cursor("traceback", PagePosition(page=cursor.position.page + 1))
 
 
 async def test_recent_list_offers_every_entry_for_opening() -> None:
@@ -224,7 +225,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
         assert footers
         assert "page 1 of" not in footers[0]
 
-        message_root.presentation.move_cursor("traceback", Position())
+        message_root.presentation.move_cursor("traceback", PagePosition())
         earliest = commit_render(message_root)
         assert "frame0" in "\n".join(_texts(earliest))
 
@@ -271,11 +272,11 @@ async def test_every_page_fits_the_real_display_budget() -> None:
         browser = make_screen(report=make_report(traceback=f"{long_line}\nValueError: boom"))
         message_root, _ = await message_root_browser(browser, execution_host=execution_host)
 
-        message_root.presentation.move_cursor("traceback", Position())
+        message_root.presentation.move_cursor("traceback", PagePosition())
         pages = _code_pages(message_root)
         assert len(pages) > 1
         for page_index in range(len(pages)):
-            message_root.presentation.move_cursor("traceback", Position(offset=page_index))
+            message_root.presentation.move_cursor("traceback", PagePosition(page=page_index))
             view = commit_render(message_root)
             assert_within_limits(view)
             assert sum(len(text) for text in _texts(view)) <= LIMITS.total_text

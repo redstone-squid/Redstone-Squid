@@ -360,7 +360,7 @@ def _paginate_v2(
     request = MaterializedCursorRequest(key=key, extent=len(pages), fingerprint=stable_fingerprint(nodes))
     grant = broker.grant(request)
     broker.record(request, grant.position)
-    index = grant.position.offset
+    index = grant.position.page
     return measure_page(pages[index], index, grant.extent), grant.extent
 
 

@@ -6,6 +6,7 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.target import Target
 from squid_ui.runtime import PresentationState
@@ -28,7 +29,6 @@ from squid_ui.semantic import (
     Table,
     TableRow,
 )
-from squid_ui.sources import Position
 from squid_ui.text import Markup
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
 
@@ -102,9 +102,9 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     )
     navigation = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(36)))
 
-    choice_plan = plan(choices, target=DISCORD_V2_DPY27, positions={"size.choices": Position(offset=1)})
-    item_plan = plan(items, target=DISCORD_V2_DPY27, positions={"catalog.items": Position(offset=1)})
-    navigation_plan = plan(navigation, target=DISCORD_V2_DPY27, positions={"tabs.destinations": Position(offset=1)})
+    choice_plan = plan(choices, target=DISCORD_V2_DPY27, positions={"size.choices": PagePosition(page=1)})
+    item_plan = plan(items, target=DISCORD_V2_DPY27, positions={"catalog.items": PagePosition(page=1)})
+    navigation_plan = plan(navigation, target=DISCORD_V2_DPY27, positions={"tabs.destinations": PagePosition(page=1)})
 
     choice_select = next(node for node in choice_plan.scene.components_v2.children if isinstance(node, scene.Select))
     item_select = next(node for node in item_plan.scene.components_v2.children if isinstance(node, scene.Select))
@@ -126,7 +126,7 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     )
     first = plan(Items("catalog", original), target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(first.session_updates)
-    session.move_cursor("catalog.items", Position(offset=1))
+    session.move_cursor("catalog.items", PagePosition(page=1))
     second_page = plan(Items("catalog", original), target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(second_page.session_updates)
     assert (

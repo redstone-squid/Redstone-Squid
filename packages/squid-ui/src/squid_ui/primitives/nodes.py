@@ -85,6 +85,13 @@ class Lines(Renderable[DiscordTarget]):
     join: str = "\n"
     overflow: Overflow = field(default_factory=Spill)
     priority: int = 0
+    keys: tuple[str, ...] = ()
+    """Stable entry identities, when a layout pager needs to reveal one."""
+
+    def __post_init__(self) -> None:
+        if self.keys and len(self.keys) != len(self.lines):
+            message = "Lines.keys must identify every line"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
