@@ -217,3 +217,54 @@ def test_markdown_shorthand_uses_the_same_deferred_text() -> None:
     assert shorthand == explicit
     locale = Localization("fr", ("hello = **Bonjour** { $name }",))
     assert resolve_text(shorthand, locale).content == r"**Bonjour** \*Ada\*"
+
+
+@pytest.mark.parametrize("markdown", [False, True])
+def test_string_conversion_keeps_identifier_literal(markdown: bool) -> None:
+    user_id = 123456789012345678
+    message = md_tr(t"ID: `{user_id!s}`", key="literal-id") if markdown else tr(t"ID: {user_id!s}", key="literal-id")
+    assert message.bindings == {"user_id": "123456789012345678"}
+    assert source_text(message, format="plain") == "ID: 123456789012345678"
+    assert message.declaration is not None
+    assert "$user_id" in message.declaration.source
+    for locale in ("en", "de"):
+        assert resolve_text(message, Localization(locale, ("literal-id = { $user_id }",))).plain() == str(user_id)
+    assert source_text(tr(t"{user_id}", key="numeric-id")) == "123,456,789,012,345,678"
+
+
+def test_string_conversion_captures_objects_once_and_preserves_literal_markdown() -> None:
+    class Value:
+        calls = 0
+
+        def __str__(self) -> str:
+            self.calls += 1
+            return "**literal** { $injected }"
+
+    value = Value()
+    message = md_tr(t"**Value:** {value!s}", key="literal-object")
+    assert value.calls == 1
+    resolved = resolve_text(message, Localization("en"))
+    assert resolved.plain() == "Value: **literal** { $injected }"
+    assert r"\*\*literal\*\*" in resolved.content
+    assert value.calls == 1
+
+
+def test_string_conversion_retains_named_expression_and_repeated_binding() -> None:
+    message = tr(t"{(identifier := 12345)!s} / {identifier!s}", key="repeated-id")
+    assert source_text(message) == "12345 / 12345"
+    assert message.bindings == {"identifier": "12345"}
+
+
+def test_invalid_conversions_are_rejected_at_capture() -> None:
+    value = 12345
+    with pytest.raises(DeclarationError, match="Only !s"):
+        tr(t"{value!r}", key="repr")
+    with pytest.raises(DeclarationError, match="Only !s"):
+        tr(t"{value!a}", key="ascii")
+    with pytest.raises(DeclarationError, match="Conflicting conversions"):
+        tr(t"{value} / {value!s}", key="mixed")
+    with pytest.raises(DeclarationError, match="original value"):
+        tr(t"{NUMBER(value)!s}", key="number")
+    nested = tr("Nested", key="nested")
+    with pytest.raises(TypeError):
+        tr(t"{nested!s}", key="eager")

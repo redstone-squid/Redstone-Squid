@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from squid_i18n import CatalogError, DeclarationError
+from squid_i18n import CatalogError, DeclarationError, md_tr, tr
 from squid_i18n.catalogs import artifacts, extract, validate
 from squid_i18n.cli import run
 
@@ -206,3 +206,28 @@ def test_explicit_key_and_markdown_shorthand_extract(constructor: str) -> None:
 def test_source_format_is_static_and_has_no_target_dialects(option: str) -> None:
     with pytest.raises(DeclarationError):
         extract(f'tr("Hello", key="hello", {option})')
+
+
+@pytest.mark.parametrize("helper", ["tr", "md_tr"])
+def test_string_conversion_extracts_original_binding_and_matches_runtime(helper: str) -> None:
+    user_id = 12345
+    runtime = (
+        md_tr(t"ID: {user_id!s}", key="literal-id") if helper == "md_tr" else tr(t"ID: {user_id!s}", key="literal-id")
+    )
+    found = extract(f'{helper}(t"ID: {{user_id!s}}", key="literal-id")')
+    assert found[0].declaration == runtime.declaration
+    assert found[0].declaration.source == "literal-id = ID: { $user_id }\n"
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["{value!a}", "{value!s:>10}", "{value} {value!s}", "{NUMBER(value)!s}", "{DATETIME(value)!s}"],
+)
+def test_invalid_string_conversions_fail_extraction(expression: str) -> None:
+    with pytest.raises(DeclarationError):
+        extract(f'tr(t"{expression}", key="invalid")')
+
+
+def test_string_conversion_changes_binding_contract() -> None:
+    with pytest.raises(CatalogError, match="Conflicting"):
+        artifacts(extract('tr(t"ID: {value}", key="id")\ntr(t"ID: {value!s}", key="id")'))

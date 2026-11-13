@@ -64,17 +64,19 @@ def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]
             raise DeclarationError(msg)
         strings = [""]
         expressions: list[str] = []
+        conversions: list[str | None] = []
         for part in parts:
             if isinstance(part, python.Constant):
                 strings[-1] += str(part.value)
             elif isinstance(part, python.Interpolation):
-                if part.conversion != -1 or part.format_spec is not None:
+                if part.format_spec is not None:
                     msg = f"{location}: use NUMBER or DATETIME for formatting"
                     raise DeclarationError(msg)
                 expressions.append(part.str or python.unparse(part.value))
+                conversions.append(None if part.conversion == -1 else chr(part.conversion))
                 strings.append("")
         try:
-            declaration = compile_template(tuple(strings), tuple(expressions), key)
+            declaration = compile_template(tuple(strings), tuple(expressions), key, conversions=tuple(conversions))
         except (CatalogError, DeclarationError) as error:
             msg = f"{location}: {error}"
             raise DeclarationError(msg) from error

@@ -189,16 +189,22 @@ def tr(template: Template | LiteralString, /, *, key: LiteralString | None = Non
 
     Supply its identity with key= or an embedded Fluent identifier. Markdown is
     parsed after translation, independently of the eventual rendering target.
+    Use !s for literal identifiers; unconverted numbers retain locale formatting.
     """
     if not isinstance(markdown, bool):
         msg = "markdown must be a bool"
         raise DeclarationError(msg)
     if isinstance(template, str):
         template = Template(template)
-    if any(slot.conversion is not None or slot.format_spec for slot in template.interpolations):
-        msg = "Use NUMBER or DATETIME instead of Python conversions and format specs"
+    if any(slot.format_spec for slot in template.interpolations):
+        msg = "Use NUMBER or DATETIME instead of Python format specs"
         raise DeclarationError(msg)
-    declaration = compile_template(template.strings, tuple(slot.expression for slot in template.interpolations), key)
+    declaration = compile_template(
+        template.strings,
+        tuple(slot.expression for slot in template.interpolations),
+        key,
+        conversions=tuple(slot.conversion for slot in template.interpolations),
+    )
     bindings: dict[str, object] = {}
     for slot, captured in zip(declaration.slots, template.interpolations, strict=True):
         value = captured.value
@@ -220,6 +226,8 @@ def tr(template: Template | LiteralString, /, *, key: LiteralString | None = Non
             value = (
                 replace(value, options=developer) if developer or isinstance(value, DateTimeExpression) else value.value
             )
+        if captured.conversion == "s":
+            value = str(value)
         if slot.name in bindings and bindings[slot.name] is not value and bindings[slot.name] != value:
             msg = f"Conflicting captured values for {slot.name}"
             raise DeclarationError(msg)

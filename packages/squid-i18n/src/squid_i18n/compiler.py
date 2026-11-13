@@ -142,8 +142,26 @@ class _BindSlots(Transformer):
 
 
 @lru_cache(maxsize=2048)
-def compile_template(strings: tuple[str, ...], expressions: tuple[str, ...], key: str | None = None) -> Declaration:
+def compile_template(
+    strings: tuple[str, ...],
+    expressions: tuple[str, ...],
+    key: str | None = None,
+    *,
+    conversions: tuple[str | None, ...] = (),
+) -> Declaration:
     slots = tuple(expression_slot(expression) for expression in expressions)
+    binding_conversions: dict[str, str | None] = {}
+    for slot, conversion in zip(slots, conversions or (None,) * len(slots), strict=True):
+        if conversion not in (None, "s"):
+            msg = "Only !s is supported; use NUMBER or DATETIME for localized formatting"
+            raise DeclarationError(msg)
+        if conversion and slot.function:
+            msg = "Apply !s to the original value, not NUMBER or DATETIME"
+            raise DeclarationError(msg)
+        if slot.name in binding_conversions and binding_conversions[slot.name] != conversion:
+            msg = f"Conflicting conversions for {slot.name}; give the value a separate name"
+            raise DeclarationError(msg)
+        binding_conversions[slot.name] = conversion
     prefix = "squidSlot"
     while any(prefix in text for text in strings):
         prefix += "X"
@@ -193,7 +211,11 @@ def compile_template(strings: tuple[str, ...], expressions: tuple[str, ...], key
             raise DeclarationError(msg)
         developer[slot.name] = options
     canonical = FluentSerializer().serialize(ast.Resource([entry]))
-    digest = hashlib.sha256((canonical + repr(sorted(developer.items()))).encode()).hexdigest()
+    contract = canonical + repr(sorted(developer.items()))
+    converted = sorted((name, conversion) for name, conversion in binding_conversions.items() if conversion)
+    if converted:
+        contract += repr(converted)
+    digest = hashlib.sha256(contract.encode()).hexdigest()
     return Declaration(
         entry.id.name,
         canonical,
