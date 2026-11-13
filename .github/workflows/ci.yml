@@ -61,7 +61,6 @@ jobs:
               - 'locales/**'
               - 'reference/**'
               - 'requirements/**'
-              - 'supabase/**'
               - 'deploy/**'
               - 'app.py'
               - 'alembic.ini'

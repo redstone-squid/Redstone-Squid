@@ -16,8 +16,8 @@ Redstone Squid is a Discord bot designed to manage and streamline the submission
 - **`/squid/google/`** - Google Services integration for Forms/Sheets
 - **`/squid/config.py`** - Bot configuration and constants
 
-### `/supabase/` - Database Management
-Do not try to edit this directory directly. It is managed by Supabase and contains the database schema and migrations.
+### `/alembic/` - Database Management
+Alembic migrations own the database schema; see `docs/new-migration.md`.
 If you want to read the current schema, you can see it in schema_dump.sql.
 
 ## Database Schema

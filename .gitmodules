@@ -1,3 +1,0 @@
-[submodule "tests/supabase"]
-	path = tests/supabase
-	url = https://github.com/supabase/supabase

@@ -132,7 +132,6 @@ scripts/pre-push text
 gradlew        text eol=lf
 web/.prettierignore text
 tests/fuzz/corpus/** text
-tests/supabase -text
 *.js           text
 *.lock         text
 *.mako         text
