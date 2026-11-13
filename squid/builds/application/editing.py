@@ -23,10 +23,9 @@ def _latest[T](current: PatchValue[T], incoming: PatchValue[T]) -> PatchValue[T]
 class BuildEditPatch:
     """A partial build update that distinguishes omitted fields from supplied values.
 
-    UNSET leaves a field unchanged. None clears nullable fields, except that a
-    None door orientation leaves the current orientation unchanged. Clearing a
-    door width or height restores that category's default; empty lists remove
-    all entries of that kind.
+    UNSET leaves a field unchanged. None clears nullable fields, including a
+    door's orientation and each part of its size, which then read as unknown;
+    empty lists remove all entries of that kind.
 
     Versions are canonical names such as "Java 1.20.4"; saving rejects unknown ones.
     Showcase tags are stable keys. `apply` cannot look them up, so it leaves tags

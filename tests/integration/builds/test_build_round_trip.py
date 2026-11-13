@@ -661,10 +661,10 @@ async def test_replacing_links_of_one_media_type_moves_a_shared_url(
     assert loaded.video_urls == ("https://example.com/dual.png",)
 
 
-async def test_door_dimension_defaults_are_declared_not_coerced_at_save(
+async def test_an_unknown_door_size_stays_unknown_through_save_and_reload(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Check door dimension defaults before saving as well as after reloading."""
+    """Historical posts can omit a door's size; saving must not substitute one."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
@@ -676,12 +676,13 @@ async def test_door_dimension_defaults_are_declared_not_coerced_at_save(
         # keeps this test about door dimensions.
         ai_generated=False,
     )
-    assert (build.door_width, build.door_height) == (1, 2)
+    assert build.door_dimensions == (None, None, None)
     await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
-    assert loaded is not None
+    assert isinstance(loaded, DoorBuild)
+    assert loaded.door_dimensions == (None, None, None)
     _assert_round_trip(build, loaded)
 
 

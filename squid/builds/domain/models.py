@@ -376,10 +376,10 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
         self.door_width, self.door_height, self.door_depth = dimensions
 
     def finalize(self) -> Build:
-        """Create an unsaved category entity and apply its defaults.
+        """Create an unsaved category entity from the staged facts.
 
         Lists are copied, but their entries and extra_info can still be shared with
-        the draft. Door width and height default to 1 and 2 when omitted.
+        the draft. Omitted facts, such as a door's size, stay unknown.
 
         Raises:
             InvalidBuildError: If no category has been set.
