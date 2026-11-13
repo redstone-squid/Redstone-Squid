@@ -113,7 +113,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return self._profile.hidden
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
         if self._profile_editor is not None:
             return (self._profile_editor,)
         fields = tuple(sl.field(field.name, field.value) for field in self._fields())
@@ -194,7 +194,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
             )
         )
         nodes.extend(self.edits.refresh_controls())
-        return tuple(nodes)
+        return nodes
 
     async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])

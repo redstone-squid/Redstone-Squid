@@ -91,7 +91,7 @@ class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Display the shared monitor's latest comparison without changing the open report."""
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         status = self.inject(_REPORT_MONITOR).changes.status
         changed = (
             status.value
@@ -109,7 +109,7 @@ class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
             nodes.append(
                 sl.note(tr(t"diagnostics-report-list-stale = The report list has changed. Refresh when you are ready."))
             )
-        return tuple(nodes)
+        return nodes
 
 
 type _ListAction = sl.semantic.ActionControl | sl.semantic.Toggle

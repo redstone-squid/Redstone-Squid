@@ -43,7 +43,7 @@ class InferenceCandidatesScreen(sd.Screen):
         return max(1, (len(self.candidates) + 24) // 25)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"inference-candidates-heading = Inferred candidates")),
@@ -73,7 +73,7 @@ class InferenceCandidatesScreen(sd.Screen):
                     )
                 )
             )
-            return tuple(nodes)
+            return nodes
         nodes.append(
             sl.choices(
                 *(
@@ -132,7 +132,7 @@ class InferenceCandidatesScreen(sd.Screen):
                     ),
                 )
             )
-        return tuple(nodes)
+        return nodes
 
     async def _retry(self, event: sd.PressEvent) -> None:
         await event.acknowledge()

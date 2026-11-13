@@ -31,7 +31,7 @@ class RecalculationProposalScreen(sd.Screen):
         self.targets = targets
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
         proposal = self.proposal
         if proposal.applied_revision is not None:
             build_id, revision = proposal.build_id, proposal.applied_revision
@@ -78,7 +78,7 @@ class RecalculationProposalScreen(sd.Screen):
                     key="review",
                 )
             )
-        return tuple(nodes)
+        return nodes
 
     async def _match(self, event: sd.ChoiceEvent) -> None:
         actor = await actor_for_interaction(event.context)

@@ -438,7 +438,7 @@ class RolePanel(Component[DiscordTarget, Any]):
         return toggle_route, set_route
 
     @override
-    def render(self) -> Sequence[LayoutNode[DiscordTarget, Any]]:
+    def render(self) -> list[LayoutNode[DiscordTarget, Any]]:
         """Render stateless buttons with a planner-owned select fallback."""
         nodes: list[LayoutNode[DiscordTarget, Any]] = [Heading(self.title)]
         for category in self.categories:
@@ -471,7 +471,7 @@ class RolePanel(Component[DiscordTarget, Any]):
                 max_values=maximum,
             )
             nodes.append(Variants((Variant((ControlGroup(buttons),)), Variant((select,)))))
-        return tuple(nodes)
+        return nodes
 
     async def _handle_toggle(
         self,

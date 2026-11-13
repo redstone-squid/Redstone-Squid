@@ -174,7 +174,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return build, await self._render_build(build)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
         state = self.projection.status
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-build-browse-loading-build = Loading build.")),)
@@ -197,7 +197,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     key="build-download",
                 )
             )
-        return tuple(nodes)
+        return nodes
 
     async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
         self._show_schematics = not self._show_schematics
@@ -510,7 +510,7 @@ class BuildBrowseScreen(sd.Screen):
         else:
             await event.notice(tr(t"build-browse-end = No more builds in this direction."))
 
-    def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _find_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.action_controls(
                 sl.form(
@@ -581,7 +581,7 @@ class BuildBrowseScreen(sd.Screen):
             )
         if self._show_search_help:
             nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
-        return tuple(nodes)
+        return nodes
 
     async def _toggle_search_help(self, _event: sl.PressEvent) -> None:
         self._show_search_help = not self._show_search_help

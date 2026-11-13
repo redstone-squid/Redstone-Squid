@@ -57,7 +57,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._delivered_videos: set[int] = set()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
         if self._show_details is not None and not self._show_details():
             return ()
         nodes = list(self._schematic_nodes())
@@ -73,7 +73,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     key="build-download",
                 )
             )
-        return tuple(nodes)
+        return nodes
 
     def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if not self._schematics.available:

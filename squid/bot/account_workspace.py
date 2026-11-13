@@ -128,7 +128,7 @@ class AccountWorkspace(sd.Screen):
             return (sl.status(tr(t"account-workspace-loading-account = Loading account.")),)
         return (self._tabs,)
 
-    def _identity_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _identity_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         account = self._account
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if account is None or account.needs_consent_refresh:
@@ -175,7 +175,7 @@ class AccountWorkspace(sd.Screen):
                     on_submit=self._refresh_member_identity,
                 )
             )
-        return tuple(nodes)
+        return nodes
 
     def _claim_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (

@@ -86,7 +86,7 @@ class VersionScreen(sd.Screen):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.status(tr(t"bot-version-tracking-loading-versions = Loading versions."))
             if self._browser is None
@@ -101,7 +101,7 @@ class VersionScreen(sd.Screen):
                     on_submit=self._add,
                 )
             )
-        return tuple(nodes)
+        return nodes
 
     async def _add(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_create():

@@ -280,7 +280,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         return await self._authorize()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
         if self.expired:
             return self._expired()
         state = self.projection.status
@@ -338,7 +338,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         nodes.extend(ws.history_controls())
         if self.controller.refresh_failed or (not ws.patch().attributes() and not ws.history.can_redo):
             nodes.extend(self.controller.controls())
-        return tuple(nodes)
+        return nodes
 
     def _expired(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         # Route registration imports the editor through opening.py, so resolve the route here.
