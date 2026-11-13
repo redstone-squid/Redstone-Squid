@@ -1,6 +1,6 @@
 """Private review of persisted recalculation candidates."""
 
-from typing import override
+from typing import Self, override
 from uuid import UUID
 
 import squid_ui as sl
@@ -29,6 +29,14 @@ class RecalculationProposalScreen(sd.Screen):
         self.services = services
         self.proposal = proposal
         self.targets = targets
+
+    @classmethod
+    async def load(cls, services: BotServices, proposal_id: UUID, request: sd.Request) -> Self:
+        """Reload retained review state and current target choices after restart."""
+        actor = await actor_for_interaction(request)
+        proposal = await services.submission_recalculations.get(proposal_id, actor)
+        targets = tuple(await services.builds.list_ids_for_source_message(proposal.source_message_id))
+        return cls(services, proposal, targets)
 
     @override
     def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
@@ -104,11 +112,3 @@ class RecalculationProposalScreen(sd.Screen):
                 self.proposal.id, self.proposal.build_id, actor, renew=True
             )
             self.notice = tr(t"recalculation-renewed = Review the refreshed diff before approving.")
-
-
-async def proposal_screen(services: BotServices, proposal_id: UUID, request: sd.Request) -> RecalculationProposalScreen:
-    """Reload retained review state and current target choices after restart."""
-    actor = await actor_for_interaction(request)
-    proposal = await services.submission_recalculations.get(proposal_id, actor)
-    targets = tuple(await services.builds.list_ids_for_source_message(proposal.source_message_id))
-    return RecalculationProposalScreen(services, proposal, targets)

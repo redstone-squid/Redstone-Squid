@@ -76,7 +76,9 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
 async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: str) -> None:
     """Reopen a retained diff under the caller's current edit authority."""
     request = await sd.request(interaction)
-    screen = await recalculation.proposal_screen(interaction.client.services, UUID(proposal_id), request)
+    screen = await recalculation.RecalculationProposalScreen.load(
+        interaction.client.services, UUID(proposal_id), request
+    )
     await request.respond(screen, audience="personal")
 
 
