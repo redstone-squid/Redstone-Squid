@@ -238,12 +238,13 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     async def _refresh_video(self, event: sl.PressEvent) -> None:
         request = cast(sd.Request, event.context)
-        if self._video_job_id is not None and not await self._deliver_video(request, self._video_job_id):
+        if self._video_job_id is not None and not await self._deliver_video(request, self._video_job_id, repeat=True):
             await event.notice(tr(t"schematic-video-pending = The video is still rendering."))
 
-    async def _deliver_video(self, request: sd.Request, job_id: int) -> bool:
+    async def _deliver_video(self, request: sd.Request, job_id: int, *, repeat: bool = False) -> bool:
         async with self._video_delivery_lock:
-            if job_id in self._delivered_videos:
+            # Explicit checks should show the result even after automatic delivery.
+            if not repeat and job_id in self._delivered_videos:
                 return True
             delivered = await self._deliver_video_once(request, job_id)
             if delivered and request.interaction is not None and not request.interaction.is_expired():

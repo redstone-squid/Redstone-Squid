@@ -1,9 +1,11 @@
 """Completed videos are attached privately without repeating an acknowledged upload."""
 
+from typing import Literal
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.schematic_tools import SchematicTools, _video_failure_reason
 from squid.core.actors import Actor
@@ -97,4 +99,44 @@ async def test_failed_video_reports_privately_without_fetching_content(
     assert await component._deliver_video(request, 41)
     request.respond.assert_awaited_once()
     assert request.respond.call_args.kwargs["audience"] == "personal"
+    service.open_video_content.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["succeeded", "failed"])
+async def test_check_video_shows_result_after_automatic_delivery(
+    delivery: tuple[SchematicTools, Mock, Mock], status: Literal["succeeded", "failed"]
+) -> None:
+    component, request, service = delivery
+    service.get_video.return_value = VideoStatus(id=41, build_id=7, schematic_id=1, status=status)
+    component._video_job_id = 41
+    assert await component._deliver_video(request, 41)
+    request.respond.reset_mock()
+    service.get_video.reset_mock()
+    event = Mock(spec=sl.PressEvent, context=request, notice=AsyncMock())
+
+    await component._refresh_video(event)
+
+    service.get_video.assert_awaited_once_with(41, account_id=10, can_view_private=True)
+    request.respond.assert_awaited_once()
+    assert request.respond.call_args.kwargs["audience"] == "personal"
+    event.notice.assert_not_awaited()
+    request.respond.reset_mock()
+    assert await component._deliver_video(request, 41)
+    request.respond.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["queued", "running"])
+async def test_check_video_reports_pending_render(
+    delivery: tuple[SchematicTools, Mock, Mock], status: Literal["queued", "running"]
+) -> None:
+    component, request, service = delivery
+    service.get_video.return_value = VideoStatus(id=41, build_id=7, schematic_id=1, status=status)
+    component._video_job_id = 41
+    event = Mock(spec=sl.PressEvent, context=request, notice=AsyncMock())
+
+    await component._refresh_video(event)
+
+    event.notice.assert_awaited_once()
+    assert "still rendering" in source_text(event.notice.call_args.args[0])
+    request.respond.assert_not_awaited()
     service.open_video_content.assert_not_awaited()
