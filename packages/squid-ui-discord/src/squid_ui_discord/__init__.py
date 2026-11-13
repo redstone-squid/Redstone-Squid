@@ -82,6 +82,7 @@ from squid_ui_discord.audience import Audience, Private, Visibility
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.cog import Cog
+from squid_ui_discord.command_options import Choice, Option
 from squid_ui_discord.commands import (
     CommandPolicy,
     CommandResult,
@@ -271,6 +272,7 @@ __all__ = [
     "ChallengeRequest",
     "ChallengeRunner",
     "ChallengeSupervisor",
+    "Choice",
     "ChoiceEvent",
     "CloseReason",
     "Cog",
@@ -314,6 +316,7 @@ __all__ = [
     "NavigateEvent",
     "OpenContext",
     "OpenEvent",
+    "Option",
     "Owner",
     "PauseUpdates",
     "PendingCard",

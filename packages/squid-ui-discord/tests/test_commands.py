@@ -480,3 +480,90 @@ async def test_unloaded_cog_dispatch_does_not_open_application_owned_panels() ->
         await run(cog.build, cog, harness.source, 42)
     assert not harness.deferrals
     assert not harness.sends
+
+
+async def test_option_declarations_preserve_native_translated_payloads() -> None:
+    class Translator(app_commands.Translator):
+        @override
+        async def translate(
+            self,
+            string: app_commands.locale_str,
+            locale: discord.Locale,
+            context: app_commands.TranslationContext,
+        ) -> str | None:
+            if locale is discord.Locale.german and "fluent_message" in string.extras:
+                return f"de_{string.message}"
+            return None
+
+    async def complete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return [app_commands.Choice(name=current, value=current)]
+
+    name = tr(t"test-options-command = lookup")
+    description = tr(t"test-options-help = Look up a build")
+    option_name = tr(t"test-options-name = category")
+    option_help = tr(t"test-options-description = Choose a category")
+    choice_name = tr(t"test-options-choice = Door")
+
+    @sd.command(name=to_locale_str(name), description=to_locale_str(description))
+    @app_commands.rename(kind=to_locale_str(option_name))
+    @app_commands.describe(kind=to_locale_str(option_help), query="Search text")
+    @app_commands.choices(kind=[app_commands.Choice(name=to_locale_str(choice_name), value="door")])
+    @app_commands.autocomplete(query=complete)
+    async def legacy(request: sd.Request, kind: str = "door", query: str | None = None) -> None:
+        pass
+
+    @sd.command(
+        name=name,
+        description=description,
+        options={
+            "kind": sd.Option(name=option_name, description=option_help, choices=[sd.Choice("door", choice_name)]),
+            "query": sd.Option(description="Search text", autocomplete=complete),
+        },
+    )
+    async def declared(request: sd.Request, kind: str = "door", query: str | None = None) -> None:
+        pass
+
+    bot = installed_bot()
+    payload = await declared.get_translated_payload(bot.tree, Translator())
+    assert payload == await legacy.get_translated_payload(bot.tree, Translator())
+    assert payload["options"][0]["description_localizations"]["de"] == "de_Choose a category"
+    assert payload["options"][0]["choices"][0]["name_localizations"]["de"] == "de_Door"
+    assert declared._params["query"].autocomplete is complete
+
+
+def test_group_options_preserve_other_native_metadata() -> None:
+    group = sd.Group(name="build", description="Build commands")
+
+    @group.command(options={"build_id": sd.Option(name="build", description="Build ID")})
+    @app_commands.describe(count="Number of builds")
+    @app_commands.choices(count=[app_commands.Choice(name="One", value=1)])
+    async def show(request: sd.Request, build_id: int, count: int = 1) -> None:
+        pass
+
+    assert group.get_command("show") is show
+    assert show.parameters[0].display_name == "build"
+    assert show.parameters[0].description == "Build ID"
+    assert show.parameters[1].description == "Number of builds"
+    assert show.parameters[1].choices[0].value == 1
+    assert show.parameters[1].default == 1
+
+
+@pytest.mark.parametrize("name", ["missing", "request"])
+def test_options_reject_unknown_or_source_parameters(name: str) -> None:
+    with pytest.raises(TypeError, match="Unknown command option"):
+
+        @sd.command(options={name: sd.Option(description="Not an option")})
+        async def show(request: sd.Request, build_id: int) -> None:
+            pass
+
+
+def test_options_reject_choices_with_autocomplete() -> None:
+    async def complete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return []
+
+    with pytest.raises(TypeError, match="both choices and autocomplete"):
+
+        @sd.command(options={"kind": sd.Option(autocomplete=complete)})
+        @app_commands.choices(kind=[app_commands.Choice(name="Door", value="door")])
+        async def show(request: sd.Request, kind: str) -> None:
+            pass

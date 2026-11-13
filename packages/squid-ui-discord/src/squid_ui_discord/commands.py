@@ -10,7 +10,7 @@ import annotationlib
 import asyncio
 import inspect
 import weakref
-from collections.abc import Awaitable, Callable, Coroutine, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import partial, wraps
 from typing import Any, Concatenate, Protocol, Unpack, cast, get_origin, overload, override
@@ -25,6 +25,7 @@ from squid_ui import paragraph
 from squid_ui.forms import FormSpec
 from squid_ui_discord._pending import _PendingCommand
 from squid_ui_discord.access import Everyone
+from squid_ui_discord.command_options import CommandText, Option, apply_options, command_text
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, RequestSource
 from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.request import Deferral, Request, _request_for_binding
@@ -44,8 +45,8 @@ _MENU_TYPES = (discord.AppCommandType.message, discord.AppCommandType.user)
 class NativeCommandKwargs(TypedDict, total=False, extra_items=object):
     """Keywords forwarded to `app_commands.command`; unknown ones pass through unchecked."""
 
-    name: str | app_commands.locale_str
-    description: str | app_commands.locale_str
+    name: CommandText
+    description: CommandText
     nsfw: bool
     auto_locale_strings: bool
     extras: dict[Any, Any]
@@ -336,6 +337,7 @@ def command(
     *,
     pending: PendingCard | None = None,
     defer: Deferral | None = None,
+    options: Mapping[str, Option] | None = None,
     **native: Unpack[NativeCommandKwargs],
 ) -> CommandDecorator:
     """Build an app command whose source parameter receives a Request.
@@ -343,13 +345,26 @@ def command(
     ``defer`` acknowledges before the handler runs. ``pending`` shows a card and replaces
     it with the returned document; the handler must return document content or None,
     which leaves the card visible. Both policies inherit from an enclosing Group.
-    Other command options pass through to discord.py.
+    Names and descriptions accept Fluent messages directly. ``options`` groups metadata by
+    Python parameter name; unknown names fail at declaration time. Other keywords pass to discord.py.
     """
     own = CommandPolicy(defer=defer, pending=pending)
 
     def decorate(callback: Callable[..., Awaitable[CommandResult]]) -> app_commands.Command[Any, ..., None]:
         outward = _wrap(callback, own, discord.Interaction)
-        return app_commands.command(**native)(outward)  # type: ignore[arg-type]
+        if options is not None:
+            parameters, source_index = _source_parameter(callback)
+            apply_options(outward, options, {parameter.name for parameter in parameters[source_index + 1 :]})
+        metadata = dict(native)
+        for key in ("name", "description"):
+            if key in metadata:
+                metadata[key] = command_text(cast(CommandText, metadata[key]))
+        result = app_commands.command(**metadata)(outward)  # type: ignore[arg-type]
+        for parameter in result.parameters:
+            if parameter.choices and parameter.autocomplete:
+                message = f"Command option {parameter.name!r} cannot have both choices and autocomplete"
+                raise TypeError(message)
+        return result
 
     return cast(CommandDecorator, decorate)
 
@@ -423,12 +438,13 @@ class Group(app_commands.Group):
         *,
         pending: PendingCard | None = None,
         defer: Deferral | None = None,
+        options: Mapping[str, Option] | None = None,
         **native: Unpack[NativeCommandKwargs],
     ) -> CommandDecorator:
         """`sd.command` registered under this group."""
 
         def decorate(callback: Callable[..., Awaitable[CommandResult]]) -> app_commands.Command[Any, ..., None]:
-            member = command(pending=pending, defer=defer, **native)(callback)
+            member = command(pending=pending, defer=defer, options=options, **native)(callback)
             self.add_command(member)
             return member
 

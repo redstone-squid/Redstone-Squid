@@ -53,6 +53,34 @@ to infer the command's cog; component callbacks use typed events such as `sd.Pre
 command binding use `await self.ui.request(source)`. Both resolvers share one request and ledger;
 a missing or closed command-owner scope raises instead of extending the panel's lifetime.
 
+Slash commands and `sd.Group.command` accept parameter metadata together in `options`, keyed by
+Python parameter name. Types and defaults stay in the handler signature:
+
+```python
+from squid_i18n import tr
+
+
+@sd.command(
+    name=tr(t"lookup-name = lookup"),
+    description=tr(t"lookup-help = Look up a build"),
+    options={
+        "kind": sd.Option(
+            name=tr(t"lookup-kind-name = kind"),
+            description=tr(t"lookup-kind-help = Build category"),
+            choices=[sd.Choice("door", tr(t"lookup-door = Door"))],
+        ),
+    },
+)
+async def lookup(request: sd.Request, kind: str = "door") -> str:
+    return kind
+```
+
+Names, descriptions, and choice labels also accept plain strings and Discord `locale_str` values.
+Fluent messages must be parameter-free declarations; the adapter retains them for the command tree's
+translator. `Option(autocomplete=callback)` accepts a native Discord autocomplete callback or one
+adapted with `sd.autocomplete()`. Choices and autocomplete cannot share an option. Native metadata
+decorators still work; explicitly supplied option fields override them, and omitted fields preserve them.
+
 Use `sd.ResponseSpec(live_updates=True)` on a screen, or pass `live_updates=True` when
 presenting it, to schedule refreshes when its observed values change. The installed scheduler
 works without a topic bus. `sd.Config(bus=...)` is optional: supply it when resources watch
