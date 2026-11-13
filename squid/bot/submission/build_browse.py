@@ -460,6 +460,8 @@ class BuildBrowseScreen(sd.Screen):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        if self._show_search_help:
+            return (self._workspace_controls(), *self._find_nodes())
         if self._selected is not None:
             return (
                 self._workspace_controls(),

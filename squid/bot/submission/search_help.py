@@ -35,7 +35,7 @@ def search_help(
     records: bool,
     apply_example: Callable[[str, sl.PressEvent], Awaitable[None]],
 ) -> sp.Tabs[sl.ComponentsV2Target, sd.Request]:
-    """Keep the reference compact enough to coexist with a page of search results."""
+    """Build the tabbed reference shown in place of browser results."""
     if records:
         fields = (
             sl.paragraph(

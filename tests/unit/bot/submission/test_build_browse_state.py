@@ -368,7 +368,7 @@ async def test_all_standings_clears_active_search_and_toggles() -> None:
 
 
 @pytest.mark.parametrize("records", [False, True])
-async def test_search_help_stays_with_results_without_refetching(records: bool) -> None:
+async def test_search_help_preserves_results_without_refetching(records: bool) -> None:
     screen = _screen(initial_id=None)
     screen._mode = "records" if records else "builds"
     service = cast(AsyncMock, screen._search_service)
@@ -380,8 +380,10 @@ async def test_search_help_stays_with_results_without_refetching(records: bool) 
         form = await ui.press_for_form(ui.key_for("catalogue-search"))
         await form.submit({"query": "door", "sort": ""})
         assert "## Search help" in ui.texts()
-        assert "## Search results" in ui.texts()
+        assert "## Search results" not in ui.texts()
+        ui.assert_within_limits()
         await ui.press(ui.key_for("search-help"))
+        assert "## Search results" in ui.texts()
         assert "## Search help" not in ui.texts()
         service.search.assert_awaited_once()
         ui.assert_within_limits()
@@ -491,3 +493,16 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
         queries.list_page.assert_awaited_with(
             statuses=frozenset({Status.CONFIRMED, Status.PENDING}), selector=PageSelector(offset=8), page_size=8
         )
+
+
+async def test_search_help_hides_and_restores_selected_build() -> None:
+    screen = _screen()
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("search-help"))
+        assert "Build #7" not in ui.texts()
+        for tab in ("fields", "syntax", "examples"):
+            await ui.press(ui.key_for(f"search-reference.{tab}"))
+            ui.assert_within_limits()
+        await ui.press(ui.key_for("search-help"))
+        assert "Build #7" in ui.texts()
+        ui.assert_within_limits()
