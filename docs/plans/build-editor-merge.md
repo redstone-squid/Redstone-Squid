@@ -1,8 +1,8 @@
 # One build editor for drafts and saved builds
 
-> **Status:** agreed 2026-11-12, not started: edit saved builds through the submission form manifest. Restrictions
-> and patterns become catalogue pickers; showcase tags, versions, and extender timings become editable;
-> AI-generated stays read-only.
+> **Status:** agreed 2026-11-12; phases 0 to 3 done 2026-11-13, phase 4 next. Edit saved builds through the
+> submission form manifest. Restrictions and patterns become catalogue pickers; showcase tags, versions, and
+> extender timings become editable; AI-generated stays read-only.
 
 ## Problem
 
@@ -51,16 +51,15 @@ view, which is what drafts pin and the API publishes.
 A new application module, `squid/submissions/application/build_answers.py`, owns both directions so they can be
 tested as a pair.
 
-- `answers_from_build(build, manifest, options)` produces the answers and the names it could not resolve. Patterns
-  and restrictions resolve to approved tag keys by the casefolded match `prefill._known` already uses.
-- `patch_from_answers(build, before, after, definitions)` compares only fields visible in the edit form and builds
-  a patch from the changed ones. Restriction keys go back into their four lists through the same lookup
-  `build_target._restriction_values` uses.
+- `answers_from_build(build, options)` produces the answers and the names it could not resolve. Patterns and
+  restrictions resolve to approved tag keys by `match_choice`, the casefolded match prefill uses.
+- `patch_from_answers(before, after, unresolved, options)` builds a patch from the answers that changed. Resolved
+  restriction names all travel in one list, because the build edit command re-files them by tag type.
 
 Known traps, each needing a test:
 
-- **Extender orientation** is stored as "Upward" or "Downward" but the editor accepts only Horizontal, Up, and
-  Down. Map both spellings, and send nothing when the value did not change.
+- **Extender orientation** was stored as "Upward" by submissions but "Up" by the editor. Phase 0 made the full
+  spelling canonical; still send nothing when the value did not change.
 - **Unresolved tag names** (names on the build with no approved tag) are not in the picker. Keep them unless the
   user removes them, and show them in the section summary. Do not add them back into the patch:
   `BuildEditPatch.apply` clears them for every list it replaces, and the build edit handler in
@@ -77,11 +76,12 @@ Known traps, each needing a test:
    saves against.
 2. `DraftWorkspace` keeps its behaviour. A new `BuildEditWorkspace` stages answers locally with an undo history,
    and its review step shows only changed fields before one save through `EditController`.
-3. `DraftEditorScreen` and `BuildEditScreen` become one screen with a mode-specific last row, following
-   [the screen conventions](../bot-screens.md):
+3. `DraftEditorScreen` and `BuildEditScreen` stay two thin screens over the shared parts: the section overview
+   and section editing in `BuildEditorScreen` (`editor.py`) and `sections.py`. Each owns only its workspace and
+   its last row, following [the screen conventions](../bot-screens.md):
    - draft: Submit, Preview, Undo, Redo;
    - saved build: Review changes (then Apply changes), Preview, Undo, Redo, Cancel.
-4. Delete `EDIT_FIELDS`, `EDIT_SECTIONS`, `squid/bot/submission/ui/fields.py`, and the shared base in `editor.py`.
+4. Delete `EDIT_FIELDS`, `EDIT_SECTIONS`, and `squid/bot/submission/ui/fields.py`.
 
 ### Patch fields for showcase tags, versions, and extender timings
 
@@ -90,10 +90,13 @@ Known traps, each needing a test:
   tags to their own fields.
 - **Versions** are the build's `build_versions` rows. The patch replaces the set, using the same version lookup as
   submission (`source_version` falls back to the newest Java version only for new submissions).
-- **Extender timings** have no column on the build. Records read them from `extender_timing_variants`
-  (`squid/records/models.py`), which nothing writes: a submission keeps its extension and retraction times only in
-  provenance, so no extender has a timing for records. The patch writes a `default` variant row, and submission
-  finalization writes one too.
+- **Extender timings** are columns on the extender (`extension_time`, `retraction_time`), as doors have, filled
+  from submission provenance by a migration. Finalization writes them and records fall back to them when an
+  extender has no measured variant, as they do for doors. (The first idea, writing a `default` row into
+  `extender_timing_variants`, would have made the builds module write records' table and reproduced the door
+  staleness problem below.)
+- **Extender directions** are stored as Horizontal, Upward, or Downward. The editor used to store "Up" and "Down",
+  which split records into two categories per direction; a migration rewrote them.
 
 Door timings have a related problem, outside this plan: a migration copied each door's timings into
 `door_timing_variants` once, and records prefer that row over the door's own columns, so later edits to an older
@@ -104,11 +107,11 @@ door's timings never reach records. Track it separately.
 Each phase lands as its own commits with tests.
 
 0. Patch and HTTP fields for showcase tags, versions, and extender timings, with finalization writing the extender
-   timing variant. Regenerate the OpenAPI contract.
+   timings. Regenerate the OpenAPI contract.
 1. Purposes and edit rules in the build form. No change to the submit view.
 2. `build_answers.py` with round-trip tests over door, extender, and other builds, including every trap above.
 3. `AnswerWorkspace`, with `DraftWorkspace` moved onto it unchanged. Draft editor tests must pass untouched.
-4. `BuildEditWorkspace` and the merged screen. Port `test_components_v2_ui.py` and `test_edit_fields.py`; compare
+4. `BuildEditWorkspace` and the saved-build screen on the shared parts. Port `test_components_v2_ui.py` and `test_edit_fields.py`; compare
    both modes in `just ui-gallery` before and after.
 5. Delete the old editor code.
 
