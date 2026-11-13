@@ -43,7 +43,7 @@ from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.submissions.infrastructure.attachment_edits import PostgresAttachmentEdits
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
-from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
+from squid.submissions.infrastructure.inference_runs import PostgresInferenceRunRepository
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from squid.submissions.infrastructure.recalculation import PostgresRecalculationProposals
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
@@ -93,7 +93,7 @@ class SqlAlchemyUnitOfWork:
         self._attachment_edits = PostgresAttachmentEdits(self._active_session)
         self._attachment_intake = PostgresAttachmentIntake(self._active_session)
         self._draft_schematics = PostgresDraftSchematics(self._active_session)
-        self._inference_runs = PostgresInferenceRuns(self._active_session)
+        self._inference_runs = PostgresInferenceRunRepository(self._active_session)
         self._media_jobs = PostgresMediaJobRepository(self._active_session)
         self._restrictions = RestrictionRepository(self._active_session)
         self._build_taxonomy = PostgresBuildTaxonomy(self._active_session)
@@ -283,7 +283,7 @@ class SqlAlchemyUnitOfWork:
         return self._draft_schematics
 
     @property
-    def inference_runs(self) -> PostgresInferenceRuns:
+    def inference_runs(self) -> PostgresInferenceRunRepository:
         self._active_session()
         return self._inference_runs
 

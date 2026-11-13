@@ -1,6 +1,7 @@
 """Claim-fenced persistence for inference inputs and stable candidates."""
 
 from collections.abc import Callable
+from typing import override
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
@@ -16,6 +17,7 @@ from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 from squid.submissions.application.inference_runs import (
     InferenceCandidate,
     InferenceClaim,
+    InferenceRunRepository,
     InferenceStatus,
     candidate_id,
     inference_busy,
@@ -30,7 +32,7 @@ _DRAFT = TypeAdapter(BuildDraftPayload)
 _SOURCE_FILES = TypeAdapter(tuple[SubmissionSourceFile, ...])
 
 
-class PostgresInferenceRuns:
+class PostgresInferenceRunRepository(InferenceRunRepository):
     """Store inference inputs and candidates in the caller's transaction.
 
     Admission is serialized across all runs. Submission runs share a global
@@ -41,6 +43,7 @@ class PostgresInferenceRuns:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
+    @override
     async def begin(self, run_id: UUID, owner: int, inputs: dict[str, JSONValue], *, capacity: int) -> InferenceClaim:
         session = self._session()
         await lock_key(session, "inference-runs", namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_CAPACITY)
@@ -102,6 +105,7 @@ class PostgresInferenceRuns:
         row.claim_expires_at = current.add(minutes=5)
         return InferenceClaim(row.claim_token)
 
+    @override
     async def complete(
         self, run_id: UUID, token: UUID, drafts: tuple[BuildDraft, ...]
     ) -> tuple[InferenceCandidate, ...]:
@@ -115,6 +119,7 @@ class PostgresInferenceRuns:
         row.claim_expires_at = None
         return _candidates(row)
 
+    @override
     async def fail(self, run_id: UUID, token: UUID) -> None:
         session = self._session()
         row = await self._claim(session, run_id, token)
@@ -123,6 +128,7 @@ class PostgresInferenceRuns:
             row.claim_token = None
             row.claim_expires_at = None
 
+    @override
     async def retained(
         self, run_id: UUID
     ) -> tuple[int, dict[str, JSONValue], bool, tuple[InferenceCandidate, ...]] | None:
@@ -136,6 +142,7 @@ class PostgresInferenceRuns:
             (row.owner_account_id, row.inputs, row.state == "completed", _candidates(row)) if row is not None else None
         )
 
+    @override
     async def get(self, run_id: UUID) -> tuple[int, tuple[InferenceCandidate, ...]] | None:
         session = self._session()
         row = await session.scalar(
@@ -149,6 +156,7 @@ class PostgresInferenceRuns:
             return None
         return row.owner_account_id, _candidates(row)
 
+    @override
     async def public_status(self, run_id: UUID) -> InferenceStatus | None:
         session = self._session()
         row = await session.get(SubmissionInferenceRun, run_id)
@@ -177,6 +185,7 @@ class PostgresInferenceRuns:
         )
         return InferenceStatus(bundle.channel_id, bundle.server_id, bundle.primary[0].message_id, row.state, states)
 
+    @override
     async def list_active(self, owner: int | None) -> tuple[UUID, ...]:
         session = self._session()
         query = select(SubmissionInferenceRun.id).where(
@@ -187,6 +196,7 @@ class PostgresInferenceRuns:
             query = query.where(SubmissionInferenceRun.owner_account_id == owner)
         return tuple(await session.scalars(query.order_by(SubmissionInferenceRun.expires_at.desc()).limit(10)))
 
+    @override
     async def expired(self) -> tuple[tuple[UUID, int], ...]:
         session = self._session()
         rows = await session.scalars(
@@ -202,6 +212,7 @@ class PostgresInferenceRuns:
             result.append((row.id, len(images)))
         return tuple(result)
 
+    @override
     async def delete_expired(self, run_id: UUID) -> None:
         session = self._session()
         await session.execute(
