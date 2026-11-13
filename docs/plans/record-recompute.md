@@ -10,9 +10,12 @@ Records (the fastest door, the smallest extender, and so on) are derived data. `
 publishes a replacement run. Whenever a source change makes a kind's records out of date,
 `record_recompute_queue` tells the worker to rebuild that kind.
 
-That table is set up as a durable work queue, but it acts as a per-kind "needs rebuilding" flag. The queue
-machinery adds cost without adding anything, and the rebuild runs in one transaction that is longer than it needs
-to be.
+Three things are wrong with this today:
+
+1. The table is set up as a durable work queue, but it acts as a per-kind "needs rebuilding" flag. The queue
+   machinery adds cost and failure modes without adding anything.
+2. Every records operation waits on one global lock for the length of a full rebuild.
+3. We rebuild far more often than the records change, and every rebuild rewrites every row.
 
 ### The queue only carries a kind
 
@@ -29,11 +32,11 @@ to be.
   lets a second worker claim and rebuild the same kind concurrently.
 - **Failures are hard to see.** Dead-lettering would be wrong here: it would mean "stop computing door records".
   The rebuild is deterministic, so a failure is a bug that blocks every record of that kind until someone fixes it.
-  Retrying forever is correct, but nothing alerts on it. Each source change resets `attempts` to 0, so a broken kind
-  retries a full rebuild after every build edit. When nothing changes, the backoff grows to its cap of
-  15 s × 2¹², about 17 hours.
+  Retrying forever is correct, but nothing alerts on it. Each source change resets `attempts` to 0, so the count never
+  shows how long a kind has been broken. When nothing changes, the backoff grows to its cap of 15 s × 2¹², about
+  17 hours.
 
-### The rebuild transaction is longer than it needs to be
+### One global lock covers the whole rebuild
 
 `rebuild_in` runs these steps in the caller's transaction:
 
@@ -43,80 +46,145 @@ to be.
 3. `_compute_scope` generates the category combinations. This is synchronous Python running on the event loop.
 4. `activate` takes `record-run:{kind}:{version}` and writes the run, results, holders and history.
 
-Only step 4 has to be atomic. Holding the transaction across steps 1-3 has two costs:
+The worker drain, the staff rebuild form (`squid/bot/submission/records.py`) and `RecordService.lookup_or_materialize`
+all go through step 1. While a background rebuild of one kind holds the lock, a user's lookup for another kind waits
+for the whole rebuild to finish.
 
-- **Every records operation waits on one global lock.** The worker drain, the staff rebuild form
-  (`squid/bot/submission/records.py`) and `RecordService.lookup_or_materialize` all call
-  `active_rules_revision_id`. While a background rebuild of one kind holds the lock, a user's lookup for another kind
-  waits for the whole rebuild to finish.
-- **The reads are not consistent anyway.** We run at READ COMMITTED, so each read statement in step 2 sees its own
-  snapshot.
+The lock does one useful thing, by accident. Because it serializes rebuilds, a rebuild that read older data can never
+publish after one that read newer data. Any redesign has to keep that guarantee.
 
-The long transaction does do one useful thing, by accident. Because the global lock serializes rebuilds, a rebuild that
-read older data can never publish after one that read newer data. Any redesign has to keep that guarantee.
+The long transaction itself is not the problem. It holds no row locks until step 4, and at READ COMMITTED it pins no
+snapshot between statements. The problem is the scope of the lock, and step 3 blocking the event loop. The staff form
+and `lookup_or_materialize` run step 3 inside the bot process, where a long synchronous computation delays every
+other Discord interaction and the gateway heartbeat.
+
+### Most rebuilds change nothing, and each one rewrites everything
+
+- **The trigger fires for builds that cannot affect records.** It fires on any change to any door or extender build,
+  but `list_confirmed` reads only confirmed builds. Every edit to a pending submission rebuilds the whole kind.
+- **Every rebuild publishes a full new run.** `activate` inserts a new run with all its results, holders and history,
+  and publishes `record_run.activated`, even when the computed records equal the active run's.
+  `record_computation_runs` also has an enqueue-search trigger, so each activation creates search projection work.
+- **Superseded runs appear to be kept forever.** Nothing in `squid/records` or the worker deletes them, so the
+  result, holder and history tables grow with every build edit.
 
 ## Proposal
 
-Do part 1 regardless of how long rebuilds take. Part 2 depends on the measurement below.
+Steps 1-3 are independent of how long rebuilds take. Step 4 is the larger saving and depends on the measurement
+below. Step 5 is deferred.
 
-### 1. Replace the queue with a per-kind "needs rebuilding" flag
+### 1. Replace the queue with one state row per kind
 
 ```
-record_dirty_kinds(build_kind PK, generation bigint, dirty_since, attempts, available_at, last_error)
+record_kind_state(build_kind PK, generation bigint, built_generation bigint,
+                  dirty_since, attempts, available_at, last_error)
 ```
 
-- **Producers** (the trigger, rules-revision activation, and saving a requested category) upsert the kind and
-  increment `generation`.
-- **The worker** handles each kind in its own transaction:
-  1. Take `pg_try_advisory_xact_lock(kind)`. If another worker holds it, skip the kind.
-  2. Read `generation` as `g`.
+The migration creates one row for each kind and the rows are never deleted. A kind needs rebuilding when
+`generation > built_generation`.
+
+`generation` only ever increases. That is why the row is permanent: if the worker deleted the row to clear the flag,
+the next change would insert a new row and the counter would start again. A counter that can go backwards cannot be
+used later to order runs (step 5), and a mistake in a `DELETE` condition would silently lose a change.
+
+- **Producers** (the trigger and rules-revision activation) increment `generation`, set `available_at` to now, and set
+  `dirty_since` if it is null. They do not touch `attempts` or `last_error`.
+- **The worker** handles each kind that needs rebuilding in its own transaction:
+  1. Try to take the kind's rebuild lock (step 2). If another rebuild holds it, skip the kind.
+  2. Read `generation` as `g`, and read the current-version pin.
   3. Rebuild the kind.
-  4. Run `DELETE ... WHERE build_kind = :kind AND generation = :g`, then commit.
-- **On failure**, roll back, then record `attempts`, `available_at` and `last_error` in a separate short transaction.
+  4. Set `built_generation = g`, reset `attempts` and `last_error`, and clear `dirty_since` if `generation` is still
+     `g`. Commit.
+- **On failure**, roll back, then increment `attempts` and record `available_at` and `last_error` in a separate short
+  transaction.
 
 How this answers each problem above:
 
-- **No lease.** If the worker crashes, its transaction rolls back and the flag is still set. The advisory lock is
-  released automatically, so we need no visibility timeout, no claim token and no claim-complete check.
-- **Changes made mid-rebuild are not lost.** A change that arrives during the rebuild increments `generation`, so the
-  final `DELETE` matches nothing and the kind runs again. The claim token does this job today.
+- **No lease.** If the worker crashes, its transaction rolls back and the kind still needs rebuilding. The advisory
+  lock is released automatically, so we need no visibility timeout, no claim token and no claim-complete check.
+- **Changes made mid-rebuild are not lost.** A change that arrives during the rebuild increments `generation` past
+  `g`, so the kind still needs rebuilding after the worker commits. The claim token does this job today.
 - **Kinds fail independently.**
-- **Failures become visible.** Add an alert on `attempts`/`last_error`. Decide whether a source change should reset
-  `attempts`. Today it does, and that is what makes a broken kind retry on every build edit.
+- **Failures become visible.** A source change makes the kind retry immediately, because the new data may be what
+  fixes the failure. It does not reset `attempts`; only a successful rebuild does. So `attempts` counts consecutive
+  failures and `dirty_since` shows how long the records have been out of date. Alert on both.
+
+Only the worker advances `built_generation`. The staff form and `lookup_or_materialize` can rebuild a scope other than
+the pinned current version, so they leave the row alone. The cost is one extra worker rebuild when a staff rebuild
+happens to run while the kind already needs rebuilding.
 
 This takes `record_recompute_queue` out of `ClaimedRowQueue`. The durable-queues audit brought it in to fix two real
 bugs: acknowledging a lease deleted work enqueued during the run, and a crashed worker's lease was never reclaimed.
 The generation check and the transaction-scoped lock fix the same two bugs without a lease. `squid/worker/queue_health.py`
-needs its own small entry for the new table, so it keeps reporting ready count and oldest age.
+needs its own small entry for the new table, so it keeps reporting how many kinds need rebuilding and for how long.
 
-### 2. Shorten the rebuild transaction (if measurements justify it)
+### 2. Lock per kind instead of globally
 
-1. **Read from one snapshot.** Open a short `REPEATABLE READ READ ONLY` transaction. Read `generation` first, then
-   every input: candidates, requested categories, the rules revision and the current-version pin. Then close it.
-2. **Compute with no transaction open.** Use `to_thread` if profiling shows `_compute_scope` blocks the event loop.
-3. **Publish in a short transaction:**
-   - Take `record-run:{kind}:{version}`.
-   - Refuse to activate if the active run was computed from a newer `generation`. Each run stores the generation it
-     was computed from, so an older result can never replace a newer one.
-   - Write the run.
-   - Clear the flag only where `generation = g`.
+- **`active_rules_revision_id` locks only to activate.** A plain read first checks whether the expected revision is
+  already active, and returns it without locking. That is almost every call. Otherwise it takes the lock and checks
+  again before activating.
+- **Every rebuild takes a per-kind lock.** `rebuild_in` takes `pg_advisory_xact_lock('record-rebuild:{kind}')` before
+  it reads anything for that kind, and holds it until commit. The worker uses the try-lock form and skips a busy
+  kind. The staff form and `lookup_or_materialize` wait. A caller that rebuilds several kinds locks them in a fixed
+  order so two callers cannot deadlock.
 
-Separately, `active_rules_revision_id` should lock only when it has to activate a new revision. When a plain read shows
-the expected revision is already active, it should return without locking. That is almost every call.
+Rebuilds of one kind still run one at a time, from reading to publishing, so an older read still cannot publish after
+a newer one. Rebuilds of different kinds no longer wait for each other. The existing `record-run:{kind}:{version}`
+lock in `activate` becomes redundant but harmless.
 
-Part 2 depends on part 1, because the generation has two jobs: it decides when the flag can be cleared, and it orders
-publication. A test should list every input to a rebuild and check that changing each one increments the generation.
-If an input is missing, a stale run can be published and nothing reports it.
+Two inputs do not go through the build trigger, and the lock is what keeps them correct:
+
+- **Requested categories.** `lookup_or_materialize` saves the category and rebuilds in one transaction. It should take
+  the kind lock before saving, so the save and the run that includes it commit together.
+- **The current-version pin.** The worker reads it in a separate transaction today, before the rebuild starts. Step 1
+  moves that read under the kind lock.
+
+The rule for any future input: a change either increments `generation`, or is published by the same transaction that
+makes it, under the kind lock. A test should list every input to a rebuild and check that each one follows the rule.
+If an input is missed, records stay out of date and nothing reports it.
+
+### 3. Compute off the event loop
+
+Run `_compute_scope` with `asyncio.to_thread` if it takes more than about 50 ms. It is a pure function of data already
+loaded, so this needs no other change. It matters most in the bot process.
+
+### 4. Publish only when the records changed
+
+Before `activate`, compare the computed batch with the active run for the same kind and version. If they are equal,
+skip the write: no new run, no `record_run.activated` event, no search projection work. Most rebuilds then only read.
+
+The comparison has to cover everything a run stores: the rules revision, titles, statuses, gap reasons, holders with
+their metric snapshots, and history. A stored hash of the batch on the run is probably simpler than loading and
+comparing rows. A new rules revision must always publish.
+
+Skipping unchanged runs is safer than making the trigger ignore unconfirmed builds. A trigger filter has to get every
+status transition right, and a mistake there leaves records out of date without any error.
+
+Also delete superseded runs after a retention period, once we have confirmed nothing reads them.
+
+### 5. Deferred: compute outside the transaction
+
+The earlier version of this plan split the rebuild into a `REPEATABLE READ READ ONLY` snapshot read, a computation
+with no transaction open, and a short publish transaction that refuses to replace a run computed from a newer
+`generation`. Compared with step 2, that adds two things:
+
+- All inputs come from one snapshot. Today each read statement sees its own, so a build edited mid-read can be loaded
+  half-changed. The edit also increments `generation`, so the next rebuild corrects it, but the wrong run is public
+  until then.
+- No database connection is held during the computation.
+
+It costs a stored generation on every run, an ordering check in `activate`, and the loss of the simple "one rebuild at
+a time per kind" argument. Do it only if rebuilds still take seconds after steps 1-4, or if a half-read run is
+actually observed.
 
 ## Before starting
 
-- **Measure.** Find the distribution of `squid.worker.record_maintenance` span durations in production. If full
-  rebuilds take tens of milliseconds, the lock contention does not matter and part 2 is not worth its complexity.
+- **Measure.** Find the distribution of `squid.worker.record_maintenance` span durations in production, how many
+  rebuilds run per day, and how many produce records that differ from the previous run. Durations decide step 3. The
+  other two numbers decide how much step 4 saves.
 - **Decide whether incremental, per-build recomputation is planned.** If it is, a real queue keyed by build is the
-  right shape and part 1 is wrong. Nothing on the roadmap suggests it is.
-- **Check `activate` under concurrency.** Today the global lock prevents two rebuilds of the same kind and version
-  from overlapping. Part 2 removes that, so confirm the per-run advisory lock and the `is_active` switch are safe
-  without it.
+  right shape and step 1 is wrong. Nothing on the roadmap suggests it is.
+- **Confirm nothing reads superseded runs** before adding retention in step 4.
 
 ## Already done
 
