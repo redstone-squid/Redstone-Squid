@@ -1,6 +1,5 @@
 CREATE TABLE public.idempotency_requests (
     id uuid NOT NULL,
-    principal text NOT NULL,
     idempotency_key text NOT NULL,
     request_fingerprint bytea NOT NULL,
     method text NOT NULL,
@@ -22,8 +21,6 @@ CREATE TABLE public.idempotency_requests (
 
 COMMENT ON TABLE public.idempotency_requests IS 'One caller-scoped mutation reservation and its completed HTTP response.';
 
-COMMENT ON COLUMN public.idempotency_requests.principal IS 'Legacy copy of caller, still written by the repository for the retained database column.';
-
 COMMENT ON COLUMN public.idempotency_requests.caller IS 'The server-derived caller namespace a key is reserved in.';
 
 ALTER TABLE ONLY public.idempotency_requests
@@ -31,9 +28,6 @@ ALTER TABLE ONLY public.idempotency_requests
 
 ALTER TABLE ONLY public.idempotency_requests
     ADD CONSTRAINT idempotency_requests_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.idempotency_requests
-    ADD CONSTRAINT idempotency_requests_principal_key UNIQUE (principal, idempotency_key);
 
 CREATE INDEX idempotency_requests_expires_at_idx ON public.idempotency_requests USING btree (expires_at);
 

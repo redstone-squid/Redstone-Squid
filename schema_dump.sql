@@ -103,7 +103,7 @@ CREATE FUNCTION public.build_history_snapshot_v1(target_build_id bigint) RETURNS
 SELECT jsonb_build_object(
     'build', jsonb_build_object('submission_status', b.submission_status, 'extra_info', b.extra_info, 'width', b.width, 'height', b.height, 'depth', b.depth, 'completion_time', b.completion_time, 'submission_time', b.submission_time, 'category', b.category, 'ai_generated', b.ai_generated, 'version_spec', b.version_spec, 'completion_at', b.completion_at, 'completion_evidence', b.completion_evidence, 'description', b.description, 'submitter_account_id', b.submitter_account_id, 'display_name', b.display_name, 'source_submission_draft_id', b.source_submission_draft_id, 'sponsor_installation_id', b.sponsor_installation_id, 'sponsor_display_name', b.sponsor_display_name, 'sponsor_address', b.sponsor_address, 'sponsor_description', b.sponsor_description, 'sponsor_website_url', b.sponsor_website_url),
     'doors', (SELECT jsonb_build_object('orientation', d.orientation, 'door_width', d.door_width, 'door_height', d.door_height, 'door_depth', d.door_depth, 'normal_opening_time', d.normal_opening_time, 'normal_closing_time', d.normal_closing_time, 'visible_opening_time', d.visible_opening_time, 'visible_closing_time', d.visible_closing_time) FROM public.doors d WHERE d.build_id = b.id),
-    'extenders', (SELECT jsonb_build_object('orientation', d.orientation, 'extension_length', d.extension_length, 'extender_type', d.extender_type) FROM public.extenders d WHERE d.build_id = b.id),
+    'extenders', (SELECT jsonb_build_object('orientation', d.orientation, 'extension_length', d.extension_length, 'extender_type', d.extender_type, 'extension_time', d.extension_time, 'retraction_time', d.retraction_time) FROM public.extenders d WHERE d.build_id = b.id),
     'creators', COALESCE((SELECT jsonb_agg(jsonb_build_object('alias_id', a.id, 'name', a.name, 'account_id', a.account_id) ORDER BY a.id) FROM public.build_creators c JOIN public.creator_aliases a ON a.id = c.alias_id WHERE c.build_id = b.id), '[]'::jsonb),
     'versions', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', v.id, 'edition', v.edition, 'major_version', v.major_version, 'minor_version', v.minor_version, 'patch_number', v.patch_number, 'data_version', v.data_version) ORDER BY v.id) FROM public.build_versions bv JOIN public.versions v ON v.id = bv.version_id WHERE bv.build_id = b.id), '[]'::jsonb),
     'tags', COALESCE((SELECT jsonb_agg(jsonb_build_object('tag_id', r.tag_id, 'value_type', r.value_type, 'numeric_value', r.numeric_value::text, 'text_value', r.text_value, 'boolean_value', r.boolean_value, 'display_unit_key', r.display_unit_key, 'display_order', r.display_order, 'evidence', r.evidence, 'provenance', r.provenance, 'created_by_account_id', r.created_by_account_id) ORDER BY r.tag_id) FROM public.build_tag_assignments r  WHERE r.build_id = b.id), '[]'::jsonb),
@@ -2855,7 +2855,9 @@ CREATE TABLE public.extenders (
     build_id bigint NOT NULL,
     orientation text,
     extension_length integer,
-    extender_type text
+    extender_type text,
+    extension_time bigint,
+    retraction_time bigint
 );
 
 
@@ -2958,7 +2960,6 @@ COMMENT ON TABLE public.guild_vote_role_weights IS 'A role multiplier scoped to 
 
 CREATE TABLE public.idempotency_requests (
     id uuid NOT NULL,
-    principal text NOT NULL,
     idempotency_key text NOT NULL,
     request_fingerprint bytea NOT NULL,
     method text NOT NULL,
@@ -2984,13 +2985,6 @@ CREATE TABLE public.idempotency_requests (
 --
 
 COMMENT ON TABLE public.idempotency_requests IS 'One caller-scoped mutation reservation and its completed HTTP response.';
-
-
---
--- Name: COLUMN idempotency_requests.principal; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.idempotency_requests.principal IS 'Legacy copy of caller, still written by the repository for the retained database column.';
 
 
 --
@@ -6406,14 +6400,6 @@ ALTER TABLE ONLY public.idempotency_requests
 
 ALTER TABLE ONLY public.idempotency_requests
     ADD CONSTRAINT idempotency_requests_pkey PRIMARY KEY (id);
-
-
---
--- Name: idempotency_requests idempotency_requests_principal_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.idempotency_requests
-    ADD CONSTRAINT idempotency_requests_principal_key UNIQUE (principal, idempotency_key);
 
 
 --

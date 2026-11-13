@@ -2,7 +2,9 @@ CREATE TABLE public.extenders (
     build_id bigint NOT NULL,
     orientation text,
     extension_length integer,
-    extender_type text
+    extender_type text,
+    extension_time bigint,
+    retraction_time bigint
 );
 
 COMMENT ON TABLE public.extenders IS 'An extender build.';
