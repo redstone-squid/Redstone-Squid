@@ -273,7 +273,7 @@ class TestOperationalInspectorSections:
         inspector.session_id = session.id
         body = "\n".join(sd.payload_texts(commit_render(MessageRoot(inspector, access=Owner(1)))))
         assert f"Session {session.id}" in body
-        assert subject.id in body
+        assert discord.utils.escape_markdown(subject.id) in body
 
     def test_overview_snapshot_download_is_round_trippable_json(self) -> None:
         asset = operational_attachment(DevToolsRuntime().snapshot())
