@@ -10,7 +10,7 @@ CREATE TABLE public.media_artifacts (
     height integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT media_artifacts_dimensions_by_role CHECK ((((role = 'report'::text) AND (width IS NULL) AND (height IS NULL)) OR ((role <> 'report'::text) AND (width > 0) AND (height > 0)))),
-    CONSTRAINT media_artifacts_role_check CHECK ((role = ANY (ARRAY['output'::text, 'poster'::text, 'video_thumbnail'::text, 'report'::text]))),
+    CONSTRAINT media_artifacts_role_check CHECK ((role = ANY (ARRAY['output'::text, 'video_thumbnail'::text, 'report'::text]))),
     CONSTRAINT media_artifacts_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT media_artifacts_size_positive CHECK ((byte_size > 0))
 );

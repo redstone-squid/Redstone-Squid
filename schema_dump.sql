@@ -3064,7 +3064,7 @@ CREATE TABLE public.media_artifacts (
     height integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT media_artifacts_dimensions_by_role CHECK ((((role = 'report'::text) AND (width IS NULL) AND (height IS NULL)) OR ((role <> 'report'::text) AND (width > 0) AND (height > 0)))),
-    CONSTRAINT media_artifacts_role_check CHECK ((role = ANY (ARRAY['output'::text, 'poster'::text, 'video_thumbnail'::text, 'report'::text]))),
+    CONSTRAINT media_artifacts_role_check CHECK ((role = ANY (ARRAY['output'::text, 'video_thumbnail'::text, 'report'::text]))),
     CONSTRAINT media_artifacts_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT media_artifacts_size_positive CHECK ((byte_size > 0))
 );
@@ -5082,11 +5082,8 @@ COMMENT ON TABLE public.submission_finalization_jobs IS 'A finalization attempt 
 CREATE TABLE public.submission_finalization_results (
     job_id uuid NOT NULL,
     build_id bigint NOT NULL,
-    target_key text,
-    provenance jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT submission_finalization_results_build_id_positive CHECK ((build_id > 0)),
-    CONSTRAINT submission_finalization_results_target_key_check CHECK (((target_key IS NULL) OR (target_key ~ '^[a-z][a-z0-9_]{0,63}$'::text)))
+    CONSTRAINT submission_finalization_results_build_id_positive CHECK ((build_id > 0))
 );
 
 
