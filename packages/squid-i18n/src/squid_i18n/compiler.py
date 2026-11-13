@@ -152,11 +152,11 @@ def compile_template(
     slots = tuple(expression_slot(expression) for expression in expressions)
     binding_conversions: dict[str, str | None] = {}
     for slot, conversion in zip(slots, conversions or (None,) * len(slots), strict=True):
-        if conversion not in (None, "s"):
-            msg = "Only !s is supported; use NUMBER or DATETIME for localized formatting"
+        if conversion not in (None, "s", "r"):
+            msg = "Only !s and !r are supported; use NUMBER or DATETIME for localized formatting"
             raise DeclarationError(msg)
         if conversion and slot.function:
-            msg = "Apply !s to the original value, not NUMBER or DATETIME"
+            msg = "Apply conversions to the original value, not NUMBER or DATETIME"
             raise DeclarationError(msg)
         if slot.name in binding_conversions and binding_conversions[slot.name] != conversion:
             msg = f"Conflicting conversions for {slot.name}; give the value a separate name"

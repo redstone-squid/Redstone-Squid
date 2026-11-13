@@ -258,13 +258,32 @@ def test_string_conversion_retains_named_expression_and_repeated_binding() -> No
 def test_invalid_conversions_are_rejected_at_capture() -> None:
     value = 12345
     with pytest.raises(DeclarationError, match="Only !s"):
-        tr(t"{value!r}", key="repr")
-    with pytest.raises(DeclarationError, match="Only !s"):
         tr(t"{value!a}", key="ascii")
     with pytest.raises(DeclarationError, match="Conflicting conversions"):
         tr(t"{value} / {value!s}", key="mixed")
     with pytest.raises(DeclarationError, match="original value"):
         tr(t"{NUMBER(value)!s}", key="number")
+    with pytest.raises(DeclarationError, match="Conflicting conversions"):
+        tr(t"{value!s} / {value!r}", key="mixed-conversions")
     nested = tr("Nested", key="nested")
     with pytest.raises(TypeError):
         tr(t"{nested!s}", key="eager")
+
+
+@pytest.mark.parametrize("markdown", [False, True])
+def test_repr_conversion_captures_literal_diagnostic_once(markdown: bool) -> None:
+    class Diagnostic:
+        calls = 0
+
+        def __repr__(self) -> str:
+            self.calls += 1
+            return "**literal** { $injected }"
+
+    value = Diagnostic()
+    message = md_tr(t"Value: {value!r}", key="diagnostic") if markdown else tr(t"Value: {value!r}", key="diagnostic")
+    assert value.calls == 1
+    assert message.bindings == {"value": "**literal** { $injected }"}
+    assert source_text(message, format="plain") == "Value: **literal** { $injected }"
+    if markdown:
+        assert r"\*\*literal\*\*" in source_text(message, format="markdown")
+    assert value.calls == 1

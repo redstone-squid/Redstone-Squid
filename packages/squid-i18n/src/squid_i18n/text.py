@@ -189,7 +189,7 @@ def tr(template: Template | LiteralString, /, *, key: LiteralString | None = Non
 
     Supply its identity with key= or an embedded Fluent identifier. Markdown is
     parsed after translation, independently of the eventual rendering target.
-    Use !s for literal identifiers; unconverted numbers retain locale formatting.
+    Use !s for literal identifiers and !r for diagnostics; unconverted numbers retain locale formatting.
     """
     if not isinstance(markdown, bool):
         msg = "markdown must be a bool"
@@ -226,8 +226,8 @@ def tr(template: Template | LiteralString, /, *, key: LiteralString | None = Non
             value = (
                 replace(value, options=developer) if developer or isinstance(value, DateTimeExpression) else value.value
             )
-        if captured.conversion == "s":
-            value = str(value)
+        if captured.conversion:
+            value = Formatter().convert_field(value, captured.conversion)
         if slot.name in bindings and bindings[slot.name] is not value and bindings[slot.name] != value:
             msg = f"Conflicting captured values for {slot.name}"
             raise DeclarationError(msg)

@@ -30,7 +30,7 @@ def test_attribute_only_and_options_extract() -> None:
     [
         'tr("literal")',
         "tr(template)",
-        'tr(t"key = {name!r}")',
+        'tr(t"key = {name!a}")',
         'tr(t"key = {NUMBER(n, use_grouping=group)}")',
         'tr(t"key = {user.name}")',
         'tr(t"key = {{ $missing }}")',
@@ -231,3 +231,17 @@ def test_invalid_string_conversions_fail_extraction(expression: str) -> None:
 def test_string_conversion_changes_binding_contract() -> None:
     with pytest.raises(CatalogError, match="Conflicting"):
         artifacts(extract('tr(t"ID: {value}", key="id")\ntr(t"ID: {value!s}", key="id")'))
+
+
+@pytest.mark.parametrize("helper", ["tr", "md_tr"])
+def test_repr_conversion_extraction_matches_runtime(helper: str) -> None:
+    value = "bad\nvalue"
+    runtime = (
+        md_tr(t"Value: {value!r}", key="diagnostic") if helper == "md_tr" else tr(t"Value: {value!r}", key="diagnostic")
+    )
+    declaration = extract(f'{helper}(t"Value: {{value!r}}", key="diagnostic")')[0].declaration
+    assert declaration == runtime.declaration
+    assert declaration.source == "diagnostic = Value: { $value }\n"
+    assert runtime.bindings == {"value": repr(value)}
+    with pytest.raises(CatalogError, match="Conflicting"):
+        artifacts(extract('tr(t"{value!s}", key="value")\ntr(t"{value!r}", key="value")'))
