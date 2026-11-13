@@ -123,23 +123,6 @@ async def test_every_extension_loads_onto_one_bot(loaded_bot: commands.Bot) -> N
     assert set(loaded_bot.extensions) == set(LOADABLE)
 
 
-async def test_no_two_cogs_claim_the_same_command_name(loaded_bot: commands.Bot) -> None:
-    """The assertion `load_extension` already makes, restated so a failure names the collision."""
-    seen: dict[str, str] = {}
-    collisions: list[str] = []
-    for command in loaded_bot.walk_commands():
-        for name in (
-            command.qualified_name,
-            *(f"{command.full_parent_name} {alias}".strip() for alias in command.aliases),
-        ):
-            owner = type(command.cog).__name__ if command.cog is not None else "?"
-            if name in seen:
-                collisions.append(f"{name!r} claimed by both {seen[name]} and {owner}")
-            seen[name] = owner
-
-    assert not collisions, "; ".join(collisions)
-
-
 async def test_the_error_browser_is_app_only(loaded_bot: commands.Bot) -> None:
     """Diagnostics use one private app-command screen; the deliberate owner failure stays hidden."""
     lookup = loaded_bot.tree.get_command("errors")
