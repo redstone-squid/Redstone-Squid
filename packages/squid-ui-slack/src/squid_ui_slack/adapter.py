@@ -18,8 +18,9 @@ SLACK_SDK_BEHAVIOR_CAPABILITIES = frozenset(
     }
 )
 
+# The public marker retains its original baseline; the renderer is also verified on SDK 3.46.
 SLACK_SDK_343_ADAPTER = AdapterProfile(
-    SlackSdk343Adapter, "slack-sdk", ">=3.43,<3.44", SLACK_SDK_BEHAVIOR_CAPABILITIES, frontend="slack"
+    SlackSdk343Adapter, "slack-sdk", ">=3.43,<3.47", SLACK_SDK_BEHAVIOR_CAPABILITIES, frontend="slack"
 )
 
 

@@ -77,8 +77,8 @@ dev = [
     "jsonschema>=4.23",
     # The replication package keeps both real adapters optional for users, but its test and
     # type-check suite exercises them together as the production/conformance pair.
-    "loro==1.13.2",
-    "pycrdt==0.14.2",
+    "loro==1.17.1",
+    "pycrdt==0.14.13",
     "pip-tools>=7.4.1",
     "pytest-archon>=0.0.6",
     "ruff>=0.5.1",
@@ -90,12 +90,14 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
-    "schemathesis==4.24.2",
+    "schemathesis==4.33.1",
     # Stub-only packages: docker and psycopg2 ship no type information, so without
     # these every symbol they export is `Any` and pyrefly reports `untyped-import`.
     "types-docker>=7.1",
     "types-psycopg2>=2.9",
     "redstone-squid[schematics,observability]",
+    # The default test and type-check suites include the Slack workspace member.
+    "squid-ui-slack",
 ]
 fuzz = [
     # Atheris bytecode instrumentation does not yet support Python 3.15.

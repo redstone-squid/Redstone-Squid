@@ -31,6 +31,7 @@ from slack_sdk.models.blocks import (
     DividerBlock,
     HeaderBlock,
     ImageBlock,
+    ImageElement,
     InputBlock,
     InputInteractiveElement,
     MarkdownTextObject,
@@ -178,7 +179,11 @@ class _Drawer:
             message = "Slack card images require an absolute HTTPS URL"
             raise DrawInvariantError(message)
         return CardBlock(
-            hero_image=image_url,
+            hero_image=(
+                ImageElement(image_url=image_url, alt_text=value.title.content if value.title else "Card image")
+                if image_url is not None
+                else None
+            ),
             title=None if value.title is None else _text(value.title),
             body=None if value.description is None else _text(value.description),
             actions=[self.button(button) for button in value.actions] or None,

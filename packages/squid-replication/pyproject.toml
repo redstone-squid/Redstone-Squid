@@ -17,8 +17,8 @@ classifiers = [
 dependencies = ["squid-reactivity==0.1.0a1"]
 
 [project.optional-dependencies]
-loro = ["loro==1.13.2"]
-pycrdt = ["pycrdt==0.14.2"]
+loro = ["loro==1.17.1"]
+pycrdt = ["pycrdt==0.14.13"]
 
 [project.urls]
 Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
@@ -27,7 +27,7 @@ Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
 Repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [build-system]
-requires = ["uv_build>=0.11,<0.13"]
+requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
 
 [tool.uv]

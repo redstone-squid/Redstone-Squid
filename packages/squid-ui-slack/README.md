@@ -6,6 +6,9 @@ client, listener, network connection, or delivery lifecycle.
 
 This is an alpha release. The Python API may change before 1.0.
 
+The default adapter supports Slack SDK 3.43 through 3.46. Its `SDK343` target names retain
+the original compatibility baseline.
+
 ```console
 pip install squid-ui-slack==0.1.0a1
 ```

@@ -177,6 +177,23 @@ def test_home_renderer_draws_current_table_card_and_carousel_models() -> None:
     assert view.to_dict()["blocks"][0]["rows"][0][0] == {"type": "raw_text", "text": "Build"}
 
 
+@pytest.mark.parametrize("title", [scene.SlackText("Piston door"), None])
+def test_card_images_serialize_as_image_elements(title: scene.SlackText | None) -> None:
+    card = scene.SlackCard(title=title, image_url="https://example.com/door.png")
+    body = scene.SlackHomeView((card, scene.SlackCarousel((card,))))
+    document = scene.Scene(scene.Codec.protocol, "slack.block-kit.home", 1, body)
+
+    blocks = ss.HomeRenderer().draw(document).to_dict()["blocks"]
+
+    expected = {
+        "type": "image",
+        "image_url": "https://example.com/door.png",
+        "alt_text": "Piston door" if title else "Card image",
+    }
+    assert blocks[0]["hero_image"] == expected
+    assert blocks[1]["elements"][0]["hero_image"] == expected
+
+
 @pytest.mark.parametrize(
     ("changed", "match"),
     [
