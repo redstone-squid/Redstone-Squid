@@ -168,9 +168,44 @@ async def test_automatic_delivery_sends_a_visible_video_followup(
         sent = interaction.followup.send.records[0].kwargs
         assert sent["ephemeral"] is True
         assert sent["files"][0].filename == "build-7-simulation.mp4"
-        visible_files = [item for item in sent["view"].walk_children() if isinstance(item, discord.ui.File)]
-        assert len(visible_files) == 1
-        assert visible_files[0].media.url == "attachment://build-7-simulation.mp4"
+        galleries = [item for item in sent["view"].walk_children() if isinstance(item, discord.ui.MediaGallery)]
+        assert len(galleries) == 1
+        assert galleries[0].items[0].media.url == "attachment://build-7-simulation.mp4"
         assert 41 in component._delivered_videos
+    finally:
+        await scope.close()
+
+
+@pytest.mark.parametrize(
+    ("media_type", "filename", "preview"),
+    [("image/png", "render.png", True), ("application/octet-stream", "build.litematic", False)],
+)
+async def test_schematic_results_preview_images_and_download_schematics(
+    delivery: tuple[SchematicTools, Mock, Mock],
+    monkeypatch: pytest.MonkeyPatch,
+    media_type: str,
+    filename: str,
+    preview: bool,
+) -> None:
+    component, _, _ = delivery
+    monkeypatch.setattr(component._schematics, "available", False)
+    component._asset = sl.document.Asset("result", filename, media_type, sl.document.InlineAsset(b"result"))
+    client = Mock(spec=discord.Client)
+    scope = sd.install(client).scope(object())
+    try:
+        payload = scope.render(component)
+        assert payload.view is not None
+        galleries = [item for item in payload.view.walk_children() if isinstance(item, discord.ui.MediaGallery)]
+        downloads = [item for item in payload.view.walk_children() if isinstance(item, discord.ui.File)]
+        assert len(galleries) == int(preview)
+        assert len(downloads) == int(not preview)
+        if preview:
+            assert galleries[0].items[0].media.url == f"attachment://{filename}"
+        files = payload.build_files()
+        try:
+            assert [file.filename for file in files] == [filename]
+        finally:
+            for file in files:
+                file.close()
     finally:
         await scope.close()
