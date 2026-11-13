@@ -170,7 +170,8 @@ def _total_text(solved) -> int:
 class Browser(Component[sl.ComponentsV2Target]):
     @override
     def render(self):
-        body = "\n".join(f"entry {index:04d}" for index in range(2000))
+        # Navigation needs several budget-driven pages, not thousands of split points.
+        body = "\n".join(f"entry {index:04d} " + "x" * 990 for index in range(20))
         return [Heading("Entries"), Code(body, overflow=Paginate(key="entries"))]
 
 
