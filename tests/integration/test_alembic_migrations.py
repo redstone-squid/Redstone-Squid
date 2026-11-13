@@ -950,6 +950,87 @@ def test_finalization_result_metadata_migration_expands_and_downgrades(
         engine.dispose()
 
 
+@pytest.mark.parametrize("legacy_metadata", [False, True])
+def test_finalization_result_metadata_contract_preserves_build_identity(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_metadata: bool,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    revision = "f45a62f38431"
+    command.upgrade(config, f"{revision}-1")
+    engine = create_engine(migration_database_url)
+    draft_id, job_id = uuid4(), uuid4()
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts "
+                    "(id, owner_account_id, schema_id, schema_revision, category, revision, status, answers, "
+                    "origin, expires_at) VALUES (:id, :owner, 'build_submission.v1', 1, 'other', 7, 'processing', "
+                    "'{}'::jsonb, 'web', now() + interval '7 days')"
+                ),
+                {"id": draft_id, "owner": account_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs "
+                    "(id, draft_id, draft_revision, payload, payload_sha256, status, completed_at, attention_issues) "
+                    "VALUES (:id, :draft, 7, '{}'::jsonb, :digest, 'completed', now(), '[]'::jsonb)"
+                ),
+                {"id": job_id, "draft": draft_id, "digest": "a" * 64},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_results (job_id, build_id, target_key, provenance) "
+                    "VALUES (:job, 41, :target, CAST(:provenance AS jsonb))"
+                ),
+                {
+                    "job": job_id,
+                    "target": "postgres_builds" if legacy_metadata else None,
+                    "provenance": json.dumps({"source_draft_id": str(draft_id)}) if legacy_metadata else None,
+                },
+            )
+            original = connection.execute(
+                text("SELECT job_id, build_id, created_at FROM submission_finalization_results")
+            ).one()
+
+        for _ in range(2):
+            command.upgrade(config, revision)
+            with engine.connect() as connection:
+                columns = set(
+                    connection.execute(
+                        text(
+                            "SELECT column_name FROM information_schema.columns "
+                            "WHERE table_schema = 'public' AND table_name = 'submission_finalization_results'"
+                        )
+                    ).scalars()
+                )
+                assert columns == {"job_id", "build_id", "created_at"}
+                assert (
+                    connection.execute(
+                        text("SELECT job_id, build_id, created_at FROM submission_finalization_results")
+                    ).one()
+                    == original
+                )
+            command.check(config)
+            command.downgrade(config, f"{revision}-1")
+            with engine.connect() as connection:
+                assert connection.execute(
+                    text("SELECT target_key, provenance FROM submission_finalization_results")
+                ).one() == (None, None)
+                assert (
+                    connection.execute(
+                        text("SELECT job_id, build_id, created_at FROM submission_finalization_results")
+                    ).one()
+                    == original
+                )
+    finally:
+        engine.dispose()
+
+
 def test_finalization_input_migration_backfills_and_rejects_updates(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
