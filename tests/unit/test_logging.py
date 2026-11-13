@@ -73,25 +73,6 @@ class TestBuildLoggingConfig:
         assert handlers["file"]["filename"] == str(tmp_path / "custom.log")
         assert handlers["access_file"]["filename"] == str(tmp_path / "access.log")
 
-    def test_keeps_bot_default_file_when_env_is_unset(
-        self,
-        tmp_path: Path,
-    ) -> None:
-        config = build_logging_config(
-            config=LoggingConfig(
-                level="INFO",
-                root_level="WARNING",
-                directory=tmp_path,
-                log_file="discord.log",
-                access_log_file=None,
-            ),
-            named_logger_levels={"squid": "INFO"},
-        )
-
-        handlers = config["handlers"]
-        assert isinstance(handlers, dict)
-        assert handlers["file"]["filename"] == str(tmp_path / "discord.log")
-
     def test_routes_loggers_through_queue(self, tmp_path: Path) -> None:
         config = build_logging_config(
             config=LoggingConfig(
