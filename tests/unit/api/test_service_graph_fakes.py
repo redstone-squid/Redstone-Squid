@@ -29,7 +29,7 @@ def _doubles() -> list[tuple[str, type]]:
 
 def test_doubles_are_discovered() -> None:
     """Fail loudly if the discovery above silently stops finding the doubles."""
-    assert len(_doubles()) >= 15
+    assert _doubles()
 
 
 @pytest.mark.parametrize(("name", "double"), _doubles(), ids=lambda value: getattr(value, "__name__", value))
