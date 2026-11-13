@@ -217,13 +217,13 @@ class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         if self.required and not value:
             _invalid(tr(t"ui-form-required = This field is required."))
         if self.minimum is not None and len(value) < self.minimum:
-            _invalid(
-                md_tr(t"ui-form-text-minimum = Enter at least {(minimum := self.minimum)} characters.")  # noqa: F841 - captured translation binding
-            )
+            minimum = self.minimum
+            _invalid(md_tr(t"ui-form-text-minimum = Enter at least {minimum} characters."))
         if self.maximum is not None and len(value) > self.maximum:
+            maximum = self.maximum
             _invalid(
                 md_tr(
-                    t"ui-form-text-maximum = Enter no more than {(maximum := self.maximum)} characters.",  # noqa: F841 - captured translation binding
+                    t"ui-form-text-maximum = Enter no more than {maximum} characters.",
                 )
             )
         return value
@@ -251,15 +251,17 @@ class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormF
         except ValueError:
             _invalid(tr(t"ui-form-integer-format = Enter a whole number."))
         if self.minimum is not None and value < self.minimum:
+            minimum = self.minimum
             _invalid(
                 md_tr(
-                    t"ui-form-number-minimum = Enter a value of at least {(minimum := self.minimum)}.",  # noqa: F841 - captured translation binding
+                    t"ui-form-number-minimum = Enter a value of at least {minimum}.",
                 )
             )
         if self.maximum is not None and value > self.maximum:
+            maximum = self.maximum
             _invalid(
                 md_tr(
-                    t"ui-form-number-maximum = Enter a value no greater than {(maximum := self.maximum)}.",  # noqa: F841 - captured translation binding
+                    t"ui-form-number-maximum = Enter a value no greater than {maximum}.",
                 )
             )
         return value
@@ -284,15 +286,17 @@ class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         if not math.isfinite(value):
             _invalid(tr(t"ui-form-number-finite = Enter a finite number."))
         if self.minimum is not None and value < self.minimum:
+            minimum = self.minimum
             _invalid(
                 md_tr(
-                    t"ui-form-number-minimum = Enter a value of at least {(minimum := self.minimum)}.",  # noqa: F841 - captured translation binding
+                    t"ui-form-number-minimum = Enter a value of at least {minimum}.",
                 )
             )
         if self.maximum is not None and value > self.maximum:
+            maximum = self.maximum
             _invalid(
                 md_tr(
-                    t"ui-form-number-maximum = Enter a value no greater than {(maximum := self.maximum)}.",  # noqa: F841 - captured translation binding
+                    t"ui-form-number-maximum = Enter a value no greater than {maximum}.",
                 )
             )
         return value
@@ -335,16 +339,17 @@ class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
                 _invalid(tr(t"ui-form-duration-format = Enter a duration such as 30m, 12h, or 7d."))
             value = round(float(match.group(1)) * _DURATION_UNITS[match.group(2).lower()])
         if self.minimum is not None and value < self.minimum:
+            minimum = self.minimum
             _invalid(
                 md_tr(
-                    t"ui-form-duration-minimum = Enter a duration of at least {(minimum := self.minimum)} seconds.",  # noqa: F841 - captured translation binding
+                    t"ui-form-duration-minimum = Enter a duration of at least {minimum} seconds.",
                 )
             )
         if self.maximum is not None and value > self.maximum:
+            maximum = self.maximum
             _invalid(
                 md_tr(
-                    t"ui-form-duration-maximum = Enter a duration no longer than {(maximum := self.maximum)} "  # noqa: F841 - captured Fluent binding
-                    t"seconds.",
+                    t"ui-form-duration-maximum = Enter a duration no longer than {maximum} seconds.",
                 )
             )
         return value
@@ -376,15 +381,17 @@ class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         except ValueError:
             _invalid(tr(t"ui-form-date-format = Enter a date as YYYY-MM-DD."))
         if self.minimum is not None and value < self.minimum:
+            value = self.minimum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-date-minimum = Enter a date on or after {(value := self.minimum.isoformat())}.",
+                    t"ui-form-date-minimum = Enter a date on or after {value}.",
                 )
             )
         if self.maximum is not None and value > self.maximum:
+            value = self.maximum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-date-maximum = Enter a date on or before {(value := self.maximum.isoformat())}.",
+                    t"ui-form-date-maximum = Enter a date on or before {value}.",
                 )
             )
         return value
@@ -411,15 +418,17 @@ class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         except ValueError:
             _invalid(tr(t"ui-form-time-format = Enter a time as HH:MM."))
         if self.minimum is not None and value < self.minimum:
+            value = self.minimum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-time-minimum = Enter a time at or after {(value := self.minimum.isoformat())}.",
+                    t"ui-form-time-minimum = Enter a time at or after {value}.",
                 )
             )
         if self.maximum is not None and value > self.maximum:
+            value = self.maximum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-time-maximum = Enter a time at or before {(value := self.maximum.isoformat())}.",
+                    t"ui-form-time-maximum = Enter a time at or before {value}.",
                 )
             )
         return value
@@ -479,15 +488,17 @@ class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
                 _invalid(tr(t"ui-form-time-nonexistent = This local time does not exist in the selected timezone."))
         instant = value.astimezone(UTC)
         if self.minimum is not None and instant < self.minimum.astimezone(UTC):
+            value = self.minimum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-datetime-minimum = Enter a date and time on or after {(value := self.minimum.isoformat())}.",
+                    t"ui-form-datetime-minimum = Enter a date and time on or after {value}.",
                 )
             )
         if self.maximum is not None and instant > self.maximum.astimezone(UTC):
+            value = self.maximum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-datetime-maximum = Enter a date and time on or before {(value := self.maximum.isoformat())}.",
+                    t"ui-form-datetime-maximum = Enter a date and time on or before {value}.",
                 )
             )
         return value
@@ -561,15 +572,17 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
 
         value = ZonedDateTime(resolved, self.timezone)
         if self.minimum is not None and value.instant < self.minimum.astimezone(UTC):
+            value = self.minimum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-datetime-minimum = Enter a date and time on or after {(value := self.minimum.isoformat())}.",
+                    t"ui-form-datetime-minimum = Enter a date and time on or after {value}.",
                 )
             )
         if self.maximum is not None and value.instant > self.maximum.astimezone(UTC):
+            value = self.maximum.isoformat()
             _invalid(
                 md_tr(
-                    t"ui-form-datetime-maximum = Enter a date and time on or before {(value := self.maximum.isoformat())}.",
+                    t"ui-form-datetime-maximum = Enter a date and time on or before {value}.",
                 )
             )
         return value
@@ -616,15 +629,19 @@ class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         try:
             value = int(str(raw).strip())
         except ValueError:
+            minimum = self.minimum
+            maximum = self.maximum
             _invalid(
                 md_tr(
-                    t"ui-form-scale-integer = Choose a whole number from {(minimum := self.minimum)} to {(maximum := self.maximum)}.",
+                    t"ui-form-scale-integer = Choose a whole number from {minimum} to {maximum}.",
                 )
             )
         if not self.minimum <= value <= self.maximum:
+            minimum = self.minimum
+            maximum = self.maximum
             _invalid(
                 md_tr(
-                    t"ui-form-scale-range = Choose a value from {(minimum := self.minimum)} to {(maximum := self.maximum)}.",  # noqa: F841 - captured translation binding
+                    t"ui-form-scale-range = Choose a value from {minimum} to {maximum}.",
                 )
             )
         return value
@@ -714,9 +731,10 @@ class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Lite
         selected = set(submitted)
         values = tuple(option.value for option in self.options if option.key in selected)
         if len(values) < self.minimum:
+            minimum = self.minimum
             _invalid(
                 md_tr(
-                    t"ui-form-selection-minimum = Choose at least {(minimum := self.minimum)} options.",  # noqa: F841 - captured translation binding
+                    t"ui-form-selection-minimum = Choose at least {minimum} options.",
                 )
             )
         maximum = len(self.options) if self.maximum is None else self.maximum

@@ -428,7 +428,7 @@ accounts-application-presentation-creator = creator { $creator_id }
 accounts-application-presentation-discord-user = Discord user { $discord_id }
 
 # squid/accounts/models.py:208
-accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject_text }.
+accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject }.
 
 # squid/accounts/errors.py:370
 accounts-check-uuid-try-again = Check the UUID and try again.
@@ -455,7 +455,7 @@ accounts-creator-name-not-found = Creator name not found
 accounts-creator-not-found-title = Creator not found
 
 # squid/accounts/models.py:199
-accounts-discord-identity-subjects = Discord identity subjects must be positive signed 64-bit integers, got { $subject_text }.
+accounts-discord-identity-subjects = Discord identity subjects must be positive signed 64-bit integers, got { $subject }.
 
 # squid/accounts/domain/consent.py:19
 accounts-discord-user-id-stored =
@@ -542,7 +542,7 @@ accounts-errors-too-many-attempts = Too many attempts
 accounts-errors-wait-for-the-cooling-off-period-to = Wait for the cooling-off period to pass, then generate a new code in game.
 
 # squid/accounts/models.py:221
-accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $subject_text }.
+accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $subject }.
 
 # squid/accounts/errors.py:89
 accounts-last-identity-required = You cannot unlink your only remaining identity.
@@ -553,8 +553,8 @@ accounts-link-credentials-forbidden = Links may not carry credentials.
 # squid/accounts/errors.py:93
 accounts-link-identity-before-unlink = Link another identity first, then unlink this one.
 
-# squid/accounts/domain/profiles.py:110
-accounts-link-invalid-scheme = Links must be https URLs, got { $scheme_text }.
+# squid/accounts/domain/profiles.py:114
+accounts-link-invalid-scheme = Links must be https URLs, got { $scheme }.
 
 # squid/accounts/domain/profiles.py:98
 accounts-link-label-required = Every link needs a label.
@@ -4228,7 +4228,7 @@ records-fastest-records-unsupported = Fastest records are not supported for { $k
 records-fixed-volume-positive = Fixed volume must be positive.
 
 # squid/records/application/services.py:560
-records-invalid-boolean-category = Invalid boolean category value { $value_text }.
+records-invalid-boolean-category = Invalid boolean category value { $value }.
 
 # squid/records/domain/categories.py:50
 records-maximum-category-size = Maximum category size cannot be negative.
@@ -5282,7 +5282,7 @@ suggestions-duplicate-suggestion-source = duplicate suggestion source: { $source
 suggestions-enumerated = { $source_id } cannot be enumerated
 
 # squid/suggestions/application/registry.py:55
-suggestions-invalid-suggestion-source = invalid suggestion source id: { $source_id_text }
+suggestions-invalid-suggestion-source = invalid suggestion source id: { $source_id }
 
 # squid/suggestions/application/registry.py:24
 suggestions-no-such-suggestion = No such suggestion source.

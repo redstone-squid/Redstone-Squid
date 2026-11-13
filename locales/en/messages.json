@@ -1472,12 +1472,12 @@
     ]
   },
   "accounts-bedrock-xuids-unsigned": {
-    "fingerprint": "9ca26d9f2786de9bcd7255e61b936792336d8d0a9235504ffa711d5ba73f9efc",
+    "fingerprint": "a9f468c61de5cd208ec7c36cde96ac1e1cc8377cf6057799d3d2b5a31ba66ebf",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "subject_text",
+        "name": "subject",
         "function": null,
         "options": []
       }
@@ -1570,12 +1570,12 @@
     ]
   },
   "accounts-discord-identity-subjects": {
-    "fingerprint": "c6353c8010a743ec5a677b06f2292a89f97a00cdf5aa434f4f3ecaba51f08e87",
+    "fingerprint": "0deb514d40dda34abe24e853a170e91d929a3111dda1d93fde1092f1b11d04fd",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "subject_text",
+        "name": "subject",
         "function": null,
         "options": []
       }
@@ -1810,12 +1810,12 @@
     ]
   },
   "accounts-java-identity-subjects": {
-    "fingerprint": "2ac2663b80e10356b37ba5d5dc2da9c02cbc781f4c4b60821be7c63afcbf2263",
+    "fingerprint": "36e95cace6ecd1a71f81b7ebf201621521d753e47777b17103de5636ff2c0bbc",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "subject_text",
+        "name": "subject",
         "function": null,
         "options": []
       }
@@ -1852,18 +1852,18 @@
     ]
   },
   "accounts-link-invalid-scheme": {
-    "fingerprint": "e766a513fc6c165c12540d8a4e05fc127c1f4b9dc709da45bb4e2d21fadd4a8e",
+    "fingerprint": "683bdadf5f722bbbd9aa5a462aa491685960dfb3a80cc07e0202582a9290da22",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "scheme_text",
+        "name": "scheme",
         "function": null,
         "options": []
       }
     ],
     "locations": [
-      "squid/accounts/domain/profiles.py:110"
+      "squid/accounts/domain/profiles.py:114"
     ]
   },
   "accounts-link-label-required": {
@@ -13741,12 +13741,12 @@
     ]
   },
   "records-invalid-boolean-category": {
-    "fingerprint": "1a21eebe2f2afab9ba6e2afd95db0da7efc0220f27d89bba941641776a8e1401",
+    "fingerprint": "1207bbb4e4db74e3e0c4c512db552d8f554614dfe93167d2870fa5bd1bb509b9",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "value_text",
+        "name": "value",
         "function": null,
         "options": []
       }
@@ -17401,12 +17401,12 @@
     ]
   },
   "suggestions-invalid-suggestion-source": {
-    "fingerprint": "ab669a2c61700d67daeac6812e55e8632c1c07303da7befffcd05e5f19cc948b",
+    "fingerprint": "6aebba693643909fdfb6f9e3aec01a1bafef4155157dd59c5623a1d1f7fca5ee",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "source_id_text",
+        "name": "source_id",
         "function": null,
         "options": []
       }

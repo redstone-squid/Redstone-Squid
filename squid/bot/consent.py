@@ -144,6 +144,7 @@ def _consent_prompt(
 ) -> ConsentPrompt:
     """Build the exact notice shown before an account or identity is stored."""
     version = CURRENT_CONSENT_VERSION
+    user_mention = sl.mention(user_id)
     if preview is None:
         return ConsentPrompt(
             user_id=user_id,
@@ -157,7 +158,7 @@ def _consent_prompt(
                 CardField(
                     tr(t"consent-discord-account = Discord account"),
                     md_tr(
-                        t"consent-value-2 = {(user_mention := sl.mention(user_id))} (`{user_id!s}`)",
+                        t"consent-value-2 = {user_mention} (`{user_id!s}`)",
                     ),
                 ),
                 CardField(
@@ -193,7 +194,7 @@ def _consent_prompt(
             CardField(
                 tr(t"consent-discord-account = Discord account"),
                 md_tr(
-                    t"consent-value-2 = {(user_mention := sl.mention(user_id))} (`{user_id!s}`)",  # noqa: F841 - captured translation binding
+                    t"consent-value-2 = {user_mention} (`{user_id!s}`)",
                 ),
             ),
             CardField(tr(t"consent-build-credit = Build credit"), _link_credit_value(preview)),

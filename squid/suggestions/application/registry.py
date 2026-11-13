@@ -53,8 +53,7 @@ class SuggestionSource:
         if not SOURCE_ID_PATTERN.match(self.id):
             raise InvalidStateError(
                 md_tr(
-                    t"suggestions-invalid-suggestion-source = invalid suggestion "
-                    t"source id: {(source_id_text := repr(source_id))}",  # noqa: F841 - captured translation binding
+                    t"suggestions-invalid-suggestion-source = invalid suggestion source id: {source_id!r}",
                 )
             )
         if (self.visibility is Visibility.REQUIRES_NODE) != (self.required_node is not None):

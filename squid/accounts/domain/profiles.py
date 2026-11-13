@@ -112,8 +112,7 @@ class ProfileLink:
             scheme = parts.scheme or ""
             raise ValidationError(
                 md_tr(
-                    t"accounts-link-invalid-scheme = Links must be https URLs, got {(scheme_text := repr(scheme))}"  # noqa: F841 - captured Fluent binding
-                    t".",
+                    t"accounts-link-invalid-scheme = Links must be https URLs, got {scheme!r}.",
                 )
             )
         if not parts.hostname:

@@ -558,7 +558,7 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
         if value not in {"true", "false"}:
             raise InvalidStateError(
                 md_tr(
-                    t"records-invalid-boolean-category = Invalid boolean category value {(value_text := repr(value))}.",  # noqa: F841 - captured translation binding
+                    t"records-invalid-boolean-category = Invalid boolean category value {value!r}.",
                 )
             )
         return value == "true"
