@@ -116,7 +116,7 @@ describe("submission API transport", () => {
         jsonResponse({ source: "approved_patterns", category: "door", revision: 4, options: [] }),
       );
     const api = createSubmissionApi("zh-CN", config);
-    await expect(api.currentForm()).resolves.toBeTruthy();
+    await expect(api.currentForm()).resolves.toEqual(form);
     expect(capturedRequest()).toMatchObject({ credentials: "include", cache: "no-store" });
     expect(capturedRequest().headers.get("Accept-Language")).toBe("zh-CN");
     await expect(api.formOptions("approved_patterns", "door")).resolves.toMatchObject({

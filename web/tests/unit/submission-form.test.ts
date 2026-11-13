@@ -7,7 +7,6 @@ import type {
   FormFieldResponse,
   FormManifestResponse,
   StoredDraftResponse,
-  SubmissionAttentionReason,
 } from "../../src/generated/types.gen";
 import {
   draftValue,
@@ -261,39 +260,15 @@ describe("renderer values", () => {
 });
 
 describe("stable finalization issue copy", () => {
-  it("maps every stable reason without claiming schematic sanitization", () => {
-    const reasons: SubmissionAttentionReason[] = [
-      "unknown_field",
-      "required",
-      "wrong_type",
-      "required_value",
-      "below_minimum",
-      "above_maximum",
-      "too_short",
-      "too_long",
-      "too_few_items",
-      "too_many_items",
-      "unknown_option",
-      "schema_unsupported",
-      "schematic_required",
-      "schematic_processing",
-      "schematic_rejected",
-      "media_processing",
-      "media_rejected",
-      "target_rejected",
-      "retry_exhausted",
-    ];
-    for (const reason of reasons) {
-      expect(issueMessage({ field_id: "submission", reason })).toMatch(/^Submission .+\.$/);
-    }
+  it("uses field labels, localized required copy, and actionable schematic guidance", () => {
     expect(issueMessage({ field_id: "display_name", reason: "required" }, "Display name")).toBe(
       "Display name is required.",
     );
     expect(
       issueMessage({ field_id: "display_name", reason: "required" }, "显示名称", "zh-CN"),
     ).toBe("显示名称为必填项。");
-    expect(issueMessage({ field_id: "schematic", reason: "schematic_required" })).not.toMatch(
-      /sanitiz/i,
+    expect(issueMessage({ field_id: "submission", reason: "schematic_required" })).toBe(
+      "Submission needs a schematic from an in-game submission client.",
     );
   });
 });

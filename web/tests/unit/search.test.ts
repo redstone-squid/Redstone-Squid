@@ -31,7 +31,6 @@ describe("guided query composition", () => {
     expect(query).toBe(
       '"fast door" creator:"Builder" version:"Java 1.21" kind:"door" type:"flush" width<=5 height<=8 depth<=12 opening_time<=8gt closing_time<=0.5s tag:"seamless"',
     );
-    expect(query).not.toContain("status");
   });
 
   it("omits empty and invalid numeric filters", () => {

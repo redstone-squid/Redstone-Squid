@@ -57,8 +57,8 @@ describe("translations", () => {
   });
 
   it("formats dates and numbers in the active locale", () => {
-    expect(formatDate("en", "2026-08-10T12:00:00Z")).toContain("2026");
-    expect(formatDate("zh-CN", "2026-08-10T12:00:00Z")).toContain("2026");
+    expect(formatDate("en", "2026-08-10T23:30:00-02:00")).toBe("Aug 11, 2026");
+    expect(formatDate("zh-CN", "2026-08-10T23:30:00-02:00")).toBe("2026年8月11日");
     expect(formatNumber("en", 12345)).toMatch(/12,345/);
   });
 });
