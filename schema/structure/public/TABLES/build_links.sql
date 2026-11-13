@@ -11,7 +11,7 @@ ALTER TABLE ONLY public.build_links
 
 CREATE TRIGGER build_links_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.build_links FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
 
-CREATE TRIGGER build_links_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_links FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER build_links_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.build_links FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 CREATE TRIGGER build_links_reject_truncate BEFORE TRUNCATE ON public.build_links FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 

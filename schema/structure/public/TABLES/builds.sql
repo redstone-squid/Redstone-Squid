@@ -78,13 +78,9 @@ CREATE CONSTRAINT TRIGGER builds_category_subtype_check AFTER INSERT OR UPDATE O
 
 CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 
-CREATE TRIGGER builds_enqueue_discord_sync AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER builds_enqueue_build_change AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
-CREATE TRIGGER builds_enqueue_discord_sync_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_discord_sync();
-
-CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-CREATE TRIGGER builds_enqueue_search_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER builds_enqueue_build_change_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_build_change();
 
 CREATE TRIGGER builds_reject_truncate BEFORE TRUNCATE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 

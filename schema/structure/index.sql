@@ -20,12 +20,12 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/emit_domain_event.sql
 \ir public/TRIGGER_FUNCTIONS/enforce_build_category_subtype.sql
 \ir public/TRIGGER_FUNCTIONS/enforce_vote_session_kind_subtype.sql
-\ir public/TRIGGER_FUNCTIONS/enqueue_build_search_projection.sql
+\ir public/TRIGGER_FUNCTIONS/enqueue_build_change.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_computed_record_search_projection.sql
-\ir public/TRIGGER_FUNCTIONS/enqueue_discord_sync.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_metadata_search_projection.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_starboard_sync.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_submission_status.sql
+\ir public/TRIGGER_FUNCTIONS/enqueue_vote_session_sync.sql
 \ir public/TRIGGER_FUNCTIONS/finish_build_edit_trigger.sql
 \ir public/FUNCTIONS/get_quantified_version_names.sql
 \ir public/FUNCTIONS/publish_domain_event.sql

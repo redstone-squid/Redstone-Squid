@@ -1271,7 +1271,7 @@ def test_alembic_detects_managed_function_and_trigger_drift(
             connection.execute(
                 text(
                     """
-                    CREATE OR REPLACE FUNCTION public.enqueue_build_search_projection()
+                    CREATE OR REPLACE FUNCTION public.enqueue_build_change()
                     RETURNS trigger
                     LANGUAGE plpgsql
                     AS $$
@@ -1282,7 +1282,7 @@ def test_alembic_detects_managed_function_and_trigger_drift(
                     """
                 )
             )
-            connection.execute(text("DROP TRIGGER builds_enqueue_discord_sync ON public.builds"))
+            connection.execute(text("DROP TRIGGER builds_enqueue_build_change ON public.builds"))
     finally:
         engine.dispose()
 

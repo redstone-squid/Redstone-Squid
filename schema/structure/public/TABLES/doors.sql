@@ -19,9 +19,7 @@ CREATE TRIGGER doors_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.do
 
 CREATE CONSTRAINT TRIGGER doors_category_subtype_check AFTER INSERT OR DELETE OR UPDATE OF build_id ON public.doors DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
 
-CREATE TRIGGER doors_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER doors_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 CREATE TRIGGER doors_reject_truncate BEFORE TRUNCATE ON public.doors FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 

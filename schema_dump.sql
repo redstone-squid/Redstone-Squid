@@ -545,57 +545,75 @@ $$;
 
 
 --
--- Name: enqueue_build_search_projection(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: enqueue_build_change(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
+CREATE FUNCTION public.enqueue_build_change() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE
     target_build_id bigint;
-    target_action text := 'upsert';
     target_kind text;
+    build_exists boolean := true;
+    build_deleted boolean := TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE';
 BEGIN
     IF TG_TABLE_NAME = 'builds' THEN
         target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
         target_kind := lower(CASE WHEN TG_OP = 'DELETE' THEN OLD.category ELSE NEW.category END);
-        IF TG_OP = 'DELETE' THEN
-            target_action := 'delete';
-        END IF;
     ELSE
+        -- When the row is going away with its build, the build's own trigger queues the deletion.
         target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
         SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
+        build_exists := FOUND;
     END IF;
 
-    PERFORM public.upsert_search_projection_request('build', target_build_id::text, target_action);
+    -- A link change queues only the Discord sync.
+    IF TG_TABLE_NAME <> 'build_links' THEN
+        PERFORM public.upsert_search_projection_request(
+            'build', target_build_id::text, CASE WHEN build_deleted THEN 'delete' ELSE 'upsert' END
+        );
 
-    IF target_kind IN ('door', 'extender') THEN
-        -- As in the upsert_*_request functions, clearing the claim token keeps an older worker
-        -- from acknowledging the new request.
-        INSERT INTO public.record_recompute_queue
-            (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
-        VALUES (
-            target_kind,
-            target_kind,
-            CASE WHEN TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE' THEN NULL ELSE target_build_id END,
-            '["source_change"]'::jsonb,
-            now(),
-            now()
-        )
-        ON CONFLICT (scope_key) DO UPDATE
-        SET build_id = EXCLUDED.build_id,
-            reasons = (
-                SELECT jsonb_agg(DISTINCT reason)
-                FROM jsonb_array_elements_text(
-                    record_recompute_queue.reasons || EXCLUDED.reasons
-                ) AS reason
-            ),
-            enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            attempts = 0,
-            claimed_at = NULL,
-            claim_token = NULL,
-            last_error = NULL;
+        IF target_kind IN ('door', 'extender') THEN
+            -- As in the upsert_*_request functions, clearing the claim token keeps an older worker
+            -- from acknowledging the new request.
+            INSERT INTO public.record_recompute_queue
+                (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
+            VALUES (
+                target_kind,
+                target_kind,
+                CASE WHEN build_deleted THEN NULL ELSE target_build_id END,
+                '["source_change"]'::jsonb,
+                now(),
+                now()
+            )
+            ON CONFLICT (scope_key) DO UPDATE
+            SET build_id = EXCLUDED.build_id,
+                reasons = (
+                    SELECT jsonb_agg(DISTINCT reason)
+                    FROM jsonb_array_elements_text(
+                        record_recompute_queue.reasons || EXCLUDED.reasons
+                    ) AS reason
+                ),
+                enqueued_at = EXCLUDED.enqueued_at,
+                available_at = EXCLUDED.available_at,
+                attempts = 0,
+                claimed_at = NULL,
+                claim_token = NULL,
+                last_error = NULL;
+        END IF;
+    END IF;
+
+    IF build_deleted THEN
+        PERFORM public.upsert_discord_sync_request('build', target_build_id::text, 'delete');
+    ELSIF build_exists THEN
+        PERFORM public.upsert_discord_sync_request('build', target_build_id::text, 'refresh');
+
+        -- A review card embeds the build it is voting on, so a build change makes the
+        -- session's cards stale too. Their posts are keyed by session, not by build, so
+        -- the sessions have to be enqueued in their own right.
+        PERFORM public.upsert_discord_sync_request('vote_session', bvs.vote_session_id::text, 'refresh')
+        FROM public.build_vote_sessions bvs
+        WHERE bvs.build_id = target_build_id;
     END IF;
     RETURN NULL;
 END;
@@ -626,51 +644,6 @@ BEGIN
         PERFORM public.upsert_search_projection_request('record', 'result:' || rr.id::text, 'upsert')
         FROM public.title_results rr
         WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-
---
--- Name: enqueue_discord_sync(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.enqueue_discord_sync() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    target_kind text;
-    target_key bigint;
-    target_action text := 'refresh';
-BEGIN
-    IF TG_TABLE_NAME = 'vote_sessions' THEN
-        target_kind := 'vote_session';
-        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-        IF TG_OP = 'DELETE' THEN target_action := 'delete'; END IF;
-    ELSIF TG_TABLE_NAME = 'votes' THEN
-        target_kind := 'vote_session';
-        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.vote_session_id ELSE NEW.vote_session_id END;
-        IF NOT EXISTS (SELECT 1 FROM public.vote_sessions WHERE id = target_key) THEN RETURN NULL; END IF;
-    ELSIF TG_TABLE_NAME = 'builds' THEN
-        target_kind := 'build';
-        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-        IF TG_OP = 'DELETE' THEN target_action := 'delete'; END IF;
-    ELSE
-        target_kind := 'build';
-        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
-        IF NOT EXISTS (SELECT 1 FROM public.builds WHERE id = target_key) THEN RETURN NULL; END IF;
-    END IF;
-
-    PERFORM public.upsert_discord_sync_request(target_kind, target_key::text, target_action);
-
-    -- A review card embeds the build it is voting on, so a build change makes the
-    -- session's cards stale too. Their posts are keyed by session, not by build, so
-    -- the sessions have to be enqueued in their own right.
-    IF target_kind = 'build' AND target_action = 'refresh' THEN
-        PERFORM public.upsert_discord_sync_request('vote_session', bvs.vote_session_id::text, 'refresh')
-        FROM public.build_vote_sessions bvs
-        WHERE bvs.build_id = target_key;
     END IF;
     RETURN NULL;
 END;
@@ -795,6 +768,33 @@ BEGIN
     LOOP
         PERFORM public.upsert_discord_sync_request(target_kind, target_key, 'refresh');
     END LOOP;
+    RETURN NULL;
+END;
+$$;
+
+
+--
+-- Name: enqueue_vote_session_sync(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_vote_session_sync() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_key bigint;
+BEGIN
+    IF TG_TABLE_NAME = 'vote_sessions' THEN
+        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        PERFORM public.upsert_discord_sync_request(
+            'vote_session', target_key::text, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'refresh' END
+        );
+    ELSE
+        -- When the vote is going away with its session, the session's own trigger queues the deletion.
+        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.vote_session_id ELSE NEW.vote_session_id END;
+        IF EXISTS (SELECT 1 FROM public.vote_sessions WHERE id = target_key) THEN
+            PERFORM public.upsert_discord_sync_request('vote_session', target_key::text, 'refresh');
+        END IF;
+    END IF;
     RETURN NULL;
 END;
 $$;
@@ -8437,17 +8437,10 @@ CREATE TRIGGER build_creators_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON 
 
 
 --
--- Name: build_creators build_creators_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: build_creators build_creators_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER build_creators_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: build_creators build_creators_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_creators_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER build_creators_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8486,10 +8479,10 @@ CREATE TRIGGER build_links_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON pub
 
 
 --
--- Name: build_links build_links_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: build_links build_links_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER build_links_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_links FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER build_links_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.build_links FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8535,17 +8528,10 @@ CREATE TRIGGER build_tag_assignments_capture_edit BEFORE INSERT OR DELETE OR UPD
 
 
 --
--- Name: build_tag_assignments build_tag_assignments_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: build_tag_assignments build_tag_assignments_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER build_tag_assignments_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: build_tag_assignments build_tag_assignments_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_tag_assignments_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER build_tag_assignments_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8563,17 +8549,10 @@ CREATE TRIGGER build_versions_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON 
 
 
 --
--- Name: build_versions build_versions_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: build_versions build_versions_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER build_versions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: build_versions build_versions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER build_versions_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8619,31 +8598,17 @@ CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_sta
 
 
 --
--- Name: builds builds_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: builds builds_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER builds_enqueue_discord_sync AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: builds builds_enqueue_discord_sync_on_update; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER builds_enqueue_discord_sync_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER builds_enqueue_build_change AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
--- Name: builds builds_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+-- Name: builds builds_enqueue_build_change_on_update; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-
---
--- Name: builds builds_enqueue_search_on_update; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER builds_enqueue_search_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER builds_enqueue_build_change_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8682,17 +8647,10 @@ CREATE CONSTRAINT TRIGGER delete_log_vote_sessions_kind_subtype_check AFTER INSE
 
 
 --
--- Name: door_timing_variants door_timing_variants_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: door_timing_variants door_timing_variants_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER door_timing_variants_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.door_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: door_timing_variants door_timing_variants_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER door_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.door_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER door_timing_variants_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.door_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8710,17 +8668,10 @@ CREATE CONSTRAINT TRIGGER doors_category_subtype_check AFTER INSERT OR DELETE OR
 
 
 --
--- Name: doors doors_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: doors doors_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER doors_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: doors doors_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER doors_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8752,17 +8703,10 @@ CREATE TRIGGER entrances_reject_truncate BEFORE TRUNCATE ON public.entrances FOR
 
 
 --
--- Name: extender_timing_variants extender_timing_variants_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: extender_timing_variants extender_timing_variants_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER extender_timing_variants_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: extender_timing_variants extender_timing_variants_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER extender_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER extender_timing_variants_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -8780,17 +8724,10 @@ CREATE CONSTRAINT TRIGGER extenders_category_subtype_check AFTER INSERT OR DELET
 
 
 --
--- Name: extenders extenders_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+-- Name: extenders extenders_enqueue_build_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER extenders_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: extenders extenders_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER extenders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER extenders_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 
 --
@@ -9007,7 +8944,7 @@ CREATE TRIGGER vote_sessions_emit_domain_event AFTER UPDATE OF status ON public.
 -- Name: vote_sessions vote_sessions_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER vote_sessions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER vote_sessions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.enqueue_vote_session_sync();
 
 
 --
@@ -9021,7 +8958,7 @@ CREATE CONSTRAINT TRIGGER vote_sessions_kind_subtype_check AFTER INSERT OR DELET
 -- Name: votes votes_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_vote_session_sync();
 
 
 --

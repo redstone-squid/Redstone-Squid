@@ -12,9 +12,7 @@ CREATE INDEX build_versions_version_idx ON public.build_versions USING btree (ve
 
 CREATE TRIGGER build_versions_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
 
-CREATE TRIGGER build_versions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER build_versions_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_change();
 
 CREATE TRIGGER build_versions_reject_truncate BEFORE TRUNCATE ON public.build_versions FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 

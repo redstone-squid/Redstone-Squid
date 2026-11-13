@@ -20,7 +20,7 @@ CREATE INDEX votes_account_idx ON public.votes USING btree (account_id);
 
 CREATE INDEX votes_option_alias_idx ON public.votes USING btree (vote_session_id, option_alias_id);
 
-CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_vote_session_sync();
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
