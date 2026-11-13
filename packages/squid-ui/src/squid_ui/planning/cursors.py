@@ -26,7 +26,7 @@ from squid_ui.presentation import (
 )
 from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership, RoutedPage, resolve_page
 from squid_ui.primitives.nodes import Footer, Node
-from squid_ui.sources import POSITION_RESOLVER, Direction, Position, PositionResolver
+from squid_ui.sources import Direction, Position, PositionPolicy, resolve_position
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +68,7 @@ class CursorCoordinator:
     chrome: Chrome
     nav: PagerNav | None = None
     overrides: Mapping[str, Position] | None = None
-    policy: PositionResolver = POSITION_RESOLVER
+    policy: PositionPolicy = resolve_position
     _pagers: list[scene.Pager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)
@@ -85,7 +85,7 @@ class CursorCoordinator:
         cursor = self.session.cursor(request.key)
         anchor = cursor.position.anchor
         anchored_offset = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
-        position = self.policy.resolve(
+        position = self.policy(
             override=None if self.overrides is None else self.overrides.get(request.key),
             anchored=Position(anchor, anchored_offset) if anchored_offset is not None else None,
             stale=bool(cursor.fingerprint and cursor.fingerprint != request.fingerprint),

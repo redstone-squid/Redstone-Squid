@@ -9,7 +9,7 @@ frontends apply those updates after successful delivery.
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from squid_ui.sources import ORIGIN, POSITION_RESOLVER, Direction, Position
+from squid_ui.sources import ORIGIN, Direction, Position, resolve_position
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +78,7 @@ class PresentationState:
     def move_cursor(self, key: str, position: Position) -> None:
         """Store one resolved position within the cursor's known extent."""
         current = self.cursor(key)
-        selected = POSITION_RESOLVER.resolve(override=position, upper_bound=current.extent - 1)
+        selected = resolve_position(override=position, upper_bound=current.extent - 1)
         updated = CursorState(
             Position(selected.anchor, selected.offset, Direction.AROUND),
             extent=current.extent,

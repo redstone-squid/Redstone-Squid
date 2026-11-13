@@ -240,7 +240,7 @@ The real defect here is narrower. **A classmethod that does not return its own c
 a constructor and must not be spelled like one.** `ScopeKind.resolve(open_context)` returns a
 `SessionScope`, so it uses the dictionary verb that means "turn an abstract selector plus a
 context into the concrete thing": `Router.resolve`, `TargetRegistry.resolve`, and
-`PositionResolver.resolve` follow the same rule.
+`resolve_position` follow the same rule.
 
 ### Methods are verb phrases
 

@@ -42,7 +42,7 @@ from squid_ui.planning.search import (
     iter_assignments,
 )
 from squid_ui.planning.target import PreparedExtension, Target
-from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
+from squid_ui.sources import Position, PositionPolicy, resolve_position
 from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
@@ -66,7 +66,6 @@ from squid_ui.target_types import (
 __all__ = [
     "CLASSIC_PROTOCOL_CAPABILITIES",
     "DEFAULT_SEARCH_BUDGET",
-    "POSITION_RESOLVER",
     "V2_PROTOCOL_CAPABILITIES",
     "AdapterProfile",
     "ClassicTarget",
@@ -88,7 +87,7 @@ __all__ = [
     "PlanReuse",
     "PlanSeverity",
     "Position",
-    "PositionResolver",
+    "PositionPolicy",
     "PreparedExtension",
     "RenderTarget",
     "Renderable",
@@ -116,4 +115,5 @@ __all__ = [
     "iter_assignments",
     "measure",
     "plan",
+    "resolve_position",
 ]

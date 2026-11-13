@@ -32,7 +32,7 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime import PresentationState
 from squid_ui.semantic import Item, Items, Paragraph
-from squid_ui.sources import Direction, Position, PositionResolver
+from squid_ui.sources import Direction, Position, resolve_position
 from squid_ui.text import NEUTRAL
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import Everyone, MessageRoot, conform
@@ -101,14 +101,14 @@ class TestPositionPolicy:
         ],
     )
     def test_precedence(self, kwargs, expected) -> None:
-        assert PositionResolver().resolve(**kwargs) == expected
+        assert resolve_position(**kwargs) == expected
 
     def test_clamps_only_the_offset(self) -> None:
-        policy = PositionResolver()
-        assert policy.resolve(override=Position("item", -3, Direction.BACKWARD), upper_bound=8) == Position(
+        policy = resolve_position
+        assert policy(override=Position("item", -3, Direction.BACKWARD), upper_bound=8) == Position(
             "item", 0, Direction.BACKWARD
         )
-        assert policy.resolve(override=Position("item", 20, Direction.FORWARD), upper_bound=8) == Position(
+        assert policy(override=Position("item", 20, Direction.FORWARD), upper_bound=8) == Position(
             "item", 8, Direction.FORWARD
         )
 

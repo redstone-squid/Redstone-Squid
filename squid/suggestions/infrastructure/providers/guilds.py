@@ -45,15 +45,12 @@ class StarboardNameProvider:
         )
 
 
-class StarboardSettingProvider:
-    """Suggest the settings `/starboard edit` accepts, with the value each expects."""
-
-    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        del request
-        return tuple(
-            Candidate.create(name, description=_setting_hint(kind), kind="starboard_setting")
-            for name, kind in sorted(EDITABLE_SETTINGS.items())
-        )
+def starboard_setting_candidates() -> tuple[Candidate, ...]:
+    """Suggest editable settings with the value each expects."""
+    return tuple(
+        Candidate.create(name, description=_setting_hint(kind), kind="starboard_setting")
+        for name, kind in sorted(EDITABLE_SETTINGS.items())
+    )
 
 
 class PermissionRoleProvider:

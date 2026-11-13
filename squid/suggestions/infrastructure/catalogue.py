@@ -31,15 +31,15 @@ from squid.suggestions.infrastructure.providers.guilds import (
     PermissionRoleProvider,
     PermissionRoles,
     StarboardNameProvider,
-    StarboardSettingProvider,
+    starboard_setting_candidates,
 )
 from squid.suggestions.infrastructure.providers.notifications import (
     AccountSubscriptions,
     SubscriptionProvider,
 )
 from squid.suggestions.infrastructure.providers.permissions import (
-    PermissionNodeProvider,
-    PermissionPatternProvider,
+    permission_node_candidates,
+    permission_pattern_candidates,
 )
 from squid.suggestions.infrastructure.providers.records import (
     AliasClaimProvider,
@@ -139,7 +139,7 @@ def _guild_sources(
     sources: list[SuggestionSource] = [
         SuggestionSource(
             id="starboard_settings",
-            provider=StarboardSettingProvider(),
+            provider=StaticProvider(starboard_setting_candidates()),
             kind=SourceKind.ENUMERABLE,
             kind_label="starboard_setting",
         )
@@ -337,13 +337,13 @@ def _permission_sources() -> tuple[SuggestionSource, ...]:
     return (
         SuggestionSource(
             id="permission_nodes",
-            provider=PermissionNodeProvider(),
+            provider=StaticProvider(permission_node_candidates()),
             kind=SourceKind.ENUMERABLE,
             kind_label="permission_node",
         ),
         SuggestionSource(
             id="permission_patterns",
-            provider=PermissionPatternProvider(),
+            provider=StaticProvider(permission_pattern_candidates()),
             kind=SourceKind.ENUMERABLE,
             kind_label="permission_pattern",
         ),
