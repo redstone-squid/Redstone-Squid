@@ -465,7 +465,9 @@ jobs:
         web-quality,
         web-e2e-full,
       ]
-    permissions: {}
+    permissions:
+      contents: read
+      packages: write # The reusable release workflow publishes images to GHCR.
     uses: ./.github/workflows/cd.yml
     secrets:
       SSH_HOST: ${{ secrets.SSH_HOST }}
