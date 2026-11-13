@@ -475,6 +475,9 @@ def figure(
     media_type: str | None = None,
 ) -> Figure:
     """One media preview with an optional caption."""
+    if isinstance(source, MediaItem) and (filename is not None or media_type is not None):
+        message = "figure file metadata belongs on its media_item()"
+        raise ValueError(message)
     resolved = source if isinstance(source, MediaItem) else media_item(source, filename=filename, media_type=media_type)
     return Figure(resolved, _opt_text(caption))
 

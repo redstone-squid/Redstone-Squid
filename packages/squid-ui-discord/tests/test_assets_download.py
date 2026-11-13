@@ -198,3 +198,13 @@ def test_path_media_and_download_share_one_upload(tmp_path: Path) -> None:
     finally:
         for file in files:
             file.close()
+
+
+def test_different_files_cannot_share_an_attachment_name() -> None:
+    document = sl.media(
+        sl.media_item(b"first", filename="image.png"),
+        sl.media_item(b"second", filename="image.png"),
+        key="gallery",
+    )
+    with pytest.raises(sl.errors.LayoutInvariantError, match="share filename"):
+        squid_ui_discord.render_static(document)

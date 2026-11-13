@@ -6,38 +6,30 @@ way wherever it was planned.
 """
 
 import io
-from collections.abc import Mapping, Sequence
-from urllib.parse import urlsplit
+from collections.abc import Sequence
 
 import discord
 
-from squid_ui import scene
-from squid_ui.assets import Asset, StoredAsset
+from squid_ui.assets import Asset
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.result import PlanResult
-
-
-def scene_nodes(document: scene.Scene) -> tuple[scene.Node, ...]:
-    """Every drawable node in a scene, whichever kind of message it resolved to."""
-    match document.body:
-        case scene.ComponentsV2(children=children):
-            return children
-        case scene.ClassicMessage(rows=rows):
-            # Classic scene file downloads lower to row controls; embeds are not scene nodes.
-            return tuple(control for row in rows for control in row.controls)
-        case _:
-            return ()
 
 
 def attachment_assets(plan: PlanResult) -> tuple[Asset, ...]:
     """The assets a plan expects to be uploaded, excluding ones already served by URL."""
-    linked = linked_file_assets(scene_nodes(plan.scene), plan.resources)
-    return tuple(
+    assets = tuple(
         asset
         for scene_asset in plan.scene.assets
-        if isinstance(asset := plan.resources.get(f"asset:{scene_asset.key}"), Asset)
-        and scene_asset.key not in linked
-        and asset.url is None
+        if isinstance(asset := plan.resources.get(f"asset:{scene_asset.key}"), Asset) and asset.url is None
     )
+
+    names: set[str] = set()
+    for asset in assets:
+        if asset.name in names:
+            message = f"different attachments share filename {asset.name!r}; give them distinct filename= values"
+            raise LayoutInvariantError(message)
+        names.add(asset.name)
+    return assets
 
 
 def files_for(assets: Sequence[Asset]) -> list[discord.File]:
@@ -50,21 +42,3 @@ def files_for(assets: Sequence[Asset]) -> list[discord.File]:
             file.close()
         raise
     return files
-
-
-def linked_file_assets(nodes: Sequence[scene.Node], resources: Mapping[str, object]) -> frozenset[str]:
-    """Asset keys the scene already references by URL, which cost no attachment slot."""
-    linked: set[str] = set()
-    for node in nodes:
-        if isinstance(node, scene.Panel):
-            linked.update(linked_file_assets(node.children, resources))
-            continue
-        if not isinstance(node, scene.File):
-            continue
-        resource = resources.get(f"asset:{node.asset_key}")
-        if not isinstance(resource, Asset) or not isinstance(resource.source, StoredAsset):
-            continue
-        parsed = urlsplit(resource.source.reference)
-        if parsed.scheme in {"http", "https"} and parsed.netloc:
-            linked.add(node.asset_key)
-    return frozenset(linked)

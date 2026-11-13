@@ -148,11 +148,11 @@ async def _merged_files(host: Sequence[discord.File], payload: MessagePayload) -
     Overflow is rejected here rather than by Discord, whose answer names neither the count
     nor which half of the list overran it.
     """
-    files = [*host, *await payload.prepare_files()]
-    if len(files) > LIMITS.attachments:
-        message = f"a Discord message carries at most {LIMITS.attachments} attachments, not {len(files)}"
+    count = len(host) + len(payload.assets)
+    if count > LIMITS.attachments:
+        message = f"a Discord message carries at most {LIMITS.attachments} attachments, not {count}"
         raise LimitViolationError([message])
-    return files
+    return [*host, *await payload.prepare_files()]
 
 
 class _ChannelMessageHandle:

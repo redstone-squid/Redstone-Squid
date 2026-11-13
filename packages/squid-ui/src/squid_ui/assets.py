@@ -131,7 +131,7 @@ def file(
         content = StoredAsset(source)
         identity = source
     elif isinstance(source, PathLike):
-        path = Path(source)
+        path = Path(source).absolute()
         name = filename or path.name
         content = LocalAsset(path)
         identity = str(path.absolute())
@@ -155,5 +155,7 @@ def file(
         raise ValueError(msg)
     mime = media_type or (source.media_type if isinstance(source, Asset) and filename is None else None)
     mime = mime or mimetypes.guess_file_type(name)[0] or "application/octet-stream"
+    if isinstance(source, Asset) and name == source.name and mime == source.media_type:
+        return source
     key = hashlib.sha256(f"{identity}\0{name}\0{mime}".encode()).hexdigest()
     return Asset(key, name, mime, content)

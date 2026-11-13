@@ -85,3 +85,14 @@ def test_media_metadata_belongs_to_a_single_entry() -> None:
     omitted: None = None
     gallery = sl.media(sl.media_item(b"one", filename="one.png"), omitted, Path("two.png"), key="gallery")
     assert len(gallery.items) == 2
+
+
+def test_repeating_existing_metadata_preserves_file_identity() -> None:
+    asset = sl.file(b"image", filename="image.png")
+    assert sl.file(asset, filename="image.png", media_type="image/png") is asset
+
+
+def test_figure_does_not_silently_ignore_file_metadata() -> None:
+    entry = sl.media_item(b"image", filename="image.png")
+    with pytest.raises(ValueError, match="media_item"):
+        sl.figure(entry, filename="other.png")
