@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
           ref: ${{ github.head_ref || github.ref_name }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
 
@@ -75,7 +76,7 @@ jobs:
           git add --update
           git commit -m "ci: apply automatic formatting and catalog updates"
           gh auth setup-git
-          git push origin "HEAD:${BRANCH}"
+          bash .github/scripts/push-autofix.sh
 
       - name: Minimize uv cache
         if: always()
