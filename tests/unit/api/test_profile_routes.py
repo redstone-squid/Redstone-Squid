@@ -288,8 +288,8 @@ class TestMerge:
 
         response = await preview_merge.fn(MergeRequest(code="ABCD2345"), accounts, _caller(), _reservation=None)
 
-        assert response.absorbed_creator_id == ABSORBED_ID
-        assert response.alias_names == ["Notch"]
+        assert response.absorbed_public_creator_id == ABSORBED_ID
+        assert response.alias_names == ("Notch",)
         assert response.build_count == 3
 
     async def test_completing_reports_the_permanent_redirect(self) -> None:
@@ -298,8 +298,8 @@ class TestMerge:
         response = await complete_merge.fn(MergeRequest(code="ABCD2345"), accounts, _caller(), _reservation=None)
 
         assert accounts.merges == [(1, "ABCD2345")]
-        assert response.surviving_creator_id == SURVIVING_ID
-        assert response.redirected_creator_id == ABSORBED_ID
+        assert response.surviving_public_creator_id == SURVIVING_ID
+        assert response.redirected_public_creator_id == ABSORBED_ID
 
     async def test_a_bad_code_surfaces_as_a_validation_error(self) -> None:
         accounts = self._merge_accounts(merge_error=InvalidMergeCodeError())

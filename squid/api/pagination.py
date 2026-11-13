@@ -5,7 +5,8 @@ validates query parameters and converts those pages to JSON representations.
 """
 
 from collections.abc import Callable
-from typing import Annotated, Self
+from dataclasses import dataclass
+from typing import Annotated, Self, cast, overload
 
 from litestar.params import QueryParameter
 from pydantic import BaseModel, ConfigDict
@@ -45,10 +46,13 @@ class PageAnchor(BaseModel):
         return cls(offset=value.offset, after_id=value.after_id, before_id=value.before_id)
 
 
-class Page[ItemT](BaseModel):
-    """One page of resource summaries and the parameters addressing its neighbours."""
+@dataclass
+class Page[ItemT]:
+    """One page of resource summaries and the parameters addressing its neighbours.
 
-    model_config = ConfigDict(extra="forbid")
+    DTOs replace items during serialization, so this HTTP envelope is mutable.
+    Application pages are copied before serialization and remain unchanged.
+    """
 
     items: list[ItemT]
     total: int
@@ -56,10 +60,20 @@ class Page[ItemT](BaseModel):
     prev: PageAnchor | None
 
     @classmethod
-    def from_domain[ResultT](cls, page: ResultPage[ResultT], render: Callable[[ResultT], ItemT]) -> Self:
-        """Serialize an application page and its items as their REST representations."""
+    @overload
+    def from_domain(cls, page: ResultPage[ItemT]) -> Self: ...
+
+    @classmethod
+    @overload
+    def from_domain[ResultT](cls, page: ResultPage[ResultT], render: Callable[[ResultT], ItemT]) -> Self: ...
+
+    @classmethod
+    def from_domain[ResultT](cls, page: ResultPage[ResultT], render: Callable[[ResultT], ItemT] | None = None) -> Self:
+        """Copy an application page, optionally mapping items that need explicit assembly."""
+        # The overload without a renderer requires matching item types.
+        items = [render(item) for item in page.items] if render is not None else cast(list[ItemT], list(page.items))
         return cls(
-            items=[render(item) for item in page.items],
+            items=items,
             total=page.total,
             next=PageAnchor.from_domain(page.next) if page.next is not None else None,
             prev=PageAnchor.from_domain(page.prev) if page.prev is not None else None,

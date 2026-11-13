@@ -1486,7 +1486,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_BuildSummary_"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.builds.BuildSummary_"
                 }
               }
             }
@@ -3120,7 +3120,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_ErrorReportSummary_"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.diagnostics.ErrorReportSummary_"
                 }
               }
             }
@@ -3971,7 +3971,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/IdentityDetail"
+                    "$ref": "#/components/schemas/LinkedIdentityDetail"
                   },
                   "type": "array"
                 }
@@ -4140,9 +4140,9 @@
               }
             },
             "content": {
-              "application/json": {
+              "": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityDetail"
+                  "$ref": "#/components/schemas/LinkedIdentityDetail"
                 }
               }
             }
@@ -5277,7 +5277,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_BuildSummary_"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.builds.BuildSummary_"
                 }
               }
             }
@@ -8622,7 +8622,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_InboxNotificationDetail_"
+                  "$ref": "#/components/schemas/Page_litestar.dto._backend.InboxNotificationDetail_"
                 }
               }
             }
@@ -9378,7 +9378,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_PublishedTitle_"
+                  "$ref": "#/components/schemas/Page_litestar.dto._backend.PublishedTitle_"
                 }
               }
             }
@@ -9520,7 +9520,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_SchematicSummary_"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.schematics.SchematicSummary_"
                 }
               }
             }
@@ -14708,7 +14708,7 @@
               }
             },
             "content": {
-              "application/json": {
+              "": {
                 "schema": {
                   "items": {
                     "$ref": "#/components/schemas/DraftSchematicResponse"
@@ -14843,7 +14843,7 @@
               }
             },
             "content": {
-              "application/json": {
+              "": {
                 "schema": {
                   "items": {
                     "$ref": "#/components/schemas/DraftSchematicResponse"
@@ -15755,7 +15755,7 @@
               }
             },
             "content": {
-              "application/json": {
+              "": {
                 "schema": {
                   "items": {
                     "$ref": "#/components/schemas/SuppliedFileResponse"
@@ -16109,7 +16109,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_TagDetail_"
+                  "$ref": "#/components/schemas/Page_litestar.dto._backend.TagDetail_"
                 }
               }
             }
@@ -16560,7 +16560,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_VersionDetail_"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.versions.VersionDetail_"
                 }
               }
             }
@@ -19277,19 +19277,19 @@
             "$ref": "#/components/schemas/DraftSchematicState"
           },
           "primary": {
-            "type": "boolean"
+            "type": "boolean",
+            "default": false
           },
           "discarded": {
-            "type": "boolean"
+            "type": "boolean",
+            "default": false
           }
         },
         "type": "object",
         "required": [
           "byte_size",
-          "discarded",
           "filename",
           "id",
-          "primary",
           "sha256",
           "state"
         ],
@@ -19918,6 +19918,17 @@
         ],
         "title": "FieldOperationRequest"
       },
+      "FieldType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "number",
+          "timestamp",
+          "boolean"
+        ],
+        "title": "FieldType",
+        "description": "Storage-independent field value types."
+      },
       "FinalizationJobStatus": {
         "type": "string",
         "enum": [
@@ -20257,20 +20268,6 @@
           "id": {
             "type": "integer"
           },
-          "revision": {
-            "type": "integer"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "payload": {
-            "additionalProperties": {},
-            "type": "object"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
           "read_at": {
             "oneOf": [
               {
@@ -20281,6 +20278,21 @@
                 "type": "null"
               }
             ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotificationKind"
+          },
+          "payload": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "revision": {
+            "type": "integer",
+            "default": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "type": "object",
@@ -20288,9 +20300,7 @@
           "created_at",
           "id",
           "kind",
-          "payload",
-          "read_at",
-          "revision"
+          "payload"
         ],
         "title": "InboxNotificationDetail"
       },
@@ -20504,6 +20514,52 @@
           }
         ]
       },
+      "LinkedIdentityDetail": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "display_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_public": {
+            "type": "boolean",
+            "default": true
+          },
+          "provider": {
+            "$ref": "#/components/schemas/IdentityProvider"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "verified_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "subject",
+          "verified_at"
+        ],
+        "title": "LinkedIdentityDetail"
+      },
       "MediaKind": {
         "type": "string",
         "enum": [
@@ -20540,21 +20596,21 @@
             "items": {
               "type": "string"
             },
-            "type": "array"
+            "type": "array",
+            "default": []
           },
           "identity_count": {
-            "type": "integer"
+            "type": "integer",
+            "default": 0
           },
           "build_count": {
-            "type": "integer"
+            "type": "integer",
+            "default": 0
           }
         },
         "type": "object",
         "required": [
-          "absorbed_creator_id",
-          "alias_names",
-          "build_count",
-          "identity_count"
+          "absorbed_creator_id"
         ],
         "title": "MergePreviewDetail"
       },
@@ -20715,6 +20771,18 @@
           "retained_creator_names"
         ],
         "title": "MinecraftIdentityRefresh"
+      },
+      "NotificationKind": {
+        "type": "string",
+        "enum": [
+          "build_confirmed",
+          "build_denied",
+          "creator_build_confirmed",
+          "record_gained",
+          "staff_build_submitted"
+        ],
+        "title": "NotificationKind",
+        "description": "Inbox and delivery message categories."
       },
       "NotificationPreferenceUpdate": {
         "properties": {
@@ -20881,211 +20949,6 @@
         "required": [],
         "title": "PageAnchor"
       },
-      "Page_BuildSummary_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/BuildSummary"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[BuildSummary]"
-      },
-      "Page_ErrorReportSummary_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ErrorReportSummary"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[ErrorReportSummary]"
-      },
-      "Page_InboxNotificationDetail_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/InboxNotificationDetail"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[InboxNotificationDetail]"
-      },
-      "Page_PublishedTitle_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/PublishedTitle"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[PublishedTitle]"
-      },
-      "Page_SchematicSummary_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/SchematicSummary"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[SchematicSummary]"
-      },
       "Page_SearchResult_": {
         "properties": {
           "items": {
@@ -21137,7 +21000,89 @@
         ],
         "title": "Page[SearchResult]"
       },
-      "Page_TagDetail_": {
+      "Page_litestar.dto._backend.InboxNotificationDetail_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxNotificationDetail"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[InboxNotificationDetail]"
+      },
+      "Page_litestar.dto._backend.PublishedTitle_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublishedTitle"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[PublishedTitle]"
+      },
+      "Page_litestar.dto._backend.TagDetail_": {
         "properties": {
           "items": {
             "items": {
@@ -21178,7 +21123,130 @@
         ],
         "title": "Page[TagDetail]"
       },
-      "Page_VersionDetail_": {
+      "Page_squid.api.v1.schemas.builds.BuildSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BuildSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[BuildSummary]"
+      },
+      "Page_squid.api.v1.schemas.diagnostics.ErrorReportSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorReportSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[ErrorReportSummary]"
+      },
+      "Page_squid.api.v1.schemas.schematics.SchematicSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SchematicSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[SchematicSummary]"
+      },
+      "Page_squid.api.v1.schemas.versions.VersionDetail_": {
         "properties": {
           "items": {
             "items": {
@@ -22006,6 +22074,17 @@
         "required": [],
         "title": "RecordFilterInput"
       },
+      "RecordOperator": {
+        "type": "string",
+        "enum": [
+          "present",
+          "exact",
+          "at_most",
+          "at_least"
+        ],
+        "title": "RecordOperator",
+        "description": "How a tag assignment satisfies a record-category predicate."
+      },
       "RecordSearchEntry": {
         "properties": {
           "record_id": {
@@ -22529,27 +22608,27 @@
             "type": "string"
           },
           "type": {
-            "type": "string"
+            "$ref": "#/components/schemas/FieldType"
           },
           "supports_range": {
-            "type": "boolean"
-          },
-          "supports_sort": {
-            "type": "boolean"
+            "type": "boolean",
+            "default": false
           },
           "aliases": {
             "items": {
               "type": "string"
             },
-            "type": "array"
+            "type": "array",
+            "default": []
+          },
+          "supports_sort": {
+            "type": "boolean",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "aliases",
           "name",
-          "supports_range",
-          "supports_sort",
           "type"
         ],
         "title": "SearchField"
@@ -23036,16 +23115,19 @@
         ],
         "title": "SuppliedFileResponse"
       },
+      "TagAuthority": {
+        "type": "string",
+        "enum": [
+          "official",
+          "user"
+        ],
+        "title": "TagAuthority",
+        "description": "Who controls a tag definition."
+      },
       "TagDetail": {
         "properties": {
           "id": {
             "type": "integer"
-          },
-          "key": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
           },
           "query_name": {
             "oneOf": [
@@ -23056,15 +23138,6 @@
                 "type": "null"
               }
             ]
-          },
-          "authority": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "value_type": {
-            "type": "string"
           },
           "restriction_type": {
             "oneOf": [
@@ -23079,7 +23152,7 @@
           "record_operator": {
             "oneOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/RecordOperator"
               },
               {
                 "type": "null"
@@ -23115,21 +23188,30 @@
                 "type": "null"
               }
             ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "authority": {
+            "$ref": "#/components/schemas/TagAuthority"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TagSemanticKind"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/TagValueType"
           }
         },
         "type": "object",
         "required": [
           "authority",
-          "canonical_unit",
-          "display_unit",
           "id",
           "key",
           "kind",
           "name",
-          "numeric_step",
-          "query_name",
-          "record_operator",
-          "restriction_type",
           "value_type"
         ],
         "title": "TagDetail"
@@ -23173,6 +23255,27 @@
           "tag_id"
         ],
         "title": "TagPredicateInput"
+      },
+      "TagSemanticKind": {
+        "type": "string",
+        "enum": [
+          "restriction",
+          "pattern",
+          "showcase"
+        ],
+        "title": "TagSemanticKind",
+        "description": "The behavior associated with a tag definition."
+      },
+      "TagValueType": {
+        "type": "string",
+        "enum": [
+          "none",
+          "numeric",
+          "text",
+          "boolean"
+        ],
+        "title": "TagValueType",
+        "description": "The scalar value attached to a tag."
       },
       "UploadCapabilities": {
         "properties": {

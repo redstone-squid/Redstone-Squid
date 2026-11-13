@@ -14,8 +14,8 @@ from uuid import UUID
 import anyio
 from litestar import Request, Response, Router, delete, get, put
 from litestar.di import NamedDependency, Provide
+from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, FromQuery, QueryParameter, SkipValidation
-from pydantic import BaseModel, ConfigDict
 
 from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
@@ -24,18 +24,14 @@ from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
 from squid.core.errors import ValidationError
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
-from squid.submissions.application.intake import SubmissionAttachmentIntake
-from squid.submissions.domain.intake import IntakeStatus
+from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 
 
-class SuppliedFileResponse(BaseModel):
-    """Retained requirement metadata, excluding private source URLs and storage keys."""
+class SuppliedFileDTO(DataclassDTO[SuppliedAttachment]):
+    """Expose retained requirements without source locations or history-management details."""
 
-    model_config = ConfigDict(from_attributes=True)
-    id: UUID
-    filename: str
-    kind: str
-    status: IntakeStatus
+    __schema_name__ = "SuppliedFileResponse"
+    config = DTOConfig(include={"id", "filename", "kind", "status"})
 
 
 def intake_service(request: Request) -> SubmissionAttachmentIntake:
@@ -58,9 +54,9 @@ _WRITE = contract(cli=transport_only())
         "intake": Provide(intake_service, sync_to_thread=False),
     },
 )
-async def list_files(draft_id: FromPath[UUID], account_id: AccountId, intake: Intake) -> list[SuppliedFileResponse]:
+async def list_files(draft_id: FromPath[UUID], account_id: AccountId, intake: Intake) -> list[SuppliedAttachment]:
     """List unresolved, registered, and explicitly discarded supplied files."""
-    return [SuppliedFileResponse.model_validate(item) for item in await intake.list(draft_id, account_id)]
+    return list(await intake.list(draft_id, account_id))
 
 
 @put(
@@ -89,7 +85,7 @@ async def upload_file(
     intake: Intake,
     filename: Annotated[str, QueryParameter(min_length=1, max_length=255)],
     replaces: FromQuery[UUID | None] = None,
-) -> list[SuppliedFileResponse]:
+) -> list[SuppliedAttachment]:
     """Register a supplied file, then discard the requirement it replaces if requested.
 
     Use a new source_id when replacing a file. The previous requirement is kept
@@ -148,7 +144,7 @@ async def discard_file(
     edit: AttachmentEdit,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> Response[list[SuppliedFileResponse]]:
+) -> Response[list[SuppliedAttachment]]:
     """Explicitly resolve a file that does not belong to this candidate."""
     response_headers: dict[str, str] = {}
     response_headers["ETag"] = await edit.save(
@@ -160,6 +156,7 @@ async def discard_file(
 
 
 router = Router(
+    return_dto=SuppliedFileDTO,
     path="/submissions/drafts/{draft_id:uuid}/supplied-files",
     tags=["submissions"],
     route_handlers=[list_files, upload_file, discard_file],

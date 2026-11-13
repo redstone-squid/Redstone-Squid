@@ -6,10 +6,8 @@ from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
 from squid.accounts.domain import (
-    AccountMerge,
     IdentityProvider,
     IdentityRefresh,
-    MergePreview,
     ProfileLink,
     ProfileUpdate,
     avatar_url_for,
@@ -247,42 +245,3 @@ class MergeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str
-
-
-class MergePreviewDetail(BaseModel):
-    """What completing a merge would move, shown before the irreversible call."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    absorbed_creator_id: UUID
-    """The creator id that would become a permanent redirect to the caller's."""
-
-    alias_names: list[str]
-    identity_count: int
-    build_count: int
-
-    @classmethod
-    def from_domain(cls, preview: MergePreview) -> MergePreviewDetail:
-        return cls(
-            absorbed_creator_id=preview.absorbed_public_creator_id,
-            alias_names=list(preview.alias_names),
-            identity_count=preview.identity_count,
-            build_count=preview.build_count,
-        )
-
-
-class AccountMergeDetail(BaseModel):
-    """The stable identities left behind by a completed merge."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    surviving_creator_id: UUID
-    redirected_creator_id: UUID
-    """Permanently redirects to `surviving_creator_id`, so links to the absorbed creator survive."""
-
-    @classmethod
-    def from_domain(cls, merge: AccountMerge) -> AccountMergeDetail:
-        return cls(
-            surviving_creator_id=merge.surviving_public_creator_id,
-            redirected_creator_id=merge.redirected_public_creator_id,
-        )

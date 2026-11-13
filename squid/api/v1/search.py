@@ -6,6 +6,7 @@ from typing import Annotated
 
 from litestar import Router, get
 from litestar.di import Provide
+from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
@@ -19,12 +20,12 @@ from squid.api.v1.schemas.search import (
     MetadataSearchResult,
     RecordSearchEntry,
     RecordSearchResult,
-    SearchField,
     SearchResult,
     SearchSuggestions,
 )
 from squid.builds.application import BuildQueryService
 from squid.core.errors import DataIntegrityError
+from squid.search.application.fields import FieldDefinition
 from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
 
 logger = logging.getLogger(__name__)
@@ -34,17 +35,28 @@ logger = logging.getLogger(__name__)
 PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
 
 
+class PublicSearchFieldDTO(DataclassDTO[FieldDefinition]):
+    """Describe supported search syntax without exposing storage keys or coercion settings."""
+
+    __schema_name__ = "SearchField"
+    config = DTOConfig(
+        include={"name", "value_type", "supports_range", "supports_sort", "aliases"},
+        rename_fields={"value_type": "type"},
+    )
+
+
 @get(
     "/fields",
     responses=responses(503),
     operation_id="search_fields_list",
+    return_dto=PublicSearchFieldDTO,
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
-async def list_search_fields(search_service: Search) -> list[SearchField]:
+async def list_search_fields(search_service: Search) -> tuple[FieldDefinition, ...]:
     """Publish the effective allowlisted query-field registry."""
     registry = await search_service.fields()
-    return [SearchField.from_domain(field) for field in registry.definitions]
+    return registry.definitions
 
 
 @get(

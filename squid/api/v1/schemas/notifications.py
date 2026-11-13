@@ -1,13 +1,12 @@
 """Authenticated notification preference, subscription, and inbox schemas."""
 
-from datetime import datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from squid.notifications import NotificationPreferences, RecordSubscriptionFilter, SubscriptionKind, TagPredicate
-from squid.notifications.models import InboxNotification, NotificationSubscription
+from squid.notifications.models import NotificationSubscription
 
 
 class NotificationPreferencesDetail(BaseModel):
@@ -130,28 +129,4 @@ class NotificationSubscriptionDetail(BaseModel):
             kind=subscription.kind,
             subject_id=subscription.subject_id,
             filter=None if subscription.record_filter is None else subscription.record_filter.as_dict(),
-        )
-
-
-class InboxNotificationDetail(BaseModel):
-    """One web inbox item."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: int
-    revision: int
-    kind: str
-    payload: dict[str, object]
-    created_at: datetime
-    read_at: datetime | None
-
-    @classmethod
-    def from_domain(cls, notification: InboxNotification) -> InboxNotificationDetail:
-        return cls(
-            id=notification.id,
-            revision=notification.revision,
-            kind=notification.kind.value,
-            payload=notification.payload,
-            created_at=notification.created_at.to_stdlib(),
-            read_at=None if notification.read_at is None else notification.read_at.to_stdlib(),
         )

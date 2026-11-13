@@ -3,6 +3,8 @@
 from typing import Annotated
 from uuid import UUID
 
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTOConfig
 from litestar import Response, Router, delete, get, patch, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
@@ -23,7 +25,6 @@ from squid.api.pagination import (
 from squid.api.revisions import expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.notifications import (
-    InboxNotificationDetail,
     NotificationPreferencesDetail,
     NotificationPreferenceUpdate,
     NotificationSubscriptionCreate,
@@ -41,7 +42,16 @@ from squid.notifications.edits import (
     notification_target,
 )
 from squid.notifications.errors import NotificationSubscriptionNotFoundError
+from squid.notifications.models import InboxNotification
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
+
+
+class InboxNotificationDTO(SQLAlchemyDTO[InboxNotification]):
+    """Publish inbox content without recipient, source-event, or delivery bookkeeping."""
+
+    __schema_name__ = "InboxNotificationDetail"
+    config = SQLAlchemyDTOConfig(include={"id", "revision", "kind", "payload", "created_at", "read_at"})
+
 
 UserCaller = NamedDependency[SkipValidation[Caller]]
 
@@ -248,6 +258,7 @@ async def delete_subscription(
     "/inbox",
     responses=responses(400, 401, 403, 422, 503),
     operation_id="notification_inbox_list",
+    return_dto=InboxNotificationDTO,
     security=[WEB],
     opt=contract(cli=browser_only()),
     status_code=200,
@@ -262,12 +273,12 @@ async def list_inbox(
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
-) -> Page[InboxNotificationDetail]:
+) -> Page[InboxNotification]:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     account_id = _account_id(caller)
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await notifications.inbox(account_id, selector=selector, page_size=page_size, visibility=visibility)
-    return Page[InboxNotificationDetail].from_domain(page, InboxNotificationDetail.from_domain)
+    return Page[InboxNotification].from_domain(page)
 
 
 @post(

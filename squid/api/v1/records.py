@@ -28,6 +28,8 @@ from squid.records.errors import RecordNotFoundError
 class PublicRecordDTO(DataclassDTO[PublishedTitle]):
     """Serialize published record facts directly without another Python record model."""
 
+    __schema_name__ = "PublishedTitle"
+
     config = DTOConfig(
         include={
             "id",
@@ -89,7 +91,7 @@ async def list_records(
     _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await records.list_page(selector=selector, descending=descending, page_size=page_size)
-    return Page[PublishedTitle].from_domain(page, lambda record: record)
+    return Page[PublishedTitle].from_domain(page)
 
 
 router = Router(

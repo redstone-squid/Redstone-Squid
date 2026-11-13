@@ -5,8 +5,9 @@ from uuid import UUID
 
 from litestar import Request, Response, Router, delete, get, post, put
 from litestar.di import NamedDependency, Provide
+from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, JSONBody, QueryParameter, SkipValidation
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
@@ -17,20 +18,14 @@ from squid.api.v1.submissions import AccountId, authenticated_account, get_submi
 from squid.core.errors import ValidationError
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain.schematics import DraftSchematicState
+from squid.submissions.domain.schematics import DraftSchematic
 
 
-class DraftSchematicResponse(BaseModel):
-    """Private source metadata without an object key or download URL."""
+class DraftSchematicDTO(DataclassDTO[DraftSchematic]):
+    """Expose source metadata without private storage paths."""
 
-    model_config = ConfigDict(from_attributes=True)
-    id: UUID
-    filename: str
-    sha256: str | None
-    byte_size: int | None
-    state: DraftSchematicState
-    primary: bool
-    discarded: bool
+    __schema_name__ = "DraftSchematicResponse"
+    config = DTOConfig(include={"id", "filename", "sha256", "byte_size", "state", "primary", "discarded"})
 
 
 class AttachSchematicRequest(BaseModel):
@@ -68,9 +63,9 @@ def _check_size(size: int, maximum: int) -> None:
 )
 async def list_schematics(
     draft_id: FromPath[UUID], account_id: AccountId, schematics: Schematics
-) -> list[DraftSchematicResponse]:
+) -> list[DraftSchematic]:
     """List retained sources, including failures and explicit discards."""
-    return [DraftSchematicResponse.model_validate(source) for source in await schematics.list(draft_id, account_id)]
+    return list(await schematics.list(draft_id, account_id))
 
 
 @put(
@@ -98,7 +93,7 @@ async def upload_schematic(
     account_id: AccountId,
     schematics: Schematics,
     filename: Annotated[str, QueryParameter(min_length=1, max_length=255)],
-) -> DraftSchematicResponse:
+) -> DraftSchematic:
     """Upload or retry one stable source ID while keeping its bytes private."""
     await schematics.reserve(draft_id, account_id, filename=filename, upload_id=upload_id)
     data = bytearray()
@@ -110,7 +105,7 @@ async def upload_schematic(
     except Exception:
         await schematics.fail(draft_id, account_id, upload_id)
         raise
-    return DraftSchematicResponse.model_validate(source)
+    return source
 
 
 @post(
@@ -136,7 +131,7 @@ async def select_primary(
     edit: AttachmentEdit,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> Response[list[DraftSchematicResponse]]:
+) -> Response[list[DraftSchematic]]:
     """Explicitly select the primary schematic for this draft."""
     response_headers: dict[str, str] = {}
     response_headers["ETag"] = await edit.save(AttachmentValues(primary=upload_id, select_primary=True))
@@ -168,7 +163,7 @@ async def discard_schematic(
     edit: AttachmentEdit,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> Response[list[DraftSchematicResponse]]:
+) -> Response[list[DraftSchematic]]:
     """Discard one draft reference; other candidates keep their source."""
     response_headers: dict[str, str] = {}
     response_headers["ETag"] = await edit.save(
@@ -199,13 +194,14 @@ async def attach_schematic(
     schematics: Schematics,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> list[DraftSchematicResponse]:
+) -> list[DraftSchematic]:
     """Assign an already supplied file to another candidate without another upload."""
     await schematics.attach(data.source_draft_id, draft_id, account_id, upload_id)
     return await list_schematics.fn(draft_id, account_id, schematics)
 
 
 router = Router(
+    return_dto=DraftSchematicDTO,
     dependencies={"schematics": Provide(get_schematics, sync_to_thread=False)},
     path="/submissions/drafts/{draft_id:uuid}/schematics",
     tags=["submissions"],

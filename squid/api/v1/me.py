@@ -3,8 +3,11 @@
 from typing import Annotated
 from uuid import UUID
 
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTOConfig
 from litestar import Response, Router, delete, get, patch, post, put
 from litestar.di import NamedDependency, Provide
+from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, SkipValidation
 
 from squid.accounts.application import AccountService
@@ -16,8 +19,9 @@ from squid.accounts.application.edits import (
     ProfileValues,
     account_target,
 )
-from squid.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, MergePreview
 from squid.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
+from squid.accounts.models import AccountIdentity
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
 from squid.api.dependencies import Accounts, BuildQueries, Services, get_accounts, get_build_queries
 from squid.api.errors import responses
@@ -35,11 +39,8 @@ from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
 from squid.api.v1.schemas.consent import ConsentGrantRequest
 from squid.api.v1.schemas.me import (
-    AccountMergeDetail,
-    IdentityDetail,
     IdentityVisibilityRequest,
     MergeCodeDetail,
-    MergePreviewDetail,
     MergeRequest,
     MinecraftIdentityRefresh,
     ProfileDetail,
@@ -56,6 +57,37 @@ from squid.permissions.domain.catalogue import (
     ACCOUNT_SELF_MANAGE,
     ACCOUNT_SELF_READ,
 )
+
+
+class LinkedIdentityDTO(SQLAlchemyDTO[AccountIdentity]):
+    """Expose caller-owned identity details without account IDs or provider metadata."""
+
+    __schema_name__ = "LinkedIdentityDetail"
+    config = SQLAlchemyDTOConfig(include={"id", "provider", "subject", "display_name", "verified_at", "is_public"})
+
+
+class MergePreviewDTO(DataclassDTO[MergePreview]):
+    """Keep the public creator ID and merge counts in the existing preview shape."""
+
+    __schema_name__ = "MergePreviewDetail"
+    config = DTOConfig(
+        include={"absorbed_public_creator_id", "alias_names", "identity_count", "build_count"},
+        rename_fields={"absorbed_public_creator_id": "absorbed_creator_id"},
+    )
+
+
+class AccountMergeDTO(DataclassDTO[AccountMerge]):
+    """Expose public redirects while withholding the internal merged account IDs."""
+
+    __schema_name__ = "AccountMergeDetail"
+    config = DTOConfig(
+        include={"surviving_public_creator_id", "redirected_public_creator_id"},
+        rename_fields={
+            "surviving_public_creator_id": "surviving_creator_id",
+            "redirected_public_creator_id": "redirected_creator_id",
+        },
+    )
+
 
 UserCaller = NamedDependency[SkipValidation[Caller]]
 RefreshCaller = NamedDependency[SkipValidation[Caller]]
@@ -174,12 +206,13 @@ async def update_profile(
     "/identities",
     responses=responses(401, 403, 404, 503),
     operation_id="account_identity_list",
+    return_dto=LinkedIdentityDTO,
     security=[WEB],
     opt=contract(cli=browser_only()),
     status_code=200,
     guards=[requires(ACCOUNT_SELF_READ)],
 )
-async def list_identities(accounts: Accounts, caller: UserCaller) -> list[IdentityDetail]:
+async def list_identities(accounts: Accounts, caller: UserCaller) -> list[AccountIdentity]:
     """List every identity linked to the caller's account, hidden ones included.
 
     Unfiltered by visibility on purpose: you can only unhide what you can see listed.
@@ -187,13 +220,14 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
     if caller.account_id is None:
         raise AuthenticationError
     identities = await accounts.list_identities(caller.account_id)
-    return [IdentityDetail.from_domain(identity) for identity in identities]
+    return list(identities)
 
 
 @put(
     "/identities/{identity_id:int}/visibility",
     responses=responses(401, 403, 404, 412, 422, 503),
     operation_id="account_identity_visibility_set",
+    return_dto=LinkedIdentityDTO,
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
     status_code=200,
@@ -213,7 +247,7 @@ async def set_identity_visibility(
     if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> Response[IdentityDetail]:
+) -> Response[AccountIdentity]:
     """Publish or withhold one linked identity on the public creator profile."""
     response_headers: dict[str, str] = {}
     if caller.account_id is None:
@@ -232,7 +266,7 @@ async def set_identity_visibility(
     identity = next((identity for identity in snapshot.account.identities if identity.id == identity_id), None)
     if identity is None:
         raise AccountIdentityNotFoundError(identity_id, account_id=caller.account_id)
-    return Response(content=IdentityDetail.from_domain(identity), headers=response_headers, status_code=200)
+    return Response(content=identity, headers=response_headers, status_code=200)
 
 
 @delete(
@@ -301,6 +335,7 @@ async def create_merge_code(
     "/merge/preview",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="account_merge_preview",
+    return_dto=MergePreviewDTO,
     security=[WEB_WRITE, DEVICE],
     opt=contract(cli=cli_command("account.merge.preview", interaction="direct")),
     status_code=200,
@@ -313,20 +348,21 @@ async def preview_merge(
     caller: ManageCaller,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> MergePreviewDetail:
+) -> MergePreview:
     """Describe what redeeming a merge code would move, without spending it.
 
     A merge cannot be undone, so this exists to be shown before the irreversible call.
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return MergePreviewDetail.from_domain(await accounts.preview_merge(caller.account_id, data.code))
+    return await accounts.preview_merge(caller.account_id, data.code)
 
 
 @post(
     "/merge",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="account_merge_complete",
+    return_dto=AccountMergeDTO,
     security=[WEB_WRITE, DEVICE],
     opt=contract(cli=cli_command("account.merge.complete", interaction="direct")),
     status_code=200,
@@ -339,14 +375,14 @@ async def complete_merge(
     caller: ManageCaller,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> AccountMergeDetail:
+) -> AccountMerge:
     """Absorb the account that minted this code into the caller's account.
 
     Irreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return AccountMergeDetail.from_domain(await accounts.complete_merge(caller.account_id, data.code))
+    return await accounts.complete_merge(caller.account_id, data.code)
 
 
 @post(

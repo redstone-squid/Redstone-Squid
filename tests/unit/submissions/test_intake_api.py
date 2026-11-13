@@ -64,7 +64,7 @@ async def test_replacement_registers_bytes_before_discarding_original_requiremen
     )
     assert intake.events == ["reserve", "register", "discard"]
     assert intake.data == b"source bytes"
-    assert "source" not in result[0].model_dump()
+    assert result == [intake.source]
 
 
 async def test_oversized_upload_is_retained_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
