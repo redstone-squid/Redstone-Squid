@@ -1,6 +1,6 @@
 """Lowering resolves deferred text before measurement and target conversion.
 
-The fixture covers text-bearing primitive fields and nested records. Leaving a Message
+The fixture covers text-bearing primitive fields and nested records. Leaving a Text
 unresolved would send it to downstream readers that expect resolved text.
 """
 
@@ -38,7 +38,8 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.target_types import DiscordTarget, Renderable
-from squid_ui.text import NEUTRAL, Message
+from squid_ui.text import NEUTRAL
+from squid_ui.text import Text as TextExpression
 
 _TEXT_FIELDS = ("content", "label", "description", "placeholder")
 
@@ -49,11 +50,13 @@ async def _ignore_selection(_event: object) -> None:
 
 def _deferred_text_in(node: object) -> list[str]:
     name = type(node).__name__
-    found = [f"{name}.{field}" for field in _TEXT_FIELDS if isinstance(getattr(node, field, None), Message)]
+    found = [f"{name}.{field}" for field in _TEXT_FIELDS if isinstance(getattr(node, field, None), TextExpression)]
     found += [
-        f"{name}.options.label" for option in getattr(node, "options", ()) or () if isinstance(option.label, Message)
+        f"{name}.options.label"
+        for option in getattr(node, "options", ()) or ()
+        if isinstance(option.label, TextExpression)
     ]
-    found += [f"{name}.lines[]" for line in getattr(node, "lines", ()) or () if isinstance(line, Message)]
+    found += [f"{name}.lines[]" for line in getattr(node, "lines", ()) or () if isinstance(line, TextExpression)]
     for field in ("children", "texts"):
         found += [name for child in getattr(node, field, ()) or () for name in _deferred_text_in(child)]
     for field in ("image", "thumbnail", "footer", "author"):
@@ -62,7 +65,7 @@ def _deferred_text_in(node: object) -> list[str]:
     for field in getattr(node, "fields", ()) or ():
         found += _deferred_text_in(field)
     for value in ("name", "value", "text"):
-        if isinstance(getattr(node, value, None), Message):
+        if isinstance(getattr(node, value, None), TextExpression):
             found.append(f"{name}.{value}")
     return found
 

@@ -76,7 +76,7 @@ class CardSection:
     fields: Sequence[CardField]
 
 
-def _try_again_in(seconds: float) -> ui.text.Message:
+def _try_again_in(seconds: float) -> ui.text.Text:
     """Round a guard's remaining cooldown up to whole seconds before wording it."""
     whole = max(1, ceil(seconds))
     return md_tr(t"bot-ui-try-again-in-seconds = Try again in {whole} seconds.")

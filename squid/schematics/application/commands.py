@@ -56,7 +56,9 @@ class RenderRequest:
                 minimum = MIN_RENDER_EXTENT
                 maximum = MAX_RENDER_EXTENT
                 raise ValidationError(
-                    md_tr(t"schematics-pixels = Render {axis} must be between {minimum} and {maximum} pixels.")
+                    md_tr(
+                        t"schematics-pixels = Render {axis} must be between {minimum} and {maximum} pixels.",
+                    )
                 )
         if self.zoom is not None and self.zoom <= 0:
             msg = tr(t"schematics-zoom-positive = Render zoom must be positive.")

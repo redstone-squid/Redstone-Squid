@@ -94,7 +94,9 @@ class TestList:
         await message_root.dispatch("open", interaction_harness(), [subject.id])
 
         assert inspector.focus == subject.id
-        assert f"MessageRoot {subject.id}" in "\n".join(sd.payload_texts(commit_render(message_root)))
+        assert f"MessageRoot {discord.utils.escape_markdown(subject.id)}" in "\n".join(
+            sd.payload_texts(commit_render(message_root))
+        )
 
     async def test_it_marks_itself_in_its_own_list(self) -> None:
         inspector = MessageRootInspector()

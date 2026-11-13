@@ -13,7 +13,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import tr
-from squid_i18n import Message, md_tr
+from squid_i18n import Text, md_tr
 
 
 class InvalidAccountError(ValidationError):
@@ -305,7 +305,7 @@ class AliasAlreadyClaimedError(ConflictError):
         *,
         holder_public_creator_id: UUID | None = None,
         holder_account_id: int | None = None,
-        end_user_action: str | Message | None = None,
+        end_user_action: str | Text | None = None,
     ) -> None:
         public_context: dict[str, JSONValue] = {"name": name}
         if holder_public_creator_id is not None:
@@ -329,7 +329,7 @@ class AliasAlreadyClaimedError(ConflictError):
             public_context={"holder_name": holder_name},
             message=md_tr(
                 t"accounts-creator-already-credited = **{name}** is already credited "
-                t"to the creator known as **{holder_name}**."
+                t"to the creator known as **{holder_name}**.",
             ),
         )
 

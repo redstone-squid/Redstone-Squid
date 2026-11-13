@@ -262,49 +262,61 @@ def _detail_text(hit: SearchHit) -> sl.TextLike:
         build_id = hit.build_id
         base_title = hit.base_title
         version_scope = hit.version_scope
-        fields = md_tr(t"""
+        fields = md_tr(
+            t"""
             bot-submission-search-view-build-base-title =
                 {{ "*" }}*Build**
                 {build_title} ({(build_id_text := str(build_id))})
                 {{ "*" }}*Base title**
                 {base_title} · {version_scope}
-            """)  # noqa: F841 - captured text identifier
+            """,  # noqa: F841 - captured translation binding
+        )
         if hit.metrics:
             metrics = ", ".join(f"{key}: {value}" for key, value in hit.metrics.items())
-            fields = md_tr(t"""
+            fields = md_tr(
+                t"""
                 bot-submission-search-view-metrics =
                     {fields}
                     {{ "*" }}*Metrics**
                     {metrics}
-                """)
+                """,
+            )
         description = hit.subtitle or ""
     elif isinstance(hit, BuildSearchHit):
         tags = ", ".join(tag for tag in hit.tags)
         status = hit.status
-        fields = md_tr(t"""
+        fields = md_tr(
+            t"""
             bot-submission-search-view-status =
                 {{ "*" }}*Status**
                 {status}
-            """)
+            """,
+        )
         description = hit.description or ""
     else:
         tags = ", ".join(alias for alias in hit.aliases)
         kind = _metadata_label(hit.metadata_kind)
-        fields = md_tr(t"""
+        fields = md_tr(
+            t"""
             bot-submission-search-view-kind =
                 {{ "*" }}*Kind**
                 {kind}
-            """)
+            """,
+        )
         description = hit.description or ""
     if tags:
-        fields = md_tr(t"""
+        fields = md_tr(
+            t"""
             bot-submission-search-view-tags =
                 {fields}
                 {{ "*" }}*Tags**
                 {tags}
-            """)
-    return md_tr(t"""
+            """,
+        )
+    return md_tr(
+        t"""
         bot-submission-search-view-value =
             {description}
             {fields}
-        """)
+        """,
+    )

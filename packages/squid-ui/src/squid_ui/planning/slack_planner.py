@@ -7,13 +7,14 @@ actions that remain visible and reports any recorded content loss.
 """
 
 import hashlib
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import fields as dataclass_fields
 from dataclasses import is_dataclass, replace
 from datetime import datetime
 from typing import Any, cast
 
+from squid_i18n import Text as TextExpression
+from squid_i18n import tree
 from squid_ui import forms, scene
 from squid_ui import semantic as sem
 from squid_ui.document import DocumentLike, as_document
@@ -27,9 +28,10 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.target import Target
+from squid_ui.planning.text_nodes import html_text
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import SlackTarget
-from squid_ui.text import Markup, Message, ResolvedText, resolve_text
+from squid_ui.text import Markup, resolve_text
 
 type SlackLimits = SlackMessageLimits | SlackModalLimits | SlackHomeLimits
 type SlackBody = scene.SlackMessage | scene.SlackModalView | scene.SlackHomeView
@@ -53,9 +55,6 @@ _SLACK_CONVERSATIONS = frozenset(
         ConversationType.GROUP_DIRECT,
     }
 )
-_LINK = re.compile(r"\[([^]]+)]\((https?://[^)]+)\)")
-_BOLD = re.compile(r"\*\*([^*]+)\*\*")
-_ITALIC = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 _TIMESTAMP_STYLES = {
     "t": "{time}",
     "T": "{time_secs}",
@@ -90,25 +89,44 @@ def _html_text(node: scene.HtmlNode) -> str:
 def _node_markup(node: scene.HtmlNode) -> Markup:
     if isinstance(node, scene.HtmlText):
         return node.markup
+    if node.tag in {scene.HtmlTag.STRONG, scene.HtmlTag.EM, scene.HtmlTag.S, scene.HtmlTag.CODE, scene.HtmlTag.A}:
+        return Markup.MARKDOWN
     return Markup.MARKDOWN if any(_node_markup(child) is not Markup.PLAIN for child in node.children) else Markup.PLAIN
 
 
 def _plain_text(value: str) -> str:
-    value = _LINK.sub(r"\1", value)
-    for token in ("**", "__", "~~", "`", "*", "_"):
-        value = value.replace(token, "")
-    return value.replace("\\", "").strip()
+    return value.strip()
+
+
+def _needs_plain_text(node: scene.HtmlNode) -> bool:
+    if isinstance(node, scene.HtmlText):
+        return any(marker in node.content for marker in ("*", "_", "~", "`"))
+    return any(_needs_plain_text(child) for child in node.children)
+
+
+def _slack_text(node: scene.HtmlNode) -> str:
+    if isinstance(node, scene.HtmlText):
+        if node.markup is not Markup.PLAIN:
+            return _slack_text(html_text(tree.parse([node.content])))
+        return node.content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    if node.tag is scene.HtmlTag.PRE:
+        return "```\n" + _html_text(node) + "\n```"
+    children = "".join(_slack_text(child) for child in node.children)
+    if node.tag is scene.HtmlTag.BLOCKQUOTE:
+        return "\n".join("> " + line for line in children.splitlines())
+    marker = {scene.HtmlTag.STRONG: "*", scene.HtmlTag.EM: "_", scene.HtmlTag.S: "~", scene.HtmlTag.CODE: "`"}.get(
+        node.tag
+    )
+    if marker:
+        return marker + children + marker
+    if node.tag is scene.HtmlTag.A and node.url is not None:
+        return f"<{node.url.url}|{children}>"
+    return children + "\n" if node.tag in {scene.HtmlTag.BR, scene.HtmlTag.LI, scene.HtmlTag.TR} else children
 
 
 def _mrkdwn(value: str, markup: Markup) -> str:
-    """Escape Slack control characters and translate a limited set of Markdown tokens."""
-    escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    if markup is Markup.PLAIN:
-        return escaped
-    escaped = _LINK.sub(r"<\2|\1>", escaped)
-    escaped = _BOLD.sub(r"*\1*", escaped)
-    escaped = _ITALIC.sub(r"_\1_", escaped)
-    return escaped.replace("~~", "~")
+    nodes = (tree.literal(value),) if markup is Markup.PLAIN else tree.parse([value])
+    return _slack_text(html_text(nodes))
 
 
 def _nested_form(node: object) -> bool:
@@ -184,11 +202,25 @@ class _Lowerer:
         return fitted
 
     def text(
-        self, value: str, path: str, *, capacity: int | None = None, markup: Markup = Markup.PLAIN
+        self,
+        value: str,
+        path: str,
+        *,
+        capacity: int | None = None,
+        markup: Markup = Markup.PLAIN,
+        node: scene.HtmlNode | None = None,
     ) -> scene.SlackText:
         if markup is Markup.PLAIN:
             return self.plain(value, path, capacity=capacity or self.limits.components.section_text)
-        rendered = _mrkdwn(value, markup)
+        if node is not None and _needs_plain_text(node):
+            self.event(
+                "slack.text.plain",
+                path,
+                "Rendered literal Markdown punctuation as plain text because Slack mrkdwn cannot escape it",
+                PlanSeverity.DEGRADATION,
+            )
+            return self.plain(_html_text(node), path, capacity=capacity or self.limits.components.section_text)
+        rendered = _slack_text(node) if node is not None else _mrkdwn(value, markup)
         if capacity is not None:
             rendered = self.fit(rendered, capacity, path, "text")
         return scene.SlackText(rendered)
@@ -291,7 +323,15 @@ class _Lowerer:
                 )
             return (
                 scene.SlackContext(
-                    (self.text(content, path, capacity=self.limits.components.section_text, markup=_node_markup(node)),)
+                    (
+                        self.text(
+                            content,
+                            path,
+                            capacity=self.limits.components.section_text,
+                            markup=_node_markup(node),
+                            node=node,
+                        ),
+                    )
                 ),
             )
         if node.tag in {
@@ -320,6 +360,7 @@ class _Lowerer:
                         markup=Markup.MARKDOWN
                         if node.tag in {scene.HtmlTag.BLOCKQUOTE, scene.HtmlTag.PRE}
                         else _node_markup(node),
+                        node=node,
                     )
                 ),
             )
@@ -424,6 +465,7 @@ class _Lowerer:
                     path,
                     capacity=self.limits.components.section_field_text,
                     markup=_node_markup(cell),
+                    node=cell,
                 )
                 for cell in row.children
                 if isinstance(cell, scene.HtmlElement) and cell.tag in {scene.HtmlTag.TH, scene.HtmlTag.TD}
@@ -461,7 +503,13 @@ class _Lowerer:
             description=(
                 None
                 if not description
-                else self.text(description, path, capacity=self.limits.components.card_body, markup=_node_markup(node))
+                else self.text(
+                    description,
+                    path,
+                    capacity=self.limits.components.card_body,
+                    markup=_node_markup(node),
+                    node=replace(node, children=tuple(child for child in node.children if child is not heading)),
+                )
             ),
         )
 
@@ -737,7 +785,7 @@ class _Lowerer:
 
     def _form_element(self, field: forms.FormField[Any], prefill: object, path: str) -> scene.SlackInputElement:
         placeholder_value: object = getattr(field, "placeholder", None)
-        if placeholder_value is not None and not isinstance(placeholder_value, str | ResolvedText | Message):
+        if placeholder_value is not None and not isinstance(placeholder_value, str | TextExpression):
             message = f"{path}: form field placeholder is not text"
             raise LayoutInvariantError(message)
         placeholder = (

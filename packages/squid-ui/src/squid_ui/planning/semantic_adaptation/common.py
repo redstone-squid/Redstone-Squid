@@ -34,11 +34,11 @@ def _select_strategy(axis: StrategyAxis, context: LoweringContext) -> str:
 
 
 def _resolve(value: TextLike, context: LoweringContext) -> str:
-    return discord_text(resolve_text(value, context.localization))
+    return discord_text(resolve_text(value, context.localization), escape=context.escape_text)
 
 
 def _literal(value: TextLike, context: LoweringContext) -> str:
-    return resolve_text(value, context.localization).content
+    return resolve_text(value, context.localization).plain()
 
 
 def _page_items[T](

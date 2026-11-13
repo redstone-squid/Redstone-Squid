@@ -153,7 +153,9 @@ class AccessScreen(sd.Screen):
                 sl.section(
                     sl.heading(tr(t"access-view-delete-internal-role = Delete internal role")),
                     sl.paragraph(
-                        md_tr(t"access-view-delete-and-its-assignments = Delete **{slug}** and its assignments?")
+                        md_tr(
+                            t"access-view-delete-and-its-assignments = Delete **{slug}** and its assignments?",
+                        )
                     ),
                 ),
                 self._decision,

@@ -74,7 +74,7 @@ def search_help(
                 "width · height · depth",
                 md_tr(
                     t"search-reference-size = Physical build dimensions in blocks and volume in blocks "
-                    t"cubed, not the door opening size. Use width<=5 or width:[3 TO 5]."
+                    t"cubed, not the door opening size. Use width<=5 or width:[3 TO 5].",
                 ),
             ),
             _entry(
@@ -150,7 +150,7 @@ def search_help(
                         md_tr(
                             t'search-reference-operators = Quote phrases: title:"vault door". Numbers and '
                             t"dates support <, <=, >, >= and inclusive ranges such as width:[3 TO 5]. "
-                            t"Wildcards (* and ?) are not supported."
+                            t"Wildcards (* and ?) are not supported.",
                         )
                     ),
                     sl.paragraph(

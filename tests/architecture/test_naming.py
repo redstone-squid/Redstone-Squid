@@ -230,6 +230,7 @@ NOT_AGENT_NOUNS = frozenset(
 
 
 SAME_CONCEPT_TWO_LAYERS = {
+    "Choice",  # A labelled option in semantic UI and Discord command metadata.
     # Reactive operations and Discord screens each expose a cancellation arm. Their
     # namespaces distinguish operation progress from a screen's cancellation reason.
     "Cancelled",

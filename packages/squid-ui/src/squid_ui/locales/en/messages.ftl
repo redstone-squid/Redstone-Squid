@@ -1,94 +1,94 @@
-# packages/squid-ui/src/squid_ui/chrome.py:124
+# packages/squid-ui/src/squid_ui/chrome.py:126
 ui-chrome-add = Add
 
 # packages/squid-ui/src/squid_ui/chrome.py:18
 ui-chrome-and-n-more = …and { $count } more
 
-# packages/squid-ui/src/squid_ui/chrome.py:118
+# packages/squid-ui/src/squid_ui/chrome.py:120
 ui-chrome-apply = Apply
 
-# packages/squid-ui/src/squid_ui/chrome.py:151
+# packages/squid-ui/src/squid_ui/chrome.py:153
 ui-chrome-approve = Approve
 
-# packages/squid-ui/src/squid_ui/chrome.py:68
+# packages/squid-ui/src/squid_ui/chrome.py:70
 ui-chrome-approved-count = Approved: { $count }/{ $total }
 
 # packages/squid-ui/src/squid_ui/chrome.py:34
 ui-chrome-approximate-total-footer = { $first }–{ $last } of ~{ $total }
 
-# packages/squid-ui/src/squid_ui/chrome.py:108
+# packages/squid-ui/src/squid_ui/chrome.py:110
 ui-chrome-back = Back
 
-# packages/squid-ui/src/squid_ui/chrome.py:117
+# packages/squid-ui/src/squid_ui/chrome.py:119
 ui-chrome-cancel = Cancel
 
-# packages/squid-ui/src/squid_ui/chrome.py:93
+# packages/squid-ui/src/squid_ui/chrome.py:95
 ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again.
 
-# packages/squid-ui/src/squid_ui/chrome.py:110
+# packages/squid-ui/src/squid_ui/chrome.py:112
 ui-chrome-close = Close
 
-# packages/squid-ui/src/squid_ui/chrome.py:116
+# packages/squid-ui/src/squid_ui/chrome.py:118
 ui-chrome-confirm = Confirm
 
-# packages/squid-ui/src/squid_ui/chrome.py:131
+# packages/squid-ui/src/squid_ui/chrome.py:133
 ui-chrome-continue = Continue
 
-# packages/squid-ui/src/squid_ui/chrome.py:91
+# packages/squid-ui/src/squid_ui/chrome.py:93
 ui-chrome-continue-session = Continue Session
 
 # packages/squid-ui/src/squid_ui/chrome.py:46
 ui-chrome-decided = You chose { $label }.
 
-# packages/squid-ui/src/squid_ui/chrome.py:99
+# packages/squid-ui/src/squid_ui/chrome.py:101
 ui-chrome-dm-unavailable = This reply is too private for a channel, and your direct messages are closed. Run the command in a direct message, or allow direct messages and retry.
 
-# packages/squid-ui/src/squid_ui/chrome.py:115
+# packages/squid-ui/src/squid_ui/chrome.py:117
 ui-chrome-download = Download
 
-# packages/squid-ui/src/squid_ui/chrome.py:125
+# packages/squid-ui/src/squid_ui/chrome.py:127
 ui-chrome-edit = Edit
 
-# packages/squid-ui/src/squid_ui/chrome.py:130
+# packages/squid-ui/src/squid_ui/chrome.py:132
 ui-chrome-finish = Finish
 
-# packages/squid-ui/src/squid_ui/chrome.py:149
+# packages/squid-ui/src/squid_ui/chrome.py:151
 ui-chrome-full = Full
 
-# packages/squid-ui/src/squid_ui/chrome.py:109
+# packages/squid-ui/src/squid_ui/chrome.py:111
 ui-chrome-home = Home
 
-# packages/squid-ui/src/squid_ui/chrome.py:144
+# packages/squid-ui/src/squid_ui/chrome.py:146
 ui-chrome-jump-to-page = Jump to a page
 
-# packages/squid-ui/src/squid_ui/chrome.py:128
+# packages/squid-ui/src/squid_ui/chrome.py:130
 ui-chrome-move-down = Move down
 
-# packages/squid-ui/src/squid_ui/chrome.py:127
+# packages/squid-ui/src/squid_ui/chrome.py:129
 ui-chrome-move-up = Move up
 
-# packages/squid-ui/src/squid_ui/chrome.py:107
+# packages/squid-ui/src/squid_ui/chrome.py:109
 ui-chrome-newer = Newer
 
-# packages/squid-ui/src/squid_ui/chrome.py:105
+# packages/squid-ui/src/squid_ui/chrome.py:107
 ui-chrome-next = Next
 
-# packages/squid-ui/src/squid_ui/chrome.py:122
+# packages/squid-ui/src/squid_ui/chrome.py:124
 ui-chrome-no-results = No results
 
-# packages/squid-ui/src/squid_ui/chrome.py:81
+# packages/squid-ui/src/squid_ui/chrome.py:83
 ui-chrome-not-now = You can't do that right now.
 
-# packages/squid-ui/src/squid_ui/chrome.py:77
+# packages/squid-ui/src/squid_ui/chrome.py:79
 ui-chrome-not-yours = These controls belong to someone else.
 
-# packages/squid-ui/src/squid_ui/chrome.py:114
+# packages/squid-ui/src/squid_ui/chrome.py:116
 ui-chrome-off = Off
 
-# packages/squid-ui/src/squid_ui/chrome.py:106
+# packages/squid-ui/src/squid_ui/chrome.py:108
 ui-chrome-older = Older
 
-# packages/squid-ui/src/squid_ui/chrome.py:113
+# packages/squid-ui/src/squid_ui/chrome.py:115
 ui-chrome-on = On
 
 # packages/squid-ui/src/squid_ui/chrome.py:26
@@ -97,40 +97,40 @@ ui-chrome-page-footer = Page { $page } of { $pages }
 # packages/squid-ui/src/squid_ui/chrome.py:42
 ui-chrome-page-option = Page { $page }
 
-# packages/squid-ui/src/squid_ui/chrome.py:104
+# packages/squid-ui/src/squid_ui/chrome.py:106
 ui-chrome-previous = Previous
 
 # packages/squid-ui/src/squid_ui/chrome.py:30
 ui-chrome-range-footer = { $first }–{ $last }
 
-# packages/squid-ui/src/squid_ui/chrome.py:112
+# packages/squid-ui/src/squid_ui/chrome.py:114
 ui-chrome-redo = Redo
 
-# packages/squid-ui/src/squid_ui/chrome.py:126
+# packages/squid-ui/src/squid_ui/chrome.py:128
 ui-chrome-remove = Remove
 
-# packages/squid-ui/src/squid_ui/chrome.py:129
+# packages/squid-ui/src/squid_ui/chrome.py:131
 ui-chrome-review = Review
 
-# packages/squid-ui/src/squid_ui/chrome.py:119
+# packages/squid-ui/src/squid_ui/chrome.py:121
 ui-chrome-save = Save
 
-# packages/squid-ui/src/squid_ui/chrome.py:121
+# packages/squid-ui/src/squid_ui/chrome.py:123
 ui-chrome-search = Search
 
-# packages/squid-ui/src/squid_ui/chrome.py:97
+# packages/squid-ui/src/squid_ui/chrome.py:99
 ui-chrome-sent-privately = Sent by direct message.
 
-# packages/squid-ui/src/squid_ui/chrome.py:79
+# packages/squid-ui/src/squid_ui/chrome.py:81
 ui-chrome-session-ended = This session has ended.
 
-# packages/squid-ui/src/squid_ui/chrome.py:89
+# packages/squid-ui/src/squid_ui/chrome.py:91
 ui-chrome-session-expiring = This session is about to expire.
 
-# packages/squid-ui/src/squid_ui/chrome.py:63
+# packages/squid-ui/src/squid_ui/chrome.py:65
 ui-chrome-slot-capacity = { $count }/{ $capacity }
 
-# packages/squid-ui/src/squid_ui/chrome.py:61
+# packages/squid-ui/src/squid_ui/chrome.py:63
 ui-chrome-slot-count = { $count }
 
 # packages/squid-ui/src/squid_ui/chrome.py:22
@@ -146,115 +146,115 @@ ui-chrome-try-again-in =
        *[other] Try again in { $whole } seconds.
     }
 
-# packages/squid-ui/src/squid_ui/chrome.py:135
+# packages/squid-ui/src/squid_ui/chrome.py:137
 ui-chrome-unanswered = Not answered yet
 
-# packages/squid-ui/src/squid_ui/chrome.py:111
+# packages/squid-ui/src/squid_ui/chrome.py:113
 ui-chrome-undo = Undo
 
-# packages/squid-ui/src/squid_ui/chrome.py:120
+# packages/squid-ui/src/squid_ui/chrome.py:122
 ui-chrome-unsaved = Unsaved changes
 
-# packages/squid-ui/src/squid_ui/chrome.py:87
+# packages/squid-ui/src/squid_ui/chrome.py:89
 ui-chrome-updates-paused = Live updates paused — press any control to resume.
 
-# packages/squid-ui/src/squid_ui/chrome.py:148
+# packages/squid-ui/src/squid_ui/chrome.py:150
 ui-chrome-waitlist = Waitlist
 
-# packages/squid-ui/src/squid_ui/chrome.py:152
+# packages/squid-ui/src/squid_ui/chrome.py:154
 ui-chrome-withdraw = Withdraw
 
-# packages/squid-ui/src/squid_ui/chrome.py:85
+# packages/squid-ui/src/squid_ui/chrome.py:87
 ui-chrome-working = Working…
 
-# packages/squid-ui/src/squid_ui/forms.py:359
+# packages/squid-ui/src/squid_ui/forms.py:377
 ui-form-date-format = Enter a date as YYYY-MM-DD.
 
-# packages/squid-ui/src/squid_ui/forms.py:363
+# packages/squid-ui/src/squid_ui/forms.py:386
 ui-form-date-maximum = Enter a date on or before { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:361
+# packages/squid-ui/src/squid_ui/forms.py:380
 ui-form-date-minimum = Enter a date on or after { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:432, packages/squid-ui/src/squid_ui/forms.py:504
+# packages/squid-ui/src/squid_ui/forms.py:466, packages/squid-ui/src/squid_ui/forms.py:538
 ui-form-datetime-format = Enter a date and time as YYYY-MM-DD HH:MM.
 
-# packages/squid-ui/src/squid_ui/forms.py:455, packages/squid-ui/src/squid_ui/forms.py:537
+# packages/squid-ui/src/squid_ui/forms.py:489, packages/squid-ui/src/squid_ui/forms.py:571
 ui-form-datetime-maximum = Enter a date and time on or before { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:449, packages/squid-ui/src/squid_ui/forms.py:531
+# packages/squid-ui/src/squid_ui/forms.py:483, packages/squid-ui/src/squid_ui/forms.py:565
 ui-form-datetime-minimum = Enter a date and time on or after { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:319
+# packages/squid-ui/src/squid_ui/forms.py:335
 ui-form-duration-format = Enter a duration such as 30m, 12h, or 7d.
 
-# packages/squid-ui/src/squid_ui/forms.py:327
+# packages/squid-ui/src/squid_ui/forms.py:345
 ui-form-duration-maximum = Enter a duration no longer than { $maximum } seconds.
 
-# packages/squid-ui/src/squid_ui/forms.py:323
+# packages/squid-ui/src/squid_ui/forms.py:339
 ui-form-duration-minimum = Enter a duration of at least { $minimum } seconds.
 
-# packages/squid-ui/src/squid_ui/forms.py:248
+# packages/squid-ui/src/squid_ui/forms.py:252
 ui-form-integer-format = Enter a whole number.
 
-# packages/squid-ui/src/squid_ui/forms.py:725
+# packages/squid-ui/src/squid_ui/forms.py:763
 ui-form-invalid-boolean = Choose yes or no.
 
-# packages/squid-ui/src/squid_ui/forms.py:637
+# packages/squid-ui/src/squid_ui/forms.py:671
 ui-form-invalid-choice = Choose one of the available options.
 
-# packages/squid-ui/src/squid_ui/forms.py:679
+# packages/squid-ui/src/squid_ui/forms.py:713
 ui-form-invalid-choices = Choose only from the available options.
 
-# packages/squid-ui/src/squid_ui/forms.py:275
+# packages/squid-ui/src/squid_ui/forms.py:285
 ui-form-number-finite = Enter a finite number.
 
-# packages/squid-ui/src/squid_ui/forms.py:273
+# packages/squid-ui/src/squid_ui/forms.py:283
 ui-form-number-format = Enter a number.
 
-# packages/squid-ui/src/squid_ui/forms.py:253, packages/squid-ui/src/squid_ui/forms.py:280
+# packages/squid-ui/src/squid_ui/forms.py:261, packages/squid-ui/src/squid_ui/forms.py:294
 ui-form-number-maximum = Enter a value no greater than { $maximum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:250, packages/squid-ui/src/squid_ui/forms.py:277
+# packages/squid-ui/src/squid_ui/forms.py:255, packages/squid-ui/src/squid_ui/forms.py:288
 ui-form-number-minimum = Enter a value of at least { $minimum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:197, packages/squid-ui/src/squid_ui/forms.py:218, packages/squid-ui/src/squid_ui/forms.py:674
+# packages/squid-ui/src/squid_ui/forms.py:197, packages/squid-ui/src/squid_ui/forms.py:218, packages/squid-ui/src/squid_ui/forms.py:708
 ui-form-required = This field is required.
 
-# packages/squid-ui/src/squid_ui/forms.py:586
+# packages/squid-ui/src/squid_ui/forms.py:620
 ui-form-scale-integer = Choose a whole number from { $minimum } to { $maximum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:592
+# packages/squid-ui/src/squid_ui/forms.py:626
 ui-form-scale-range = Choose a value from { $minimum } to { $maximum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:686
+# packages/squid-ui/src/squid_ui/forms.py:724
 ui-form-selection-maximum = Choose no more than { $maximum } options.
 
-# packages/squid-ui/src/squid_ui/forms.py:683
+# packages/squid-ui/src/squid_ui/forms.py:718
 ui-form-selection-minimum = Choose at least { $minimum } options.
 
-# packages/squid-ui/src/squid_ui/forms.py:223
+# packages/squid-ui/src/squid_ui/forms.py:225
 ui-form-text-maximum = Enter no more than { $maximum } characters.
 
-# packages/squid-ui/src/squid_ui/forms.py:220
+# packages/squid-ui/src/squid_ui/forms.py:221
 ui-form-text-minimum = Enter at least { $minimum } characters.
 
-# packages/squid-ui/src/squid_ui/forms.py:438, packages/squid-ui/src/squid_ui/forms.py:513
+# packages/squid-ui/src/squid_ui/forms.py:472, packages/squid-ui/src/squid_ui/forms.py:547
 ui-form-time-ambiguous = This local time occurs twice in the selected timezone. Enter a date and time with an explicit UTC offset.
 
-# packages/squid-ui/src/squid_ui/forms.py:386
+# packages/squid-ui/src/squid_ui/forms.py:412
 ui-form-time-format = Enter a time as HH:MM.
 
-# packages/squid-ui/src/squid_ui/forms.py:390
+# packages/squid-ui/src/squid_ui/forms.py:421
 ui-form-time-maximum = Enter a time at or before { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:388
+# packages/squid-ui/src/squid_ui/forms.py:415
 ui-form-time-minimum = Enter a time at or after { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:445, packages/squid-ui/src/squid_ui/forms.py:519
+# packages/squid-ui/src/squid_ui/forms.py:479, packages/squid-ui/src/squid_ui/forms.py:553
 ui-form-time-nonexistent = This local time does not exist in the selected timezone.
 
-# packages/squid-ui/src/squid_ui/forms.py:522
+# packages/squid-ui/src/squid_ui/forms.py:556
 ui-form-timezone-offset-mismatch = The UTC offset does not match this local time in the selected timezone.
 
 # packages/squid-ui/src/squid_ui/factories.py:591

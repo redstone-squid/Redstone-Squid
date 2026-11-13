@@ -170,3 +170,21 @@ def test_renderer_resolves_media_assets(figure: bool) -> None:
     result = sl.planning.plan(document, target=sl.html.target())
     assert result.resources["asset:image"] == asset
     assert 'src="data:image/png;base64,aW1hZ2U="' in Renderer().draw(result.scene, plan=result)
+
+
+def test_translated_markdown_and_literal_bindings_share_a_structured_html_path() -> None:
+    name = "**Ada** <script>"
+    value = sl.md_tr(t"Hello **{name}**", key="hello")
+    locale = sl.text.Localization("fr", ("hello = **Bonjour** { $name }",))
+    result = sl.planning.plan(sl.paragraph(value), target=sl.html.target(), localization=locale)
+    html = Renderer().draw(result.scene, plan=result)
+    assert "<strong>Bonjour</strong> **Ada** &lt;script&gt;" in html
+    assert "<strong>Ada</strong>" not in html
+
+
+def test_separately_authored_markdown_fragments_stay_separate_in_html() -> None:
+    value = sl.md("**") + "Ada" + sl.md("**")
+    result = sl.planning.plan(sl.paragraph(value), target=sl.html.target())
+    html = Renderer().draw(result.scene, plan=result)
+    assert "**Ada**" in html
+    assert "<strong>Ada</strong>" not in html

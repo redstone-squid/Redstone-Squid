@@ -901,8 +901,8 @@ bot-profile-render-pronouns = Pronouns
 # squid/bot/profile_render.py:37, squid/bot/profile_render.py:99
 bot-profile-render-value = { $provider } — { $name }
 
-# squid/bot/profile_render.py:35
-bot-profile-render-value-2 = { $provider } — <@{ $subject }>
+# squid/bot/profile_render.py:36
+bot-profile-render-value-2 = { $provider } — { $subject }
 
 # squid/bot/recount.py:85
 bot-recount-give-a-link-to-a-message-in = Give a link to a message in this server.
@@ -1213,8 +1213,8 @@ bot-submission-consent-banner-consent-recorded = Consent recorded
 # squid/bot/submission/consent_banner.py:65
 bot-submission-consent-banner-discord-account = Discord account
 
-# squid/bot/submission/consent_banner.py:66
-bot-submission-consent-banner-value = <@{ $user_id_text }> ({ $user_id_text })
+# squid/bot/submission/consent_banner.py:68
+bot-submission-consent-banner-value = { $user_mention } ({ $user_id_text })
 
 # squid/bot/submission/edit.py:82
 bot-submission-edit-cannot-use-options = Cannot use these options
@@ -2573,8 +2573,8 @@ consent-prompt-already-open = You already have a consent prompt open. Please ans
 # squid/bot/consent.py:146
 consent-storage-prerequisite = Before Redstone Squid stores anything about you
 
-# squid/bot/consent.py:155, squid/bot/consent.py:187
-consent-value-2 = <@{ $user_id_text }> (`{ $user_id_text }`)
+# squid/bot/consent.py:159, squid/bot/consent.py:195
+consent-value-2 = { $user_mention } (`{ $user_id_text }`)
 
 # squid/core/errors.py:245
 core-configuration-invalid = Application configuration is invalid.
@@ -5230,8 +5230,8 @@ submit-another-attachment-help = Another schematic, image, or video.
 # squid/bot/submission/submit.py:164
 submit-attachment-types-help = Your schematic, an image, or a video.
 
-# squid/bot/submission/submit.py:420
-submit-author-consent-required = The author of this message (<@{ $user_id_text }>) has not consented to data storage. They must grant consent before this build can be ingested.
+# squid/bot/submission/submit.py:428
+submit-author-consent-required = The author of this message ({ $user_mention }) has not consented to data storage. They must grant consent before this build can be ingested.
 
 # squid/bot/submission/submit.py:405
 submit-build-log-channel-required = Builds are only read out of messages posted in a build log channel.

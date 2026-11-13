@@ -75,27 +75,33 @@ def format_duration(seconds: int) -> sl.TextLike:
             return label
     if seconds % 86400 == 0:
         count = seconds // 86400
-        return md_tr(t"""
+        return md_tr(
+            t"""
             bot-voting-poll-wizard-day = {{ $count ->
                 [one] {count} day
                *[other] {count} days
             }}
-            """)
+            """,
+        )
     if seconds % 3600 == 0:
         count = seconds // 3600
-        return md_tr(t"""
+        return md_tr(
+            t"""
             bot-voting-poll-wizard-hour-2 = {{ $count ->
                 [one] {count} hour
                *[other] {count} hours
             }}
-            """)
+            """,
+        )
     count = seconds // 60
-    return md_tr(t"""
+    return md_tr(
+        t"""
         bot-voting-poll-wizard-minute = {{ $count ->
             [one] {count} minute
            *[other] {count} minutes
         }}
-        """)
+        """,
+    )
 
 
 def parse_option_lines(
@@ -136,7 +142,9 @@ def parse_option_lines(
             )
         if not emoji_is_usable(emoji):
             raise InvalidVoteConfigurationError(
-                md_tr(t"poll-setup-custom-emoji-unavailable = The custom emoji {emoji} is not accessible to this bot.")
+                md_tr(
+                    t"poll-setup-custom-emoji-unavailable = The custom emoji {emoji} is not accessible to this bot.",
+                )
             )
         options.append(
             VoteOption(
@@ -350,7 +358,7 @@ class PollScreen(sd.Screen[str]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.published_url is not None:
-            published_url = sl.discord_md(self.published_url)
+            published_url = sl.text_link(self.published_url, self.published_url)
             return (
                 sl.status(
                     md_tr(t"bot-voting-poll-wizard-poll-published = Poll published: {published_url}"),

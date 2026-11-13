@@ -20,9 +20,9 @@ from squid.media.errors import (
     MediaDraftStateConflictError,
     MediaLimitExceededError,
 )
-from squid_i18n import Markup, source_text
+from squid_i18n import source_text
 from squid_i18n.compiler import parse_resource
-from squid_ui.text import Localization, Message, localization_scope
+from squid_ui.text import Localization, Text, localization_scope
 
 UPLOAD_ID = UUID("75043a53-05ae-4097-bbf4-4eae1d6b088c")
 PUBLIC_ATTACHMENT_ERROR_COPY: dict[type[SquidError], dict[str, str]] = {
@@ -81,15 +81,15 @@ def test_public_attachment_errors_localize_title_detail_and_action_at_render_tim
         message.declaration.source.replace(" = ", f" = {locale}:", 1)
         for error in errors
         for message in (error.title, error.message, error.end_user_action)
-        if isinstance(message, Message) and message.declaration is not None
+        if isinstance(message, Text) and message.declaration is not None
     )
     localization = Localization(locale=locale, resources=resources)
 
     with localization_scope(localization):
         for error in errors:
-            assert isinstance(error.title, Message)
-            assert isinstance(error.message, Message)
-            assert isinstance(error.end_user_action, Message)
+            assert isinstance(error.title, Text)
+            assert isinstance(error.message, Text)
+            assert isinstance(error.end_user_action, Text)
             assert error.title.resolve().startswith(f"{locale}:")
             assert error.message.resolve().startswith(f"{locale}:")
             assert error.end_user_action.resolve().startswith(f"{locale}:")
@@ -140,8 +140,8 @@ def test_public_attachment_error_copy_is_complete_in_real_catalogs(locale: str) 
             error = errors[error_type]
             for field, template in expected_copy.items():
                 message = getattr(error, field)
-                assert isinstance(message, Message)
-                assert source_text(message, markup=Markup.PLAIN) == template
+                assert isinstance(message, Text)
+                assert source_text(message, format="plain") == template
                 assert message.declaration is not None
                 assert message.declaration.identifier in catalog_keys
                 rendered = message.resolve()

@@ -53,8 +53,8 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from squid.submissions.errors import DraftCapacityExceededError
-from squid_i18n import md_tr
-from squid_ui.text import Message, md
+from squid_i18n import Text, md_tr
+from squid_ui.text import md
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -111,7 +111,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             "door_size": sd.Option(
                 name=tr(t"command-build-submit-door-size-name = door_size"),
                 description=md_tr(
-                    t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional."
+                    t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.",
                 ),
             ),
             "door_type": sd.Option(
@@ -126,7 +126,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             "build_size": sd.Option(
                 name=tr(t"command-build-submit-build-size-name = build_size"),
                 description=md_tr(
-                    t"bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`."
+                    t"bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.",
                 ),
             ),
             "creators": sd.Option(
@@ -137,21 +137,21 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             "versions": sd.Option(
                 name=tr(t"command-build-submit-versions-name = versions"),
                 description=md_tr(
-                    t"submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`."
+                    t"submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.",
                 ),
                 autocomplete=suggests("approved_source_versions"),
             ),
             "patterns": sd.Option(
                 name=tr(t"command-build-submit-patterns-name = patterns"),
                 description=md_tr(
-                    t"submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`."
+                    t"submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.",
                 ),
                 autocomplete=suggests("approved_patterns", multi=True),
             ),
             "restrictions": sd.Option(
                 name=tr(t"command-build-submit-restrictions-name = restrictions"),
                 description=md_tr(
-                    t"submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`."
+                    t"submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.",
                 ),
                 autocomplete=suggests("approved_restrictions", multi=True),
             ),
@@ -224,7 +224,9 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             except ValueError:
                 return error_node(
                     tr(t"bot-submission-submit-check-door-size = Check the door size"),
-                    md_tr(t"submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`."),
+                    md_tr(
+                        t"submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.",
+                    ),
                 )
         if build_size is not None:
             try:
@@ -232,7 +234,9 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             except ValueError:
                 return error_node(
                     tr(t"bot-submission-submit-check-build-size = Check the build size"),
-                    md_tr(t"submit-build-size-format = Write it as width x height x depth, such as `5x7x4`."),
+                    md_tr(
+                        t"submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.",
+                    ),
                 )
         if door_type is not None:
             draft.door_orientation = door_type
@@ -348,7 +352,11 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             return SavedDraftsScreen(nodes)
         if inbox:
             return text_node(tr(t"build-drafts-inbox-empty = No drafts are waiting for staff correction."))
-        return text_node(md_tr(t"build-drafts-empty = You have no drafts in progress. Start one with `/build submit`."))
+        return text_node(
+            md_tr(
+                t"build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.",
+            )
+        )
 
     async def _is_build_log_message(self, message: discord.Message) -> bool:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
@@ -419,8 +427,8 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
                 tr(t"bot-submission-submit-author-has-not-consented = Author has not consented"),
                 md_tr(
                     t"submit-author-consent-required = The author of this "
-                    t"message (<@{(user_id_text := str(user_id))}>) has not consented to data storage. They must grant consent before "  # noqa: F841 - captured text identifier
-                    t"this build can be ingested."
+                    t"message ({(user_mention := sl.mention(user_id))}) has not consented to data storage. They must grant consent before "  # noqa: F841 - captured text identifier
+                    t"this build can be ingested.",
                 ),
             )
 
@@ -473,7 +481,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         )
 
 
-def _draft_line(draft: StoredDraft) -> Message:
+def _draft_line(draft: StoredDraft) -> Text:
     """Describe a draft in the /build drafts list by category, a name, its state, and last edit."""
     answers = draft.snapshot.answers
     creators = answers.get("creators")
@@ -490,7 +498,7 @@ def _draft_line(draft: StoredDraft) -> Message:
         case _:
             state = tr(t"build-drafts-state-editing = In progress")
     updated = draft.updated_at.to_stdlib()
-    return Message.join("\n", (title, Message.join(" · ", (state, md_tr(t"build-drafts-edited = Edited {updated}")))))
+    return Text.join("\n", (title, Text.join(" · ", (state, md_tr(t"build-drafts-edited = Edited {updated}")))))
 
 
 def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest, category: str) -> sl.TextLike:
@@ -503,5 +511,5 @@ def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest, cate
         return ""
     fields = field_names(manifest, category, field_ids)
     return md_tr(
-        t"draft-editor-unused-options = Some values from the command could not be used: {fields}. Fill them in below."
+        t"draft-editor-unused-options = Some values from the command could not be used: {fields}. Fill them in below.",
     )

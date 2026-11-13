@@ -136,9 +136,9 @@ def test_link_consent_card_names_every_stored_value_and_credit_outcome(
     assert "Minecraft UUID" in card_text
     assert "Minecraft username" in card_text
     assert "Notch" in card_text
-    assert str(JAVA_UUID).replace("-", r"\-") in card_text
+    assert str(JAVA_UUID) in card_text
     assert expected_credit in card_text
-    assert CURRENT_CONSENT_VERSION.replace("-", r"\-") in card_text
+    assert CURRENT_CONSENT_VERSION in card_text
     assert all(label in rendered for label in ("Agree and link", "Cancel", "Privacy notice"))
 
 

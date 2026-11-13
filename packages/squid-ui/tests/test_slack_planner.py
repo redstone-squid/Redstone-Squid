@@ -48,7 +48,7 @@ def test_message_compiles_text_actions_dates_and_accessible_fallback() -> None:
     )
 
     assert isinstance(result.scene.body, scene.SlackMessage)
-    assert "Build review" in result.scene.body.text
+    assert "Build **review**" in result.scene.body.text
     assert any(isinstance(block, scene.SlackHeader) for block in result.scene.body.blocks)
     assert any(
         isinstance(block, scene.SlackSection) and block.text is not None and "<!date^" in block.text.content
@@ -256,3 +256,25 @@ def test_literal_paragraph_does_not_become_slack_mrkdwn() -> None:
     assert section.text is not None
     assert section.text.kind is scene.SlackTextKind.PLAIN
     assert section.text.content == "*literal* <@123>"
+
+
+def test_slack_lowers_translated_styles_from_structure() -> None:
+    name = "Ada <@123>"
+    value = sl.md_tr(t"**Hello** {name}", key="hello")
+    result = sl.planning.plan(sl.paragraph(value), target=MESSAGE)
+    section = result.scene.body.blocks[0]
+    assert isinstance(section, scene.SlackSection)
+    assert section.text is not None
+    assert section.text.content == "*Hello* Ada &lt;@123&gt;"
+
+
+def test_slack_keeps_literal_markdown_punctuation_literal() -> None:
+    name = "*Ada*"
+    value = sl.md_tr(t"Hello **{name}**", key="hello")
+    result = sl.planning.plan(sl.paragraph(value), target=MESSAGE)
+    section = result.scene.body.blocks[0]
+    assert isinstance(section, scene.SlackSection)
+    assert section.text is not None
+    assert section.text.kind is scene.SlackTextKind.PLAIN
+    assert section.text.content == "Hello *Ada*"
+    assert any(event.code == "slack.text.plain" for event in result.report.events)

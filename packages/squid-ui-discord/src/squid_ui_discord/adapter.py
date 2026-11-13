@@ -56,6 +56,13 @@ def _plan_form(spec: FormSpec, *, target: AnyTarget, localization: Localization,
     return plan_form(spec, localization=localization, limits=target.limits.components, strict=strict)
 
 
+def escape_text(value: str) -> str:
+    """Use discord.py for Markdown escaping; channel references also stay literal."""
+    return discord.utils.escape_markdown(discord.utils.escape_mentions(value), ignore_links=False).replace(
+        "<#", "<\u200b#"
+    )
+
+
 DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     DiscordPy27Adapter,
     "discord.py",
@@ -64,6 +71,7 @@ DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     {DISCORD_ITEM.name: _DiscordItemExtension()},
     frontend="discord",
     form_planner=_plan_form,
+    escape_text=escape_text,
 )
 """Verified discord.py 2.7 profile, annotated at the family accepted by renderer defaults.
 
@@ -104,6 +112,7 @@ def discord_py_adapter_profile(
         {} if extensions is None else extensions,
         frontend="discord",
         form_planner=_plan_form,
+        escape_text=escape_text,
     )
 
 

@@ -62,7 +62,11 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             if await ensure_consented_account(request, self.bot.services.accounts) is None:
                 return None
             return sd.Response(
-                text_node(md_tr(t"vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.")),
+                text_node(
+                    md_tr(
+                        t"vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.",
+                    )
+                ),
                 audience="personal",
             )
         # Bound out here because `publish` runs later: a narrowing of `account.id` does not survive

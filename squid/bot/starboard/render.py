@@ -8,8 +8,7 @@ from squid.bot.i18n import localization_for
 from squid.bot.ui import render_payload
 from squid.core.i18n import tr
 from squid.starboard.application import EntryState
-from squid_i18n import md_tr
-from squid_ui.text import Message
+from squid_i18n import Text, md_tr
 
 
 def starboard_layout(
@@ -36,7 +35,7 @@ def starboard_layout(
         children.append(
             sd.v2.text(
                 md_tr(
-                    t"bot-starboard-render-replying-to-message = -# Replying to message `{(message_id_text := str(message_id))}`"  # noqa: F841 - captured translation binding
+                    t"bot-starboard-render-replying-to-message = -# Replying to message `{(message_id_text := str(message_id))}`",  # noqa: F841 - captured translation binding
                 )
             )
         )
@@ -55,7 +54,7 @@ def starboard_layout(
         count = entry.raw_count
         footer.append(md_tr(t'bot-starboard-render-reactions = {{ " " }}({count} reactions)'))
     footer.append(f" · <#{message.channel.id}>")
-    children.append(sd.v2.footer(Message.join("", footer)))
+    children.append(sd.v2.footer(Text.join("", footer)))
     return render_payload(
         [sd.v2.panel(*(children), accent=config.colour)],
         localization=localization_for(locale),

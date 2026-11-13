@@ -6,7 +6,7 @@ from typing import Self, override
 
 from squid.core.errors import ConfigurationError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
-from squid_i18n import Message
+from squid_i18n import Text
 
 
 class NodeScope(StrEnum):
@@ -63,7 +63,7 @@ class PermissionNode:
 
     name: str
     scope: NodeScope
-    description: Message = field(hash=False)
+    description: Text = field(hash=False)
     default: Default = Default.DENY
     tags: frozenset[Tag] = field(default_factory=frozenset)
 

@@ -80,12 +80,12 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
             roles=False,
             replied_user=False,
         ),
-    )(render_payload([text_node(_removed_role_notice(owner.mention, member.mention))]))
+    )(render_payload([text_node(_removed_role_notice(owner.id, member.id))]))
     await anyio.sleep(10)
 
     await member.add_roles(redstoner_role)
     await request.respond(
-        text_node(_restored_role_notice(member.mention)),
+        text_node(_restored_role_notice(member.id)),
         audience="personal",
     )
 
@@ -117,8 +117,8 @@ class RedstonerScreen(sd.Screen):
         self._publish_panel = publish_panel
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        role_mention = sl.discord_md(f"<@&{self._role_id}>")
-        source_channel_mention = sl.discord_md(f"<#{self._source_channel_id}>")
+        role_mention = sl.mention(self._role_id, kind="role")
+        source_channel_mention = sl.mention(self._source_channel_id, kind="channel")
         actions: list[sl.semantic.ActionControl] = []
         if self._can_deploy:
             actions.append(
@@ -130,10 +130,13 @@ class RedstonerScreen(sd.Screen):
             sl.section(
                 sl.heading(tr(t"give-redstoner-redstoner-automation = Redstoner automation")),
                 sl.fields(
-                    sl.field(tr(t"give-redstoner-role = Role"), sl.md(md_tr(t"give-redstoner-value = {role_mention}"))),
+                    sl.field(
+                        tr(t"give-redstoner-role = Role"),
+                        md_tr(t"give-redstoner-value = {role_mention}"),
+                    ),
                     sl.field(
                         tr(t"give-redstoner-source-channel = Source channel"),
-                        sl.md(md_tr(t"give-redstoner-value-2 = {source_channel_mention}")),
+                        md_tr(t"give-redstoner-value-2 = {source_channel_mention}"),
                     ),
                     sl.field(tr(t"give-redstoner-server = Server"), str(self._guild_id)),
                 ),
@@ -234,8 +237,8 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
         locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
-            reason = sl.discord_md(decision.reason)
-            url = sl.discord_md(message.jump_url)
+            reason = sl.plain(decision.reason)
+            url = sl.text_link(message.jump_url, message.jump_url)
             with localization_scope(localization_for(locale)):
                 payload = render_payload([text_node(md_tr(t"give-redstoner-in = {reason} in {url}"))])
             await send_to(message.channel)(payload)
@@ -255,14 +258,13 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return
         await member.add_roles(redstoner_role)
         with localization_scope(localization_for(locale)):
-            payload = render_payload([text_node(_role_granted_notice(member.mention))])
+            payload = render_payload([text_node(_role_granted_notice(member.id))])
         await send_to(message.channel)(payload)
 
         with localization_scope(localization_for(locale)):
-            role = redstoner_role.mention
             url = decision.source_message_url
             presentation = render_payload(
-                [sd.v2.text(_role_award_notice(member.mention, role, url))],
+                [sd.v2.text(_role_award_notice(member.id, redstoner_role.id, url))],
                 locale=locale,
             )
         await send_to(
@@ -271,28 +273,28 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         )(presentation)
 
 
-def _removed_role_notice(owner: str, member: str) -> str:
-    owner = sl.discord_md(owner)
-    member = sl.discord_md(member)
+def _removed_role_notice(owner_id: int, member_id: int) -> sl.TextLike:
+    owner = sl.mention(owner_id)
+    member = sl.mention(member_id)
     return md_tr(t"redstoner-role-self-removed = {owner}, {member} has removed their own redstoner role.")
 
 
-def _restored_role_notice(member: str) -> str:
-    member = sl.discord_md(member)
+def _restored_role_notice(member_id: int) -> sl.TextLike:
+    member = sl.mention(member_id)
     return md_tr(t"redstoner-role-restored = {member} — just kidding, here is your role back.")
 
 
-def _role_granted_notice(member: str) -> str:
-    member = sl.discord_md(member)
+def _role_granted_notice(member_id: int) -> sl.TextLike:
+    member = sl.mention(member_id)
     return md_tr(t"give-redstoner-gave-the-redstoner-role = Gave {member} the redstoner role.")
 
 
-def _role_award_notice(member: str, role: str, url: str) -> str:
-    member = sl.discord_md(member)
-    role = sl.discord_md(role)
-    url = sl.discord_md(url)
+def _role_award_notice(member_id: int, role_id: int, destination: str) -> sl.TextLike:
+    member = sl.mention(member_id)
+    role = sl.mention(role_id, kind="role")
+    url = sl.text_link(destination, destination)
     return md_tr(
-        t"redstoner-role-earned = Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."
+        t"redstoner-role-earned = Hi {member}, you received the {role} role after reaching 15 upvotes in {url}.",
     )
 
 

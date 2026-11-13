@@ -2,7 +2,6 @@
 
 import logging
 from collections.abc import Sequence
-from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from functools import lru_cache
@@ -14,7 +13,7 @@ from fluent_compiler.compiler import CompiledFtl, compile_messages
 from fluent_compiler.resource import FtlResource
 from fluent_compiler.types import fluent_date, fluent_number
 
-from squid_i18n import text
+from squid_i18n import text, tree
 from squid_i18n.compiler import parse_resource
 from squid_i18n.errors import CatalogError, ResolutionError
 from squid_i18n.expressions import DateTimeExpression, NumberExpression
@@ -27,7 +26,14 @@ class _Binding(str):
 
 
 class _SafeText(str):
-    """A value already escaped for the selected output dialect."""
+    """Fluent output retaining authored strings separately from captured nodes."""
+
+    parts: tuple[str | tree.Node, ...]
+
+    def __new__(cls, value: str, parts: tuple[str | tree.Node, ...] | None = None) -> _SafeText:
+        result = super().__new__(cls, value)
+        result.parts = (value,) if parts is None else parts
+        return result
 
 
 class _Escaper:
@@ -35,26 +41,27 @@ class _Escaper:
     use_isolating: Final = False
     name: Final = "squid-text"
 
-    def __init__(self, markup: text.Markup) -> None:
-        self.markup = markup
-
     def select(self, message_id: str, **kwargs: object) -> bool:
         return True
 
     def escape(self, unescaped: str, /) -> _SafeText:
-        if self.markup is text.Markup.PLAIN or not isinstance(unescaped, _Binding):
-            return _SafeText(unescaped)
-        return _SafeText(text._escape_markdown(unescaped).replace("@", "@\u200b"))
+        if isinstance(unescaped, _SafeText):
+            return unescaped
+        return (
+            _SafeText(unescaped, (tree.literal(unescaped),))
+            if isinstance(unescaped, _Binding)
+            else _SafeText(unescaped)
+        )
 
     def mark_escaped(self, value: str, /) -> _SafeText:
         return _SafeText(value)
 
     def join(self, parts: Sequence[_SafeText], /) -> _SafeText:
-        return _SafeText("".join(parts))
+        return _SafeText("".join(parts), tuple(part for output in parts for part in output.parts))
 
 
 @lru_cache(maxsize=64)
-def compile_catalog(locale: str, resources: tuple[str, ...], markup: text.Markup) -> CompiledFtl:
+def compile_catalog(locale: str, resources: tuple[str, ...]) -> CompiledFtl:
     # Validate duplicate IDs across files as well as parser junk before compilation.
     parse_resource("\n".join(resources))
     try:
@@ -62,7 +69,7 @@ def compile_catalog(locale: str, resources: tuple[str, ...], markup: text.Markup
             locale,
             [FtlResource.from_string(resource) for resource in resources],
             use_isolating=False,
-            escapers=[_Escaper(markup)],
+            escapers=[_Escaper()],
         )
     except UnknownLocaleError as error:
         msg = f"Unsupported Fluent locale: {locale}"
@@ -74,14 +81,12 @@ def compile_catalog(locale: str, resources: tuple[str, ...], markup: text.Markup
     return compiled
 
 
-def _arguments(message: text.Message, localization: text.Localization) -> dict[str, object]:
+def _arguments(message: text._Translation, localization: text.Localization) -> dict[str, object]:
     args: dict[str, object] = {}
     for name, value in message.bindings.items():
-        if isinstance(value, text.Message | text.ResolvedText):
-            resolved = text.resolve_text(
-                replace(value, markup=text.Markup.PLAIN) if message.markup is text.Markup.PLAIN else value, localization
-            )
-            args[name] = _SafeText(text._content_for(resolved, message.markup))
+        if isinstance(value, text.Text):
+            resolved = text.resolve_text(value, localization)
+            args[name] = _SafeText(resolved.plain(), (tree.Node("sequence", children=resolved.nodes),))
         elif isinstance(value, NumberExpression):
             args[name] = fluent_number(value.value, **dict(value.options))
         elif isinstance(value, DateTimeExpression):
@@ -91,7 +96,8 @@ def _arguments(message: text.Message, localization: text.Localization) -> dict[s
                 options["timeZone"] = ZoneInfo(zone)
             args[name] = fluent_date(value.value, **options)
         elif isinstance(value, text.TextValue | datetime):
-            args[name] = _SafeText(text._temporal_value(value, message.markup) or "")
+            resolved = text.resolve_text(text._capture(value), localization)
+            args[name] = _SafeText(resolved.plain(), (tree.Node("sequence", children=resolved.nodes),))
         elif isinstance(value, bool):
             args[name] = "true" if value else "false"
         elif isinstance(value, int | float | Decimal | date):
@@ -101,7 +107,7 @@ def _arguments(message: text.Message, localization: text.Localization) -> dict[s
     return args
 
 
-def render_message(message: text.Message, localization: text.Localization) -> text.ResolvedText:
+def render_message(message: text._Translation, localization: text.Localization) -> text._Document:
     declaration = message.declaration
     assert declaration is not None
     if message.selected_attribute is None and not declaration.has_value:
@@ -116,15 +122,20 @@ def render_message(message: text.Message, localization: text.Localization) -> te
     )
     for candidate, resources in candidates:
         try:
-            compiled = compile_catalog(candidate, resources, message.markup)
+            compiled = compile_catalog(candidate, resources)
             if candidate == "en" and key not in compiled.message_functions:
-                compiled = compile_catalog(candidate, (*resources, declaration.source), message.markup)
+                compiled = compile_catalog(candidate, (*resources, declaration.source))
             function = compiled.message_functions.get(key)
             if function is not None:
                 errors: list[Exception] = []
                 output = function(_arguments(message, localization), errors)
                 if not errors:
-                    return text.ResolvedText(str(output), message.markup)
+                    parts = output.parts if isinstance(output, _SafeText) else (str(output),)
+                    if not message.markdown:
+                        nodes = tuple(tree.literal(part) if isinstance(part, str) else part for part in parts)
+                    else:
+                        nodes = tree.parse(parts)
+                    return text._Document(nodes)
         except CatalogError, TypeError, ValueError, ArithmeticError:
             pass
         if candidate != "en":

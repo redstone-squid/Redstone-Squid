@@ -23,7 +23,7 @@ from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicate
 from squid.builds.domain.titles import format_build_display_title
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.observability import add_counter
-from squid_i18n import Message
+from squid_i18n import Text
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +164,7 @@ async def render_build_card(
         group("Credits", credit_names),
         group("Resources", resource_names),
         bool(extra_media) and sl.media(*extra_media, key="media"),
-        sl.note(sl.discord_md(footer)),
+        sl.note(sl.plain(footer)),
         *rows,
         accent=_status_colour(build.submission_status, build_id=build.id),
         thumbnail=media[0] if media else None,
@@ -225,7 +225,7 @@ async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> l
     return media[:10]
 
 
-def build_description(build: Build) -> Message | None:
+def build_description(build: Build) -> Text | None:
     """Describe locational/directional restrictions and escaped submitter notes, or return None."""
     desc: list[sl.TextLike] = []
 
@@ -242,7 +242,7 @@ def build_description(build: Build) -> Message | None:
     if build.description:
         desc.append("\n" + build.description)
 
-    return Message.join("\n", desc) if desc else None
+    return Text.join("\n", desc) if desc else None
 
 
 def build_metadata_fields(build: Build) -> dict[str, str]:

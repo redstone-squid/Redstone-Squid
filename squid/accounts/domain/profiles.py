@@ -17,7 +17,7 @@ from squid.accounts.domain.models import IdentityDetails, IdentityProvider
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.core.sentinel import UNSET
-from squid_i18n import Message, md_tr
+from squid_i18n import Text, md_tr
 
 MAX_PROFILE_LINKS: Final = 10
 """Maximum number of external links on one profile."""
@@ -50,7 +50,7 @@ MERGE_TICKET_TTL_SECONDS: Final = 10 * 60
 Ticket creation supplies the absorbed account's proof timestamp during a merge."""
 
 
-def _reject_control_characters(value: str, *, field_name: str | Message, allow_newlines: bool = False) -> None:
+def _reject_control_characters(value: str, *, field_name: str | Text, allow_newlines: bool = False) -> None:
     """Reject Unicode control and format characters, optionally allowing line breaks."""
     for character in value:
         if character in "\n\r" and allow_newlines:
@@ -58,12 +58,14 @@ def _reject_control_characters(value: str, *, field_name: str | Message, allow_n
         if unicodedata.category(character) in {"Cc", "Cf"}:
             field = field_name
             raise ValidationError(
-                md_tr(t"accounts-profile-control-characters = {field} may not contain control characters.")
+                md_tr(
+                    t"accounts-profile-control-characters = {field} may not contain control characters.",
+                )
             )
 
 
 def _normalize_text(
-    value: str | None, *, field_name: str | Message, limit: int, allow_newlines: bool = False
+    value: str | None, *, field_name: str | Text, limit: int, allow_newlines: bool = False
 ) -> str | None:
     """Normalize Unicode and trim a profile field; return None for blank or missing text."""
     if value is None:
@@ -75,7 +77,9 @@ def _normalize_text(
         field = field_name
         length = len(normalized)
         raise ValidationError(
-            md_tr(t"accounts-profile-field-too-long = {field} may be at most {limit} characters, got {length}.")
+            md_tr(
+                t"accounts-profile-field-too-long = {field} may be at most {limit} characters, got {length}.",
+            )
         )
     _reject_control_characters(normalized, field_name=field_name, allow_newlines=allow_newlines)
     return normalized
@@ -109,7 +113,7 @@ class ProfileLink:
             raise ValidationError(
                 md_tr(
                     t"accounts-link-invalid-scheme = Links must be https URLs, got {(scheme_text := repr(scheme))}"  # noqa: F841 - captured Fluent binding
-                    t"."
+                    t".",
                 )
             )
         if not parts.hostname:
@@ -173,7 +177,9 @@ class ProfileUpdate:
                 limit = MAX_PROFILE_LINKS
                 count = len(links)
                 raise ValidationError(
-                    md_tr(t"accounts-profile-link-limit = A profile may have at most {limit} links, got {count}.")
+                    md_tr(
+                        t"accounts-profile-link-limit = A profile may have at most {limit} links, got {count}.",
+                    )
                 )
             changes["links"] = tuple(ProfileLink.parse(link.label, link.url) for link in links)
         return replace(self, **changes)  # type: ignore[arg-type]

@@ -36,7 +36,7 @@ class ErrorReportOperations(Protocol):
 def _traceback_footer(page: int, pages: int) -> sl.TextLike:
     section = tr(t"diagnostics-view-traceback = Traceback")
     return md_tr(
-        t"diagnostics-attachment-page-hint = {section} — page {page} of {pages} · the attachment has the whole report"
+        t"diagnostics-attachment-page-hint = {section} — page {page} of {pages} · the attachment has the whole report",
     )
 
 
@@ -243,7 +243,7 @@ class ErrorReportScreen(sd.Screen[int]):
                         sl.heading(tr(t"diagnostics-view-errors-cleared = Errors cleared")),
                         sl.paragraph(
                             md_tr(
-                                t"diagnostics-view-deleted-stored-error-reports = Deleted {count} stored error reports."
+                                t"diagnostics-view-deleted-stored-error-reports = Deleted {count} stored error reports.",
                             )
                         ),
                     ),
@@ -369,7 +369,7 @@ def report_asset(report: ErrorReport) -> sl.document.Asset:
 
 
 def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field]:
-    identifier = sl.discord_md(f"`{report.correlation_id}`")
+    identifier = sl.inline_code(report.correlation_id)
     entries = [
         sl.field(
             tr(t"diagnostics-view-when = When"),
@@ -393,7 +393,9 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
         entries.append(
             sl.field(
                 tr(t"diagnostics-view-ambiguous = Ambiguous"),
-                md_tr(t"diagnostics-shared-reference-note = {count} reports share this reference; this is the newest."),
+                md_tr(
+                    t"diagnostics-shared-reference-note = {count} reports share this reference; this is the newest.",
+                ),
             )
         )
     return entries

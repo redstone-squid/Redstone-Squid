@@ -38,7 +38,7 @@ from squid.records.application import RecordService
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.search.domain import SearchRequest, SearchScope, SearchSort
-from squid_i18n import ResolvedText, md_tr
+from squid_i18n import md_tr
 from squid_reactivity import TopicBus, TopicHandle
 from squid_ui.sources import window_fingerprint
 
@@ -257,7 +257,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return sl.section(
             sl.heading(tr(t"build-review-confirmation-title = Confirm review decision")),
             sl.paragraph(
-                md_tr(t"bot-submission-build-browse-build = {action} build #{(build_id_text := str(build_id))}?")  # noqa: F841
+                md_tr(
+                    t"bot-submission-build-browse-build = {action} build #{(build_id_text := str(build_id))}?",  # noqa: F841 - captured translation binding
+                )
             ),
         )
 
@@ -678,7 +680,7 @@ class BuildBrowseScreen(sd.Screen):
         await self._browser._back(_event)
 
 
-def _build_summary(build: Build) -> ResolvedText:
+def _build_summary(build: Build) -> sl.TextLike:
     """A compact list entry; the full card is reserved for an opened build."""
     title = build.title
     size = " x ".join(str(value) if value is not None else "?" for value in (build.width, build.height, build.depth))

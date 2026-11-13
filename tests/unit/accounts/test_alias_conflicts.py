@@ -7,7 +7,7 @@ import pytest
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.api.errors import ProblemDetail, _status_for_error
 from squid.bot.errors import build_error_notice
-from squid_ui.text import Message
+from squid_ui.text import Text
 
 PUBLIC_CREATOR = UUID("33333333-3333-3333-3333-333333333333")
 HOLDER_ACCOUNT_ID = 4242
@@ -41,7 +41,7 @@ def test_the_internal_account_id_never_reaches_a_public_surface() -> None:
     ).with_holder_name("Notch")
 
     bot_text = build_error_notice(error, "en").detail
-    assert isinstance(error.title, Message)
+    assert isinstance(error.title, Text)
     problem = ProblemDetail(
         title=error.title.resolve(),
         status=_status_for_error(error),

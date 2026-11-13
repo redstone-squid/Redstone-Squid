@@ -38,9 +38,9 @@ from squid.submissions.domain import (
 from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
-from squid_i18n import md_tr
+from squid_i18n import Text, md_tr
 from squid_ui.interactions import PressHandler
-from squid_ui.text import Message, TextLike, md
+from squid_ui.text import TextLike, md
 
 MAX_MODAL_FIELDS = 5
 """Discord modals hold at most five inputs."""
@@ -65,7 +65,7 @@ class DimensionGroup:
 
     key: str
     """The modal input key; it must not collide with a manifest field ID."""
-    label: Message
+    label: Text
     field_ids: tuple[str, str, str]
     """Width, height, and depth field IDs, in that order."""
 
@@ -181,7 +181,7 @@ class SectionEditorScreen(sd.Screen[None]):
         answers = ws.answers
         children: list[Any] = [sd.v2.heading(md(t"{section.title}"))]
         if ws.notice:
-            children.append(sd.v2.text(Message.join("", ("⚠️ ", ws.notice))))
+            children.append(sd.v2.text(Text.join("", ("⚠️ ", ws.notice))))
         # Follow the form's field order: a picker where its field is, and each modal group where it starts.
         chunks = {chunk.fields[0].id: chunk for chunk in modal_chunks(section)}
         for field in section.fields:
@@ -190,7 +190,7 @@ class SectionEditorScreen(sd.Screen[None]):
             elif (chunk := chunks.get(field.id)) is not None:
                 children.append(
                     sd.v2.section(
-                        Message.join("\n", _answer_lines(ws, chunk.fields, answers, show_empty=True)),
+                        Text.join("\n", _answer_lines(ws, chunk.fields, answers, show_empty=True)),
                         accessory=sd.v2.button(
                             tr(t"draft-editor-edit = Edit"), partial(self._edit_form, chunk.id), key=f"form_{chunk.id}"
                         ),
@@ -216,7 +216,7 @@ class SectionEditorScreen(sd.Screen[None]):
         ]
         if not options:
             lines.append(tr(t"draft-editor-no-options = No options are available right now."))
-            return [sd.v2.text(Message.join("\n", lines))]
+            return [sd.v2.text(Text.join("\n", lines))]
         pages = (len(options) - 1) // PICKER_PAGE_SIZE + 1
         page = self._picker_page(field, options)
         multiple = field.value_kind is ValueKind.STRING_LIST
@@ -226,13 +226,13 @@ class SectionEditorScreen(sd.Screen[None]):
             lines.append(
                 md_tr(
                     t"draft-editor-picker-pages-multiple = -# Page {page_number} of {pages}. "
-                    t"Choices on other pages are kept."
+                    t"Choices on other pages are kept.",
                 )
                 if multiple
                 else md_tr(t"draft-editor-picker-pages = -# Page {page_number} of {pages}.")
             )
         children: list[Any] = [
-            sd.v2.text(Message.join("\n", lines)),
+            sd.v2.text(Text.join("\n", lines)),
             sd.v2.select(
                 *(sd.v2.option(option.label[:100], option.value, default=option.value in selected) for option in shown),
                 on_select=partial(self._select_value, field.id),
@@ -326,7 +326,7 @@ def form_sections(manifest: FormManifest, category: str, fields: Iterable[FormFi
     return tuple(section for section in sections if section.fields)
 
 
-def section_text(ws: AnswerWorkspace, section: FormSection, *, show_empty: bool = False) -> Message:
+def section_text(ws: AnswerWorkspace, section: FormSection, *, show_empty: bool = False) -> Text:
     """The section title followed by one line per answer or missing required field.
 
     With show_empty, empty optional fields get a "Not set" line too, as when reviewing a cleared value.
@@ -334,7 +334,7 @@ def section_text(ws: AnswerWorkspace, section: FormSection, *, show_empty: bool 
     lines = _answer_lines(ws, section.fields, ws.answers, show_empty=show_empty)
     if not lines:
         lines = [md_tr(t"draft-editor-section-empty = *Optional. Nothing added yet.*")]
-    return Message.join("\n", (md(t"**{section.title}**"), *lines))
+    return Text.join("\n", (md(t"**{section.title}**"), *lines))
 
 
 def _answer_lines(
@@ -358,7 +358,7 @@ def _answer_lines(
         if field.id in grouped:
             continue
         value = answers.get(field.id)
-        label = md(t"{field.label}: ")
+        label = Text.join("", (field.label, ": "))
         if is_empty(value):
             if field.required:
                 lines.append(label + md_tr(t"draft-editor-required = ⚠️ *Required*"))
@@ -367,7 +367,7 @@ def _answer_lines(
             continue
         line = label + _value_text(ws, field, value)
         if (reason := errors.get(field.id)) is not None:
-            line = Message.join("", (line, " — ⚠️ ", problem_text(reason)))
+            line = Text.join("", (line, " — ⚠️ ", problem_text(reason)))
         lines.append(line)
     return lines
 
@@ -381,7 +381,7 @@ def _dimensions_line(
     optional fields.
     """
     values = tuple(answers.get(field_id) for field_id in group.field_ids)
-    label = Message.join("", (group.label, ": "))
+    label = Text.join("", (group.label, ": "))
     reason = next((errors[field_id] for field_id in group.field_ids if field_id in errors), None)
     if all(value is None for value in values):
         if reason is not None:
@@ -389,7 +389,7 @@ def _dimensions_line(
         return label + md_tr(t"draft-editor-not-set = *Not set*") if show_empty else None
     size = format_dimensions(tuple(value if isinstance(value, int) else None for value in values))
     line = label + md(t"{size}")
-    return line if reason is None else Message.join("", (line, " — ⚠️ ", problem_text(reason)))
+    return line if reason is None else Text.join("", (line, " — ⚠️ ", problem_text(reason)))
 
 
 def _value_text(ws: AnswerWorkspace, field: FormField, value: JSONValue) -> TextLike:
@@ -584,7 +584,7 @@ def modal_chunks(section: FormSection) -> tuple[FormSection, ...]:
     )
 
 
-def problem_text(reason: str) -> Message:
+def problem_text(reason: str) -> Text:
     """Describe why a field's value cannot be accepted, as a short phrase after its value."""
     match reason:
         case SubmissionAttentionReason.REQUIRED:

@@ -8,8 +8,9 @@ from squid.accounts.application.presentation import claimant_label
 from squid.accounts.domain import IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile, avatar_url_for
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
-from squid_i18n import md_tr
-from squid_ui.text import Message
+from squid_i18n import Text, md_tr
+from squid_ui.text import TextLike
+from squid_ui.text import mention as text_mention
 
 _PROVIDER_LABELS = {
     IdentityProvider.DISCORD: tr(t"bot-profile-render-discord = Discord"),
@@ -18,12 +19,12 @@ _PROVIDER_LABELS = {
 }
 
 
-def provider_label(provider: IdentityProvider) -> Message:
+def provider_label(provider: IdentityProvider) -> Text:
     """Name a provider the way a player would."""
     return _PROVIDER_LABELS[provider]
 
 
-def identity_label(identity: AccountIdentity) -> Message:
+def identity_label(identity: AccountIdentity) -> Text:
     """Name one identity for a picker or a list.
 
     A Discord identity renders as a mention, which is the only handle a reader can click; every
@@ -31,8 +32,8 @@ def identity_label(identity: AccountIdentity) -> Message:
     """
     provider = provider_label(identity.provider)
     if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
-        subject = str(identity.discord_id)
-        return md_tr(t"bot-profile-render-value-2 = {provider} — <@{subject}>")
+        subject = text_mention(identity.discord_id)
+        return md_tr(t"bot-profile-render-value-2 = {provider} — {subject}")
     name = identity.display_name or identity.subject
     return md_tr(t"bot-profile-render-value = {provider} — {name}")
 
@@ -80,38 +81,40 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
         fields.append(
             CardField(
                 tr(t"bot-profile-render-linked-accounts = Linked accounts"),
-                Message.join("\n", (_public_identity_label(identity) for identity in profile.identities)),
+                Text.join("\n", (_public_identity_label(identity) for identity in profile.identities)),
             )
         )
     if profile.aliases:
         fields.append(
             CardField(
                 tr(t"bot-profile-render-creator-credit = Creator credit"),
-                Message.join("\n", (_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases)),
+                Text.join("\n", (_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases)),
             )
         )
     return fields
 
 
-def _public_identity_label(identity: IdentityDetails) -> Message:
+def _public_identity_label(identity: IdentityDetails) -> Text:
     provider = provider_label(identity.provider)
     name = identity.display_name or identity.subject
     return md_tr(t"bot-profile-render-value = {provider} — {name}")
 
 
-def _alias_credit_label(name: str, count: int) -> Message:
-    return md_tr(t"""
+def _alias_credit_label(name: str, count: int) -> Text:
+    return md_tr(
+        t"""
         bot-profile-render-build = {{ $count ->
             [one] {{ "*" }}*{name}** — {count} build
            *[other] {{ "*" }}*{name}** — {count} builds
         }}
-        """)
+        """,
+    )
 
 
-def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
+def present_claimant(claim: AliasClaim, *, mention: bool = True) -> TextLike:
     """Prefer a clickable Discord mention, otherwise use the shared plain label."""
     if mention and claim.claimant is not None:
         discord = claim.claimant.most_recent_identity_for(IdentityProvider.DISCORD)
         if discord is not None and discord.discord_id is not None:
-            return f"<@{discord.discord_id}>"
+            return text_mention(discord.discord_id)
     return claimant_label(claim)

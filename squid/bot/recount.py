@@ -24,7 +24,7 @@ from squid.bot.utils.permissions import enforce
 from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
 from squid_i18n import md_tr
-from squid_ui.text import Message
+from squid_ui.text import Text
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -74,7 +74,7 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     async def recount_link(
         self, guild_id: int, link: str, *, authorize_starboard: Callable[[], Awaitable[None]]
-    ) -> Message:
+    ) -> Text:
         """Recount the message a link points at and describe the outcome to the requester.
 
         Anyone may recount a vote card. A starboard recount calls `authorize_starboard`
@@ -145,9 +145,11 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         return None
 
 
-def _cooldown(seconds: float) -> Message:
+def _cooldown(seconds: float) -> Text:
     whole = max(1, ceil(seconds))
-    return md_tr(t"recount-server-rate-limited = This server ran a recount recently. Try again in {whole} seconds.")
+    return md_tr(
+        t"recount-server-rate-limited = This server ran a recount recently. Try again in {whole} seconds.",
+    )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

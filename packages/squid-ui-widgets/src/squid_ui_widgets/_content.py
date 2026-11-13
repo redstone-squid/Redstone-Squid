@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from squid_ui.factories import is_layout_node, paragraph
 from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Message, ResolvedText, TextLike, source_text
+from squid_ui.text import Text, TextLike, source_text
 
 type ContentLike[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
     LayoutNode[RenderTargetT, ContextT] | TextLike | Iterable[LayoutNode[RenderTargetT, ContextT] | TextLike]
@@ -25,7 +25,7 @@ def normalize_content[RenderTargetT: RenderTarget, ContextT = object](
 
     Iterables are consumed immediately. Mappings and nested iterables are rejected.
     """
-    if isinstance(value, str | ResolvedText | Message):
+    if isinstance(value, str | Text):
         return (paragraph(value),)
     if is_layout_node(value):
         return (value,)
@@ -42,7 +42,7 @@ def _normalize_item[RenderTargetT: RenderTarget, ContextT = object](
     value: LayoutNode[RenderTargetT, ContextT] | TextLike, *, name: str
 ) -> LayoutNode[RenderTargetT, ContextT]:
     """Normalize one member of an iterable content slot."""
-    if isinstance(value, str | ResolvedText | Message):
+    if isinstance(value, str | Text):
         return paragraph(value)
     if is_layout_node(value):
         return value
@@ -60,22 +60,11 @@ def require_key(value: str, *, name: str) -> str:
 
 def slug(value: TextLike) -> str:
     """Derive a readable fallback key for the short ``MenuEntry(label, content)`` form."""
-    if isinstance(value, str):
-        source = value
-    elif isinstance(value, ResolvedText):
-        source = value.content
-    else:
-        source = value.declaration.identifier if value.declaration is not None else source_text(value)
+    source = value.declaration.identifier if isinstance(value, Text) and value.declaration else source_text(value)
     result = re.sub(r"[^a-z0-9]+", "-", source.casefold()).strip("-")
     return result or "entry"
 
 
 def display_text(value: object) -> str:
     """Render text wrappers directly, falling back to str for other values."""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, ResolvedText):
-        return value.content
-    if isinstance(value, Message):
-        return source_text(value)
-    return str(value)
+    return source_text(value) if isinstance(value, str | Text) else str(value)

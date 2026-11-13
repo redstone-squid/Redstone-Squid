@@ -92,7 +92,7 @@ async def test_wizard_finishes_publication_once() -> None:
         text = "\n".join(
             child.content for child in payload.layout.walk_children() if isinstance(child, discord.ui.TextDisplay)
         )
-        assert "Poll published: https://discord.com/channels/1/2/3" in text
+        assert "Poll published: [https://discord.com/channels/1/2/3](https://discord.com/channels/1/2/3)" in text
         await ui.root.dispatch(key, interaction_harness(user_id=1))
 
     cast(AsyncCallRecorder, screen._resolve_options).assert_awaited_once_with(("One", "Two"))

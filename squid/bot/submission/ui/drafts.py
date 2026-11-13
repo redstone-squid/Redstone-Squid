@@ -73,9 +73,9 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.submissions.domain.intake import IntakeStatus
-from squid_i18n import NUMBER, md_tr
+from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import TopicHandle
-from squid_ui.text import Message, TextLike, md
+from squid_ui.text import TextLike, md
 from squid_ui_discord.modal import FileField
 
 MAX_FILES_PER_UPLOAD = 4
@@ -349,7 +349,7 @@ class DraftWorkspace(sl.Reactive):
         self.notice = (
             md_tr(
                 t"draft-editor-files-failed = {failed} of the files could not be added. "
-                t"They are listed under Files so you can replace or remove them."
+                t"They are listed under Files so you can replace or remove them.",
             )
             if failed
             else ""
@@ -485,12 +485,14 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
             return children
         missing = len(ws.missing_required())
         footer = (
-            md_tr(t"""
+            md_tr(
+                t"""
                 draft-editor-required-left = {{ {NUMBER(missing)} ->
                     [one] ⚠️ **{NUMBER(missing)} required field is empty.** Fill it in to submit.
                    *[other] ⚠️ **{NUMBER(missing)} required fields are empty.** Fill them in to submit.
                 }}
-                """)
+                """,
+            )
             if missing
             else tr(t"draft-editor-ready = Ready to submit.")
         )
@@ -572,7 +574,7 @@ class FilesEditorScreen(sd.Screen[None]):
         selected = next((item for item in files if str(item.id) == self.selected_file), None)
         children: list[Any] = [sd.v2.heading(tr(t"draft-editor-files-heading = Files"))]
         if ws.notice:
-            children.append(sd.v2.text(Message.join("", ("⚠️ ", ws.notice))))
+            children.append(sd.v2.text(Text.join("", ("⚠️ ", ws.notice))))
         children.append(sd.v2.text(_files_text(ws, heading=False)))
         schematic_count = sum(item.kind == "schematic" for item in files)
         if schematic_count > 1:
@@ -710,7 +712,7 @@ class BuildPreviewScreen(sd.Screen[None]):
         intro = sl.paragraph(
             md_tr(
                 t"draft-editor-preview-intro = **Preview** · This is the card others will see once you submit. "
-                t"It updates as you edit; images and schematics appear after submission."
+                t"It updates as you edit; images and schematics appear after submission.",
             )
         )
         match self.card.status:
@@ -746,21 +748,23 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
             title = md_tr(t"draft-editor-title-editing = ## Submit a build · {category}")
     match phase:
         case Phase.EDITING:
-            status = md_tr(t"""
+            status = md_tr(
+                t"""
                 draft-editor-status-editing =
                     Fill in each section, then press **Submit**. Your answers are saved as you go.
                     -# Reopen this draft with `/build drafts` until {expires}.
-                """)
+                """,
+            )
         case Phase.WAITING_FOR_FILES:
             status = md_tr(
                 t"draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** "
                 t"The submission continues on its own once they are ready. "
-                t"If you edit anything now, press **Submit** again afterwards."
+                t"If you edit anything now, press **Submit** again afterwards.",
             )
         case Phase.NEEDS_CHANGES:
             status = md_tr(
                 t"draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** "
-                t"Fix the problems below, then press **Submit** again."
+                t"Fix the problems below, then press **Submit** again.",
             )
         case Phase.CREATING:
             status = tr(
@@ -772,7 +776,7 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
             status = (
                 md_tr(
                     t"draft-editor-status-done = ✅ Your build was saved as **#{(build_id_text := str(result.build_id))}** "  # noqa: F841 - captured text identifier
-                    t"and is now pending review. You can still edit it while it waits."
+                    t"and is now pending review. You can still edit it while it waits.",
                 )
                 if result is not None
                 else tr(t"draft-editor-status-done-unknown = ✅ Your build was saved and is now pending review.")
@@ -780,7 +784,7 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
         case Phase.EXPIRED:
             status = md_tr(
                 t"draft-editor-status-expired = This draft expired before it was submitted. "
-                t"Start a new one with `/build submit`; your answers are listed below for reference."
+                t"Start a new one with `/build submit`; your answers are listed below for reference.",
             )
     lines: list[TextLike] = [title, status]
     issues = [
@@ -788,19 +792,21 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
     ]
     if phase in {Phase.NEEDS_CHANGES, Phase.WAITING_FOR_FILES} and issues:
         labels = {field.id: field.label for field in ws.manifest.fields_for(ws.category)}
-        lines.extend(Message.join("", ("- ", _issue_text(issue, labels))) for issue in issues)
+        lines.extend(Text.join("", ("- ", _issue_text(issue, labels))) for issue in issues)
     if ws.notice:
-        lines.append(Message.join("", ("⚠️ ", ws.notice)))
-    return sd.v2.text(Message.join("\n", lines))
+        lines.append(Text.join("", ("⚠️ ", ws.notice)))
+    return sd.v2.text(Text.join("\n", lines))
 
 
-def _files_text(ws: DraftWorkspace, *, heading: bool = True) -> Message:
+def _files_text(ws: DraftWorkspace, *, heading: bool = True) -> Text:
     """List each file with its kind, adding a status only when the file needs attention."""
     lines: list[TextLike] = [md_tr(t"draft-editor-files-title = **Files**")] if heading else []
     editable = ws.phase in EDITABLE_PHASES
     if not ws.attachments:
         lines.append(
-            md_tr(t"draft-editor-files-empty = *No files yet. Add your schematic and any images or videos.*")
+            md_tr(
+                t"draft-editor-files-empty = *No files yet. Add your schematic and any images or videos.*",
+            )
             if editable
             else md_tr(t"draft-editor-files-none = *No files.*")
         )
@@ -828,11 +834,11 @@ def _files_text(ws: DraftWorkspace, *, heading: bool = True) -> Message:
         parts: list[TextLike] = [md(t"**{item.filename}**"), kind]
         if status is not None:
             parts.append(status)
-        lines.append(Message.join(" · ", parts))
-    return Message.join("\n", lines)
+        lines.append(Text.join(" · ", parts))
+    return Text.join("\n", lines)
 
 
-def field_names(manifest: FormManifest, category: str, field_ids: Iterable[str]) -> Message:
+def field_names(manifest: FormManifest, category: str, field_ids: Iterable[str]) -> Text:
     """Join field labels for a sentence, naming a size once (as "Door size") instead of its parts."""
     labels = {field.id: field.label for field in manifest.fields_for(category)}
     names: list[TextLike] = []
@@ -841,7 +847,7 @@ def field_names(manifest: FormManifest, category: str, field_ids: Iterable[str])
         name = group.label if group is not None else md(t"{(labels.get(field_id, field_id))}")
         if name not in names:
             names.append(name)
-    return Message.join(", ", names)
+    return Text.join(", ", names)
 
 
 # Modals
@@ -901,12 +907,12 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
     """
     if issue.reason in _FIELD_REASONS:
         label = labels.get(issue.field_id, issue.field_id)
-        return md(t"{label}: ") + problem_text(issue.reason)
+        return Text.join("", (label, ": ", problem_text(issue.reason)))
     match issue.reason:
         case SubmissionAttentionReason.SCHEMA_UNSUPPORTED:
             return md_tr(
                 t"draft-editor-issue-schema-unsupported = This draft uses an old version of the form. "
-                t"Start a new one with `/build submit`."
+                t"Start a new one with `/build submit`.",
             )
         case SubmissionAttentionReason.SCHEMATIC_REQUIRED:
             return md_tr(t"draft-editor-issue-schematic-required = Add a schematic under **Files**.")
@@ -914,18 +920,18 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
             return tr(t"draft-editor-issue-schematic-processing = Your schematic is still being processed.")
         case SubmissionAttentionReason.SCHEMATIC_REJECTED:
             return md_tr(
-                t"draft-editor-issue-schematic-rejected = Your schematic could not be read. Replace it under **Files**."
+                t"draft-editor-issue-schematic-rejected = Your schematic could not be read. Replace it under **Files**.",
             )
         case SubmissionAttentionReason.SCHEMATIC_PRIMARY_REQUIRED:
             return md_tr(
                 t"draft-editor-issue-schematic-primary = You added several schematics. "
-                t"Choose the main one under **Files**."
+                t"Choose the main one under **Files**.",
             )
         case SubmissionAttentionReason.MEDIA_PROCESSING:
             return tr(t"draft-editor-issue-media-processing = Your images or videos are still being processed.")
         case SubmissionAttentionReason.MEDIA_REJECTED:
             return md_tr(
-                t"draft-editor-issue-media-rejected = A file could not be used. Replace or remove it under **Files**."
+                t"draft-editor-issue-media-rejected = A file could not be used. Replace or remove it under **Files**.",
             )
         case SubmissionAttentionReason.SPONSOR_UNAVAILABLE:
             return tr(
@@ -935,14 +941,14 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
         case SubmissionAttentionReason.RETRY_EXHAUSTED:
             return md_tr(
                 t"draft-editor-issue-retry-exhausted = Creating the build failed several times. "
-                t"Press **Submit** to try again, or ask staff for help if it keeps failing."
+                t"Press **Submit** to try again, or ask staff for help if it keeps failing.",
             )
         case SubmissionAttentionReason.PERMISSION_REVOKED:
             return tr(t"draft-editor-issue-permission = You no longer have permission to submit this draft.")
         case _:
             return md_tr(
                 t"draft-editor-issue-target-rejected = The build could not be created from these answers. "
-                t"Check them and press **Submit** again."
+                t"Check them and press **Submit** again.",
             )
 
 

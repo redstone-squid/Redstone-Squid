@@ -5,8 +5,8 @@ from uuid import UUID
 
 from squid.accounts.domain import IdentityRefresh, LinkPreview
 from squid.accounts.models import AccountIdentity
-from squid_i18n import md_tr
-from squid_ui.text import Message, md
+from squid_i18n import Text, md_tr
+from squid_ui.text import md
 
 
 def link_conflict(preview: LinkPreview, existing_java: Sequence[AccountIdentity]) -> UUID | None:
@@ -18,10 +18,10 @@ def link_conflict(preview: LinkPreview, existing_java: Sequence[AccountIdentity]
     return None
 
 
-def link_message(refresh: IdentityRefresh) -> Message:
+def link_message(refresh: IdentityRefresh) -> Text:
     """Render a link outcome with the same reconciliation details as a refresh."""
     name = refresh.current_name
-    return Message.join(
+    return Text.join(
         "\n",
         [
             md_tr(t"account-discord-linked = Your Discord account is now linked to **{name}**."),
@@ -30,7 +30,7 @@ def link_message(refresh: IdentityRefresh) -> Message:
     )
 
 
-def refresh_message(refresh: IdentityRefresh) -> Message:
+def refresh_message(refresh: IdentityRefresh) -> Text:
     """Render every branch of a refresh, including the one where nothing changed."""
     if not refresh.renamed:
         name = refresh.current_name
@@ -39,16 +39,18 @@ def refresh_message(refresh: IdentityRefresh) -> Message:
         old = refresh.previous_name
         new = refresh.current_name
         headline = md_tr(t"account-name-changed = Your Minecraft name changed from **{old}** to **{new}**.")
-    return Message.join("\n", [headline, *reconciliation_lines(refresh)])
+    return Text.join("\n", [headline, *reconciliation_lines(refresh)])
 
 
-def reconciliation_lines(refresh: IdentityRefresh) -> list[Message]:
+def reconciliation_lines(refresh: IdentityRefresh) -> list[Text]:
     """Describe creator-credit reconciliation shared by linking and refreshing."""
-    lines: list[Message] = []
+    lines: list[Text] = []
     if refresh.claimed_alias is not None:
         name = refresh.claimed_alias.name
         lines.append(
-            md_tr(t"account-credits-attributed = Build credits under **{name}** are attributed to your account.")
+            md_tr(
+                t"account-credits-attributed = Build credits under **{name}** are attributed to your account.",
+            )
         )
     elif refresh.contested_alias is not None:
         name = refresh.contested_alias.name
@@ -56,12 +58,12 @@ def reconciliation_lines(refresh: IdentityRefresh) -> list[Message]:
         lines.append(
             md_tr(
                 t"account-claim-awaiting-review = **{name}** is already "
-                t"credited to another account, so it was not moved. Claim #{(id_text := str(id))} is awaiting staff review."  # noqa: F841 - captured translation binding
+                t"credited to another account, so it was not moved. Claim #{(id_text := str(id))} is awaiting staff review.",  # noqa: F841 - captured translation binding
             )
         )
 
     if refresh.retained_alias_names:
         # Escape each name; only the bold markers around it are trusted Markdown.
-        names = Message.join(", ", (md(t"**{name}**") for name in refresh.retained_alias_names))
+        names = Text.join(", ", (md(t"**{name}**") for name in refresh.retained_alias_names))
         lines.append(md_tr(t"account-credits-retained = You are still credited under: {names}."))
     return lines

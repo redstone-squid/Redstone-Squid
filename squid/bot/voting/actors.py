@@ -14,7 +14,7 @@ from squid.permissions.domain.catalogue import (
     VOTE_WEIGHT_STAFF,
 )
 from squid.voting.domain import VoteRejection
-from squid_ui.text import Message
+from squid_ui.text import Text
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -38,7 +38,7 @@ fails the lookup here instead of leaking `not_eligible` into a user's channel.
 """
 
 
-def describe_rejection(rejection: VoteRejection) -> Message:
+def describe_rejection(rejection: VoteRejection) -> Text:
     """Return the sentence that explains a typed rejection."""
     return REJECTION_MESSAGES[rejection]
 

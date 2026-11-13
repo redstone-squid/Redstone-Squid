@@ -120,15 +120,15 @@ class MessageRootInspector(sl.Component):
         nodes.append(self._controls(back=False))
         return nodes
 
-    def _row(self, snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
-        mine = " *(this panel)*" if snapshot.id == self.own_id else ""
+    def _row(self, snapshot: squid_ui_discord.MessageRootSnapshot) -> sl.TextLike:
+        mine = sl.md(" *(this panel)*") if snapshot.id == self.own_id else ""
         key = self._session_key(snapshot.id)
-        session = "" if key is None else f" · session `{key!r}`"
-        location = f" · [jump]({snapshot.address.jump_url})" if snapshot.address is not None else ""
-        return (
-            f"`{snapshot.id}` **{snapshot.component.rsplit('.', 1)[-1]}**{mine}\n"
-            f"gen {snapshot.generation} · {_flags(snapshot)} · age {_duration(snapshot.age)}"
-            f" · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}{session}{location}"
+        session = "" if key is None else sl.md(t" · session `{key!r}`")
+        location = "" if snapshot.address is None else " · " + sl.text_link("jump", snapshot.address.jump_url)
+        return sl.md(
+            t"`{snapshot.id}` **{snapshot.component.rsplit('.', 1)[-1]}**{mine}\n"
+            t"gen {snapshot.generation} · {_flags(snapshot)} · age {_duration(snapshot.age)}"
+            t" · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}{session}{location}"
         )
 
     def _session_key(self, message_root_id: str) -> Hashable | None:
@@ -363,15 +363,15 @@ class OperationalInspector(sl.Component):
             notice = None
 
         rows = [
-            f"`{message_root.id}` **{message_root.component.rsplit('.', 1)[-1]}** · gen {message_root.generation} · {_flags(message_root)}"
+            sl.md(
+                t"`{message_root.id}` **{message_root.component.rsplit('.', 1)[-1]}** · gen {message_root.generation} · {_flags(message_root)}"
+            )
             for message_root in snapshot.message_roots
         ]
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading("Message roots"),
-                sl.bullets(*(sl.discord_md(row) for row in rows), key="roots", page_size=8)
-                if rows
-                else sl.paragraph("No message roots."),
+                sl.bullets(*rows, key="roots", page_size=8) if rows else sl.paragraph("No message roots."),
             ),
         ]
         if snapshot.message_roots:
@@ -428,15 +428,15 @@ class OperationalInspector(sl.Component):
             notice = None
 
         rows = [
-            f"`{session.id}` · key `{session.key}` · roots={len(session.message_roots)} · members={_members(session)}"
+            sl.md(
+                t"`{session.id}` · key `{session.key}` · roots={len(session.message_roots)} · members={_members(session)}"
+            )
             for session in snapshot.sessions
         ]
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading("Live sessions"),
-                sl.bullets(*(sl.discord_md(row) for row in rows), key="sessions", page_size=8)
-                if rows
-                else sl.paragraph("No live sessions."),
+                sl.bullets(*rows, key="sessions", page_size=8) if rows else sl.paragraph("No live sessions."),
             ),
         ]
         if snapshot.sessions:
@@ -884,31 +884,31 @@ def metrics_text(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
 
 
 def _summary(snapshot: squid_ui_discord.MessageRootSnapshot) -> list[sl.TextLike]:
-    entries = [
-        f"**Component**\n`{snapshot.component}`",
-        f"**Generation**\n{snapshot.generation} · {_flags(snapshot)} · {snapshot.suppressed} suppressed",
-        f"**Timing**\nage {_duration(snapshot.age)} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}",
-        f"**Access**\n{_access_text(snapshot.access)}",
+    entries: list[sl.TextLike] = [
+        sl.md(t"**Component**\n`{snapshot.component}`"),
+        sl.md(t"**Generation**\n{snapshot.generation} · {_flags(snapshot)} · {snapshot.suppressed} suppressed"),
+        sl.md(t"**Timing**\nage {_duration(snapshot.age)} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}"),
+        sl.md(t"**Access**\n{_access_text(snapshot.access)}"),
     ]
     address = snapshot.address
     if address is None:
-        # A message root sent through an unwaited interaction response has never seen its message.
-        entries.append("**Message**\nnot located yet — nobody has clicked it")
+        entries.append(sl.md("**Message**\nnot located yet — nobody has clicked it"))
     else:
-        where = "ephemeral" if address.ephemeral else f"<#{address.channel_id}>"
-        entries.append(f"**Message**\n[{address.message_id}]({address.jump_url}) in {where}")
-    return [sl.discord_md(entry) for entry in entries]
+        where = "ephemeral" if address.ephemeral else sl.mention(address.channel_id, kind="channel")
+        link = sl.text_link(str(address.message_id), address.jump_url)
+        entries.append(sl.md(t"**Message**\n{link} in {where}"))
+    return entries
 
 
-def _access_text(access: squid_ui_discord.AccessPolicy) -> str:
+def _access_text(access: squid_ui_discord.AccessPolicy) -> sl.TextLike:
     """Describe the message root's access policy without exposing callback internals."""
     if isinstance(access, squid_ui_discord.Everyone):
         return "Everyone"
     if isinstance(access, squid_ui_discord.Owner):
-        return f"Owner (<@{access.user_id}>)"
+        return sl.plain(t"Owner ({sl.mention(access.user_id)})")
     if isinstance(access, squid_ui_discord.Users):
-        users = ", ".join(f"<@{user_id}>" for user_id in sorted(access.user_ids))
-        return f"Users ({users})"
+        users = sl.text.Text.join(", ", (sl.mention(user_id) for user_id in sorted(access.user_ids)))
+        return sl.plain(t"Users ({users})")
     if isinstance(access, squid_ui_discord.access.Check):
         return "Check"
     return type(access).__name__

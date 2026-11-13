@@ -1,6 +1,6 @@
 """Dependency-neutral profiles for libraries that realize protocol targets."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -69,6 +69,9 @@ class AdapterCapability(StrEnum):
 @dataclass(frozen=True, slots=True)
 class AdapterProfile[AdapterT]:
     """Verified behavior supplied by one library family and version range."""
+
+    escape_text: Callable[[str], str] | None = field(default=None, kw_only=True, repr=False, compare=False)
+    """Escape literal text for the protocol's Markdown serializer."""
 
     frontend: str | None = field(default=None, kw_only=True)
     """Dispatch identity used to select frontend-specific callback implementations."""

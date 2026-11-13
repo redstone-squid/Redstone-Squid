@@ -203,7 +203,9 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._video_job_id = status.id
         job_id = status.id
         await event.notice(
-            md_tr(t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.")
+            md_tr(
+                t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.",
+            )
         )
         host = cast(_VideoTaskHost, request.client)
         host.background_tasks.start(self._follow_video(request, status.id), name=f"schematic-video-{status.id}")
@@ -244,7 +246,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             await request.respond(
                 sl.paragraph(
                     md_tr(
-                        t"schematic-video-input-choice = Choose an input position and request the video again: {candidates}"
+                        t"schematic-video-input-choice = Choose an input position and request the video again: {candidates}",
                     )
                 ),
                 audience="personal",
@@ -266,7 +268,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             await request.respond(
                 sl.paragraph(
                     md_tr(
-                        t"schematic-video-too-large = This video exceeds Discord's attachment limit. Download it while signed in: {url}"
+                        t"schematic-video-too-large = This video exceeds Discord's attachment limit. Download it while signed in: {url}",
                     )
                 ),
                 audience="personal",

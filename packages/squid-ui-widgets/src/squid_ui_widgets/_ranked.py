@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.text import ResolvedText, TextLike, md
+from squid_ui.text import TextLike, md
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +70,7 @@ class RankedRows[EntryT]:
             return str(self.project(entry, self.identity))
         return repr(entry)
 
-    def lines(self, entries: tuple[RankedEntry | EntryT, ...], offset: int) -> tuple[ResolvedText, ...]:
+    def lines(self, entries: tuple[RankedEntry | EntryT, ...], offset: int) -> tuple[TextLike, ...]:
         """Format entries with ranks continuing after `offset`."""
         return tuple(
             md(t"{rank}. **{label}** — {value}")

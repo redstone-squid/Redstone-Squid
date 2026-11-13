@@ -121,8 +121,8 @@ async def test_selecting_a_claim_enables_decisions() -> None:
 @pytest.mark.parametrize(
     ("approve", "expected"),
     [
-        pytest.param(True, "Credited **Notch** to <@555>.", id="approve"),
-        pytest.param(False, "Closed <@555>'s claim on **Notch** without crediting it.", id="reject"),
+        pytest.param(True, "Credited **Notch** to @555.", id="approve"),
+        pytest.param(False, "Closed @555's claim on **Notch** without crediting it.", id="reject"),
     ],
 )
 async def test_claim_decisions_name_the_claimant_in_the_public_confirmation(
@@ -159,7 +159,7 @@ async def test_a_held_name_explains_the_conflict_then_requires_deliberate_reassi
         ("approve", 7, AUTHOR_ID, False),
         ("approve", 7, AUTHOR_ID, True),
     ]
-    assert second.notices == [("Credited **Notch** to <@555>.", sl.interactions.Visibility.PUBLIC)]
+    assert second.notices == [("Credited **Notch** to @555.", sl.interactions.Visibility.PUBLIC)]
 
 
 async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_name(

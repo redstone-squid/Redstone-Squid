@@ -48,12 +48,14 @@ def _default_decided(label: TextLike) -> TextLike:
 
 def _default_try_again_in(seconds: float) -> TextLike:
     whole = max(1, ceil(seconds))
-    return md_tr(t"""
+    return md_tr(
+        t"""
         ui-chrome-try-again-in = {{ {whole} ->
             [one] Try again in {whole} second.
            *[other] Try again in {whole} seconds.
         }}
-        """)
+        """,
+    )
 
 
 def _default_slot_count(count: int, capacity: int | None) -> TextLike:

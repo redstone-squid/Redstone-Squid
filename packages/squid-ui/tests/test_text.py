@@ -1,160 +1,120 @@
-"""Resolved text dialect and interpolation safety."""
+"""Portable text composition and destination-specific serialization."""
 
 from datetime import UTC, datetime
 
 import pytest
 
-from squid_i18n import tr
-from squid_ui.text import (
+from squid_i18n import (
     Localization,
-    Markup,
-    Message,
-    ResolvedText,
+    Text,
     current_localization,
-    discord_md,
     discord_text,
+    inline_code,
     localization_scope,
     md,
+    mention,
     plain,
     resolve_text,
     source_text,
+    strong,
+    text_link,
+    timestamp_text,
+    tr,
 )
 
 
-def test_bare_markdown_is_trusted() -> None:
-    text = md("**Build complete**")
-
-    assert text.content == "**Build complete**"
-    assert text.markup is Markup.MARKDOWN
-
-
-def test_template_string_interpolations_are_escaped_and_mentions_are_neutralized() -> None:
-    title = "**surprise** @everyone"
-    text = md(t"Build: {title}")
-
-    assert text.content == "Build: \\*\\*surprise\\*\\* @\u200beveryone"
-
-
-def test_template_string_can_opt_into_trusted_markdown() -> None:
-    label = discord_md("**safe author markup**")
-
-    assert md(t"Result: {label}").content == "Result: **safe author markup**"
-
-
-def test_translated_format_strings_escape_named_values() -> None:
-    text = md("Build {title} by {author}", title="[x](bad)", author="@here")
-
-    assert text.content == "Build \\[x\\]\\(bad\\) by @\u200bhere"
-
-
-def test_translated_format_strings_apply_specs_before_escaping() -> None:
-    text = md("Took {seconds:.1f}s", seconds=2.54)
-
-    assert text.content == "Took 2\\.5s"
-
-
-def test_localization_scope_is_nested_and_reset_safe() -> None:
-    first = Localization("first")
-    second = Localization("second")
-    original = current_localization()
-
-    with localization_scope(first):
-        assert current_localization() is first
-        with localization_scope(second):
-            assert current_localization() is second
-        assert current_localization() is first
-
-    assert current_localization() is original
-
-
-def test_plain_text_is_escaped_only_when_drawn_for_discord() -> None:
-    text = plain("**literal**")
-
-    assert text.content == "**literal**"
-    assert discord_text(text) == "\\*\\*literal\\*\\*"
-
-
-def test_timestamp_interpolation_uses_discord_tokens_and_plain_iso() -> None:
-    import squid_ui as sl
-
-    instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
-
-    assert discord_md(t"Updated {instant}").content == "Updated <t:1787409000:f>"
-    assert discord_md(t"Updated {sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE)}").content == (
-        "Updated <t:1787409000:R>"
-    )
-    assert plain(instant).content == "2026-08-22T14:30:00+00:00"
+def discord(value: str | Text) -> str:
+    return discord_text(resolve_text(value, current_localization()))
 
 
 def french() -> Localization:
     return Localization("fr", ("test-hello = Bonjour\ntest-bye = Au revoir { $name }",))
 
 
-def test_a_message_cannot_become_a_string_by_accident() -> None:
-    message = tr(t"test-hello = Hello")
+def test_all_constructors_return_the_same_text_type() -> None:
+    for value in (plain("literal"), md("**formatted**"), tr("Save", key="save"), strong("name")):
+        assert type(value) is Text
 
+
+def test_bindings_are_literal_and_mentions_are_neutralized_at_the_destination() -> None:
+    title = "**surprise** @everyone <#123>"
+    value = md(t"Build: {title}")
+    assert source_text(value, format="plain") == "Build: " + title
+    assert discord(value) == "Build: \\*\\*surprise\\*\\* @\u200beveryone \\<\u200b#123>"
+
+
+def test_markdown_interpolation_preserves_existing_text_structure() -> None:
+    title = plain("*Door*")
+    status = md("**Approved**")
+    assert discord(md(t"{title}: {status}")) == r"\*Door\*: **Approved**"
+    assert discord(md("{title}: {status}", title=title, status=status)) == r"\*Door\*: **Approved**"
+
+
+def test_python_values_can_be_formatted_before_capture() -> None:
+    assert source_text(md("Took {seconds:.1f}s", seconds=2.54)) == "Took 2.5s"
+
+
+def test_text_formatting_never_eagerly_resolves_translations() -> None:
+    label = tr("Hello", key="test-hello")
+    with pytest.raises(TypeError, match="stays deferred"):
+        md(t"{label:>10}")
+
+
+def test_localization_scope_is_nested_and_reset_safe() -> None:
+    first, second = Localization("first"), Localization("second")
+    original = current_localization()
+    with localization_scope(first):
+        assert current_localization() is first
+        with localization_scope(second):
+            assert current_localization() is second
+        assert current_localization() is first
+    assert current_localization() is original
+
+
+def test_a_text_cannot_become_a_string_by_accident() -> None:
+    message = tr("Hello", key="test-hello")
     with pytest.raises(TypeError, match="no text until resolved"):
         str(message)
     with pytest.raises(TypeError, match="no text until resolved"):
         _ = f"{message}!"
 
 
-def test_joined_text_stays_deferred_until_the_render_locale() -> None:
-    joined = Message.join(
-        "\n", [tr(t"test-hello = Hello"), md("**trusted**"), tr(t"test-bye = Bye {(name := '*Ann*')}")]
-    )
-
-    assert resolve_text(joined, french()).content == "Bonjour\n**trusted**\nAu revoir \\*Ann\\*"
+def test_composition_stays_deferred_until_the_render_locale() -> None:
+    name = "*Ann*"
+    joined = Text.join("\n", [tr("Hello", key="test-hello"), md("**trusted**"), tr(t"Bye {name}", key="test-bye")])
+    with localization_scope(french()):
+        assert discord(joined) == "Bonjour\n**trusted**\nAu revoir \\*Ann\\*"
     assert source_text(joined) == "Hello\n**trusted**\nBye \\*Ann\\*"
 
 
-def test_joined_plain_text_is_escaped_inside_markdown() -> None:
-    joined = Message.join(" {} ", [plain("*literal*"), md("{braces}")])
-
-    assert resolve_text(joined, french()).content == "\\*literal\\* \\{\\} {braces}"
-
-
-def test_adding_text_keeps_messages_deferred() -> None:
-    greeting = md("> ") + tr(t"test-hello = Hello") + " " + plain("*Ann*")
-
-    assert isinstance(greeting, Message)
-    assert resolve_text(greeting, french()).content == "> Bonjour \\*Ann\\*"
-
-
-def test_adding_literal_text_does_not_choose_markdown() -> None:
-    combined = plain("*a*") + " **b**"
-
-    assert resolve_text(combined, Localization()) == ResolvedText("*a* **b**")
-    assert resolve_text("**a** " + plain("*b*"), Localization()) == ResolvedText("**a** *b*")
-
-
-def test_resolve_uses_the_current_localization() -> None:
+def test_markdown_fragments_cannot_complete_each_others_delimiters() -> None:
+    joined = md("**") + tr("Hello", key="test-hello") + md("**")
     with localization_scope(french()):
-        assert tr(t"test-hello = Hello").resolve() == "Bonjour"
-        assert plain("*a*").resolve() == "*a*"
+        assert discord(joined) == r"\*\*Bonjour\*\*"
+        assert discord(strong(tr("Hello", key="test-hello"))) == "**Bonjour**"
 
 
-def test_markdown_interpolation_composes_typed_text_without_a_trust_wrapper() -> None:
-    title = plain("*Door*")
-    status = md("**Approved**")
-
-    assert md(t"{title}: {status}").content == r"\*Door\*: **Approved**"
-    assert md("{title}: {status}", title=title, status=status).content == r"\*Door\*: **Approved**"
+def test_plain_text_remains_literal_through_composition() -> None:
+    combined = plain("*a*") + " **b**"
+    assert source_text(combined) == "*a* **b**"
+    assert discord(combined) == r"\*a\* \*\*b\*\*"
 
 
-def test_discord_serialization_is_explicit_and_neutralizes_plain_mentions() -> None:
-    text = resolve_text("Build #7. @everyone **literal**", Localization())
+def test_mentions_and_timestamps_are_semantic_values() -> None:
+    instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
+    owner = mention(123)
+    updated = timestamp_text(instant, style="R")
+    value = tr(t"{owner} updated {updated}", key="updated")
+    assert discord(value) == "<@123> updated <t:1787409000:R>"
+    assert source_text(value, format="plain") == "@123 updated 2026-08-22T14:30:00+00:00"
+    assert discord(plain(t"Updated {instant}")) == "Updated <t:1787409000:f>"
 
-    assert text.markup is Markup.PLAIN
-    assert text.resolve() == "Build #7. @everyone **literal**"
-    assert discord_text(text) == r"Build #7. @" + "\u200b" + r"everyone \*\*literal\*\*"
 
-
-def test_format_specs_do_not_turn_typed_literal_values_into_markdown() -> None:
-    literal = plain("*x*")
-    formatted = md("**x**")
-
-    assert md("{value:>5}", value=literal).content == r"  \*x\*"
-    assert md(t"{literal:>5}").content == r"  \*x\*"
-    assert md("{value:>7}", value=formatted).content == "  **x**"
-    assert md(t"{formatted:>7}").content == "  **x**"
+def test_literal_code_and_link_destinations_cannot_inject_structure() -> None:
+    label = "[click](https://evil.example)"
+    assert source_text(inline_code("a`b")) == "`` a`b ``"
+    assert source_text(text_link(label, "https://example.org/(a)")) == (
+        r"[\[click\](https://evil.example)](<https://example.org/(a)>)"
+    )
+    with pytest.raises(ValueError, match="safe destination"):
+        text_link("click", "javascript:alert(1)")

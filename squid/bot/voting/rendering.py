@@ -151,13 +151,13 @@ def _generic_poll_nodes(
         for option in options:
             option_id = option.identifier or ""
             voters = [
-                f"<@{discord_id}>"
+                sl.mention(discord_id)
                 for vote in snapshot.selections
                 if vote.option_id == option.identifier
                 and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
             ]
-            voter_suffix = sl.discord_md(
-                f" ({', '.join(voters)})" if poll.visibility == "visible_live" and voters else ""
+            voter_suffix = (
+                (" (" + sl.text.Text.join(", ", voters) + ")") if poll.visibility == "visible_live" and voters else ""
             )
             label = option.label or option.identifier or option.emoji
             weighted_count = weighted.get(option_id, 0)
@@ -250,6 +250,11 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
         )
         lines.append(f"\n**Poll closed — {outcome}**")
     else:
-        deadline = sl.md(t"{sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}").content
+        deadline = sl.text.discord_text(
+            sl.text.resolve_text(
+                sl.plain(t"{sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}"),
+                sl.text.current_localization(),
+            )
+        )
         lines.append(f"\nCloses {deadline}.")
     return "\n".join(lines)

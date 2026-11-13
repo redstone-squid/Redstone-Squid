@@ -20,6 +20,7 @@ from squid.bot.account_presentation import (
 from squid.bot.profile_render import present_claimant
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.providers.records import AliasClaimProvider
+from squid_i18n import NEUTRAL, discord_text, resolve_text
 from squid_ui.text import source_text
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -190,7 +191,7 @@ def test_a_claimant_with_discord_is_shown_as_a_mention() -> None:
     """A Discord mention gives the reviewer a clickable identity."""
     claim = _claim(Account(identities=(AccountIdentity.discord(555),), consent=None, id=42, created_at=NOW))
 
-    assert present_claimant(claim) == "<@555>"
+    assert discord_text(resolve_text(present_claimant(claim), NEUTRAL)) == "<@555>"
 
 
 def test_a_claimant_without_discord_falls_back_to_the_java_name() -> None:
@@ -205,7 +206,7 @@ def test_a_claimant_with_only_a_public_creator_is_named_by_it() -> None:
     creator = UUID("33333333-3333-3333-3333-333333333333")
     claim = _claim(Account(identities=(), consent=None, id=42, created_at=NOW, public_creator_id=creator))
 
-    presented = present_claimant(claim)
+    presented = source_text(present_claimant(claim))
 
     assert str(creator) in presented
     assert "42" not in presented
@@ -213,7 +214,7 @@ def test_a_claimant_with_only_a_public_creator_is_named_by_it() -> None:
 
 def test_the_internal_id_is_last_and_labelled_as_a_diagnostic() -> None:
     """It identifies a row rather than a person, so it must not read like a name."""
-    presented = present_claimant(_claim(None))
+    presented = source_text(present_claimant(_claim(None)))
 
     assert "42" in presented
     assert "unidentified" in presented

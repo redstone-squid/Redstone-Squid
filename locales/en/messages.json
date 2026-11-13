@@ -2996,7 +2996,7 @@
     ]
   },
   "bot-profile-render-value-2": {
-    "fingerprint": "7434e02afb2d414f3c61e0e085a3929c014f6c0e0410bb9364a8936baec01c07",
+    "fingerprint": "61ea80e5dddc9cee35380e497cfe81a0830a1fa0f03a62fe6379d6afb4b3bf3d",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -3012,7 +3012,7 @@
       }
     ],
     "locations": [
-      "squid/bot/profile_render.py:35"
+      "squid/bot/profile_render.py:36"
     ]
   },
   "bot-recount-give-a-link-to-a-message-in": {
@@ -4041,10 +4041,15 @@
     ]
   },
   "bot-submission-consent-banner-value": {
-    "fingerprint": "80e9c9854721bbb961864c721d34fd82fe53328d96e995241f7203f72b8ef1ac",
+    "fingerprint": "f18e714d946acda460394153ae49b04616e553bd325e774b5be87ff0ed35b3a3",
     "attributes": [],
     "has_value": true,
     "arguments": [
+      {
+        "name": "user_mention",
+        "function": null,
+        "options": []
+      },
       {
         "name": "user_id_text",
         "function": null,
@@ -4052,7 +4057,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/consent_banner.py:66"
+      "squid/bot/submission/consent_banner.py:68"
     ]
   },
   "bot-submission-edit-cannot-use-options": {
@@ -8435,10 +8440,15 @@
     ]
   },
   "consent-value-2": {
-    "fingerprint": "9f9f117e050b8bfa7c0941578f3ac4e89c6696177d53fa316126d100f9d980fc",
+    "fingerprint": "dd1ec823d0fb10b6fea2e2ce08729f284925daba03e8cf7d39d2c95704c4ab27",
     "attributes": [],
     "has_value": true,
     "arguments": [
+      {
+        "name": "user_mention",
+        "function": null,
+        "options": []
+      },
       {
         "name": "user_id_text",
         "function": null,
@@ -8446,8 +8456,8 @@
       }
     ],
     "locations": [
-      "squid/bot/consent.py:155",
-      "squid/bot/consent.py:187"
+      "squid/bot/consent.py:159",
+      "squid/bot/consent.py:195"
     ]
   },
   "core-configuration-invalid": {
@@ -17210,18 +17220,18 @@
     ]
   },
   "submit-author-consent-required": {
-    "fingerprint": "dc2a734d0861fc0826640b377df6bff9ea605f4173dc024b4579e9ec0cfbd9aa",
+    "fingerprint": "f4248b268115b1c1aa7e0273e98f57d947639309092ab03bee4a5ead8de737d7",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "user_id_text",
+        "name": "user_mention",
         "function": null,
         "options": []
       }
     ],
     "locations": [
-      "squid/bot/submission/submit.py:420"
+      "squid/bot/submission/submit.py:428"
     ]
   },
   "submit-build-log-channel-required": {

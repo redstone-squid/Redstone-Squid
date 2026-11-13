@@ -201,38 +201,40 @@ class FormField:
         field_id = self.id
         if not self.label.strip():
             raise ValidationError(
-                md_tr(t"submissions-field-blank-label = field {(field_id_text := str(field_id))} has a blank label")
+                md_tr(
+                    t"submissions-field-blank-label = field {(field_id_text := str(field_id))} has a blank label",
+                )
             )
         if self.option_source is not None:
             _require_stable_id(self.option_source.replace(":", "_"), "option source")
         if self.options and self.option_source is not None:
             raise ValidationError(
                 md_tr(
-                    t"submissions-field-inline-dynamic = field {(field_id_text := str(field_id))} cannot have inline and dynamic options"
+                    t"submissions-field-inline-dynamic = field {(field_id_text := str(field_id))} cannot have inline and dynamic options",
                 )
             )
         if self.control in {ControlKind.CHOICE, ControlKind.MULTI_CHOICE} and not (self.options or self.option_source):
             raise ValidationError(
                 md_tr(
-                    t"submissions-choice-options-required = choice field {(field_id_text := str(field_id))} requires options"
+                    t"submissions-choice-options-required = choice field {(field_id_text := str(field_id))} requires options",
                 )
             )
         if self.repeatable and self.value_kind is not ValueKind.STRING_LIST:
             raise ValidationError(
                 md_tr(
-                    t"submissions-repeatable-field-use = repeatable field {(field_id_text := str(field_id))} must use string_list values"
+                    t"submissions-repeatable-field-use = repeatable field {(field_id_text := str(field_id))} must use string_list values",
                 )
             )
         if not self.purposes:
             raise ValidationError(
                 md_tr(
-                    t"submissions-field-purpose = field {(field_id_text := str(field_id))} must apply to at least one purpose"
+                    t"submissions-field-purpose = field {(field_id_text := str(field_id))} must apply to at least one purpose",
                 )
             )
         if not self.origins:
             raise ValidationError(
                 md_tr(
-                    t"submissions-field-apply = field {(field_id_text := str(field_id))} must apply to at least one origin"  # noqa: F841 - captured translation binding
+                    t"submissions-field-apply = field {(field_id_text := str(field_id))} must apply to at least one origin",  # noqa: F841 - captured translation binding
                 )
             )
 
@@ -257,7 +259,7 @@ class FormSection:
             section_id = self.id
             raise ValidationError(
                 md_tr(
-                    t"submissions-section-blank-title = section {(section_id_text := str(section_id))} has a blank title"  # noqa: F841 - captured translation binding
+                    t"submissions-section-blank-title = section {(section_id_text := str(section_id))} has a blank title",  # noqa: F841 - captured translation binding
                 )
             )
         _require_unique((item.id for item in self.fields), f"section {self.id} field IDs")
@@ -325,7 +327,7 @@ class FormManifest:
                 raise ValidationError(
                     md_tr(
                         t"submissions-category-duplicates-common = category {category_code} duplicates "
-                        t"common fields: {fields}"
+                        t"common fields: {fields}",
                     )
                 )
 
@@ -529,7 +531,7 @@ def _require_stable_id(value: str, label: str) -> None:
         raise ValidationError(
             md_tr(
                 t"submissions-field-name-format = {label} must start with a "
-                t"letter and contain only lowercase letters, digits, or underscores"
+                t"letter and contain only lowercase letters, digits, or underscores",
             )
         )
 

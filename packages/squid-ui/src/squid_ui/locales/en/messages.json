@@ -5,7 +5,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:124"
+      "packages/squid-ui/src/squid_ui/chrome.py:126"
     ]
   },
   "ui-chrome-and-n-more": {
@@ -29,7 +29,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:118"
+      "packages/squid-ui/src/squid_ui/chrome.py:120"
     ]
   },
   "ui-chrome-approve": {
@@ -38,7 +38,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:151"
+      "packages/squid-ui/src/squid_ui/chrome.py:153"
     ]
   },
   "ui-chrome-approved-count": {
@@ -58,7 +58,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:68"
+      "packages/squid-ui/src/squid_ui/chrome.py:70"
     ]
   },
   "ui-chrome-approximate-total-footer": {
@@ -92,7 +92,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:108"
+      "packages/squid-ui/src/squid_ui/chrome.py:110"
     ]
   },
   "ui-chrome-cancel": {
@@ -101,7 +101,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:117"
+      "packages/squid-ui/src/squid_ui/chrome.py:119"
     ]
   },
   "ui-chrome-changed-elsewhere": {
@@ -110,7 +110,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:93"
+      "packages/squid-ui/src/squid_ui/chrome.py:95"
     ]
   },
   "ui-chrome-close": {
@@ -119,7 +119,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:110"
+      "packages/squid-ui/src/squid_ui/chrome.py:112"
     ]
   },
   "ui-chrome-confirm": {
@@ -128,7 +128,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:116"
+      "packages/squid-ui/src/squid_ui/chrome.py:118"
     ]
   },
   "ui-chrome-continue": {
@@ -137,7 +137,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:131"
+      "packages/squid-ui/src/squid_ui/chrome.py:133"
     ]
   },
   "ui-chrome-continue-session": {
@@ -146,7 +146,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:91"
+      "packages/squid-ui/src/squid_ui/chrome.py:93"
     ]
   },
   "ui-chrome-decided": {
@@ -170,7 +170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:99"
+      "packages/squid-ui/src/squid_ui/chrome.py:101"
     ]
   },
   "ui-chrome-download": {
@@ -179,7 +179,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:115"
+      "packages/squid-ui/src/squid_ui/chrome.py:117"
     ]
   },
   "ui-chrome-edit": {
@@ -188,7 +188,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:125"
+      "packages/squid-ui/src/squid_ui/chrome.py:127"
     ]
   },
   "ui-chrome-finish": {
@@ -197,7 +197,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:130"
+      "packages/squid-ui/src/squid_ui/chrome.py:132"
     ]
   },
   "ui-chrome-full": {
@@ -206,7 +206,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:149"
+      "packages/squid-ui/src/squid_ui/chrome.py:151"
     ]
   },
   "ui-chrome-home": {
@@ -215,7 +215,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:109"
+      "packages/squid-ui/src/squid_ui/chrome.py:111"
     ]
   },
   "ui-chrome-jump-to-page": {
@@ -224,7 +224,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:144"
+      "packages/squid-ui/src/squid_ui/chrome.py:146"
     ]
   },
   "ui-chrome-move-down": {
@@ -233,7 +233,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:128"
+      "packages/squid-ui/src/squid_ui/chrome.py:130"
     ]
   },
   "ui-chrome-move-up": {
@@ -242,7 +242,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:127"
+      "packages/squid-ui/src/squid_ui/chrome.py:129"
     ]
   },
   "ui-chrome-newer": {
@@ -251,7 +251,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:107"
+      "packages/squid-ui/src/squid_ui/chrome.py:109"
     ]
   },
   "ui-chrome-next": {
@@ -260,7 +260,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:105"
+      "packages/squid-ui/src/squid_ui/chrome.py:107"
     ]
   },
   "ui-chrome-no-results": {
@@ -269,7 +269,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:122"
+      "packages/squid-ui/src/squid_ui/chrome.py:124"
     ]
   },
   "ui-chrome-not-now": {
@@ -278,7 +278,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:81"
+      "packages/squid-ui/src/squid_ui/chrome.py:83"
     ]
   },
   "ui-chrome-not-yours": {
@@ -287,7 +287,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:77"
+      "packages/squid-ui/src/squid_ui/chrome.py:79"
     ]
   },
   "ui-chrome-off": {
@@ -296,7 +296,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:114"
+      "packages/squid-ui/src/squid_ui/chrome.py:116"
     ]
   },
   "ui-chrome-older": {
@@ -305,7 +305,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:106"
+      "packages/squid-ui/src/squid_ui/chrome.py:108"
     ]
   },
   "ui-chrome-on": {
@@ -314,7 +314,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:113"
+      "packages/squid-ui/src/squid_ui/chrome.py:115"
     ]
   },
   "ui-chrome-page-footer": {
@@ -358,7 +358,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:104"
+      "packages/squid-ui/src/squid_ui/chrome.py:106"
     ]
   },
   "ui-chrome-range-footer": {
@@ -387,7 +387,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:112"
+      "packages/squid-ui/src/squid_ui/chrome.py:114"
     ]
   },
   "ui-chrome-remove": {
@@ -396,7 +396,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:126"
+      "packages/squid-ui/src/squid_ui/chrome.py:128"
     ]
   },
   "ui-chrome-review": {
@@ -405,7 +405,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:129"
+      "packages/squid-ui/src/squid_ui/chrome.py:131"
     ]
   },
   "ui-chrome-save": {
@@ -414,7 +414,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:119"
+      "packages/squid-ui/src/squid_ui/chrome.py:121"
     ]
   },
   "ui-chrome-search": {
@@ -423,7 +423,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:121"
+      "packages/squid-ui/src/squid_ui/chrome.py:123"
     ]
   },
   "ui-chrome-sent-privately": {
@@ -432,7 +432,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:97"
+      "packages/squid-ui/src/squid_ui/chrome.py:99"
     ]
   },
   "ui-chrome-session-ended": {
@@ -441,7 +441,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:79"
+      "packages/squid-ui/src/squid_ui/chrome.py:81"
     ]
   },
   "ui-chrome-session-expiring": {
@@ -450,7 +450,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:89"
+      "packages/squid-ui/src/squid_ui/chrome.py:91"
     ]
   },
   "ui-chrome-slot-capacity": {
@@ -470,7 +470,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:63"
+      "packages/squid-ui/src/squid_ui/chrome.py:65"
     ]
   },
   "ui-chrome-slot-count": {
@@ -485,7 +485,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:61"
+      "packages/squid-ui/src/squid_ui/chrome.py:63"
     ]
   },
   "ui-chrome-step-progress": {
@@ -554,7 +554,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:135"
+      "packages/squid-ui/src/squid_ui/chrome.py:137"
     ]
   },
   "ui-chrome-undo": {
@@ -563,7 +563,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:111"
+      "packages/squid-ui/src/squid_ui/chrome.py:113"
     ]
   },
   "ui-chrome-unsaved": {
@@ -572,7 +572,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:120"
+      "packages/squid-ui/src/squid_ui/chrome.py:122"
     ]
   },
   "ui-chrome-updates-paused": {
@@ -581,7 +581,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:87"
+      "packages/squid-ui/src/squid_ui/chrome.py:89"
     ]
   },
   "ui-chrome-waitlist": {
@@ -590,7 +590,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:148"
+      "packages/squid-ui/src/squid_ui/chrome.py:150"
     ]
   },
   "ui-chrome-withdraw": {
@@ -599,7 +599,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:152"
+      "packages/squid-ui/src/squid_ui/chrome.py:154"
     ]
   },
   "ui-chrome-working": {
@@ -608,7 +608,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/chrome.py:85"
+      "packages/squid-ui/src/squid_ui/chrome.py:87"
     ]
   },
   "ui-form-date-format": {
@@ -617,7 +617,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:359"
+      "packages/squid-ui/src/squid_ui/forms.py:377"
     ]
   },
   "ui-form-date-maximum": {
@@ -632,7 +632,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:363"
+      "packages/squid-ui/src/squid_ui/forms.py:386"
     ]
   },
   "ui-form-date-minimum": {
@@ -647,7 +647,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:361"
+      "packages/squid-ui/src/squid_ui/forms.py:380"
     ]
   },
   "ui-form-datetime-format": {
@@ -656,8 +656,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:432",
-      "packages/squid-ui/src/squid_ui/forms.py:504"
+      "packages/squid-ui/src/squid_ui/forms.py:466",
+      "packages/squid-ui/src/squid_ui/forms.py:538"
     ]
   },
   "ui-form-datetime-maximum": {
@@ -672,8 +672,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:455",
-      "packages/squid-ui/src/squid_ui/forms.py:537"
+      "packages/squid-ui/src/squid_ui/forms.py:489",
+      "packages/squid-ui/src/squid_ui/forms.py:571"
     ]
   },
   "ui-form-datetime-minimum": {
@@ -688,8 +688,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:449",
-      "packages/squid-ui/src/squid_ui/forms.py:531"
+      "packages/squid-ui/src/squid_ui/forms.py:483",
+      "packages/squid-ui/src/squid_ui/forms.py:565"
     ]
   },
   "ui-form-duration-format": {
@@ -698,7 +698,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:319"
+      "packages/squid-ui/src/squid_ui/forms.py:335"
     ]
   },
   "ui-form-duration-maximum": {
@@ -713,7 +713,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:327"
+      "packages/squid-ui/src/squid_ui/forms.py:345"
     ]
   },
   "ui-form-duration-minimum": {
@@ -728,7 +728,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:323"
+      "packages/squid-ui/src/squid_ui/forms.py:339"
     ]
   },
   "ui-form-integer-format": {
@@ -737,7 +737,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:248"
+      "packages/squid-ui/src/squid_ui/forms.py:252"
     ]
   },
   "ui-form-invalid-boolean": {
@@ -746,7 +746,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:725"
+      "packages/squid-ui/src/squid_ui/forms.py:763"
     ]
   },
   "ui-form-invalid-choice": {
@@ -755,7 +755,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:637"
+      "packages/squid-ui/src/squid_ui/forms.py:671"
     ]
   },
   "ui-form-invalid-choices": {
@@ -764,7 +764,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:679"
+      "packages/squid-ui/src/squid_ui/forms.py:713"
     ]
   },
   "ui-form-number-finite": {
@@ -773,7 +773,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:275"
+      "packages/squid-ui/src/squid_ui/forms.py:285"
     ]
   },
   "ui-form-number-format": {
@@ -782,7 +782,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:273"
+      "packages/squid-ui/src/squid_ui/forms.py:283"
     ]
   },
   "ui-form-number-maximum": {
@@ -797,8 +797,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:253",
-      "packages/squid-ui/src/squid_ui/forms.py:280"
+      "packages/squid-ui/src/squid_ui/forms.py:261",
+      "packages/squid-ui/src/squid_ui/forms.py:294"
     ]
   },
   "ui-form-number-minimum": {
@@ -813,8 +813,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:250",
-      "packages/squid-ui/src/squid_ui/forms.py:277"
+      "packages/squid-ui/src/squid_ui/forms.py:255",
+      "packages/squid-ui/src/squid_ui/forms.py:288"
     ]
   },
   "ui-form-required": {
@@ -825,7 +825,7 @@
     "locations": [
       "packages/squid-ui/src/squid_ui/forms.py:197",
       "packages/squid-ui/src/squid_ui/forms.py:218",
-      "packages/squid-ui/src/squid_ui/forms.py:674"
+      "packages/squid-ui/src/squid_ui/forms.py:708"
     ]
   },
   "ui-form-scale-integer": {
@@ -845,7 +845,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:586"
+      "packages/squid-ui/src/squid_ui/forms.py:620"
     ]
   },
   "ui-form-scale-range": {
@@ -865,7 +865,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:592"
+      "packages/squid-ui/src/squid_ui/forms.py:626"
     ]
   },
   "ui-form-selection-maximum": {
@@ -880,7 +880,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:686"
+      "packages/squid-ui/src/squid_ui/forms.py:724"
     ]
   },
   "ui-form-selection-minimum": {
@@ -895,7 +895,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:683"
+      "packages/squid-ui/src/squid_ui/forms.py:718"
     ]
   },
   "ui-form-text-maximum": {
@@ -910,7 +910,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:223"
+      "packages/squid-ui/src/squid_ui/forms.py:225"
     ]
   },
   "ui-form-text-minimum": {
@@ -925,7 +925,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:220"
+      "packages/squid-ui/src/squid_ui/forms.py:221"
     ]
   },
   "ui-form-time-ambiguous": {
@@ -934,8 +934,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:438",
-      "packages/squid-ui/src/squid_ui/forms.py:513"
+      "packages/squid-ui/src/squid_ui/forms.py:472",
+      "packages/squid-ui/src/squid_ui/forms.py:547"
     ]
   },
   "ui-form-time-format": {
@@ -944,7 +944,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:386"
+      "packages/squid-ui/src/squid_ui/forms.py:412"
     ]
   },
   "ui-form-time-maximum": {
@@ -959,7 +959,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:390"
+      "packages/squid-ui/src/squid_ui/forms.py:421"
     ]
   },
   "ui-form-time-minimum": {
@@ -974,7 +974,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:388"
+      "packages/squid-ui/src/squid_ui/forms.py:415"
     ]
   },
   "ui-form-time-nonexistent": {
@@ -983,8 +983,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:445",
-      "packages/squid-ui/src/squid_ui/forms.py:519"
+      "packages/squid-ui/src/squid_ui/forms.py:479",
+      "packages/squid-ui/src/squid_ui/forms.py:553"
     ]
   },
   "ui-form-timezone-offset-mismatch": {
@@ -993,7 +993,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:522"
+      "packages/squid-ui/src/squid_ui/forms.py:556"
     ]
   },
   "ui-tally-option": {

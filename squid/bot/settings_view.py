@@ -23,8 +23,7 @@ from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
 from squid.voting.domain.models import VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_i18n import md_tr
-from squid_ui.text import Message
+from squid_i18n import Text, md_tr
 
 if TYPE_CHECKING:
     from squid.settings.application import SettingsService
@@ -48,7 +47,7 @@ CONVERSATION_TYPES = (
 )
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
-SETTING_LABELS: dict[ScalarChannelSetting, Message] = {
+SETTING_LABELS: dict[ScalarChannelSetting, Text] = {
     "Smallest": tr(t"bot-settings-view-smallest-record-builds = Smallest-record builds"),
     "Fastest": tr(t"bot-settings-view-fastest-record-builds = Fastest-record builds"),
     "First": tr(t"bot-settings-view-first-of-a-kind-builds = First-of-a-kind builds"),
@@ -57,7 +56,7 @@ SETTING_LABELS: dict[ScalarChannelSetting, Message] = {
 }
 """What each channel setting is for, named rather than title-cased so it translates."""
 
-KIND_LABELS: dict[VoteKind, Message] = {
+KIND_LABELS: dict[VoteKind, Text] = {
     VoteKind.BUILD: tr(t"bot-settings-view-build-reviews = Build reviews"),
     VoteKind.DELETE_LOG: tr(t"bot-settings-view-deletion-votes = Deletion votes"),
     VoteKind.GENERIC: tr(t"bot-settings-view-polls = Polls"),
@@ -321,8 +320,10 @@ class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if channel_id is None:
             return tr(t"bot-settings-view-not-set = _Not set_")
         if self._guild.get_channel_or_thread(channel_id) is None:
-            return md_tr(t"bot-settings-view-not-found = _Not found_ ({(channel_id_text := str(channel_id))})")  # noqa: F841 - captured text identifier
-        return sl.md("{mention}", mention=sl.discord_md(f"<#{channel_id}>"))
+            return md_tr(
+                t"bot-settings-view-not-found = _Not found_ ({(channel_id_text := str(channel_id))})",  # noqa: F841 - captured translation binding
+            )
+        return sl.mention(channel_id, kind="channel")
 
 
 class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
@@ -474,7 +475,9 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 choice = VoteChoice.GENERIC if self.kind is VoteKind.GENERIC else VoteChoice(choice_text)
             except ValueError:
                 await event.notice(
-                    md_tr(t"bot-settings-view-is-not-a-vote-choice = `{choice_text}` is not a vote choice.")
+                    md_tr(
+                        t"bot-settings-view-is-not-a-vote-choice = `{choice_text}` is not a vote choice.",
+                    )
                 )
                 return
             parsed = discord.PartialEmoji.from_str(emoji)
@@ -482,7 +485,9 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 custom = self._guild.get_emoji(parsed.id or 0)
                 if custom is None or not custom.is_usable():
                     await event.notice(
-                        md_tr(t"settings-custom-emoji-unavailable = The custom emoji {emoji} is inaccessible.")
+                        md_tr(
+                            t"settings-custom-emoji-unavailable = The custom emoji {emoji} is inaccessible.",
+                        )
                     )
                     return
             options.append(
@@ -554,11 +559,11 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         weight_lines = [
             md_tr(
-                t"bot-settings-role-multiplier = {(role := self._role_display(weight.role_id))} — {(multiplier := format(weight.multiplier, 'g'))}x"  # noqa: F841 - captured translation binding
+                t"bot-settings-role-multiplier = {(role := self._role_display(weight.role_id))} — {(multiplier := format(weight.multiplier, 'g'))}x",  # noqa: F841 - captured translation binding
             )
             for weight in self.configuration.weights
         ]
-        weights = sl.text.Message.join("\n", weight_lines) if weight_lines else tr(t"bot-settings-view-none = _None_")
+        weights = sl.text.Text.join("\n", weight_lines) if weight_lines else tr(t"bot-settings-view-none = _None_")
         return [
             CardField(tr(t"bot-settings-view-emojis = Emojis"), emojis),
             CardField(tr(t"bot-settings-view-role-multipliers = Role multipliers"), weights),
@@ -567,7 +572,9 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def _role_display(self, role_id: int) -> sl.TextLike:
         role = self._guild.get_role(role_id)
         if role is None:
-            return md_tr(t"bot-settings-view-deleted-role = _Deleted role_ ({(role_id_text := str(role_id))})")  # noqa: F841 - captured text identifier
+            return md_tr(
+                t"bot-settings-view-deleted-role = _Deleted role_ ({(role_id_text := str(role_id))})",  # noqa: F841 - captured translation binding
+            )
         return role.name
 
     def _scope_note(self) -> sl.TextLike | None:

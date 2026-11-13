@@ -37,9 +37,9 @@ from squid.edits.application import EditRunner
 from squid.edits.domain import RevisionConflictError
 from squid.submissions.application.build_answers import BuildAnswers, answers_from_build, patch_from_answers
 from squid.submissions.domain import ChoiceOption, FormField, FormManifest, FormSection, SubmissionOrigin
-from squid_i18n import md_tr
+from squid_i18n import Text, md_tr
 from squid_reactivity import TopicHandle
-from squid_ui.text import Message, TextLike, md
+from squid_ui.text import TextLike, md
 
 type OptionLoader = Callable[[str], Awaitable[tuple[ChoiceOption, ...]]]
 """Fetch the current choices of one option source, such as `approved_restrictions`."""
@@ -164,11 +164,11 @@ class BuildEditWorkspace(sl.Reactive):
         )
         labels = {field.id: field.label for field in self.manifest.fields_for(self.category)}
         problems = [
-            Message.join("", (md(t"**{labels.get(field_id, field_id)}**: "), problem_text(errors[field_id])))
+            Text.join("", (md(t"**{labels.get(field_id, field_id)}**"), ": ", problem_text(errors[field_id])))
             for field_id in values
             if field_id in errors
         ]
-        return Message.join("\n", problems) if problems else None
+        return Text.join("\n", problems) if problems else None
 
     def remove_unresolved(self, names: Collection[str]) -> None:
         """Remove names that match no catalogue entry, as one undoable step; must run inside a UI action."""
@@ -305,7 +305,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 t"be discarded."
             )
         elif ws.notice:
-            description = Message.join("", ("⚠️ ", ws.notice))
+            description = Text.join("", ("⚠️ ", ws.notice))
         elif self.confirming:
             description = tr(t"build-editor-review-hint = Review the changed values below, then apply them.")
         else:
@@ -371,7 +371,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             )
             if unlisted:
                 names = ", ".join(unlisted)
-                text = Message.join("\n", (text, md_tr(t"build-editor-unlisted = Not in the catalogue: {names}")))
+                text = Text.join("\n", (text, md_tr(t"build-editor-unlisted = Not in the catalogue: {names}")))
             sections.append(EditorSection(section.id, text))
         return sections
 
@@ -394,7 +394,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 lines.append(md_tr(t"build-editor-removed-unlisted = Removed: {names}"))
                 removed = ()
             if lines:
-                sections.append(EditorSection(section.id, Message.join("\n", lines)))
+                sections.append(EditorSection(section.id, Text.join("\n", lines)))
         return sections
 
     def _actions(self) -> list[sl.semantic.ActionControl[sd.Request]]:

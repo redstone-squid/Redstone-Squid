@@ -159,7 +159,7 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
                 [
                     text_node(
                         md_tr(
-                            t"bot-version-tracking-version-added-successfully = Version added successfully: {version}"
+                            t"bot-version-tracking-version-added-successfully = Version added successfully: {version}",
                         )
                     )
                 ]

@@ -54,14 +54,14 @@ class SuggestionSource:
             raise InvalidStateError(
                 md_tr(
                     t"suggestions-invalid-suggestion-source = invalid suggestion "
-                    t"source id: {(source_id_text := repr(source_id))}"
+                    t"source id: {(source_id_text := repr(source_id))}",
                 )
             )
         if (self.visibility is Visibility.REQUIRES_NODE) != (self.required_node is not None):
             raise InvalidStateError(
                 md_tr(
                     t"suggestions-required-node-set = {(source_id_text := str(source_id))}: "  # noqa: F841 - captured text identifier
-                    t"required_node must be set exactly when visibility is requires_node"
+                    t"required_node must be set exactly when visibility is requires_node",
                 )
             )
 
@@ -81,7 +81,7 @@ class SuggestionRegistry:
                 source_id = source.id
                 raise InvalidStateError(
                     md_tr(
-                        t"suggestions-duplicate-suggestion-source = duplicate suggestion source: {(source_id_text := str(source_id))}"  # noqa: F841 - captured translation binding
+                        t"suggestions-duplicate-suggestion-source = duplicate suggestion source: {(source_id_text := str(source_id))}",  # noqa: F841 - captured translation binding
                     )
                 )
             registered[source.id] = source

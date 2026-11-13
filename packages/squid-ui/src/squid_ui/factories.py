@@ -24,7 +24,7 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
-from squid_i18n import NUMBER, md_tr, plain
+from squid_i18n import NUMBER, Text, md_tr, plain, strong
 from squid_ui.assets import FileInput, file
 from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
@@ -121,7 +121,7 @@ from squid_ui.semantic import (
 from squid_ui.tallies import TallyOption
 from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import Message, ResolvedText, TextLike, md
+from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
@@ -216,7 +216,7 @@ def _reject(value: object, origin: str, index: int) -> NoReturn:
             "True is not content; `cond and node` evaluates to the node or to the condition, "
             "so only None and False can stand for an omitted child"
         )
-    elif isinstance(value, str | ResolvedText | Message | Template):
+    elif isinstance(value, str | Text | Template):
         # Only collection factories reject text; container children promote it to a Paragraph.
         detail = "text is not an entry here; build one with the matching factory"
     elif isinstance(value, Mapping):
@@ -236,7 +236,7 @@ def _children[RenderTargetT = RenderTarget, ContextT = object](
     for index, value in enumerate(values):
         if value is None or value is False or value == "":
             continue
-        if isinstance(value, str | ResolvedText | Message | Template):
+        if isinstance(value, str | Text | Template):
             # A paragraph renders on every target, but its own annotation names the base
             # `RenderTarget`, so it cannot be spelled as satisfying an arbitrary one.
             collected.append(cast(LayoutNode[RenderTargetT, ContextT], Paragraph(_text(value))))
@@ -515,7 +515,7 @@ def bullets(
     page: PageOwnership = FIRST_PAGE,
 ) -> List:
     """A bulleted or numbered list; bare text becomes an entry. ``key`` carries its page."""
-    collected = _collect(entries, (ListItem, str, ResolvedText, Template), "sl.bullets()")
+    collected = _collect(entries, (ListItem, str, Text, Template), "sl.bullets()")
     return List(
         tuple(entry if isinstance(entry, ListItem) else bullet(entry) for entry in collected),
         key,
@@ -585,11 +585,11 @@ def grid[ContextT = object](
     return Grid(key, _collect(cells, (GridCell,), "sl.grid()"), columns, on_pick, flexibility)
 
 
-def _tally_label(option: TallyOption) -> Message:
-    label = Message.join("", (md("**"), option.label, md("**"))) if option.mine else option.label
+def _tally_label(option: TallyOption) -> Text:
+    label = strong(option.label) if option.mine else option.label
     count = option.count
     result = md_tr(t"ui-tally-option = {label} — {NUMBER(count)}")
-    return Message.join(" ", (plain(option.emoji), result)) if option.emoji is not None else result
+    return Text.join(" ", (plain(option.emoji), result)) if option.emoji is not None else result
 
 
 def tally[ContextT = object](

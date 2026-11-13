@@ -1,6 +1,6 @@
 """State and results shared across semantic adaptation modules."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from squid_ui import scene
@@ -49,6 +49,7 @@ class LoweringContext:
     states_explored: int = 0
     search_fallback: bool = False
     panel_depth: int = 0
+    escape_text: Callable[[str], str] | None = None
 
 
 @dataclass(frozen=True, slots=True)

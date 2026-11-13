@@ -27,7 +27,7 @@ from squid.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH_ANY,
 )
 from squid_i18n import md_tr
-from squid_ui.text import Message
+from squid_ui.text import Text
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -156,7 +156,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
             await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
 
 
-def _missing_creator_page(user: str) -> Message:
+def _missing_creator_page(user: str) -> Text:
     return md_tr(t"bot-verify-doesn-t-have-a-creator-page = {user} doesn't have a creator page.")
 
 

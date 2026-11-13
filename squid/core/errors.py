@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import ClassVar, Self, override
 
 from squid.core.i18n import tr
-from squid_i18n import Markup, Message, source_text
+from squid_i18n import Text, source_text
 
 type JSONValue = bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
 
@@ -81,26 +81,26 @@ class SquidError(Exception):
     Callers must choose safe public messages; this class does not redact them.
     """
 
-    default_message: ClassVar[str | Message] = tr(
+    default_message: ClassVar[str | Text] = tr(
         t"core-errors-an-application-error-occurred = An application error occurred."
     )
-    default_title: ClassVar[str | Message] = tr(t"core-errors-application-error = Application error")
+    default_title: ClassVar[str | Text] = tr(t"core-errors-application-error = Application error")
     default_code: ClassVar[ErrorCode] = ErrorCode.INTERNAL_ERROR
     default_resource: ClassVar[str | None] = None
     default_developer_action: ClassVar[str | None] = None
-    default_end_user_action: ClassVar[str | Message | None] = None
+    default_end_user_action: ClassVar[str | Text | None] = None
 
     def __init__(
         self,
-        message: str | Message | None = None,
+        message: str | Text | None = None,
         *,
         code: ErrorCode | None = None,
         resource: str | None = None,
         context: Mapping[str, JSONValue] | None = None,
         public_context: Mapping[str, JSONValue] | None = None,
         developer_action: str | None = None,
-        end_user_action: str | Message | None = None,
-        title: str | Message | None = None,
+        end_user_action: str | Text | None = None,
+        title: str | Text | None = None,
     ) -> None:
         self.message = message or self.default_message
         self.title = title or self.default_title
@@ -117,8 +117,8 @@ class SquidError(Exception):
         return self.backend_detail()
 
     def _rendered_message(self) -> str:
-        if isinstance(self.message, Message):
-            return source_text(self.message, markup=Markup.PLAIN)
+        if isinstance(self.message, Text):
+            return source_text(self.message, format="plain")
         return self.message
 
     def backend_detail(self) -> str:
@@ -131,9 +131,9 @@ class SquidError(Exception):
         separator = "\n" if "\n" in message else " "
         return f"{message}{separator}{self.developer_action}"
 
-    def public_text(self) -> Message:
+    def public_text(self) -> Text:
         """Return the message and end-user action, translated when the reader's locale is known."""
-        return Message.join(" ", (part for part in (self.message, self.end_user_action) if part))
+        return Text.join(" ", (part for part in (self.message, self.end_user_action) if part))
 
     def public_detail(self) -> str:
         """Render `public_text` in the current locale, for callers that need a string now."""
@@ -144,9 +144,9 @@ class SquidError(Exception):
         *,
         context: Mapping[str, JSONValue] | None = None,
         public_context: Mapping[str, JSONValue] | None = None,
-        message: str | Message | None = None,
+        message: str | Text | None = None,
         developer_action: str | None = None,
-        end_user_action: str | Message | None = None,
+        end_user_action: str | Text | None = None,
     ) -> Self:
         """Update this exception in place and return it without replacing its traceback.
 

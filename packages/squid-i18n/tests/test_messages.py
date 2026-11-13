@@ -1,6 +1,5 @@
 """Declaration, binding, formatting, and rendering contracts."""
 
-from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -12,10 +11,10 @@ from squid_i18n import (
     DeclarationError,
     Localization,
     Markup,
-    Message,
     ResolutionError,
-    discord_md,
+    Text,
     localization_scope,
+    md,
     md_tr,
     plain,
     resolve_text,
@@ -26,9 +25,9 @@ from squid_i18n import (
 
 def test_values_remain_data_and_attributes_share_bindings() -> None:
     name = "}\ninjected = @everyone *x*"
-    message = md_tr(t"greeting = Hello {name}\n    .label = Label {name}")
-    assert source_text(message) == "Hello \\}\ninjected = @\u200beveryone \\*x\\*"
-    assert source_text(message.attribute("label")).startswith("Label \\}")
+    message = tr(t"greeting = Hello {name}\n    .label = Label {name}", markdown=True)
+    assert source_text(message) == "Hello }\ninjected = @everyone *x*"
+    assert source_text(message.attribute("label")).startswith("Label }")
     with pytest.raises(DeclarationError, match="Unknown attribute"):
         message.attribute("missing")
     with pytest.raises(TypeError):
@@ -71,8 +70,8 @@ def test_walrus_binding_and_nested_messages() -> None:
     assert count == 2
     message = tr(t"outer = [{caption}]")
     assert source_text(message) == "[2 items]"
-    assert source_text(Message.join(" / ", [caption, plain("*literal*")])) == "2 items / *literal*"
-    trusted = discord_md("**safe**")
+    assert source_text(Text.join(" / ", [caption, plain("*literal*")])) == "2 items / *literal*"
+    trusted = md("**safe**")
     assert source_text(tr(t"trusted = {trusted}")) == "**safe**"
 
 
@@ -84,7 +83,7 @@ def test_translation_is_deferred_and_source_text_ignores_reader_locale() -> None
         assert message.resolve() == "你好 Alex"
         assert source_text(message) == "Hello Alex"
         assert message.attribute("label").resolve() == "Label"
-    assert source_text(replace(message, markup=Markup.PLAIN)) == "Hello Alex"
+    assert source_text(message, format="plain") == "Hello Alex"
 
 
 def test_string_selector_uses_unescaped_value() -> None:
@@ -149,7 +148,7 @@ def test_plain_diagnostics_remain_plain_through_nested_compositions() -> None:
     name = "*name* @everyone"
     child = tr(t"child = {name}")
     parent = tr(t"parent = {child}") + child
-    assert source_text(parent, markup=Markup.PLAIN) == "*name* @everyone*name* @everyone"
+    assert source_text(parent, format="plain") == "*name* @everyone*name* @everyone"
 
 
 def test_multiline_declarations_preserve_newlines_and_blank_lines() -> None:
@@ -168,29 +167,32 @@ def test_multiline_declarations_preserve_newlines_and_blank_lines() -> None:
 def test_plain_and_markdown_declarations_have_explicit_interpolation_rules() -> None:
     name = "*Ada* @everyone"
     literal = tr(t"plain-greeting = Hello {name}")
-    formatted = md_tr(t"markdown-greeting = **Hello** {name}")
+    formatted = tr(t"markdown-greeting = **Hello** {name}", markdown=True)
 
     assert resolve_text(literal, Localization()).markup is Markup.PLAIN
     assert source_text(literal) == "Hello *Ada* @everyone"
     assert resolve_text(formatted, Localization()).markup is Markup.MARKDOWN
-    assert source_text(formatted) == "**Hello** \\*Ada\\* @\u200beveryone"
+    assert source_text(formatted) == "**Hello** \\*Ada\\* @everyone"
 
 
 def test_authored_fluent_string_literals_keep_markdown_but_bindings_stay_literal() -> None:
     name = "*Ada* @everyone"
-    message = md_tr(t'authored-star = {{ "*" }}*Hello** {name}')
+    message = tr(t'authored-star = {{ "*" }}*Hello** {name}', markdown=True)
 
-    assert source_text(message) == "**Hello** \\*Ada\\* @\u200beveryone"
+    assert source_text(message) == "**Hello** \\*Ada\\* @everyone"
 
 
 def test_markdown_selectors_compare_original_bindings_before_escaping_output() -> None:
     state = "needs-review"
-    message = md_tr(t"""markdown-status = {{ {state} ->
+    message = tr(
+        t"""markdown-status = {{ {state} ->
         [needs-review] {state}
        *[other] wrong
-    }}""")
+    }}""",
+        markdown=True,
+    )
 
-    assert source_text(message) == r"needs\-review"
+    assert source_text(message) == "needs-review"
 
 
 def test_explicit_keys_and_embedded_keys_have_the_same_identity() -> None:
@@ -206,3 +208,12 @@ def test_explicit_keys_and_embedded_keys_have_the_same_identity() -> None:
 def test_a_key_cannot_be_supplied_twice() -> None:
     with pytest.raises(DeclarationError, match="not both"):
         tr("greeting = Hello", key="greeting")
+
+
+def test_markdown_shorthand_uses_the_same_deferred_text() -> None:
+    name = "*Ada*"
+    shorthand = md_tr(t"Hello **{name}**", key="hello")
+    explicit = tr(t"Hello **{name}**", key="hello", markdown=True)
+    assert shorthand == explicit
+    locale = Localization("fr", ("hello = **Bonjour** { $name }",))
+    assert resolve_text(shorthand, locale).content == r"**Bonjour** \*Ada\*"

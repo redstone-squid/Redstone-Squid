@@ -60,7 +60,9 @@ class FieldRegistry:
                 key = name.casefold()
                 if key in self._fields:
                     raise InvalidStateError(
-                        md_tr(t"search-duplicate-search-field = duplicate search field or alias: {name}")
+                        md_tr(
+                            t"search-duplicate-search-field = duplicate search field or alias: {name}",
+                        )
                     )
                 self._fields[key] = field
 
@@ -99,7 +101,9 @@ class FieldRegistry:
             except ValueError as error:
                 field_name = field.name
                 raise ValidationError(
-                    md_tr(t"search-expects-iso-date = {field_name} expects an ISO-8601 date or timestamp")
+                    md_tr(
+                        t"search-expects-iso-date = {field_name} expects an ISO-8601 date or timestamp",
+                    )
                 ) from error
         lowered = raw.casefold()
         if lowered in {"true", "yes", "1"}:

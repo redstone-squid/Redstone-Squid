@@ -198,7 +198,7 @@ class AccountIdentity(CreatedAtMixin, Base, kw_only=True):
                     raise ValidationError(
                         md_tr(
                             t"accounts-discord-identity-subjects = Discord "
-                            t"identity subjects must be positive signed 64-bit integers, got {(subject_text := repr(subject))}."
+                            t"identity subjects must be positive signed 64-bit integers, got {(subject_text := repr(subject))}.",
                         )
                     )
                 return cls(provider=provider, subject=subject, display_name=display_name, verified_at=verified_at)
@@ -207,7 +207,7 @@ class AccountIdentity(CreatedAtMixin, Base, kw_only=True):
                     raise ValidationError(
                         md_tr(
                             t"accounts-bedrock-xuids-unsigned = Bedrock XUIDs must "
-                            t"be unsigned 64-bit integers, got {(subject_text := repr(subject))}."
+                            t"be unsigned 64-bit integers, got {(subject_text := repr(subject))}.",
                         )
                     )
                 return cls(provider=provider, subject=subject, display_name=display_name, verified_at=verified_at)
@@ -220,7 +220,7 @@ class AccountIdentity(CreatedAtMixin, Base, kw_only=True):
                     raise ValidationError(
                         md_tr(
                             t"accounts-java-identity-subjects = Java identity "
-                            t"subjects must be UUIDs, got {(subject_text := repr(subject))}."  # noqa: F841 - captured translation binding
+                            t"subjects must be UUIDs, got {(subject_text := repr(subject))}.",  # noqa: F841 - captured translation binding
                         )
                     ) from error
                 return cls(provider=provider, subject=canonical, display_name=display_name, verified_at=verified_at)

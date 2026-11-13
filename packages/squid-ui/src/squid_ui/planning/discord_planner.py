@@ -465,6 +465,7 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
                 session=self.presentation,
                 pages=broker,
                 capabilities=self.target.capabilities,
+                escape_text=self.target.adapter.escape_text,
                 strategies=dict(cached.strategies),
                 fallbacks=dict(cached.fallbacks),
             )
@@ -544,6 +545,7 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
             session=self.presentation,
             pages=broker,
             capabilities=self.target.capabilities,
+            escape_text=self.target.adapter.escape_text,
             strategies=strategies,
             fallbacks=fallbacks,
         )

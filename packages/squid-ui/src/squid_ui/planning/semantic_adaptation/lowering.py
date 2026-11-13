@@ -7,7 +7,7 @@ Strategy discovery lives in `decisions`; comparing complete layouts belongs to
 the Discord planner.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import assert_never, cast
 
@@ -202,6 +202,7 @@ def lower_semantics(
     pages: CursorCoordinator | None = None,
     capabilities: frozenset[str] = frozenset(),
     search_budget: int = DEFAULT_SEARCH_BUDGET,
+    escape_text: Callable[[str], str] | None = None,
     strategies: Mapping[str, str] | None = None,
     fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticLowering:
@@ -226,6 +227,7 @@ def lower_semantics(
         {} if strategies is None else strategies,
         {} if fallbacks is None else fallbacks,
         search_budget,
+        escape_text=escape_text,
     )
     lowered: list[Node] = []
     for index, node in enumerate(nodes):

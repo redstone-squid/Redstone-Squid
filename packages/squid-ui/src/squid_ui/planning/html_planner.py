@@ -68,6 +68,7 @@ from squid_ui.planning.structure import (
 )
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_allocation import truncate_text
+from squid_ui.planning.text_nodes import html_text
 from squid_ui.presentation import (
     ActivePagers,
     CursorState,
@@ -217,9 +218,8 @@ class _Compiler:
     updates: list[SessionUpdate] = field(default_factory=list)
     states_explored: int = 1
 
-    def text(self, value: TextLike) -> scene.HtmlText:
-        resolved = resolve_text(value, self.localization)
-        return scene.HtmlText(resolved.content, resolved.markup)
+    def text(self, value: TextLike) -> scene.HtmlNode:
+        return html_text(resolve_text(value, self.localization).nodes)
 
     def element(
         self,
@@ -712,7 +712,7 @@ class _Compiler:
                 assert_never(unreachable)
 
     def _resolved(self, value: TextLike) -> str:
-        return resolve_text(value, self.localization).content
+        return resolve_text(value, self.localization).plain()
 
     def _fork(self) -> _Compiler:
         return replace(

@@ -6,7 +6,7 @@ from squid.accounts.errors import AccountAlreadyLinkedError
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
 from squid.core.i18n import localization_for, tr
-from squid_ui.text import Message, localization_scope
+from squid_ui.text import Text, localization_scope
 
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -87,7 +87,7 @@ def test_deferred_message_params_render_in_backend_and_public_detail() -> None:
     error = RestrictionNotFoundError("no-pistons")
 
     assert error.backend_detail() == "Restriction 'no-pistons' does not exist."
-    assert error.public_detail() == "Restriction 'no\\-pistons' does not exist."
+    assert error.public_detail() == "Restriction 'no-pistons' does not exist."
 
 
 def test_ambient_title_and_public_detail_fall_back_to_english() -> None:
@@ -96,7 +96,7 @@ def test_ambient_title_and_public_detail_fall_back_to_english() -> None:
     error = _BuildNotFoundError(42)
 
     with localization_scope(localization_for("en")):
-        assert isinstance(error.title, Message)
+        assert isinstance(error.title, Text)
         assert error.title.resolve() == "Resource not found"
         assert error.public_detail() == "Build not found. Check the build ID and try again."
     # Unsupported locales bind the English catalog rather than erroring.

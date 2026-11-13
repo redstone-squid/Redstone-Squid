@@ -627,7 +627,7 @@ class AccountRepository:
                     # rather than telling a reviewer to ask staff.
                     end_user_action=md_tr(
                         t"accounts-claim-reassign-required = "
-                        t"Approve with `reassign: True` to move the name to the claimant."
+                        t"Approve with `reassign: True` to move the name to the claimant.",
                     ),
                 )
             alias.account_id = claim.account_id

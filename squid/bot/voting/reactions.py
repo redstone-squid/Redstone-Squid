@@ -33,7 +33,7 @@ from squid.voting.application.ports import VoteActorResolver
 from squid.voting.application.recount import BallotRecounter
 from squid.voting.domain import CastVoteResult, VoteRejection, VoteSessionSnapshot
 from squid_i18n import md_tr
-from squid_ui.text import Message, discord_md, localization_scope
+from squid_ui.text import Text, localization_scope, mention
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -287,11 +287,13 @@ class VoteReactionHandler:
         await self._remove_reaction(message, emoji, user)
         locale = await resolve_locale(message, self.bot.services.settings)
         with localization_scope(localization_for(locale)):
-            payload = render_payload([text_node(_unconsented_vote_message(user.mention))])
+            payload = render_payload([text_node(_unconsented_vote_message(user.id))])
         with contextlib.suppress(discord.HTTPException):
             await send_to(message.channel, delete_after=30)(payload)
 
 
-def _unconsented_vote_message(user: object) -> Message:
-    user = discord_md(str(user))
-    return md_tr(t"vote-consent-required = {user}, voting stores your Discord user ID. Run `/account consent` first.")
+def _unconsented_vote_message(user_id: int) -> Text:
+    user = mention(user_id)
+    return md_tr(
+        t"vote-consent-required = {user}, voting stores your Discord user ID. Run `/account consent` first.",
+    )

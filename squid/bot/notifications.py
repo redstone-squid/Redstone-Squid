@@ -20,7 +20,7 @@ from squid.notifications.domain import NotificationKind
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
 from squid_i18n import md_tr
-from squid_ui.text import Message, localization_scope
+from squid_ui.text import Text, localization_scope
 
 logger = logging.getLogger(__name__)
 
@@ -110,26 +110,30 @@ class NotificationCog(sd.Cog[Any]):
         return await ensure_consented_account(request, self.bot.services.accounts)
 
 
-def delivery_message(delivery: PendingNotificationDelivery) -> Message:
+def delivery_message(delivery: PendingNotificationDelivery) -> Text:
     """Build deferred DM text from a materialized notification payload."""
     build_id = delivery.payload.get("build_id")
     if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
         if isinstance(build_id, int):
-            return md_tr(t"""
+            return md_tr(
+                t"""
                 notifications-build-review-link =
                     A new build is awaiting staff review.
                     Open it in Discord with `/build browse id:{(build_id_text := str(build_id))}`.
-                """)  # noqa: F841 - captured text identifier
+                """,  # noqa: F841 - captured translation binding
+            )
         return tr(t"notifications-build-awaiting-review = A new build is awaiting staff review.")
     if delivery.kind is NotificationKind.RECORD_GAINED:
         raw_records = delivery.payload.get("records", [])
         count = len(raw_records) if isinstance(raw_records, list) else 1
-        return md_tr(t"""
+        return md_tr(
+            t"""
             bot-notifications-a-credited-build-gained-record = {{ $count ->
                 [one] A credited build gained {count} record.
                *[other] A credited build gained {count} records.
             }}
-            """)
+            """,
+        )
     if delivery.kind is NotificationKind.BUILD_CONFIRMED:
         return tr(t"bot-notifications-your-build-was-confirmed = Your build was confirmed.")
     if delivery.kind is NotificationKind.BUILD_DENIED:

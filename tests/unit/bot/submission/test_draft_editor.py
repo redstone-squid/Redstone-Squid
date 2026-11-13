@@ -418,7 +418,7 @@ async def test_saved_ticks_show_as_seconds_and_prefill_the_modal_losslessly() ->
     editor = await open_editor(services, drafts)
     with transaction():
         await editor.workspace.save_values({"opening_time": 7})
-    assert "Opening time: 0\\.35s" in rendered_text(editor)
+    assert "Opening time: 0.35s" in rendered_text(editor)
     event = press()
     await editor._edit_section("door_timing", event)
     entry = next(item for item in event.present_form.call_args.args[0].items if item.key == "opening_time")
@@ -456,7 +456,7 @@ async def test_picker_opens_on_the_page_of_the_current_choice() -> None:
     with transaction():
         await child._select_value("source_version", Mock(spec=sd.SelectionEvent, values=("Java 1.1",)))
     assert editor.workspace.draft.snapshot.answers["source_version"] == "Java 1.1"
-    assert "Minecraft version: Java 1\\.1" in rendered_text(editor)
+    assert "Minecraft version: Java 1.1" in rendered_text(editor)
 
 
 async def test_files_are_listed_with_a_status_only_when_they_need_attention() -> None:
@@ -470,8 +470,8 @@ async def test_files_are_listed_with_a_status_only_when_they_need_attention() ->
     )
     editor = await open_editor(services, drafts)
     text = rendered_text(editor)
-    assert "**door\\.litematic** · Schematic\n" in text
-    assert "**clip\\.mp4** · Video · ⚠️ Upload failed" in text
+    assert "**door.litematic** · Schematic\n" in text
+    assert "**clip.mp4** · Video · ⚠️ Upload failed" in text
     assert "old" not in text
 
     files = FilesEditorScreen(editor.workspace)

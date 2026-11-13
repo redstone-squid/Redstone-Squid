@@ -6,15 +6,15 @@ from typing import Any
 
 from discord import app_commands
 
-from squid_i18n import Message
+from squid_i18n import Text
 from squid_ui_discord.i18n import to_locale_str
 
-type CommandText = str | app_commands.locale_str | Message
+type CommandText = str | app_commands.locale_str | Text
 type AutocompleteCallback = Callable[..., Coroutine[Any, Any, list[app_commands.Choice[Any]]]]
 
 
 def command_text(value: CommandText) -> str | app_commands.locale_str:
-    return to_locale_str(value) if isinstance(value, Message) else value
+    return to_locale_str(value) if isinstance(value, Text) else value
 
 
 @dataclass(frozen=True, slots=True)

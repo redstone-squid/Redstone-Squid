@@ -42,7 +42,7 @@ class PublicServerProfile:
                 raise ValidationError(
                     md_tr(
                         t"minecraft-auth-server-profile-length = Server "
-                        t"profile {label} must contain 1 to {maximum} characters."
+                        t"profile {label} must contain 1 to {maximum} characters.",
                     )
                 )
         if self.sponsor_opt_in and not self.enabled:

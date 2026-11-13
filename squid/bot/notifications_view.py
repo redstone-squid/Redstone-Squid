@@ -422,17 +422,19 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         if not self._settings.subscriptions:
             return tr(t"bot-notifications-view-nothing-yet = _Nothing yet._")
         lines: list[sl.TextLike] = [
-            md_tr(t"""
+            md_tr(
+                t"""
                 bot-notifications-subscription =
                     {{ "*" }}*{(label := self.describe(subscription))}**
                     {(detail := self.detail(subscription))}
-                """)  # noqa: F841 - captured Fluent binding
+                """,  # noqa: F841 - captured translation binding
+            )
             for subscription in self.subscriptions
         ]
         hidden = len(self._settings.subscriptions) - len(self.subscriptions)
         if hidden > 0:
             lines.append(md_tr(t"bot-notifications-remainder = …and {hidden} more."))
-        return sl.text.Message.join("\n", lines)
+        return sl.text.Text.join("\n", lines)
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
         return _kind_label(subscription.kind)

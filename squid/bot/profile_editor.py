@@ -25,7 +25,7 @@ from squid.core.errors import ValidationError
 from squid_i18n import md_tr
 
 
-def _link_count(count: int) -> sl.text.Message:
+def _link_count(count: int) -> sl.text.Text:
     return md_tr(t"account-view-links = {count} links")
 
 

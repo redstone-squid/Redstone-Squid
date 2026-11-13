@@ -115,19 +115,23 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
     credit = preview.credit
     if credit is None:
         username = preview.username
-        return md_tr(t"consent-no-credits-notice = No build credits **{username}** yet, so nothing is reattributed.")
+        return md_tr(
+            t"consent-no-credits-notice = No build credits **{username}** yet, so nothing is reattributed.",
+        )
     count = credit.build_count
-    builds = md_tr(t"""
+    builds = md_tr(
+        t"""
         bot-consent-build = {{ $count ->
             [one] {count} build
            *[other] {count} builds
         }}
-        """)
+        """,
+    )
     if credit.is_contested:
         name = credit.name
         return md_tr(
             t"consent-existing-credit-warning = **{name}** ({builds}) is already credited to "
-            t"another creator, so agreeing moves nothing and opens a claim for staff to review."
+            t"another creator, so agreeing moves nothing and opens a claim for staff to review.",
         )
     name = credit.name
     return md_tr(t"consent-credit-attribution = **{name}** ({builds}) becomes attributed to your account.")
@@ -153,12 +157,14 @@ def _consent_prompt(
                 CardField(
                     tr(t"consent-discord-account = Discord account"),
                     md_tr(
-                        t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"
+                        t"consent-value-2 = {(user_mention := sl.mention(user_id))} (`{(user_id_text := str(user_id))}`)",
                     ),
                 ),
                 CardField(
                     tr(t"consent-consent-recorded = Consent recorded"),
-                    md_tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
+                    md_tr(
+                        t"consent-notice-versioning = Notice {version}, timed at the moment you agree.",
+                    ),
                 ),
             ),
             accept_label=tr(t"consent-agree = Agree"),
@@ -176,15 +182,19 @@ def _consent_prompt(
         fields=(
             CardField(
                 tr(t"consent-minecraft-account = Minecraft account"),
-                md_tr(t"""
+                md_tr(
+                    t"""
                     bot-consent-value =
                         {{ "*" }}*{username}**
                         `{uuid}`
-                    """),
+                    """,
+                ),
             ),
             CardField(
                 tr(t"consent-discord-account = Discord account"),
-                md_tr(t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"),  # noqa: F841 - captured text identifier
+                md_tr(
+                    t"consent-value-2 = {(user_mention := sl.mention(user_id))} (`{(user_id_text := str(user_id))}`)",  # noqa: F841 - captured translation binding
+                ),
             ),
             CardField(tr(t"consent-build-credit = Build credit"), _link_credit_value(preview)),
             CardField(

@@ -174,8 +174,8 @@ def test_catalog_check_rejects_edited_english_resource(tmp_path: Path) -> None:
 
 def test_markdown_declarations_and_imported_aliases_extract_without_execution() -> None:
     found = extract(
-        "from squid_i18n import md_tr as translated_markdown\n"
-        'md_tr(t"ready = **Ready**")\n'
+        "from squid_i18n import tr as translated_markdown\n"
+        'tr(t"ready = **Ready**")\n'
         'translated_markdown(t"hello = Hello {name}")'
     )
 
@@ -194,3 +194,15 @@ def test_literal_string_and_explicit_key_extraction_match_embedded_declarations(
 def test_dynamic_declarations_are_not_extractable(source: str) -> None:
     with pytest.raises(DeclarationError):
         extract(source)
+
+
+@pytest.mark.parametrize("constructor", ["tr", "md_tr"])
+def test_explicit_key_and_markdown_shorthand_extract(constructor: str) -> None:
+    result = extract(f'from squid_i18n import {constructor} as translate\ntranslate("Save", key="save")')
+    assert result[0].declaration.identifier == "save"
+
+
+@pytest.mark.parametrize("option", ['markdown="discord"', "markdown=flag", 'format="discord"'])
+def test_source_format_is_static_and_has_no_target_dialects(option: str) -> None:
+    with pytest.raises(DeclarationError):
+        extract(f'tr("Hello", key="hello", {option})')

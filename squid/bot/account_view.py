@@ -232,7 +232,9 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         removed_label = _identity_label(identity)
         await event.notice(
-            md_tr(t"account-identity-unlinked = Unlinked {removed_label}. Any build credit you hold is unaffected.")
+            md_tr(
+                t"account-identity-unlinked = Unlinked {removed_label}. Any build credit you hold is unaffected.",
+            )
         )
 
     async def _edit_page(self, event: sd.PressEvent) -> None:
@@ -324,7 +326,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         identity_label = _identity_label(identity)
         warning = md_tr(
             t"account-linked-identity-remove-warning = Remove {identity_label}? Any build credit you hold "
-            t"is unaffected."
+            t"is unaffected.",
         )
         if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._actor_id:
             consequence = tr(

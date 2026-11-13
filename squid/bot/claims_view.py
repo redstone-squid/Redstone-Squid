@@ -123,7 +123,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return (panel,)
         return (panel, sl.action_controls(*buttons, key="claim-actions"))
 
-    def _page_footer(self, page: int, pages: int) -> sl.text.Message:
+    def _page_footer(self, page: int, pages: int) -> sl.text.Text:
         total = len(self._claims)
         return md_tr(t"claims-view-page-of-in-total = Page {page} of {pages} — {total} in total")
 
@@ -175,11 +175,13 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return
         await self._reload()
         name = resolved.alias_name
-        claimant = sl.md(present_claimant(resolved))
+        claimant = present_claimant(resolved)
         message = (
             md_tr(t"claims-view-credited-to = Credited **{name}** to {claimant}.")
             if approve
-            else md_tr(t"claims-closed-uncredited = Closed {claimant}'s claim on **{name}** without crediting it.")
+            else md_tr(
+                t"claims-closed-uncredited = Closed {claimant}'s claim on **{name}** without crediting it.",
+            )
         )
         await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
 
@@ -193,17 +195,19 @@ def _claim_entry(claim: AliasClaim) -> sl.TextLike:
     claim_id = claim.id
     name = claim.alias_name
     heading = md_tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
-    claimant = sl.md(present_claimant(claim))
+    claimant = present_claimant(claim)
     age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
     detail = md_tr(t"claims-view-opened = {claimant} — opened {age}")
-    return md_tr(t"""
+    return md_tr(
+        t"""
         bot-claims-view-value =
             {{ "*" }}*{heading}**
             {detail}
-        """)
+        """,
+    )
 
 
-def _claim_label(claim: AliasClaim) -> sl.text.Message:
+def _claim_label(claim: AliasClaim) -> sl.text.Text:
     claim_id = claim.id
     name = claim.alias_name
     return md_tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier

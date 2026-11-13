@@ -222,7 +222,9 @@ class RecordsScreen(sd.Screen):
         definitions = summary.definitions
         resolved = summary.resolved
         await event.notice(
-            md_tr(t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.")
+            md_tr(
+                t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.",
+            )
         )
 
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
@@ -242,7 +244,7 @@ class RecordsScreen(sd.Screen):
         await event.notice(
             md_tr(
                 t"records-rebuild-summary = Rebuilt {definitions} "
-                t"definitions; {resolved} resolved; {unresolved} awaiting evidence."
+                t"definitions; {resolved} resolved; {unresolved} awaiting evidence.",
             )
         )
 

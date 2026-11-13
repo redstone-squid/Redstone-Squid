@@ -83,7 +83,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
         count = len(result.unresolved_account_ids)
         text += " " + md_tr(
             t"vote-unresolved-voter-cache-retained = {count} voter(s) could not be resolved, "
-            t"so their cached weight was kept."
+            t"so their cached weight was kept.",
         )
     await request.respond(text_node(text), audience="personal")
 

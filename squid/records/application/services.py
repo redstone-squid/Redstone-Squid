@@ -367,7 +367,7 @@ class RecordService:
             raise ValidationError(
                 md_tr(
                     t"records-record-category-category = Record category {(definition_id_text := str(definition_id))} is "  # noqa: F841 - captured text identifier
-                    t"a {actual} category, not {requested}."
+                    t"a {actual} category, not {requested}.",
                 )
             )
         return await self.lookup_or_materialize(
@@ -558,7 +558,7 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
         if value not in {"true", "false"}:
             raise InvalidStateError(
                 md_tr(
-                    t"records-invalid-boolean-category = Invalid boolean category value {(value_text := repr(value))}."  # noqa: F841 - captured translation binding
+                    t"records-invalid-boolean-category = Invalid boolean category value {(value_text := repr(value))}.",  # noqa: F841 - captured translation binding
                 )
             )
         return value == "true"
@@ -582,7 +582,9 @@ def _base_key(source: CandidateBuild) -> str:
         )
     build_id = source.candidate.build_id
     raise DataIntegrityError(
-        md_tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
+        md_tr(
+            t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.",  # noqa: F841 - captured translation binding
+        )
     )
 
 
@@ -611,7 +613,9 @@ def _category_with_restrictions(
         )
     build_id = source.candidate.build_id
     raise DataIntegrityError(
-        md_tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
+        md_tr(
+            t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.",  # noqa: F841 - captured translation binding
+        )
     )
 
 
@@ -622,7 +626,9 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
         return tuple(EXTENDER_TIMING_METHODS)
     kind_name = kind.value
     raise InvalidStateError(
-        md_tr(t"records-fastest-records-unsupported = Fastest records are not supported for {kind_name}.")
+        md_tr(
+            t"records-fastest-records-unsupported = Fastest records are not supported for {kind_name}.",
+        )
     )
 
 

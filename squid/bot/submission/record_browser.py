@@ -55,7 +55,9 @@ def record_browser(
             sl.action_controls(
                 *(
                     sl.action_control(
-                        md_tr(t"record-browse-open-holder = Open build #{(build_id_text := str(build_id))}"),  # noqa: F841
+                        md_tr(
+                            t"record-browse-open-holder = Open build #{(build_id_text := str(build_id))}",  # noqa: F841 - captured translation binding
+                        ),
                         partial(open_build, build_id),
                         key=f"holder-{build_id}",
                     )

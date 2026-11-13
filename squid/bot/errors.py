@@ -34,8 +34,8 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
-from squid_i18n import NUMBER, md_tr
-from squid_ui.text import NEUTRAL, Message, TextLike, localization_scope
+from squid_i18n import NUMBER, Text, md_tr
+from squid_ui.text import NEUTRAL, TextLike, localization_scope
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ def _present_missing_nodes(error: PermissionNodeRequired) -> _NoticeDraft:
     descriptions are translated, so a refusal reads as "you need this capability"
     rather than as a tier the user has no way to look up.
     """
-    described = Message.join(
+    described = Text.join(
         "\n", (f"`{name}` — " + CATALOGUE[name].description for name in error.nodes if name in CATALOGUE)
     )
     if error.forbidden:
@@ -195,7 +195,9 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
         # Give Discord users an in-bot recovery path when an operation requires consent.
         return _NoticeDraft(
             tr(t"errors-consent-required = Consent required"),
-            md_tr(t"errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it."),
+            md_tr(
+                t"errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it.",
+            ),
         )
     if isinstance(error, (DomainError, ServiceUnavailableError)):
         return _NoticeDraft(error.title, error.public_text())
@@ -221,7 +223,7 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
         return _NoticeDraft(
             tr(t"errors-command-on-cooldown = Command on cooldown"),
             md_tr(
-                t"errors-try-again-in-seconds = Try again in {NUMBER(seconds, minimum_fraction_digits=1, maximum_fraction_digits=1)} seconds."
+                t"errors-try-again-in-seconds = Try again in {NUMBER(seconds, minimum_fraction_digits=1, maximum_fraction_digits=1)} seconds.",
             ),
         )
     if isinstance(error, commands.MaxConcurrencyReached):
@@ -269,9 +271,9 @@ def _resolved(text: TextLike) -> str:
     return text if isinstance(text, str) else text.resolve()
 
 
-def _unexpected_error_detail(error_id: str) -> Message:
+def _unexpected_error_detail(error_id: str) -> Text:
     return md_tr(
-        t"errors-unexpected-reference = An unexpected error occurred. Reference: `{(error_id_text := str(error_id))}`"  # noqa: F841 - captured translation binding
+        t"errors-unexpected-reference = An unexpected error occurred. Reference: `{(error_id_text := str(error_id))}`",  # noqa: F841 - captured translation binding
     )
 
 

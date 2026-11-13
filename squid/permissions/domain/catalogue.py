@@ -22,7 +22,7 @@ from squid.permissions.domain.models import (
     Tag,
     UnknownPermissionNodeError,
 )
-from squid_i18n import Message
+from squid_i18n import Text
 
 MIN_SEGMENTS = 2
 """`<domain>.<verb>` is the shallowest a node may be. A single bare segment would
@@ -86,7 +86,7 @@ class CatalogueBuilder:
         self,
         name: str,
         scope: NodeScope,
-        description: Message,
+        description: Text,
         *,
         default: Default = Default.DENY,
         tags: Sequence[Tag] = (),

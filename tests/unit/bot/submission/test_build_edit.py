@@ -107,7 +107,7 @@ async def test_names_outside_the_catalogue_are_listed_and_can_only_be_removed() 
     await screen.projection.reload()
     workspace = screen.workspace
 
-    assert "Not in the catalogue: Hand\\-wired" in rendered(screen)
+    assert "Not in the catalogue: Hand-wired" in rendered(screen)
     # Kept names are written back, so an unrelated save never drops them.
     with sl.runtime.transaction():
         await workspace.save_values({"display_name": "Door"})
@@ -119,4 +119,4 @@ async def test_names_outside_the_catalogue_are_listed_and_can_only_be_removed() 
     assert workspace.unresolved == UnresolvedTaxonomy()
     assert workspace.patch().miscellaneous_restrictions == ["Observerless"]
     screen.confirming = True
-    assert "Removed: Hand\\-wired" in rendered(screen)
+    assert "Removed: Hand-wired" in rendered(screen)

@@ -117,7 +117,7 @@ class SubmissionAttentionIssue:
             field_id = self.field_id
             raise ValidationError(
                 md_tr(
-                    t"submissions-invalid-submission-attention = invalid submission attention field ID: {(field_id_text := str(field_id))}"  # noqa: F841 - captured translation binding
+                    t"submissions-invalid-submission-attention = invalid submission attention field ID: {(field_id_text := str(field_id))}",  # noqa: F841 - captured translation binding
                 )
             )
 
@@ -340,7 +340,7 @@ class NormalizedSubmission:
             raise ValidationError(
                 md_tr(
                     t"submissions-submission-incompatible-category = {category} "
-                    t"submission has incompatible category details"
+                    t"submission has incompatible category details",
                 )
             )
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
@@ -401,7 +401,9 @@ def _require_stable_keys(values: tuple[str, ...], label: str) -> None:
         raise ValidationError(md_tr(t"submissions-keys-unique = {label} keys must be unique"))
     if any(_STABLE_KEY.fullmatch(value) is None for value in values):
         raise ValidationError(
-            md_tr(t"submissions-keys-stable-lowercase = {label} keys must be stable lowercase identifiers")
+            md_tr(
+                t"submissions-keys-stable-lowercase = {label} keys must be stable lowercase identifiers",
+            )
         )
 
 

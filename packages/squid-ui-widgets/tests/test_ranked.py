@@ -38,7 +38,7 @@ def test_a_mounted_ranking_hands_every_row_to_a_controlled_pager() -> None:
     harness = wt.driving(_leaderboard().build_component())
 
     pager = engine.find(harness.nodes, Lines).overflow
-    assert _listing(harness.nodes) == ["1. **Ada** — 30", "2. **Grace** — 20", "3. **Edsger** — 10"]
+    assert _listing(harness.nodes) == ["1\\. **Ada** — 30", "2\\. **Grace** — 20", "3\\. **Edsger** — 10"]
     assert isinstance(pager, Paginate)
     assert pager.key == "leaderboard"
     assert pager.per == 2
@@ -62,9 +62,9 @@ def test_a_routed_ranking_plans_its_page_and_numbers_rows_globally() -> None:
     first = wt.routed(_leaderboard())
     second = wt.routed(_leaderboard(), sp.RankedListState(1))
 
-    assert "1. **Ada** — 30\n2. **Grace** — 20" in first.texts()
+    assert "1\\. **Ada** — 30\n2\\. **Grace** — 20" in first.texts()
     assert any("Page 1 of 2" in text for text in first.texts())
-    assert "3. **Edsger** — 10" in second.texts()
+    assert "3\\. **Edsger** — 10" in second.texts()
     assert any("Page 2 of 2" in text for text in second.texts())
     assert [route.state for route in first.routes] == [sp.RankedListState(0), sp.RankedListState(1)]
 
@@ -93,7 +93,7 @@ def test_a_label_and_value_may_be_read_off_an_arbitrary_entry() -> None:
         ).build_component()
     )
 
-    assert _listing(harness.nodes) == ["1. **Ada** — 30", "2. **Grace** — 20"]
+    assert _listing(harness.nodes) == ["1\\. **Ada** — 30", "2\\. **Grace** — 20"]
 
 
 def test_top_n_caps_the_listing_and_explicit_entries_keep_their_keys() -> None:
@@ -109,7 +109,7 @@ def test_top_n_caps_the_listing_and_explicit_entries_keep_their_keys() -> None:
         ).build_component()
     )
 
-    assert _listing(harness.nodes) == ["1. **Ada** — 30", "2. **Grace** — 20"]
+    assert _listing(harness.nodes) == ["1\\. **Ada** — 30", "2\\. **Grace** — 20"]
 
 
 @pytest.mark.parametrize("kwargs", [{"top_n": 0}, {"page_size": 0}])

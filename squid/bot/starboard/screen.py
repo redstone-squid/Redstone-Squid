@@ -135,7 +135,7 @@ class StarboardScreen(sd.Screen):
                     sl.heading(tr(t"bot-starboard-screen-delete-starboard = Delete starboard")),
                     sl.paragraph(
                         md_tr(
-                            t"starboard-delete-confirmation = Delete **{board_name}** and stop mirroring new entries?"
+                            t"starboard-delete-confirmation = Delete **{board_name}** and stop mirroring new entries?",
                         )
                     ),
                 ),

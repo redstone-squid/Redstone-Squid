@@ -6,6 +6,7 @@ from typing import cast, override
 import pytest
 
 import squid_ui as sl
+from squid_ui import scene
 from squid_ui.semantic import SemanticNode
 from squid_ui_discord import DISCORD_V2_DPY27
 
@@ -44,8 +45,8 @@ class TestNormalization:
         assert node.children == (sl.semantic.Paragraph(sl.plain(t"value: {hostile}")),)
         promoted = node.children[0]
         assert isinstance(promoted, sl.semantic.Paragraph)
-        assert isinstance(promoted.content, sl.text.ResolvedText)
-        assert "*not bold*" in promoted.content.content
+        assert isinstance(promoted.content, sl.text.Text)
+        assert "*not bold*" in sl.text.source_text(promoted.content)
 
     def test_t_strings_are_resolved_in_configuration_text_too(self) -> None:
         name = "a_b"
@@ -316,3 +317,11 @@ class TestRating:
     def test_a_scale_needs_at_least_two_points(self) -> None:
         with pytest.raises(ValueError, match="at least 2"):
             sl.rating(key="stars", maximum=1)
+
+
+def test_literal_whitespace_and_mentions_survive_discord_planning() -> None:
+    value = sl.plain("  a  b\n@everyone <#123>")
+    result = sl.planning.plan(sl.paragraph(value), target=DISCORD_V2_DPY27)
+    node = result.scene.body.children[0]
+    assert isinstance(node, scene.Text)
+    assert node.content == "  a  b\n@\u200beveryone <\u200b#123>"

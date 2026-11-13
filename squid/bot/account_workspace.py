@@ -346,7 +346,7 @@ class AccountWorkspace(sd.Screen):
         alias_name = claim.alias_name
         await event.notice(
             md_tr(
-                t"account-claim-pending-review = Claim #{(claim_id_text := str(claim_id))} for **{alias_name}** is awaiting staff approval."  # noqa: F841 - captured translation binding
+                t"account-claim-pending-review = Claim #{(claim_id_text := str(claim_id))} for **{alias_name}** is awaiting staff approval.",  # noqa: F841 - captured translation binding
             )
         )
 
@@ -356,7 +356,7 @@ class AccountWorkspace(sd.Screen):
         await event.notice(
             md_tr(
                 t"account-merge-code-warning = Merge code: `{code}`. It "
-                t"expires {expiry}. Keep it private: it hands this account over."
+                t"expires {expiry}. Keep it private: it hands this account over.",
             )
         )
 
@@ -372,7 +372,7 @@ class AccountWorkspace(sd.Screen):
         self._merge_decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
             md_tr(
                 t"account-merge-transfer-preview = Move {aliases} creator "
-                t"names, {identities} identities, and {builds} build credits here? This cannot be undone."
+                t"names, {identities} identities, and {builds} build credits here? This cannot be undone.",
             ),
             (
                 sp.DecisionOption("confirm", tr(t"account-workspace-merge-accounts = Merge accounts"), sl.Tone.DANGER),
@@ -393,7 +393,9 @@ class AccountWorkspace(sd.Screen):
         self._merge_decision = None
         await self._rebuild(changed_account_id=result.surviving_account_id)
         await event.source.notice(
-            md_tr(t"account-merge-complete = Merged. `{redirected}` now redirects to your creator page.")
+            md_tr(
+                t"account-merge-complete = Merged. `{redirected}` now redirects to your creator page.",
+            )
         )
 
     def _account_id(self) -> int:

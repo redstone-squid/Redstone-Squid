@@ -135,7 +135,9 @@ def coerce_assignment_value(definition: TagDefinition, raw_value: str | None) ->
         numeric = Decimal(value)
     except InvalidOperation as error:
         raise ValidationError(
-            md_tr(t"tags-expects-number-canonical = {display_name} expects a number in its canonical unit.")
+            md_tr(
+                t"tags-expects-number-canonical = {display_name} expects a number in its canonical unit.",
+            )
         ) from error
     if not numeric.is_finite():
         raise ValidationError(md_tr(t"tags-expects-finite-number = {display_name} expects a finite number."))

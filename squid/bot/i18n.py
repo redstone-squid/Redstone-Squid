@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.settings.application import SettingsService
-from squid_i18n import Localization, Message, localization_scope
+from squid_i18n import Localization, Text, localization_scope
 from squid_ui_discord.contracts import LocalizationSource
 from squid_ui_discord.i18n import to_locale_str as to_locale_str
 from squid_ui_discord.runtime import DiscordUIRuntime
@@ -68,6 +68,6 @@ class SquidAppCommandTranslator(app_commands.Translator):
             return None  # Let discord.py fall back to the source string.
         with localization_scope(localization_for(resolved)):
             message = string.extras.get("fluent_message")
-            if not isinstance(message, Message):
+            if not isinstance(message, Text):
                 return None
             return message.resolve()

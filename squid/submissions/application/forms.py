@@ -32,7 +32,7 @@ from squid.submissions.domain import (
     VisibilityOperator,
     VisibilityRule,
 )
-from squid_i18n import Message, localization_scope
+from squid_i18n import Text, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
@@ -171,7 +171,7 @@ _EDIT_ONLY = frozenset({FormPurpose.EDIT})
 
 def _build_form_manifest(revision: int) -> FormManifest:
     # The manifest is JSON for web clients, so its text is resolved in the requested locale here.
-    localize = Message.resolve
+    localize = Text.resolve
     context_section_id = "provenance" if revision == 2 else "submission_context"
     context_title = (
         tr(t"submissions-application-forms-provenance = About this submission")
@@ -445,7 +445,7 @@ def _build_form_manifest(revision: int) -> FormManifest:
     )
 
 
-def _door_form(localize: Callable[[Message], str], revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION) -> CategoryForm:
+def _door_form(localize: Callable[[Text], str], revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION) -> CategoryForm:
     opening_width = (
         tr(t"submissions-application-forms-opening-width = Opening width")
         if revision == 2
@@ -533,7 +533,7 @@ def _door_form(localize: Callable[[Message], str], revision: int = CURRENT_SUBMI
     )
 
 
-def _extender_form(localize: Callable[[Message], str]) -> CategoryForm:
+def _extender_form(localize: Callable[[Text], str]) -> CategoryForm:
     return CategoryForm(
         code="extender",
         label=localize(tr(t"submissions-application-forms-extender = Extender")),
@@ -590,10 +590,10 @@ def _extender_form(localize: Callable[[Message], str]) -> CategoryForm:
     )
 
 
-def _links_and_location(localize: Callable[[Message], str]) -> FormSection:
+def _links_and_location(localize: Callable[[Text], str]) -> FormSection:
     """Media links and server details, which a submission collects as files and context instead."""
 
-    def links(field_id: str, label: Message) -> FormField:
+    def links(field_id: str, label: Text) -> FormField:
         return FormField(
             id=field_id,
             label=localize(label),
@@ -606,7 +606,7 @@ def _links_and_location(localize: Callable[[Message], str]) -> FormSection:
             purposes=_EDIT_ONLY,
         )
 
-    def text(field_id: str, label: Message, max_length: int) -> FormField:
+    def text(field_id: str, label: Text, max_length: int) -> FormField:
         return FormField(
             id=field_id,
             label=localize(label),
@@ -630,7 +630,7 @@ def _links_and_location(localize: Callable[[Message], str]) -> FormSection:
     )
 
 
-def _pattern_section(localize: Callable[[Message], str]) -> FormSection:
+def _pattern_section(localize: Callable[[Text], str]) -> FormSection:
     return FormSection(
         id="patterns",
         title=localize(tr(t"submissions-application-forms-mechanism-patterns = Patterns")),
@@ -665,8 +665,8 @@ def _pattern_section(localize: Callable[[Message], str]) -> FormSection:
 
 def _integer_field(
     field_id: str,
-    label: Message,
-    localize: Callable[[Message], str],
+    label: Text,
+    localize: Callable[[Text], str],
     *,
     required: bool,
     maximum: int,
@@ -681,7 +681,7 @@ def _integer_field(
     )
 
 
-def _duration_field(field_id: str, label: Message, localize: Callable[[Message], str]) -> FormField:
+def _duration_field(field_id: str, label: Text, localize: Callable[[Text], str]) -> FormField:
     return FormField(
         id=field_id,
         label=localize(label),
@@ -692,7 +692,7 @@ def _duration_field(field_id: str, label: Message, localize: Callable[[Message],
     )
 
 
-def _license_options(localize: Callable[[Message], str]) -> tuple[ChoiceOption, ...]:
+def _license_options(localize: Callable[[Text], str]) -> tuple[ChoiceOption, ...]:
     return tuple(
         ChoiceOption(value, localize(label))
         for value, label in (

@@ -153,12 +153,12 @@ def _prefill(
     if inapplicable:
         names = ", ".join(inapplicable)
         return md_tr(
-            t"build-editor-fields-unavailable = This build has no {names}. Open the workspace to see what it does have."
+            t"build-editor-fields-unavailable = This build has no {names}. Open the workspace to see what it does have.",
         )
     if unknown:
         names = ", ".join(unknown)
         return md_tr(
             t"bot-submission-edit-unknown-names = Not in the catalogue: {names}. "
-            t"Choose from the catalogue, or propose a new tag."
+            t"Choose from the catalogue, or propose a new tag.",
         )
     return workspace.prefill(values)

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from squid.core.i18n import tr
-from squid_i18n import Message
+from squid_i18n import Text
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,12 +40,12 @@ class RenderSkipReason(StrEnum):
     MISSING_FILE = "missing_file"
 
     @property
-    def description(self) -> Message:
+    def description(self) -> Text:
         """A translatable sentence a moderator can be shown verbatim."""
         return _RENDER_SKIP_DESCRIPTIONS[self]
 
 
-_RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, Message] = {
+_RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, Text] = {
     RenderSkipReason.RENDERING_DISABLED: tr(
         t"schematics-schematic-not-enabled = Schematic previews are not enabled on this instance."
     ),

@@ -88,7 +88,7 @@ class FieldOperation:
             field_id = self.field_id
             raise ValidationError(
                 md_tr(
-                    t"submissions-invalid-draft-field-id = invalid draft field ID: {(field_id_text := str(field_id))}"  # noqa: F841 - captured translation binding
+                    t"submissions-invalid-draft-field-id = invalid draft field ID: {(field_id_text := str(field_id))}",  # noqa: F841 - captured translation binding
                 )
             )
         if self.kind is FieldOperationKind.UNSET and self.value is not None:
@@ -129,7 +129,9 @@ class DraftChange:
         if len(self.operations) > MAX_DRAFT_OPERATIONS:
             limit = MAX_DRAFT_OPERATIONS
             raise ValidationError(
-                md_tr(t"submissions-draft-changes-exceed = draft changes cannot exceed {limit} operations")
+                md_tr(
+                    t"submissions-draft-changes-exceed = draft changes cannot exceed {limit} operations",
+                )
             )
         operation_ids = [operation.operation_id for operation in self.operations]
         if len(operation_ids) != len(set(operation_ids)):
@@ -232,7 +234,9 @@ class DraftSnapshot:
             current = self.status.value
             next_status = status.value
             raise ValidationError(
-                md_tr(t"submissions-draft-transition = draft cannot transition from {current} to {next_status}"),
+                md_tr(
+                    t"submissions-draft-transition = draft cannot transition from {current} to {next_status}",
+                ),
                 resource="submission_draft",
             )
         return replace(self, status=status)

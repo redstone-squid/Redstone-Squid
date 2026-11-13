@@ -72,7 +72,7 @@ def test_a_second_install_on_one_client_is_refused() -> None:
 
 
 def test_install_keeps_host_defaults_and_adds_to_them() -> None:
-    chrome = sl.chrome.Chrome(close=sl.text.ResolvedText("Dismiss"))
+    chrome = sl.chrome.Chrome(close=sl.plain("Dismiss"))
 
     runtime = install(
         cast(discord.Client, fake_client()), sd.Config(defaults=sd.MessageRootDefaults(chrome=chrome, strict=True))

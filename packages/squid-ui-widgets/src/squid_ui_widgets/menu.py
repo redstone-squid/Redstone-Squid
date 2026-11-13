@@ -3,11 +3,12 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from squid_i18n import Text as TextExpression
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
 from squid_ui.semantic import ControlDisplay, LayoutNode
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Message, ResolvedText, TextLike
+from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key, slug
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
 
@@ -54,7 +55,7 @@ class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             label = label_or_content
             raw_content = content
         require_key(resolved_key, name="MenuEntry.key")
-        if not isinstance(label, str | ResolvedText | Message):
+        if not isinstance(label, str | TextExpression):
             message = "MenuEntry.label must be text"
             raise TypeError(message)
         child_entries = tuple(entries)

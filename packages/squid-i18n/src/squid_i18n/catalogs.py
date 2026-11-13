@@ -18,7 +18,6 @@ from squid_i18n.compiler import Declaration, compile_template, parse_resource
 from squid_i18n.errors import CatalogError, DeclarationError
 from squid_i18n.expressions import DEVELOPER_OPTIONS
 from squid_i18n.runtime import compile_catalog
-from squid_i18n.text import Markup
 
 
 @dataclass(frozen=True)
@@ -28,7 +27,7 @@ class LocatedDeclaration:
 
 
 def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]:
-    """Read literal tr(t"...") and md_tr(t"...") calls, including imported aliases, without executing them."""
+    """Read literal tr(...) calls, including imported aliases, without executing them."""
     tree = python.parse(source, filename)
     names = {"tr", "md_tr"}
     for node in python.walk(tree):
@@ -42,15 +41,19 @@ def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]
         if name not in names:
             continue
         location = f"{filename}:{node.lineno}"
-        if len(node.args) != 1 or any(keyword.arg != "key" for keyword in node.keywords):
-            msg = f"{location}: use one literal declaration and an optional literal key="
+        if len(node.args) != 1 or any(keyword.arg not in {"key", "markdown"} for keyword in node.keywords):
+            msg = f"{location}: use one literal declaration with optional literal key= and markdown="
             raise DeclarationError(msg)
         key = None
         for keyword in node.keywords:
-            if not isinstance(keyword.value, python.Constant) or not isinstance(keyword.value.value, str):
-                msg = f"{location}: key= must be a literal string"
+            if keyword.arg == "key":
+                if not isinstance(keyword.value, python.Constant) or not isinstance(keyword.value.value, str):
+                    msg = f"{location}: key= must be a literal string"
+                    raise DeclarationError(msg)
+                key = keyword.value.value
+            elif not isinstance(keyword.value, python.Constant) or not isinstance(keyword.value.value, bool):
+                msg = f"{location}: markdown= must be a literal bool"
                 raise DeclarationError(msg)
-            key = keyword.value.value
         argument = node.args[0]
         if isinstance(argument, python.Constant) and isinstance(argument.value, str):
             parts = [argument]
@@ -140,7 +143,7 @@ class _Dependencies(Visitor):
 
 def validate(locale: str, resources: tuple[str, ...], declarations: Iterable[Declaration]) -> None:
     """Reject syntax, reference, cycle, function and external-variable errors."""
-    compiled = compile_catalog(locale, resources, Markup.PLAIN)
+    compiled = compile_catalog(locale, resources)
     del compiled
     dependencies: dict[str, _Dependencies] = {}
     for resource in resources:

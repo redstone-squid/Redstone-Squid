@@ -124,7 +124,9 @@ def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:
     value = answers.get(field_id)
     if not isinstance(value, str):
         raise InvalidStateError(
-            md_tr(t"submissions-field-not-string = validated field {(field_id_text := str(field_id))} is not a string")  # noqa: F841
+            md_tr(
+                t"submissions-field-not-string = validated field {(field_id_text := str(field_id))} is not a string",  # noqa: F841 - captured translation binding
+            )
         )
     return value
 
@@ -135,7 +137,9 @@ def _optional_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None
         return None
     if not isinstance(value, str):
         raise InvalidStateError(
-            md_tr(t"submissions-field-not-string = validated field {(field_id_text := str(field_id))} is not a string")  # noqa: F841
+            md_tr(
+                t"submissions-field-not-string = validated field {(field_id_text := str(field_id))} is not a string",  # noqa: F841 - captured translation binding
+            )
         )
     return value
 
@@ -155,7 +159,7 @@ def _optional_int(answers: Mapping[str, JSONValue], field_id: str) -> int | None
     if not isinstance(value, int) or isinstance(value, bool):
         raise InvalidStateError(
             md_tr(
-                t"submissions-field-not-integer = validated field {(field_id_text := str(field_id))} is not an integer"  # noqa: F841 - captured translation binding
+                t"submissions-field-not-integer = validated field {(field_id_text := str(field_id))} is not an integer",  # noqa: F841 - captured translation binding
             )
         )
     return value
@@ -166,7 +170,7 @@ def _required_bool(answers: Mapping[str, JSONValue], field_id: str) -> bool:
     if not isinstance(value, bool):
         raise InvalidStateError(
             md_tr(
-                t"submissions-validated-field-not = validated field {(field_id_text := str(field_id))} is not a boolean"  # noqa: F841 - captured translation binding
+                t"submissions-validated-field-not = validated field {(field_id_text := str(field_id))} is not a boolean",  # noqa: F841 - captured translation binding
             )
         )
     return value
@@ -181,7 +185,7 @@ def _string_tuple(answers: Mapping[str, JSONValue], field_id: str) -> tuple[str,
     ):
         raise InvalidStateError(
             md_tr(
-                t"submissions-not-string-list = validated field {(field_id_text := str(field_id))} is not a string list"  # noqa: F841 - captured translation binding
+                t"submissions-not-string-list = validated field {(field_id_text := str(field_id))} is not a string list",  # noqa: F841 - captured translation binding
             )
         )
     return tuple(cast(Sequence[str], value))
