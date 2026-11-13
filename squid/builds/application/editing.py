@@ -31,6 +31,8 @@ class BuildEditPatch:
 
     extender_orientation: PatchValue[str | None] = UNSET
     extension_length: PatchValue[int | None] = UNSET
+    extension_time: PatchValue[int | None] = UNSET
+    retraction_time: PatchValue[int | None] = UNSET
     display_name: PatchValue[str | None] = UNSET
     visible_opening_time: PatchValue[int | None] = UNSET
     visible_closing_time: PatchValue[int | None] = UNSET
@@ -69,6 +71,8 @@ class BuildEditPatch:
             combined = cls(
                 extender_orientation=_latest(combined.extender_orientation, patch.extender_orientation),
                 extension_length=_latest(combined.extension_length, patch.extension_length),
+                extension_time=_latest(combined.extension_time, patch.extension_time),
+                retraction_time=_latest(combined.retraction_time, patch.retraction_time),
                 display_name=_latest(combined.display_name, patch.display_name),
                 visible_opening_time=_latest(combined.visible_opening_time, patch.visible_opening_time),
                 visible_closing_time=_latest(combined.visible_closing_time, patch.visible_closing_time),
@@ -222,7 +226,7 @@ class BuildEditPatch:
             if self.visible_closing_time is not UNSET:
                 build.visible_closing_time = self.visible_closing_time
 
-        extender_fields = ("extender_orientation", "extension_length")
+        extender_fields = ("extender_orientation", "extension_length", "extension_time", "retraction_time")
         patched_extender_fields = [name for name in extender_fields if getattr(self, name) is not UNSET]
         if patched_extender_fields:
             if not isinstance(build, ExtenderBuild):
@@ -239,6 +243,10 @@ class BuildEditPatch:
                     build.extension_length = validate_extension_length(self.extension_length)
             except ValueError as error:
                 raise InvalidBuildError(str(error)) from error
+            if self.extension_time is not UNSET:
+                build.extension_time = self.extension_time
+            if self.retraction_time is not UNSET:
+                build.retraction_time = self.retraction_time
 
         if self.locationality is not UNSET:
             self._replace_reliability(

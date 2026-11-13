@@ -356,6 +356,8 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
     extender_orientation: str | None = None
     extension_length: int | None = None
     extender_type: str | None = None
+    extension_time: int | None = None
+    retraction_time: int | None = None
 
     @property
     def dimensions(self) -> tuple[int | None, int | None, int | None]:
@@ -433,6 +435,8 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
                     orientation=self.extender_orientation,
                     extension_length=self.extension_length,
                     extender_type=self.extender_type,
+                    extension_time=self.extension_time,
+                    retraction_time=self.retraction_time,
                 )
             case BuildCategory.UTILITY:
                 return UtilityBuild(**common)

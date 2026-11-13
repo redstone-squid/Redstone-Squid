@@ -5,17 +5,20 @@ from sqlalchemy import CheckConstraint, Index
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from squid.builds.models import ExtenderBuild
 from squid.records.application.models import CategoryIdentity
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
     ResolutionStatus,
+    TimingVariant,
     VersionScope,
 )
 from squid.records.infrastructure.repository import (
     CALCULATOR_VERSION,
     FORMATTER_VERSION,
     PostgresRecordRepository,
+    _extender_candidate,
     _gap_from_row,
     parse_category_key,
 )
@@ -120,3 +123,15 @@ async def test_standings_filter_is_applied_to_both_rows_and_count() -> None:
         sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
         assert "title_results.status = 'resolved'" in sql
         assert "record_computation_runs.is_active IS true" in sql
+
+
+def test_an_extender_without_measured_variants_competes_on_its_own_timings() -> None:
+    extender = ExtenderBuild(id=1, orientation="Up", extension_length=3, extension_time=4, retraction_time=6)
+
+    candidate = _extender_candidate(extender, ())
+    measured = _extender_candidate(extender, (TimingVariant((1, 2, None, None)),))
+
+    assert candidate is not None
+    assert measured is not None
+    assert candidate.candidate.timing_variants == (TimingVariant((6, 4, None, None)),)
+    assert measured.candidate.timing_variants == (TimingVariant((1, 2, None, None)),)

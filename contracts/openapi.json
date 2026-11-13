@@ -22418,6 +22418,28 @@
               }
             ],
             "title": "Extender Type"
+          },
+          "extension_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extension Time"
+          },
+          "retraction_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retraction Time"
           }
         },
         "additionalProperties": false,
@@ -22426,10 +22448,12 @@
           "orientation",
           "patterns",
           "extension_length",
-          "extender_type"
+          "extender_type",
+          "extension_time",
+          "retraction_time"
         ],
         "title": "ExtenderDetails",
-        "description": "Facts owned by piston extenders."
+        "description": "Facts owned by piston extenders. Timings are in game ticks."
       },
       "ExtenderPatch": {
         "properties": {
@@ -22461,12 +22485,36 @@
               }
             ],
             "title": "Extension Length"
+          },
+          "extension_time": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extension Time"
+          },
+          "retraction_time": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retraction Time"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "ExtenderPatch",
-        "description": "Partial changes to an extender's direction and reach."
+        "description": "Partial changes to an extender's direction, reach, and timings in game ticks."
       },
       "FabricChallengeCreateRequest": {
         "properties": {

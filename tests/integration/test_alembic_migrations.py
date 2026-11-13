@@ -2072,3 +2072,52 @@ def test_draft_schematic_migration_recovers_waiting_uploads(
         command.upgrade(config, "head")
     finally:
         engine.dispose()
+
+
+def test_extender_timings_move_out_of_submission_provenance_without_history(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "a5b8c1d4e7f0")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            _begin_build_edit(connection)
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            builds = {}
+            for name, timing in (("submitted", {"extension": 7, "retraction": 9}), ("legacy", None)):
+                builds[name] = connection.execute(
+                    text(
+                        "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated, "
+                        "extra_info) VALUES (0, 'Extender', :account, false, CAST(:info AS jsonb)) RETURNING id"
+                    ),
+                    {
+                        "account": account,
+                        "info": json.dumps({"submission_provenance": {"timing": timing}} if timing else {}),
+                    },
+                ).scalar_one()
+                connection.execute(text("INSERT INTO extenders (build_id) VALUES (:id)"), {"id": builds[name]})
+        with engine.connect() as connection:
+            history_before = connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one()
+
+        command.upgrade(config, "4fd493faba21")
+        with engine.connect() as connection:
+            timings = {
+                build_id: (extension, retraction)
+                for build_id, extension, retraction in connection.execute(
+                    text("SELECT build_id, extension_time, retraction_time FROM extenders")
+                )
+            }
+            assert timings == {builds["submitted"]: (7, 9), builds["legacy"]: (None, None)}
+            assert connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one() == history_before
+            snapshot = connection.execute(
+                text("SELECT build_history_snapshot_v1(:id)"), {"id": builds["submitted"]}
+            ).scalar_one()
+            assert snapshot["extenders"]["extension_time"] == 7
+
+        command.downgrade(config, "a5b8c1d4e7f0")
+        command.upgrade(config, "head")
+    finally:
+        engine.dispose()

@@ -14,6 +14,8 @@ def test_combine_preserves_every_typed_patch_field() -> None:
     patch = BuildEditPatch(
         extender_orientation="Up",
         extension_length=5,
+        extension_time=6,
+        retraction_time=7,
         display_name="My build",
         visible_opening_time=3,
         visible_closing_time=4,
@@ -106,6 +108,14 @@ def test_extender_edits_normalize_preserve_and_clear_geometry() -> None:
     assert build.extension_length is None
 
 
+def test_extender_timings_are_set_and_cleared() -> None:
+    build = ExtenderBuild(extension_time=4)
+    BuildEditPatch(retraction_time=6).apply(build)
+    assert (build.extension_time, build.retraction_time) == (4, 6)
+    BuildEditPatch(extension_time=None).apply(build)
+    assert build.extension_time is None
+
+
 @pytest.mark.parametrize("length", [0, -1, 513])
 def test_extender_edits_reject_invalid_lengths(length: int) -> None:
     with pytest.raises(InvalidBuildError, match="between 1 and 512"):
@@ -115,3 +125,5 @@ def test_extender_edits_reject_invalid_lengths(length: int) -> None:
 def test_extender_geometry_rejects_other_categories() -> None:
     with pytest.raises(InvalidBuildError, match="Extender fields"):
         BuildEditPatch(extension_length=3).apply(DoorBuild())
+    with pytest.raises(InvalidBuildError, match="Extender fields"):
+        BuildEditPatch(extension_time=3).apply(DoorBuild())

@@ -298,7 +298,7 @@ async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_b
     )
 
 
-async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no_slot() -> None:
+async def test_extender_timing_is_stored_on_the_extender_and_in_provenance() -> None:
     submission = replace(
         _submission(SubmissionCategory.EXTENDER),
         details=ExtenderSubmissionDetails(
@@ -315,6 +315,7 @@ async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no
     assert isinstance(build, ExtenderBuild)
     assert build.orientation == "Upward"
     assert build.extension_length == 5
+    assert (build.extension_time, build.retraction_time) == (7, 9)
     provenance = cast(Mapping[str, object], build.extra_info).get("submission_provenance")
     assert isinstance(provenance, Mapping)
     assert provenance["timing"] == {"extension": 7, "retraction": 9}

@@ -244,6 +244,8 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
             extension_length=submission.details.extension_length,
             patterns=pattern_names,
             extender_type=pattern_names[0] if pattern_names else None,
+            extension_time=submission.details.timing.extension,
+            retraction_time=submission.details.timing.retraction,
         )
     return BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[submission.category]](**common)
 
@@ -387,6 +389,8 @@ def preview_build(
             extension_length=integer("extension_length"),
             patterns=pattern_names,
             extender_type=pattern_names[0] if pattern_names else None,
+            extension_time=integer("extension_time"),
+            retraction_time=integer("retraction_time"),
         )
     else:
         build = BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[SubmissionCategory(category)]](**common)

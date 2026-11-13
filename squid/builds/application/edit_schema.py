@@ -60,18 +60,27 @@ class DoorPatch(BaseModel):
 
 
 class ExtenderPatch(BaseModel):
-    """Partial changes to an extender's direction and reach."""
+    """Partial changes to an extender's direction, reach, and timings in game ticks."""
 
     model_config = ConfigDict(extra="forbid")
 
     orientation: Literal["Horizontal", "Up", "Down"] | None = None
     extension_length: int | None = Field(default=None, ge=1, le=512)
+    extension_time: int | None = Field(default=None, ge=0)
+    retraction_time: int | None = Field(default=None, ge=0)
+
+    # Wire name -> BuildEditPatch field name.
+    _EDIT_FIELDS: ClassVar[Mapping[str, str]] = {
+        "orientation": "extender_orientation",
+        "extension_length": "extension_length",
+        "extension_time": "extension_time",
+        "retraction_time": "retraction_time",
+    }
 
     def edit_attributes(self) -> dict[str, object]:
-        supplied: dict[str, object] = self.model_dump(exclude_unset=True)
-        if "orientation" in supplied:
-            supplied["extender_orientation"] = supplied.pop("orientation")
-        return supplied
+        """Flatten the supplied fields onto the application patch's names."""
+        supplied = self.model_dump(exclude_unset=True)
+        return {self._EDIT_FIELDS[name]: value for name, value in supplied.items()}
 
 
 class BuildPatch(BaseModel):
@@ -153,9 +162,7 @@ class BuildPatch(BaseModel):
         if door:
             attributes["door"] = door
         extender = {
-            wire: attributes.pop(name)
-            for wire, name in (("orientation", "extender_orientation"), ("extension_length", "extension_length"))
-            if name in attributes
+            wire: attributes.pop(name) for wire, name in ExtenderPatch._EDIT_FIELDS.items() if name in attributes
         }
         if extender:
             attributes["extender"] = extender

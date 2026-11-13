@@ -89,7 +89,15 @@ def build_values(build: Build) -> EditValues:
         )
     if isinstance(build, ExtenderBuild):
         patch = BuildEditPatch.combine(
-            (patch, BuildEditPatch(extender_orientation=build.orientation, extension_length=build.extension_length))
+            (
+                patch,
+                BuildEditPatch(
+                    extender_orientation=build.orientation,
+                    extension_length=build.extension_length,
+                    extension_time=build.extension_time,
+                    retraction_time=build.retraction_time,
+                ),
+            )
         )
     unresolved: Info = {}
     UnresolvedTaxonomy.read(build.extra_info).write(unresolved)

@@ -804,6 +804,8 @@ def _extender_candidate(
 ) -> CandidateBuild | None:
     if extender.orientation is None or extender.extension_length is None:
         return None
+    # As for doors, measured variants take precedence over the submitted timing.
+    fallback_timing = TimingVariant((extender.retraction_time, extender.extension_time, None, None))
     depth = extender.depth or 1
     restrictions = _restriction_facets(extender.tags)
     patterns = _pattern_facets(extender.tags)
@@ -819,7 +821,7 @@ def _extender_candidate(
             fixed_volume=extender.width * extender.height * depth
             if extender.width is not None and extender.height is not None and not is_expandable
             else None,
-            timing_variants=timing,
+            timing_variants=timing or (fallback_timing,),
         ),
         version_ids=frozenset(version.version_id for version in extender.build_versions),
         restrictions=restrictions,

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
-from squid.builds.application import BuildService
+from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
@@ -144,7 +144,19 @@ def test_name_and_visible_timings_preserve_explicit_clears() -> None:
 def test_extender_patch_preserves_omission_and_clear_semantics() -> None:
     assert BuildPatch(extender=ExtenderPatch(orientation="Up")).edit_attributes() == {"extender_orientation": "Up"}
     assert BuildPatch(extender=ExtenderPatch(extension_length=None)).edit_attributes() == {"extension_length": None}
+    assert BuildPatch(extender=ExtenderPatch(extension_time=4, retraction_time=None)).edit_attributes() == {
+        "extension_time": 4,
+        "retraction_time": None,
+    }
     with pytest.raises(ValidationError):
         BuildPatch(extender=None)
     with pytest.raises(ValidationError):
         ExtenderPatch.model_validate({"extension_length": -1})
+    with pytest.raises(ValidationError):
+        ExtenderPatch.model_validate({"retraction_time": -1})
+
+
+def test_typed_extender_timings_travel_in_the_extender_object() -> None:
+    patch = BuildPatch.from_patch(BuildEditPatch(extension_time=4, retraction_time=6))
+
+    assert patch.extender == ExtenderPatch(extension_time=4, retraction_time=6)

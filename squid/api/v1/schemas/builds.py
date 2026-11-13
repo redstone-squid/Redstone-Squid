@@ -183,7 +183,7 @@ class DoorDetails(BaseModel):
 
 
 class ExtenderDetails(BaseModel):
-    """Facts owned by piston extenders."""
+    """Facts owned by piston extenders. Timings are in game ticks."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -192,6 +192,8 @@ class ExtenderDetails(BaseModel):
     patterns: list[str]
     extension_length: int | None
     extender_type: str | None
+    extension_time: int | None
+    retraction_time: int | None
 
 
 class GeneralDetails(BaseModel):
@@ -222,6 +224,8 @@ def _details(build: Build) -> BuildDetails:
                 patterns=list(build.patterns),
                 extension_length=build.extension_length,
                 extender_type=build.extender_type,
+                extension_time=build.extension_time,
+                retraction_time=build.retraction_time,
             )
         case _:
             return GeneralDetails(category=cast(Literal["Utility", "Entrance", "Other"], build.category.value))

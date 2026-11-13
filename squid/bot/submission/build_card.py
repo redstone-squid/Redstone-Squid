@@ -23,7 +23,7 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.domain import Status
 from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.builds.domain.titles import format_build_display_title
-from squid.builds.models import Build, DoorBuild
+from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.observability import add_counter
 
 logger = logging.getLogger(__name__)
@@ -267,6 +267,11 @@ def build_metadata_fields(build: Build) -> dict[str, str]:
             fields["Visible Opening Time"] = f"{build.visible_opening_time / 20}s"
         if build.visible_closing_time:
             fields["Visible Closing Time"] = f"{build.visible_closing_time / 20}s"
+    if isinstance(build, ExtenderBuild):
+        if build.extension_time:
+            fields["Extension Time"] = f"{build.extension_time / 20}s"
+        if build.retraction_time:
+            fields["Retraction Time"] = f"{build.retraction_time / 20}s"
 
     if build.creators_ign:
         fields["Creators"] = ", ".join(sorted(build.creators_ign))

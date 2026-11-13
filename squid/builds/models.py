@@ -391,6 +391,9 @@ class ExtenderBuild(Build, kw_only=True):
     orientation: Mapped[str | None] = mapped_column(Text, default=None)
     extension_length: Mapped[int | None] = mapped_column(Integer, default=None)
     extender_type: Mapped[str | None] = mapped_column(Text, default=None)
+    # Timings are game ticks; None means the timing has not been supplied.
+    extension_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    retraction_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
 
 
 class UtilityBuild(Build, kw_only=True):
