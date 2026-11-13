@@ -127,7 +127,7 @@ if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 type TextValue = TextLike | Template
-"""Author text: trusted Markdown, already-resolved text, or a t-string to interpolate."""
+"""Author text: literal strings and t-strings, or explicitly formatted text."""
 
 type Conditional[ItemT] = ItemT | Literal[False] | None
 """One value, or an omitted one.
@@ -203,7 +203,7 @@ def is_portable_node(value: object) -> TypeIs[PortableNode[Any]]:
 
 
 def _text(value: TextValue) -> TextLike:
-    return md(value) if isinstance(value, Template) else value
+    return plain(value) if isinstance(value, Template) else value
 
 
 def _opt_text(value: TextValue | None) -> TextLike | None:
@@ -586,7 +586,7 @@ def grid[ContextT = object](
 
 
 def _tally_label(option: TallyOption) -> Message:
-    label = Message.join("", ("**", option.label, "**")) if option.mine else option.label
+    label = Message.join("", (md("**"), option.label, md("**"))) if option.mine else option.label
     count = option.count
     result = md_tr(t"ui-tally-option = {label} — {NUMBER(count)}")
     return Message.join(" ", (plain(option.emoji), result)) if option.emoji is not None else result

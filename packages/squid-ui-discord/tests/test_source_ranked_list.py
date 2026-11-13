@@ -93,7 +93,7 @@ class FlakyScoreSource(ScoreSource):
         (sl.sources.SourceCapabilities(offsets=True, count=sl.sources.CountPrecision.EXACT), "-# 1\N{EN DASH}2 of 3"),
         (
             sl.sources.SourceCapabilities(offsets=True, count=sl.sources.CountPrecision.APPROXIMATE),
-            "-# 1\N{EN DASH}2 of ~3",
+            "-# 1\N{EN DASH}2 of \\~3",
         ),
         (sl.sources.SourceCapabilities(offsets=True), "-# 1\N{EN DASH}2"),
         (sl.sources.SourceCapabilities(), None),

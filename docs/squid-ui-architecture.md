@@ -426,8 +426,8 @@ planning serializes text before measuring its payload size.
 Both HTML renderers share the same safe Markdown token renderer. Native inline
 containers render inline Markdown; the Components V2 preview also renders block
 syntax such as headings, lists, quotes, and fenced code. Raw HTML is disabled,
-and links and images are restricted to safe URL schemes. Unsupported Discord
-syntax remains visible as text rather than being treated as HTML.
+and links and images are restricted to safe URL schemes. Discord mention, emoji, and timestamp
+tokens remain visible as text rather than being treated as HTML.
 
 ### Declaring a component's dialect
 

@@ -584,7 +584,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, Co
         )
 
     def paged_lines(
-        self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
+        self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
     ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
         """Delegate child paging through namespaced action and control keys."""
         return self.parent.paged_lines(lines, self._action(action_name), key=self._key(key), page=page, per=per)

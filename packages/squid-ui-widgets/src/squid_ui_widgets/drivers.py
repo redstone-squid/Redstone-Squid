@@ -174,7 +174,7 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
     ) -> FormTrigger | RoutedActionControl: ...
 
     def paged_lines(
-        self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
+        self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
     ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
         """Show ``lines`` ``per`` at a time, starting at the zero-based ``page`` from machine state.
 
@@ -358,7 +358,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
         return form(label, resolved, key=key, on_submit=submitted, tone=tone, emphasis=emphasis)
 
     def paged_lines(
-        self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
+        self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
     ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
         """Page the lines with a planner pager whose page the machine state controls."""
 
@@ -492,7 +492,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         return routed_action_control(label, route_id, key=key, tone=tone, emphasis=emphasis)
 
     def paged_lines(
-        self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
+        self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
     ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
         """Let the planner resolve page boundaries and encode persistent navigation."""
 

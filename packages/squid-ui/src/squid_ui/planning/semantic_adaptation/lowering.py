@@ -435,7 +435,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                 resolved_label = f"-# {resolved_label}"
             text = resolved_label
             if description is not None:
-                text += f"\n{_literal(description, context)}"
+                text += f"\n{_resolve(description, context)}"
             if _cards(context):
                 if spoiler:
                     message = (
@@ -468,16 +468,16 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
         case ProgressBar(value=value, maximum=maximum, label=label):
             ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))
             filled = round(ratio * 10)
-            prefix = f"{_literal(label, context)}: " if label is not None else ""
+            prefix = f"{_resolve(label, context)}: " if label is not None else ""
             return [Text(f"{prefix}{'█' * filled}{'░' * (10 - filled)} {ratio:.0%}", overflow=Never())]
         case Metric(value=value, label=label, unit=unit):
             suffix = f" {unit}" if unit else ""
-            return [Text(f"**{_literal(label, context)}:** {value}{suffix}", overflow=Never())]
+            return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
         case Timestamp(instant=instant, style=style, label=label):
-            prefix = f"**{_literal(label, context)}:** " if label is not None else None
+            prefix = f"**{_resolve(label, context)}:** " if label is not None else None
             return [Time(instant, style.value, prefix)]
         case ZonedTimestamp(value=value, label=label):
-            prefix = f"**{_literal(label, context)}:** " if label is not None else None
+            prefix = f"**{_resolve(label, context)}:** " if label is not None else None
             return [ZonedTime(value, prefix)]
         case FormTrigger():
             return _form(node, context)

@@ -8,7 +8,8 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.ownership import Controlled
-from squid_ui.primitives import Lines, Paginate
+from squid_ui.primitives import Alt, Lines, Paginate
+from squid_ui.text import source_text
 from squid_ui_widgets import testing as wt
 
 
@@ -18,7 +19,7 @@ class _LimitKwargs(TypedDict, total=False):
 
 
 def _listing(nodes: tuple[sl.semantic.AnyLayoutNode, ...]) -> list[str]:
-    return [str(line) for line in engine.find(nodes, Lines).lines]
+    return [source_text(line.primary if isinstance(line, Alt) else line) for line in engine.find(nodes, Lines).lines]
 
 
 def _leaderboard() -> sp.RankedList:

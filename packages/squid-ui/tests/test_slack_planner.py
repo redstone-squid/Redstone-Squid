@@ -246,3 +246,13 @@ def test_slack_planner_reuses_exact_and_structural_caches() -> None:
     assert first.metrics.reuse is PlanReuse.MISS
     assert exact.metrics.reuse is PlanReuse.EXACT
     assert structural.metrics.reuse is PlanReuse.STRUCTURAL
+
+
+def test_literal_paragraph_does_not_become_slack_mrkdwn() -> None:
+    result = sl.planning.plan(sl.paragraph("*literal* <@123>"), target=MESSAGE)
+    section = result.scene.body.blocks[0]
+
+    assert isinstance(section, scene.SlackSection)
+    assert section.text is not None
+    assert section.text.kind is scene.SlackTextKind.PLAIN
+    assert section.text.content == "*literal* <@123>"
