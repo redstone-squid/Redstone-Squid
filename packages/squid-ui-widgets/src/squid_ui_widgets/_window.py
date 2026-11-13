@@ -30,6 +30,8 @@ class LoadingCopy:
     loading: TextLike = "Loading…"
     failed: TextLike = "Could not load entries."
     retry: TextLike = "Retry"
+    removed: TextLike = "That item is no longer in these results."
+    end: TextLike = "No more entries in this direction."
 
 
 DEFAULT_LOADING_COPY = LoadingCopy()

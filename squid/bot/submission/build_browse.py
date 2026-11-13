@@ -113,6 +113,51 @@ class _BuildSource:
         return window_fingerprint(window.items, lambda build: str(build.id))
 
 
+class _NeighbourBuildSource:
+    """An ID-addressed build context for direct links and related-build screens."""
+
+    capabilities = sl.sources.SourceCapabilities(backward=True)
+
+    def __init__(self, queries: BuildQueryService, statuses: frozenset[Status]) -> None:
+        self.queries = queries
+        self.statuses = statuses
+
+    def initial(self, build: Build) -> sl.sources.LoadedWindow[Build]:
+        key = str(build.id)
+        window = sl.sources.Window(
+            sl.sources.Position(key),
+            (build,),
+            previous=sl.sources.Position(key, direction=sl.sources.Direction.BACKWARD),
+            next=sl.sources.Position(key, direction=sl.sources.Direction.FORWARD),
+        )
+        return sl.sources.LoadedWindow(window, window_fingerprint(window.items, lambda item: str(item.id)))
+
+    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
+        assert position.anchor is not None
+        build_id = int(position.anchor)
+        if position.direction is sl.sources.Direction.AROUND:
+            build = await self.queries.get(build_id)
+            if build is None or build.submission_status not in self.statuses:
+                return sl.sources.Window(sl.sources.Position(), ())
+            return self.initial(build).window
+        selector = (
+            PageSelector(before_id=build_id)
+            if position.direction is sl.sources.Direction.BACKWARD
+            else PageSelector(after_id=build_id)
+        )
+        page = await self.queries.list_page(statuses=self.statuses, selector=selector, page_size=extent)
+        return sl.sources.Window(
+            sl.sources.Position(str(page.items[0].id) if page.items else None),
+            page.items,
+            previous=sl.sources.Position(str(page.prev.before_id), direction=sl.sources.Direction.BACKWARD)
+            if page.prev is not None and page.prev.before_id is not None
+            else None,
+            next=sl.sources.Position(str(page.next.after_id), direction=sl.sources.Direction.FORWARD)
+            if page.next is not None and page.next.after_id is not None
+            else None,
+        )
+
+
 class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Show one build and refresh its card when the build topic changes.
 
@@ -351,7 +396,7 @@ class BuildBrowseScreen(sd.Screen):
     _query: str = sl.state("")
     _sort: str = sl.state("")
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")
-    _selected: _BuildDetail | None = sl.state(None, opaque=True)
+    _selected: sp.Browser[Build, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
 
     def __init__(
         self,
@@ -403,7 +448,6 @@ class BuildBrowseScreen(sd.Screen):
             # `_BuildSource` filters on `submission_status`, so every listed build carries one; the
             # domain type stays optional only for a build that has not been submitted yet.
             summary=_build_summary,
-            on_open=self._open_list_build,
             detail=self._detail,
             page_size=8,
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
@@ -424,8 +468,6 @@ class BuildBrowseScreen(sd.Screen):
                 self._workspace_controls(),
                 *self._find_nodes(),
                 sl.action_controls(
-                    sl.action_control(tr(t"build-browse-newer = Newer"), self._newer, key="newer"),
-                    sl.action_control(tr(t"build-browse-older = Older"), self._older, key="older"),
                     sl.action_control(tr(t"build-browse-list = List view"), self._back, key="back"),
                     key="selected-actions",
                     display=sl.semantic.ControlDisplay.INDIVIDUAL,
@@ -490,29 +532,6 @@ class BuildBrowseScreen(sd.Screen):
     async def _open_holder(self, build_id: int, event: sl.PressEvent) -> None:
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
-
-    async def _open_list_build(self, _event: sl.ActionEvent, build: Build) -> None:
-        await self._show_build(build)
-
-    async def _newer(self, event: sl.PressEvent) -> None:
-        await self._adjacent(event, newer=True)
-
-    async def _older(self, event: sl.PressEvent) -> None:
-        await self._adjacent(event, newer=False)
-
-    async def _adjacent(self, event: sl.PressEvent, *, newer: bool) -> None:
-        if self._selected is None:
-            return
-        build_id = self._selected._build_id
-        page = await self._queries.list_page(
-            statuses=self._statuses,
-            selector=PageSelector(before_id=build_id) if newer else PageSelector(after_id=build_id),
-            page_size=1,
-        )
-        if page.items:
-            await self._show_build(page.items[0])
-        else:
-            await event.notice(tr(t"build-browse-end = No more builds in this direction."))
 
     def _find_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
@@ -619,11 +638,25 @@ class BuildBrowseScreen(sd.Screen):
         return True
 
     async def _show_build(self, build: Build) -> None:
-        detail = self._detail(build)
-        # Prepare the card before switching views so a modal submission can present
-        # the result in its response instead of waiting for a later live refresh.
+        source = _NeighbourBuildSource(self._queries, self._statuses)
+        session = sp.BrowseSession(
+            source, identity=lambda item: str(item.id), page_size=1, initial=source.initial(build)
+        )
+        session.open(str(build.id), revision=session.revision)
+        browser = sp.Browser(
+            session,
+            key="linked-build",
+            identity=lambda item: str(item.id),
+            label=lambda item: f"#{item.id} {item.title}",
+            detail=self._detail,
+            chronology=sl.sources.Chronology.NEWEST_FIRST,
+        )
+        # Prepare the detail before a modal switches views. The parent keeps its own
+        # collection and focus while this explicitly opened child browses by build ID.
+        await browser._detail._load()
+        detail = cast(_BuildDetail, browser._detail.value)
         await detail.projection._load()
-        self._selected = detail
+        self._selected = browser
 
     async def _open_id(self, event: sl.SubmitEvent) -> None:
         form = _OpenBuildForm.from_submission(event)
@@ -681,7 +714,6 @@ class BuildBrowseScreen(sd.Screen):
 
     async def _back(self, _event: sl.PressEvent) -> None:
         self._selected = None
-        await self._browser._back(_event)
 
 
 def _build_summary(build: Build) -> sl.TextLike:

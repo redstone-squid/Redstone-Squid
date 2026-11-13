@@ -166,7 +166,7 @@ class SearchScreen(sd.Screen):
                 retry=tr(t"bot-submission-search-view-retry = Retry"),
             ),
         )
-        self._browser.window.replace(self._source.initial_loaded())
+        self._browser.session.replace(self._source.initial_loaded())
 
     @property
     def request(self) -> SearchRequest:
@@ -195,13 +195,11 @@ class SearchScreen(sd.Screen):
 
     def _visible_window(self) -> sl.sources.LoadedWindow[SearchHit]:
         """Keep the last loaded page visible while a fetch is pending or has failed."""
-        state = self._browser.window.status
-        if isinstance(state, sl.resources.Ready):
-            return state.value
-        if isinstance(state, sl.resources.Pending | sl.resources.Failed) and state.previous is not None:
-            return state.previous.value
-        message = "search browser has no visible window"
-        raise sl.errors.LayoutInvariantError(message)
+        current = self._browser.session.snapshot
+        if current is None:
+            message = "search browser has no visible window"
+            raise sl.errors.LayoutInvariantError(message)
+        return current.loaded
 
     def _detail(self, hit: SearchHit) -> _SearchDetail:
         return _SearchDetail(

@@ -15,7 +15,8 @@ from squid_ui_widgets import guards, machines
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection
 from squid_ui_widgets._window import DEFAULT_LOADING_COPY, LoadingCopy
 from squid_ui_widgets.agreement import Agreement, AgreementParticipant, AgreementResolveHandler
-from squid_ui_widgets.browser import Browser, BrowserDetail, BrowserOpenHandler, BrowserOverview
+from squid_ui_widgets.browser import Browser, BrowserDetail, BrowserOverview
+from squid_ui_widgets.browsing import BrowseSession, BrowseSnapshot
 from squid_ui_widgets.collection import (
     CollectionChangeHandler,
     CollectionEditor,
@@ -83,9 +84,10 @@ __all__ = [
     "Agreement",
     "AgreementParticipant",
     "AgreementResolveHandler",
+    "BrowseSession",
+    "BrowseSnapshot",
     "Browser",
     "BrowserDetail",
-    "BrowserOpenHandler",
     "BrowserOverview",
     "CollectionChangeHandler",
     "CollectionEditor",

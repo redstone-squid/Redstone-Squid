@@ -1,12 +1,12 @@
 """Resource-backed master-detail browsing."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Callable, Sequence
+from functools import partial
 from typing import override
 
-from squid_reactivity.core import (
-    state,
-)
-from squid_reactivity.resources import Failed, Pending, Ready, resource
+from squid_reactivity import untracked
+from squid_reactivity.operations import Failed, Pending
+from squid_reactivity.resources import PendingMode, resource
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import (
@@ -31,11 +31,9 @@ from squid_ui.planning.navigation import (
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
-    ORIGIN,
     Chronology,
     LoadedWindow,
     Position,
-    WindowLoader,
     WindowSource,
     window_footer,
 )
@@ -45,17 +43,14 @@ from squid_ui_widgets._content import ContentLike, normalize_content, require_ke
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
     LoadingCopy,
-    WindowRequest,
-    last_ready,
-    load_window,
     source_navigation_state,
     step_labels,
 )
+from squid_ui_widgets.browsing import BrowseSession, Movement
 
 type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = Callable[
     [ItemT], ContentLike[RenderTargetT, ContextT]
 ]
-type BrowserOpenHandler[ItemT] = Callable[[ActionEvent, ItemT], Awaitable[None]]
 type BrowserOverview[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = Callable[
     [LoadedWindow[ItemT]], ContentLike[RenderTargetT, ContextT]
 ]
@@ -66,21 +61,17 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
 ):
     """Browse a window source and open one item's detail content.
 
-    The previous page remains usable during loading or failure. detail is called once
-    per open; refreshing the source does not rebuild an already open detail. A detail
-    component must manage any refresh of its own data.
+    The session owns source navigation and focus. Detail content is prepared through
+    an atomic resource when focus changes; the factory must be safe to retry. Refreshing
+    the same item retains its detail, whose component owns refresh of its domain data.
 
     Paging and stepping between opened items say Previous and Next. Pass `chronology` for a
     list sorted by time to label them Newer and Older instead.
     """
 
-    _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
-    opened: ItemT | None = state(None, persist=False, opaque=True)
-    _detail_value: ContentLike[RenderTargetT, ContextT] | None = state(None, persist=False, opaque=True)
-
     def __init__(
         self,
-        source: WindowSource[ItemT],
+        source: WindowSource[ItemT] | BrowseSession[ItemT],
         *,
         key: str = "browser",
         identity: Callable[[ItemT], str],
@@ -90,7 +81,6 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         entry_actions: Callable[[ItemT], Sequence[ActionControl | Link]] | None = None,
         overview: BrowserOverview[ItemT, RenderTargetT, ContextT] | None = None,
         page_size: int = 10,
-        on_open: BrowserOpenHandler[ItemT] | None = None,
         title: TextLike | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
@@ -100,121 +90,83 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         if page_size < 1 or page_size > 25:
             message = "Browser.page_size must be between 1 and 25"
             raise ValueError(message)
-        self.source = source
-        self.identity = identity
+        self.session = (
+            source
+            if isinstance(source, BrowseSession)
+            else BrowseSession(source, identity=identity, page_size=page_size)
+        )
+        self.identity = self.session.identity
         self.label = label
         self.detail = detail
         self.summary = summary
         self.entry_actions = entry_actions
         self.overview = overview
-        self.page_size = page_size
-        self.on_open = on_open
+        self.page_size = self.session.page_size
         self.title = title
         self.empty = normalize_content(empty, name="Browser.empty")
         self.copy = copy
         self.chronology = chronology
-        self.loader = WindowLoader(source, page_size, identity, initial=ORIGIN)
 
-    @resource
-    async def window(self) -> LoadedWindow[ItemT]:
-        """Load the requested source window around the visible anchor."""
-        return await load_window(
-            self.loader,
-            self._request,
-            previous=last_ready(self.window.status),
-            subject="browser",
-        )
+    @property
+    def source(self) -> WindowSource[ItemT]:
+        return self.session.source
+
+    @property
+    def opened(self) -> ItemT | None:
+        return self.session.focused_item
+
+    @resource(pending=PendingMode.ATOMIC)
+    async def _detail(self) -> ContentLike[RenderTargetT, ContextT] | None:
+        # Only a focus change replaces the child. Refreshing the same item leaves its
+        # editor state intact; the child owns refresh of its own domain data.
+        _visit = self.session.visit
+        key = self.session.focus
+        with untracked():
+            item = self.session.focused_item
+        return self.detail(item) if key is not None and item is not None else None
 
     async def refresh(self) -> None:
-        """Refresh around the visible anchor and wait for settlement."""
-        self._request = WindowRequest()
-        await self.window._load()
+        self.session.move("refresh", revision=self.session.revision)
+        if self.session.operation is not None:
+            await self.session.operation
 
-    async def _previous(self, _event: ActionEvent) -> None:
-        """Request the previous source window."""
-        self._request = WindowRequest("previous")
+    async def _move(self, movement: Movement, revision: int, _event: ActionEvent) -> None:
+        self.session.move(movement, revision=revision)
 
-    async def _next(self, _event: ActionEvent) -> None:
-        """Request the next source window."""
-        self._request = WindowRequest("next")
+    async def _seek(self, revision: int, _event: ActionEvent, page: int) -> None:
+        self.session.move("seek", revision=revision, position=Position(offset=page * self.page_size))
 
-    async def _seek(self, _event: ActionEvent, page: int) -> None:
-        """Request a zero-based page from a jumpable source."""
-        self._request = WindowRequest("seek", Position(offset=page * self.page_size))
+    async def _retry(self, revision: int, _event: ActionEvent) -> None:
+        self.session.retry(revision=revision)
 
-    async def _retry(self, _event: ActionEvent) -> None:
-        """Retry the current window request."""
-        self._request = WindowRequest(self._request.operation, self._request.position)
-
-    def _ready(self) -> LoadedWindow[ItemT] | None:
-        """Return the current or stale window available for interaction."""
-        current = self.window.status
-        if isinstance(current, Ready):
-            return current.value
-        if isinstance(current, Pending | Failed) and current.previous is not None:
-            return current.previous.value
-        return None
-
-    async def _selected(self, event: ChoiceEvent) -> None:
-        """Open the single selected item if it remains visible."""
-        if len(event.selected) != 1:
-            return
-        loaded = self._ready()
-        if loaded is None:
-            return
-        item = next((item for item in loaded.window.items if self.identity(item) == event.selected[0]), None)
-        if item is None:
-            return
-        await self._open(event, item)
-
-    async def _open(self, event: ActionEvent, item: ItemT) -> None:
-        """Open one item and materialize its detail once."""
-        self.opened = item
-        self._detail_value = self.detail(item)
-        if self.on_open is not None:
-            await self.on_open(event, item)
+    async def _selected(self, revision: int, event: ChoiceEvent) -> None:
+        if len(event.selected) == 1:
+            self.session.open(event.selected[0], revision=revision)
 
     async def _back(self, _event: ActionEvent) -> None:
-        """Return from detail to the source overview."""
-        self.opened = None
-        self._detail_value = None
+        self.session.back(revision=self.session.revision)
 
-    async def _adjacent(self, event: ActionEvent, delta: int) -> None:
-        """Open an adjacent item within the current source window."""
-        loaded = self._ready()
-        if loaded is None or self.opened is None:
-            return
-        items = loaded.window.items
-        index = next(
-            (index for index, item in enumerate(items) if self.identity(item) == self.identity(self.opened)), -1
-        )
-        target = index + delta
-        if 0 <= target < len(items):
-            await self._open(event, items[target])
-
-    async def _previous_item(self, event: ActionEvent) -> None:
-        """Open the previous item in the visible window."""
-        await self._adjacent(event, -1)
-
-    async def _next_item(self, event: ActionEvent) -> None:
-        """Open the next item in the visible window."""
-        await self._adjacent(event, 1)
+    async def _back_at(self, revision: int, _event: ActionEvent) -> None:
+        self.session.back(revision=revision)
 
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:
-        """Render ready, pending, or failed source state."""
-        # Match each status before inspecting previous so type checkers can prove exhaustiveness.
-        match self.window.status:
-            case Ready(value=loaded):
-                return self._render_loaded(loaded)
-            case Pending(previous=previous):
-                if previous is None:
-                    return self._status(self.copy.loading)
-                return self._render_loaded(previous.value)
-            case Failed(previous=previous):
-                if previous is None:
-                    return self._status(self.copy.failed, retry=True)
-                return self._render_loaded(previous.value, status_text=self.copy.failed, retry=True)
+        current = self.session.snapshot
+        operation = self.session.operation
+        status = None if operation is None else operation.status
+        failed = isinstance(status, Failed)
+        status_text = self.copy.failed if failed else self.copy.loading if isinstance(status, Pending) else None
+        if current is None:
+            return self._status(status_text or self.copy.loading, retry=failed)
+        if current.notice == "removed":
+            status_text = self.copy.removed
+        elif current.notice == "end":
+            status_text = self.copy.end
+        if current.focus is not None:
+            item = self.session.focused_item
+            assert item is not None
+            return self._render_detail(current.loaded, item, status_text=status_text, retry=failed)
+        return self._render_overview(current.loaded, status_text=status_text, retry=failed)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT, ContextT]:
         """Render a source status without a stale window."""
@@ -222,29 +174,12 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             heading(self.title) if self.title is not None else None,
             note(message),
             action_controls(
-                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, partial(self._retry, self.session.revision), key=f"{self.key}.retry"),
+                key=f"{self.key}.retry-row",
             )
             if retry
             else None,
         )
-
-    def _render_loaded(
-        self,
-        loaded: LoadedWindow[ItemT],
-        *,
-        status_text: TextLike | None = None,
-        retry: bool = False,
-    ) -> DocumentLike[RenderTargetT, ContextT]:
-        """Render a loaded window as either overview or detail."""
-        opened = None
-        if self.opened is not None:
-            opened = next(
-                (item for item in loaded.window.items if self.identity(item) == self.identity(self.opened)),
-                None,
-            )
-        if opened is not None and self._detail_value is not None:
-            return self._render_detail(loaded, opened, status_text=status_text, retry=retry)
-        return self._render_overview(loaded, status_text=status_text, retry=retry)
 
     def _render_overview(
         self,
@@ -267,7 +202,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             picker = choices(
                 *(choice(self.label(item), key=self.identity(item)) for item in items),
                 key=f"{self.key}.open",
-                selection=controlled((), self._selected),
+                selection=controlled((), partial(self._selected, self.session.revision)),
                 minimum=1,
                 maximum=1,
             )
@@ -282,7 +217,8 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             *self._navigation(loaded),
             note(status_text) if status_text is not None else None,
             action_controls(
-                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, partial(self._retry, self.session.revision), key=f"{self.key}.retry"),
+                key=f"{self.key}.retry-row",
             )
             if retry
             else None,
@@ -307,9 +243,9 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             nav(
                 NavigationContext(
                     state,
-                    self._previous,
-                    self._next,
-                    self._seek if state.extent is not None else None,
+                    partial(self._move, "previous", self.session.revision),
+                    partial(self._move, "next", self.session.revision),
+                    partial(self._seek, self.session.revision) if state.extent is not None else None,
                 )
             )
         )
@@ -325,8 +261,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         """Render one opened item and its local actions."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
-        index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))
-        detail_value = self._detail_value
+        detail_value = self._detail.value
         assert detail_value is not None
         detail = normalize_content(detail_value, name="Browser.detail")
         previous_label, next_label = step_labels(chrome, self.chronology)
@@ -336,31 +271,32 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             *detail,
             action_controls(*entry_actions, key=f"{self.key}.entry-actions") if entry_actions else None,
             action_controls(
-                # The step buttons stay in place, greyed out, at either end of a page; with only
-                # one item there is nowhere to step, so they are left out. Back leaves the item,
-                # so it comes last.
-                len(items) > 1
+                (len(items) > 1 or loaded.window.has_previous or loaded.window.has_next)
                 and action_control(
-                    previous_label, self._previous_item, key=f"{self.key}.item-previous", available=index > 0
+                    previous_label,
+                    partial(self._move, "previous-item", self.session.revision),
+                    key=f"{self.key}.item-previous",
+                    available=self.session.can_step(-1) and not self.session.busy,
                 ),
-                len(items) > 1
+                (len(items) > 1 or loaded.window.has_previous or loaded.window.has_next)
                 and action_control(
                     next_label,
-                    self._next_item,
+                    partial(self._move, "next-item", self.session.revision),
                     key=f"{self.key}.item-next",
-                    available=index < len(items) - 1,
+                    available=self.session.can_step(1) and not self.session.busy,
                 ),
-                action_control(chrome.back, self._back, key=f"{self.key}.back"),
+                action_control(chrome.back, partial(self._back_at, self.session.revision), key=f"{self.key}.back"),
                 key=f"{self.key}.detail-navigation",
                 display=ControlDisplay.INDIVIDUAL,
             ),
             note(status_text) if status_text is not None else None,
             action_controls(
-                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, partial(self._retry, self.session.revision), key=f"{self.key}.retry"),
+                key=f"{self.key}.retry-row",
             )
             if retry
             else None,
         )
 
 
-__all__ = ["Browser", "BrowserDetail", "BrowserOpenHandler", "BrowserOverview"]
+__all__ = ["Browser", "BrowserDetail", "BrowserOverview"]

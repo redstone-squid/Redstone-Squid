@@ -46,15 +46,18 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
         detail=detail,
         page_size=2,
     )
-    browser.window.replace(loaded)
+    browser.session.replace(loaded)
 
     # Drive the semantic picker; adapters may lower its options into separate buttons.
     await engine.choose(browser, "browser.open", "a")
 
+    await browser._detail._load()
     assert browser.opened == Entry("a", "A")
     assert built == ["a"], "one detail per open, not one per render"
 
+    await browser._detail._load()
     await engine.press(browser, "browser.item-next")
+    await browser._detail._load()
 
     assert browser.opened == Entry("b", "B")
     assert built == ["a", "b"]
@@ -74,15 +77,15 @@ async def test_navigating_keeps_the_previous_window_visible_while_the_next_is_pe
         detail=lambda item: item.label,
         page_size=2,
     )
-    browser.window.replace(loaded)
+    browser.session.replace(loaded)
 
-    browser._request = type(browser._request)("next")
+    browser.session.move("next", revision=browser.session.revision)
 
-    assert isinstance(browser.window.status, sl.resources.Pending)
-    assert browser.window.status.previous == sl.resources.Ready(loaded)
+    assert browser.session.busy
+    assert browser.session.snapshot is not None and browser.session.snapshot.loaded == loaded
     rendered = "\n".join(engine.texts(engine.render_tree(browser)) + engine.labels(engine.render_tree(browser)))
     assert "A" in rendered
-    assert "Loading" not in rendered
+    assert "Loading" in rendered
 
 
 async def test_the_overview_hook_receives_the_loaded_window() -> None:
@@ -95,7 +98,7 @@ async def test_the_overview_hook_receives_the_loaded_window() -> None:
         detail=lambda item: item.label,
         overview=lambda current: (seen.append(current), sl.note("Warning"))[1],
     )
-    browser.window.replace(loaded)
+    browser.session.replace(loaded)
 
     nodes = engine.render_tree(browser)
 
@@ -120,9 +123,9 @@ def _paged_browser(
 async def test_paging_says_previous_and_next_unless_the_list_is_sorted_by_time() -> None:
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
     plain = _paged_browser(source)
-    plain.window.replace(loaded)
+    plain.session.replace(loaded)
     newest_first = _paged_browser(source, sl.sources.Chronology.NEWEST_FIRST)
-    newest_first.window.replace(loaded)
+    newest_first.session.replace(loaded)
 
     assert "Next" in engine.labels(engine.render_tree(plain))
     assert not {"Older", "Newer"} & set(engine.labels(engine.render_tree(plain)))
@@ -133,9 +136,10 @@ async def test_paging_says_previous_and_next_unless_the_list_is_sorted_by_time()
 async def test_stepping_between_items_follows_the_list_order_in_time() -> None:
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B")))
     browser = _paged_browser(source, sl.sources.Chronology.OLDEST_FIRST)
-    browser.window.replace(loaded)
+    browser.session.replace(loaded)
 
     await engine.choose(browser, "browser.open", "a")
+    await browser._detail._load()
     tree = engine.render_tree(browser)
 
     assert engine.labels(engine.find(tree, sl.semantic.ActionControl, key="browser.item-previous")) == ["Older"]
@@ -145,9 +149,10 @@ async def test_stepping_between_items_follows_the_list_order_in_time() -> None:
 async def test_a_single_item_has_no_step_buttons() -> None:
     source, loaded = await _loaded((Entry("a", "A"),))
     browser = _paged_browser(source)
-    browser.window.replace(loaded)
+    browser.session.replace(loaded)
 
     await engine.choose(browser, "browser.open", "a")
+    await browser._detail._load()
 
     tree = engine.render_tree(browser)
     assert not {"browser.item-previous", "browser.item-next"} & set(engine.keys(tree))
@@ -157,10 +162,10 @@ async def test_a_single_item_has_no_step_buttons() -> None:
 async def test_page_numbers_appear_only_when_there_is_more_than_one_page() -> None:
     one_page_source, one_page = await _loaded((Entry("a", "A"), Entry("b", "B")))
     single = _paged_browser(one_page_source)
-    single.window.replace(one_page)
+    single.session.replace(one_page)
     two_page_source, two_pages = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
     paged = _paged_browser(two_page_source)
-    paged.window.replace(two_pages)
+    paged.session.replace(two_pages)
 
     assert not [text for text in engine.texts(engine.render_tree(single)) if "of 1" in text]
     assert [text for text in engine.texts(engine.render_tree(paged)) if "1 of 2" in text]

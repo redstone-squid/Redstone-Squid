@@ -9,7 +9,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
+from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities, _BuildDetail
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.records import RecordsScreen
 from squid.bot.utils.web import MediaPreviewClient
@@ -140,8 +140,8 @@ async def test_review_confirmation_can_open_and_cancel(action: str) -> None:
 async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
     screen = _screen(status=Status.PENDING)
     await screen.on_load()
-    detail = screen._selected
-    assert detail is not None
+    assert screen._selected is not None
+    detail = cast(_BuildDetail, screen._selected._detail.value)
 
     async def request_then_fail() -> None:
         await detail._request_approve(1, press_event())
@@ -169,7 +169,7 @@ async def test_open_id_through_the_discord_modal() -> None:
         form = await ui.press_for_form(ui.key_for("open-id"))
         await form.submit({"id": "7"})
         assert "Build #7" in ui.texts()
-        ui.control(ui.key_for("older"))
+        ui.control(ui.key_for("linked-build.item-next"))
         ui.control(ui.key_for("open-id"))
 
 
@@ -191,7 +191,7 @@ async def test_detail_navigation_uses_id_anchors_and_preserves_visibility(newer:
         prev=None,
     )
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("newer" if newer else "older"))
+        await ui.press(ui.key_for("linked-build.item-previous" if newer else "linked-build.item-next"))
         assert f"Build #{8 if newer else 6}" in ui.texts()
         queries.list_page.assert_awaited_once_with(
             statuses=frozenset({Status.CONFIRMED, Status.PENDING}),
@@ -204,7 +204,7 @@ async def test_list_selection_and_return_keep_the_list_available() -> None:
     async with stage(_screen(initial_id=None), owner=object()) as ui:
         await ui.select(ui.key_for("builds.open"), ["7"])
         assert "Build #7" in ui.texts()
-        await ui.press(ui.key_for("back"))
+        await ui.press(ui.key_for("builds.back"))
         assert "## Build catalogue" in ui.texts()
         ui.control(ui.key_for("builds.open"))
 
@@ -238,7 +238,7 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
         await ui.select(ui.key_for("records.open"), ["10"])
         await ui.press(ui.key_for("holder-7"))
         assert "Build #7" in ui.texts()
-        await ui.press(ui.key_for("back"))
+        await ui.press("back")
         assert "## Smallest 2x2 door" in ui.texts()
         assert not any("resolved" in text or "no_candidate" in text for text in ui.texts())
         ui.control(ui.key_for("holder-9"))
@@ -276,7 +276,7 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
     screen = _screen(status=Status.PENDING)
     screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
     async with stage(screen, owner=object()) as ui:
-        ui.control(ui.key_for("older"))
+        ui.control(ui.key_for("linked-build.item-next"))
         ui.control(ui.key_for("schematic-tools"))
         assert any("Submission ID: 7" in text for text in ui.texts())
         ui.assert_within_limits()

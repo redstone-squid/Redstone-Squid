@@ -45,6 +45,7 @@ class BrowseSession[ItemT](Reactive):
 
     snapshot: BrowseSnapshot[ItemT] | None = state(None, persist=False, opaque=True)
     revision: int = state(0, persist=False)
+    visit: int = state(0, persist=False)
     operation: OperationExecution[None, None] | None = state(None, persist=False, opaque=True)
     _request: _Request[ItemT] | None = state(None, persist=False, opaque=True)
     source: WindowSource[ItemT] = state(persist=False, opaque=True)
@@ -91,6 +92,7 @@ class BrowseSession[ItemT](Reactive):
         """Start a different collection without retaining its predecessor's focus."""
         with transaction():
             self.source = source
+            self.visit += 1
             self.snapshot = None
             self.revision += 1
             self._start(_Request(source, None, "refresh"))
@@ -150,6 +152,8 @@ class BrowseSession[ItemT](Reactive):
 
     def _publish(self, snapshot: BrowseSnapshot[ItemT]) -> None:
         with transaction():
+            if self.snapshot is None or self.snapshot.focus != snapshot.focus:
+                self.visit += 1
             self.snapshot = snapshot
             self.revision += 1
             self.operation = None
@@ -180,8 +184,8 @@ class BrowseSession[ItemT](Reactive):
             address = current.window.previous if backward else current.window.next
             seen: set[Position] = set()
             while address is not None:
-                if address in seen:
-                    msg = "source navigation repeated a continuation address"
+                if address in seen or len(seen) >= 32:
+                    msg = "source navigation repeated an address or exceeded 32 empty windows"
                     raise ValueError(msg)
                 seen.add(address)
                 loaded = await loader.load(address)
@@ -189,7 +193,14 @@ class BrowseSession[ItemT](Reactive):
                 if loaded.window.items:
                     focus = None
                     if movement.endswith("-item"):
-                        focus = self.identity(loaded.window.items[-1 if backward else 0])
+                        keys = tuple(self.identity(item) for item in loaded.window.items)
+                        target = len(keys) - 1 if backward else 0
+                        if base is not None and base.focus in keys:
+                            target = keys.index(base.focus) + (-1 if backward else 1)
+                        if not 0 <= target < len(keys):
+                            address = loaded.window.previous if backward else loaded.window.next
+                            continue
+                        focus = keys[target]
                     return BrowseSnapshot(loaded, focus, focus)
                 address = loaded.window.previous if backward else loaded.window.next
             # Data may have disappeared after the displayed source advertised another window.
