@@ -5,7 +5,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from textwrap import dedent
+from textwrap import dedent, indent
 
 from fluent.syntax import FluentParser, FluentSerializer, ast
 from fluent.syntax.visitor import Transformer, Visitor
@@ -142,13 +142,21 @@ class _BindSlots(Transformer):
 
 
 @lru_cache(maxsize=2048)
-def compile_template(strings: tuple[str, ...], expressions: tuple[str, ...]) -> Declaration:
+def compile_template(strings: tuple[str, ...], expressions: tuple[str, ...], key: str | None = None) -> Declaration:
     slots = tuple(expression_slot(expression) for expression in expressions)
     prefix = "squidSlot"
     while any(prefix in text for text in strings):
         prefix += "X"
     markers = {f"{prefix}{index}End": slot for index, slot in enumerate(slots)}
     source = "".join(text + "$" + key for text, key in zip(strings, markers, strict=False)) + strings[-1]
+    if key is not None:
+        if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_-]*", key):
+            msg = "Invalid translation key"
+            raise DeclarationError(msg)
+        if re.match(r"\s*[a-zA-Z][a-zA-Z0-9_-]*\s*=", source):
+            msg = "Supply the translation key either in the declaration or with key=, not both"
+            raise DeclarationError(msg)
+        source = key + " =\n" + indent(dedent(source).strip(), "    ")
     resource = parse_resource(dedent(source).strip() + "\n")
     entries = [node for node in resource.body if isinstance(node, ast.Message | ast.Term)]
     if len(entries) != 1 or not isinstance(entries[0], ast.Message):

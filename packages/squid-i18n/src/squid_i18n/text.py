@@ -137,12 +137,14 @@ class Message:
 type TextLike = str | ResolvedText | Message
 
 
-def tr(template: Template, /) -> Message:
+def tr(template: Template | LiteralString, /, *, key: LiteralString | None = None) -> Message:
     """Capture one named Fluent declaration; Python values never enter its parser."""
+    if isinstance(template, str):
+        template = Template(template)
     if any(slot.conversion is not None or slot.format_spec for slot in template.interpolations):
         msg = "Use NUMBER or DATETIME instead of Python conversions and format specs"
         raise DeclarationError(msg)
-    declaration = compile_template(template.strings, tuple(slot.expression for slot in template.interpolations))
+    declaration = compile_template(template.strings, tuple(slot.expression for slot in template.interpolations), key)
     bindings: dict[str, object] = {}
     for slot, captured in zip(declaration.slots, template.interpolations, strict=True):
         value = captured.value

@@ -42,12 +42,26 @@ def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]
         if name not in names:
             continue
         location = f"{filename}:{node.lineno}"
-        if len(node.args) != 1 or node.keywords or not isinstance(node.args[0], python.TemplateStr):
-            msg = f"{location}: use tr() or md_tr() with one literal t-string declaration"
+        if len(node.args) != 1 or any(keyword.arg != "key" for keyword in node.keywords):
+            msg = f"{location}: use one literal declaration and an optional literal key="
+            raise DeclarationError(msg)
+        key = None
+        for keyword in node.keywords:
+            if not isinstance(keyword.value, python.Constant) or not isinstance(keyword.value.value, str):
+                msg = f"{location}: key= must be a literal string"
+                raise DeclarationError(msg)
+            key = keyword.value.value
+        argument = node.args[0]
+        if isinstance(argument, python.Constant) and isinstance(argument.value, str):
+            parts = [argument]
+        elif isinstance(argument, python.TemplateStr):
+            parts = argument.values
+        else:
+            msg = f"{location}: use a literal string or t-string declaration"
             raise DeclarationError(msg)
         strings = [""]
         expressions: list[str] = []
-        for part in node.args[0].values:
+        for part in parts:
             if isinstance(part, python.Constant):
                 strings[-1] += str(part.value)
             elif isinstance(part, python.Interpolation):
@@ -57,7 +71,7 @@ def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]
                 expressions.append(part.str or python.unparse(part.value))
                 strings.append("")
         try:
-            declaration = compile_template(tuple(strings), tuple(expressions))
+            declaration = compile_template(tuple(strings), tuple(expressions), key)
         except (CatalogError, DeclarationError) as error:
             msg = f"{location}: {error}"
             raise DeclarationError(msg) from error

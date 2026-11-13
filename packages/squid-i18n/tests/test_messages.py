@@ -191,3 +191,18 @@ def test_markdown_selectors_compare_original_bindings_before_escaping_output() -
     }}""")
 
     assert source_text(message) == r"needs\-review"
+
+
+def test_explicit_keys_and_embedded_keys_have_the_same_identity() -> None:
+    name = "Ada"
+    explicit = tr(t"Hello {name}", key="greeting")
+    embedded = tr(t"greeting = Hello {name}")
+
+    assert explicit.declaration == embedded.declaration
+    assert source_text(explicit) == source_text(embedded) == "Hello Ada"
+    assert source_text(tr("Save", key="common-save")) == "Save"
+
+
+def test_a_key_cannot_be_supplied_twice() -> None:
+    with pytest.raises(DeclarationError, match="not both"):
+        tr("greeting = Hello", key="greeting")

@@ -180,3 +180,17 @@ def test_markdown_declarations_and_imported_aliases_extract_without_execution() 
     )
 
     assert [item.declaration.identifier for item in found] == ["ready", "hello"]
+
+
+def test_literal_string_and_explicit_key_extraction_match_embedded_declarations() -> None:
+    explicit = extract('tr("Save", key="common-save")')[0].declaration
+    embedded = extract('tr(t"common-save = Save")')[0].declaration
+
+    assert explicit == embedded
+    assert extract('tr(t"Hello {name}", key="greeting")')[0].declaration.slots[0].name == "name"
+
+
+@pytest.mark.parametrize("source", ['tr("Save", key=key)', 'tr(f"Hello {name}", key="hello")'])
+def test_dynamic_declarations_are_not_extractable(source: str) -> None:
+    with pytest.raises(DeclarationError):
+        extract(source)
