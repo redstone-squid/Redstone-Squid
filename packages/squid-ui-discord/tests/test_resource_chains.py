@@ -202,15 +202,18 @@ async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
 
 
 async def test_two_independent_resources_still_settle_together() -> None:
-    """Smoke-test delivery with two independent atomic bindings; this does not measure concurrency."""
+    """Both resources settle before one complete atomic presentation is delivered."""
+    loads = {"left": 0, "right": 0}
 
     class Pair(sl.Component[sl.ComponentsV2Target]):
         @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
         async def left(self) -> str:
+            loads["left"] += 1
             return "L"
 
         @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
         async def right(self) -> str:
+            loads["right"] += 1
             return "R"
 
         @override
@@ -223,9 +226,17 @@ async def test_two_independent_resources_still_settle_together() -> None:
 
     message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
     message: Any = message_harness()
-    await message_root.send(delivered_to(message))
+    sent: list[str] = []
 
-    assert message_root.snapshot().suppressed >= 0
+    async def destination(presentation) -> Any:
+        sent.append(texts(presentation.layout))
+        return await delivered_to(message)(presentation)
+
+    await message_root.send(destination)
+
+    assert sent == ["LR"]
+    assert loads == {"left": 1, "right": 1}
+    message.edit.assert_not_awaited()
 
 
 # --- Cycles ---------------------------------------------------------------------------
