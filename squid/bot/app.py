@@ -137,12 +137,7 @@ class RedstoneSquid(Bot):
         self.inference_reasoning_effort = inference_reasoning_effort
         self.development_mode = development_mode
         description = f"{config.bot_name} v{config.bot_version}".strip()
-        intents = discord.Intents.none()
-        intents.guilds = True
-        intents.members = True
-        intents.messages = True
-        intents.message_content = True
-        intents.reactions = True
+        intents = discord.Intents(guilds=True, members=True, messages=True, message_content=True, reactions=True)
         super().__init__(
             command_prefix=commands.when_mentioned_or(config.prefix),
             owner_id=config.owner_id,
