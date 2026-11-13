@@ -1,1 +1,4 @@
-CREATE TRIGGER build_versions_reject_truncate BEFORE TRUNCATE ON public.build_versions FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
+CREATE TRIGGER build_versions_reject_truncate
+    BEFORE TRUNCATE ON public.build_versions
+    FOR EACH STATEMENT
+    EXECUTE FUNCTION public.capture_build_edit_trigger();

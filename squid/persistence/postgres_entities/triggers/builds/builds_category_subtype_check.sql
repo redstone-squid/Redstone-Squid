@@ -1,1 +1,5 @@
-CREATE CONSTRAINT TRIGGER builds_category_subtype_check AFTER INSERT OR UPDATE OF id, category ON public.builds DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
+CREATE CONSTRAINT TRIGGER builds_category_subtype_check
+    AFTER INSERT OR UPDATE OF id, category ON public.builds
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW
+    EXECUTE FUNCTION public.enforce_build_category_subtype();
