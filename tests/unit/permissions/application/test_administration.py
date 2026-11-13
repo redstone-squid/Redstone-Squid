@@ -466,7 +466,7 @@ class TestLastGranter:
             await service.revoke(actor, pattern="perm.grant.global", account_id=7)
 
 
-async def test_every_mutation_records_an_audit_entry() -> None:
+async def test_grant_records_an_audit_entry() -> None:
     store = stored(rules=granted("**"))
     service = admin(store)
     actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
