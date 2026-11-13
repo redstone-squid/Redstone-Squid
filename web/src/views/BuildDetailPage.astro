@@ -3,7 +3,7 @@ import ErrorState from "../components/ErrorState.astro";
 import MediaGallery from "../components/MediaGallery";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, CatalogueApiError, fetchBuild, fetchSchematics } from "../lib/api";
-import type { BuildDetail, PageSchematicSummary } from "../generated/types.gen";
+import type { BuildDetail, BuildSchematicsListResponse } from "../generated/types.gen";
 import {
   formatDate,
   formatNumber,
@@ -26,7 +26,7 @@ const { locale } = Astro.props;
 const buildId = readPositiveInteger(Astro.props.id);
 let error;
 let build: BuildDetail | undefined;
-let schematics: PageSchematicSummary | undefined;
+let schematics: BuildSchematicsListResponse | undefined;
 if (!buildId) {
   error = new CatalogueApiError(404);
   Astro.locals.responseStatus = 404;

@@ -12,9 +12,9 @@ import {
 import type {
   BuildDetail,
   PageSearchResult as SearchPage,
-  PageBuildSummary,
-  PagePublishedTitle,
-  PageSchematicSummary,
+  BuildsListResponse,
+  RecordsListResponse,
+  BuildSchematicsListResponse,
   RecordDetail,
   SearchScope,
   SearchSuggestions,
@@ -97,7 +97,7 @@ export type BuildQuery = PageQuery & {
 export async function fetchBuilds(
   locale: Locale,
   query: BuildQuery = {},
-): Promise<PageBuildSummary> {
+): Promise<BuildsListResponse> {
   const result = await buildsList({
     client: createCatalogueClient(locale),
     query: {
@@ -126,7 +126,7 @@ export type RecordQuery = PageQuery & {
 export async function fetchRecords(
   locale: Locale,
   query: RecordQuery = {},
-): Promise<PagePublishedTitle> {
+): Promise<RecordsListResponse> {
   const result = await recordsList({
     client: createCatalogueClient(locale),
     query: {
@@ -150,7 +150,7 @@ export async function fetchRecord(locale: Locale, id: number): Promise<RecordDet
 export async function fetchSchematics(
   locale: Locale,
   buildId: number,
-): Promise<PageSchematicSummary> {
+): Promise<BuildSchematicsListResponse> {
   const result = await buildSchematicsList({
     client: createCatalogueClient(locale),
     path: { build_id: buildId },

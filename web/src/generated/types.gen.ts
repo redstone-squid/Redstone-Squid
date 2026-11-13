@@ -586,8 +586,8 @@ export type DraftSchematicResponse = {
     sha256: string | null;
     byte_size: number | null;
     state: DraftSchematicState;
-    primary: boolean;
-    discarded: boolean;
+    primary?: boolean;
+    discarded?: boolean;
 };
 
 /**
@@ -739,6 +739,13 @@ export type FieldOperationRequest = {
 };
 
 /**
+ * FieldType
+ *
+ * Storage-independent field value types.
+ */
+export type FieldType = 'text' | 'number' | 'timestamp' | 'boolean';
+
+/**
  * FinalizationJobStatus
  *
  * Durable state of one source-draft finalization job.
@@ -845,13 +852,13 @@ export type IdentityVisibilityRequest = {
  */
 export type InboxNotificationDetail = {
     id: number;
-    revision: number;
-    kind: string;
+    read_at?: string | null;
+    kind: NotificationKind;
     payload: {
         [key: string]: unknown;
     };
+    revision?: number;
     created_at: string;
-    read_at: string | null;
 };
 
 /**
@@ -924,6 +931,18 @@ export type JsonValue = null | boolean | number | string | Array<JsonValue> | {
 };
 
 /**
+ * LinkedIdentityDetail
+ */
+export type LinkedIdentityDetail = {
+    id: number;
+    display_name?: string | null;
+    is_public?: boolean;
+    provider: IdentityProvider;
+    subject: string;
+    verified_at: string | null;
+};
+
+/**
  * MediaKind
  *
  * A hosted media type accepted by a submission.
@@ -943,9 +962,9 @@ export type MergeCodeDetail = {
  */
 export type MergePreviewDetail = {
     absorbed_creator_id: string;
-    alias_names: Array<string>;
-    identity_count: number;
-    build_count: number;
+    alias_names?: Array<string>;
+    identity_count?: number;
+    build_count?: number;
 };
 
 /**
@@ -995,6 +1014,13 @@ export type MinecraftIdentityRefresh = {
     contested_creator_name: string | null;
     pending_claim_id: number | null;
 };
+
+/**
+ * NotificationKind
+ *
+ * Inbox and delivery message categories.
+ */
+export type NotificationKind = 'build_confirmed' | 'build_denied' | 'creator_build_confirmed' | 'record_gained' | 'staff_build_submitted';
 
 /**
  * NotificationPreferenceUpdate
@@ -1053,56 +1079,6 @@ export type PageAnchor = {
 };
 
 /**
- * Page[BuildSummary]
- */
-export type PageBuildSummary = {
-    items: Array<BuildSummary>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
- * Page[ErrorReportSummary]
- */
-export type PageErrorReportSummary = {
-    items: Array<ErrorReportSummary>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
- * Page[InboxNotificationDetail]
- */
-export type PageInboxNotificationDetail = {
-    items: Array<InboxNotificationDetail>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
- * Page[PublishedTitle]
- */
-export type PagePublishedTitle = {
-    items: Array<PublishedTitle>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
- * Page[SchematicSummary]
- */
-export type PageSchematicSummary = {
-    items: Array<SchematicSummary>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
  * Page[SearchResult]
  */
 export type PageSearchResult = {
@@ -1113,10 +1089,60 @@ export type PageSearchResult = {
 };
 
 /**
+ * Page[InboxNotificationDetail]
+ */
+export type PageLitestarDtoBackendInboxNotificationDetail = {
+    items: Array<InboxNotificationDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[PublishedTitle]
+ */
+export type PageLitestarDtoBackendPublishedTitle = {
+    items: Array<PublishedTitle>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[TagDetail]
  */
-export type PageTagDetail = {
+export type PageLitestarDtoBackendTagDetail = {
     items: Array<TagDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[BuildSummary]
+ */
+export type PageSquidApiV1SchemasBuildsBuildSummary = {
+    items: Array<BuildSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[ErrorReportSummary]
+ */
+export type PageSquidApiV1SchemasDiagnosticsErrorReportSummary = {
+    items: Array<ErrorReportSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[SchematicSummary]
+ */
+export type PageSquidApiV1SchemasSchematicsSchematicSummary = {
+    items: Array<SchematicSummary>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -1125,7 +1151,7 @@ export type PageTagDetail = {
 /**
  * Page[VersionDetail]
  */
-export type PageVersionDetail = {
+export type PageSquidApiV1SchemasVersionsVersionDetail = {
     items: Array<VersionDetail>;
     total: number;
     next: PageAnchor | null;
@@ -1332,6 +1358,13 @@ export type RecordFilterInput = {
 };
 
 /**
+ * RecordOperator
+ *
+ * How a tag assignment satisfies a record-category predicate.
+ */
+export type RecordOperator = 'present' | 'exact' | 'at_most' | 'at_least';
+
+/**
  * RecordSearchEntry
  */
 export type RecordSearchEntry = {
@@ -1463,10 +1496,10 @@ export type SchematicSummary = {
  */
 export type SearchField = {
     name: string;
-    type: string;
-    supports_range: boolean;
-    supports_sort: boolean;
-    aliases: Array<string>;
+    type: FieldType;
+    supports_range?: boolean;
+    aliases?: Array<string>;
+    supports_sort?: boolean;
 };
 
 /**
@@ -1620,21 +1653,28 @@ export type SuppliedFileResponse = {
 };
 
 /**
+ * TagAuthority
+ *
+ * Who controls a tag definition.
+ */
+export type TagAuthority = 'official' | 'user';
+
+/**
  * TagDetail
  */
 export type TagDetail = {
     id: number;
+    query_name?: string | null;
+    restriction_type?: string | null;
+    record_operator?: RecordOperator | null;
+    canonical_unit?: string | null;
+    display_unit?: string | null;
+    numeric_step?: string | null;
     key: string;
     name: string;
-    query_name: string | null;
-    authority: string;
-    kind: string;
-    value_type: string;
-    restriction_type: string | null;
-    record_operator: string | null;
-    canonical_unit: string | null;
-    display_unit: string | null;
-    numeric_step: string | null;
+    authority: TagAuthority;
+    kind: TagSemanticKind;
+    value_type: TagValueType;
 };
 
 /**
@@ -1645,6 +1685,20 @@ export type TagPredicateInput = {
     operator?: 'present' | 'exact';
     value?: string | number | number | boolean | null;
 };
+
+/**
+ * TagSemanticKind
+ *
+ * The behavior associated with a tag definition.
+ */
+export type TagSemanticKind = 'restriction' | 'pattern' | 'showcase';
+
+/**
+ * TagValueType
+ *
+ * The scalar value attached to a tag.
+ */
+export type TagValueType = 'none' | 'numeric' | 'text' | 'boolean';
 
 /**
  * UploadCapabilities
@@ -2370,7 +2424,7 @@ export type BuildsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageBuildSummary;
+    200: PageSquidApiV1SchemasBuildsBuildSummary;
 };
 
 export type BuildsListResponse = BuildsListResponses[keyof BuildsListResponses];
@@ -2964,7 +3018,7 @@ export type DiagnosticsErrorsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageErrorReportSummary;
+    200: PageSquidApiV1SchemasDiagnosticsErrorReportSummary;
 };
 
 export type DiagnosticsErrorsListResponse = DiagnosticsErrorsListResponses[keyof DiagnosticsErrorsListResponses];
@@ -3207,7 +3261,7 @@ export type AccountIdentityListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<IdentityDetail>;
+    200: Array<LinkedIdentityDetail>;
 };
 
 export type AccountIdentityListResponse = AccountIdentityListResponses[keyof AccountIdentityListResponses];
@@ -3265,7 +3319,7 @@ export type AccountIdentityVisibilitySetResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: IdentityDetail;
+    200: LinkedIdentityDetail;
 };
 
 export type AccountIdentityVisibilitySetResponse = AccountIdentityVisibilitySetResponses[keyof AccountIdentityVisibilitySetResponses];
@@ -3606,7 +3660,7 @@ export type AccountBuildsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageBuildSummary;
+    200: PageSquidApiV1SchemasBuildsBuildSummary;
 };
 
 export type AccountBuildsListResponse = AccountBuildsListResponses[keyof AccountBuildsListResponses];
@@ -4665,7 +4719,7 @@ export type NotificationInboxListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageInboxNotificationDetail;
+    200: PageLitestarDtoBackendInboxNotificationDetail;
 };
 
 export type NotificationInboxListResponse = NotificationInboxListResponses[keyof NotificationInboxListResponses];
@@ -4887,7 +4941,7 @@ export type RecordsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PagePublishedTitle;
+    200: PageLitestarDtoBackendPublishedTitle;
 };
 
 export type RecordsListResponse = RecordsListResponses[keyof RecordsListResponses];
@@ -4939,7 +4993,7 @@ export type BuildSchematicsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageSchematicSummary;
+    200: PageSquidApiV1SchemasSchematicsSchematicSummary;
 };
 
 export type BuildSchematicsListResponse = BuildSchematicsListResponses[keyof BuildSchematicsListResponses];
@@ -6939,7 +6993,7 @@ export type TagsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageTagDetail;
+    200: PageLitestarDtoBackendTagDetail;
 };
 
 export type TagsListResponse = TagsListResponses[keyof TagsListResponses];
@@ -7102,7 +7156,7 @@ export type MinecraftVersionsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageVersionDetail;
+    200: PageSquidApiV1SchemasVersionsVersionDetail;
 };
 
 export type MinecraftVersionsListResponse = MinecraftVersionsListResponses[keyof MinecraftVersionsListResponses];

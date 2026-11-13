@@ -5,9 +5,9 @@ import type {
   BuildDetail,
   BuildSummary,
   PageSearchResult as SearchPage,
-  PageBuildSummary,
-  PagePublishedTitle,
-  PageSchematicSummary,
+  BuildsListResponse,
+  RecordsListResponse,
+  BuildSchematicsListResponse,
   ProblemDetail,
   RecordDetail,
   PublishedTitle,
@@ -168,7 +168,7 @@ function problem(request: Request, status: number, code: string): Response {
   });
 }
 
-function buildPage(url: URL): PageBuildSummary {
+function buildPage(url: URL): BuildsListResponse {
   if (url.searchParams.get("after_id") === "2") {
     return {
       items: [builds[2]],
@@ -187,7 +187,7 @@ function buildPage(url: URL): PageBuildSummary {
   };
 }
 
-function recordPage(url: URL): PagePublishedTitle {
+function recordPage(url: URL): RecordsListResponse {
   if (url.searchParams.get("after_id") === "1") {
     return {
       items: [records[1]],
@@ -213,7 +213,7 @@ async function routeRequest(request: Request): Promise<Response> {
     if (query.includes("syntax:error") || query === "(")
       return problem(request, 400, "invalid_query");
     if (query.includes("force:unavailable")) return problem(request, 503, "service_unavailable");
-    return json(buildPage(url) satisfies PageBuildSummary);
+    return json(buildPage(url) satisfies BuildsListResponse);
   }
   // Both detail reads exceed the catalogue client's five-second deadline.
   if (url.pathname === "/v1/builds/998") {
@@ -222,7 +222,12 @@ async function routeRequest(request: Request): Promise<Response> {
   }
   if (url.pathname === "/v1/builds/998/schematics") {
     await new Promise((resolve) => setTimeout(resolve, 5_500));
-    return json({ items: [], total: 0, next: null, prev: null } satisfies PageSchematicSummary);
+    return json({
+      items: [],
+      total: 0,
+      next: null,
+      prev: null,
+    } satisfies BuildSchematicsListResponse);
   }
   if (url.pathname === "/v1/builds/1") return json(detail satisfies BuildDetail);
   if (url.pathname === "/v1/builds/1/schematics") {
@@ -250,12 +255,12 @@ async function routeRequest(request: Request): Promise<Response> {
       total: 1,
       next: null,
       prev: null,
-    } satisfies PageSchematicSummary);
+    } satisfies BuildSchematicsListResponse);
   }
   if (/^\/v1\/builds\/\d+(?:\/schematics)?$/.test(url.pathname))
     return problem(request, 404, "not_found");
 
-  if (url.pathname === "/v1/records") return json(recordPage(url) satisfies PagePublishedTitle);
+  if (url.pathname === "/v1/records") return json(recordPage(url) satisfies RecordsListResponse);
   if (url.pathname === "/v1/records/11") return json(recordDetail satisfies RecordDetail);
   if (/^\/v1\/records\/\d+$/.test(url.pathname)) return problem(request, 404, "not_found");
 

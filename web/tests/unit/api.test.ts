@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   BuildDetail,
   BuildSummary,
-  PageBuildSummary,
-  PagePublishedTitle,
+  BuildsListResponse,
+  RecordsListResponse,
   PublishedTitle,
-  PageSchematicSummary,
+  BuildSchematicsListResponse,
   RecordDetail,
 } from "../../src/generated/types.gen";
 import {
@@ -104,7 +104,7 @@ describe("per-request API client", () => {
         total: 1,
         next: null,
         prev: null,
-      } satisfies PageBuildSummary),
+      } satisfies BuildsListResponse),
     );
     const client = createCatalogueClient("zh-CN", config);
     const result = await client.get({ url: "/v1/builds" });
@@ -124,7 +124,7 @@ describe("typed catalogue reads", () => {
         total: 9,
         next: { offset: null, after_id: 3, before_id: null },
         prev: null,
-      } satisfies PageBuildSummary),
+      } satisfies BuildsListResponse),
     );
     await expect(
       fetchBuilds("en", { q: "door", sort: "-id", afterId: 7, pageSize: 200 }),
@@ -139,7 +139,7 @@ describe("typed catalogue reads", () => {
 
   it("sends only the parameter that addresses the page", async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies PageBuildSummary),
+      jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies BuildsListResponse),
     );
     // The API rejects a combination outright, so the client must never assemble one.
     await fetchBuilds("en", { offset: 40, afterId: 7, beforeId: 3 });
@@ -152,13 +152,13 @@ describe("typed catalogue reads", () => {
   it("addresses a page backwards or by offset when no forward anchor is given", async () => {
     fetchMock
       .mockResolvedValueOnce(
-        jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies PageBuildSummary),
+        jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies BuildsListResponse),
       )
       .mockResolvedValueOnce(
-        jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies PageBuildSummary),
+        jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies BuildsListResponse),
       )
       .mockResolvedValueOnce(
-        jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies PageBuildSummary),
+        jsonResponse({ items: [], total: 0, next: null, prev: null } satisfies BuildsListResponse),
       );
     await fetchBuilds("en", { beforeId: 3, offset: 40 });
     expect(requestedUrl().searchParams.get("before_id")).toBe("3");
@@ -169,8 +169,8 @@ describe("typed catalogue reads", () => {
   });
 
   it("loads build, record, record page, and schematic detail shapes", async () => {
-    const recordPage: PagePublishedTitle = { items: [record], total: 1, next: null, prev: null };
-    const schematicPage: PageSchematicSummary = {
+    const recordPage: RecordsListResponse = { items: [record], total: 1, next: null, prev: null };
+    const schematicPage: BuildSchematicsListResponse = {
       items: [],
       total: 0,
       next: null,
