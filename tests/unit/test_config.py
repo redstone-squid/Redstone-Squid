@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, SecretStr, ValidationError
 
 from squid.config import (
     EMBEDDING_DIMENSION,
@@ -868,7 +868,7 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
         SQUID_RATE_LIMIT_REDIS_URL="rediss://user:secret@redis.example/0",
         SQUID_RATE_LIMIT_WINDOW_SECONDS="60",
         SQUID_RATE_LIMIT_IP_REQUESTS="120",
-        SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS="90",
+        SQUID_RATE_LIMIT_CALLER_REQUESTS="90",
         SQUID_RATE_LIMIT_WRITE_REQUESTS="30",
         SQUID_RATE_LIMIT_VOTE_REQUESTS="10",
         SQUID_RATE_LIMIT_MINECRAFT_CHALLENGE_START_REQUESTS="6",
@@ -880,8 +880,7 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
         SQUID_API_IDEMPOTENCY_MAX_RESPONSE_BYTES="2097152",
     )
 
-    with pytest.warns(DeprecationWarning, match="CALLER_REQUESTS"):
-        config = load_api_process_config(dotenv_path=dotenv)
+    config = load_api_process_config(dotenv_path=dotenv)
 
     assert config.api.trusted_proxy_ips == ("127.0.0.1", "10.0.0.0/8")
     assert config.api.idempotency_max_response_bytes == 2_097_152
@@ -901,10 +900,28 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
     assert "secret@redis" not in repr(config)
 
 
-def test_new_caller_quota_wins_over_the_deprecated_name() -> None:
-    config = RateLimitConfig.model_validate({"caller_requests": 120, "principal_requests": 90})
+def test_legacy_caller_quota_name_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="principal_requests"):
+        RateLimitConfig.model_validate({"caller_requests": 120, "principal_requests": 90})
 
-    assert config.caller_requests == 120
+
+@pytest.mark.parametrize("source", ["environment", "dotenv"])
+def test_legacy_caller_quota_environment_key_is_unknown(
+    monkeypatch: pytest.MonkeyPatch, dotenv: Path, source: str
+) -> None:
+    _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", SQUID_STRICT_UNKNOWN_KEYS="true")
+    if source == "environment":
+        monkeypatch.setenv("SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS", "90")
+    else:
+        dotenv.write_text("SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS=90\n", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config(dotenv_path=dotenv)
+
+    assert any(
+        issue["field"] == "SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS" and issue["type"] == "unknown_key"
+        for issue in _issues(exc_info.value)
+    )
 
 
 @pytest.mark.parametrize(
