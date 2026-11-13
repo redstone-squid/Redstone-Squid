@@ -6,12 +6,10 @@ import re
 from collections.abc import Iterable
 from html import escape
 
-from markdown_it import MarkdownIt
-from markdown_it.token import Token
-
 from squid_ui import scene
 from squid_ui.assets import Asset, InlineAsset, LocalAsset, StoredAsset
 from squid_ui.errors import DrawInvariantError
+from squid_ui.html._markdown import markdown
 from squid_ui.html._safety import attribute as _attribute
 from squid_ui.html._safety import safe_url as _safe_url
 from squid_ui.planning.result import PlanResult
@@ -31,7 +29,6 @@ textarea,select,input:not([type=checkbox]){width:100%;max-width:36rem;padding:.5
 .squid-spoiler{filter:blur(.5rem)}.squid-spoiler:focus,.squid-spoiler:hover{filter:none}
 """.strip()
 
-_MARKDOWN = MarkdownIt("js-default", {"html": False, "linkify": False})
 _MEDIA_TYPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\Z")
 _BOOLEAN_ATTRIBUTES = frozenset(
     {
@@ -55,11 +52,6 @@ _DATA_ATTRIBUTES = {
     scene.HtmlAttributeName.TONE: "data-squid-tone",
 }
 _VOID_TAGS = frozenset({scene.HtmlTag.BR, scene.HtmlTag.HR, scene.HtmlTag.IMG, scene.HtmlTag.INPUT})
-
-
-def _token_attribute(token: Token, name: str) -> str | None:
-    value = token.attrGet(name)
-    return value if isinstance(value, str) else None
 
 
 class Renderer:
@@ -135,7 +127,7 @@ class Renderer:
         if isinstance(node, scene.HtmlText):
             if node.markup is Markup.PLAIN:
                 return escape(node.content)
-            return self._markdown(node.content)
+            return markdown(node.content)
         return self._element(node, assets, plan)
 
     def _element(
@@ -231,54 +223,6 @@ class Renderer:
         if isinstance(resource.source, StoredAsset):
             return _safe_url(resource.source.reference)
         return None
-
-    def _markdown(self, content: str) -> str:
-        parsed = _MARKDOWN.parseInline(content)
-        tokens = () if not parsed else parsed[0].children or ()
-        return "".join(self._markdown_token(token) for token in tokens)
-
-    def _markdown_token(self, token: Token) -> str:
-        match token.type:
-            case "text":
-                return escape(token.content)
-            case "softbreak":
-                return "\n"
-            case "hardbreak":
-                return "<br>"
-            case "code_inline":
-                return f"<code>{escape(token.content)}</code>"
-            case "strong_open":
-                return "<strong>"
-            case "strong_close":
-                return "</strong>"
-            case "em_open":
-                return "<em>"
-            case "em_close":
-                return "</em>"
-            case "s_open":
-                return "<s>"
-            case "s_close":
-                return "</s>"
-            case "link_open":
-                href = _token_attribute(token, "href")
-                if href is None or (safe := _safe_url(href)) is None:
-                    return ""
-                title = _token_attribute(token, "title")
-                title_attribute = "" if title is None else f' title="{_attribute(title)}"'
-                return f'<a href="{_attribute(safe)}" rel="noopener noreferrer"{title_attribute}>'
-            case "link_close":
-                return "</a>"
-            case "image":
-                source = _token_attribute(token, "src")
-                if source is None or (safe := _safe_url(source)) is None:
-                    return escape(token.content)
-                title = _token_attribute(token, "title")
-                title_attribute = "" if title is None else f' title="{_attribute(title)}"'
-                return f'<img src="{_attribute(safe)}" alt="{_attribute(token.content)}"{title_attribute}>'
-            case _:
-                if token.content:
-                    return escape(token.content)
-                return escape(token.markup)
 
 
 __all__ = ["DEFAULT_CSS", "AssetResolver", "Renderer"]

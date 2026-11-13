@@ -10,11 +10,13 @@ from squid_ui import scene
 from squid_ui.assets import Asset, InlineAsset, LocalAsset, StoredAsset
 from squid_ui.entity import EntityKind, EntityRef
 from squid_ui.errors import DrawInvariantError
+from squid_ui.html._markdown import markdown
 from squid_ui.html._safety import attribute as _attribute
 from squid_ui.html._safety import safe_url as _safe_url
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import AssetResolver
 from squid_ui.temporal import ZonedDateTime
+from squid_ui.text import Markup
 
 PREVIEW_CSS = """
 .squid-view{box-sizing:border-box;max-width:720px;padding:16px;border-radius:8px;background:#313338;color:#dbdee1;
@@ -116,7 +118,8 @@ class DiscordPreviewRenderer:
     ) -> str:
         match node:
             case scene.Text(content=content, markup=markup):
-                return f'<div class="squid-text" data-squid-markup="{markup.value}">{escape(content)}</div>'
+                rendered = escape(content) if markup is Markup.PLAIN else markdown(content, block=True)
+                return f'<div class="squid-text" data-squid-markup="{markup.value}">{rendered}</div>'
             case scene.Time(instant=instant, style=style, prefix=prefix):
                 return (
                     f'<div class="squid-text">{escape(prefix or "")}'

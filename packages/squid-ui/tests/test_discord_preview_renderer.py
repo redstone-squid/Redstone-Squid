@@ -91,3 +91,25 @@ def test_entity_select_shows_its_current_values_as_mentions() -> None:
     assert '<option value="" disabled>Choose a channel</option>' in rendered
     assert '<option value="" disabled selected>Choose a role</option>' in rendered
     assert 'data-squid-entity="role"' in rendered
+
+
+def test_preview_renders_markdown_blocks_and_preserves_literal_text() -> None:
+    from squid_ui.text import Markup
+
+    document = replace(
+        _scene(),
+        body=scene.ComponentsV2(
+            (
+                scene.Text("# Title\n\n**Ready**\n\n- first\n- second\n\n```\nx < y\n```", Markup.DISCORD_MARKDOWN),
+                scene.Text("**literal** <script>", Markup.PLAIN),
+            )
+        ),
+    )
+
+    rendered = DiscordPreviewRenderer().draw(document)
+
+    assert "<h1>Title</h1>" in rendered
+    assert "<strong>Ready</strong>" in rendered
+    assert "<ul><li>" in rendered
+    assert "<pre><code>x &lt; y\n</code></pre>" in rendered
+    assert "**literal** &lt;script&gt;" in rendered
