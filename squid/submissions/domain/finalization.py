@@ -117,7 +117,7 @@ class SubmissionAttentionIssue:
             field_id = self.field_id
             raise ValidationError(
                 md_tr(
-                    t"submissions-invalid-submission-attention = invalid submission attention field ID: {(field_id_text := str(field_id))}",  # noqa: F841 - captured translation binding
+                    t"submissions-invalid-submission-attention = invalid submission attention field ID: {field_id!s}",
                 )
             )
 

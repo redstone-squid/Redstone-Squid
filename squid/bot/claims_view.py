@@ -194,7 +194,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:
     claim_id = claim.id
     name = claim.alias_name
-    heading = md_tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
+    heading = md_tr(t"claims-view-claim = Claim #{claim_id!s} — {name}")
     claimant = present_claimant(claim)
     age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
     detail = md_tr(t"claims-view-opened = {claimant} — opened {age}")
@@ -210,7 +210,7 @@ def _claim_entry(claim: AliasClaim) -> sl.TextLike:
 def _claim_label(claim: AliasClaim) -> sl.text.Text:
     claim_id = claim.id
     name = claim.alias_name
-    return md_tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
+    return md_tr(t"claims-view-claim = Claim #{claim_id!s} — {name}")
 
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:

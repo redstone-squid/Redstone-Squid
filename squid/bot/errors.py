@@ -273,7 +273,7 @@ def _resolved(text: TextLike) -> str:
 
 def _unexpected_error_detail(error_id: str) -> Text:
     return md_tr(
-        t"errors-unexpected-reference = An unexpected error occurred. Reference: `{(error_id_text := str(error_id))}`",  # noqa: F841 - captured translation binding
+        t"errors-unexpected-reference = An unexpected error occurred. Reference: `{error_id!s}`",
     )
 
 

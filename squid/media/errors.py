@@ -232,7 +232,7 @@ class MediaProcessingTimeoutError(MediaProcessingError, TimeoutError):
 def _upload_conflict_message(upload_id: object) -> Text:
     upload_id = str(upload_id)
     return md_tr(
-        t"media-media-upload-exists = Media upload {(upload_id_text := str(upload_id))} already exists with different metadata.",  # noqa: F841 - captured translation binding
+        t"media-media-upload-exists = Media upload {upload_id!s} already exists with different metadata.",
     )
 
 

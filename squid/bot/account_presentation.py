@@ -58,7 +58,7 @@ def reconciliation_lines(refresh: IdentityRefresh) -> list[Text]:
         lines.append(
             md_tr(
                 t"account-claim-awaiting-review = **{name}** is already "
-                t"credited to another account, so it was not moved. Claim #{(id_text := str(id))} is awaiting staff review.",  # noqa: F841 - captured translation binding
+                t"credited to another account, so it was not moved. Claim #{id!s} is awaiting staff review.",
             )
         )
 

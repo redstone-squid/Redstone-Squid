@@ -119,8 +119,8 @@ def delivery_message(delivery: PendingNotificationDelivery) -> Text:
                 t"""
                 notifications-build-review-link =
                     A new build is awaiting staff review.
-                    Open it in Discord with `/build browse id:{(build_id_text := str(build_id))}`.
-                """,  # noqa: F841 - captured translation binding
+                    Open it in Discord with `/build browse id:{build_id!s}`.
+                """,
             )
         return tr(t"notifications-build-awaiting-review = A new build is awaiting staff review.")
     if delivery.kind is NotificationKind.RECORD_GAINED:

@@ -66,7 +66,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
             CardField(
                 tr(t"bot-submission-consent-banner-discord-account = Discord account"),
                 md_tr(
-                    t"bot-submission-consent-banner-value = {(user_mention := sl.mention(user_id))} ({(user_id_text := str(user_id))})",  # noqa: F841 - captured translation binding
+                    t"bot-submission-consent-banner-value = {(user_mention := sl.mention(user_id))} ({user_id!s})",  # noqa: F841 - captured translation binding
                 ),
             ),
             CardField(

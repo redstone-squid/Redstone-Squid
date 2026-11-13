@@ -13,7 +13,7 @@ def claimant_label(claim: AliasClaim) -> str:
     """
     account_id = claim.account_id
     message = md_tr(
-        t"accounts-unidentified-account-internal = unidentified account (internal ID {(account_id_text := str(account_id))})",  # noqa: F841 - captured translation binding
+        t"accounts-unidentified-account-internal = unidentified account (internal ID {account_id!s})",
     )
     claimant = claim.claimant
     if claimant is not None:
@@ -22,13 +22,13 @@ def claimant_label(claim: AliasClaim) -> str:
             return java.display_name
         discord = claimant.most_recent_identity_for(IdentityProvider.DISCORD)
         if claimant.public_creator_id is not None:
-            creator_id = str(claimant.public_creator_id)
+            creator_id = claimant.public_creator_id
             message = md_tr(
-                t"accounts-application-presentation-creator = creator {(creator_id_text := str(creator_id))}",  # noqa: F841 - captured translation binding
+                t"accounts-application-presentation-creator = creator {creator_id!s}",
             )
         elif discord is not None and discord.discord_id is not None:
             discord_id = discord.discord_id
             message = md_tr(
-                t"accounts-application-presentation-discord-user = Discord user {(discord_id_text := str(discord_id))}",  # noqa: F841 - captured translation binding
+                t"accounts-application-presentation-discord-user = Discord user {discord_id!s}",
             )
     return resolve_text(message, current_localization()).plain()

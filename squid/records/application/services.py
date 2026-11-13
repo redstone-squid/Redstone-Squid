@@ -366,7 +366,7 @@ class RecordService:
             requested = kind.value
             raise ValidationError(
                 md_tr(
-                    t"records-record-category-category = Record category {(definition_id_text := str(definition_id))} is "  # noqa: F841 - captured text identifier
+                    t"records-record-category-category = Record category {definition_id!s} is "
                     t"a {actual} category, not {requested}.",
                 )
             )
@@ -583,7 +583,7 @@ def _base_key(source: CandidateBuild) -> str:
     build_id = source.candidate.build_id
     raise DataIntegrityError(
         md_tr(
-            t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.",  # noqa: F841 - captured translation binding
+            t"records-candidate-no-typed = Candidate {build_id!s} has no typed category facts.",
         )
     )
 
@@ -614,7 +614,7 @@ def _category_with_restrictions(
     build_id = source.candidate.build_id
     raise DataIntegrityError(
         md_tr(
-            t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.",  # noqa: F841 - captured translation binding
+            t"records-candidate-no-typed = Candidate {build_id!s} has no typed category facts.",
         )
     )
 

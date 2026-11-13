@@ -35,7 +35,7 @@ def starboard_layout(
         children.append(
             sd.v2.text(
                 md_tr(
-                    t"bot-starboard-render-replying-to-message = -# Replying to message `{(message_id_text := str(message_id))}`",  # noqa: F841 - captured translation binding
+                    t"bot-starboard-render-replying-to-message = -# Replying to message `{message_id!s}`",
                 )
             )
         )

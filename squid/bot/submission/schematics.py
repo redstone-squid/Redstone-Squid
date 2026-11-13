@@ -27,11 +27,11 @@ def _describe(stored: StoredSchematic, *, render_skip: RenderSkipReason | None =
         md_tr(
             t"""
             schematic-build-measured-size =
-                ### Schematic for build {(id_text := str(id))}
+                ### Schematic for build {id!s}
                 {{ "*" }}*Measured size**: {width} x {height} x {length} (bounding volume {volume})
                 {{ "*" }}*Non-air blocks**: {blocks}
                 {{ "*" }}*Distinct block states**: {states}
-            """,  # noqa: F841 - captured translation binding
+            """,
         )
     ]
     if metrics.source_data_version is not None:

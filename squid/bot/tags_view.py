@@ -284,7 +284,7 @@ class TagsScreen(sd.Screen):
         )
         await event.notice(
             md_tr(
-                t"bot-tags-view-tag-is-awaiting-staff-approval = Tag #{(tag_id_text := str(tag_id))} is awaiting staff approval.",  # noqa: F841 - captured translation binding
+                t"bot-tags-view-tag-is-awaiting-staff-approval = Tag #{tag_id!s} is awaiting staff approval.",
             )
         )
 
@@ -309,7 +309,7 @@ class TagsScreen(sd.Screen):
         tag_name = self._tag_names.get(tag_id, str(tag_id))
         await event.notice(
             md_tr(
-                t"bot-tags-view-attached-to-build = Attached **{tag_name}** to build #{(build_id_text := str(build_id))}.",  # noqa: F841 - captured translation binding
+                t"bot-tags-view-attached-to-build = Attached **{tag_name}** to build #{build_id!s}.",
             )
         )
 

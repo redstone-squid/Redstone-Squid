@@ -196,11 +196,11 @@ access-view-this-server = This server
 # squid/bot/access_view.py:529
 access-view-unassign = Unassign
 
-# squid/bot/account_presentation.py:57
-account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id_text } is awaiting staff review.
+# squid/bot/account_presentation.py:59
+account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id } is awaiting staff review.
 
 # squid/bot/account_workspace.py:348
-account-claim-pending-review = Claim #{ $claim_id_text } for **{ $alias_name }** is awaiting staff approval.
+account-claim-pending-review = Claim #{ $claim_id } for **{ $alias_name }** is awaiting staff approval.
 
 # squid/bot/account_presentation.py:51
 account-credits-attributed = Build credits under **{ $name }** are attributed to your account.
@@ -421,11 +421,11 @@ accounts-account-already-linked = Your account is already linked to a different 
 # squid/accounts/errors.py:22
 accounts-account-data-invalid = The account data is invalid.
 
-# squid/accounts/application/presentation.py:28
-accounts-application-presentation-creator = creator { $creator_id_text }
+# squid/accounts/application/presentation.py:26
+accounts-application-presentation-creator = creator { $creator_id }
 
-# squid/accounts/application/presentation.py:33
-accounts-application-presentation-discord-user = Discord user { $discord_id_text }
+# squid/accounts/application/presentation.py:31
+accounts-application-presentation-discord-user = Discord user { $discord_id }
 
 # squid/accounts/models.py:208
 accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject_text }.
@@ -640,8 +640,8 @@ accounts-recent-account-proof-required = Recent account proof required
 # squid/accounts/errors.py:389
 accounts-retry-soon = Try again in a few minutes.
 
-# squid/accounts/application/presentation.py:17
-accounts-unidentified-account-internal = unidentified account (internal ID { $account_id_text })
+# squid/accounts/application/presentation.py:15
+accounts-unidentified-account-internal = unidentified account (internal ID { $account_id })
 
 # squid/accounts/errors.py:185
 accounts-unlink-before-link = Unlink the current account before linking a new one.
@@ -958,8 +958,8 @@ bot-settings-view-confirm-reset = Confirm reset
 # squid/bot/settings_view.py:55
 bot-settings-view-confirmed-builds = Confirmed builds
 
-# squid/bot/settings_view.py:570
-bot-settings-view-deleted-role = _Deleted role_ ({ $role_id_text })
+# squid/bot/settings_view.py:575
+bot-settings-view-deleted-role = _Deleted role_ ({ $role_id })
 
 # squid/bot/settings_view.py:62
 bot-settings-view-deletion-votes = Deletion votes
@@ -985,8 +985,8 @@ bot-settings-view-is-not-a-vote-choice = `{ $choice_text }` is not a vote choice
 # squid/bot/settings_view.py:553, squid/bot/settings_view.py:561
 bot-settings-view-none = _None_
 
-# squid/bot/settings_view.py:324
-bot-settings-view-not-found = _Not found_ ({ $channel_id_text })
+# squid/bot/settings_view.py:323
+bot-settings-view-not-found = _Not found_ ({ $channel_id })
 
 # squid/bot/settings_view.py:322
 bot-settings-view-not-set = _Not set_
@@ -1036,8 +1036,8 @@ bot-starboard-render-original-message = Original message
 # squid/bot/starboard/render.py:56
 bot-starboard-render-reactions = { " " }({ $count } reactions)
 
-# squid/bot/starboard/render.py:38
-bot-starboard-render-replying-to-message = -# Replying to message `{ $message_id_text }`
+# squid/bot/starboard/render.py:37
+bot-starboard-render-replying-to-message = -# Replying to message `{ $message_id }`
 
 # squid/bot/starboard/screen.py:417
 bot-starboard-screen-add-or-replace = Add or replace
@@ -1154,7 +1154,7 @@ bot-starboard-screen-value = Value
 bot-submission-build-browse-approve = Approve
 
 # squid/bot/submission/build_browse.py:260
-bot-submission-build-browse-build = { $action } build #{ $build_id_text }?
+bot-submission-build-browse-build = { $action } build #{ $build_id }?
 
 # squid/bot/submission/build_browse.py:403
 bot-submission-build-browse-build-catalogue = Build catalogue
@@ -1214,7 +1214,7 @@ bot-submission-consent-banner-consent-recorded = Consent recorded
 bot-submission-consent-banner-discord-account = Discord account
 
 # squid/bot/submission/consent_banner.py:68
-bot-submission-consent-banner-value = { $user_mention } ({ $user_id_text })
+bot-submission-consent-banner-value = { $user_mention } ({ $user_id })
 
 # squid/bot/submission/edit.py:82
 bot-submission-edit-cannot-use-options = Cannot use these options
@@ -1318,7 +1318,7 @@ bot-submission-search-open-this-build-directly = Open this build directly.
 # squid/bot/submission/search_view.py:265
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
-    { $build_title } ({ $build_id_text })
+    { $build_title } ({ $build_id })
     { "*" }*Base title**
     { $base_title } · { $version_scope }
 
@@ -1437,7 +1437,7 @@ bot-tags-view-approve = Approve
 bot-tags-view-archive = Archive
 
 # squid/bot/tags_view.py:311
-bot-tags-view-attached-to-build = Attached **{ $tag_name }** to build #{ $build_id_text }.
+bot-tags-view-attached-to-build = Attached **{ $tag_name }** to build #{ $build_id }.
 
 # squid/bot/tags_view.py:434
 bot-tags-view-build-id = Build ID
@@ -1509,7 +1509,7 @@ bot-tags-view-restriction-aliases = Restriction aliases
 bot-tags-view-tag-id = Tag ID
 
 # squid/bot/tags_view.py:286
-bot-tags-view-tag-is-awaiting-staff-approval = Tag #{ $tag_id_text } is awaiting staff approval.
+bot-tags-view-tag-is-awaiting-staff-approval = Tag #{ $tag_id } is awaiting staff approval.
 
 # squid/bot/tags_view.py:183
 bot-tags-view-tag-proposals-awaiting-review = Tag proposals awaiting review
@@ -2129,8 +2129,8 @@ claims-review-heading = Creator credit claims awaiting review
 # squid/bot/claims_view.py:99
 claims-view-approve = Approve
 
-# squid/bot/claims_view.py:195, squid/bot/claims_view.py:209
-claims-view-claim = Claim #{ $claim_id_text } — { $name }
+# squid/bot/claims_view.py:197, squid/bot/claims_view.py:213
+claims-view-claim = Claim #{ $claim_id } — { $name }
 
 # squid/bot/claims_view.py:180
 claims-view-credited-to = Credited **{ $name }** to { $claimant }.
@@ -2574,7 +2574,7 @@ consent-prompt-already-open = You already have a consent prompt open. Please ans
 consent-storage-prerequisite = Before Redstone Squid stores anything about you
 
 # squid/bot/consent.py:159, squid/bot/consent.py:195
-consent-value-2 = { $user_mention } (`{ $user_id_text }`)
+consent-value-2 = { $user_mention } (`{ $user_id }`)
 
 # squid/core/errors.py:245
 core-configuration-invalid = Application configuration is invalid.
@@ -3000,8 +3000,8 @@ draft-editor-size-help = Width x height x depth in blocks. Use ? for a value you
 # squid/bot/submission/ui/drafts.py:766
 draft-editor-status-creating = ⏳ Creating your build. This usually takes under a minute; this message updates when it is done.
 
-# squid/bot/submission/ui/drafts.py:773
-draft-editor-status-done = ✅ Your build was saved as **#{ $build_id_text }** and is now pending review. You can still edit it while it waits.
+# squid/bot/submission/ui/drafts.py:777
+draft-editor-status-done = ✅ Your build was saved as **#{ $build_id }** and is now pending review. You can still edit it while it waits.
 
 # squid/bot/submission/ui/drafts.py:778
 draft-editor-status-done-unknown = ✅ Your build was saved and is now pending review.
@@ -3179,8 +3179,8 @@ errors-something-went-wrong = Something went wrong
 # squid/bot/errors.py:223
 errors-try-again-in-seconds = Try again in { NUMBER($seconds, minimumFractionDigits: 1, maximumFractionDigits: 1) } seconds.
 
-# squid/bot/errors.py:273
-errors-unexpected-reference = An unexpected error occurred. Reference: `{ $error_id_text }`
+# squid/bot/errors.py:275
+errors-unexpected-reference = An unexpected error occurred. Reference: `{ $error_id }`
 
 # squid/events/application.py:77
 events-claim-limit-out-of-range = claim limit must be between 1 and 100
@@ -3674,7 +3674,7 @@ media-media-upload-draft = Media upload and draft identifiers cannot be nil UUID
 media-media-upload-exceeds = Media upload exceeds the { $limit }-byte source limit.
 
 # squid/media/errors.py:234
-media-media-upload-exists = Media upload { $upload_id_text } already exists with different metadata.
+media-media-upload-exists = Media upload { $upload_id } already exists with different metadata.
 
 # squid/media/application/jobs.py:156
 media-media-upload-identifiers = Media upload identifiers cannot be nil UUIDs.
@@ -3817,7 +3817,7 @@ notifications-build-ready = A build notification is available.
 # squid/bot/notifications.py:118
 notifications-build-review-link =
     A new build is awaiting staff review.
-    Open it in Discord with `/build browse id:{ $build_id_text }`.
+    Open it in Discord with `/build browse id:{ $build_id }`.
 
 # squid/bot/notifications_view.py:94
 notifications-channel-and-follow-help = Toggle where notifications arrive, and unfollow what you no longer want.
@@ -4180,7 +4180,7 @@ record-browse-empty = No published records are available.
 record-browse-no-holders = No confirmed holders yet.
 
 # squid/bot/submission/record_browser.py:58
-record-browse-open-holder = Open build #{ $build_id_text }
+record-browse-open-holder = Open build #{ $build_id }
 
 # squid/bot/submission/record_browser.py:78
 record-browse-title = Records
@@ -4209,8 +4209,8 @@ record-filter-hint = Toggle any record types; none selected means all types. Sea
 # squid/bot/submission/commands.py:201
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
-# squid/records/application/services.py:585, squid/records/application/services.py:614
-records-candidate-no-typed = Candidate { $build_id_text } has no typed category facts.
+# squid/records/application/services.py:585, squid/records/application/services.py:616
+records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/records/errors.py:29, squid/records/errors.py:45
 records-category-not-found-title = Record category not found
@@ -4258,13 +4258,13 @@ records-rebuild-summary = Rebuilt { $definitions } definitions; { $resolved } re
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
 # squid/records/application/services.py:368
-records-record-category-category = Record category { $definition_id_text } is a { $actual } category, not { $requested }.
+records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
 # squid/records/errors.py:28
 records-record-category-not-found = Record category not found.
 
 # squid/records/infrastructure/repository.py:511
-records-record-definition-stores = Record definition { $definition_id_text } stores a category key that does not parse.
+records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
 # squid/records/errors.py:16
 records-record-not-found-title = Record not found
@@ -4322,7 +4322,7 @@ schematic-block-count-disclaimer = -# Read by { $analyzer }. Block count is not 
 
 # squid/bot/submission/schematics.py:27
 schematic-build-measured-size =
-    ### Schematic for build { $id_text }
+    ### Schematic for build { $id }
     { "*" }*Measured size**: { $width } x { $height } x { $length } (bounding volume { $volume })
     { "*" }*Non-air blocks**: { $blocks }
     { "*" }*Distinct block states**: { $states }
@@ -4921,8 +4921,8 @@ submissions-choice-characters-without = choice values must be 1-120 characters w
 # squid/submissions/domain/forms.py:90
 submissions-choice-labels-blank = choice labels cannot be blank
 
-# squid/submissions/domain/forms.py:216
-submissions-choice-options-required = choice field { $field_id_text } requires options
+# squid/submissions/domain/forms.py:218
+submissions-choice-options-required = choice field { $field_id } requires options
 
 # squid/submissions/application/forms.py:348
 submissions-choose-explicitly-publication = Nothing is published unless you choose Anyone.
@@ -5020,26 +5020,26 @@ submissions-exact-source-minecraft = Minecraft version
 # squid/submissions/domain/finalization.py:275
 submissions-extender-length-positive = extender length must be positive
 
-# squid/submissions/domain/forms.py:234
-submissions-field-apply = field { $field_id_text } must apply to at least one origin
+# squid/submissions/domain/forms.py:236
+submissions-field-apply = field { $field_id } must apply to at least one origin
 
 # squid/submissions/domain/forms.py:204
-submissions-field-blank-label = field { $field_id_text } has a blank label
+submissions-field-blank-label = field { $field_id } has a blank label
 
-# squid/submissions/domain/forms.py:210
-submissions-field-inline-dynamic = field { $field_id_text } cannot have inline and dynamic options
+# squid/submissions/domain/forms.py:212
+submissions-field-inline-dynamic = field { $field_id } cannot have inline and dynamic options
 
 # squid/submissions/domain/forms.py:530
 submissions-field-name-format = { $label } must start with a letter and contain only lowercase letters, digits, or underscores
 
-# squid/submissions/domain/normalization.py:157
-submissions-field-not-integer = validated field { $field_id_text } is not an integer
+# squid/submissions/domain/normalization.py:161
+submissions-field-not-integer = validated field { $field_id } is not an integer
 
-# squid/submissions/domain/normalization.py:127, squid/submissions/domain/normalization.py:138
-submissions-field-not-string = validated field { $field_id_text } is not a string
+# squid/submissions/domain/normalization.py:127, squid/submissions/domain/normalization.py:140
+submissions-field-not-string = validated field { $field_id } is not a string
 
-# squid/submissions/domain/forms.py:228
-submissions-field-purpose = field { $field_id_text } must apply to at least one purpose
+# squid/submissions/domain/forms.py:230
+submissions-field-purpose = field { $field_id } must apply to at least one purpose
 
 # squid/submissions/application/finalization.py:259
 submissions-finalization-job-missing = processing draft has no active finalization job
@@ -5057,10 +5057,10 @@ submissions-form-revision-protocol = form revision and protocol bounds must be p
 submissions-i-permission-distribute = I have permission to distribute this schematic under the selected license.
 
 # squid/submissions/domain/drafts.py:90
-submissions-invalid-draft-field-id = invalid draft field ID: { $field_id_text }
+submissions-invalid-draft-field-id = invalid draft field ID: { $field_id }
 
 # squid/submissions/domain/finalization.py:119
-submissions-invalid-submission-attention = invalid submission attention field ID: { $field_id_text }
+submissions-invalid-submission-attention = invalid submission attention field ID: { $field_id }
 
 # squid/submissions/domain/drafts.py:255
 submissions-json-contain-too = draft JSON values contain too many nodes
@@ -5095,8 +5095,8 @@ submissions-normalized-submission-provenance = normalized submission provenance 
 # squid/submissions/domain/finalization.py:325
 submissions-normalized-submission-schema = normalized submission schema provenance is invalid
 
-# squid/submissions/domain/normalization.py:183
-submissions-not-string-list = validated field { $field_id_text } is not a string list
+# squid/submissions/domain/normalization.py:187
+submissions-not-string-list = validated field { $field_id } is not a string list
 
 # squid/submissions/domain/drafts.py:136
 submissions-operation-ids-unique = operation IDs must be unique within a draft change
@@ -5143,8 +5143,8 @@ submissions-rejected-build-submission = rejected build submission requires at le
 # squid/submissions/application/preparation.py:45
 submissions-rejected-preparation-requirement = rejected submission preparation requires at least one issue
 
-# squid/submissions/domain/forms.py:222
-submissions-repeatable-field-use = repeatable field { $field_id_text } must use string_list values
+# squid/submissions/domain/forms.py:224
+submissions-repeatable-field-use = repeatable field { $field_id } must use string_list values
 
 # squid/submissions/application/forms.py:300
 submissions-restrictions-tags = Restrictions and tags
@@ -5164,8 +5164,8 @@ submissions-schema-revision-positive = schema_revision must be positive and revi
 # squid/submissions/application/forms.py:340
 submissions-schematic-rights-privacy = Schematic sharing
 
-# squid/submissions/domain/forms.py:259
-submissions-section-blank-title = section { $section_id_text } has a blank title
+# squid/submissions/domain/forms.py:261
+submissions-section-blank-title = section { $section_id } has a blank title
 
 # squid/submissions/application/forms.py:182
 submissions-show-sponsoring-server = Show the sponsoring server on this build
@@ -5212,8 +5212,8 @@ submissions-unset-operations-carry = unset operations cannot carry a value
 # squid/submissions/application/forms.py:156
 submissions-unsupported-checked-submission = unsupported checked-in submission form revision
 
-# squid/submissions/domain/normalization.py:168
-submissions-validated-field-not = validated field { $field_id_text } is not a boolean
+# squid/submissions/domain/normalization.py:172
+submissions-validated-field-not = validated field { $field_id } is not a boolean
 
 # squid/submissions/domain/finalization.py:195
 submissions-verified-artifact-identifiers = verified artifact identifiers cannot be nil UUIDs
@@ -5276,10 +5276,10 @@ submit-staff-notes-prompt = A short description of the build.
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
 # squid/suggestions/application/registry.py:83
-suggestions-duplicate-suggestion-source = duplicate suggestion source: { $source_id_text }
+suggestions-duplicate-suggestion-source = duplicate suggestion source: { $source_id }
 
 # squid/suggestions/application/services.py:119
-suggestions-enumerated = { $source_id_text } cannot be enumerated
+suggestions-enumerated = { $source_id } cannot be enumerated
 
 # squid/suggestions/application/registry.py:55
 suggestions-invalid-suggestion-source = invalid suggestion source id: { $source_id_text }
@@ -5288,7 +5288,7 @@ suggestions-invalid-suggestion-source = invalid suggestion source id: { $source_
 suggestions-no-such-suggestion = No such suggestion source.
 
 # squid/suggestions/application/registry.py:62
-suggestions-required-node-set = { $source_id_text }: required_node must be set exactly when visibility is requires_node
+suggestions-required-node-set = { $source_id }: required_node must be set exactly when visibility is requires_node
 
 # squid/suggestions/application/registry.py:25
 suggestions-unknown-suggestion-source = Unknown suggestion source

@@ -346,7 +346,7 @@ class AccountWorkspace(sd.Screen):
         alias_name = claim.alias_name
         await event.notice(
             md_tr(
-                t"account-claim-pending-review = Claim #{(claim_id_text := str(claim_id))} for **{alias_name}** is awaiting staff approval.",  # noqa: F841 - captured translation binding
+                t"account-claim-pending-review = Claim #{claim_id!s} for **{alias_name}** is awaiting staff approval.",
             )
         )
 

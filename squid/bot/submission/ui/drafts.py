@@ -775,7 +775,7 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
             result = ws.result.result if ws.result is not None else None
             status = (
                 md_tr(
-                    t"draft-editor-status-done = ✅ Your build was saved as **#{(build_id_text := str(result.build_id))}** "  # noqa: F841 - captured text identifier
+                    t"draft-editor-status-done = ✅ Your build was saved as **#{(build_id := result.build_id)!s}** "  # noqa: F841 - captured text identifier
                     t"and is now pending review. You can still edit it while it waits.",
                 )
                 if result is not None

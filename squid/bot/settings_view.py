@@ -321,7 +321,7 @@ class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return tr(t"bot-settings-view-not-set = _Not set_")
         if self._guild.get_channel_or_thread(channel_id) is None:
             return md_tr(
-                t"bot-settings-view-not-found = _Not found_ ({(channel_id_text := str(channel_id))})",  # noqa: F841 - captured translation binding
+                t"bot-settings-view-not-found = _Not found_ ({channel_id!s})",
             )
         return sl.mention(channel_id, kind="channel")
 
@@ -573,7 +573,7 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         role = self._guild.get_role(role_id)
         if role is None:
             return md_tr(
-                t"bot-settings-view-deleted-role = _Deleted role_ ({(role_id_text := str(role_id))})",  # noqa: F841 - captured translation binding
+                t"bot-settings-view-deleted-role = _Deleted role_ ({role_id!s})",
             )
         return role.name
 

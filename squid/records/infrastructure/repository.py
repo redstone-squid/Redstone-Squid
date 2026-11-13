@@ -510,7 +510,7 @@ class PostgresRecordRepository:
             raise DataIntegrityError(
                 md_tr(
                     t"records-record-definition-stores = "
-                    t"Record definition {(definition_id_text := str(definition_id))} stores a category key that does not parse.",  # noqa: F841 - captured translation binding
+                    t"Record definition {definition_id!s} stores a category key that does not parse.",
                 )
             )
         return identity

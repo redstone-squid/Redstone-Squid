@@ -117,7 +117,7 @@ class SuggestionService:
         if source.kind is not SourceKind.ENUMERABLE:
             raise ValidationError(
                 md_tr(
-                    t"suggestions-enumerated = {(source_id_text := str(source_id))} cannot be enumerated",  # noqa: F841 - captured translation binding
+                    t"suggestions-enumerated = {source_id!s} cannot be enumerated",
                 )
             )
         request = SuggestionRequest(

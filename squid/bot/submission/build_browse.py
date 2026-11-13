@@ -258,7 +258,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             sl.heading(tr(t"build-review-confirmation-title = Confirm review decision")),
             sl.paragraph(
                 md_tr(
-                    t"bot-submission-build-browse-build = {action} build #{(build_id_text := str(build_id))}?",  # noqa: F841 - captured translation binding
+                    t"bot-submission-build-browse-build = {action} build #{build_id!s}?",
                 )
             ),
         )

@@ -266,10 +266,10 @@ def _detail_text(hit: SearchHit) -> sl.TextLike:
             t"""
             bot-submission-search-view-build-base-title =
                 {{ "*" }}*Build**
-                {build_title} ({(build_id_text := str(build_id))})
+                {build_title} ({build_id!s})
                 {{ "*" }}*Base title**
                 {base_title} · {version_scope}
-            """,  # noqa: F841 - captured translation binding
+            """,
         )
         if hit.metrics:
             metrics = ", ".join(f"{key}: {value}" for key, value in hit.metrics.items())
