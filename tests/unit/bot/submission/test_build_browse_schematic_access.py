@@ -74,7 +74,6 @@ def _detail(stored: StoredSchematic | None, *, actor: int | None, held: set[str]
     return SchematicTools(
         7,
         schematics=FeaturedSchematics(stored),
-        measure_timing=False,
         actor_account_id=actor,
         authorize=authorize,
     )

@@ -22,7 +22,6 @@ from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
-    BUILD_SCHEMATIC_MEASURE_TIMING,
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_DEBUG,
     BUILD_SUBMISSION_EDIT,
@@ -237,7 +236,6 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             reject=await held(BUILD_SUBMISSION_REJECT),
             debug=await held(BUILD_SUBMISSION_DEBUG),
             edit=await held(BUILD_SUBMISSION_EDIT),
-            measure_timing=await held(BUILD_SCHEMATIC_MEASURE_TIMING),
         )
 
         async def authorize(node: PermissionNode) -> bool:

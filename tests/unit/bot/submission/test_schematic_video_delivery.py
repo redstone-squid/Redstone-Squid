@@ -24,9 +24,7 @@ def delivery(monkeypatch: pytest.MonkeyPatch) -> tuple[SchematicTools, Mock, Moc
     service.public_base_url = "https://squid.example"
     schematics = Mock(spec=SchematicService)
     schematics.videos = service
-    component = SchematicTools(
-        7, schematics=schematics, measure_timing=False, actor_account_id=10, authorize=AsyncMock(return_value=True)
-    )
+    component = SchematicTools(7, schematics=schematics, actor_account_id=10, authorize=AsyncMock(return_value=True))
     request = Mock(spec=sd.Request)
     request.interaction = Mock(filesize_limit=100)
     request.interaction.is_expired.return_value = False

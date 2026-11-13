@@ -11,8 +11,6 @@ import squid_ui_discord as sd
 from squid.bot.submission.schematics import (
     WRITABLE_EXTENSIONS,
     _describe,
-    _describe_input_refusal,
-    _describe_timing,
     _parse_position,
 )
 from squid.bot.ui import tr
@@ -20,14 +18,13 @@ from squid.bot.utils.permissions import actor_for_interaction, allows
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
-    BUILD_SCHEMATIC_MEASURE_TIMING,
     BUILD_SCHEMATIC_VIEW_PRIVATE,
 )
 from squid.runtime import BackgroundTaskSupervisor
 from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
 from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
-from squid.schematics.errors import AmbiguousSimulationInputError, SchematicRenderRefusedError
+from squid.schematics.errors import SchematicRenderRefusedError
 
 
 class _VideoTaskHost(Protocol):
@@ -46,14 +43,12 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         build_id: int,
         *,
         schematics: SchematicService,
-        measure_timing: bool,
         actor_account_id: int | None,
         authorize: Callable[[PermissionNode], Awaitable[bool]],
         show_details: Callable[[], bool] | None = None,
     ) -> None:
         self._build_id = build_id
         self._schematics = schematics
-        self._measure_timing = measure_timing
         self._actor_account_id = actor_account_id
         self._authorize = authorize
         self._show_details = show_details
@@ -107,13 +102,6 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     key="convert",
                     on_submit=self._convert,
                 ),
-                self._measure_timing
-                and sl.form(
-                    tr(t"bot-submission-build-browse-measure-timing = Measure timing"),
-                    self._timing_form(),
-                    key="timing",
-                    on_submit=self._timing,
-                ),
                 videos_enabled
                 and sl.form(
                     tr(t"schematic-video-action = Render video"),
@@ -135,10 +123,6 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
     @staticmethod
     def _convert_form() -> sl.forms.FormSpec:
         return _ConvertForm().spec()
-
-    @staticmethod
-    def _timing_form() -> sl.forms.FormSpec:
-        return _TimingForm().spec()
 
     async def _primary(self, event: sl.ActionEvent, private_access: PermissionNode) -> StoredSchematic | None:
         """Return the featured schematic if the actor may use it, otherwise tell them why not.
@@ -329,27 +313,6 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             t"bot-submission-build-browse-conversion-report = Conversion report: {loss_summary}"
         )
 
-    async def _timing(self, event: sl.SubmitEvent) -> None:
-        if (
-            not await self._may(event, BUILD_SCHEMATIC_MEASURE_TIMING)
-            or await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE) is None
-        ):
-            return
-        form = _TimingForm.from_submission(event)
-        raw = form.input or None
-        position = _parse_position(raw)
-        if raw is not None and position is None:
-            await event.notice(
-                tr(t"build-input-position-invalid = Input position must contain three integers, for example `12 5 -3`.")
-            )
-            return
-        try:
-            result = await self._schematics.measure_timing(self._build_id, input_position=position)
-        except AmbiguousSimulationInputError as error:
-            self._schematic_result = _describe_input_refusal(error)
-            return
-        self._schematic_result = _describe_timing(result)
-
     def _schematic_asset(self, data: bytes, extension: str) -> sl.document.Asset:
         return sl.document.Asset(
             "schematic",
@@ -358,20 +321,15 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             sl.document.InlineAsset(data),
         )
 
-    async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
-        if await self._authorize(node):
-            return True
-        await event.notice(
-            tr(t"build-operation-permission-denied = You are no longer allowed to perform this build operation.")
-        )
-        return False
-
 
 class _ConvertForm(sl.forms.Form):
     title = tr(t"bot-submission-build-browse-convert-schematic = Convert schematic")
 
     format = sl.forms.ChoiceField(
         label=tr(t"bot-submission-build-browse-output-format = Output format"),
+        description=tr(
+            t"schematic-convert-format-help = litematic for Litematica; schem for WorldEdit; mcstructure for Bedrock."
+        ),
         default=SchematicFormat.LITEMATIC,
         options=tuple(
             sl.forms.ChoiceOption(file_format.value, file_format.value, file_format)
@@ -379,20 +337,17 @@ class _ConvertForm(sl.forms.Form):
         ),
     )
     data_version = sl.forms.IntField(
-        label=tr(t"build-minecraft-data-version-label = Minecraft data version"), required=False
+        label=tr(t"build-minecraft-data-version-label = Minecraft data version"),
+        description=tr(
+            t"schematic-convert-data-help = Advanced: numeric world-format ID. Leave blank when using a version name."
+        ),
+        required=False,
     )
     version = sl.forms.TextField(
         label=tr(t"build-minecraft-version-label = Minecraft version name"),
-        required=False,
-        maximum=100,
-    )
-
-
-class _TimingForm(sl.forms.Form):
-    title = tr(t"build-schematic-timing-action = Measure schematic timing")
-
-    input = sl.forms.TextField(
-        label=tr(t"bot-submission-build-browse-input-position-x-y-z = Input position (x y z)"),
+        description=tr(
+            t"schematic-convert-version-help = For example, 1.21. Leave both version fields blank to keep the current version."
+        ),
         required=False,
         maximum=100,
     )
@@ -402,6 +357,9 @@ class _VideoForm(sl.forms.Form):
     title = tr(t"schematic-video-action = Render video")
     simulate = sl.forms.ChoiceField(
         label=tr(t"schematic-video-motion = Build motion"),
+        description=tr(
+            t"schematic-video-motion-help = Simulate lever or button activations, or show the build without activating it."
+        ),
         default=True,
         options=(
             sl.forms.ChoiceOption("simulate", tr(t"schematic-video-simulate = Simulate inputs"), value=True),
@@ -409,13 +367,26 @@ class _VideoForm(sl.forms.Form):
         ),
     )
     seconds = sl.forms.IntField(
-        label=tr(t"schematic-video-duration = Duration (seconds)"), default=6, minimum=1, maximum=10
+        label=tr(t"schematic-video-duration = Duration (seconds)"),
+        description=tr(t"schematic-video-duration-help = 1 to 10 seconds. There are 20 game ticks per second."),
+        default=6,
+        minimum=1,
+        maximum=10,
     )
     orbit = sl.forms.IntField(
-        label=tr(t"schematic-video-orbit = Camera orbit (degrees; 0 for fixed)"), default=180, minimum=-360, maximum=360
+        label=tr(t"schematic-video-orbit = Camera orbit (degrees; 0 for fixed)"),
+        description=tr(
+            t"schematic-video-orbit-help = 180 is a half turn; 360 is a full turn. Negative values reverse direction."
+        ),
+        default=180,
+        minimum=-360,
+        maximum=360,
     )
     interactions = sl.forms.TextField(
         label=tr(t"schematic-video-inputs = Activations: tick x y z, one per line"),
+        description=tr(
+            t"schematic-video-inputs-help = 20 activates the detected input after 1s; 20 1 2 3 selects a position. Ignored for static builds."
+        ),
         default="20",
         required=False,
         maximum=1000,

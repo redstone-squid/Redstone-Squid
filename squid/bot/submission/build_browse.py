@@ -78,7 +78,6 @@ class BuildCapabilities:
     reject: bool
     debug: bool
     edit: bool
-    measure_timing: bool
 
 
 class _BuildSource:
@@ -154,7 +153,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self.schematics = SchematicTools(
             build.id,
             schematics=schematics,
-            measure_timing=capabilities.measure_timing,
             actor_account_id=actor_account_id,
             authorize=authorize,
             show_details=lambda: self._show_schematics,

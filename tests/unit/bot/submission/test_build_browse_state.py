@@ -74,7 +74,6 @@ def _screen(
             reject=True,
             debug=False,
             edit=False,
-            measure_timing=False,
         ),
         actor_account_id=1,
         authorize=authorize,
