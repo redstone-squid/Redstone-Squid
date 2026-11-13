@@ -45,8 +45,8 @@ async def search_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
 
 
-async def seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Index one document per restriction, plus filler so the planner has a reason to use an index."""
+async def seed(session_factory: async_sessionmaker[AsyncSession], *, creator_count: int = 7) -> None:
+    """Seed restrictions and enough creator values to check filtering, deduplication and limits."""
     async with session_factory() as session, session.begin():
         for index, name in enumerate(RESTRICTIONS):
             document = SearchDocument(
@@ -62,8 +62,8 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
             session.add(
                 SearchDocumentFacet(document_id=document.id, field_name="restriction", ordinal=0, text_value=name)
             )
-        # Give the planner enough unrelated rows to favor a selective prefix index scan.
-        for index in range(2_000):
+        # The first two documents share a creator, so DISTINCT has observable work to do.
+        for index in range(creator_count):
             filler = SearchDocument(
                 resource_kind="build",
                 source_key=f"filler-{index}",
@@ -76,11 +76,9 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
             await session.flush()
             session.add(
                 SearchDocumentFacet(
-                    document_id=filler.id, field_name="creator", ordinal=0, text_value=f"Builder {index}"
+                    document_id=filler.id, field_name="creator", ordinal=0, text_value=f"Builder {max(0, index - 1)}"
                 )
             )
-    async with session_factory() as session, session.begin():
-        await session.execute(text("ANALYZE search_document_facets"))
 
 
 @pytest.mark.usefixtures("search_tables")
@@ -111,8 +109,7 @@ async def test_facet_values_are_distinct_and_bounded(
     await seed(async_session_factory)
     repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     values = await repository.facet_values("creator", "builder", limit=5)
-    assert len(values) == 5
-    assert len(set(values)) == 5
+    assert values == [f"Builder {index}" for index in range(5)]
 
 
 @pytest.mark.usefixtures("search_tables")
@@ -120,8 +117,9 @@ async def test_the_prefix_query_uses_the_prefix_index(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A selective prefix should use the index without disabling sequential scans."""
-    await seed(async_session_factory)
+    await seed(async_session_factory, creator_count=2_000)
     async with async_session_factory() as session:
+        await session.execute(text("ANALYZE search_document_facets"))
         plan = "\n".join(
             row
             for row in (
