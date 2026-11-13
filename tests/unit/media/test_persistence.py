@@ -39,6 +39,5 @@ def test_media_checked_text_columns_round_trip_as_domain_enums() -> None:
     postgres = dialect()
 
     assert kind_type.process_result_value("video", postgres) is MediaKind.VIDEO
-    assert role_type.process_result_value("poster", postgres) is MediaArtifactRole.POSTER
     assert role_type.process_result_value("video_thumbnail", postgres) is MediaArtifactRole.VIDEO_THUMBNAIL
     assert status_type.process_result_value("claimed", postgres) is MediaJobStatus.CLAIMED

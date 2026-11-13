@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.media.application.jobs import MEDIA_VIDEO_THUMBNAIL_ROLES, MediaJobSnapshot
+from squid.media.application.jobs import MediaJobSnapshot
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 
@@ -70,7 +70,7 @@ class DraftMediaResponse(StrictSchema):
             (
                 artifact
                 for artifact in snapshot.artifacts
-                if artifact.role is MediaArtifactRole.OUTPUT or artifact.role in MEDIA_VIDEO_THUMBNAIL_ROLES
+                if artifact.role in {MediaArtifactRole.OUTPUT, MediaArtifactRole.VIDEO_THUMBNAIL}
             ),
             key=lambda artifact: artifact.role.value,
         )
@@ -82,11 +82,7 @@ class DraftMediaResponse(StrictSchema):
             source_content_type=snapshot.upload.source_content_type,
             artifacts=[
                 DraftMediaArtifactResponse(
-                    role=(
-                        DraftMediaArtifactRole.OUTPUT
-                        if artifact.role is MediaArtifactRole.OUTPUT
-                        else DraftMediaArtifactRole.VIDEO_THUMBNAIL
-                    ),
+                    role=DraftMediaArtifactRole(artifact.role.value),
                     content_type=artifact.content_type,
                     width=_dimension(artifact.width),
                     height=_dimension(artifact.height),

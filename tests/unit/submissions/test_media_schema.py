@@ -33,7 +33,7 @@ async def test_list_get_and_discard_keep_stable_states_without_private_artifacts
         height=6,
     )
     poster = StoredMediaArtifact(
-        role=MediaArtifactRole.POSTER,
+        role=MediaArtifactRole.VIDEO_THUMBNAIL,
         object_key="private/posters/secret",
         content_type="image/jpeg",
         byte_size=3,

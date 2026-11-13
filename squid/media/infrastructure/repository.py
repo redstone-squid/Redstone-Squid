@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.media.application.jobs import (
-    MEDIA_VIDEO_THUMBNAIL_ROLES,
     ArtifactCleanupClaim,
     ClaimedMediaJob,
     MediaDraftUploadAuthorization,
@@ -414,7 +413,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 MediaArtifactRecord.role.in_(
                     (
                         MediaArtifactRole.OUTPUT,
-                        MediaArtifactRole.POSTER,
                         MediaArtifactRole.VIDEO_THUMBNAIL,
                     )
                 ),
@@ -423,7 +421,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         proposed_output_bytes = sum(
             artifact.byte_size
             for artifact in artifacts
-            if artifact.role is MediaArtifactRole.OUTPUT or artifact.role in MEDIA_VIDEO_THUMBNAIL_ROLES
+            if artifact.role in {MediaArtifactRole.OUTPUT, MediaArtifactRole.VIDEO_THUMBNAIL}
         )
         totals = MediaBatchTotals(output_bytes=int(existing_output_bytes or 0) + proposed_output_bytes)
         if violations := limits.batch_violations(totals):
@@ -771,8 +769,8 @@ def _snapshot(
 def _validate_completed_artifacts(kind: MediaKind, artifacts: Sequence[StoredMediaArtifact]) -> None:
     roles = [artifact.role for artifact in artifacts]
     expected = {MediaArtifactRole.OUTPUT, MediaArtifactRole.REPORT}
-    role_set = set(roles)
-    valid_thumbnail = len(role_set & MEDIA_VIDEO_THUMBNAIL_ROLES) == int(kind is MediaKind.VIDEO)
-    if len(roles) != len(role_set) or role_set - MEDIA_VIDEO_THUMBNAIL_ROLES != expected or not valid_thumbnail:
+    if kind is MediaKind.VIDEO:
+        expected.add(MediaArtifactRole.VIDEO_THUMBNAIL)
+    if len(roles) != len(set(roles)) or set(roles) != expected:
         msg = f"Completed {kind.value} media requires exactly these artifacts: {sorted(expected)}."
         raise ValueError(msg)

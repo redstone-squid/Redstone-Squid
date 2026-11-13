@@ -736,7 +736,7 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
     assert snapshot.upload.raw_deleted_at == NOW
     assert {artifact.role for artifact in snapshot.artifacts} == {
         MediaArtifactRole.OUTPUT,
-        MediaArtifactRole.POSTER,
+        MediaArtifactRole.VIDEO_THUMBNAIL,
         MediaArtifactRole.REPORT,
     }
     assert snapshot.upload.source_object_key not in artifacts.objects
@@ -747,7 +747,7 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
     assert report_payload["actions"] == ["video_transcoded"]
     assert "poster" in report_payload
     assert "video_thumbnail" not in report_payload
-    thumbnail = next(artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.POSTER)
+    thumbnail = next(artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.VIDEO_THUMBNAIL)
     assert thumbnail.object_key.startswith("media/posters/")
     assert not any(tmp_path.iterdir())
     assert all(not directory.exists() for directory in normalizer.seen_directories)

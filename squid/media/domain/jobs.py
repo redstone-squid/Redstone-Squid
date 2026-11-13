@@ -17,7 +17,5 @@ class MediaArtifactRole(StrEnum):
     """The purpose of a durable artifact produced by normalization."""
 
     OUTPUT = "output"
-    # Legacy thumbnail role; the worker still writes it while older readers remain supported.
-    POSTER = "poster"
     VIDEO_THUMBNAIL = "video_thumbnail"
     REPORT = "report"

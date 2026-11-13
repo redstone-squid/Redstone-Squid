@@ -6,7 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from squid.core.errors import InvalidStateError
-from squid.media.application.jobs import MEDIA_VIDEO_THUMBNAIL_ROLES, MediaJobSnapshot, StoredMediaArtifact
+from squid.media.application.jobs import MediaJobSnapshot, StoredMediaArtifact
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.submissions.domain.finalization import (
@@ -121,7 +121,7 @@ def _assess_media(
             for job in active
             if job.status is MediaJobStatus.COMPLETED
             for artifact in job.artifacts
-            if artifact.role is MediaArtifactRole.OUTPUT or artifact.role in MEDIA_VIDEO_THUMBNAIL_ROLES
+            if artifact.role in {MediaArtifactRole.OUTPUT, MediaArtifactRole.VIDEO_THUMBNAIL}
         ),
     )
     rejected |= bool(limits.batch_violations(totals))
@@ -160,13 +160,9 @@ def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
         return False
     expected = {MediaArtifactRole.OUTPUT, MediaArtifactRole.REPORT}
     roles = [artifact.role for artifact in job.artifacts]
-    role_set = set(roles)
-    thumbnail_roles = role_set & MEDIA_VIDEO_THUMBNAIL_ROLES
-    if (
-        len(roles) != len(role_set)
-        or role_set - MEDIA_VIDEO_THUMBNAIL_ROLES != expected
-        or len(thumbnail_roles) != int(job.upload.kind is MediaKind.VIDEO)
-    ):
+    if job.upload.kind is MediaKind.VIDEO:
+        expected.add(MediaArtifactRole.VIDEO_THUMBNAIL)
+    if len(roles) != len(set(roles)) or set(roles) != expected:
         return False
     artifacts = {artifact.role: artifact for artifact in job.artifacts}
     output = artifacts[MediaArtifactRole.OUTPUT]
@@ -177,7 +173,7 @@ def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
     if report.content_type != "application/json" or report.width is not None or report.height is not None:
         return False
     if job.upload.kind is MediaKind.VIDEO:
-        thumbnail = artifacts[thumbnail_roles.pop()]
+        thumbnail = artifacts[MediaArtifactRole.VIDEO_THUMBNAIL]
         if thumbnail.content_type != "image/jpeg" or not _valid_visual_artifact(thumbnail, limits):
             return False
     return True

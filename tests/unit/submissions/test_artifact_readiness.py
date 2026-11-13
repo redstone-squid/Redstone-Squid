@@ -224,10 +224,10 @@ async def test_completed_video_requires_a_valid_thumbnail() -> None:
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
 
 
-async def test_completed_video_accepts_a_legacy_poster_during_rolling_upgrade() -> None:
+async def test_completed_video_accepts_a_valid_thumbnail() -> None:
     artifacts = (
         _artifact(MediaArtifactRole.OUTPUT, content_type="video/mp4"),
-        _artifact(MediaArtifactRole.POSTER, content_type="image/jpeg"),
+        _artifact(MediaArtifactRole.VIDEO_THUMBNAIL, content_type="image/jpeg"),
         _artifact(MediaArtifactRole.REPORT, content_type="application/json", width=None, height=None),
     )
 

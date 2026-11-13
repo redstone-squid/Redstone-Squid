@@ -77,9 +77,6 @@ MEDIA_ARTIFACT_CLEANUP_CLAIM = timedelta(hours=24)
 """Recovery window for an object deletion that may still be running after worker loss."""
 
 
-MEDIA_VIDEO_THUMBNAIL_ROLES = frozenset({MediaArtifactRole.POSTER, MediaArtifactRole.VIDEO_THUMBNAIL})
-
-
 @dataclass(frozen=True, slots=True)
 class MediaDraftUploadAuthorization:
     """Owner and revision proof that persistence must revalidate atomically."""
@@ -788,8 +785,7 @@ class MediaNormalizationJobRunner:
             if result.poster_path is None:
                 msg = "A video normalization result omitted its poster path."
                 raise MediaJobArtifactError(msg)
-            # Keep the legacy durable value until readers predating the dual-read rollout have drained.
-            files.append((MediaArtifactRole.POSTER, result.poster_path, result.report.poster))
+            files.append((MediaArtifactRole.VIDEO_THUMBNAIL, result.poster_path, result.report.poster))
         prepared: list[tuple[StoredMediaArtifact, bytes]] = []
         for role, path, facts in files:
             data = await asyncio.to_thread(_read_verified, path, facts, self._jobs.limits.max_output_bytes)
@@ -848,7 +844,6 @@ class MediaNormalizationJobRunner:
     ) -> StoredMediaArtifact:
         namespace = {
             MediaArtifactRole.OUTPUT: "normalized",
-            MediaArtifactRole.POSTER: "posters",
             MediaArtifactRole.VIDEO_THUMBNAIL: "posters",
             MediaArtifactRole.REPORT: "reports",
         }[role]

@@ -82,7 +82,7 @@ class MediaArtifactRecord(Base, kw_only=True):
     __table_args__ = (
         UniqueConstraint("upload_id", "role", name="media_artifacts_upload_role_key"),
         CheckConstraint(
-            "role IN ('output', 'poster', 'video_thumbnail', 'report')",
+            "role IN ('output', 'video_thumbnail', 'report')",
             name="media_artifacts_role_check",
         ),
         CheckConstraint("byte_size > 0", name="media_artifacts_size_positive"),

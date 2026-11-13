@@ -8,6 +8,8 @@ from uuid import uuid4
 import psycopg2
 import pytest
 from alembic.config import Config
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from sqlalchemy import Connection, create_engine, text
@@ -2322,5 +2324,58 @@ def test_short_extender_directions_are_spelled_in_full(
             stored = dict(connection.execute(text("SELECT build_id, orientation FROM extenders")).all())
         assert [stored[build_id] for build_id in builds] == ["Upward", "Downward", "Upward", "Horizontal", None]
         command.upgrade(config, "head")
+    finally:
+        engine.dispose()
+
+
+def test_video_thumbnail_role_migration_preserves_objects(migration_database_url: str) -> None:
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    revision = ScriptDirectory.from_config(config).get_revision("a56b73f49542")
+    assert revision is not None
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            # Isolate the role conversion from unrelated upload and draft prerequisites.
+            connection.execute(
+                text(
+                    "CREATE TABLE media_artifacts (upload_id integer, role text, object_key text, "
+                    "CONSTRAINT media_artifacts_upload_role_key UNIQUE (upload_id, role), "
+                    "CONSTRAINT media_artifacts_role_check "
+                    "CHECK (role IN ('output', 'poster', 'video_thumbnail', 'report')))"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO media_artifacts VALUES "
+                    "(1, 'poster', 'media/posters/legacy'), "
+                    "(2, 'video_thumbnail', 'media/posters/current'), "
+                    "(1, 'output', 'media/normalized/output'), "
+                    "(1, 'report', 'media/reports/report')"
+                )
+            )
+            with Operations.context(MigrationContext.configure(connection)):
+                revision.module.upgrade()
+                rows = connection.execute(
+                    text("SELECT upload_id, role, object_key FROM media_artifacts ORDER BY upload_id, role")
+                ).all()
+                assert rows == [
+                    (1, "output", "media/normalized/output"),
+                    (1, "report", "media/reports/report"),
+                    (1, "video_thumbnail", "media/posters/legacy"),
+                    (2, "video_thumbnail", "media/posters/current"),
+                ]
+                with pytest.raises(DBAPIError, match="media_artifacts_role_check"), connection.begin_nested():
+                    connection.execute(text("INSERT INTO media_artifacts VALUES (3, 'poster', 'legacy')"))
+                revision.module.downgrade()
+                assert connection.execute(
+                    text("SELECT role FROM media_artifacts WHERE object_key LIKE 'media/posters/%'")
+                ).scalars().all() == ["poster", "poster"]
+                revision.module.upgrade()
+                assert (
+                    connection.execute(
+                        text("SELECT upload_id, role, object_key FROM media_artifacts ORDER BY upload_id, role")
+                    ).all()
+                    == rows
+                )
     finally:
         engine.dispose()
