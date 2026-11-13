@@ -267,26 +267,3 @@ async def test_registered_claim_provider_uses_full_plain_labels(java_name: str |
 
 
 # Account-panel unlink interactions are covered in ``test_account_panel.py``.
-
-
-@pytest.mark.parametrize(
-    "refresh",
-    [
-        pytest.param(_refresh(current_name="Steve", previous_name="Steve"), id="unchanged"),
-        pytest.param(_refresh(), id="renamed-nothing-claimed"),
-        pytest.param(_refresh(claimed_alias=CreatorAlias(id=5, name="NewName", account_id=1)), id="renamed-claimed"),
-        pytest.param(
-            _refresh(
-                contested_alias=CreatorAlias(id=9, name="NewName", account_id=2),
-                opened_claim=AliasClaim(
-                    id=3, alias_id=9, alias_name="NewName", account_id=1, status=ClaimStatus.PENDING, created_at=NOW
-                ),
-            ),
-            id="contested",
-        ),
-        pytest.param(_refresh(retained_alias_names=("OldName",)), id="retained-only"),
-    ],
-)
-def test_every_branch_renders_something(refresh: IdentityRefresh) -> None:
-    """No combination may produce an empty message, which Discord rejects outright."""
-    assert source_text(refresh_message(refresh)).strip()

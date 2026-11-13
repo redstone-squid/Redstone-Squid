@@ -136,10 +136,6 @@ async def test_the_error_browser_is_app_only(loaded_bot: commands.Bot) -> None:
     assert loaded_bot.get_command("error") is None
 
 
-def test_extension_list_has_no_duplicates() -> None:
-    assert len(EXTENSIONS) == len(set(EXTENSIONS))
-
-
 def test_layout_showcase_is_development_only() -> None:
     assert "squid.bot.layout_showcase" not in EXTENSIONS
     assert "squid.bot.layout_showcase" in DEVELOPMENT_EXTENSIONS

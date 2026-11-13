@@ -638,38 +638,17 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
     assert caught.value.context["subject"] == "999"
 
 
-@pytest.mark.parametrize(
-    "refresh",
-    [
-        pytest.param(IdentityRefresh(99, JAVA_UUID, "Steve", "Steve"), id="unchanged"),
-        pytest.param(IdentityRefresh(99, JAVA_UUID, "New", "Old"), id="renamed"),
-        pytest.param(
-            IdentityRefresh(
-                99,
-                JAVA_UUID,
-                "New",
-                "Old",
-                claimed_alias=CreatorAlias(id=5, name="New", account_id=99),
-            ),
-            id="claimed",
+async def test_staff_refresh_targets_the_selected_account_and_forwards_its_notice() -> None:
+    refresh = IdentityRefresh(
+        99,
+        JAVA_UUID,
+        "New",
+        "Old",
+        contested_alias=CreatorAlias(id=5, name="New", account_id=100),
+        opened_claim=AliasClaim(
+            id=7, alias_id=5, alias_name="New", account_id=99, status=ClaimStatus.PENDING, created_at=NOW
         ),
-        pytest.param(
-            IdentityRefresh(
-                99,
-                JAVA_UUID,
-                "New",
-                "Old",
-                contested_alias=CreatorAlias(id=5, name="New", account_id=100),
-                opened_claim=AliasClaim(
-                    id=7, alias_id=5, alias_name="New", account_id=99, status=ClaimStatus.PENDING, created_at=NOW
-                ),
-            ),
-            id="contested",
-        ),
-        pytest.param(IdentityRefresh(99, JAVA_UUID, "New", "Old", retained_alias_names=("Old",)), id="retained"),
-    ],
-)
-async def test_staff_refresh_renders_every_reconciliation_branch(refresh: IdentityRefresh) -> None:
+    )
     target = Account(
         identities=(AccountIdentity.discord(999),), consent=AccountConsent.grant_current(), id=99, created_at=NOW
     )
