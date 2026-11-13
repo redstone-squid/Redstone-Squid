@@ -187,3 +187,29 @@ async def test_initial_atomic_suspension_reuses_completed_ancestor_render() -> N
     assert testing.texts(ready.nodes) == ["detail"]
     assert root.renders == 1
     runtime.commit(ready)
+
+
+async def test_suspended_full_render_cannot_backdate_completed_siblings_to_old_content() -> None:
+    class Detail(ui.Component):
+        shown = False
+
+        @ui.resource(pending=ui.resources.PendingMode.ATOMIC)
+        async def content(self) -> str:
+            return "detail"
+
+        @override
+        def render(self) -> ui.LayoutNode:
+            return ui.paragraph(self.content.value if self.shown else "overview")
+
+    sibling = Counter()
+    detail = Detail()
+    runtime = ComponentRuntime(Root(sibling, detail))
+    commit(runtime)
+    sibling.value = 1
+    detail.shown = True
+    runtime.invalidate()
+    assert runtime.render(reuse_committed=True).suspended
+    await detail.content._load()
+    ready = runtime.render(reuse_committed=True)
+    assert testing.texts(ready.nodes) == ["1", "detail"]
+    runtime.commit(ready)

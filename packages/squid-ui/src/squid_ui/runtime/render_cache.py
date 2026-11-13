@@ -26,6 +26,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
         self._dirty_paths: set[str] = set()
         self._paths: dict[AnyComponent, set[str]] = {}
         self._force_all = True
+        self._incomplete = False
 
     def expansion(self) -> IncrementalRender[RenderTargetT]:
         """Lend the expansion algorithm a view valid for one synchronous render.
@@ -34,6 +35,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
         It must not retain this view across lifecycle reconciliation, which can replace
         the backing dictionaries. Failed renders do not clear invalidation causes.
         """
+        self._incomplete = True
         if self._force_all:
             # Discard stale snapshots once. If discovery suspends, the completed work
             # from this pass can be reused while the unfinished component retries.
@@ -96,7 +98,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
 
     def can_backdate(self) -> bool:
         """Whether every attributed change settled back to its cached observation."""
-        if self._force_all or self._forced or not self._dirty:
+        if self._incomplete or self._force_all or self._forced or not self._dirty:
             return False
         for component in self._dirty:
             paths = self._paths.get(component)
@@ -167,6 +169,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
 
     def rendered(self) -> None:
         """Clear the causes consumed by a completed expansion or a backdated render."""
+        self._incomplete = False
         self._dirty.clear()
         self._forced.clear()
         self._force_all = False
@@ -215,6 +218,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
 
     def clear(self) -> None:
         """Release every snapshot and path when the component runtime finishes."""
+        self._incomplete = False
         self._renders.clear()
         self._subtrees.clear()
         self._dirty.clear()
