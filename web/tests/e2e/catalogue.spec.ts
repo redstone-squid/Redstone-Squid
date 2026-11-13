@@ -81,9 +81,15 @@ test("renders build specifications, safe media, downloads, and schematic analysi
   await page.getByRole("button", { name: "Next media" }).click();
   await expect(page.getByText("Item 2 of 2")).toBeVisible();
   await expectCatalogueMetadata(page, "/builds/1");
-  expect(await page.locator('script[type="application/ld+json"]').textContent()).toContain(
-    "CreativeWork",
-  );
+  const structuredData = await page.locator('script[type="application/ld+json"]').textContent();
+  expect(JSON.parse(structuredData ?? "")).toMatchObject({
+    "@type": "CreativeWork",
+    name: "Copper Bolt 5×5",
+    creator: [
+      { "@type": "Person", name: "CircuitSage" },
+      { "@type": "Person", name: "红石猫" },
+    ],
+  });
 });
 
 test("uses a branded fallback for broken preview media", async ({ page }) => {
