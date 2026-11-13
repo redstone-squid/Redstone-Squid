@@ -193,8 +193,8 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._asset is not None:
             nodes.append(
                 sl.download(
-                    tr(t"bot-submission-build-browse-download-result = Download result"),
                     self._asset,
+                    label=tr(t"bot-submission-build-browse-download-result = Download result"),
                     key="build-download",
                 )
             )
@@ -323,12 +323,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             await event.notice(tr(t"build-no-longer-available = That build is no longer available."))
             return
         data = _debug_dump(build).encode()
-        self._asset = sl.document.Asset(
-            "build-debug",
-            f"build-{self._build_id}-debug.json",
-            "application/json",
-            sl.document.InlineAsset(data),
-        )
+        self._asset = sl.file(data, filename=f"build-{self._build_id}-debug.json")
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):

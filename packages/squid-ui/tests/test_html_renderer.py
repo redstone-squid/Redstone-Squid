@@ -114,7 +114,7 @@ def test_renderer_resolves_declared_inline_assets_without_exposing_callbacks() -
         "text/plain",
         sl.document.InlineAsset(b"hello"),
     )
-    result = sl.planning.plan(sl.download("Report", asset, key="report"), target=sl.html.target())
+    result = sl.planning.plan(sl.download(asset, label="Report", key="report"), target=sl.html.target())
 
     rendered = Renderer().draw(result.scene, plan=result)
 

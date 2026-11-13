@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 import discord
 
 from squid_ui import scene
-from squid_ui.assets import Asset, InlineAsset, StoredAsset
+from squid_ui.assets import Asset, StoredAsset
 from squid_ui.planning.result import PlanResult
 
 
@@ -34,18 +34,21 @@ def attachment_assets(plan: PlanResult) -> tuple[Asset, ...]:
     return tuple(
         asset
         for scene_asset in plan.scene.assets
-        if isinstance(asset := plan.resources.get(f"asset:{scene_asset.key}"), Asset) and scene_asset.key not in linked
+        if isinstance(asset := plan.resources.get(f"asset:{scene_asset.key}"), Asset)
+        and scene_asset.key not in linked
+        and asset.url is None
     )
 
 
 def files_for(assets: Sequence[Asset]) -> list[discord.File]:
     """Materialize fresh `discord.File` wrappers; a sent file cannot be re-sent."""
     files: list[discord.File] = []
-    for asset in assets:
-        if not isinstance(asset.source, InlineAsset):
-            message = f"Discord delivery needs a host resolver for stored asset {asset.key!r}"
-            raise TypeError(message)
-        files.append(discord.File(io.BytesIO(asset.source.data), filename=asset.name))
+    try:
+        files.extend(discord.File(io.BytesIO(asset.read()), filename=asset.name) for asset in assets)
+    except BaseException:
+        for file in files:
+            file.close()
+        raise
     return files
 
 

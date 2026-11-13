@@ -320,13 +320,13 @@ def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> No
     cache = PlanCache()
     memo = PlanMemo()
     first = sl.planning.plan(
-        sl.download("Report", asset, key="report"),
+        sl.download(asset, label="Report", key="report"),
         target=sl.html.target(),
         cache=cache,
         memo=memo,
     )
     exact = sl.planning.plan(
-        sl.download("Report", asset, key="report"),
+        sl.download(asset, label="Report", key="report"),
         target=sl.html.target(),
         cache=cache,
     )

@@ -44,6 +44,7 @@ from squid_ui import (
     temporal,
     text,
 )
+from squid_ui.assets import FileInput, file
 from squid_ui.context import ContextKey
 from squid_ui.document import (
     Document,
@@ -185,6 +186,7 @@ __all__ = [
     "EntityEvent",
     "EntitySelectionEvent",
     "ExistingLayoutError",
+    "FileInput",
     "HtmlTarget",
     "InvalidSubmitEvent",
     "LayoutDegradedError",
@@ -246,6 +248,7 @@ __all__ = [
     "field",
     "fields",
     "figure",
+    "file",
     "form",
     "forms",
     "grid",

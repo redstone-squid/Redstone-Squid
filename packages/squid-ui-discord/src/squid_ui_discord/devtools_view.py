@@ -291,8 +291,8 @@ class OperationalInspector(sl.Component):
                 sl.heading("Operational dashboard"),
                 sl.code("\n".join(counts)),
                 sl.download(
-                    "Download snapshot",
                     operational_attachment(snapshot),
+                    label="Download snapshot",
                     key="operational-snapshot",
                     description="Bounded JSON diagnostics from this refresh",
                 ),
@@ -344,8 +344,8 @@ class OperationalInspector(sl.Component):
                 if asset is not None:
                     children.append(
                         sl.download(
-                            "Download scene",
                             asset,
+                            label="Download scene",
                             key="scene",
                             description="Committed scene protocol JSON",
                         )

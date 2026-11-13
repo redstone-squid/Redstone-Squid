@@ -83,7 +83,7 @@ _MINIMAL: dict[type, Callable[[], semantic.AnyLayoutNode]] = {
     semantic.Figure: lambda: sl.figure("https://example.invalid/i.png", caption="caption"),
     semantic.Media: lambda: sl.media("https://example.invalid/i.png", key="media"),
     semantic.Toggle: lambda: sl.toggle("Notify", key="toggle"),
-    semantic.Download: lambda: sl.download("Report", _ASSET, key="download"),
+    semantic.Download: lambda: sl.download(_ASSET, label="Report", key="download"),
     semantic.Status: lambda: sl.status("operational"),
     semantic.ProgressBar: lambda: sl.progress(0.5, label="Progress"),
     semantic.Roster: _roster,

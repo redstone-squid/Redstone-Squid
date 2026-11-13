@@ -300,8 +300,8 @@ class ErrorReportScreen(sd.Screen[int]):
         children.append(sl.fields(*_summary_fields(report, matches)))
         children.append(
             sl.download(
-                tr(t"diagnostics-view-full-report = Full report"),
                 report_asset(report),
+                label=tr(t"diagnostics-view-full-report = Full report"),
                 key="full-report",
                 emphasis=sl.semantic.Emphasis.STRONG,
             )

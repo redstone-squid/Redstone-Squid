@@ -441,6 +441,8 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                         f"{path}: classic targets cannot preserve file spoilers; provide an explicit Variants fallback"
                     )
                     raise LayoutInvariantError(message)
+                if asset.url is not None:
+                    return [Text(f"{text}\n{asset.url}", overflow=Never())]
                 # No file *component* exists outside Components V2. The asset still uploads and
                 # the label and description still show; what is lost is the dedicated
                 # affordance, which the report says out loud rather than leaving to be noticed.

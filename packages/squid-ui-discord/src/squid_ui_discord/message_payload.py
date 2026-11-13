@@ -5,6 +5,7 @@ Delivery uses the mode to clear replaced fields and reject a transition from
 Components V2 back to classic. Size and structural audits belong to the renderers.
 """
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -12,7 +13,7 @@ from typing import Any
 
 import discord
 
-from squid_ui.assets import Asset
+from squid_ui.assets import Asset, LocalAsset
 from squid_ui.errors import LayoutError
 from squid_ui_discord.attachments import files_for
 
@@ -114,6 +115,13 @@ class MessagePayload:
     def build_files(self) -> list[discord.File]:
         """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
         return files_for(self.assets)
+
+    async def prepare_files(self) -> list[discord.File]:
+        """Read local inputs off the event loop, then create fresh upload wrappers."""
+        for asset in self.assets:
+            if isinstance(asset.source, LocalAsset):
+                await asyncio.to_thread(asset.read)
+        return self.build_files()
 
     def _send_fields(self) -> dict[str, Any]:
         """Return the mode-dependent discord.py send kwargs, attachments excluded.

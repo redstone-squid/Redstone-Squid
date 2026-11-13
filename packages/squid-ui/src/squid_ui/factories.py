@@ -25,7 +25,7 @@ from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
 from squid_i18n import NUMBER, plain, tr
-from squid_ui.assets import Asset
+from squid_ui.assets import FileInput, file
 from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
 from squid_ui.grids import GridCell
@@ -467,9 +467,15 @@ def zoned_timestamp(value: ZonedDateTime, *, label: TextValue | None = None) -> 
     return ZonedTimestamp(value, _opt_text(label))
 
 
-def figure(media: MediaItem | str | Asset, *, caption: TextValue | None = None) -> Figure:
-    """One image with an optional caption, from a URL or asset."""
-    resolved = media_item(media) if isinstance(media, str | Asset) else media
+def figure(
+    source: MediaItem | FileInput,
+    *,
+    caption: TextValue | None = None,
+    filename: str | None = None,
+    media_type: str | None = None,
+) -> Figure:
+    """One media preview with an optional caption."""
+    resolved = source if isinstance(source, MediaItem) else media_item(source, filename=filename, media_type=media_type)
     return Figure(resolved, _opt_text(caption))
 
 
@@ -632,21 +638,53 @@ def tally[ContextT = object](
     return stack(*bars, control)
 
 
-def media_item(source: str | Asset, *, key: str = "", description: TextValue | None = None) -> MediaItem:
-    """One media preview, from a URL or an asset declared at its point of use."""
-    return MediaItem(key, source, _opt_text(description))
+def media_item(
+    source: FileInput,
+    *,
+    key: str = "",
+    filename: str | None = None,
+    media_type: str | None = None,
+    description: TextValue | None = None,
+    spoiler: bool = False,
+) -> MediaItem:
+    """Describe one gallery entry. Use this for per-item metadata in a gallery."""
+    asset = file(source, filename=filename, media_type=media_type)
+    return MediaItem(key, asset.url or asset, _opt_text(description), spoiler)
 
 
 def media(
-    *entries: Conditional[MediaItem | str | Asset],
+    *sources: Conditional[MediaItem | FileInput],
     key: str,
+    filename: str | None = None,
+    media_type: str | None = None,
+    description: TextValue | None = None,
+    spoiler: bool = False,
     display: MediaDisplay = MediaDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Media:
-    """A set of media previews; a bare URL or asset becomes an item. ``key`` carries the chosen display."""
-    collected = _collect(entries, (MediaItem, str, Asset), "sl.media()")
+    """Preview paths, bytes, binary streams, or URLs, without reading local files yet.
+
+    Bytes and unnamed streams need filename=. Metadata keywords describe a single
+    source; for galleries, use media_item() on entries that need metadata.
+    """
+    entries = tuple(source for source in sources if source is not None and source is not False)
+    metadata = filename is not None or media_type is not None or description is not None or spoiler
+    if metadata and (len(entries) != 1 or isinstance(entries[0], MediaItem)):
+        msg = "media metadata requires one bare source; use media_item() for gallery entries"
+        raise ValueError(msg)
     return Media(
-        tuple(media_item(entry) if isinstance(entry, str | Asset) else entry for entry in collected),
+        tuple(
+            source
+            if isinstance(source, MediaItem)
+            else media_item(
+                source,
+                filename=filename,
+                media_type=media_type,
+                description=description,
+                spoiler=spoiler,
+            )
+            for source in entries
+        ),
         key,
         display,
         flexibility,
@@ -704,15 +742,29 @@ def toggle[ContextT = object](
 
 
 def download(
-    label: TextValue | None,
-    asset: Asset,
+    source: FileInput,
     *,
     key: str,
+    label: TextValue | None = None,
+    filename: str | None = None,
+    media_type: str | None = None,
     description: TextValue | None = None,
     emphasis: Emphasis = Emphasis.NORMAL,
+    spoiler: bool = False,
 ) -> Download:
-    """Offer an inline-declared asset through a visible download control."""
-    return Download(key, _opt_text(label), asset, _opt_text(description), emphasis)
+    """Offer a path, bytes, binary stream, or URL as a downloadable file.
+
+    Bytes and unnamed streams need filename=. The default label is localized.
+    Input ownership and snapshot behavior are the same as file().
+    """
+    return Download(
+        key,
+        _opt_text(label),
+        file(source, filename=filename, media_type=media_type),
+        _opt_text(description),
+        emphasis,
+        spoiler,
+    )
 
 
 def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.NORMAL) -> Link:

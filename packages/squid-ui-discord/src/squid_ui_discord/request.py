@@ -250,7 +250,7 @@ class Request[OwnerT = Any]:
 
         async def reply(payload: MessagePayload) -> DeliveryResult:
             delivered = await message.reply(
-                files=[*files, *payload.build_files()],
+                files=[*files, *await payload.prepare_files()],
                 allowed_mentions=allowed_mentions,
                 mention_author=False,
                 **payload._send_fields(),

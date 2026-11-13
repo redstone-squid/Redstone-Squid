@@ -300,7 +300,7 @@ def test_media_collects_assets_and_renders_attachment_previews(media_type: str) 
     asset = sl.document.Asset("preview", "preview.bin", media_type, sl.document.InlineAsset(b"preview"))
     document = sl.stack(
         sl.media(sl.media_item(asset, description="Preview"), "https://example.invalid/image.png", key="media"),
-        sl.download("Save", asset, key="save"),
+        sl.download(asset, label="Save", key="save"),
     )
     result = plan(document, target=DISCORD_V2_DPY27)
     assert len(result.scene.assets) == 1

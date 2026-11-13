@@ -134,21 +134,21 @@ def _addresses_source(interaction: discord.Interaction[Any]) -> bool:
     return response_type is None or response_type in _UPDATE_RESPONSES
 
 
-def _write_fields(payload: MessagePayload, previous: MessageMode, *, keep_attachments: bool) -> dict[str, Any]:
+async def _write_fields(payload: MessagePayload, previous: MessageMode, *, keep_attachments: bool) -> dict[str, Any]:
     """The edit kwargs for one write, transition matrix included."""
     fields = payload._edit_fields(previous)
     if not keep_attachments:
-        fields["attachments"] = payload.build_files()
+        fields["attachments"] = await payload.prepare_files()
     return fields
 
 
-def _merged_files(host: Sequence[discord.File], payload: MessagePayload) -> list[discord.File]:
+async def _merged_files(host: Sequence[discord.File], payload: MessagePayload) -> list[discord.File]:
     """The host's own files followed by the payload's, refused if Discord cannot take them.
 
     Overflow is rejected here rather than by Discord, whose answer names neither the count
     nor which half of the list overran it.
     """
-    files = [*host, *payload.build_files()]
+    files = [*host, *await payload.prepare_files()]
     if len(files) > LIMITS.attachments:
         message = f"a Discord message carries at most {LIMITS.attachments} attachments, not {len(files)}"
         raise LimitViolationError([message])
@@ -168,7 +168,7 @@ class _ChannelMessageHandle:
         return False
 
     async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
-        fields = _write_fields(payload, self.mode, keep_attachments=keep_attachments)
+        fields = await _write_fields(payload, self.mode, keep_attachments=keep_attachments)
         try:
             self._message = await self._message.edit(allowed_mentions=None, **fields)
         except discord.HTTPException as error:
@@ -211,7 +211,7 @@ class _WebhookMessageHandle:
 
     async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
         interaction = self._interaction
-        fields = _write_fields(payload, self.mode, keep_attachments=keep_attachments)
+        fields = await _write_fields(payload, self.mode, keep_attachments=keep_attachments)
         try:
             # An unspent response is the cheap path: it edits the source message with no
             # extra round trip. Afterwards the message has to be named explicitly.
@@ -265,7 +265,7 @@ class _OriginalResponseHandle:
         return self._interaction.is_expired()
 
     async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
-        fields = _write_fields(payload, self.mode, keep_attachments=keep_attachments)
+        fields = await _write_fields(payload, self.mode, keep_attachments=keep_attachments)
         try:
             self._message = await self._interaction.edit_original_response(**fields)
         except discord.HTTPException as error:
@@ -408,7 +408,7 @@ class MessageDestination(Protocol):
 
     The payload is the whole payload Squid owns. Transport policy stays here:
     ephemerality, waiting, allowed mentions, DM fallback, and the host's own files, which
-    are merged ahead of `payload.build_files()`.
+    are merged ahead of `payload.prepare_files()`.
     """
 
     async def __call__(self, payload: MessagePayload, /) -> DeliveryResult: ...
@@ -454,7 +454,7 @@ def reply_to(
         # Sampled before the send on purpose: this send is what makes the response done.
         response_done = active is not None and active.response.is_done()
         message = await ctx.send(
-            files=_merged_files(files, payload),
+            files=await _merged_files(files, payload),
             ephemeral=ephemeral,
             allowed_mentions=mentions,
             **payload._send_fields(),
@@ -513,7 +513,7 @@ def send_to(
         if delete_after is not None:
             fields["delete_after"] = delete_after
         message = await target.send(
-            files=_merged_files(files, payload),
+            files=await _merged_files(files, payload),
             allowed_mentions=mentions,
             **fields,
         )
@@ -545,7 +545,7 @@ def respond_to(
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(payload: MessagePayload) -> DeliveryResult:
-        merged_files = _merged_files(files, payload)
+        merged_files = await _merged_files(files, payload)
         mode = payload.mode
         if complete_deferred:
             fields = payload._send_fields()
@@ -608,7 +608,7 @@ def edit_to(
 
     async def send(payload: MessagePayload) -> DeliveryResult:
         fields = payload._edit_fields(message_mode(message))
-        fields["attachments"] = _merged_files(files, payload)
+        fields["attachments"] = await _merged_files(files, payload)
         try:
             edited = await message.edit(allowed_mentions=mentions, **fields)
         except discord.HTTPException as error:

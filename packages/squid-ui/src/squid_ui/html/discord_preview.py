@@ -7,7 +7,7 @@ from datetime import datetime
 from html import escape
 
 from squid_ui import scene
-from squid_ui.assets import Asset, InlineAsset, StoredAsset
+from squid_ui.assets import Asset, InlineAsset, LocalAsset, StoredAsset
 from squid_ui.entity import EntityKind, EntityRef
 from squid_ui.errors import DrawInvariantError
 from squid_ui.html._safety import attribute as _attribute
@@ -90,8 +90,8 @@ class DiscordPreviewRenderer:
             resource = plan.resources.get(f"asset:{metadata.key}") if plan is not None else None
             if not isinstance(resource, Asset):
                 return None
-            if isinstance(resource.source, InlineAsset):
-                encoded = base64.b64encode(resource.source.data).decode("ascii")
+            if isinstance(resource.source, InlineAsset | LocalAsset):
+                encoded = base64.b64encode(resource.read()).decode("ascii")
                 return f"data:{resource.media_type};base64,{encoded}"
             if isinstance(resource.source, StoredAsset):
                 return _safe_url(resource.source.reference)

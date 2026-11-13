@@ -167,3 +167,41 @@ The factories produce the existing primitive dataclasses; direct constructors re
 
 Next, use the [API map](squid-ui-api.md) or read the complete
 [architecture and ownership guide](squid-ui-architecture.md).
+
+
+## Media and downloads
+
+Both accept a `Path`, bytes, an open binary stream, or an HTTP(S) URL. Strings are
+URLs; use `Path` for local files. Supply `filename=` for bytes and unnamed streams;
+the MIME type is inferred from the name, or overridden with `media_type=`.
+
+```python
+from io import BytesIO
+from pathlib import Path
+
+preview = sl.media(Path("preview.png"), key="preview")
+video = sl.media(BytesIO(video_bytes), filename="simulation.mp4", key="video")
+export = sl.download(schematic_bytes, filename="build.litematic", label="Schematic", key="export")
+gallery = sl.media(
+    sl.media_item(Path("front.png"), description="Front view"),
+    "https://example.org/side.png",
+    key="views",
+)
+```
+
+`media` previews the content; `download` offers a file control. The same file can
+appear in both without a second upload. Use `sl.file(source, filename=...)` when
+you want to name a file once and share it across controls or renders. `sl.figure`
+also accepts these inputs and adds a caption.
+
+Construction and planning do not read local files. Discord delivery snapshots them
+in a worker thread on first use. Reusing a `sl.file` result or a constructed node
+reuses that snapshot; create a new one to pick up changed content. Caller-owned
+streams stay open and are read from their current position. Seekable streams have
+their position restored. Keep a stream open until first delivery, and reuse a
+`sl.file` result for non-seekable streams so they are consumed only once.
+
+Synchronous HTML rendering and `build_files()` read synchronously. Custom async
+Discord destinations should use `await payload.prepare_files()` to avoid blocking
+the event loop. `Asset` and `StoredAsset` remain available for host-managed durable
+references; local paths and streams belong to the current process.

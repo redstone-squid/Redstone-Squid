@@ -10,7 +10,7 @@ from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
 from squid_ui import scene
-from squid_ui.assets import Asset, InlineAsset, StoredAsset
+from squid_ui.assets import Asset, InlineAsset, LocalAsset, StoredAsset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.html._safety import attribute as _attribute
 from squid_ui.html._safety import safe_url as _safe_url
@@ -225,8 +225,8 @@ class Renderer:
         resource = plan.resources.get(f"asset:{reference.key}") if plan is not None else None
         if not isinstance(resource, Asset):
             return None
-        if isinstance(resource.source, InlineAsset) and _MEDIA_TYPE.fullmatch(resource.media_type):
-            encoded = base64.b64encode(resource.source.data).decode("ascii")
+        if isinstance(resource.source, InlineAsset | LocalAsset) and _MEDIA_TYPE.fullmatch(resource.media_type):
+            encoded = base64.b64encode(resource.read()).decode("ascii")
             return f"data:{resource.media_type};base64,{encoded}"
         if isinstance(resource.source, StoredAsset):
             return _safe_url(resource.source.reference)

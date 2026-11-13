@@ -78,7 +78,7 @@ def test_message_renderer_resolves_stored_and_injected_asset_urls() -> None:
         sl.document.StoredAsset("https://example.com/report.txt"),
     )
     result = sl.planning.plan(
-        sl.download("Report", stored, key="report-download"),
+        sl.download(stored, label="Report", key="report-download"),
         target=ss.SLACK_MESSAGE_SDK343,
     )
 

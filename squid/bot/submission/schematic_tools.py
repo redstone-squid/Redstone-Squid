@@ -67,8 +67,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         elif self._asset is not None:
             nodes.append(
                 sl.download(
-                    tr(t"bot-submission-build-browse-download-result = Download result"),
                     self._asset,
+                    label=tr(t"bot-submission-build-browse-download-result = Download result"),
                     key="build-download",
                 )
             )
@@ -161,12 +161,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         except SchematicRenderRefusedError as error:
             await event.notice(error.public_text())
             return
-        self._asset = sl.document.Asset(
-            "schematic-render",
-            f"build-{self._build_id}-render.png",
-            "image/png",
-            sl.document.InlineAsset(rendered.png),
-        )
+        self._asset = sl.file(rendered.png, filename=f"build-{self._build_id}-render.png")
 
     async def _video(self, event: sl.SubmitEvent) -> None:
         request = cast(sd.Request, event.context)
@@ -276,16 +271,10 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 audience="personal",
             )
             return True
-        asset = sl.document.Asset(
-            "schematic-video",
-            f"build-{self._build_id}-simulation.mp4",
-            "video/mp4",
-            sl.document.InlineAsset(content),
-        )
         await request.respond(
             (
                 sl.paragraph(tr(t"schematic-video-ready = Your schematic video is ready.")),
-                sl.media(asset, key="schematic-video-preview"),
+                sl.media(content, filename=f"build-{self._build_id}-simulation.mp4", key="schematic-video-preview"),
             ),
             audience="personal",
         )
@@ -310,12 +299,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
     def _schematic_asset(self, data: bytes, extension: str) -> sl.document.Asset:
-        return sl.document.Asset(
-            "schematic",
-            f"build-{self._build_id}.{extension}",
-            "application/octet-stream",
-            sl.document.InlineAsset(data),
-        )
+        return sl.file(data, filename=f"build-{self._build_id}.{extension}")
 
 
 class _ConvertForm(sl.forms.Form):
