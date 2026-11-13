@@ -3,6 +3,7 @@
 from typing import Literal
 from unittest.mock import AsyncMock, Mock
 
+import discord
 import pytest
 
 import squid_ui as sl
@@ -12,6 +13,7 @@ from squid.core.actors import Actor
 from squid.schematics.application.services import SchematicService
 from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
 from squid_ui.text import source_text
+from squid_ui_discord.testing import InteractionHarness
 
 
 @pytest.fixture
@@ -42,7 +44,6 @@ async def test_completed_video_is_attached_once_and_privately(delivery: tuple[Sc
     assert await component._deliver_video(request, 41)
     request.respond.assert_awaited_once()
     assert request.respond.call_args.kwargs["audience"] == "personal"
-    assert request.respond.call_args.kwargs["files"][0].filename == "build-7-simulation.mp4"
     service.open_video_content.assert_awaited_once_with(41, account_id=10, can_view_private=True)
 
 
@@ -140,3 +141,36 @@ async def test_check_video_reports_pending_render(
     assert "still rendering" in source_text(event.notice.call_args.args[0])
     request.respond.assert_not_awaited()
     service.open_video_content.assert_not_awaited()
+
+
+async def test_automatic_delivery_sends_a_visible_video_followup(
+    delivery: tuple[SchematicTools, Mock, Mock], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    component, _, service = delivery
+    service.get_video.side_effect = [
+        VideoStatus(id=41, build_id=7, schematic_id=1, status="running"),
+        VideoStatus(id=41, build_id=7, schematic_id=1, status="succeeded"),
+    ]
+    client = Mock(spec=discord.Client)
+    runtime = sd.install(client)
+    scope = runtime.scope(object())
+    interaction = InteractionHarness(client=client)
+    interaction.source.filesize_limit = 100
+    request = await scope.request(interaction.source)
+    await interaction.response.send_message("Video queued", ephemeral=True)
+    monkeypatch.setattr("squid.bot.submission.schematic_tools.anyio.sleep", AsyncMock())
+
+    try:
+        await component._follow_video(request, 41)
+
+        assert service.get_video.await_count == 2
+        assert len(interaction.followup.send.records) == 1
+        sent = interaction.followup.send.records[0].kwargs
+        assert sent["ephemeral"] is True
+        assert sent["files"][0].filename == "build-7-simulation.mp4"
+        visible_files = [item for item in sent["view"].walk_children() if isinstance(item, discord.ui.File)]
+        assert len(visible_files) == 1
+        assert visible_files[0].media.url == "attachment://build-7-simulation.mp4"
+        assert 41 in component._delivered_videos
+    finally:
+        await scope.close()

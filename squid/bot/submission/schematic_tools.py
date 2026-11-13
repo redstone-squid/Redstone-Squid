@@ -1,13 +1,10 @@
 """Schematic actions and their results within a build detail panel."""
 
 import asyncio
-import contextlib
-import io
 from collections.abc import Awaitable, Callable
 from typing import Protocol, cast, override
 
 import anyio
-import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -293,14 +290,20 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 audience="personal",
             )
             return True
-        with contextlib.closing(
-            discord.File(io.BytesIO(content), filename=f"build-{self._build_id}-simulation.mp4")
-        ) as attachment:
-            await request.respond(
-                sl.paragraph(tr(t"schematic-video-ready = Your schematic video is ready.")),
-                files=[attachment],
-                audience="personal",
-            )
+        asset = sl.document.Asset(
+            "schematic-video",
+            f"build-{self._build_id}-simulation.mp4",
+            "video/mp4",
+            sl.document.InlineAsset(content),
+        )
+        await request.respond(
+            sl.download(
+                tr(t"schematic-video-ready = Your schematic video is ready."),
+                asset,
+                key="schematic-video-download",
+            ),
+            audience="personal",
+        )
         return True
 
     async def _convert(self, event: sl.SubmitEvent) -> None:
