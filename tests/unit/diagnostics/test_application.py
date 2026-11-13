@@ -201,7 +201,7 @@ async def test_lookup_reports_how_many_share_a_reference() -> None:
     assert matches == 2
 
 
-async def test_lookup_rejects_an_unknown_or_expired_reference() -> None:
+async def test_lookup_rejects_an_unknown_reference() -> None:
     service = build_service(_state())
 
     with pytest.raises(ErrorReportNotFoundError):

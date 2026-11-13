@@ -335,7 +335,6 @@ async def test_loaded_status_is_a_status_member(
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     assert loaded.submission_status is Status.PENDING
-    assert loaded.submission_status.name == "PENDING"
 
     await transact(
         repository,

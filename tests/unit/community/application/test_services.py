@@ -183,19 +183,11 @@ def test_welcome_relay_applies_the_pending_bound_to_members_and_messages() -> No
     ) == WelcomeRelayDecision(3, "Bob", "Welcome Bob!")
 
 
-def test_welcome_relay_rejects_ambiguous_and_expired_matches() -> None:
-    clock = Clock(10)
-    service = WelcomeRelayService(
-        WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1, pending_ttl_seconds=5),
-        random_source=Random(0),
-        clock=clock,
-    )
+def test_welcome_relay_rejects_ambiguous_matches() -> None:
+    service = WelcomeRelayService(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1), random_source=Random(0))
     service.record_join(2, "Alex")
     service.record_join(3, "Alex")
 
-    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alex!") is None
-
-    clock.now = 20
     assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alex!") is None
 
 

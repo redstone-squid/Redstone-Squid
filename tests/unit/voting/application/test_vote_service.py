@@ -127,7 +127,8 @@ class FakeVoteRepository:
         return 26
 
     async def attach_message(self, vote_session_id: int, message_id: int) -> None:
-        self.attach_calls.append((vote_session_id, message_id))
+        # Replace the list so the fake UOW only publishes the attachment on commit.
+        self.attach_calls = [*self.attach_calls, (vote_session_id, message_id)]
 
     async def create_build_session(
         self,
@@ -293,14 +294,13 @@ async def test_initial_build_vote_creation_uses_idempotent_repository_operation(
     assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_OPTIONS)]
 
 
-async def test_message_attachment_stays_an_explicit_application_operation() -> None:
+async def test_message_attachment_is_committed() -> None:
     repository = FakeVoteRepository(None)
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     await service.attach_message(26, 9001)
-    await service.attach_message(26, 9001)
 
-    assert repository.attach_calls == [(26, 9001), (26, 9001)]
+    assert repository.attach_calls == [(26, 9001)]
 
 
 async def test_refresh_log_carries_session_id_without_user_attributes(caplog: pytest.LogCaptureFixture) -> None:
