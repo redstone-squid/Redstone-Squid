@@ -28,7 +28,6 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/enqueue_submission_status.sql
 \ir public/TRIGGER_FUNCTIONS/finish_build_edit_trigger.sql
 \ir public/FUNCTIONS/get_quantified_version_names.sql
-\ir public/FUNCTIONS/power_set_max.sql
 \ir public/FUNCTIONS/publish_domain_event.sql
 \ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_submission_finalization_input_update.sql
