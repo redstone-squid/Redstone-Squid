@@ -1,4 +1,3 @@
--- Replacing queued work clears its claim token so an older worker cannot acknowledge the new request.
 CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -18,20 +17,11 @@ BEGIN
         SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
     END IF;
 
-    INSERT INTO public.search_projection_queue
-        (resource_kind, source_key, action, enqueued_at, available_at)
-    VALUES ('build', target_build_id::text, target_action, now(), now())
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action,
-        enqueued_at = EXCLUDED.enqueued_at,
-        available_at = EXCLUDED.available_at,
-        attempts = 0,
-        claimed_at = NULL,
-        claim_token = NULL,
-        dead_at = NULL,
-        last_error = NULL;
+    PERFORM public.upsert_search_projection_request('build', target_build_id::text, target_action);
 
     IF target_kind IN ('door', 'extender') THEN
+        -- As in the upsert_*_request functions, clearing the claim token keeps an older worker
+        -- from acknowledging the new request.
         INSERT INTO public.record_recompute_queue
             (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
         VALUES (

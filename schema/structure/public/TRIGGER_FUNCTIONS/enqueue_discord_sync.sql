@@ -24,49 +24,15 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM public.builds WHERE id = target_key) THEN RETURN NULL; END IF;
     END IF;
 
-    -- The generation is drawn from a sequence rather than counted per row. Acknowledging
-    -- a job deletes its queue row, so a per-row counter restarted at 1 on the next edit
-    -- and could name a revision below one already applied. Sequences are exempt from
-    -- rollback, which is exactly what a staleness token needs.
-    INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, generation, enqueued_at, available_at,
-         claimed_at, claim_token, dead_at, attempts, last_error)
-    VALUES (
-        target_kind, target_key::text, target_action,
-        nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
-    )
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action,
-        generation = EXCLUDED.generation,
-        enqueued_at = EXCLUDED.enqueued_at,
-        available_at = EXCLUDED.available_at,
-        claimed_at = NULL,
-        claim_token = NULL,
-        dead_at = NULL,
-        attempts = 0,
-        last_error = NULL;
+    PERFORM public.upsert_discord_sync_request(target_kind, target_key::text, target_action);
 
     -- A review card embeds the build it is voting on, so a build change makes the
     -- session's cards stale too. Their posts are keyed by session, not by build, so
     -- the sessions have to be enqueued in their own right.
     IF target_kind = 'build' AND target_action = 'refresh' THEN
-        INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, available_at,
-             claimed_at, claim_token, dead_at, attempts, last_error)
-        SELECT
-            'vote_session', bvs.vote_session_id::text, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
+        PERFORM public.upsert_discord_sync_request('vote_session', bvs.vote_session_id::text, 'refresh')
         FROM public.build_vote_sessions bvs
-        WHERE bvs.build_id = target_key
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET generation = EXCLUDED.generation,
-            enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            claimed_at = NULL,
-            claim_token = NULL,
-            dead_at = NULL,
-            attempts = 0,
-            last_error = NULL;
+        WHERE bvs.build_id = target_key;
     END IF;
     RETURN NULL;
 END;

@@ -164,17 +164,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         row.updated_at = Instant.now()
         await session.flush()
         await session.execute(
-            text(
-                """
-                INSERT INTO search_projection_queue
-                    (resource_kind, source_key, action, enqueued_at, available_at)
-                VALUES ('metadata', :source_key, :action, now(), now())
-                ON CONFLICT (resource_kind, source_key) DO UPDATE
-                SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
-                    available_at = EXCLUDED.available_at, attempts = 0,
-                    claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL
-                """
-            ),
+            text("SELECT upsert_search_projection_request('metadata', :source_key, :action)"),
             {
                 "source_key": f"tag:{tag_id}",
                 "action": "upsert" if status is TagModerationStatus.APPROVED else "delete",

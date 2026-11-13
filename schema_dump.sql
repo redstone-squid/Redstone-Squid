@@ -567,20 +567,11 @@ BEGIN
         SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
     END IF;
 
-    INSERT INTO public.search_projection_queue
-        (resource_kind, source_key, action, enqueued_at, available_at)
-    VALUES ('build', target_build_id::text, target_action, now(), now())
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action,
-        enqueued_at = EXCLUDED.enqueued_at,
-        available_at = EXCLUDED.available_at,
-        attempts = 0,
-        claimed_at = NULL,
-        claim_token = NULL,
-        dead_at = NULL,
-        last_error = NULL;
+    PERFORM public.upsert_search_projection_request('build', target_build_id::text, target_action);
 
     IF target_kind IN ('door', 'extender') THEN
+        -- As in the upsert_*_request functions, clearing the claim token keeps an older worker
+        -- from acknowledging the new request.
         INSERT INTO public.record_recompute_queue
             (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
         VALUES (
@@ -618,43 +609,23 @@ $$;
 CREATE FUNCTION public.enqueue_computed_record_search_projection() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-DECLARE
-    target_result_id bigint;
 BEGIN
     IF TG_TABLE_NAME = 'title_results' THEN
-        target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-        INSERT INTO public.search_projection_queue
-            (resource_kind, source_key, action, enqueued_at, available_at)
-        VALUES (
+        PERFORM public.upsert_search_projection_request(
             'record',
-            'result:' || target_result_id::text,
-            CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END,
-            now(),
-            now()
-        )
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            'result:' || (CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END)::text,
+            CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END
+        );
     ELSIF TG_TABLE_NAME = 'title_holders' THEN
-        target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
-        INSERT INTO public.search_projection_queue
-            (resource_kind, source_key, action, enqueued_at, available_at)
-        VALUES ('record', 'result:' || target_result_id::text, 'upsert', now(), now())
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+        PERFORM public.upsert_search_projection_request(
+            'record',
+            'result:' || (CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END)::text,
+            'upsert'
+        );
     ELSE
-        INSERT INTO public.search_projection_queue
-            (resource_kind, source_key, action, enqueued_at, available_at)
-        SELECT 'record', 'result:' || rr.id::text, 'upsert', now(), now()
+        PERFORM public.upsert_search_projection_request('record', 'result:' || rr.id::text, 'upsert')
         FROM public.title_results rr
-        WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+        WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
     END IF;
     RETURN NULL;
 END;
@@ -691,49 +662,15 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM public.builds WHERE id = target_key) THEN RETURN NULL; END IF;
     END IF;
 
-    -- The generation is drawn from a sequence rather than counted per row. Acknowledging
-    -- a job deletes its queue row, so a per-row counter restarted at 1 on the next edit
-    -- and could name a revision below one already applied. Sequences are exempt from
-    -- rollback, which is exactly what a staleness token needs.
-    INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, generation, enqueued_at, available_at,
-         claimed_at, claim_token, dead_at, attempts, last_error)
-    VALUES (
-        target_kind, target_key::text, target_action,
-        nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
-    )
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action,
-        generation = EXCLUDED.generation,
-        enqueued_at = EXCLUDED.enqueued_at,
-        available_at = EXCLUDED.available_at,
-        claimed_at = NULL,
-        claim_token = NULL,
-        dead_at = NULL,
-        attempts = 0,
-        last_error = NULL;
+    PERFORM public.upsert_discord_sync_request(target_kind, target_key::text, target_action);
 
     -- A review card embeds the build it is voting on, so a build change makes the
     -- session's cards stale too. Their posts are keyed by session, not by build, so
     -- the sessions have to be enqueued in their own right.
     IF target_kind = 'build' AND target_action = 'refresh' THEN
-        INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, available_at,
-             claimed_at, claim_token, dead_at, attempts, last_error)
-        SELECT
-            'vote_session', bvs.vote_session_id::text, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
+        PERFORM public.upsert_discord_sync_request('vote_session', bvs.vote_session_id::text, 'refresh')
         FROM public.build_vote_sessions bvs
-        WHERE bvs.build_id = target_key
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET generation = EXCLUDED.generation,
-            enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            claimed_at = NULL,
-            claim_token = NULL,
-            dead_at = NULL,
-            attempts = 0,
-            last_error = NULL;
+        WHERE bvs.build_id = target_key;
     END IF;
     RETURN NULL;
 END;
@@ -767,73 +704,25 @@ BEGIN
         target_action := 'delete';
     END IF;
 
-    INSERT INTO public.search_projection_queue
-        (resource_kind, source_key, action, enqueued_at, available_at)
-    VALUES ('metadata', target_kind || ':' || target_id::text, target_action, now(), now())
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action,
-        enqueued_at = EXCLUDED.enqueued_at,
-        available_at = EXCLUDED.available_at,
-        attempts = 0,
-        claimed_at = NULL,
-        claim_token = NULL,
-        dead_at = NULL,
-        last_error = NULL;
+    PERFORM public.upsert_search_projection_request(
+        'metadata', target_kind || ':' || target_id::text, target_action
+    );
 
+    -- Builds show the names of their tags, creators, and versions, so their documents are stale too.
     IF TG_TABLE_NAME IN ('tag_definitions', 'tag_aliases') THEN
-        INSERT INTO public.search_projection_queue
-            (resource_kind, source_key, action, enqueued_at, available_at)
-        SELECT 'build', assignment.build_id::text, 'upsert', now(), now()
+        PERFORM
+            public.upsert_search_projection_request('build', assignment.build_id::text, 'upsert'),
+            public.upsert_discord_sync_request('build', assignment.build_id::text, 'refresh')
         FROM public.build_tag_assignments assignment
-        WHERE assignment.tag_id = target_id
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert',
-            enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            attempts = 0,
-            claimed_at = NULL,
-            claim_token = NULL,
-            dead_at = NULL,
-            last_error = NULL;
-
-        INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, available_at,
-             claimed_at, claim_token, dead_at, attempts, last_error)
-        SELECT
-            'build', assignment.build_id::text, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
-        FROM public.build_tag_assignments assignment
-        WHERE assignment.tag_id = target_id
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = EXCLUDED.action,
-            generation = EXCLUDED.generation,
-            enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            claimed_at = NULL,
-            claim_token = NULL,
-            dead_at = NULL,
-            attempts = 0,
-            last_error = NULL;
+        WHERE assignment.tag_id = target_id;
     ELSIF TG_TABLE_NAME = 'creator_aliases' THEN
-        INSERT INTO public.search_projection_queue
-            (resource_kind, source_key, action, enqueued_at, available_at)
-        SELECT 'build', bc.build_id::text, 'upsert', now(), now()
+        PERFORM public.upsert_search_projection_request('build', bc.build_id::text, 'upsert')
         FROM public.build_creators bc
-        WHERE bc.alias_id = target_id
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+        WHERE bc.alias_id = target_id;
     ELSIF TG_TABLE_NAME = 'versions' THEN
-        INSERT INTO public.search_projection_queue
-            (resource_kind, source_key, action, enqueued_at, available_at)
-        SELECT 'build', bv.build_id::text, 'upsert', now(), now()
+        PERFORM public.upsert_search_projection_request('build', bv.build_id::text, 'upsert')
         FROM public.build_versions bv
-        WHERE bv.version_id = target_id
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+        WHERE bv.version_id = target_id;
     END IF;
     RETURN NULL;
 END;
@@ -847,59 +736,29 @@ $$;
 CREATE FUNCTION public.enqueue_starboard_sync() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-DECLARE
-    target_key text;
 BEGIN
     IF TG_TABLE_NAME = 'starboards' THEN
         -- A configuration change restyles or re-thresholds every entry on the board.
-        INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, available_at,
-             claimed_at, claim_token, dead_at, attempts, last_error)
-        SELECT
-            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
+        PERFORM public.upsert_discord_sync_request(
+            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh'
+        )
         FROM public.starboard_entries e
-        WHERE e.starboard_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
-        RETURN NULL;
-    END IF;
-
-    IF TG_TABLE_NAME = 'messages' THEN
-        target_key := NULL;
-        INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, available_at,
-             claimed_at, claim_token, dead_at, attempts, last_error)
-        SELECT
-            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
+        WHERE e.starboard_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+    ELSIF TG_TABLE_NAME = 'messages' THEN
+        PERFORM public.upsert_discord_sync_request(
+            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh'
+        )
         FROM public.starboard_entries e
-        WHERE e.origin_message_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-            available_at = EXCLUDED.available_at,
-            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
-        RETURN NULL;
-    END IF;
-
-    IF TG_OP = 'DELETE' THEN
-        target_key := OLD.starboard_id || ':' || OLD.origin_message_id;
+        WHERE e.origin_message_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+    ELSIF TG_OP = 'DELETE' THEN
+        PERFORM public.upsert_discord_sync_request(
+            'starboard_entry', OLD.starboard_id || ':' || OLD.origin_message_id, 'delete'
+        );
     ELSE
-        target_key := NEW.starboard_id || ':' || NEW.origin_message_id;
+        PERFORM public.upsert_discord_sync_request(
+            'starboard_entry', NEW.starboard_id || ':' || NEW.origin_message_id, 'refresh'
+        );
     END IF;
-    INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, generation, enqueued_at, available_at,
-         claimed_at, claim_token, dead_at, attempts, last_error)
-    VALUES (
-        'starboard_entry', target_key, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'refresh' END,
-        nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
-    )
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action, generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-        available_at = EXCLUDED.available_at,
-        claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
     RETURN NULL;
 END;
 $$;
@@ -934,15 +793,7 @@ BEGIN
         SELECT 'submission_draft', draft_key::text WHERE draft_key IS NOT NULL
         UNION ALL SELECT 'inference_run', run_key::text WHERE run_key IS NOT NULL
     LOOP
-        INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, available_at,
-             claimed_at, claim_token, dead_at, attempts, last_error)
-        VALUES (target_kind, target_key, 'refresh', nextval('public.discord_sync_generation_seq'),
-                now(), now(), NULL, NULL, NULL, 0, NULL)
-        ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = EXCLUDED.action, generation = EXCLUDED.generation,
-            enqueued_at = EXCLUDED.enqueued_at, available_at = EXCLUDED.available_at,
-            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+        PERFORM public.upsert_discord_sync_request(target_kind, target_key, 'refresh');
     END LOOP;
     RETURN NULL;
 END;
@@ -1129,6 +980,62 @@ BEGIN
         MESSAGE = 'submission finalization inputs are immutable',
         SCHEMA = 'public',
         TABLE = 'submission_finalization_inputs';
+END;
+$$;
+
+
+--
+-- Name: upsert_discord_sync_request(text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.upsert_discord_sync_request(resource_kind_input text, source_key_input text, action_input text) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- The generation is drawn from a sequence rather than counted per row. Acknowledging
+    -- a job deletes its queue row, so a per-row counter restarted at 1 on the next edit
+    -- and could name a revision below one already applied. Sequences are exempt from
+    -- rollback, which is exactly what a staleness token needs.
+    INSERT INTO public.discord_sync_queue
+        (resource_kind, source_key, action, generation, enqueued_at, available_at)
+    VALUES (
+        resource_kind_input, source_key_input, action_input,
+        nextval('public.discord_sync_generation_seq'), now(), now()
+    )
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        generation = EXCLUDED.generation,
+        enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
+        attempts = 0,
+        claimed_at = NULL,
+        claim_token = NULL,
+        dead_at = NULL,
+        last_error = NULL;
+END;
+$$;
+
+
+--
+-- Name: upsert_search_projection_request(text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.upsert_search_projection_request(resource_kind_input text, source_key_input text, action_input text) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    INSERT INTO public.search_projection_queue
+        (resource_kind, source_key, action, enqueued_at, available_at)
+    VALUES (resource_kind_input, source_key_input, action_input, now(), now())
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
+        attempts = 0,
+        claimed_at = NULL,
+        claim_token = NULL,
+        dead_at = NULL,
+        last_error = NULL;
 END;
 $$;
 

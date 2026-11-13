@@ -32,6 +32,8 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/FUNCTIONS/publish_domain_event.sql
 \ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_submission_finalization_input_update.sql
+\ir public/FUNCTIONS/upsert_discord_sync_request.sql
+\ir public/FUNCTIONS/upsert_search_projection_request.sql
 \ir public/TABLES/account_identities.sql
 \ir public/SEQUENCES/account_identities_id_seq.sql
 \ir public/TABLES/account_merge_tickets.sql
