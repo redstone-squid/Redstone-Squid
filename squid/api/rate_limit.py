@@ -450,7 +450,7 @@ class RateLimitMiddleware:
         if not decision.allowed:
             response = handle_squid_error(request, RateLimitedError(decision.retry_after))
             _set_rate_limit_headers(response, _states(request))
-            await response.to_asgi_response(request.app, request)(scope, receive, send)
+            await response.to_asgi_response(app=None, request=request)(scope, receive, send)
             return
 
         async def send_with_headers(message: Message) -> None:
@@ -470,6 +470,9 @@ async def enforce_route_rate_limits(
     caller: NamedDependency[Caller],
 ) -> None:
     """Apply caller quotas and any write, suggestion, render, or authorization quota for this route."""
+    if request.state.get("route_rate_limits_checked", False):
+        return
+    request.state.route_rate_limits_checked = True
     limiter, policies = _limiter_state(request)
     checks: list[RateLimitRequest] = []
     identity = caller.subject if caller.kind != "anonymous" else _client_identity(request)

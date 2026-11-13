@@ -1,9 +1,9 @@
 """Per-route declarations for the public OpenAPI and CLI capability contract.
 
-Each route uses `contract()` to tell clients which credentials and permission
-scopes it accepts, how it appears in the CLI, and which operations its responses
-link to. These declarations describe the API; route dependencies enforce access.
-Application construction checks the declarations before publishing OpenAPI.
+Each route declares native security requirements and uses `contract()` for
+permission scopes, CLI behavior, and response links. Guards and application
+services enforce access; these declarations describe the public API. Application
+construction checks the declarations before publishing OpenAPI.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
@@ -17,14 +17,6 @@ from squid.api.capabilities import API_FEATURES
 
 type SecurityRequirement = dict[str, list[str]]
 type CliClassification = Literal["command", "browser-only", "transport-only", "internal", "compatibility-alias"]
-
-SECURITY_PLACEHOLDER_KEY: Final = "x-squid-security"
-"""Temporary key for security requirements before OpenAPI postprocessing.
-
-FastAPI merges lists from `openapi_extra` with generated lists. Using `security`
-directly would append requirements to those inferred from dependencies, rather
-than replace them. The postprocessor renames this key after the merge.
-"""
 
 _UNSAFE_METHODS: Final = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -77,14 +69,12 @@ def compatibility_alias(canonical_operation_id: str) -> dict[str, Any]:
 
 def contract(
     *,
-    security: Sequence[SecurityRequirement],
     cli: dict[str, Any],
     scopes: Sequence[str] = (),
     links: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build the `openapi_extra` carrying one route's permanent contract metadata."""
+    """Build CLI, permission, and response-link metadata for a route's `opt`."""
     extra: dict[str, Any] = {
-        SECURITY_PLACEHOLDER_KEY: [dict(requirement) for requirement in security],
         "x-squid-cli": cli,
     }
     if scopes:
@@ -114,7 +104,7 @@ def validate_contract(app: Litestar) -> None:
         operation_ids.append(operation_id)
 
         extra = handler.opt
-        if SECURITY_PLACEHOLDER_KEY not in extra or "x-squid-cli" not in extra:
+        if not handler.resolve_security() or "x-squid-cli" not in extra:
             msg = f"Operation {operation_id!r} has no declared contract() metadata."
             raise ValueError(msg)
 
@@ -132,7 +122,7 @@ def validate_contract(app: Litestar) -> None:
             aliases[operation_id] = cli["canonical_operation_id"]
 
         if methods & _UNSAFE_METHODS:
-            for requirement in extra[SECURITY_PLACEHOLDER_KEY]:
+            for requirement in handler.resolve_security():
                 if "WebSession" in requirement and "CsrfToken" not in requirement:
                     msg = f"Operation {operation_id!r} accepts WebSession on an unsafe method without CsrfToken."
                     raise ValueError(msg)

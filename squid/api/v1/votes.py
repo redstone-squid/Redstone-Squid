@@ -6,7 +6,7 @@ from litestar.params import FromPath, FromQuery, JSONBody
 from pydantic import BaseModel, ConfigDict, Field
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
-from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
+from squid.api.dependencies import CurrentCaller, VoteMembers, Votes, get_vote_members, get_votes
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.security import requires
@@ -32,7 +32,8 @@ class VoteInput(BaseModel):
     "/{vote_session_id:int}",
     responses=responses(404, 422, 503),
     operation_id="vote_session_get",
-    opt=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
+    security=[ANONYMOUS, SERVICE, WEB, DEVICE],
+    opt=contract(cli=transport_only()),
 )
 async def get_vote_session(
     vote_session_id: FromPath[int],
@@ -50,9 +51,10 @@ async def get_vote_session(
     "/{vote_session_id:int}/votes",
     responses=responses(400, 401, 403, 404, 409, 429, 503),
     before_request=reserve_idempotent_before_request,
-    dependencies={"caller": Provide(requires(VOTE_POLL_CAST))},
+    guards=[requires(VOTE_POLL_CAST)],
     operation_id="vote_cast",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
 )
 async def cast_vote(
@@ -82,9 +84,10 @@ async def cast_vote(
     "/{vote_session_id:int}/votes",
     responses=responses(400, 401, 403, 404, 409, 429, 503),
     before_request=reserve_idempotent_before_request,
-    dependencies={"caller": Provide(requires(VOTE_POLL_CAST))},
+    guards=[requires(VOTE_POLL_CAST)],
     operation_id="vote_clear",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
 )
 async def clear_vote(
@@ -126,4 +129,12 @@ def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
             raise AuthorizationError
 
 
-router = Router(path="/vote-sessions", tags=["vote sessions"], route_handlers=[get_vote_session, cast_vote, clear_vote])
+router = Router(
+    dependencies={
+        "vote_members": Provide(get_vote_members, sync_to_thread=False),
+        "votes": Provide(get_votes, sync_to_thread=False),
+    },
+    path="/vote-sessions",
+    tags=["vote sessions"],
+    route_handlers=[get_vote_session, cast_vote, clear_vote],
+)

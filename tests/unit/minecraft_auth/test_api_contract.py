@@ -13,7 +13,7 @@ from whenever import Instant
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.app import create_api_app
-from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization, get_players
+from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization
 from squid.api.openapi import openapi_document
 from squid.api.security import ANONYMOUS, Caller, current_browser_account_id, current_caller
 from squid.api.v1.minecraft_auth import router
@@ -296,7 +296,6 @@ def app_with_fakes(
 
     overrides[get_minecraft_installations] = installation_dependency
     overrides[get_minecraft_player_authorization] = player_dependency
-    overrides[get_players] = player_dependency
     overrides[current_browser_account_id] = account_dependency
     overrides[current_caller] = caller_dependency
     app = route_app([router], overrides=overrides, handle_errors=True)

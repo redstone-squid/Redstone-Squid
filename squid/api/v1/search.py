@@ -5,10 +5,11 @@ from collections.abc import Sequence
 from typing import Annotated
 
 from litestar import Router, get
+from litestar.di import Provide
 from litestar.params import QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import BuildQueries, Search
+from squid.api.dependencies import BuildQueries, Search, get_build_queries, get_search
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageAnchor, PageSizeParam
 from squid.api.v1.schemas.builds import BuildSummary
@@ -37,7 +38,8 @@ PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
     "/fields",
     responses=responses(503),
     operation_id="search_fields_list",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def list_search_fields(search_service: Search) -> list[SearchField]:
     """Publish the effective allowlisted query-field registry."""
@@ -49,7 +51,8 @@ async def list_search_fields(search_service: Search) -> list[SearchField]:
     "/suggest",
     responses=responses(400, 422, 503),
     operation_id="search_terms_suggest",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def suggest_terms(
     search_service: Search,
@@ -64,7 +67,8 @@ async def suggest_terms(
     "/",
     responses=responses(400, 422, 503),
     operation_id="search_execute",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def search(
     search_service: Search,
@@ -139,4 +143,12 @@ async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[Search
     return summaries
 
 
-router = Router(path="/search", tags=["search"], route_handlers=[list_search_fields, suggest_terms, search])
+router = Router(
+    dependencies={
+        "build_queries": Provide(get_build_queries, sync_to_thread=False),
+        "search_service": Provide(get_search, sync_to_thread=False),
+    },
+    path="/search",
+    tags=["search"],
+    route_handlers=[list_search_fields, suggest_terms, search],
+)

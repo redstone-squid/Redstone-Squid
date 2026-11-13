@@ -10,7 +10,7 @@ from litestar.params import PathParameter, QueryParameter, SkipValidation
 from litestar.response import Redirect
 
 from squid.api.contract import ANONYMOUS, WEB, WEB_WRITE, browser_only, contract
-from squid.api.dependencies import CurrentCaller, WebAuth
+from squid.api.dependencies import CurrentCaller, WebAuth, get_web_auth
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
 from squid.api.v1.schemas.auth import CsrfTokenResponse
@@ -26,7 +26,8 @@ resource, not a credential failure: "this deployment has no GitHub login" is a f
     "/csrf",
     responses=responses(401, 503),
     operation_id="browser_csrf_get",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
 )
 async def csrf_token(request: Request, caller: CurrentCaller) -> Response[CsrfTokenResponse]:
@@ -45,7 +46,8 @@ async def csrf_token(request: Request, caller: CurrentCaller) -> Response[CsrfTo
     status_code=204,
     responses=responses(401, 403, 409, 503),
     operation_id="browser_session_revoke",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def logout(
@@ -66,7 +68,8 @@ async def logout(
     "/{provider:str}",
     responses=responses(400, 404, 422, 503),
     operation_id="browser_authorization_start",
-    opt=contract(security=[ANONYMOUS], cli=browser_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=browser_only()),
     status_code=307,
 )
 async def browser_authorization_start(
@@ -86,7 +89,8 @@ async def browser_authorization_start(
     "/{provider:str}/callback",
     responses=responses(400, 401, 404, 422, 503),
     operation_id="browser_authorization_callback",
-    opt=contract(security=[ANONYMOUS], cli=browser_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=browser_only()),
     status_code=307,
 )
 async def browser_authorization_callback(
@@ -132,6 +136,7 @@ def _validate_redirect(request: Request, redirect_to: str | None) -> None:
 
 
 router = Router(
+    dependencies={"web_auth": Provide(get_web_auth, sync_to_thread=False)},
     path="/auth",
     tags=["authentication"],
     route_handlers=[csrf_token, logout, browser_authorization_start, browser_authorization_callback],

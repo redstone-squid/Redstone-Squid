@@ -206,6 +206,6 @@ async def test_refresh_reports_an_unchanged_name() -> None:
 async def test_staff_refresh_targets_the_named_account() -> None:
     refresh = IdentityRefresh(account_id=42, java_uuid=JAVA_UUID, current_name="Steve", previous_name="Steve")
     accounts = _accounts(refresh=refresh)
-    response = await refresh_minecraft_identity_for.fn(42, accounts, _permission=None, _reservation=None)
+    response = await refresh_minecraft_identity_for.fn(42, accounts, _reservation=None)
     assert accounts.refreshes == [(42, None)]
     assert response.ign == "Steve"

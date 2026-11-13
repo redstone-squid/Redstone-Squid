@@ -14,7 +14,7 @@ from uuid import UUID
 import anyio
 from litestar import Request, Response, Router, delete, get, put
 from litestar.di import NamedDependency, Provide
-from litestar.params import QueryParameter, SkipValidation
+from litestar.params import FromPath, FromQuery, QueryParameter, SkipValidation
 from pydantic import BaseModel, ConfigDict
 
 from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
@@ -43,13 +43,14 @@ def intake_service(request: Request) -> SubmissionAttachmentIntake:
 
 
 Intake = NamedDependency[SkipValidation[SubmissionAttachmentIntake]]
-_READ = contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only())
-_WRITE = contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only())
+_READ = contract(cli=transport_only())
+_WRITE = contract(cli=transport_only())
 
 
 @get(
     "/",
     operation_id="submission_supplied_file_list",
+    security=[WEB, DEVICE, MINECRAFT],
     opt=_READ,
     status_code=200,
     dependencies={
@@ -57,7 +58,7 @@ _WRITE = contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only())
         "intake": Provide(intake_service, sync_to_thread=False),
     },
 )
-async def list_files(draft_id: UUID, account_id: AccountId, intake: Intake) -> list[SuppliedFileResponse]:
+async def list_files(draft_id: FromPath[UUID], account_id: AccountId, intake: Intake) -> list[SuppliedFileResponse]:
     """List unresolved, registered, and explicitly discarded supplied files."""
     return [SuppliedFileResponse.model_validate(item) for item in await intake.list(draft_id, account_id)]
 
@@ -65,6 +66,7 @@ async def list_files(draft_id: UUID, account_id: AccountId, intake: Intake) -> l
 @put(
     "/{source_id:uuid}",
     operation_id="submission_supplied_file_upload",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     status_code=202,
     opt={
         **_WRITE,
@@ -80,13 +82,13 @@ async def list_files(draft_id: UUID, account_id: AccountId, intake: Intake) -> l
 )
 @streams_own_body
 async def upload_file(
-    draft_id: UUID,
-    source_id: UUID,
+    draft_id: FromPath[UUID],
+    source_id: FromPath[UUID],
     request: Request,
     account_id: AccountId,
     intake: Intake,
     filename: Annotated[str, QueryParameter(min_length=1, max_length=255)],
-    replaces: UUID | None = None,
+    replaces: FromQuery[UUID | None] = None,
 ) -> list[SuppliedFileResponse]:
     """Register a supplied file, then discard the requirement it replaces if requested.
 
@@ -126,6 +128,7 @@ async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
 @delete(
     "/{source_id:uuid}",
     operation_id="submission_supplied_file_discard",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=_WRITE,
     status_code=200,
     dependencies={
@@ -138,8 +141,8 @@ async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
     },
 )
 async def discard_file(
-    draft_id: UUID,
-    source_id: UUID,
+    draft_id: FromPath[UUID],
+    source_id: FromPath[UUID],
     account_id: AccountId,
     intake: Intake,
     edit: AttachmentEdit,

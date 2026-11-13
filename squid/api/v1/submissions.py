@@ -13,7 +13,15 @@ from uuid import UUID
 from litestar import Request, Response, Router, delete, get, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import HeaderParameter, JSONBody, PathParameter, QueryParameter, SkipValidation
+from litestar.params import (
+    FromPath,
+    FromQuery,
+    HeaderParameter,
+    JSONBody,
+    PathParameter,
+    QueryParameter,
+    SkipValidation,
+)
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
 from squid.api.errors import responses
@@ -87,7 +95,7 @@ class SubmissionDraftCommands(Protocol):
         self,
         actor: int,
         *,
-        after: UUID | None = None,
+        after: FromQuery[UUID | None] = None,
         limit: int = 20,
     ) -> tuple[StoredDraft, ...]: ...
 
@@ -284,7 +292,8 @@ _DRAFT_DELETE_LINKS = {
     "/inbox",
     responses=responses(401, 403, 422, 503),
     operation_id="submission_correction_inbox",
-    opt=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
@@ -294,7 +303,7 @@ _DRAFT_DELETE_LINKS = {
 async def list_correction_inbox(
     drafts: Drafts,
     account_id: AccountId,
-    after: UUID | None = None,
+    after: FromQuery[UUID | None] = None,
     limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
 ) -> DraftInboxResponse:
     """List drafts needing staff correction, excluding attachment processing waits."""
@@ -305,8 +314,8 @@ async def list_correction_inbox(
     "/drafts",
     responses=responses(401, 403, 503),
     operation_id="submission_drafts_list",
+    security=[WEB, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB, DEVICE, MINECRAFT],
         cli=cli_command("draft.list", features=("submission-drafts",), interaction="direct"),
     ),
     status_code=200,
@@ -324,7 +333,8 @@ async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListRespons
     "/form/current",
     responses=responses(503),
     operation_id="submission_form_current",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
 )
@@ -338,7 +348,8 @@ async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
     "/form/schemas/{schema_id:str}/revisions/{revision:str}",
     responses=responses(404, 422, 503),
     operation_id="submission_form_revision_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
 )
@@ -356,7 +367,8 @@ async def pinned_form(
     "/form/options/{source:str}",
     responses=responses(400, 404, 422, 503),
     operation_id="submission_form_options_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
 )
@@ -373,8 +385,8 @@ async def form_options(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 409, 422, 503),
     operation_id="submission_draft_create",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("draft.create", features=("submission-drafts",), interaction="direct"),
         links={"201": _DRAFT_CREATE_LINKS},
     ),
@@ -411,8 +423,8 @@ async def create_draft(
     "/drafts/{draft_id:uuid}",
     responses=responses(401, 403, 404, 422, 503),
     operation_id="submission_draft_get",
+    security=[WEB, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB, DEVICE, MINECRAFT],
         cli=cli_command("draft.show", features=("submission-drafts",), interaction="direct"),
     ),
     status_code=200,
@@ -421,7 +433,7 @@ async def create_draft(
         "account_id": Provide(authenticated_account),
     },
 )
-async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> Response[StoredDraftResponse]:
+async def get_draft(draft_id: FromPath[UUID], drafts: Drafts, account_id: AccountId) -> Response[StoredDraftResponse]:
     """Return one draft after enforcing caller ownership."""
     response_headers: dict[str, str] = {}
     draft = await drafts.get_accessible(draft_id, account_id)
@@ -433,8 +445,8 @@ async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> Re
     "/drafts/{draft_id:uuid}/changes",
     responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
     operation_id="submission_draft_change",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("draft.change", features=("submission-drafts",), interaction="direct"),
         links={"200": _DRAFT_CHANGE_LINKS},
     ),
@@ -447,7 +459,7 @@ async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> Re
     },
 )
 async def change_draft(
-    draft_id: UUID,
+    draft_id: FromPath[UUID],
     data: JSONBody[DraftChangeRequest],
     drafts: Drafts,
     account_id: AccountId,
@@ -475,8 +487,8 @@ async def change_draft(
     "/drafts/{draft_id:uuid}/manifest-upgrade",
     responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_draft_manifest_upgrade",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("draft.upgrade", features=("submission-drafts",), interaction="direct"),
     ),
     status_code=200,
@@ -487,7 +499,7 @@ async def change_draft(
     },
 )
 async def upgrade_draft_manifest(
-    draft_id: UUID,
+    draft_id: FromPath[UUID],
     data: JSONBody[DraftManifestUpgradeRequest],
     request: Request,
     drafts: Drafts,
@@ -511,8 +523,8 @@ async def upgrade_draft_manifest(
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_finalization_start",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("draft.submit", features=("submission-finalization",), interaction="direct"),
         links={"202": _DRAFT_SUBMIT_LINKS},
     ),
@@ -523,7 +535,7 @@ async def upgrade_draft_manifest(
     },
 )
 async def submit_draft(
-    draft_id: UUID,
+    draft_id: FromPath[UUID],
     request: Request,
     finalization: Finalization,
     account_id: AccountId,
@@ -545,8 +557,8 @@ async def submit_draft(
     "/drafts/{draft_id:uuid}/status",
     responses=responses(401, 403, 404, 422, 503),
     operation_id="submission_finalization_get",
+    security=[WEB, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB, DEVICE, MINECRAFT],
         cli=cli_command("draft.status", features=("submission-finalization",), interaction="direct"),
     ),
     status_code=200,
@@ -556,7 +568,7 @@ async def submit_draft(
     },
 )
 async def get_draft_submission(
-    draft_id: UUID, finalization: Finalization, account_id: AccountId
+    draft_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
 ) -> SubmissionAttemptResponse | DraftPreparationResponse:
     """Return retained finalization state after rechecking draft ownership."""
     snapshot = await finalization.status(draft_id, account_id)
@@ -571,7 +583,8 @@ async def get_draft_submission(
     "/drafts/{draft_id:uuid}/attempts",
     responses=responses(401, 403, 404, 409, 422, 503),
     operation_id="submission_attempts_list",
-    opt=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
         "finalization": Provide(get_submission_finalization, sync_to_thread=False),
@@ -579,7 +592,7 @@ async def get_draft_submission(
     },
 )
 async def list_draft_attempts(
-    draft_id: UUID,
+    draft_id: FromPath[UUID],
     finalization: Finalization,
     account_id: AccountId,
     before: Annotated[int | None, QueryParameter(ge=1)] = None,
@@ -594,7 +607,8 @@ async def list_draft_attempts(
     "/drafts/{draft_id:uuid}/attempts/{attempt_id:uuid}",
     responses=responses(401, 403, 404, 409, 422, 503),
     operation_id="submission_attempt_get",
-    opt=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
         "finalization": Provide(get_submission_finalization, sync_to_thread=False),
@@ -602,7 +616,7 @@ async def list_draft_attempts(
     },
 )
 async def get_draft_attempt(
-    draft_id: UUID, attempt_id: UUID, finalization: Finalization, account_id: AccountId
+    draft_id: FromPath[UUID], attempt_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
 ) -> SubmissionAttemptResponse:
     """Read one attempt without exposing execution credentials or its private payload."""
     snapshot = await finalization.attempt(draft_id, account_id, attempt_id)
@@ -616,8 +630,8 @@ async def get_draft_attempt(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 422, 503),
     operation_id="submission_draft_delete",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("draft.delete", features=("submission-drafts",), interaction="direct"),
         links={"204": _DRAFT_DELETE_LINKS},
     ),
@@ -628,7 +642,11 @@ async def get_draft_attempt(
     },
 )
 async def delete_draft(
-    draft_id: UUID, drafts: Drafts, account_id: AccountId, *, _reservation: NamedDependency[SkipValidation[None]]
+    draft_id: FromPath[UUID],
+    drafts: Drafts,
+    account_id: AccountId,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> Response[None]:
     """Immediately delete one caller-owned draft."""
     await drafts.delete(draft_id, account_id)

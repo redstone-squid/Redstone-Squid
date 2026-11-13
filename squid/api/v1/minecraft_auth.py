@@ -15,11 +15,16 @@ from uuid import UUID
 from litestar import Request, Router, delete, get, post, put
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import HeaderParameter, JSONBody, SkipValidation
+from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
 from pydantic import AnyHttpUrl
 
 from squid.api.contract import ANONYMOUS, PAPER, WEB, WEB_WRITE, browser_only, contract, transport_only
-from squid.api.dependencies import MinecraftInstallations, MinecraftPlayerAuthorization
+from squid.api.dependencies import (
+    MinecraftInstallations,
+    MinecraftPlayerAuthorization,
+    get_minecraft_installations,
+    get_minecraft_player_authorization,
+)
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
 from squid.api.security import BrowserAccountId, current_browser_account_id, prevent_credential_storage
@@ -118,7 +123,8 @@ async def enforce_fabric_request_idempotency(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 422, 503),
     operation_id="paper_installation_create",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(reserve_idempotent_request),
@@ -148,7 +154,8 @@ async def create_installation(
     "/paper/installations",
     responses=responses(400, 401, 403, 503),
     operation_id="paper_installations_list",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -170,7 +177,8 @@ async def list_installations(
     "/paper/installations/{installation_id:uuid}/rotate",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="paper_installation_rotate",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -180,7 +188,7 @@ async def list_installations(
     },
 )
 async def rotate_installation(
-    installation_id: UUID,
+    installation_id: FromPath[UUID],
     installations: MinecraftInstallations,
     account_id: BrowserAccountId,
     *,
@@ -195,7 +203,8 @@ async def rotate_installation(
     "/paper/installations/{installation_id:uuid}/profile",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="paper_installation_profile_update",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -205,7 +214,7 @@ async def rotate_installation(
     },
 )
 async def update_installation_profile(
-    installation_id: UUID,
+    installation_id: FromPath[UUID],
     data: JSONBody[ServerProfileSchema],
     installations: MinecraftInstallations,
     account_id: BrowserAccountId,
@@ -224,7 +233,8 @@ async def update_installation_profile(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="paper_installation_revoke",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(reserve_idempotent_request),
@@ -233,7 +243,7 @@ async def update_installation_profile(
     },
 )
 async def revoke_installation(
-    installation_id: UUID,
+    installation_id: FromPath[UUID],
     installations: MinecraftInstallations,
     account_id: BrowserAccountId,
     *,
@@ -248,7 +258,8 @@ async def revoke_installation(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 409, 422, 429, 503),
     operation_id="paper_challenge_start",
-    opt=contract(security=[PAPER], cli=transport_only()),
+    security=[PAPER],
+    opt=contract(cli=transport_only()),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(enforce_paper_request_idempotency),
@@ -273,7 +284,8 @@ async def start_paper_challenge(
     "/paper/challenges/exchange",
     responses=responses(400, 401, 409, 422, 503),
     operation_id="paper_challenge_exchange",
-    opt=contract(security=[PAPER], cli=transport_only()),
+    security=[PAPER],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -299,7 +311,8 @@ async def exchange_paper_challenge(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 409, 422, 429, 503),
     operation_id="fabric_challenge_start",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(enforce_fabric_request_idempotency),
@@ -329,7 +342,8 @@ async def start_fabric_challenge(
     "/fabric/challenges/exchange",
     responses=responses(400, 409, 422, 503),
     operation_id="fabric_challenge_exchange",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -353,7 +367,8 @@ async def exchange_fabric_challenge(
     "/challenges/approval",
     responses=responses(400, 401, 403, 409, 422, 503),
     operation_id="minecraft_challenge_approve",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -379,7 +394,8 @@ async def approve_challenge(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="minecraft_grant_revoke",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(reserve_idempotent_request),
@@ -388,7 +404,7 @@ async def approve_challenge(
     },
 )
 async def revoke_grant(
-    grant_id: UUID,
+    grant_id: FromPath[UUID],
     players: MinecraftPlayerAuthorization,
     account_id: BrowserAccountId,
     *,
@@ -401,6 +417,10 @@ async def revoke_grant(
 
 
 router = Router(
+    dependencies={
+        "installations": Provide(get_minecraft_installations, sync_to_thread=False),
+        "players": Provide(get_minecraft_player_authorization, sync_to_thread=False),
+    },
     path="/minecraft/auth",
     tags=["minecraft-authentication"],
     route_handlers=[

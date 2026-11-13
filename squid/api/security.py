@@ -7,7 +7,9 @@ from typing import Any, Literal
 from uuid import UUID
 
 from litestar import Request, Response
+from litestar.connection import ASGIConnection
 from litestar.di import NamedDependency
+from litestar.handlers import BaseRouteHandler
 from litestar.params import SkipValidation
 
 from squid.accounts.errors import ConsentRequiredError
@@ -102,32 +104,31 @@ ANONYMOUS = Caller(kind="anonymous", subject="anonymous", nodes=UNBOUNDED)
 """No credential restriction; the permission service still checks the anonymous subject."""
 
 
-def requires(node: PermissionNode | str) -> Callable[[Request, Caller], Awaitable[Caller]]:
-    """Build a named dependency requiring one permission node.
+def requires(node: PermissionNode | str) -> Callable[[ASGIConnection, BaseRouteHandler], Awaitable[None]]:
+    """Require credential scopes and account authority before running the handler.
 
-    Check both credential restrictions and account permissions through
-    `Caller.allows`. Denial raises AuthenticationError for an anonymous caller
-    and AuthorizationError for an authenticated caller.
+    Anonymous denials are authentication errors; authenticated denials are
+    authorization errors. Object ownership remains the application's concern.
     """
     required = CATALOGUE[node] if isinstance(node, str) else node
 
-    async def check(request: Request, current_identity: NamedDependency[SkipValidation[Caller]]) -> Caller:
-        caller = current_identity
-        permissions = request.app.state.runtime.services.permissions
+    async def check(connection: ASGIConnection, _handler: BaseRouteHandler) -> None:
+        caller = await current_caller(Request(connection.scope))
+        permissions = connection.app.state.runtime.services.permissions
         if not await caller.allows(permissions, required):
             raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
-        return caller
 
     return check
 
 
 async def current_caller(request: Request) -> Caller:
     """Resolve credentials once per request, including calls from pre-handler hooks."""
-    cached = request.state.get("squid_caller")
+    cached = request.scope.get("user")
     if isinstance(cached, Caller):
         return cached
     caller = await _authenticate_caller(request)
-    request.state.squid_caller = caller
+    request.scope["user"] = caller
+    request.scope["auth"] = caller.kind
     return caller
 
 
@@ -231,9 +232,8 @@ async def _authenticate_caller(request: Request) -> Caller:
     )
 
 
-async def current_browser_account_id(current_identity: NamedDependency[SkipValidation[Caller]]) -> int:
+async def current_browser_account_id(caller: NamedDependency[SkipValidation[Caller]]) -> int:
     """Require a signed-in browser account with current privacy consent."""
-    caller = current_identity
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
     return caller.require_consented_account()
@@ -249,9 +249,9 @@ async def prevent_credential_storage(response: Response[Any]) -> Response[Any]:
     return response
 
 
-async def consented_account_id(current_identity: NamedDependency[SkipValidation[Caller]]) -> int:
+async def consented_account_id(caller: NamedDependency[SkipValidation[Caller]]) -> int:
     """Dependency form, for routes whose only precondition is a consented account."""
-    return current_identity.require_consented_account()
+    return caller.require_consented_account()
 
 
 ConsentedAccountId = NamedDependency[int]

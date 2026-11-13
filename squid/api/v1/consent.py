@@ -19,7 +19,8 @@ from squid_i18n import localization_scope
     "/notice",
     responses=responses(503),
     operation_id="consent_notice_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     status_code=200,
 )
 async def get_notice(request: Request) -> Response[PrivacyNoticeDetail]:

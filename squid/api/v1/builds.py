@@ -9,7 +9,16 @@ from litestar.di import NamedDependency, Provide
 from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, QueryParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
-from squid.api.dependencies import BuildQueries, CurrentCaller, Permissions, Search, Services
+from squid.api.dependencies import (
+    BuildQueries,
+    CurrentCaller,
+    Permissions,
+    Search,
+    Services,
+    get_build_queries,
+    get_permissions,
+    get_search,
+)
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
 from squid.api.pagination import (
@@ -52,12 +61,11 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
     "/{build_id:int}",
     responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
     before_request=reserve_edit_before_request,
-    dependencies={
-        "caller": Provide(requires(BUILD_SUBMISSION_CREATE)),
-        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
-    },
+    guards=[requires(BUILD_SUBMISSION_CREATE)],
+    dependencies={"operation_id": Provide(edit_operation_id, sync_to_thread=False)},
     operation_id="builds_update",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
 )
 async def edit_build(
@@ -98,7 +106,8 @@ async def edit_build(
         describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="builds_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def get_build(build_id: FromPath[int], build_queries: BuildQueries) -> Response[BuildDetail]:
     """Return one confirmed public build.
@@ -114,7 +123,8 @@ async def get_build(build_id: FromPath[int], build_queries: BuildQueries) -> Res
     "/",
     responses=responses(400, 401, 403, 422, 503),
     operation_id="builds_list",
-    opt=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
+    security=[ANONYMOUS, SERVICE, WEB, DEVICE],
+    opt=contract(cli=transport_only()),
 )
 async def list_builds(
     build_queries: BuildQueries,
@@ -208,4 +218,13 @@ def _expected_revision(build_id: int, if_match: str | None) -> int:
     return int(match.group("revision"))
 
 
-router = Router(path="/builds", tags=["builds"], route_handlers=[edit_build, get_build, list_builds])
+router = Router(
+    dependencies={
+        "build_queries": Provide(get_build_queries, sync_to_thread=False),
+        "permissions": Provide(get_permissions, sync_to_thread=False),
+        "search_service": Provide(get_search, sync_to_thread=False),
+    },
+    path="/builds",
+    tags=["builds"],
+    route_handlers=[edit_build, get_build, list_builds],
+)

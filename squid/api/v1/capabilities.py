@@ -21,7 +21,8 @@ from squid.submissions.application import CURRENT_SUBMISSION_PROTOCOL
 @get(
     "/capabilities",
     operation_id="capabilities_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def capabilities() -> ApiCapabilities:
     """Publish independently versioned client compatibility and safety limits."""

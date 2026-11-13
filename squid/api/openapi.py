@@ -1,6 +1,6 @@
 """Publish route metadata and shared definitions in the OpenAPI document.
 
-Routes declare their security requirements and CLI metadata through `contract()`.
+Routes declare security through Litestar and CLI metadata through `contract()`.
 This module adds shared security schemes, response headers, and each route's
 explicit security declaration.
 """
@@ -11,12 +11,13 @@ from typing import Any, override
 from litestar import Litestar, Request
 from litestar._openapi.schema_generation.schema import SchemaCreator
 from litestar.openapi.plugins import JsonRenderPlugin, SwaggerRenderPlugin
-from litestar.openapi.spec import OpenAPIType, Schema
+from litestar.openapi.spec import OpenAPIFormat, OpenAPIType, Schema
 from litestar.plugins import OpenAPISchemaPlugin
 from litestar.typing import FieldDefinition
 from pydantic_core import to_jsonable_python
+from whenever import Instant
 
-from squid.api.contract import SECURITY_PLACEHOLDER_KEY, iter_contract_routes, validate_contract
+from squid.api.contract import iter_contract_routes, validate_contract
 from squid.api.errors import ProblemDetail, responses
 from squid.core.errors import JSONValue
 from squid.submissions.domain import (
@@ -97,19 +98,7 @@ def _postprocess(document: dict[str, Any]) -> None:
         }
     }
     _install_validation_errors(document)
-    _rename_security_placeholder(document)
     _install_request_id_headers(document)
-
-
-def _rename_security_placeholder(document: dict[str, Any]) -> None:
-    """Publish route security metadata under the standard OpenAPI key."""
-    for path_item in document["paths"].values():
-        for method, operation in path_item.items():
-            if method not in _HTTP_METHODS or SECURITY_PLACEHOLDER_KEY not in operation:
-                continue
-            path_item[method] = {
-                ("security" if key == SECURITY_PLACEHOLDER_KEY else key): value for key, value in operation.items()
-            }
 
 
 def _install_request_id_headers(document: dict[str, Any]) -> None:
@@ -154,10 +143,15 @@ class ApplicationValueSchemaPlugin(OpenAPISchemaPlugin):
 
     @override
     def is_plugin_supported_field(self, field_definition: FieldDefinition) -> bool:
-        return field_definition.annotation == JSONValue.__value__ or field_definition.annotation is DraftChangeKey
+        return field_definition.annotation == JSONValue.__value__ or field_definition.annotation in (
+            DraftChangeKey,
+            Instant,
+        )
 
     @override
     def to_openapi_schema(self, field_definition: FieldDefinition, schema_creator: SchemaCreator) -> Schema:
+        if field_definition.annotation is Instant:
+            return Schema(type=OpenAPIType.STRING, format=OpenAPIFormat.DATE_TIME)
         if field_definition.annotation is DraftChangeKey:
             return Schema(
                 type=OpenAPIType.STRING,

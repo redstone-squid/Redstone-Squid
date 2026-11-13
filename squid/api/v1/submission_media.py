@@ -21,11 +21,11 @@ import anyio.to_thread
 from litestar import Request, Response, Router, delete, get, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import QueryParameter, SkipValidation
+from litestar.params import FromPath, FromQuery, QueryParameter, SkipValidation
 
 from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
-from squid.api.dependencies import DraftAttachments
+from squid.api.dependencies import DraftAttachments, get_draft_attachments
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.request_body import streams_own_body
@@ -69,11 +69,11 @@ UploadId = Annotated[UUID | None, QueryParameter(description="Stable client-gene
     "/{kind:str}",
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     operation_id="submission_media_upload",
     opt={
         "requestBody": _STREAMING_REQUEST_BODY,
         **contract(
-            security=[WEB_WRITE, DEVICE, MINECRAFT],
             cli=cli_command("media.upload", features=("submission-media",), interaction="direct"),
         ),
     },
@@ -81,8 +81,8 @@ UploadId = Annotated[UUID | None, QueryParameter(description="Stable client-gene
 )
 @streams_own_body
 async def upload_draft_media(
-    draft_id: UUID,
-    kind: MediaKind,
+    draft_id: FromPath[UUID],
+    kind: FromPath[MediaKind],
     request: Request,
     attachments: DraftAttachments,
     account_id: AccountId,
@@ -135,15 +135,15 @@ def _private_upload_directory() -> Iterator[Path]:
     "/",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="submission_media_list",
+    security=[WEB, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB, DEVICE, MINECRAFT],
         cli=cli_command("media.list", features=("submission-media",), interaction="direct"),
     ),
     status_code=200,
     dependencies={"account_id": Provide(authenticated_account)},
 )
 async def list_draft_media(
-    draft_id: UUID, request: Request, attachments: DraftAttachments, account_id: AccountId
+    draft_id: FromPath[UUID], request: Request, attachments: DraftAttachments, account_id: AccountId
 ) -> Response[DraftMediaListResponse]:
     """List all retained states and safe normalized facts for an owned draft."""
     response_headers: dict[str, str] = {}
@@ -165,15 +165,19 @@ async def list_draft_media(
     "/{upload_id:uuid}",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="submission_media_get",
+    security=[WEB, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB, DEVICE, MINECRAFT],
         cli=cli_command("media.status", features=("submission-media",), interaction="direct"),
     ),
     status_code=200,
     dependencies={"account_id": Provide(authenticated_account)},
 )
 async def get_draft_media(
-    draft_id: UUID, upload_id: UUID, request: Request, attachments: DraftAttachments, account_id: AccountId
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
+    request: Request,
+    attachments: DraftAttachments,
+    account_id: AccountId,
 ) -> Response[DraftMediaResponse]:
     """Return one upload after enforcing both draft ownership and association."""
     response_headers: dict[str, str] = {}
@@ -190,8 +194,8 @@ async def get_draft_media(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="submission_media_discard",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("media.discard", features=("submission-media",), interaction="direct"),
     ),
     dependencies={
@@ -203,8 +207,8 @@ async def get_draft_media(
     },
 )
 async def discard_draft_media(
-    draft_id: UUID,
-    upload_id: UUID,
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
     request: Request,
     attachments: DraftAttachments,
     account_id: AccountId,
@@ -347,8 +351,8 @@ def _prevent_storage(headers: dict[str, str], limits: MediaLimits) -> None:
 @post(
     "/{upload_id:uuid}/attach",
     operation_id="submission_media_attach",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT],
         cli=cli_command("media.attach", features=("submission-media",), interaction="direct"),
     ),
     status_code=200,
@@ -358,9 +362,9 @@ def _prevent_storage(headers: dict[str, str], limits: MediaLimits) -> None:
     },
 )
 async def attach_draft_media(
-    draft_id: UUID,
-    upload_id: UUID,
-    source_draft_id: UUID,
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
+    source_draft_id: FromQuery[UUID],
     attachments: DraftAttachments,
     account_id: AccountId,
     *,
@@ -371,6 +375,7 @@ async def attach_draft_media(
 
 
 router = Router(
+    dependencies={"attachments": Provide(get_draft_attachments)},
     path="/submissions/drafts/{draft_id:uuid}/media",
     tags=["submissions"],
     route_handlers=[upload_draft_media, list_draft_media, get_draft_media, discard_draft_media, attach_draft_media],

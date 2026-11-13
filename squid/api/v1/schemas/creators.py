@@ -3,9 +3,7 @@
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
-from whenever import Instant
 
-from squid.accounts.domain import CreditedAlias, IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile
 from squid.accounts.models import CreatorAlias
 
 
@@ -21,87 +19,3 @@ class CreatorAliasDetail(BaseModel):
     @classmethod
     def from_domain(cls, alias: CreatorAlias) -> CreatorAliasDetail:
         return cls(name=alias.name, claimed=alias.is_claimed, creator_id=alias.public_creator_id)
-
-
-class CreditedAliasDetail(BaseModel):
-    """One creator name held by this creator, and how many builds carry it."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    build_count: int
-
-    @classmethod
-    def from_domain(cls, alias: CreditedAlias) -> CreditedAliasDetail:
-        return cls(name=alias.name, build_count=alias.build_count)
-
-
-class PublicIdentityDetail(BaseModel):
-    """A linked identity the creator has chosen to publish.
-
-    Internal identity IDs and verification timestamps are omitted from this public
-    representation.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    provider: IdentityProvider
-    subject: str
-    display_name: str | None
-
-    @classmethod
-    def from_domain(cls, identity: IdentityDetails) -> PublicIdentityDetail:
-        return cls(provider=identity.provider, subject=identity.subject, display_name=identity.display_name)
-
-
-class ProfileLinkDetail(BaseModel):
-    """One external link published on a creator profile."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    label: str
-    url: str
-
-    @classmethod
-    def from_domain(cls, link: ProfileLink) -> ProfileLinkDetail:
-        return cls(label=link.label, url=link.url)
-
-
-class CreatorProfileDetail(BaseModel):
-    """A creator's public profile, including the destination of an account merge.
-
-    A hidden profile still includes id, canonical_id, and aliases so existing build
-    credits remain usable. Other profile details are null or empty.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: UUID
-    canonical_id: UUID | None
-    """Set when the requested id belonged to an account that was merged into this one."""
-
-    hidden: bool
-    aliases: list[CreditedAliasDetail]
-    display_name: str | None
-    bio: str | None
-    pronouns: str | None
-    links: list[ProfileLinkDetail]
-    avatar_url: str | None
-    joined_at: Instant | None
-    identities: list[PublicIdentityDetail]
-
-    @classmethod
-    def from_domain(cls, profile: PublicCreatorProfile) -> CreatorProfileDetail:
-        return cls(
-            id=profile.public_id,
-            canonical_id=profile.canonical_public_id,
-            hidden=profile.hidden,
-            aliases=[CreditedAliasDetail.from_domain(alias) for alias in profile.aliases],
-            display_name=profile.display_name,
-            bio=profile.bio,
-            pronouns=profile.pronouns,
-            links=[ProfileLinkDetail.from_domain(link) for link in profile.links],
-            avatar_url=profile.avatar_url,
-            joined_at=profile.joined_at,
-            identities=[PublicIdentityDetail.from_domain(identity) for identity in profile.identities],
-        )

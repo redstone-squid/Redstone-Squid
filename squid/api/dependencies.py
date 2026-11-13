@@ -145,47 +145,9 @@ MinecraftInstallations = NamedDependency[SkipValidation[InstallationCredentialSe
 MinecraftPlayerAuthorization = NamedDependency[SkipValidation[PlayerAuthorizationService]]
 
 
-def get_caller(current_identity: NamedDependency[SkipValidation[Caller]]) -> Caller:
-    return current_identity
-
-
-def get_search_service(services: Services) -> SearchService:
-    return services.search
-
-
-def get_versions_service(services: Services) -> VersionService:
-    return services.versions
-
-
-def get_players(services: Services) -> PlayerAuthorizationService:
-    return get_minecraft_player_authorization(services)
-
-
 def service_dependencies() -> dict[str, Provide]:
-    """Bind application services by the argument names used in HTTP handlers."""
+    """Bind the runtime and caller shared by every resource router."""
     return {
         "services": Provide(get_services),
-        "players": Provide(get_players, sync_to_thread=False),
-        "installations": Provide(get_minecraft_installations, sync_to_thread=False),
-        "authorization": Provide(get_minecraft_player_authorization, sync_to_thread=False),
-        "current_identity": Provide(current_caller),
-        "caller": Provide(get_caller, sync_to_thread=False),
-        "builds": Provide(get_builds, sync_to_thread=False),
-        "build_queries": Provide(get_build_queries, sync_to_thread=False),
-        "records": Provide(get_records, sync_to_thread=False),
-        "notifications": Provide(get_notifications, sync_to_thread=False),
-        "schematics": Provide(get_schematics, sync_to_thread=False),
-        "search": Provide(get_search, sync_to_thread=False),
-        "search_service": Provide(get_search_service, sync_to_thread=False),
-        "suggestions": Provide(get_suggestions, sync_to_thread=False),
-        "tags": Provide(get_tags, sync_to_thread=False),
-        "accounts": Provide(get_accounts, sync_to_thread=False),
-        "versions": Provide(get_versions, sync_to_thread=False),
-        "versions_service": Provide(get_versions_service, sync_to_thread=False),
-        "votes": Provide(get_votes, sync_to_thread=False),
-        "vote_members": Provide(get_vote_members, sync_to_thread=False),
-        "web_auth": Provide(get_web_auth, sync_to_thread=False),
-        "permissions": Provide(get_permissions, sync_to_thread=False),
-        "error_reports": Provide(get_error_reports, sync_to_thread=False),
-        "attachments": Provide(get_draft_attachments),
+        "caller": Provide(current_caller),
     }

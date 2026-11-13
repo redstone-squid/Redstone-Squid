@@ -27,13 +27,13 @@ EditCaller = NamedDependency[SkipValidation[Caller]]
     "/",
     responses=responses(401, 403, 503),
     operation_id="runtime_settings_get",
+    security=[WEB, DEVICE, MINECRAFT, MINECRAFT | PAPER, SERVICE],
     opt=contract(
-        security=[WEB, DEVICE, MINECRAFT, MINECRAFT | PAPER, SERVICE],
         cli=cli_command("settings.show", interaction="direct"),
         scopes=("settings.runtime.view",),
     ),
     status_code=200,
-    dependencies={"caller": Provide(requires(SETTINGS_RUNTIME_VIEW))},
+    guards=[requires(SETTINGS_RUNTIME_VIEW)],
 )
 async def get_runtime_settings(services: Services, caller: ViewCaller) -> Response[RuntimeSettingsDetail]:
     """Read current global settings. Discord IDs are returned as decimal strings."""
@@ -51,15 +51,15 @@ async def get_runtime_settings(services: Services, caller: ViewCaller) -> Respon
     "/",
     responses=responses(401, 403, 412, 422, 503),
     operation_id="runtime_settings_update",
+    security=[WEB_WRITE, DEVICE, MINECRAFT, MINECRAFT | PAPER, SERVICE],
     opt=contract(
-        security=[WEB_WRITE, DEVICE, MINECRAFT, MINECRAFT | PAPER, SERVICE],
         cli=cli_command("settings.set", interaction="direct"),
         scopes=("settings.runtime.edit",),
     ),
     status_code=200,
+    guards=[requires(SETTINGS_RUNTIME_EDIT)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(SETTINGS_RUNTIME_EDIT)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )

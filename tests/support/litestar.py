@@ -49,6 +49,10 @@ def route_app(
     copies = []
     for router in routers:
         cloned = deepcopy(router, {id(router.owner): None} if router.owner is not None else {})
+        cloned.dependencies = {
+            name: replacement(provider if isinstance(provider, Provide) else Provide(provider))
+            for name, provider in (cloned.dependencies or {}).items()
+        }
         for route in cloned.routes:
             if not isinstance(route, HTTPRoute):
                 continue

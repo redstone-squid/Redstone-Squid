@@ -8,7 +8,7 @@ from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import PublicRecords, Records, get_public_records
+from squid.api.dependencies import PublicRecords, Records, get_public_records, get_records
 from squid.api.errors import responses
 from squid.api.pagination import (
     AfterIdParam,
@@ -54,7 +54,8 @@ _SORT_FIELDS = frozenset({"id"})
     responses=responses(404, 422, 500, 503),
     operation_id="records_get",
     dependencies={"records": Provide(get_public_records, sync_to_thread=False)},
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def get_record(record_id: FromPath[int], records: PublicRecords) -> RecordDetail:
     """Return one result only while its computation run is active."""
@@ -73,7 +74,8 @@ async def get_record(record_id: FromPath[int], records: PublicRecords) -> Record
     responses=responses(400, 422, 503),
     operation_id="records_list",
     return_dto=PublicRecordDTO,
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def list_records(
     records: Records,
@@ -90,4 +92,9 @@ async def list_records(
     return Page[PublishedTitle].from_domain(page, lambda record: record)
 
 
-router = Router(path="/records", tags=["records"], route_handlers=[get_record, list_records])
+router = Router(
+    dependencies={"records": Provide(get_records, sync_to_thread=False)},
+    path="/records",
+    tags=["records"],
+    route_handlers=[get_record, list_records],
+)

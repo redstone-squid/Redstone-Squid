@@ -5,11 +5,12 @@ from uuid import UUID
 
 from litestar import Request, Response, Router, delete, get, post, put
 from litestar.di import NamedDependency, Provide
-from litestar.params import JSONBody, QueryParameter, SkipValidation
+from litestar.params import FromPath, JSONBody, QueryParameter, SkipValidation
 from pydantic import BaseModel, ConfigDict
 
 from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
+from squid.api.dependencies import get_schematics
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
@@ -44,8 +45,8 @@ def schematic_service(request: Request) -> DraftSchematicService:
 
 
 Schematics = NamedDependency[SkipValidation[DraftSchematicService]]
-_READ = contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only())
-_WRITE = contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only())
+_READ = contract(cli=transport_only())
+_WRITE = contract(cli=transport_only())
 
 
 def _check_size(size: int, maximum: int) -> None:
@@ -57,6 +58,7 @@ def _check_size(size: int, maximum: int) -> None:
 @get(
     "/",
     operation_id="submission_schematic_list",
+    security=[WEB, DEVICE, MINECRAFT],
     opt=_READ,
     status_code=200,
     dependencies={
@@ -65,7 +67,7 @@ def _check_size(size: int, maximum: int) -> None:
     },
 )
 async def list_schematics(
-    draft_id: UUID, account_id: AccountId, schematics: Schematics
+    draft_id: FromPath[UUID], account_id: AccountId, schematics: Schematics
 ) -> list[DraftSchematicResponse]:
     """List retained sources, including failures and explicit discards."""
     return [DraftSchematicResponse.model_validate(source) for source in await schematics.list(draft_id, account_id)]
@@ -74,6 +76,7 @@ async def list_schematics(
 @put(
     "/{upload_id:uuid}",
     operation_id="submission_schematic_upload",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     status_code=202,
     opt={
         **_WRITE,
@@ -89,8 +92,8 @@ async def list_schematics(
 )
 @streams_own_body
 async def upload_schematic(
-    draft_id: UUID,
-    upload_id: UUID,
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
     request: Request,
     account_id: AccountId,
     schematics: Schematics,
@@ -113,6 +116,7 @@ async def upload_schematic(
 @post(
     "/{upload_id:uuid}/primary",
     operation_id="submission_schematic_primary",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=_WRITE,
     status_code=200,
     dependencies={
@@ -125,8 +129,8 @@ async def upload_schematic(
     },
 )
 async def select_primary(
-    draft_id: UUID,
-    upload_id: UUID,
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
     account_id: AccountId,
     schematics: Schematics,
     edit: AttachmentEdit,
@@ -144,6 +148,7 @@ async def select_primary(
 @delete(
     "/{upload_id:uuid}",
     operation_id="submission_schematic_discard",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=_WRITE,
     status_code=200,
     dependencies={
@@ -156,8 +161,8 @@ async def select_primary(
     },
 )
 async def discard_schematic(
-    draft_id: UUID,
-    upload_id: UUID,
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
     account_id: AccountId,
     schematics: Schematics,
     edit: AttachmentEdit,
@@ -177,6 +182,7 @@ async def discard_schematic(
 @post(
     "/{upload_id:uuid}/attach",
     operation_id="submission_schematic_attach",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=_WRITE,
     status_code=200,
     dependencies={
@@ -186,8 +192,8 @@ async def discard_schematic(
     },
 )
 async def attach_schematic(
-    draft_id: UUID,
-    upload_id: UUID,
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
     data: JSONBody[AttachSchematicRequest],
     account_id: AccountId,
     schematics: Schematics,
@@ -200,6 +206,7 @@ async def attach_schematic(
 
 
 router = Router(
+    dependencies={"schematics": Provide(get_schematics, sync_to_thread=False)},
     path="/submissions/drafts/{draft_id:uuid}/schematics",
     tags=["submissions"],
     route_handlers=[list_schematics, upload_schematic, select_primary, discard_schematic, attach_schematic],

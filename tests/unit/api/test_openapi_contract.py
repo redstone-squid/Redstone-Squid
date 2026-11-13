@@ -6,13 +6,13 @@ from typing import Any
 
 import httpx
 import pytest
-from litestar import Litestar, get
+from litestar import Litestar, Router, get, post
 from litestar.testing import TestClient
 
 from scripts import export_openapi
 from squid.api.app import create_api_app
 from squid.api.capabilities import API_FEATURES
-from squid.api.contract import ANONYMOUS, contract, transport_only, validate_contract
+from squid.api.contract import ANONYMOUS, WEB, contract, transport_only, validate_contract
 from squid.api.errors import ProblemDetail
 from squid.api.openapi import openapi_document
 from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
@@ -202,7 +202,8 @@ def test_validate_contract_accepts_a_route_declared_through_contract() -> None:
     @get(
         "/bare",
         operation_id="bare_get",
-        opt=contract(security=[ANONYMOUS], cli=transport_only()),
+        security=[ANONYMOUS],
+        opt=contract(cli=transport_only()),
         sync_to_thread=False,
     )
     def bare() -> dict[str, str]:
@@ -274,3 +275,45 @@ def test_domain_value_schemas_preserve_string_constraints_and_recursive_json() -
     assert next(variant for variant in variants if variant["type"] == "object")["additionalProperties"] == {
         "$ref": "#/components/schemas/JSONValue"
     }
+
+
+def test_security_requirements_are_native_route_metadata() -> None:
+    native = _app.openapi_schema.to_schema()
+    for path, method, operation in _document_operations(openapi_document(_app)):
+        assert native["paths"][path][method]["security"] == operation["security"]
+        assert "x-squid-security" not in operation
+
+
+def test_validate_contract_rejects_missing_security_declaration() -> None:
+    @get("/bare", operation_id="bare_get", opt=contract(cli=transport_only()), sync_to_thread=False)
+    def bare() -> dict[str, str]:
+        return {}
+
+    with pytest.raises(ValueError, match="no declared contract"):
+        validate_contract(Litestar(route_handlers=[bare]))
+
+
+def test_validate_contract_checks_inherited_native_security() -> None:
+    @post("/bare", operation_id="bare_post", opt=contract(cli=transport_only()), sync_to_thread=False)
+    def bare() -> dict[str, str]:
+        return {}
+
+    app = Litestar(route_handlers=[Router(path="/", route_handlers=[bare], security=[WEB])])
+    with pytest.raises(ValueError, match="unsafe method without CsrfToken"):
+        validate_contract(app)
+
+
+@pytest.mark.parametrize(
+    "operation_id", ["submission_media_upload", "submission_schematic_upload", "submission_supplied_file_upload"]
+)
+def test_streaming_uploads_keep_native_security(operation_id: str) -> None:
+    operation = next(
+        operation
+        for _path, _method, operation in _document_operations(_app.openapi_schema.to_schema())
+        if operation["operationId"] == operation_id
+    )
+    assert operation["security"] == [
+        {"WebSession": [], "CsrfToken": []},
+        {"DeviceSession": []},
+        {"MinecraftPlayer": []},
+    ]

@@ -3,11 +3,20 @@
 from typing import Annotated
 
 from litestar import Request, Response, Router, get, post
+from litestar.di import Provide
 from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import FromPath, JSONBody, PathParameter, QueryParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
-from squid.api.dependencies import BuildQueries, CurrentCaller, Permissions, Schematics
+from squid.api.dependencies import (
+    BuildQueries,
+    CurrentCaller,
+    Permissions,
+    Schematics,
+    get_build_queries,
+    get_permissions,
+    get_schematics,
+)
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.links import relative_url_for
@@ -28,7 +37,8 @@ from squid.schematics.errors import SchematicSupportUnavailableError
         describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="build_schematics_list",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def list_build_schematics(
     build_id: FromPath[int],
@@ -71,7 +81,8 @@ async def list_build_schematics(
         ),
     },
     operation_id="build_schematic_content_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def get_schematic_content(
     build_id: FromPath[int],
@@ -119,7 +130,8 @@ async def get_schematic_content(
         ),
     },
     operation_id="build_schematic_render_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def render_build_schematic(
     build_id: FromPath[int],
@@ -167,7 +179,8 @@ async def render_build_schematic(
         ),
     },
     operation_id="schematic_render_content_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def get_schematic_render_content(
     recipe_hash: Annotated[str, PathParameter(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
@@ -187,7 +200,8 @@ async def get_schematic_render_content(
     operation_id="schematic_video_create",
     responses=responses(403, 404, 409, 413, 422, 503),
     before_request=reserve_idempotent_before_request,
-    opt=contract(security=[WEB_WRITE, DEVICE, MINECRAFT], cli=transport_only()),
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
 )
 async def submit_schematic_video(
     build_id: FromPath[int],
@@ -225,7 +239,8 @@ async def submit_schematic_video(
     operation_id="schematic_video_status",
     name="get_schematic_video",
     responses=responses(403, 404, 422, 503),
-    opt=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
 )
 async def get_schematic_video(
     video_id: FromPath[int],
@@ -257,7 +272,8 @@ async def get_schematic_video(
     "/schematic-videos/{video_id:int}/content",
     operation_id="schematic_video_content",
     name="get_schematic_video_content",
-    opt=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
     responses={
         **responses(403, 404, 409, 422, 503),
         200: ResponseSpec(
@@ -299,6 +315,11 @@ async def get_schematic_video_content(
 
 
 router = Router(
+    dependencies={
+        "build_queries": Provide(get_build_queries, sync_to_thread=False),
+        "permissions": Provide(get_permissions, sync_to_thread=False),
+        "schematics": Provide(get_schematics, sync_to_thread=False),
+    },
     path="/",
     tags=["schematics"],
     route_handlers=[

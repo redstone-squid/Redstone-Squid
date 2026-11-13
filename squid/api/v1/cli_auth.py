@@ -13,7 +13,7 @@ from uuid import UUID
 from litestar import Request, Router, delete, get, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import JSONBody, QueryParameter, SkipValidation
+from litestar.params import FromPath, JSONBody, QueryParameter, SkipValidation
 from pydantic import AnyHttpUrl
 
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract, transport_only
@@ -149,8 +149,8 @@ VerificationUri = NamedDependency[SkipValidation[AnyHttpUrl]]
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 409, 422, 429, 503),
     operation_id="cli_enrollment_start",
+    security=[ANONYMOUS],
     opt=contract(
-        security=[ANONYMOUS],
         cli=cli_command("auth.login", features=("cli-device-auth",), interaction="browser-continuation"),
     ),
     dependencies={
@@ -179,7 +179,8 @@ async def start_enrollment(
     "/enrollments/exchange",
     responses=responses(400, 409, 422, 503),
     operation_id="cli_enrollment_exchange",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -204,7 +205,8 @@ async def exchange_enrollment(
     "/enrollments/approval",
     responses=responses(400, 401, 403, 409, 422, 503),
     operation_id="cli_enrollment_preview",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -225,7 +227,8 @@ async def preview_enrollment(
     "/enrollments/approval",
     responses=responses(400, 401, 403, 409, 422, 503),
     operation_id="cli_enrollment_approve",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -252,7 +255,8 @@ async def approve_enrollment(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 404, 409, 422, 429, 503),
     operation_id="cli_session_challenge_start",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(enforce_anonymous_cli_idempotency),
@@ -281,7 +285,8 @@ async def start_session_challenge(
     "/sessions",
     responses=responses(400, 404, 409, 422, 503),
     operation_id="cli_session_exchange",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -308,7 +313,8 @@ async def exchange_session_challenge(
     "/devices",
     responses=responses(400, 401, 403, 503),
     operation_id="cli_devices_list",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
         "account_id": Provide(current_browser_account_id),
@@ -328,7 +334,8 @@ async def list_devices(cli: CliAuthorization, account_id: BrowserAccountId) -> C
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="cli_device_revoke",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(reserve_idempotent_request),
@@ -338,7 +345,7 @@ async def list_devices(cli: CliAuthorization, account_id: BrowserAccountId) -> C
     },
 )
 async def revoke_device(
-    device_id: UUID,
+    device_id: FromPath[UUID],
     cli: CliAuthorization,
     account_id: BrowserAccountId,
     *,
@@ -354,9 +361,8 @@ async def revoke_device(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 422, 503),
     operation_id="cli_session_revoke",
-    opt=contract(
-        security=[DEVICE], cli=cli_command("auth.logout", features=("cli-device-auth",), interaction="direct")
-    ),
+    security=[DEVICE],
+    opt=contract(cli=cli_command("auth.logout", features=("cli-device-auth",), interaction="direct")),
     dependencies={
         "account_id": Provide(current_browser_account_id),
         "_reservation": Provide(reserve_idempotent_request),

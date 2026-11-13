@@ -513,7 +513,7 @@ async def test_player_grant_derives_minecraft_origin() -> None:
         grant_id=GRANT_ID,
     )
 
-    actor = await authenticated_submission_caller(make_request({"type": "http", "state": {"squid_caller": caller}}))
+    actor = await authenticated_submission_caller(make_request({"type": "http", "user": caller}))
 
     assert actor is caller
     assert _submission_origin(actor) is SubmissionOrigin.PAPER
@@ -530,7 +530,7 @@ async def test_cli_session_derives_distinct_submission_origin() -> None:
         cli_session_id=session_id,
     )
 
-    actor = await authenticated_submission_caller(make_request({"type": "http", "state": {"squid_caller": caller}}))
+    actor = await authenticated_submission_caller(make_request({"type": "http", "user": caller}))
 
     assert actor is caller
     assert _submission_origin(actor) is SubmissionOrigin.CLI
@@ -589,4 +589,4 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
 )
 async def test_submission_caller_rejects_incomplete_or_inconsistent_provenance(caller: Caller) -> None:
     with pytest.raises(AuthenticationError):
-        await authenticated_submission_caller(make_request({"type": "http", "state": {"squid_caller": caller}}))
+        await authenticated_submission_caller(make_request({"type": "http", "user": caller}))

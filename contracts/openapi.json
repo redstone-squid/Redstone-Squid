@@ -13708,6 +13708,18 @@
           }
         },
         "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -13725,18 +13737,6 @@
             }
           }
         },
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          },
-          {
-            "DeviceSession": []
-          },
-          {
-            "MinecraftPlayer": []
-          }
-        ],
         "x-squid-cli": {
           "classification": "command",
           "command": "media.upload",
@@ -18599,6 +18599,16 @@
             "type": "string",
             "format": "uuid"
           },
+          "hidden": {
+            "type": "boolean"
+          },
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/CreditedAlias"
+            },
+            "type": "array",
+            "default": []
+          },
           "canonical_id": {
             "oneOf": [
               {
@@ -18609,15 +18619,6 @@
                 "type": "null"
               }
             ]
-          },
-          "hidden": {
-            "type": "boolean"
-          },
-          "aliases": {
-            "items": {
-              "$ref": "#/components/schemas/CreditedAliasDetail"
-            },
-            "type": "array"
           },
           "display_name": {
             "oneOf": [
@@ -18651,9 +18652,10 @@
           },
           "links": {
             "items": {
-              "$ref": "#/components/schemas/creators_ProfileLinkDetail"
+              "$ref": "#/components/schemas/ProfileLink"
             },
-            "type": "array"
+            "type": "array",
+            "default": []
           },
           "avatar_url": {
             "oneOf": [
@@ -18667,7 +18669,10 @@
           },
           "joined_at": {
             "oneOf": [
-              {},
+              {
+                "type": "string",
+                "format": "date-time"
+              },
               {
                 "type": "null"
               }
@@ -18675,42 +18680,34 @@
           },
           "identities": {
             "items": {
-              "$ref": "#/components/schemas/PublicIdentityDetail"
+              "$ref": "#/components/schemas/IdentityDetails"
             },
-            "type": "array"
+            "type": "array",
+            "default": []
           }
         },
         "type": "object",
         "required": [
-          "aliases",
-          "avatar_url",
-          "bio",
-          "canonical_id",
-          "display_name",
           "hidden",
-          "id",
-          "identities",
-          "joined_at",
-          "links",
-          "pronouns"
+          "id"
         ],
         "title": "CreatorProfileDetail"
       },
-      "CreditedAliasDetail": {
+      "CreditedAlias": {
         "properties": {
           "name": {
             "type": "string"
           },
           "build_count": {
-            "type": "integer"
+            "type": "integer",
+            "default": 0
           }
         },
         "type": "object",
         "required": [
-          "build_count",
           "name"
         ],
-        "title": "CreditedAliasDetail"
+        "title": "CreditedAlias"
       },
       "CsrfTokenResponse": {
         "properties": {
@@ -20183,7 +20180,10 @@
           },
           "verified_at": {
             "oneOf": [
-              {},
+              {
+                "type": "string",
+                "format": "date-time"
+              },
               {
                 "type": "null"
               }
@@ -20203,6 +20203,32 @@
           "verified_at"
         ],
         "title": "IdentityDetail"
+      },
+      "IdentityDetails": {
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/IdentityProvider"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "display_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "subject"
+        ],
+        "title": "IdentityDetails"
       },
       "IdentityProvider": {
         "type": "string",
@@ -20492,7 +20518,10 @@
           "code": {
             "type": "string"
           },
-          "expires_at": {}
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         },
         "type": "object",
         "required": [
@@ -21361,7 +21390,7 @@
           },
           "links": {
             "items": {
-              "$ref": "#/components/schemas/me_ProfileLinkDetail"
+              "$ref": "#/components/schemas/ProfileLinkDetail"
             },
             "type": "array"
           },
@@ -21389,6 +21418,38 @@
           "pronouns"
         ],
         "title": "ProfileDetail"
+      },
+      "ProfileLink": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "url"
+        ],
+        "title": "ProfileLink"
+      },
+      "ProfileLinkDetail": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "url"
+        ],
+        "title": "ProfileLinkDetail"
       },
       "ProfileUpdateRequest": {
         "properties": {
@@ -21426,7 +21487,7 @@
             "oneOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/me_ProfileLinkDetail"
+                  "$ref": "#/components/schemas/ProfileLinkDetail"
                 },
                 "type": "array"
               },
@@ -21489,33 +21550,6 @@
           "minimum"
         ],
         "title": "ProtocolInterval"
-      },
-      "PublicIdentityDetail": {
-        "properties": {
-          "provider": {
-            "$ref": "#/components/schemas/IdentityProvider"
-          },
-          "subject": {
-            "type": "string"
-          },
-          "display_name": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "display_name",
-          "provider",
-          "subject"
-        ],
-        "title": "PublicIdentityDetail"
       },
       "PublishedTitle": {
         "properties": {
@@ -23210,7 +23244,10 @@
           },
           "created_at": {
             "oneOf": [
-              {},
+              {
+                "type": "string",
+                "format": "date-time"
+              },
               {
                 "type": "null"
               }
@@ -23829,38 +23866,6 @@
         ],
         "title": "VoteVisibility",
         "description": "How much of a generic poll's state is disclosed while it is open."
-      },
-      "creators_ProfileLinkDetail": {
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "label",
-          "url"
-        ],
-        "title": "ProfileLinkDetail"
-      },
-      "me_ProfileLinkDetail": {
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "label",
-          "url"
-        ],
-        "title": "ProfileLinkDetail"
       }
     },
     "securitySchemes": {

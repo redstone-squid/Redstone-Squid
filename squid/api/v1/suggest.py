@@ -7,10 +7,11 @@ same route and response model, so clients can discover it without a new endpoint
 from typing import Annotated
 
 from litestar import Request, Response, Router, get
+from litestar.di import Provide
 from litestar.params import PathParameter, QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import CurrentCaller, Suggestions
+from squid.api.dependencies import CurrentCaller, Suggestions, get_suggestions
 from squid.api.errors import responses
 from squid.api.security import Caller
 from squid.api.v1.schemas.suggest import SuggestionPage, SuggestionSourceInfo
@@ -29,7 +30,8 @@ CACHE_SECONDS = 30
     "/",
     responses=responses(503),
     operation_id="suggestion_sources_list",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def list_sources(suggestions: Suggestions) -> list[SuggestionSourceInfo]:
     """Publish the registered sources and how to drive each one."""
@@ -40,7 +42,8 @@ async def list_sources(suggestions: Suggestions) -> list[SuggestionSourceInfo]:
     "/{source:str}",
     responses=responses(404, 422, 503),
     operation_id="suggestions_get",
-    opt=contract(security=[ANONYMOUS], cli=transport_only()),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
 )
 async def suggest(
     source: SourceId,
@@ -94,4 +97,9 @@ class _CallerAuthorizer:
 __all__ = ["SuggestionService", "router"]
 
 
-router = Router(path="/suggest", tags=["suggest"], route_handlers=[list_sources, suggest])
+router = Router(
+    dependencies={"suggestions": Provide(get_suggestions, sync_to_thread=False)},
+    path="/suggest",
+    tags=["suggest"],
+    route_handlers=[list_sources, suggest],
+)

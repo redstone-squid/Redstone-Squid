@@ -5,7 +5,7 @@ from uuid import UUID
 
 from litestar import Response, Router, delete, get, patch, post, put
 from litestar.di import NamedDependency, Provide
-from litestar.params import HeaderParameter, JSONBody, SkipValidation
+from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, SkipValidation
 
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import (
@@ -19,7 +19,7 @@ from squid.accounts.application.edits import (
 from squid.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
-from squid.api.dependencies import Accounts, BuildQueries, Services
+from squid.api.dependencies import Accounts, BuildQueries, Services, get_accounts, get_build_queries
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.pagination import (
@@ -67,9 +67,10 @@ _ALL_STATUSES = frozenset(Status)
     "/",
     responses=responses(401, 403, 404, 503),
     operation_id="account_get",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
+    guards=[requires(ACCOUNT_SELF_READ)],
 )
 async def get_me(accounts: Accounts, caller: UserCaller) -> Response[UserMe]:
     """Return the caller's account, linked identities, and profile.
@@ -94,12 +95,11 @@ async def _render_me(accounts: AccountService, account_id: int, *, consent_pendi
     "/consent",
     responses=responses(401, 403, 404, 409, 503),
     operation_id="account_consent_grant",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={
-        "_reservation": Provide(reserve_idempotent_request),
-        "caller": Provide(requires(ACCOUNT_SELF_READ)),
-    },
+    guards=[requires(ACCOUNT_SELF_READ)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def grant_consent(
     accounts: Accounts,
@@ -125,11 +125,12 @@ async def grant_consent(
     "/profile",
     responses=responses(400, 401, 403, 404, 412, 422, 503),
     operation_id="account_profile_update",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
@@ -173,9 +174,10 @@ async def update_profile(
     "/identities",
     responses=responses(401, 403, 404, 503),
     operation_id="account_identity_list",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
+    guards=[requires(ACCOUNT_SELF_READ)],
 )
 async def list_identities(accounts: Accounts, caller: UserCaller) -> list[IdentityDetail]:
     """List every identity linked to the caller's account, hidden ones included.
@@ -192,16 +194,17 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
     "/identities/{identity_id:int}/visibility",
     responses=responses(401, 403, 404, 412, 422, 503),
     operation_id="account_identity_visibility_set",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
 async def set_identity_visibility(
-    identity_id: int,
+    identity_id: FromPath[int],
     data: JSONBody[IdentityVisibilityRequest],
     accounts: Accounts,
     caller: ManageCaller,
@@ -237,15 +240,16 @@ async def set_identity_visibility(
     status_code=204,
     responses=responses(401, 403, 404, 409, 412, 422, 503),
     operation_id="account_identity_unlink",
-    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.identity.unlink", interaction="direct")),
+    security=[WEB_WRITE, DEVICE],
+    opt=contract(cli=cli_command("account.identity.unlink", interaction="direct")),
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
 async def unlink_identity(
-    identity_id: int,
+    identity_id: FromPath[int],
     caller: ManageCaller,
     services: Services,
     operation_id: NamedDependency[SkipValidation[UUID]],
@@ -272,12 +276,11 @@ async def unlink_identity(
     "/merge-code",
     responses=responses(401, 403, 404, 503),
     operation_id="account_merge_code_create",
-    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.merge.code", interaction="direct")),
+    security=[WEB_WRITE, DEVICE],
+    opt=contract(cli=cli_command("account.merge.code", interaction="direct")),
     status_code=200,
-    dependencies={
-        "_reservation": Provide(reserve_idempotent_request),
-        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
-    },
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def create_merge_code(
     accounts: Accounts, caller: ManageCaller, *, _reservation: NamedDependency[SkipValidation[None]]
@@ -298,12 +301,11 @@ async def create_merge_code(
     "/merge/preview",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="account_merge_preview",
-    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.merge.preview", interaction="direct")),
+    security=[WEB_WRITE, DEVICE],
+    opt=contract(cli=cli_command("account.merge.preview", interaction="direct")),
     status_code=200,
-    dependencies={
-        "_reservation": Provide(reserve_idempotent_request),
-        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
-    },
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def preview_merge(
     data: JSONBody[MergeRequest],
@@ -325,12 +327,11 @@ async def preview_merge(
     "/merge",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="account_merge_complete",
-    opt=contract(security=[WEB_WRITE, DEVICE], cli=cli_command("account.merge.complete", interaction="direct")),
+    security=[WEB_WRITE, DEVICE],
+    opt=contract(cli=cli_command("account.merge.complete", interaction="direct")),
     status_code=200,
-    dependencies={
-        "_reservation": Provide(reserve_idempotent_request),
-        "caller": Provide(requires(ACCOUNT_SELF_MANAGE)),
-    },
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def complete_merge(
     data: JSONBody[MergeRequest],
@@ -352,12 +353,11 @@ async def complete_merge(
     "/minecraft/refresh",
     responses=responses(401, 403, 404, 409, 503),
     operation_id="account_minecraft_refresh",
-    opt=contract(security=[ANONYMOUS], cli=cli_command("account.refresh", interaction="direct")),
+    security=[ANONYMOUS],
+    opt=contract(cli=cli_command("account.refresh", interaction="direct")),
     status_code=200,
-    dependencies={
-        "_reservation": Provide(reserve_idempotent_request),
-        "caller": Provide(requires(ACCOUNT_IDENTITY_REFRESH)),
-    },
+    guards=[requires(ACCOUNT_IDENTITY_REFRESH)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def refresh_minecraft_identity(
     accounts: Accounts, caller: RefreshCaller, *, _reservation: NamedDependency[SkipValidation[None]]
@@ -375,18 +375,16 @@ async def refresh_minecraft_identity(
     "/{account_id:int}/minecraft/refresh",
     responses=responses(401, 403, 404, 409, 503),
     operation_id="account_minecraft_refresh_for",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={
-        "_permission": Provide(requires(ACCOUNT_IDENTITY_REFRESH_ANY)),
-        "_reservation": Provide(reserve_idempotent_request),
-    },
+    guards=[requires(ACCOUNT_IDENTITY_REFRESH_ANY)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def refresh_minecraft_identity_for(
-    account_id: int,
+    account_id: FromPath[int],
     accounts: Accounts,
     *,
-    _permission: NamedDependency[SkipValidation[Caller]],
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> MinecraftIdentityRefresh:
     """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
@@ -397,13 +395,12 @@ async def refresh_minecraft_identity_for(
     "/{account_id:int}/profile",
     responses=responses(401, 403, 404, 503),
     operation_id="account_profile_review",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={"_permission": Provide(requires(ACCOUNT_PROFILE_MODERATE))},
+    guards=[requires(ACCOUNT_PROFILE_MODERATE)],
 )
-async def review_profile(
-    account_id: int, accounts: Accounts, *, _permission: NamedDependency[SkipValidation[Caller]]
-) -> Response[ProfileDetail]:
+async def review_profile(account_id: FromPath[int], accounts: Accounts) -> Response[ProfileDetail]:
     """Read a profile and its revision for staff moderation."""
     response_headers: dict[str, str] = {}
     snapshot = await accounts.editor_snapshot(account_id)
@@ -419,16 +416,17 @@ async def review_profile(
     "/{account_id:int}/profile",
     responses=responses(401, 403, 404, 412, 422, 428, 503),
     operation_id="account_profile_clear",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
+    guards=[requires(ACCOUNT_PROFILE_MODERATE)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_PROFILE_MODERATE)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
 async def clear_profile(
-    account_id: int,
+    account_id: FromPath[int],
     accounts: Accounts,
     caller: NamedDependency[SkipValidation[Caller]],
     services: Services,
@@ -463,14 +461,15 @@ async def clear_profile(
     "/builds",
     responses=responses(400, 401, 403, 422, 503),
     operation_id="account_builds_list",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
+    guards=[requires(ACCOUNT_SELF_READ)],
 )
 async def list_my_builds(
     build_queries: BuildQueries,
     caller: UserCaller,
-    status: BuildStatusFilter | None = None,
+    status: FromQuery[BuildStatusFilter | None] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
@@ -492,6 +491,10 @@ async def list_my_builds(
 
 
 router = Router(
+    dependencies={
+        "accounts": Provide(get_accounts, sync_to_thread=False),
+        "build_queries": Provide(get_build_queries, sync_to_thread=False),
+    },
     path="/users/me",
     tags=["users"],
     route_handlers=[
@@ -511,5 +514,11 @@ router = Router(
 
 
 accounts_router = Router(
-    path="/accounts", tags=["users"], route_handlers=[refresh_minecraft_identity_for, review_profile, clear_profile]
+    dependencies={
+        "accounts": Provide(get_accounts, sync_to_thread=False),
+        "build_queries": Provide(get_build_queries, sync_to_thread=False),
+    },
+    path="/accounts",
+    tags=["users"],
+    route_handlers=[refresh_minecraft_identity_for, review_profile, clear_profile],
 )

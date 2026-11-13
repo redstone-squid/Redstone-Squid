@@ -6,14 +6,16 @@ from uuid import UUID
 
 from litestar import Litestar, Request, Response, get, post
 from litestar.config.cors import CORSConfig
-from litestar.di import NamedDependency, Provide
+from litestar.di import Provide
 from litestar.middleware import DefineMiddleware
 from litestar.openapi import OpenAPIConfig
 from litestar.openapi.spec import Tag
 from litestar.params import JSONBody
 from pydantic import BaseModel
+from whenever import Instant
 lazy import uvicorn
 
+from squid.api.authentication import CallerAuthenticationMiddleware
 from squid.api.contract import (
     ANONYMOUS,
     DEVICE,
@@ -24,7 +26,7 @@ from squid.api.contract import (
     internal,
     transport_only,
 )
-from squid.api.dependencies import Accounts, service_dependencies
+from squid.api.dependencies import Accounts, get_accounts, service_dependencies
 from squid.api.errors import capture_exception, exception_handlers, responses
 from squid.api.i18n import LocaleContextMiddleware
 from squid.api.idempotency import (
@@ -42,7 +44,7 @@ from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateRespon
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter
 from squid.api.request_body import BoundedRequestBodyMiddleware
 from squid.api.request_context import RequestContextMiddleware
-from squid.api.security import Caller, requires
+from squid.api.security import requires
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
 from squid.bootstrap import create_api_runtime
@@ -65,7 +67,8 @@ ConfigFactory = Callable[[], ApiProcessConfig]
 @get(
     "/livez",
     operation_id="health_live",
-    opt=contract(security=[ANONYMOUS], cli=internal("Process liveness probe.")),
+    security=[ANONYMOUS],
+    opt=contract(cli=internal("Process liveness probe.")),
 )
 async def live() -> dict[str, str]:
     """Report only whether the API process can service requests."""
@@ -75,7 +78,8 @@ async def live() -> dict[str, str]:
 @get(
     "/readyz",
     operation_id="health_ready",
-    opt=contract(security=[ANONYMOUS], cli=internal("Deployment readiness probe.")),
+    security=[ANONYMOUS],
+    opt=contract(cli=internal("Deployment readiness probe.")),
 )
 async def ready(request: Request) -> Response[dict[str, str]]:
     """Report whether required database state matches this release."""
@@ -89,7 +93,8 @@ async def ready(request: Request) -> Response[dict[str, str]]:
 @get(
     "/health",
     operation_id="health_ready_compatibility",
-    opt=contract(security=[ANONYMOUS], cli=compatibility_alias("health_ready")),
+    security=[ANONYMOUS],
+    opt=contract(cli=compatibility_alias("health_ready")),
 )
 async def ready_compatibility(request: Request) -> Response[dict[str, str]]:
     return await ready.fn(request)
@@ -105,13 +110,17 @@ class User(BaseModel):
     "/v1/verify",
     status_code=201,
     responses=responses(401, 403, 404, 409, 422, 429, 503),
-    dependencies={"_caller": Provide(requires(ACCOUNT_VERIFY_RELAY))},
+    dependencies={
+        "accounts": Provide(get_accounts, sync_to_thread=False),
+    },
+    guards=[requires(ACCOUNT_VERIFY_RELAY)],
     before_request=reserve_idempotent_before_request,
     operation_id="verification_create",
     tags=["users"],
-    opt=contract(security=[SERVICE, WEB_WRITE, DEVICE], cli=transport_only(), scopes=("account.verify.relay",)),
+    security=[SERVICE, WEB_WRITE, DEVICE],
+    opt=contract(cli=transport_only(), scopes=("account.verify.relay",)),
 )
-async def get_verification_code(data: JSONBody[User], accounts: Accounts, _caller: NamedDependency[Caller]) -> int:
+async def get_verification_code(data: JSONBody[User], accounts: Accounts) -> int:
     """Generate a verification code for a user."""
     return await accounts.generate_verification_code(data.uuid)
 
@@ -120,11 +129,14 @@ async def get_verification_code(data: JSONBody[User], accounts: Accounts, _calle
     "/verify",
     status_code=201,
     responses=responses(401, 403, 404, 409, 422, 429, 503),
-    dependencies={"_caller": Provide(requires(ACCOUNT_VERIFY_RELAY))},
+    dependencies={
+        "accounts": Provide(get_accounts, sync_to_thread=False),
+    },
+    guards=[requires(ACCOUNT_VERIFY_RELAY)],
     before_request=reserve_idempotent_before_request,
     operation_id="verification_create_compatibility",
+    security=[SERVICE, WEB_WRITE, DEVICE],
     opt=contract(
-        security=[SERVICE, WEB_WRITE, DEVICE],
         cli=compatibility_alias("verification_create"),
         scopes=("account.verify.relay",),
     ),
@@ -132,7 +144,6 @@ async def get_verification_code(data: JSONBody[User], accounts: Accounts, _calle
 async def get_verification_code_compatibility(
     data: JSONBody[User],
     accounts: Accounts,
-    _caller: NamedDependency[Caller],
 ) -> int:
     return await accounts.generate_verification_code(data.uuid)
 
@@ -210,6 +221,7 @@ def create_api_app(
         ],
         dependencies=service_dependencies(),
         plugins=[ApplicationValueSchemaPlugin()],
+        type_encoders={Instant: Instant.format_iso},
         lifespan=[lifespan],
         logging_config=None,
         exception_handlers=exception_handlers(),
@@ -232,6 +244,7 @@ def create_api_app(
             DefineMiddleware(BoundedRequestBodyMiddleware),
             DefineMiddleware(CompleteIdempotentResponseMiddleware),
             DefineMiddleware(RateLimitMiddleware),
+            DefineMiddleware(CallerAuthenticationMiddleware, scopes={"http"}),
         ],
     )
     install_openapi_contract(api)

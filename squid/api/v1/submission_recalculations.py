@@ -8,7 +8,7 @@ from uuid import UUID
 
 from litestar import Router, get, post
 from litestar.di import NamedDependency, Provide
-from litestar.params import JSONBody, SkipValidation
+from litestar.params import FromPath, JSONBody, SkipValidation
 from pydantic import BaseModel, Field
 
 from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
@@ -61,13 +61,14 @@ def recalculation_proposals(services: Services) -> RecalculationProposalService:
 
 
 Proposals = NamedDependency[SkipValidation[RecalculationProposalService]]
-_READ = contract(security=[WEB, DEVICE], cli=transport_only())
-_WRITE = contract(security=[WEB_WRITE, DEVICE], cli=transport_only())
+_READ = contract(cli=transport_only())
+_WRITE = contract(cli=transport_only())
 
 
 @get(
     "/source/{message_id:int}",
     operation_id="submission_revision_history",
+    security=[WEB, DEVICE],
     opt=_READ,
     status_code=200,
     dependencies={
@@ -76,7 +77,11 @@ _WRITE = contract(security=[WEB_WRITE, DEVICE], cli=transport_only())
     },
 )
 async def history(
-    message_id: int, caller: CurrentCaller, proposals: Proposals, *, _reservation: NamedDependency[SkipValidation[None]]
+    message_id: FromPath[int],
+    caller: CurrentCaller,
+    proposals: Proposals,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> list[RecalculationProposalResponse]:
     """List recalculation proposals for a source message after checking the caller's access."""
     caller.require_consented_account()
@@ -89,6 +94,7 @@ async def history(
 @get(
     "/{proposal_id:uuid}",
     operation_id="submission_revision_get",
+    security=[WEB, DEVICE],
     opt=_READ,
     status_code=200,
     dependencies={
@@ -97,7 +103,7 @@ async def history(
     },
 )
 async def get_proposal(
-    proposal_id: UUID,
+    proposal_id: FromPath[UUID],
     caller: CurrentCaller,
     proposals: Proposals,
     *,
@@ -111,6 +117,7 @@ async def get_proposal(
 @post(
     "/{proposal_id:uuid}/match",
     operation_id="submission_revision_match",
+    security=[WEB_WRITE, DEVICE],
     opt=_WRITE,
     status_code=200,
     dependencies={
@@ -119,7 +126,7 @@ async def get_proposal(
     },
 )
 async def match_proposal(
-    proposal_id: UUID,
+    proposal_id: FromPath[UUID],
     data: JSONBody[RecalculationMatchRequest],
     caller: CurrentCaller,
     proposals: Proposals,
@@ -139,6 +146,7 @@ async def match_proposal(
 @post(
     "/{proposal_id:uuid}/approve",
     operation_id="submission_revision_approve",
+    security=[WEB_WRITE, DEVICE],
     opt=_WRITE,
     status_code=200,
     dependencies={
@@ -147,7 +155,7 @@ async def match_proposal(
     },
 )
 async def approve_proposal(
-    proposal_id: UUID,
+    proposal_id: FromPath[UUID],
     caller: CurrentCaller,
     proposals: Proposals,
     *,

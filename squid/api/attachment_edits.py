@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from litestar.di import NamedDependency
-from litestar.params import HeaderParameter, SkipValidation
+from litestar.params import FromPath, HeaderParameter, SkipValidation
 
 from squid.api.revisions import expected_revision, revision_etag
 from squid.api.v1.submissions import AccountId
@@ -32,7 +32,7 @@ class AttachmentEditRequest:
 
 
 def attachment_edit_request(
-    draft_id: UUID,
+    draft_id: FromPath[UUID],
     account_id: AccountId,
     runner: NamedDependency[SkipValidation[EditRunner]],
     operation_id: NamedDependency[UUID],

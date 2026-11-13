@@ -6,10 +6,10 @@ from uuid import UUID
 from litestar import Response, Router, delete, get, patch, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import HeaderParameter, JSONBody, SkipValidation
+from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
 
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
-from squid.api.dependencies import Notifications, Permissions, Services
+from squid.api.dependencies import Notifications, Permissions, Services, get_notifications, get_permissions
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.pagination import (
@@ -60,9 +60,10 @@ InboxAccess = NamedDependency[SkipValidation[InboxVisibility]]
     "/preferences",
     responses=responses(401, 403, 503),
     operation_id="notification_preferences_get",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
+    guards=[requires(ACCOUNT_SELF_READ)],
 )
 async def get_preferences(notifications: Notifications, caller: UserCaller) -> Response[NotificationPreferencesDetail]:
     """Return channel preferences, with disabled defaults until privacy consent is accepted."""
@@ -80,11 +81,12 @@ async def get_preferences(notifications: Notifications, caller: UserCaller) -> R
     "/preferences",
     responses=responses(400, 401, 403, 412, 422, 503),
     operation_id="notification_preferences_update",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
     status_code=200,
+    guards=[requires(ACCOUNT_SELF_READ)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_READ)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
@@ -116,9 +118,10 @@ async def update_preferences(
     "/subscriptions",
     responses=responses(401, 403, 503),
     operation_id="notification_subscriptions_list",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={"caller": Provide(requires(ACCOUNT_SELF_READ))},
+    guards=[requires(ACCOUNT_SELF_READ)],
 )
 async def list_subscriptions(
     notifications: Notifications, caller: UserCaller
@@ -141,10 +144,11 @@ async def list_subscriptions(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
     operation_id="notification_subscription_create",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
+    guards=[requires(ACCOUNT_SELF_READ)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_READ)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
@@ -206,15 +210,16 @@ async def create_subscription(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 503),
     operation_id="notification_subscription_delete",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
+    guards=[requires(ACCOUNT_SELF_READ)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_READ)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
 async def delete_subscription(
-    subscription_id: int,
+    subscription_id: FromPath[int],
     services: Services,
     caller: UserCaller,
     operation_id: NamedDependency[SkipValidation[UUID]],
@@ -243,12 +248,11 @@ async def delete_subscription(
     "/inbox",
     responses=responses(400, 401, 403, 422, 503),
     operation_id="notification_inbox_list",
-    opt=contract(security=[WEB], cli=browser_only()),
+    security=[WEB],
+    opt=contract(cli=browser_only()),
     status_code=200,
-    dependencies={
-        "caller": Provide(requires(ACCOUNT_SELF_READ)),
-        "visibility": Provide(resolve_inbox_visibility),
-    },
+    guards=[requires(ACCOUNT_SELF_READ)],
+    dependencies={"visibility": Provide(resolve_inbox_visibility)},
 )
 async def list_inbox(
     notifications: Notifications,
@@ -271,15 +275,16 @@ async def list_inbox(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 503),
     operation_id="notification_inbox_mark_read",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
+    guards=[requires(ACCOUNT_SELF_READ)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_READ)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
 async def mark_read(
-    notification_id: int,
+    notification_id: FromPath[int],
     services: Services,
     caller: UserCaller,
     operation_id: NamedDependency[SkipValidation[UUID]],
@@ -310,15 +315,16 @@ async def mark_read(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 503),
     operation_id="notification_inbox_mark_unread",
-    opt=contract(security=[WEB_WRITE], cli=browser_only()),
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
+    guards=[requires(ACCOUNT_SELF_READ)],
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "caller": Provide(requires(ACCOUNT_SELF_READ)),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
     },
 )
 async def mark_unread(
-    notification_id: int,
+    notification_id: FromPath[int],
     services: Services,
     caller: UserCaller,
     operation_id: NamedDependency[SkipValidation[UUID]],
@@ -351,6 +357,10 @@ def _account_id(caller: Caller) -> int:
 
 
 router = Router(
+    dependencies={
+        "notifications": Provide(get_notifications, sync_to_thread=False),
+        "permissions": Provide(get_permissions, sync_to_thread=False),
+    },
     path="/users/me/notifications",
     tags=["notifications"],
     route_handlers=[
