@@ -652,49 +652,49 @@ accounts-verification-attempts-exceeded = Too many incorrect verification codes.
 # squid/accounts/errors.py:140
 accounts-verification-code-invalid = The verification code is invalid or expired.
 
-# squid/bot/admin.py:324
+# squid/bot/admin.py:332
 admin-build-spreadsheet = Build spreadsheet
 
-# squid/bot/admin.py:334
+# squid/bot/admin.py:342
 admin-database = Database
 
-# squid/bot/admin.py:299
+# squid/bot/admin.py:307
 admin-globally = globally
 
-# squid/bot/admin.py:108
+# squid/bot/admin.py:112
 admin-message-queued = Message selected. Run /paste in the destination channel to move it.
 
-# squid/bot/admin.py:336
+# squid/bot/admin.py:344
 admin-open-database = Open database
 
-# squid/bot/admin.py:326
+# squid/bot/admin.py:334
 admin-open-spreadsheet = Open spreadsheet
 
-# squid/bot/admin.py:130
+# squid/bot/admin.py:134
 admin-paste-empty = Select a message with Apps → Archive Message first.
 
-# squid/bot/admin.py:139
+# squid/bot/admin.py:143
 admin-paste-same-channel = Run /paste in a different channel to move this message.
 
-# squid/bot/admin.py:125
+# squid/bot/admin.py:129
 admin-paste-server-only = Use /paste in a server channel.
 
-# squid/bot/admin.py:136
+# squid/bot/admin.py:140
 admin-paste-source-hidden = You no longer have access to the source message.
 
-# squid/bot/admin.py:133
+# squid/bot/admin.py:137
 admin-paste-source-unavailable = The source channel is unavailable.
 
-# squid/bot/admin.py:304
+# squid/bot/admin.py:312
 admin-synced-commands = Synced { $count } commands { $scope }.
 
-# squid/bot/admin.py:317
+# squid/bot/admin.py:325
 admin-synced-the-tree-to = Synced the tree to { $synced }/{ $total }.
 
-# squid/bot/admin.py:105
+# squid/bot/admin.py:109
 admin-that-message-is-not-from-this-server = That message is not from this server.
 
-# squid/bot/admin.py:301
+# squid/bot/admin.py:309
 admin-to-the-current-guild = to the current guild
 
 # squid/api/errors.py:266
@@ -904,25 +904,25 @@ bot-profile-render-value = { $provider } — { $name }
 # squid/bot/profile_render.py:34
 bot-profile-render-value-2 = { $provider } — <@{ $subject }>
 
-# squid/bot/recount.py:85
+# squid/bot/recount.py:84
 bot-recount-give-a-link-to-a-message-in = Give a link to a message in this server.
 
-# squid/bot/recount.py:115
+# squid/bot/recount.py:114
 bot-recount-i-cannot-read-that-message = I cannot read that message.
 
-# squid/bot/recount.py:125
+# squid/bot/recount.py:124
 bot-recount-starboard-reactions-recounted = Starboard reactions recounted.
 
-# squid/bot/recount.py:108
+# squid/bot/recount.py:107
 bot-recount-that-message-is-not-a-vote-or = That message is not a vote or a starboard message.
 
-# squid/bot/recount.py:95
+# squid/bot/recount.py:94
 bot-recount-that-vote-is-already-being-recounted = That vote is already being recounted.
 
-# squid/bot/recount.py:93
+# squid/bot/recount.py:92
 bot-recount-that-vote-is-already-closed = That vote is already closed.
 
-# squid/bot/recount.py:100
+# squid/bot/recount.py:99
 bot-recount-votes-recounted = Votes recounted.
 
 # squid/bot/settings_view.py:555
@@ -1312,7 +1312,7 @@ bot-submission-schematics-signs = **Signs**: { $text }
 # squid/bot/submission/schematics.py:101
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/commands.py:191
+# squid/bot/submission/commands.py:177
 bot-submission-search-open-this-build-directly = Open this build directly.
 
 # squid/bot/submission/search_view.py:266
@@ -1376,22 +1376,22 @@ bot-submission-search-view-version = Version
 # squid/bot/submission/search_view.py:108
 bot-submission-search-view-view-build = View build
 
-# squid/bot/submission/submit.py:415
+# squid/bot/submission/submit.py:418
 bot-submission-submit-author-has-not-consented = Author has not consented
 
-# squid/bot/submission/submit.py:230
+# squid/bot/submission/submit.py:233
 bot-submission-submit-check-build-size = Check the build size
 
-# squid/bot/submission/submit.py:222
+# squid/bot/submission/submit.py:225
 bot-submission-submit-check-door-size = Check the door size
 
-# squid/bot/submission/submit.py:156
+# squid/bot/submission/submit.py:118
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 
-# squid/bot/submission/submit.py:400
+# squid/bot/submission/submit.py:403
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
-# squid/bot/submission/submit.py:158
+# squid/bot/submission/submit.py:127
 bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.
 
 # squid/bot/submission/ui/opening.py:92
@@ -1847,34 +1847,34 @@ build-browser-search-sort = Sort (optional)
 # squid/bot/submission/build_browse.py:716
 build-browser-sort-help = Examples: width, -width, -created_at. Leave blank for relevance.
 
-# squid/bot/submission/submit.py:336
+# squid/bot/submission/submit.py:339
 build-drafts-detected = **Builds found in your build-log posts**
 
-# squid/bot/submission/submit.py:489
+# squid/bot/submission/submit.py:492
 build-drafts-edited = Edited { $updated }
 
-# squid/bot/submission/submit.py:347
+# squid/bot/submission/submit.py:350
 build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.
 
-# squid/bot/submission/submit.py:346
+# squid/bot/submission/submit.py:349
 build-drafts-inbox-empty = No drafts are waiting for staff correction.
 
-# squid/bot/submission/submit.py:329
+# squid/bot/submission/submit.py:332
 build-drafts-open = Open
 
-# squid/bot/submission/submit.py:338
+# squid/bot/submission/submit.py:341
 build-drafts-review = Review
 
-# squid/bot/submission/submit.py:481
+# squid/bot/submission/submit.py:484
 build-drafts-state-creating = Creating the build
 
-# squid/bot/submission/submit.py:487
+# squid/bot/submission/submit.py:490
 build-drafts-state-editing = In progress
 
-# squid/bot/submission/submit.py:485
+# squid/bot/submission/submit.py:488
 build-drafts-state-needs-changes = Needs changes
 
-# squid/bot/submission/submit.py:483
+# squid/bot/submission/submit.py:486
 build-drafts-state-waiting = Waiting for files
 
 # squid/submissions/application/forms.py:399
@@ -2021,19 +2021,19 @@ build-search-load-failed = Could not load search results.
 # squid/bot/submission/search_view.py:161
 build-search-loading = Loading search results…
 
-# squid/bot/submission/commands.py:142
+# squid/bot/submission/commands.py:120
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/commands.py:133, squid/bot/submission/commands.py:192
+# squid/bot/submission/commands.py:130, squid/bot/submission/commands.py:182
 build-search-query-help = Search text and filters, e.g. `width:5`.
 
-# squid/bot/submission/commands.py:140
+# squid/bot/submission/commands.py:115
 build-search-sort-help = Order results by a field, ascending or descending.
 
-# squid/bot/submission/commands.py:135
+# squid/bot/submission/commands.py:102
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
 
 # squid/builds/errors.py:108
@@ -2195,58 +2195,58 @@ cli-auth-too-many-cli = Too many CLI authorization requests are active.
 # squid/cli_auth/errors.py:73
 cli-cli-device-proof-invalid = The CLI device proof is invalid.
 
-# squid/bot/permissions.py:52
+# squid/bot/permissions.py:51
 command-access-help = Inspect and manage this server's access controls
 
-# squid/bot/permissions.py:51
+# squid/bot/permissions.py:50
 command-access-name = access
 
-# squid/bot/permissions.py:59
+# squid/bot/permissions.py:57
 command-access-role-help = …
 
-# squid/bot/permissions.py:55
+# squid/bot/permissions.py:57
 command-access-role-name = role
 
-# squid/bot/permissions.py:59
+# squid/bot/permissions.py:54
 command-access-user-help = …
 
-# squid/bot/permissions.py:56
+# squid/bot/permissions.py:54
 command-access-user-name = user
 
-# squid/bot/verify.py:44
+# squid/bot/verify.py:42
 command-account-help = Manage your account or view a creator page
 
-# squid/bot/verify.py:43
+# squid/bot/verify.py:41
 command-account-name = account
 
-# squid/bot/verify.py:46
+# squid/bot/verify.py:45
 command-account-user-name = user
 
-# squid/bot/admin.py:97
+# squid/bot/admin.py:101
 command-archive-message-name = Archive Message
 
-# squid/bot/submission/commands.py:187
+# squid/bot/submission/commands.py:176
 command-build-browse-build-id-name = id
 
-# squid/bot/submission/commands.py:184
+# squid/bot/submission/commands.py:173
 command-build-browse-help = Browse builds and record holders.
 
-# squid/bot/submission/commands.py:183
+# squid/bot/submission/commands.py:172
 command-build-browse-name = browse
 
-# squid/bot/submission/commands.py:188
+# squid/bot/submission/commands.py:181
 command-build-browse-query-name = query
 
-# squid/bot/submission/submit.py:304
+# squid/bot/submission/submit.py:306
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
 
 # squid/bot/submission/submit.py:310
 command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.
 
-# squid/bot/submission/submit.py:307
+# squid/bot/submission/submit.py:309
 command-build-drafts-inbox-name = inbox
 
-# squid/bot/submission/submit.py:301
+# squid/bot/submission/submit.py:304
 command-build-drafts-name = drafts
 
 # squid/bot/submission/groups.py:18
@@ -2255,97 +2255,97 @@ command-build-help = Browse and submit redstone builds
 # squid/bot/submission/groups.py:17
 command-build-name = build
 
-# squid/bot/submission/submit.py:105
+# squid/bot/submission/submit.py:126
 command-build-submit-build-size-name = build_size
 
-# squid/bot/submission/submit.py:106
+# squid/bot/submission/submit.py:96
 command-build-submit-category-name = category
 
-# squid/bot/submission/submit.py:123
+# squid/bot/submission/submit.py:99
 command-build-submit-choice-category-door = Door
 
-# squid/bot/submission/submit.py:132
+# squid/bot/submission/submit.py:102
 command-build-submit-choice-category-entrance = Entrance
 
-# squid/bot/submission/submit.py:126
+# squid/bot/submission/submit.py:100
 command-build-submit-choice-category-extender = Extender
 
-# squid/bot/submission/submit.py:135
+# squid/bot/submission/submit.py:103
 command-build-submit-choice-category-other = Other
 
-# squid/bot/submission/submit.py:129
+# squid/bot/submission/submit.py:101
 command-build-submit-choice-category-utility = Utility
 
-# squid/bot/submission/submit.py:140
+# squid/bot/submission/submit.py:120
 command-build-submit-choice-door-type-door = Door
 
-# squid/bot/submission/submit.py:143
+# squid/bot/submission/submit.py:121
 command-build-submit-choice-door-type-skydoor = Skydoor
 
-# squid/bot/submission/submit.py:146
+# squid/bot/submission/submit.py:122
 command-build-submit-choice-door-type-trapdoor = Trapdoor
 
-# squid/bot/submission/submit.py:107
+# squid/bot/submission/submit.py:132
 command-build-submit-creators-name = creators
 
-# squid/bot/submission/submit.py:108
+# squid/bot/submission/submit.py:158
 command-build-submit-description-name = description
 
-# squid/bot/submission/submit.py:109
+# squid/bot/submission/submit.py:111
 command-build-submit-door-size-name = door_size
 
-# squid/bot/submission/submit.py:110
+# squid/bot/submission/submit.py:117
 command-build-submit-door-type-name = door_type
 
-# squid/bot/submission/submit.py:112
+# squid/bot/submission/submit.py:166
 command-build-submit-file-2-name = file_2
 
-# squid/bot/submission/submit.py:113
+# squid/bot/submission/submit.py:170
 command-build-submit-file-3-name = file_3
 
-# squid/bot/submission/submit.py:114
+# squid/bot/submission/submit.py:174
 command-build-submit-file-4-name = file_4
 
-# squid/bot/submission/submit.py:111
+# squid/bot/submission/submit.py:162
 command-build-submit-file-name = file
 
-# squid/bot/submission/submit.py:99
+# squid/bot/submission/submit.py:91
 command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens.
 
-# squid/bot/submission/submit.py:96
+# squid/bot/submission/submit.py:89
 command-build-submit-name = submit
 
-# squid/bot/submission/submit.py:115
+# squid/bot/submission/submit.py:107
 command-build-submit-name-name = name
 
-# squid/bot/submission/submit.py:116
+# squid/bot/submission/submit.py:144
 command-build-submit-patterns-name = patterns
 
-# squid/bot/submission/submit.py:117
+# squid/bot/submission/submit.py:151
 command-build-submit-restrictions-name = restrictions
 
-# squid/bot/submission/submit.py:118
+# squid/bot/submission/submit.py:137
 command-build-submit-versions-name = versions
 
-# squid/bot/diagnostics.py:28
+# squid/bot/diagnostics.py:24
 command-errors-help = Browse private error reports, optionally opening one reference.
 
-# squid/bot/diagnostics.py:26
+# squid/bot/diagnostics.py:23
 command-errors-name = errors
 
-# squid/bot/diagnostics.py:33
+# squid/bot/diagnostics.py:28
 command-errors-reference-help = The error reference to open immediately
 
-# squid/bot/diagnostics.py:31
+# squid/bot/diagnostics.py:27
 command-errors-reference-name = reference
 
-# squid/bot/help.py:163
+# squid/bot/help.py:161
 command-help-command-name = command
 
-# squid/bot/help.py:159
+# squid/bot/help.py:157
 command-help-help = Show a grouped command directory or focused command details.
 
-# squid/bot/help.py:161
+# squid/bot/help.py:158
 command-help-name = help
 
 # squid/bot/layout_showcase.py:26
@@ -2381,10 +2381,10 @@ command-layout-workbench-name = workbench
 # squid/bot/notifications.py:50
 command-notifications-name = notifications
 
-# squid/bot/admin.py:113
+# squid/bot/admin.py:117
 command-paste-help = Move your selected archive message into this channel
 
-# squid/bot/admin.py:112
+# squid/bot/admin.py:116
 command-paste-name = paste
 
 # squid/bot/voting/vote.py:50
@@ -2393,28 +2393,28 @@ command-poll-help = Create a multi-option poll through an ephemeral preview wiza
 # squid/bot/voting/vote.py:48
 command-poll-name = poll
 
-# squid/bot/submission/submit.py:394
+# squid/bot/submission/submit.py:397
 command-recalculate-build-name = Scan Build Message
 
-# squid/bot/submission/commands.py:205
+# squid/bot/submission/commands.py:197
 command-records-browse-help = Browse records and their holder builds
 
-# squid/bot/submission/commands.py:204
+# squid/bot/submission/commands.py:196
 command-records-name = records
 
-# squid/bot/submission/commands.py:207
+# squid/bot/submission/commands.py:200
 command-records-query-name = query
 
-# squid/bot/recount.py:55
+# squid/bot/recount.py:53
 command-recount-help = Count the reactions on a vote or starboard message again.
 
-# squid/bot/recount.py:62
+# squid/bot/recount.py:57
 command-recount-message-help = Link to a vote card, a starboard post, or the message it shows
 
-# squid/bot/recount.py:58
+# squid/bot/recount.py:56
 command-recount-message-name = message
 
-# squid/bot/recount.py:52
+# squid/bot/recount.py:51
 command-recount-name = recount
 
 # squid/bot/give_redstoner.py:163
@@ -2423,67 +2423,67 @@ command-redstoner-help = Inspect and deploy Redstoner automation
 # squid/bot/give_redstoner.py:162
 command-redstoner-name = redstoner
 
-# squid/bot/admin.py:194
+# squid/bot/admin.py:198
 command-runtime-settings-help = View or change global runtime settings
 
-# squid/bot/admin.py:193
+# squid/bot/admin.py:197
 command-runtime-settings-name = runtime-settings
 
-# squid/bot/admin.py:203
+# squid/bot/admin.py:211
 command-runtime-settings-revision-help = …
 
-# squid/bot/admin.py:198
+# squid/bot/admin.py:210
 command-runtime-settings-revision-name = revision
 
-# squid/bot/admin.py:204
+# squid/bot/admin.py:203
 command-runtime-settings-setting-help = …
 
-# squid/bot/admin.py:199
+# squid/bot/admin.py:202
 command-runtime-settings-setting-name = setting
 
-# squid/bot/admin.py:205
+# squid/bot/admin.py:207
 command-runtime-settings-value-help = …
 
-# squid/bot/admin.py:200
+# squid/bot/admin.py:206
 command-runtime-settings-value-name = value
 
-# squid/bot/submission/commands.py:112
+# squid/bot/submission/commands.py:124
 command-search-choice-mode-keyword = keyword
 
-# squid/bot/submission/commands.py:114
+# squid/bot/submission/commands.py:125
 command-search-choice-mode-smart = smart
 
-# squid/bot/submission/commands.py:120
+# squid/bot/submission/commands.py:107
 command-search-choice-scope-builds = builds
 
-# squid/bot/submission/commands.py:128
+# squid/bot/submission/commands.py:110
 command-search-choice-scope-everything = everything
 
-# squid/bot/submission/commands.py:122
+# squid/bot/submission/commands.py:108
 command-search-choice-scope-patterns = patterns
 
-# squid/bot/submission/commands.py:118
+# squid/bot/submission/commands.py:106
 command-search-choice-scope-records = records
 
-# squid/bot/submission/commands.py:125
+# squid/bot/submission/commands.py:109
 command-search-choice-scope-restrictions = restrictions
 
-# squid/bot/submission/commands.py:100
+# squid/bot/submission/commands.py:97
 command-search-help = Search builds, records, and taxonomy metadata
 
-# squid/bot/submission/commands.py:104
+# squid/bot/submission/commands.py:119
 command-search-mode-name = mode
 
-# squid/bot/submission/commands.py:99
+# squid/bot/submission/commands.py:96
 command-search-name = search
 
-# squid/bot/submission/commands.py:105
+# squid/bot/submission/commands.py:129
 command-search-query-name = query
 
-# squid/bot/submission/commands.py:106
+# squid/bot/submission/commands.py:101
 command-search-scope-name = scope
 
-# squid/bot/submission/commands.py:107
+# squid/bot/submission/commands.py:114
 command-search-sort-name = sort
 
 # squid/bot/settings.py:29
@@ -2498,16 +2498,16 @@ command-starboard-help = Configure this server's starboards
 # squid/bot/starboard/cog.py:206
 command-starboard-name = starboard
 
-# squid/bot/admin.py:58
+# squid/bot/admin.py:59
 command-tags-build-id-help = …
 
-# squid/bot/admin.py:59
+# squid/bot/admin.py:58
 command-tags-build-id-name = build
 
-# squid/bot/admin.py:56
+# squid/bot/admin.py:55
 command-tags-help = Browse, apply, propose, and moderate build tags
 
-# squid/bot/admin.py:55
+# squid/bot/admin.py:54
 command-tags-name = tags
 
 # squid/bot/version_tracking.py:126
@@ -3035,7 +3035,7 @@ draft-editor-title-editing = ## Submit a build · { $category }
 # squid/bot/submission/ui/drafts.py:744
 draft-editor-title-expired = ## Draft expired · { $category }
 
-# squid/bot/submission/submit.py:501
+# squid/bot/submission/submit.py:504
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
 # squid/bot/submission/ui/drafts.py:600
@@ -3224,55 +3224,55 @@ give-redstoner-value = { $role_mention }
 # squid/bot/give_redstoner.py:135
 give-redstoner-value-2 = { $source_channel_mention }
 
-# squid/bot/help.py:26
+# squid/bot/help.py:25
 help-account = Account
 
-# squid/bot/help.py:29
+# squid/bot/help.py:28
 help-administration-setup = Administration & setup
 
-# squid/bot/help.py:24
+# squid/bot/help.py:23
 help-build = Build
 
-# squid/bot/help.py:112
+# squid/bot/help.py:111
 help-command-not-found = Command not found
 
-# squid/bot/help.py:113
+# squid/bot/help.py:112
 help-command-unavailable = No command named `{ $needle }` is available.
 
-# squid/bot/help.py:27
+# squid/bot/help.py:26
 help-community = Community
 
-# squid/bot/help.py:25
+# squid/bot/help.py:24
 help-discover = Discover
 
-# squid/bot/help.py:123
+# squid/bot/help.py:122
 help-documentation = Documentation
 
-# squid/bot/help.py:34
+# squid/bot/help.py:33
 help-information = Information
 
-# squid/bot/help.py:130
+# squid/bot/help.py:129
 help-invite = Invite
 
-# squid/bot/help.py:75
+# squid/bot/help.py:74
 help-no-commands-are-available = No commands are available.
 
-# squid/bot/help.py:144, squid/bot/help.py:91
+# squid/bot/help.py:143, squid/bot/help.py:90
 help-no-details-provided = No details provided
 
-# squid/bot/help.py:74
+# squid/bot/help.py:73
 help-redstone-squid-help = Redstone Squid help
 
-# squid/bot/help.py:124
+# squid/bot/help.py:123
 help-regulations = Regulations
 
-# squid/bot/help.py:121
+# squid/bot/help.py:120
 help-source = Source
 
-# squid/bot/help.py:122
+# squid/bot/help.py:121
 help-submission-form = Submission form
 
-# squid/bot/help.py:165
+# squid/bot/help.py:162
 help-the-command-to-get-help-for = The command to get help for.
 
 # squid/idempotency/infrastructure/crypto.py:61
@@ -4206,7 +4206,7 @@ record-browser-smallest = Smallest
 # squid/bot/submission/build_browse.py:570
 record-filter-hint = Toggle any record types; none selected means all types. Search keeps your selection.
 
-# squid/bot/submission/commands.py:210
+# squid/bot/submission/commands.py:201
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
 # squid/records/application/services.py:584, squid/records/application/services.py:613
@@ -4290,16 +4290,16 @@ records-title-holder-required = A resolved record title must have at least one h
 # squid/records/domain/models.py:145
 records-title-holders-forbidden = Only a resolved record title can have official holders.
 
-# squid/bot/recount.py:112
+# squid/bot/recount.py:111
 recount-already-running = That message is already being recounted.
 
-# squid/bot/recount.py:124
+# squid/bot/recount.py:123
 recount-message-has-no-starboard = No starboard counts reactions on that message.
 
-# squid/bot/recount.py:150
+# squid/bot/recount.py:149
 recount-server-rate-limited = This server ran a recount recently. Try again in { $whole } seconds.
 
-# squid/bot/recount.py:102
+# squid/bot/recount.py:101
 recount-votes-already-current = Votes recounted; nothing had been missed.
 
 # squid/bot/give_redstoner.py:173
@@ -5224,55 +5224,55 @@ submissions-visible-closing-time = Visible closing time
 # squid/submissions/application/forms.py:519
 submissions-visible-opening-time = Visible opening time
 
-# squid/bot/submission/submit.py:172, squid/bot/submission/submit.py:173, squid/bot/submission/submit.py:174
+# squid/bot/submission/submit.py:167, squid/bot/submission/submit.py:171, squid/bot/submission/submit.py:175
 submit-another-attachment-help = Another schematic, image, or video.
 
-# squid/bot/submission/submit.py:171
+# squid/bot/submission/submit.py:163
 submit-attachment-types-help = Your schematic, an image, or a video.
 
-# squid/bot/submission/submit.py:416
+# squid/bot/submission/submit.py:419
 submit-author-consent-required = The author of this message (<@{ $user_id_text }>) has not consented to data storage. They must grant consent before this build can be ingested.
 
-# squid/bot/submission/submit.py:401
+# squid/bot/submission/submit.py:404
 submit-build-log-channel-required = Builds are only read out of messages posted in a build log channel.
 
-# squid/bot/submission/submit.py:231
+# squid/bot/submission/submit.py:234
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
-# squid/bot/submission/submit.py:151
+# squid/bot/submission/submit.py:97
 submit-category-help = The kind of build to submit.
 
-# squid/bot/submission/submit.py:168
+# squid/bot/submission/submit.py:152
 submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.
 
-# squid/bot/submission/submit.py:160
+# squid/bot/submission/submit.py:133
 submit-creator-ign-prompt = In-game names of the creators, comma separated.
 
-# squid/bot/submission/submit.py:154
+# squid/bot/submission/submit.py:112
 submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
-# squid/bot/submission/submit.py:204
+# squid/bot/submission/submit.py:207
 submit-door-options-only = Door size and orientation can only be supplied for doors.
 
-# squid/bot/submission/submit.py:223
+# squid/bot/submission/submit.py:226
 submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.
 
-# squid/bot/submission/submit.py:203, squid/bot/submission/submit.py:208
+# squid/bot/submission/submit.py:206, squid/bot/submission/submit.py:211
 submit-inapplicable-options = Options do not apply
 
-# squid/bot/submission/submit.py:152
+# squid/bot/submission/submit.py:108
 submit-name-help = An optional name for the build.
 
-# squid/bot/submission/submit.py:209
+# squid/bot/submission/submit.py:212
 submit-pattern-options-only = Patterns can only be supplied for doors and extenders.
 
-# squid/bot/submission/submit.py:165
+# squid/bot/submission/submit.py:145
 submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.
 
-# squid/bot/submission/submit.py:170
+# squid/bot/submission/submit.py:159
 submit-staff-notes-prompt = A short description of the build.
 
-# squid/bot/submission/submit.py:162
+# squid/bot/submission/submit.py:138
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
 # squid/suggestions/application/registry.py:82
@@ -5365,7 +5365,7 @@ ui-list-controls-not-owned = These list controls belong to someone else.
 # squid/bot/verify.py:131
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
 
-# squid/bot/verify.py:49
+# squid/bot/verify.py:46
 verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.
 
 # squid/bot/version_tracking.py:107

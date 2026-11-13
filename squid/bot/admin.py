@@ -17,7 +17,7 @@ from squid.accounts.domain import IdentityProvider
 from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
-from squid.bot.utils.autocomplete import autocompletes
+from squid.bot.utils.autocomplete import suggests
 from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor, enforce, requires
 from squid.core.i18n import tr
 from squid.edits.domain import EditCommand, EditValues, LatestRevision, Revision
@@ -50,13 +50,17 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self._paste_lock = asyncio.Lock()
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
-    @autocompletes(build_id="builds")
     @sd.command(
-        name=to_locale_str(tr(t"command-tags-name = tags")),
-        description=to_locale_str(tr(t"command-tags-help = Browse, apply, propose, and moderate build tags")),
+        name=tr(t"command-tags-name = tags"),
+        description=tr(t"command-tags-help = Browse, apply, propose, and moderate build tags"),
+        options={
+            "build_id": sd.Option(
+                name=tr(t"command-tags-build-id-name = build"),
+                description=tr(t"command-tags-build-id-help = …"),
+                autocomplete=suggests("builds"),
+            )
+        },
     )
-    @app_commands.describe(build_id=to_locale_str(tr(t"command-tags-build-id-help = …")))
-    @app_commands.rename(build_id=to_locale_str(tr(t"command-tags-build-id-name = build")))
     async def tags_workspace(self, request: sd.Request[Self], build_id: int | None = None) -> TagsScreen:
         """Open the capability-aware build tag workspace."""
         nodes = (
@@ -190,19 +194,23 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         await message.delete()
 
     @sd.command(
-        name=to_locale_str(tr(t"command-runtime-settings-name = runtime-settings")),
-        description=to_locale_str(tr(t"command-runtime-settings-help = View or change global runtime settings")),
+        name=tr(t"command-runtime-settings-name = runtime-settings"),
+        description=tr(t"command-runtime-settings-help = View or change global runtime settings"),
         defer="private",
-    )
-    @app_commands.rename(
-        revision=to_locale_str(tr(t"command-runtime-settings-revision-name = revision")),
-        setting=to_locale_str(tr(t"command-runtime-settings-setting-name = setting")),
-        value=to_locale_str(tr(t"command-runtime-settings-value-name = value")),
-    )
-    @app_commands.describe(
-        revision=to_locale_str(tr(t"command-runtime-settings-revision-help = …")),
-        setting=to_locale_str(tr(t"command-runtime-settings-setting-help = …")),
-        value=to_locale_str(tr(t"command-runtime-settings-value-help = …")),
+        options={
+            "setting": sd.Option(
+                name=tr(t"command-runtime-settings-setting-name = setting"),
+                description=tr(t"command-runtime-settings-setting-help = …"),
+            ),
+            "value": sd.Option(
+                name=tr(t"command-runtime-settings-value-name = value"),
+                description=tr(t"command-runtime-settings-value-help = …"),
+            ),
+            "revision": sd.Option(
+                name=tr(t"command-runtime-settings-revision-name = revision"),
+                description=tr(t"command-runtime-settings-revision-help = …"),
+            ),
+        },
     )
     async def runtime_settings_slash(
         self,

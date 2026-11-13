@@ -2,14 +2,11 @@
 
 from typing import TYPE_CHECKING, Self
 
-from discord import app_commands
-
 import squid_ui_discord as sd
 from squid.bot.diagnostics_view import ErrorReportScreen
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 from squid_i18n import tr
-from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -23,14 +20,14 @@ class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self.error_reports = bot.services.error_reports
 
     @sd.command(
-        name=to_locale_str(tr(t"command-errors-name = errors")),
-        description=to_locale_str(
-            tr(t"command-errors-help = Browse private error reports, optionally opening one reference.")
-        ),
-    )
-    @app_commands.rename(reference=to_locale_str(tr(t"command-errors-reference-name = reference")))
-    @app_commands.describe(
-        reference=to_locale_str(tr(t"command-errors-reference-help = The error reference to open immediately"))
+        name=tr(t"command-errors-name = errors"),
+        description=tr(t"command-errors-help = Browse private error reports, optionally opening one reference."),
+        options={
+            "reference": sd.Option(
+                name=tr(t"command-errors-reference-name = reference"),
+                description=tr(t"command-errors-reference-help = The error reference to open immediately"),
+            )
+        },
     )
     @hide_unless(manage_guild=True)
     async def errors(self, request: sd.Request[Self], reference: str | None = None) -> ErrorReportScreen:

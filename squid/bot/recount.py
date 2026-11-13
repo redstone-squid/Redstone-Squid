@@ -24,7 +24,6 @@ from squid.bot.utils.permissions import enforce
 from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
 from squid_ui.text import Message
-from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -49,19 +48,19 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self._origins_in_progress: set[int] = set()
 
     @sd.command(
-        name=to_locale_str(tr(t"command-recount-name = recount")),
+        name=tr(t"command-recount-name = recount"),
         defer="private",
-        description=to_locale_str(
-            tr(t"command-recount-help = Count the reactions on a vote or starboard message again.")
-        ),
+        description=tr(t"command-recount-help = Count the reactions on a vote or starboard message again."),
+        options={
+            "message": sd.Option(
+                name=tr(t"command-recount-message-name = message"),
+                description=tr(
+                    t"command-recount-message-help = Link to a vote card, a starboard post, or the message it shows"
+                ),
+            )
+        },
     )
-    @app_commands.rename(message=to_locale_str(tr(t"command-recount-message-name = message")))
     @app_commands.guild_only()
-    @app_commands.describe(
-        message=to_locale_str(
-            tr(t"command-recount-message-help = Link to a vote card, a starboard post, or the message it shows")
-        )
-    )
     async def recount(self, request: sd.Request[Self], message: str) -> sd.CommandResult:
         """Count the reactions on a vote or starboard message again."""
         guild = request.guild

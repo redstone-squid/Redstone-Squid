@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
 import discord
-from discord import app_commands
 
 import squid_ui_discord as sd
 from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
@@ -13,7 +12,6 @@ from squid.accounts.models import Account
 from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
-from squid.bot.i18n import to_locale_str
 from squid.bot.profile_render import (
     public_profile_fields,
 )
@@ -40,14 +38,16 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         self.account_service = bot.services.accounts
 
     @sd.command(
-        name=to_locale_str(tr(t"command-account-name = account")),
-        description=to_locale_str(tr(t"command-account-help = Manage your account or view a creator page")),
-    )
-    @app_commands.rename(user=to_locale_str(tr(t"command-account-user-name = user")))
-    @app_commands.describe(
-        user=to_locale_str(
-            tr(t"verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.")
-        )
+        name=tr(t"command-account-name = account"),
+        description=tr(t"command-account-help = Manage your account or view a creator page"),
+        options={
+            "user": sd.Option(
+                name=tr(t"command-account-user-name = user"),
+                description=tr(
+                    t"verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account."
+                ),
+            )
+        },
     )
     async def account(
         self, request: sd.Request[Self], user: discord.Member | discord.User | None = None

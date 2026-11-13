@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Self, override
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import discord
-from discord import app_commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -30,7 +29,7 @@ from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimension
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import draft_editor, field_names
 from squid.bot.ui import error_node, text_node
-from squid.bot.utils.autocomplete import autocompletes, suggests
+from squid.bot.utils.autocomplete import suggests
 from squid.bot.utils.permissions import actor_for_interaction, current_edit_actor, enforce
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
@@ -86,92 +85,96 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     messages: MessageService
     consent_sticky: StickyMessage
 
-    @autocompletes(
-        patterns=suggests("approved_patterns", multi=True),
-        versions="approved_source_versions",
-        restrictions=suggests("approved_restrictions", multi=True),
-        creators=suggests("creators", multi=True),
-    )
     @BuildCommandGroup.build_group.command(
-        name=to_locale_str(tr(t"command-build-submit-name = submit")),
+        name=tr(t"command-build-submit-name = submit"),
         defer="private",
-        description=to_locale_str(
-            tr(
-                t"command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens."
-            )
+        description=tr(
+            t"command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens."
         ),
-    )
-    @app_commands.rename(
-        build_size=to_locale_str(tr(t"command-build-submit-build-size-name = build_size")),
-        category=to_locale_str(tr(t"command-build-submit-category-name = category")),
-        creators=to_locale_str(tr(t"command-build-submit-creators-name = creators")),
-        description=to_locale_str(tr(t"command-build-submit-description-name = description")),
-        door_size=to_locale_str(tr(t"command-build-submit-door-size-name = door_size")),
-        door_type=to_locale_str(tr(t"command-build-submit-door-type-name = door_type")),
-        file=to_locale_str(tr(t"command-build-submit-file-name = file")),
-        file_2=to_locale_str(tr(t"command-build-submit-file-2-name = file_2")),
-        file_3=to_locale_str(tr(t"command-build-submit-file-3-name = file_3")),
-        file_4=to_locale_str(tr(t"command-build-submit-file-4-name = file_4")),
-        name=to_locale_str(tr(t"command-build-submit-name-name = name")),
-        patterns=to_locale_str(tr(t"command-build-submit-patterns-name = patterns")),
-        restrictions=to_locale_str(tr(t"command-build-submit-restrictions-name = restrictions")),
-        versions=to_locale_str(tr(t"command-build-submit-versions-name = versions")),
-    )
-    @app_commands.choices(
-        category=[
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-category-door = Door")), value="Door"
+        options={
+            "category": sd.Option(
+                name=tr(t"command-build-submit-category-name = category"),
+                description=tr(t"submit-category-help = The kind of build to submit."),
+                choices=[
+                    sd.Choice("Door", tr(t"command-build-submit-choice-category-door = Door")),
+                    sd.Choice("Extender", tr(t"command-build-submit-choice-category-extender = Extender")),
+                    sd.Choice("Utility", tr(t"command-build-submit-choice-category-utility = Utility")),
+                    sd.Choice("Entrance", tr(t"command-build-submit-choice-category-entrance = Entrance")),
+                    sd.Choice("Other", tr(t"command-build-submit-choice-category-other = Other")),
+                ],
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-category-extender = Extender")), value="Extender"
+            "name": sd.Option(
+                name=tr(t"command-build-submit-name-name = name"),
+                description=tr(t"submit-name-help = An optional name for the build."),
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-category-utility = Utility")), value="Utility"
+            "door_size": sd.Option(
+                name=tr(t"command-build-submit-door-size-name = door_size"),
+                description=tr(
+                    t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional."
+                ),
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-category-entrance = Entrance")), value="Entrance"
+            "door_type": sd.Option(
+                name=tr(t"command-build-submit-door-type-name = door_type"),
+                description=tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor."),
+                choices=[
+                    sd.Choice("Door", tr(t"command-build-submit-choice-door-type-door = Door")),
+                    sd.Choice("Skydoor", tr(t"command-build-submit-choice-door-type-skydoor = Skydoor")),
+                    sd.Choice("Trapdoor", tr(t"command-build-submit-choice-door-type-trapdoor = Trapdoor")),
+                ],
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-category-other = Other")), value="Other"
+            "build_size": sd.Option(
+                name=tr(t"command-build-submit-build-size-name = build_size"),
+                description=tr(
+                    t"bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`."
+                ),
             ),
-        ],
-        door_type=[
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-door-type-door = Door")), value="Door"
+            "creators": sd.Option(
+                name=tr(t"command-build-submit-creators-name = creators"),
+                description=tr(t"submit-creator-ign-prompt = In-game names of the creators, comma separated."),
+                autocomplete=suggests("creators", multi=True),
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-door-type-skydoor = Skydoor")), value="Skydoor"
+            "versions": sd.Option(
+                name=tr(t"command-build-submit-versions-name = versions"),
+                description=tr(
+                    t"submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`."
+                ),
+                autocomplete=suggests("approved_source_versions"),
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-build-submit-choice-door-type-trapdoor = Trapdoor")), value="Trapdoor"
+            "patterns": sd.Option(
+                name=tr(t"command-build-submit-patterns-name = patterns"),
+                description=tr(
+                    t"submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`."
+                ),
+                autocomplete=suggests("approved_patterns", multi=True),
             ),
-        ],
-    )
-    @app_commands.describe(
-        category=to_locale_str(tr(t"submit-category-help = The kind of build to submit.")),
-        name=to_locale_str(tr(t"submit-name-help = An optional name for the build.")),
-        door_size=to_locale_str(
-            tr(t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.")
-        ),
-        door_type=to_locale_str(tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.")),
-        build_size=to_locale_str(
-            tr(t"bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.")
-        ),
-        creators=to_locale_str(tr(t"submit-creator-ign-prompt = In-game names of the creators, comma separated.")),
-        versions=to_locale_str(
-            tr(t"submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.")
-        ),
-        patterns=to_locale_str(
-            tr(t"submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.")
-        ),
-        restrictions=to_locale_str(
-            tr(t"submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.")
-        ),
-        description=to_locale_str(tr(t"submit-staff-notes-prompt = A short description of the build.")),
-        file=to_locale_str(tr(t"submit-attachment-types-help = Your schematic, an image, or a video.")),
-        file_2=to_locale_str(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
-        file_3=to_locale_str(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
-        file_4=to_locale_str(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
+            "restrictions": sd.Option(
+                name=tr(t"command-build-submit-restrictions-name = restrictions"),
+                description=tr(
+                    t"submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`."
+                ),
+                autocomplete=suggests("approved_restrictions", multi=True),
+            ),
+            "description": sd.Option(
+                name=tr(t"command-build-submit-description-name = description"),
+                description=tr(t"submit-staff-notes-prompt = A short description of the build."),
+            ),
+            "file": sd.Option(
+                name=tr(t"command-build-submit-file-name = file"),
+                description=tr(t"submit-attachment-types-help = Your schematic, an image, or a video."),
+            ),
+            "file_2": sd.Option(
+                name=tr(t"command-build-submit-file-2-name = file_2"),
+                description=tr(t"submit-another-attachment-help = Another schematic, image, or video."),
+            ),
+            "file_3": sd.Option(
+                name=tr(t"command-build-submit-file-3-name = file_3"),
+                description=tr(t"submit-another-attachment-help = Another schematic, image, or video."),
+            ),
+            "file_4": sd.Option(
+                name=tr(t"command-build-submit-file-4-name = file_4"),
+                description=tr(t"submit-another-attachment-help = Another schematic, image, or video."),
+            ),
+        },
     )
     async def submit_form(
         self,
@@ -298,17 +301,17 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         )
 
     @BuildCommandGroup.build_group.command(
-        name=to_locale_str(tr(t"command-build-drafts-name = drafts")),
+        name=tr(t"command-build-drafts-name = drafts"),
         defer="private",
-        description=to_locale_str(
-            tr(t"command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.")
-        ),
-    )
-    @app_commands.rename(inbox=to_locale_str(tr(t"command-build-drafts-inbox-name = inbox")))
-    @app_commands.describe(
-        inbox=to_locale_str(
-            tr(t"command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.")
-        )
+        description=tr(t"command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox."),
+        options={
+            "inbox": sd.Option(
+                name=tr(t"command-build-drafts-inbox-name = inbox"),
+                description=tr(
+                    t"command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own."
+                ),
+            )
+        },
     )
     async def saved_drafts(self, request: sd.Request[Self], *, inbox: bool = False) -> sd.CommandResult:
         """Reopen saved drafts, or browse the staff correction inbox."""

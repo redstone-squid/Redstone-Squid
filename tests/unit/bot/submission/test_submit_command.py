@@ -197,7 +197,7 @@ async def _submit(cog: BuildSubmitCommands[Any], **options: Any) -> InteractionH
     harness = InteractionHarness(user_id=7, client=cog.bot)
     cast(Any, harness).id = 123
     harness.guild = None
-    await cast(Any, BuildSubmitCommands.submit_form).callback(cog, harness.source, **options)
+    await cast(Any, BuildSubmitCommands).submit_form.callback(cog, harness.source, **options)
     return harness
 
 

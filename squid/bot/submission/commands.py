@@ -4,12 +4,10 @@ import logging
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self, override
 
-from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, when_mentioned
 
 import squid_ui_discord as sd
-from squid.bot.i18n import to_locale_str
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
@@ -18,7 +16,7 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid.bot.utils.autocomplete import autocompletes
+from squid.bot.utils.autocomplete import suggests
 from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -94,53 +92,45 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
     async def ui_unload(self) -> None:
         await self.consent_sticky.close()
 
-    @autocompletes(sort="search_sorts", query="search_query")
     @sd.command(
-        name=to_locale_str(tr(t"command-search-name = search")),
-        description=to_locale_str(tr(t"command-search-help = Search builds, records, and taxonomy metadata")),
+        name=tr(t"command-search-name = search"),
+        description=tr(t"command-search-help = Search builds, records, and taxonomy metadata"),
         defer="public",
-    )
-    @app_commands.rename(
-        mode=to_locale_str(tr(t"command-search-mode-name = mode")),
-        query=to_locale_str(tr(t"command-search-query-name = query")),
-        scope=to_locale_str(tr(t"command-search-scope-name = scope")),
-        sort=to_locale_str(tr(t"command-search-sort-name = sort")),
-    )
-    @app_commands.choices(
-        mode=[
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-search-choice-mode-keyword = keyword")), value="keyword"
+        options={
+            "scope": sd.Option(
+                name=tr(t"command-search-scope-name = scope"),
+                description=tr(
+                    t"build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all."
+                ),
+                choices=[
+                    sd.Choice("records", tr(t"command-search-choice-scope-records = records")),
+                    sd.Choice("builds", tr(t"command-search-choice-scope-builds = builds")),
+                    sd.Choice("patterns", tr(t"command-search-choice-scope-patterns = patterns")),
+                    sd.Choice("restrictions", tr(t"command-search-choice-scope-restrictions = restrictions")),
+                    sd.Choice("everything", tr(t"command-search-choice-scope-everything = everything")),
+                ],
             ),
-            app_commands.Choice(name=to_locale_str(tr(t"command-search-choice-mode-smart = smart")), value="smart"),
-        ],
-        scope=[
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-search-choice-scope-records = records")), value="records"
+            "sort": sd.Option(
+                name=tr(t"command-search-sort-name = sort"),
+                description=tr(t"build-search-sort-help = Order results by a field, ascending or descending."),
+                autocomplete=suggests("search_sorts"),
             ),
-            app_commands.Choice(name=to_locale_str(tr(t"command-search-choice-scope-builds = builds")), value="builds"),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-search-choice-scope-patterns = patterns")), value="patterns"
+            "mode": sd.Option(
+                name=tr(t"command-search-mode-name = mode"),
+                description=tr(
+                    t"build-search-matching-mode-help = Use keyword matching or smart meaning-based matching."
+                ),
+                choices=[
+                    sd.Choice("keyword", tr(t"command-search-choice-mode-keyword = keyword")),
+                    sd.Choice("smart", tr(t"command-search-choice-mode-smart = smart")),
+                ],
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-search-choice-scope-restrictions = restrictions")), value="restrictions"
+            "query": sd.Option(
+                name=tr(t"command-search-query-name = query"),
+                description=tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
+                autocomplete=suggests("search_query"),
             ),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-search-choice-scope-everything = everything")), value="everything"
-            ),
-        ],
-    )
-    @app_commands.describe(
-        query=to_locale_str(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
-        scope=to_locale_str(
-            tr(
-                t"build-search-target-types-help = What to look through: "
-                t"records, builds, patterns, restrictions, or all."
-            )
-        ),
-        sort=to_locale_str(tr(t"build-search-sort-help = Order results by a field, ascending or descending.")),
-        mode=to_locale_str(
-            tr(t"build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.")
-        ),
+        },
     )
     async def search_records(
         self,
@@ -178,18 +168,20 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             render_build=lambda build: render_build_card(build, self.bot.media_previews),
         )
 
-    @autocompletes(build_id="builds")
     @BuildCommandGroup.build_group.command(
-        name=to_locale_str(tr(t"command-build-browse-name = browse")),
-        description=to_locale_str(tr(t"command-build-browse-help = Browse builds and record holders.")),
-    )
-    @app_commands.rename(
-        build_id=to_locale_str(tr(t"command-build-browse-build-id-name = id")),
-        query=to_locale_str(tr(t"command-build-browse-query-name = query")),
-    )
-    @app_commands.describe(
-        build_id=to_locale_str(tr(t"bot-submission-search-open-this-build-directly = Open this build directly.")),
-        query=to_locale_str(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
+        name=tr(t"command-build-browse-name = browse"),
+        description=tr(t"command-build-browse-help = Browse builds and record holders."),
+        options={
+            "build_id": sd.Option(
+                name=tr(t"command-build-browse-build-id-name = id"),
+                description=tr(t"bot-submission-search-open-this-build-directly = Open this build directly."),
+                autocomplete=suggests("builds"),
+            ),
+            "query": sd.Option(
+                name=tr(t"command-build-browse-query-name = query"),
+                description=tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
+            ),
+        },
     )
     async def browse_builds(
         self, request: sd.Request[Self], build_id: int | None = None, query: str | None = None
@@ -201,14 +193,16 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         return screen
 
     @sd.command(
-        name=to_locale_str(tr(t"command-records-name = records")),
-        description=to_locale_str(tr(t"command-records-browse-help = Browse records and their holder builds")),
-    )
-    @app_commands.rename(query=to_locale_str(tr(t"command-records-query-name = query")))
-    @app_commands.describe(
-        query=to_locale_str(
-            tr(t"record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.")
-        ),
+        name=tr(t"command-records-name = records"),
+        description=tr(t"command-records-browse-help = Browse records and their holder builds"),
+        options={
+            "query": sd.Option(
+                name=tr(t"command-records-query-name = query"),
+                description=tr(
+                    t"record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest."
+                ),
+            )
+        },
     )
     async def records_workspace(self, request: sd.Request[Self], query: str | None = None) -> BuildBrowseScreen:
         """Open the shared catalogue at its record standings."""
