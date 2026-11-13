@@ -11,6 +11,7 @@ from squid_replication import (
     LoroBackend,
     Replica,
     ReplicatedSnapshot,
+    ReplicatedTreeSnapshot,
     ReplicationChangeToken,
     ReplicationCorruptUpdateError,
 )
@@ -77,7 +78,7 @@ def test_one_action_spans_every_public_container_and_undoes_exactly() -> None:
         lists=(("steps", ()),),
         movable_lists=(("parts", ()),),
         maps=(("settings", ()),),
-        trees=(("outline", document.snapshot().tree("outline")),),
+        trees=(("outline", ReplicatedTreeSnapshot(roots=(), nodes=())),),
     )
 
 
