@@ -5,18 +5,10 @@ The field registry is already the published contract for what may be queried
 memorized from documentation.
 """
 
-from typing import Protocol
-
-from squid.search.application.fields import FieldRegistry
 from squid.suggestions.application import Candidate
+from squid.suggestions.application.ports import SearchFields
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.cache import TtlCache
-
-
-class SearchFields(Protocol):
-    """Read the effective public field registry."""
-
-    async def fields(self) -> FieldRegistry: ...
 
 
 class SearchFieldProvider:

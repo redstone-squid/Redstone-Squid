@@ -16,6 +16,7 @@ from squid.search.application.completion import (
 )
 from squid.search.application.fields import FieldRegistry
 from squid.suggestions.application import Candidate, rank
+from squid.suggestions.application.ports import SearchFields
 from squid.suggestions.domain import (
     MAX_SUGGESTIONS,
     ReplacementSpan,
@@ -23,12 +24,6 @@ from squid.suggestions.domain import (
     SuggestionRequest,
     SuggestionResult,
 )
-
-
-class SearchFields(Protocol):
-    """Read the effective public field registry."""
-
-    async def fields(self) -> FieldRegistry: ...
 
 
 class FacetReader(Protocol):

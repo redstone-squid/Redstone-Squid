@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from sqlalchemy import Text, delete, func, insert, select, update
 from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -13,7 +14,6 @@ from squid.core.errors import DataIntegrityError
 from squid.core.scores import round_score
 from squid.messages.errors import MessageNotFoundError
 from squid.messages.models import Message
-from squid.persistence.repository import BaseAsyncRepository
 from squid.posts.models import DiscordPost
 from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.settings.models import ServerSetting
@@ -52,7 +52,7 @@ from squid.voting.models import (
 )
 
 
-class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
+class _VoteSessionModelRepository(SQLAlchemyAsyncRepository[VoteSession]):
     model_type = VoteSession
 
 

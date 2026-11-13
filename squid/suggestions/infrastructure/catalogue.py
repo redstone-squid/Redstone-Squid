@@ -4,8 +4,6 @@ Adapters refer to sources by ID. Sources also used as submission form options
 retain the same IDs in the form manifest.
 """
 
-from typing import Protocol
-
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_LIST,
@@ -13,8 +11,8 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
 )
 from squid.records.domain import BaseTitle, BuildKind, VersionScope
-from squid.search.application.fields import FieldRegistry
 from squid.suggestions.application import SuggestionRegistry, SuggestionSource
+from squid.suggestions.application.ports import SearchFields
 from squid.suggestions.application.queries import SuggestionRepository
 from squid.suggestions.domain import SourceKind, ValueType, Visibility
 from squid.suggestions.infrastructure.providers import (
@@ -59,12 +57,6 @@ PUBLIC_BUILD_STATUSES = ("confirmed",)
 """Build statuses exposed by public suggestion sources."""
 
 PENDING_BUILD_STATUSES = ("pending",)
-
-
-class SearchFields(Protocol):
-    """Read the effective public field registry."""
-
-    async def fields(self) -> FieldRegistry: ...
 
 
 def build_registry(
