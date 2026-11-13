@@ -167,70 +167,70 @@ ui-chrome-withdraw = Withdraw
 # packages/squid-ui/src/squid_ui/chrome.py:87
 ui-chrome-working = Working…
 
-# packages/squid-ui/src/squid_ui/forms.py:377
+# packages/squid-ui/src/squid_ui/forms.py:382
 ui-form-date-format = Enter a date as YYYY-MM-DD.
 
-# packages/squid-ui/src/squid_ui/forms.py:386
+# packages/squid-ui/src/squid_ui/forms.py:393
 ui-form-date-maximum = Enter a date on or before { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:380
+# packages/squid-ui/src/squid_ui/forms.py:386
 ui-form-date-minimum = Enter a date on or after { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:466, packages/squid-ui/src/squid_ui/forms.py:538
+# packages/squid-ui/src/squid_ui/forms.py:475, packages/squid-ui/src/squid_ui/forms.py:549
 ui-form-datetime-format = Enter a date and time as YYYY-MM-DD HH:MM.
 
-# packages/squid-ui/src/squid_ui/forms.py:489, packages/squid-ui/src/squid_ui/forms.py:571
+# packages/squid-ui/src/squid_ui/forms.py:500, packages/squid-ui/src/squid_ui/forms.py:584
 ui-form-datetime-maximum = Enter a date and time on or before { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:483, packages/squid-ui/src/squid_ui/forms.py:565
+# packages/squid-ui/src/squid_ui/forms.py:493, packages/squid-ui/src/squid_ui/forms.py:577
 ui-form-datetime-minimum = Enter a date and time on or after { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:335
+# packages/squid-ui/src/squid_ui/forms.py:339
 ui-form-duration-format = Enter a duration such as 30m, 12h, or 7d.
 
-# packages/squid-ui/src/squid_ui/forms.py:345
+# packages/squid-ui/src/squid_ui/forms.py:351
 ui-form-duration-maximum = Enter a duration no longer than { $maximum } seconds.
 
-# packages/squid-ui/src/squid_ui/forms.py:339
+# packages/squid-ui/src/squid_ui/forms.py:344
 ui-form-duration-minimum = Enter a duration of at least { $minimum } seconds.
 
 # packages/squid-ui/src/squid_ui/forms.py:252
 ui-form-integer-format = Enter a whole number.
 
-# packages/squid-ui/src/squid_ui/forms.py:763
+# packages/squid-ui/src/squid_ui/forms.py:781
 ui-form-invalid-boolean = Choose yes or no.
 
-# packages/squid-ui/src/squid_ui/forms.py:671
+# packages/squid-ui/src/squid_ui/forms.py:688
 ui-form-invalid-choice = Choose one of the available options.
 
-# packages/squid-ui/src/squid_ui/forms.py:713
+# packages/squid-ui/src/squid_ui/forms.py:730
 ui-form-invalid-choices = Choose only from the available options.
 
-# packages/squid-ui/src/squid_ui/forms.py:285
+# packages/squid-ui/src/squid_ui/forms.py:287
 ui-form-number-finite = Enter a finite number.
 
-# packages/squid-ui/src/squid_ui/forms.py:283
+# packages/squid-ui/src/squid_ui/forms.py:285
 ui-form-number-format = Enter a number.
 
-# packages/squid-ui/src/squid_ui/forms.py:261, packages/squid-ui/src/squid_ui/forms.py:294
+# packages/squid-ui/src/squid_ui/forms.py:263, packages/squid-ui/src/squid_ui/forms.py:298
 ui-form-number-maximum = Enter a value no greater than { $maximum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:255, packages/squid-ui/src/squid_ui/forms.py:288
+# packages/squid-ui/src/squid_ui/forms.py:256, packages/squid-ui/src/squid_ui/forms.py:291
 ui-form-number-minimum = Enter a value of at least { $minimum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:197, packages/squid-ui/src/squid_ui/forms.py:218, packages/squid-ui/src/squid_ui/forms.py:708
+# packages/squid-ui/src/squid_ui/forms.py:197, packages/squid-ui/src/squid_ui/forms.py:218, packages/squid-ui/src/squid_ui/forms.py:725
 ui-form-required = This field is required.
 
-# packages/squid-ui/src/squid_ui/forms.py:620
+# packages/squid-ui/src/squid_ui/forms.py:635
 ui-form-scale-integer = Choose a whole number from { $minimum } to { $maximum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:626
+# packages/squid-ui/src/squid_ui/forms.py:643
 ui-form-scale-range = Choose a value from { $minimum } to { $maximum }.
 
-# packages/squid-ui/src/squid_ui/forms.py:724
+# packages/squid-ui/src/squid_ui/forms.py:742
 ui-form-selection-maximum = Choose no more than { $maximum } options.
 
-# packages/squid-ui/src/squid_ui/forms.py:718
+# packages/squid-ui/src/squid_ui/forms.py:736
 ui-form-selection-minimum = Choose at least { $minimum } options.
 
 # packages/squid-ui/src/squid_ui/forms.py:225
@@ -239,22 +239,22 @@ ui-form-text-maximum = Enter no more than { $maximum } characters.
 # packages/squid-ui/src/squid_ui/forms.py:221
 ui-form-text-minimum = Enter at least { $minimum } characters.
 
-# packages/squid-ui/src/squid_ui/forms.py:472, packages/squid-ui/src/squid_ui/forms.py:547
+# packages/squid-ui/src/squid_ui/forms.py:481, packages/squid-ui/src/squid_ui/forms.py:558
 ui-form-time-ambiguous = This local time occurs twice in the selected timezone. Enter a date and time with an explicit UTC offset.
 
-# packages/squid-ui/src/squid_ui/forms.py:412
+# packages/squid-ui/src/squid_ui/forms.py:419
 ui-form-time-format = Enter a time as HH:MM.
 
-# packages/squid-ui/src/squid_ui/forms.py:421
+# packages/squid-ui/src/squid_ui/forms.py:430
 ui-form-time-maximum = Enter a time at or before { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:415
+# packages/squid-ui/src/squid_ui/forms.py:423
 ui-form-time-minimum = Enter a time at or after { $value }.
 
-# packages/squid-ui/src/squid_ui/forms.py:479, packages/squid-ui/src/squid_ui/forms.py:553
+# packages/squid-ui/src/squid_ui/forms.py:488, packages/squid-ui/src/squid_ui/forms.py:564
 ui-form-time-nonexistent = This local time does not exist in the selected timezone.
 
-# packages/squid-ui/src/squid_ui/forms.py:556
+# packages/squid-ui/src/squid_ui/forms.py:567
 ui-form-timezone-offset-mismatch = The UTC offset does not match this local time in the selected timezone.
 
 # packages/squid-ui/src/squid_ui/factories.py:591
