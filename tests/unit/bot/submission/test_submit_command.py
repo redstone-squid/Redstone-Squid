@@ -188,6 +188,7 @@ def _cog() -> BuildSubmitCommands[Any]:
             )
         ),
     )
+    cog.bot.is_owner = AsyncMock(return_value=False)
     cog.ui = cog.bot.ui.scope(cog)
     cog.builds = BuildRecorder()
     return cog

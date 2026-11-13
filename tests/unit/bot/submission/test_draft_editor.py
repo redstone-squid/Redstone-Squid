@@ -59,6 +59,7 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.submissions.domain.intake import IntakeStatus
+from squid.submissions.errors import DraftAccessDeniedError
 from squid.tags.application import TagService
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
@@ -81,10 +82,13 @@ class Drafts(SubmissionDraftService):
         self.current = draft
         self.actors: list[DraftActor] = []
         self.changes: list[DraftChange] = []
+        self.required_actor: Actor | None = None
 
     @override
     async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
+        if self.required_actor is not None and actor != self.required_actor:
+            raise DraftAccessDeniedError
         self.actors.append(actor)
         return self.current
 
@@ -185,8 +189,8 @@ async def open_editor(
 ) -> DraftEditorScreen:
     editor = await draft_editor(
         services,
-        actor,
         drafts.current.snapshot.id,
+        resolve_actor=AsyncMock(return_value=Actor(account_id=actor)),
         changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
         render_card=render_card,
     )
@@ -220,22 +224,63 @@ async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
     assert "Submit" in labels(reopened.render())
 
 
-async def test_staff_writes_use_actor_and_preserve_owner() -> None:
+@pytest.mark.parametrize(
+    "actor",
+    [
+        Actor(account_id=99, discord_user_id=123, is_bot_owner=True),
+        Actor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789})),
+    ],
+)
+async def test_staff_authority_survives_open_refresh_save_and_submit(
+    actor: Actor, monkeypatch: pytest.MonkeyPatch
+) -> None:
     services, drafts = setup()
-    editor = await open_editor(services, drafts, actor=99)
+    drafts.required_actor = actor
+    resolve_actor = AsyncMock(return_value=actor)
+    files = AsyncMock(return_value=())
+    status = AsyncMock(return_value=None)
+    submit = AsyncMock()
+    monkeypatch.setattr(services.submission_intake, "list", files)
+    monkeypatch.setattr(services.submission_finalization, "status", status)
+    monkeypatch.setattr(services.submission_finalization, "submit", submit)
+    draft_id = drafts.current.snapshot.id
+    editor = await draft_editor(
+        services,
+        draft_id,
+        changes=LocalTopicBus().topic("submission_draft", str(draft_id)),
+        resolve_actor=resolve_actor,
+    )
+    ws = editor.workspace
+    await ws.projection.reload()
+    assert await ws.may_edit()
     with transaction():
-        await editor.workspace.save_values({"description": "Staff correction"})
-    assert editor.workspace.draft.snapshot.owner_account_id == 7
-    assert all((actor.account_id if isinstance(actor, Actor) else actor) == 99 for actor in drafts.actors)
+        await ws.save_values({"description": "Staff correction"})
+    await ws.projection.reload()
+    await ws.submit()
+
+    assert ws.draft.snapshot.owner_account_id == 7
+    assert drafts.actors
+    assert all(seen == actor for seen in drafts.actors)
     assert drafts.changes[0].client_instance_id == "versioned-editor"
+    for call in (*files.await_args_list, *status.await_args_list):
+        assert call.args == (draft_id, actor)
+    submit.assert_awaited_once_with(draft_id, actor, locale=None)
+
+    # The same open workspace must stop using staff authority after it is revoked.
+    resolve_actor.return_value = Actor(account_id=99, discord_user_id=123, guild_id=456)
+    assert not await ws.may_edit()
+    with pytest.raises(DraftAccessDeniedError):
+        await ws.reload()
+    revision = drafts.current.snapshot.revision
+    await ws.save_values({"description": "No longer authorized"})
+    assert drafts.current.snapshot.revision == revision
 
 
 async def test_undo_resolves_the_current_actor() -> None:
     services, drafts = setup()
-    resolve_actor = AsyncMock(side_effect=[Actor(account_id=7), Actor(account_id=99)])
+    resolve_actor = AsyncMock(return_value=Actor(account_id=7))
     editor = await draft_editor(
         services,
-        7,
         drafts.current.snapshot.id,
         changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
         resolve_actor=resolve_actor,
@@ -243,10 +288,12 @@ async def test_undo_resolves_the_current_actor() -> None:
     await editor.workspace.projection.reload()
     with transaction():
         await editor.workspace.save_values({"description": "Correction"})
+    resolve_actor.return_value = Actor(account_id=99)
+    drafts.actors.clear()
     with transaction():
         await editor.workspace.edits.undo()
-    assert resolve_actor.await_count == 2
-    assert Actor(account_id=99) in drafts.actors
+    assert drafts.actors
+    assert all(actor == Actor(account_id=99) for actor in drafts.actors)
     assert "description" not in drafts.current.snapshot.answers
 
 

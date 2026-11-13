@@ -117,6 +117,8 @@ class DraftWorkspace(sl.Reactive):
     The workspace loads the draft, its files, and its finalization result, and reloads them
     when the draft's topic publishes a change, for example when a background worker finishes
     the build. Every message that reads it redraws after a save, whichever message made it.
+    Reads and actions resolve a current Actor so staff authority and account changes survive
+    every service call. An account ID alone cannot carry Discord roles or bot ownership.
     """
 
     notice: sl.TextLike = sl.state("")
@@ -127,22 +129,17 @@ class DraftWorkspace(sl.Reactive):
     def __init__(
         self,
         services: BotServices,
-        actor_id: int,
         draft: StoredDraft,
         manifest: FormManifest,
         *,
         changes: TopicHandle,
         render_card: CardRenderer | None = None,
-        resolve_actor: Callable[[], Awaitable[Actor]] | None = None,
+        resolve_actor: Callable[[], Awaitable[Actor]],
     ) -> None:
         self.services = services
 
-        async def actor() -> Actor:
-            return Actor(account_id=actor_id) if resolve_actor is None else await resolve_actor()
-
-        self.resolve_actor = actor
-        self.edits = EditController(services.edits, actor, self.reload)
-        self.actor_id = actor_id
+        self.resolve_actor = resolve_actor
+        self.edits = EditController(services.edits, resolve_actor, self.reload)
         self.manifest = manifest
         self.render_card = render_card
         self._draft_id = draft.snapshot.id
@@ -276,9 +273,10 @@ class DraftWorkspace(sl.Reactive):
             self.projection.replace(current)
 
     async def _read(self) -> _Projection:
-        draft = await self.services.submission_drafts.get_accessible(self._draft_id, self.actor_id)
-        attachments = await self.services.submission_intake.list(self._draft_id, self.actor_id)
-        result = await self.services.submission_finalization.status(self._draft_id, self.actor_id)
+        actor = await self.resolve_actor()
+        draft = await self.services.submission_drafts.get_accessible(self._draft_id, actor)
+        attachments = await self.services.submission_intake.list(self._draft_id, actor)
+        result = await self.services.submission_finalization.status(self._draft_id, actor)
         return draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None
 
     async def load_options(self, fields: Iterable[FormField]) -> None:
@@ -306,14 +304,14 @@ class DraftWorkspace(sl.Reactive):
 
     async def may_edit(self) -> bool:
         try:
-            current = await self.services.submission_drafts.get_accessible(self._draft_id, self.actor_id)
+            current = await self.services.submission_drafts.get_accessible(self._draft_id, await self.resolve_actor())
         except SquidError:
             return False
         return current.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
 
     async def submit(self) -> None:
         try:
-            await self.services.submission_finalization.submit(self._draft_id, self.actor_id, locale=None)
+            await self.services.submission_finalization.submit(self._draft_id, await self.resolve_actor(), locale=None)
         except SquidError as error:
             self.notice = error.public_text()
         else:
@@ -337,10 +335,10 @@ class DraftWorkspace(sl.Reactive):
         for item, file in zip(memberships, files, strict=True):
             try:
                 await draft_intake.register_uploaded_file(
-                    self.services, self._draft_id, self.actor_id, item.source_id, file
+                    self.services, self._draft_id, await self.resolve_actor(), item.source_id, file
                 )
             except Exception:
-                await self.services.submission_intake.fail(self._draft_id, self.actor_id, item.source_id)
+                await self.services.submission_intake.fail(self._draft_id, await self.resolve_actor(), item.source_id)
                 failed += 1
         await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
             AttachmentValues(files=memberships).edit_values(), tr(t"draft-history-add-files = Add submission files")
@@ -363,7 +361,7 @@ class DraftWorkspace(sl.Reactive):
     async def use_file(self, file_id: UUID) -> None:
         """Download a file found in the build-log post the draft was inferred from."""
         try:
-            await draft_intake.receive_retained_file(self.services, self._draft_id, self.actor_id, file_id)
+            await draft_intake.receive_retained_file(self.services, self._draft_id, await self.resolve_actor(), file_id)
         except Exception:
             self.notice = tr(
                 t"draft-editor-file-download-failed = The file could not be downloaded. Replace or remove it."
@@ -392,7 +390,7 @@ class DraftWorkspace(sl.Reactive):
         )
         try:
             await draft_intake.register_uploaded_file(
-                self.services, self._draft_id, self.actor_id, replacement.source_id, source
+                self.services, self._draft_id, await self.resolve_actor(), replacement.source_id, source
             )
         except Exception:
             self.notice = tr(
@@ -953,12 +951,11 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
 
 async def draft_editor(
     services: BotServices,
-    actor_id: int,
     draft_id: UUID,
     *,
     changes: TopicHandle,
     render_card: CardRenderer | None = None,
-    resolve_actor: Callable[[], Awaitable[Actor]] | None = None,
+    resolve_actor: Callable[[], Awaitable[Actor]],
     notice: sl.TextLike = "",
 ) -> DraftEditorScreen:
     """Open a saved draft with the form revision it was created under.
@@ -973,7 +970,7 @@ async def draft_editor(
     Raises:
         ValueError: This server can no longer read the draft's form revision.
     """
-    draft = await services.submission_drafts.get_accessible(draft_id, actor_id)
+    draft = await services.submission_drafts.get_accessible(draft_id, await resolve_actor())
     manifest = await services.submission_forms.manifest_revision(
         draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None
     )
@@ -981,7 +978,7 @@ async def draft_editor(
         message = "This draft's form revision is unavailable."
         raise ValueError(message)
     workspace = DraftWorkspace(
-        services, actor_id, draft, manifest, changes=changes, render_card=render_card, resolve_actor=resolve_actor
+        services, draft, manifest, changes=changes, render_card=render_card, resolve_actor=resolve_actor
     )
     await workspace.reload()
     await workspace.load_options(workspace.fields)

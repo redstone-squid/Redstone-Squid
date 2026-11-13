@@ -297,7 +297,6 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         )
         return await draft_editor(
             services,
-            uploader_account_id,
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
             resolve_actor=partial(current_edit_actor, request),

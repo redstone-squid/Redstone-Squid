@@ -75,7 +75,7 @@ async def _download_and_register(
 
 
 async def register_uploaded_file(
-    services: BotServices, draft_id: UUID, actor_id: int, source_id: UUID, source: UploadedFile
+    services: BotServices, draft_id: UUID, actor_id: DraftActor, source_id: UUID, source: UploadedFile
 ) -> None:
     max_bytes = services.submission_intake.max_file_bytes(source.name, source.media_type)
     if source.size > max_bytes:

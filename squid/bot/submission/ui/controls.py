@@ -54,12 +54,10 @@ async def recover_build_editor(interaction: Interaction[RedstoneSquid], build_id
 async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -> None:
     """Resolve durable identity and current authority before reopening a private draft."""
     request = await sd.request(interaction)
-    actor = await ensure_consented_account(request, interaction.client.services.accounts)
-    if actor is None:
+    if await ensure_consented_account(request, interaction.client.services.accounts) is None:
         return
     screen = await drafts.draft_editor(
         interaction.client.services,
-        actor,
         UUID(draft_id),
         changes=interaction.client.topic_bus.topic("submission_draft", draft_id),
         resolve_actor=partial(current_edit_actor, request),
