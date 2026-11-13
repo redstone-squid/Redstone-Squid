@@ -120,10 +120,14 @@ class TestFields:
         assert message(document).embeds[0].fields
 
     def test_a_field_ladder_survives_as_the_values_overflow_policy(self) -> None:
+        # Each field fits its slot, but together they exceed the shared embed budget.
         long = "x" * 900
-        body = message(Fields((Field("k", "Links", long, fallbacks=("short",)),)))
+        body = message(Fields(tuple(Field(str(index), "Links", long, fallbacks=("short",)) for index in range(7))))
 
-        assert body.embeds[0].fields[0].value in {long, "short"}
+        values = [field.value for embed in body.embeds for field in embed.fields]
+        assert len(values) == 7
+        assert set(values) <= {long, "short"}
+        assert "short" in values
 
 
 class TestTables:

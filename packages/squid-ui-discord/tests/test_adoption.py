@@ -20,6 +20,7 @@ from squid_ui.primitives import (
     ActionStyle,
     Button,
     EntitySelect,
+    File,
     Gallery,
     GalleryItem,
     LinkButton,
@@ -179,7 +180,10 @@ def test_layout_view_rejects_missing_and_ambiguous_assets() -> None:
     with pytest.raises(AdoptionError, match="attachment name"):
         adopt(layout, assets=(asset, duplicate))
 
-    assert adopt(layout, assets=(asset,)).render() is not None
+    document = adopt(layout, assets=(asset,)).render()
+    assert isinstance(document, Document)
+    assert document.children == (File("download", "download.zip", "application/zip"),)
+    assert document.assets == (asset,)
 
 
 def test_layout_view_resolves_http_files_through_stored_asset_metadata() -> None:

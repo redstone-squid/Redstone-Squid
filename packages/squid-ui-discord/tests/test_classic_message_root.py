@@ -151,11 +151,13 @@ class TestSharedContracts:
         render_for(target, message_root)
         assert message_root.target is target
 
-    def test_a_finished_message_root_stops_its_view(self, target) -> None:
+    async def test_a_finished_message_root_stops_its_view(self, target) -> None:
         message_root = message_root_for(target)
         view = render_for(target, message_root)
 
         assert view.is_finished() is False
+        await message_root.finish()
+        assert view.is_finished() is True
 
 
 def _screen(message_root: AnyMessageRoot) -> Screen:

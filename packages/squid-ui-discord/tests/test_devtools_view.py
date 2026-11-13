@@ -257,19 +257,23 @@ class TestOperationalInspectorSections:
         assert list(inspector.render())
 
     async def test_root_and_session_detail_panels_render(self) -> None:
-        subject = await live_subject()
-        runtime = DevToolsRuntime()
+        manager = squid_ui_discord.SessionManager()
+        subject = MessageRoot(Subject(), access=Everyone())
+        opened = await manager.open(subject, delivered_to(sd.message_harness()))
+        assert isinstance(opened, squid_ui_discord.sessions.Opened)
+        runtime = DevToolsRuntime(sessions=manager)
         inspector = OperationalInspector(runtime)
 
         inspector.section = "roots"
         inspector.message_root_id = subject.id
         assert list(inspector.render())
 
-        snapshot = runtime.snapshot()
-        if snapshot.sessions:
-            inspector.section = "sessions"
-            inspector.session_id = snapshot.sessions[0].id
-            assert list(inspector.render())
+        (session,) = runtime.snapshot().sessions
+        inspector.section = "sessions"
+        inspector.session_id = session.id
+        body = "\n".join(sd.payload_texts(commit_render(MessageRoot(inspector, access=Owner(1)))))
+        assert f"Session {session.id}" in body
+        assert subject.id in body
 
     def test_overview_snapshot_download_is_round_trippable_json(self) -> None:
         asset = operational_attachment(DevToolsRuntime().snapshot())

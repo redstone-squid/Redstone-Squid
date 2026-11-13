@@ -7,6 +7,8 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+from squid_ui.assets import Asset, InlineAsset
+from squid_ui.document import Document
 from squid_ui.planning.limits import Axis
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
@@ -162,9 +164,14 @@ class TestAttachedFragment:
 
     def test_files_are_repeatable_and_fresh(self):
         host = sd.layout_view()
-        attached = contribute(_text("body"), to=host)
-        assert attached.build_files() == []
-        assert attached.attachments([]) == []
+        asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"report bytes"))
+        document = Document((sl.primitives.File("report", "report.txt", "text/plain"),), assets=(asset,))
+        attached = contribute(document, to=host)
+        first, second = attached.build_files(), attached.attachments()
+        assert [file.filename for file in first] == ["report.txt"]
+        assert [file.filename for file in second] == ["report.txt"]
+        assert first[0] is not second[0]
+        assert first[0].fp.read() == second[0].fp.read() == b"report bytes"
 
     def test_attaching_twice_is_refused(self):
         planned = fragment(_text("body"), alongside=sd.layout_view())

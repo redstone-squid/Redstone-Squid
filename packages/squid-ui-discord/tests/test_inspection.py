@@ -38,14 +38,12 @@ def _rich_view() -> discord.ui.LayoutView:
 class TestAgreesWithDiscordPy:
     """Compare measured resource usage with the SDK's own traversal and counters."""
 
-    def test_component_count_matches_the_library_walk(self):
+    def test_component_count_matches_the_library_walk_and_enforced_counter(self):
         view = _rich_view()
-        assert measure(view).cost.get(Axis.COMPONENTS) == len(list(view.walk_children()))
-
-    def test_component_count_matches_the_enforced_counter(self):
-        view = _rich_view()
+        count = measure(view).cost.get(Axis.COMPONENTS)
+        assert count == len(list(view.walk_children()))
         # `_total_children` is what discord.py itself rejects at 40.
-        assert measure(view).cost.get(Axis.COMPONENTS) == view._total_children
+        assert count == view._total_children
 
     def test_text_matches_content_length(self):
         view = _rich_view()
