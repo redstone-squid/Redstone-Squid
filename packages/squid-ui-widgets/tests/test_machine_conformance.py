@@ -95,7 +95,6 @@ def test_the_initial_state_is_stable_across_reads(build: MachineFactory) -> None
     _ = wt.mounted(subject).nodes
 
     assert subject.initial_state == first
-    assert subject.initial_state == subject.initial_state
 
 
 @machine

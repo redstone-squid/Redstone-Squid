@@ -30,6 +30,8 @@ def test_attribute_only_and_options_extract() -> None:
     [
         'tr("literal")',
         "tr(template)",
+        'tr("Save", key=key)',
+        'tr(f"Hello {name}", key="hello")',
         'tr(t"key = {name!a}")',
         'tr(t"key = {NUMBER(n, use_grouping=group)}")',
         'tr(t"key = {user.name}")',
@@ -188,12 +190,6 @@ def test_literal_string_and_explicit_key_extraction_match_embedded_declarations(
 
     assert explicit == embedded
     assert extract('tr(t"Hello {name}", key="greeting")')[0].declaration.slots[0].name == "name"
-
-
-@pytest.mark.parametrize("source", ['tr("Save", key=key)', 'tr(f"Hello {name}", key="hello")'])
-def test_dynamic_declarations_are_not_extractable(source: str) -> None:
-    with pytest.raises(DeclarationError):
-        extract(source)
 
 
 @pytest.mark.parametrize("constructor", ["tr", "md_tr"])

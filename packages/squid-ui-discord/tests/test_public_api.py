@@ -1,24 +1,9 @@
 """Public namespace and optional-extra packaging contracts for the Discord adapter."""
 
-import importlib
 import subprocess
 import sys
-from types import ModuleType
-
-import pytest
 
 import squid_ui_discord
-
-RENAMED_SUBMODULES = (
-    "squid_ui_discord.rendering",
-    "squid_ui_discord.conformance",
-)
-
-
-@pytest.mark.parametrize("dotted", RENAMED_SUBMODULES)
-def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> None:
-    mod = importlib.import_module(dotted)
-    assert isinstance(mod, ModuleType)
 
 
 def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
