@@ -8,7 +8,7 @@ from dataclasses import replace
 from time import perf_counter
 
 from squid_i18n import tr
-from squid_ui import Palette, fallback, form, scene
+from squid_ui import Palette, Role, Tone, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.ownership import Controlled
 from squid_ui.planning import PlanCache, PlanMemo, plan
@@ -40,6 +40,7 @@ from squid_ui.semantic import (
     Paragraph,
     Section,
     Stack,
+    Status,
     Uncontrolled,
 )
 from squid_ui.text import Localization, Markup
@@ -440,3 +441,18 @@ def test_realistic_queue_plan_and_draw_meets_latency_budget() -> None:
 def _p95(samples: list[float]) -> float:
     ordered = sorted(samples)
     return ordered[int((len(ordered) - 1) * 0.95)]
+
+
+def test_custom_role_overrides_and_markers_invalidate_cached_plans() -> None:
+    cache = PlanCache()
+    role = Role("build.pending", Tone.WARNING, marker="⏳ ")
+    document = Section(Heading("Build"), (Paragraph("pending"),), accent=role)
+    first = plan(document, target=DISCORD_V2_DPY27, palette=Palette(roles={role.name: 0x111111}), cache=cache)
+    second = plan(document, target=DISCORD_V2_DPY27, palette=Palette(roles={role.name: 0x222222}), cache=cache)
+    assert not second.metrics.cache_hit
+    assert first.scene != second.scene
+
+    before = plan(Status("Pending", tone=role), target=DISCORD_V2_DPY27, cache=cache)
+    after = plan(Status("Pending", tone=replace(role, marker="")), target=DISCORD_V2_DPY27, cache=cache)
+    assert not after.metrics.cache_hit
+    assert before.scene != after.scene

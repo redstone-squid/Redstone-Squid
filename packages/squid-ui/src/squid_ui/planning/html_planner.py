@@ -27,7 +27,7 @@ from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
 from squid_ui.ownership import Uncontrolled
-from squid_ui.palette import Palette
+from squid_ui.palette import Palette, Role
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
@@ -453,7 +453,7 @@ class _Compiler:
                         *self.compile_children(children, path),
                         attributes=_attributes(
                             (scene.HtmlAttributeName.CLASS, "squid-aside"),
-                            (scene.HtmlAttributeName.TONE, tone.value),
+                            (scene.HtmlAttributeName.TONE, tone.base.value),
                         ),
                         colour=self.palette.tone(tone),
                     ),
@@ -571,10 +571,11 @@ class _Compiler:
                 return (
                     self.element(
                         scene.HtmlTag.DIV,
+                        *((scene.HtmlText(tone.marker),) if isinstance(tone, Role) and tone.marker else ()),
                         self.text(content),
                         attributes=_attributes(
                             (scene.HtmlAttributeName.ROLE, "status"),
-                            (scene.HtmlAttributeName.TONE, tone.value),
+                            (scene.HtmlAttributeName.TONE, tone.base.value),
                             (scene.HtmlAttributeName.EMPHASIS, emphasis.value),
                         ),
                         colour=self.palette.tone(tone),
@@ -875,7 +876,7 @@ class _Compiler:
                     attributes=_attributes(
                         (scene.HtmlAttributeName.TYPE, "button"),
                         (scene.HtmlAttributeName.DISABLED, True if not cell.available else None),
-                        (scene.HtmlAttributeName.TONE, cell.tone.value),
+                        (scene.HtmlAttributeName.TONE, cell.tone.base.value),
                     ),
                     action=action,
                 )
@@ -1094,7 +1095,7 @@ class _Compiler:
                 attributes=_attributes(
                     (scene.HtmlAttributeName.TYPE, "button"),
                     (scene.HtmlAttributeName.DISABLED, True if not item.available else None),
-                    (scene.HtmlAttributeName.TONE, item.tone.value),
+                    (scene.HtmlAttributeName.TONE, item.tone.base.value),
                     (scene.HtmlAttributeName.EMPHASIS, item.emphasis.value),
                 ),
                 route=scene.HtmlRouteRef(item.route_id),
@@ -1114,7 +1115,7 @@ class _Compiler:
             attributes=_attributes(
                 (scene.HtmlAttributeName.TYPE, "button"),
                 (scene.HtmlAttributeName.DISABLED, True if not item.available else None),
-                (scene.HtmlAttributeName.TONE, item.tone.value),
+                (scene.HtmlAttributeName.TONE, item.tone.base.value),
                 (scene.HtmlAttributeName.EMPHASIS, item.emphasis.value),
             ),
             action=action,

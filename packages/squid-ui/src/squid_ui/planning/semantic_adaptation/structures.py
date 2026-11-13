@@ -397,7 +397,7 @@ def _grouped(
     eligible: list[ActionControl] = []
     direct: list[ActionControl] = []
     for action in actions:
-        default_grouping = action.emphasis.value != "strong" and action.tone in {Tone.NEUTRAL, Tone.INFO}
+        default_grouping = action.emphasis.value != "strong" and action.tone.base in {Tone.NEUTRAL, Tone.INFO}
         if action.allow_grouping if action.allow_grouping is not None else default_grouping:
             eligible.append(action)
         else:

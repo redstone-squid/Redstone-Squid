@@ -68,3 +68,20 @@ def test_accent_roles_follow_the_active_palette(accent: sl.Accent) -> None:
     assert resolve_accent(accent, palette) == expected
     if isinstance(accent, sl.Tone):
         assert resolve_accent(accent, Palette(neutral=None, info=None, success=None, warning=None, danger=None)) is None
+
+
+def test_custom_roles_resolve_overrides_fallbacks_and_explicit_absence() -> None:
+    pending = sl.Role("build.pending", base=sl.Tone.WARNING, marker="⏳ ")
+    overrides: dict[str, int | None] = {pending.name: 0x123456}
+    palette = sl.Palette(warning=0x654321, roles=overrides)
+    overrides[pending.name] = 0
+
+    assert resolve_accent(pending, palette) == 0x123456
+    assert sl.Palette(warning=0x654321).tone(pending) == 0x654321
+    assert sl.Palette(roles={pending.name: None}).tone(pending) is None
+    assert sl.Palette(roles={pending.name: 0}).tone(pending) == 0
+
+
+@pytest.mark.parametrize("marker, expected", [(None, "⚠️ "), ("", ""), ("⏳ ", "⏳ ")])
+def test_role_status_marker_can_inherit_replace_or_suppress(marker: str | None, expected: str) -> None:
+    assert sl.Role("build.pending", sl.Tone.WARNING, marker).status_marker == expected

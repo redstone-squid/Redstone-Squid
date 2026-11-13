@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
+from squid_ui.palette import Role
 from squid_ui.planning.cursors import MaterializedCursorRequest, content_fingerprint
 from squid_ui.planning.search import StrategyAxis, choose_strategy
 from squid_ui.planning.semantic_adaptation.model import LoweringContext
@@ -67,9 +68,9 @@ def _page_items[T](
     return visible, index, grant.extent
 
 
-def _button_style(tone: Tone, emphasis: Emphasis) -> ActionStyle:
+def _button_style(tone: Tone | Role, emphasis: Emphasis) -> ActionStyle:
     return {
         Tone.SUCCESS: ActionStyle.SUCCESS,
         Tone.DANGER: ActionStyle.DANGER,
         Tone.INFO: ActionStyle.PRIMARY,
-    }.get(tone, ActionStyle.PRIMARY if emphasis is Emphasis.STRONG else ActionStyle.SECONDARY)
+    }.get(tone.base, ActionStyle.PRIMARY if emphasis is Emphasis.STRONG else ActionStyle.SECONDARY)

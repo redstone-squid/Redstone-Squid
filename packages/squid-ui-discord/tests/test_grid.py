@@ -179,3 +179,15 @@ def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
     grid = cast(sl.semantic.Grid, tree.nodes[0])
 
     assert grid.key == "child.board"
+
+
+@pytest.mark.parametrize("base", list(sl.Tone))
+def test_exact_grid_custom_roles_use_the_base_button_style(base: sl.Tone) -> None:
+    def document(tone: sl.Tone | sl.Role) -> tuple[sl.primitives.Row, ...]:
+        return squid_ui_discord.button_grid(
+            sp.GridCell("pick", "Pick", tone=tone), key="grid", columns=1, on_pick=_pick
+        )
+
+    builtin = sl.planning.plan(document(base), target=squid_ui_discord.DISCORD_V2_DPY27)
+    custom = sl.planning.plan(document(sl.Role("app.custom", base)), target=squid_ui_discord.DISCORD_V2_DPY27)
+    assert custom.scene == builtin.scene

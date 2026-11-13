@@ -24,7 +24,7 @@ from squid_ui.grids import GridCell, validate_grid
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
 from squid_ui.ownership import Controlled, Ownership, Uncontrolled
-from squid_ui.palette import INHERIT, Accent, Palette, Tone
+from squid_ui.palette import INHERIT, Accent, Palette, Role, Tone
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import Node
 from squid_ui.rosters import RosterPlacement
@@ -230,7 +230,7 @@ class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
 class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A titled block of related content.
 
-    ``accent`` accepts a `Tone` or `AccentRole.BRAND`, resolved through the active palette.
+    ``accent`` accepts a `Tone`, custom `Role`, or `AccentRole.BRAND`, resolved through the active palette.
     Omit it to use `Palette.brand`, pass ``None`` for no accent, or pass an exact colour
     when the value is data, such as a guild's configured colour.
 
@@ -256,7 +256,7 @@ class Article[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
 @dataclass(frozen=True, slots=True)
 class Aside[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,7 +426,7 @@ class Toggle[ContextT = object](Adaptable[RenderTarget, ContextT]):
     on: ToggleOwnership[ContextT] = OFF
     on_label: TextLike | None = None
     off_label: TextLike | None = None
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
     available: bool = True
 
 
@@ -445,7 +445,7 @@ class Download(Adaptable[RenderTarget]):
 @dataclass(frozen=True, slots=True)
 class Status(Adaptable[RenderTarget]):
     content: TextLike
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
 
@@ -533,7 +533,7 @@ class FormTrigger[ContextT = object](Adaptable[RenderTarget, ContextT]):
     spec: FormSpec[ContextT]
     on_submit: SubmitHandler[ContextT]
     mode: ActionMode = ActionMode.EXCLUSIVE
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
     guard: Guard | None = None
     """Admission for the press that opens the form; the submission is not re-admitted."""
@@ -546,7 +546,7 @@ class ActionControl[ContextT = object]:
     key: str
     label: TextLike
     on_trigger: PressHandler[ContextT]
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
     available: bool = True
     allow_grouping: bool | None = None
@@ -581,7 +581,7 @@ class RoutedActionControl:
     key: str
     label: TextLike
     route_id: str
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
     available: bool = True
 

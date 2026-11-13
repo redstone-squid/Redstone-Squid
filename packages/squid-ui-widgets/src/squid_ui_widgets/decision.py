@@ -6,6 +6,7 @@ from typing import override
 
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, stack, status
+from squid_ui.palette import Role
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
@@ -19,7 +20,7 @@ class DecisionOption:
 
     key: str
     label: TextLike
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
 
@@ -145,7 +146,7 @@ class _Confirmation[RenderTargetT: RenderTarget = RenderTarget, ContextT = objec
         key: str,
         confirm_label: TextLike | None,
         cancel_label: TextLike | None,
-        tone: Tone,
+        tone: Tone | Role,
     ) -> None:
         super().__init__(
             prompt,
@@ -180,7 +181,7 @@ def confirm[RenderTargetT: RenderTarget, ContextT = object](
     on_cancel: Callable[[TransitionEvent[DecisionState]], Awaitable[None]] | None = None,
     confirm_label: TextLike | None = None,
     cancel_label: TextLike | None = None,
-    tone: Tone = Tone.DANGER,
+    tone: Tone | Role = Tone.DANGER,
 ) -> ComponentDriver[DecisionState, RenderTargetT, ContextT]:
     """Build a two-option decision shell with confirm and cancel callbacks.
 

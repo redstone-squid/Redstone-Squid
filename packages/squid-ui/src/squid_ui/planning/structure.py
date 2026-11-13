@@ -8,7 +8,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any, Protocol
 
-from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Tone
+from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Role, Tone
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.styles import Color
 from squid_ui.semantic import Controlled, Details, Items, Navigation, Toggle, Uncontrolled
@@ -55,7 +55,7 @@ def resolve_accent(accent: Accent, palette: Palette) -> Color | None:
     """Resolve a structural accent to an exact colour: the palette brand when inherited."""
     if accent is AccentDefault.INHERIT or accent is AccentRole.BRAND:
         return palette.brand
-    if isinstance(accent, Tone):
+    if isinstance(accent, Tone | Role):
         return palette.tone(accent)
     return accent
 

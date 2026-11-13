@@ -425,3 +425,17 @@ def test_html_routed_paging_rebuilds_route_ids_with_a_shared_cache() -> None:
         assert result.scene.pagers[0].page == 1
         assert not result.bindings
         assert all(item.route.route_id.startswith(prefix) for item in _elements(result) if item.route is not None)
+
+
+@pytest.mark.parametrize("base", list(sl.Tone))
+def test_custom_roles_preserve_builtin_target_behavior(base: sl.Tone) -> None:
+    def document(tone: sl.Tone | sl.Role) -> sl.LayoutNode:
+        return sl.group(
+            sl.aside("Aside", tone=tone),
+            sl.status("Status", tone=tone),
+            sl.action_controls(sl.action_control("Go", _pressed, key="go", tone=tone), key="actions"),
+        )
+
+    builtin = sl.planning.plan(document(base), target=sl.html.target())
+    custom = sl.planning.plan(document(sl.Role("app.custom", base)), target=sl.html.target())
+    assert custom.scene == builtin.scene

@@ -7,7 +7,7 @@ and transport packages import `squid_ui.grids` directly.
 
 from dataclasses import dataclass
 
-from squid_ui.palette import Tone
+from squid_ui.palette import Role, Tone
 from squid_ui.text import TextLike
 
 
@@ -18,7 +18,7 @@ class GridCell:
     key: str
     label: TextLike
     available: bool = True
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
 
     def __post_init__(self) -> None:
         if not self.key:

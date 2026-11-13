@@ -129,7 +129,7 @@ from squid_ui.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
-from squid_ui.palette import INHERIT, Accent, AccentRole, Palette, PaletteRegistry
+from squid_ui.palette import INHERIT, Accent, AccentRole, Palette, PaletteRegistry, Role
 from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.definition import Component
 from squid_ui.semantic import (
@@ -212,6 +212,7 @@ __all__ = [
     "Reactive",
     "RenderTarget",
     "Renderable",
+    "Role",
     "RoutedPage",
     "ScaleEvent",
     "SelectionEvent",

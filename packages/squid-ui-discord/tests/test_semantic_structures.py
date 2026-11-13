@@ -7,6 +7,7 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import plan
+from squid_ui.planning.target import Target
 from squid_ui.runtime import PresentationState
 from squid_ui.semantic import (
     Choice,
@@ -326,4 +327,41 @@ def test_figure_collects_asset_for_classic_embed() -> None:
     assert len(result.scene.assets) == 1
     assert result.scene.body.embeds[0].image is not None
     assert result.scene.body.embeds[0].image.asset_name == "preview.png"
+    assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene
+
+
+@pytest.mark.parametrize("target", [DISCORD_V1_DPY27, DISCORD_V2_DPY27])
+@pytest.mark.parametrize("base", list(sl.Tone))
+def test_custom_roles_preserve_builtin_target_behavior(target: Target, base: sl.Tone) -> None:
+    async def pressed(_event: sl.ActionEvent) -> None:
+        pass
+
+    def document(tone: sl.Tone | sl.Role) -> sl.LayoutNode:
+        return sl.group(
+            sl.block("accent", accent=tone),
+            sl.status("status", tone=tone),
+            sl.action_controls(
+                *(sl.action_control(f"Action {i}", pressed, key=str(i), tone=tone) for i in range(6)),
+                key="actions",
+                display=sl.semantic.ControlDisplay.GROUPED,
+            ),
+        )
+
+    builtin = plan(document(base), target=target)
+    custom = plan(document(sl.Role("app.custom", base)), target=target)
+
+    assert custom.scene == builtin.scene
+
+
+def test_custom_role_marker_and_scoped_colour_are_resolved_before_scene_encoding() -> None:
+    pending = sl.Role("build.pending", sl.Tone.WARNING, marker="⏳ ")
+    document = sl.themed(
+        sl.Palette(roles={pending.name: 0x123456}),
+        sl.block(sl.status("Pending", tone=pending), accent=pending),
+    )
+    result = plan(document, target=DISCORD_V2_DPY27)
+    panel = result.scene.components_v2.children[0]
+    assert isinstance(panel, scene.Panel)
+    assert panel.accent == 0x123456
+    assert panel.children == (scene.Text("⏳ Pending", markup=Markup.DISCORD_MARKDOWN),)
     assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene

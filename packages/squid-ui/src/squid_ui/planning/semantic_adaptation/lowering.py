@@ -183,7 +183,6 @@ from squid_ui.semantic import (
     Themed,
     Timestamp,
     Toggle,
-    Tone,
     Truncated,
     Unbreakable,
     ZonedTimestamp,
@@ -460,12 +459,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                 return [Text(text, overflow=Never())]
             return [Text(text, overflow=Never()), PrimitiveFile(asset.key, asset.name, asset.media_type, spoiler)]
         case Status(content=content, tone=tone):
-            prefix = {
-                Tone.INFO: "\N{INFORMATION SOURCE}\N{VARIATION SELECTOR-16} ",
-                Tone.SUCCESS: "✅ ",
-                Tone.WARNING: "⚠️ ",
-                Tone.DANGER: "❌ ",
-            }.get(tone, "")
+            prefix = tone.status_marker
             return [Text(prefix + _resolve(content, context), overflow=Never())]
         case ProgressBar(value=value, maximum=maximum, label=label):
             ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))

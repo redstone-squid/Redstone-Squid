@@ -8,6 +8,7 @@ from typing import Any, Generic, TypeVar, cast
 from squid_ui.document import DocumentLike, as_document
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import Form, FormField, FormIssue, FormLike, FormSpec
+from squid_ui.palette import Role
 from squid_ui.semantic import (
     ActionControl,
     Choice,
@@ -545,7 +546,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, Co
         action_name: str,
         *,
         key: str,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> ActionControl | RoutedActionControl:
@@ -596,7 +597,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, Co
         *,
         key: str,
         label: TextLike,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> FormTrigger | RoutedActionControl:
         """Delegate a child form through namespaced action and control keys."""

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from squid_ui.palette import Tone
+from squid_ui.palette import Role, Tone
 from squid_ui.text import TextLike
 
 
@@ -23,7 +23,7 @@ class RosterSlot:
     key: str
     label: TextLike
     capacity: int | None = None
-    tone: Tone = Tone.NEUTRAL
+    tone: Tone | Role = Tone.NEUTRAL
 
     def __post_init__(self) -> None:
         if not self.key:

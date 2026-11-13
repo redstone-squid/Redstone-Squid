@@ -4,16 +4,16 @@ from collections.abc import Awaitable, Callable
 
 from squid_ui.grids import GridCell, validate_grid
 from squid_ui.interactions import PressEvent, SelectionEvent
-from squid_ui.palette import Tone
+from squid_ui.palette import Role, Tone
 from squid_ui.primitives import ActionStyle, Button, Row
 
 
-def _style(tone: Tone) -> ActionStyle:
+def _style(tone: Tone | Role) -> ActionStyle:
     return {
         Tone.SUCCESS: ActionStyle.SUCCESS,
         Tone.DANGER: ActionStyle.DANGER,
         Tone.INFO: ActionStyle.PRIMARY,
-    }.get(tone, ActionStyle.SECONDARY)
+    }.get(tone.base, ActionStyle.SECONDARY)
 
 
 def button_grid(

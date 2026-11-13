@@ -202,3 +202,16 @@ def test_semantic_accents_use_scoped_palette_colours() -> None:
 
     for colour in ("#445566", "#112233", "#778899"):
         assert f"--squid-accent:{colour}" in rendered
+
+
+def test_custom_role_marker_preserves_status_markup_and_escapes_html() -> None:
+    pending = sl.Role("build.pending", sl.Tone.WARNING, marker="<pending> ")
+    result = sl.planning.plan(
+        sl.status(sl.md("**Review**"), tone=pending),
+        target=sl.html.target(),
+        palette=sl.Palette(roles={pending.name: 0x123456}),
+    )
+    rendered = Renderer().draw(result.scene)
+    assert "&lt;pending&gt; " in rendered
+    assert "<strong>Review</strong>" in rendered
+    assert "--squid-accent:#123456" in rendered

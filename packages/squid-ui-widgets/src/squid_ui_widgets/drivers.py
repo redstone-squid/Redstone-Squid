@@ -27,6 +27,7 @@ from squid_ui.factories import (
 )
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.palette import Role
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.component import Component
@@ -144,7 +145,7 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
         action_name: str,
         *,
         key: str,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> ActionControl | RoutedActionControl: ...
@@ -169,7 +170,7 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
         *,
         key: str,
         label: TextLike,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> FormTrigger | RoutedActionControl: ...
 
@@ -299,7 +300,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
         action_name: str,
         *,
         key: str,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> ActionControl:
@@ -346,7 +347,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
         *,
         key: str,
         label: TextLike,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> FormTrigger:
         """Bind a mounted form submission to machine dispatch."""
@@ -442,7 +443,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         action_name: str,
         *,
         key: str,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> RoutedActionControl:
@@ -483,7 +484,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         *,
         key: str,
         label: TextLike,
-        tone: Tone = Tone.NEUTRAL,
+        tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> RoutedActionControl:
         """Encode an input-phase route for a form trigger."""

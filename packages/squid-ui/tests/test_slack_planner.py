@@ -278,3 +278,17 @@ def test_slack_keeps_literal_markdown_punctuation_literal() -> None:
     assert section.text.kind is scene.SlackTextKind.PLAIN
     assert section.text.content == "Hello *Ada*"
     assert any(event.code == "slack.text.plain" for event in result.report.events)
+
+
+@pytest.mark.parametrize("base", list(sl.Tone))
+def test_custom_roles_preserve_builtin_target_behavior(base: sl.Tone) -> None:
+    def document(tone: sl.Tone | sl.Role) -> sl.LayoutNode:
+        return sl.group(
+            sl.aside("Aside", tone=tone),
+            sl.status("Status", tone=tone),
+            sl.action_controls(sl.action_control("Go", _pressed, key="go", tone=tone), key="actions"),
+        )
+
+    builtin = sl.planning.plan(document(base), target=MESSAGE)
+    custom = sl.planning.plan(document(sl.Role("app.custom", base)), target=MESSAGE)
+    assert custom.scene == builtin.scene
