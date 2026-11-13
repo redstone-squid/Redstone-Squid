@@ -627,7 +627,7 @@ async def test_opening_another_editor_closes_the_first() -> None:
         assert isinstance(second, SectionEditorScreen)
         assert second.section_id == "taxonomy"
         assert isinstance(first.component, SectionEditorScreen)
-        assert rendered_text(first.component) == "Changes saved. You can dismiss this message."
+        assert rendered_text(first.component) == "Done. You can dismiss this message."
 
 
 async def test_an_expired_panel_offers_to_reopen_the_draft(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -24,11 +24,6 @@ NO_NATIVE_ENGINE = ("nucleation", "sqlalchemy", "discord")
             id="post-entity",
         ),
         pytest.param("squid.bot.utils.permissions", ("squid.bot.app",), id="bot-permissions"),
-        pytest.param(
-            "squid.bot.submission.ui.fields",
-            ("squid.bot.submission.ui.views",),
-            id="submission-fields",
-        ),
         pytest.param("squid.schematics.domain", NO_NATIVE_ENGINE, id="schematic-domain"),
         pytest.param("squid.schematics.application", NO_NATIVE_ENGINE, id="schematic-application"),
         pytest.param("squid.schematics.infrastructure.capability", ("nucleation",), id="schematic-capability"),

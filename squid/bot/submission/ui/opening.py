@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import squid_ui_discord as sd
 from squid.bot.submission.build_card import render_build_card
-from squid.bot.submission.ui.views import BuildEditScreen
+from squid.bot.submission.ui.build_edit import BuildEditScreen, BuildEditWorkspace
 from squid.bot.ui import error_node, tr
 from squid.bot.utils.permissions import current_edit_actor
 from squid.builds.application import BuildService
@@ -12,6 +12,7 @@ from squid.builds.domain import Status
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.submissions.domain import ChoiceOption
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -54,16 +55,30 @@ async def prepare_build_editor(
     async def refresh_posts(build_id: int) -> None:
         await client.refresh_posts("build", str(build_id))
 
+    forms = client.services.submission_forms
+    manifest = await forms.edit_manifest(locale=None)
+    category = build.category.value.lower()
+
+    async def load_options(source: str) -> tuple[ChoiceOption, ...]:
+        return (await forms.options(source, category, locale=None)).options
+
+    # Load every catalogue now: the restriction and pattern catalogues decide which of the build's
+    # names are resolved, and the others label its saved answers in the overview.
+    sources = sorted({field.option_source for field in manifest.fields_for(category) if field.option_source})
+    workspace = BuildEditWorkspace(
+        build, manifest, {source: await load_options(source) for source in sources}, load_options=load_options
+    )
     prepared = BuildEditScreen(
         build,
         client.services.builds if builds is None else builds,
+        workspace,
         node=await render_build(build),
         authorize=authorize,
         edits=client.services.edits,
         actor=actor,
         render_build=render_build,
         refresh_posts=refresh_posts,
-        changes=None if build.id is None else client.topic_bus.topic("build", str(build.id)),
+        changes=client.topic_bus.topic("build", str(build.id)),
         recovered=recovered,
     )
     return prepared

@@ -12,7 +12,7 @@ import squid_ui_discord as sd
 from squid.bot.submission import build_card as build_card_module
 from squid.bot.submission.build_card import build_description, build_metadata_fields, render_build_card
 from squid.bot.submission.search_view import SearchScreen
-from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
+from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour, render_payload
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildService
@@ -24,7 +24,6 @@ from squid.messages.domain import MessageRef
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
-from squid_ui.text import source_text
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import (
     AsyncCallRecorder,
@@ -34,7 +33,7 @@ from squid_ui_discord.testing import (
     interaction_harness,
     message_harness,
 )
-from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor
+from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace
 from tests.support.discord import make_layout_bot
 
 
@@ -142,12 +141,11 @@ def test_missing_or_unknown_build_status_is_neutral_and_reported(
     assert "Build 7 has no valid submission status" in caplog.text
 
 
-async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
-    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
+async def test_build_editor_shows_the_edit_form_sections(display_build: Build) -> None:
     component = BuildEditScreen(
         display_build,
         BuildRecorder(),
-        [field],
+        edit_workspace(display_build),
         edits=BuildEditRecorder(),
         actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
@@ -161,8 +159,9 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
     # so this touches no service.
     await component.projection.reload()
 
-    assert len(component.sections()) == 1
-    assert "Build size and versions" in str(component.render())
+    rendered = str(component.render())
+    assert "Observerless" in rendered
+    assert "Not in the catalogue" not in rendered
     assert "Open new editor" not in str(component.render())
     assert "build-edit-recovery" not in str(component.render())
     assert component._current()[0] is display_build
@@ -180,6 +179,7 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
     component = BuildEditScreen(
         display_build,
         BuildRecorder(),
+        edit_workspace(display_build),
         edits=BuildEditRecorder(),
         actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
@@ -216,12 +216,12 @@ async def test_build_editor_commits_against_the_revision_it_presented(
     display_build: Build, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     builds = EditRecorder(display_build)
-    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
-    field.stage("1.21+")
+    workspace = edit_workspace(display_build)
+    assert workspace.prefill({"version_compatibility": "1.21+"}) is None
     component = BuildEditScreen(
         display_build,
         builds,
-        [field],
+        workspace,
         edits=builds.runner,
         actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
@@ -247,6 +247,7 @@ async def test_closing_build_editor_cancels_without_saving(display_build: Build)
     component = BuildEditScreen(
         display_build,
         builds,
+        edit_workspace(display_build),
         edits=builds.runner,
         actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
@@ -267,12 +268,12 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
     display_build: Build, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     builds = EditRecorder(display_build, conflict=True)
-    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
-    field.stage("1.21+")
+    workspace = edit_workspace(display_build)
+    assert workspace.prefill({"version_compatibility": "1.21+"}) is None
     component = BuildEditScreen(
         display_build,
         builds,
-        [field],
+        workspace,
         edits=builds.runner,
         actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
@@ -285,8 +286,8 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
         await ui.press("apply")
 
         assert component.saved is False
-        assert component.validation_error is not None
-        assert "changed while you were editing" in source_text(component.validation_error)
+        assert component.conflict
+        assert "changed while you were editing" in str(component.render())
         assert "Reload latest" in str(component.render())
         assert component.outcome is None
         assert not ui.root.finished
@@ -434,9 +435,9 @@ async def test_search_timeout_disables_bound_controls() -> None:
 
 async def test_build_history_survives_a_failed_card_refresh(display_build: Build) -> None:
     builds = EditRecorder(display_build)
-    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     before = display_build.version_spec
-    field.stage("1.21+")
+    workspace = edit_workspace(display_build)
+    assert workspace.prefill({"version_compatibility": "1.21+"}) is None
 
     async def unavailable_card(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         raise RuntimeError("card service unavailable")
@@ -444,7 +445,7 @@ async def test_build_history_survives_a_failed_card_refresh(display_build: Build
     component = BuildEditScreen(
         display_build,
         builds,
-        [field],
+        workspace,
         edits=builds.runner,
         actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),

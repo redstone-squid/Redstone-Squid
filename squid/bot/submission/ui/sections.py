@@ -300,11 +300,11 @@ class SectionEditorScreen(sd.Screen[None]):
 def closed_detail(
     screen: sd.Screen[None], ws: AnswerWorkspace
 ) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...] | None:
-    """The final view of an editor message once it is closed, or once the draft can no longer change."""
+    """The final view of an editor message once it is closed, or once its answers can no longer change."""
     if screen.outcome is not None:
-        return (sl.status(tr(t"draft-editor-detail-closed = Changes saved. You can dismiss this message.")),)
+        return (sl.status(tr(t"editor-detail-closed = Done. You can dismiss this message.")),)
     if not ws.editable:
-        return (sl.status(tr(t"draft-editor-detail-locked = This draft can no longer be edited here.")),)
+        return (sl.status(tr(t"editor-detail-locked = These answers can no longer be edited here.")),)
     return None
 
 
@@ -315,9 +315,22 @@ def done_row(on_done: PressHandler[sd.Request], *before: Any) -> Any:
     )
 
 
-def section_text(ws: AnswerWorkspace, section: FormSection) -> Message:
-    """The section title followed by one line per answer or missing required field."""
-    lines = _answer_lines(ws, section.fields, ws.answers, show_empty=False)
+def form_sections(manifest: FormManifest, category: str, fields: Iterable[FormField]) -> tuple[FormSection, ...]:
+    """The form's sections in order, reduced to `fields`; sections left with no field are dropped."""
+    visible = {field.id for field in fields}
+    sections = (
+        FormSection(section.id, section.title, tuple(field for field in section.fields if field.id in visible))
+        for section in (*manifest.common_sections, *manifest.category(category).sections)
+    )
+    return tuple(section for section in sections if section.fields)
+
+
+def section_text(ws: AnswerWorkspace, section: FormSection, *, show_empty: bool = False) -> Message:
+    """The section title followed by one line per answer or missing required field.
+
+    With show_empty, empty optional fields get a "Not set" line too, as when reviewing a cleared value.
+    """
+    lines = _answer_lines(ws, section.fields, ws.answers, show_empty=show_empty)
     if not lines:
         lines = [tr(t"draft-editor-section-empty = *Optional. Nothing added yet.*")]
     return Message.join("\n", (md(t"**{section.title}**"), *lines))

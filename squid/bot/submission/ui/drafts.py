@@ -43,6 +43,7 @@ from squid.bot.submission.ui.sections import (
     closed_detail,
     dimension_groups,
     done_row,
+    form_sections,
     is_empty,
     problem_text,
     section_text,
@@ -205,13 +206,7 @@ class DraftWorkspace(sl.Reactive):
     @property
     def sections(self) -> tuple[FormSection, ...]:
         """Manifest sections reduced to their visible fields; sections with none are dropped."""
-        visible = {field.id for field in self.fields}
-        manifest_sections = (*self.manifest.common_sections, *self.manifest.category(self.category).sections)
-        sections = (
-            FormSection(section.id, section.title, tuple(field for field in section.fields if field.id in visible))
-            for section in manifest_sections
-        )
-        return tuple(section for section in sections if section.fields)
+        return form_sections(self.manifest, self.category, self.fields)
 
     def section(self, section_id: str) -> FormSection | None:
         return next((section for section in self.sections if section.id == section_id), None)

@@ -1,8 +1,8 @@
 # One build editor for drafts and saved builds
 
-> **Status:** agreed 2026-11-12; phases 0 to 3 done 2026-11-13, phase 4 next. Edit saved builds through the
-> submission form manifest. Restrictions and patterns become catalogue pickers; showcase tags, versions, and
-> extender timings become editable; AI-generated stays read-only.
+> **Status:** agreed 2026-11-12, done 2026-11-13; the saved-build editor is `squid/bot/submission/ui/build_edit.py`.
+> Saved builds are edited through the submission form manifest. Restrictions and patterns are catalogue pickers;
+> showcase tags, versions, and extender timings are editable; AI-generated stays read-only.
 
 ## Problem
 
@@ -78,7 +78,7 @@ Known traps, each needing a test:
    and its review step shows only changed fields before one save through `EditController`.
 3. `DraftEditorScreen` and `BuildEditScreen` stay two thin screens over the shared parts: the section overview
    and section editing in `BuildEditorScreen` (`editor.py`) and `sections.py`. Each owns only its workspace and
-   its last row, following [the screen conventions](../bot-screens.md):
+   its last row, following [the screen conventions](../../bot-screens.md):
    - draft: Submit, Preview, Undo, Redo;
    - saved build: Review changes (then Apply changes), Preview, Undo, Redo, Cancel.
 4. Delete `EDIT_FIELDS`, `EDIT_SECTIONS`, and `squid/bot/submission/ui/fields.py`.

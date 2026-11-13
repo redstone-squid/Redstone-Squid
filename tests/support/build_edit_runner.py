@@ -1,5 +1,6 @@
 """Small in-memory build editor for transport tests; database tests exercise the handler."""
 
+from squid.bot.submission.ui.build_edit import BuildEditWorkspace
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.edits import build_values
 from squid.builds.models import Build, DoorBuild
@@ -12,6 +13,8 @@ from squid.edits.domain import (
     Revision,
     require_revision,
 )
+from squid.submissions.application.forms import build_edit_manifest
+from squid.submissions.domain import ChoiceOption
 
 
 async def build_edit_actor() -> Actor:
@@ -47,3 +50,21 @@ class BuildEditRecorder:
             ),
             receipt,
         )
+
+
+EDIT_OPTIONS: dict[str, tuple[ChoiceOption, ...]] = {
+    "approved_restrictions": (ChoiceOption("observerless", "Observerless"), ChoiceOption("seamless", "Seamless")),
+    "approved_patterns": (ChoiceOption("regular", "Regular"), ChoiceOption("full_lamp", "Full Lamp")),
+    "approved_showcase_tags": (ChoiceOption("compact", "Compact"),),
+    "approved_source_versions": (ChoiceOption("Java 1.20", "Java 1.20"), ChoiceOption("Java 1.21", "Java 1.21")),
+}
+"""Small catalogues for saved-build editors in tests."""
+
+
+async def _no_more_options(source: str) -> tuple[ChoiceOption, ...]:
+    raise AssertionError(f"the test did not expect {source} to be loaded")
+
+
+def edit_workspace(build: Build) -> BuildEditWorkspace:
+    """A saved-build workspace over the checked-in edit form and `EDIT_OPTIONS`."""
+    return BuildEditWorkspace(build, build_edit_manifest(), EDIT_OPTIONS, load_options=_no_more_options)
