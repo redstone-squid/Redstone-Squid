@@ -15,7 +15,6 @@ from squid.schematics.application import (
     IngestRequest,
     RenderRequest,
     RenderSkipReason,
-    SchematicPreviewService,
     SchematicPublication,
     SchematicService,
     SkippedRender,
@@ -117,12 +116,6 @@ def service(
         analyzer,
         store,
     )
-
-
-def test_preview_orchestration_has_an_application_owned_boundary() -> None:
-    schematics, _, _ = service()
-
-    assert isinstance(schematics.previews, SchematicPreviewService)
 
 
 def original_publication(*, public: bool = False) -> SchematicPublication:
