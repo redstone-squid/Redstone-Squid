@@ -144,7 +144,21 @@ class FormProtocolTest {
 
     @Test
     fun `unsupported optional controls do not block a renderer`() {
-        val manifest = FormProtocolJson.decodeManifest(manifestDocument())
+        val manifest = FormProtocolJson.decodeManifest(
+            manifestDocument(
+                extraField =
+                    """
+                    ,{
+                      "id": "future_optional",
+                      "label": "Preview",
+                      "control": "voxel_preview",
+                      "value_kind": "string",
+                      "required": false,
+                      "origins": ["fabric"]
+                    }
+                    """.trimIndent(),
+            ),
+        )
         val result = FormCapabilityNegotiator.negotiate(
             manifest,
             category = "door",

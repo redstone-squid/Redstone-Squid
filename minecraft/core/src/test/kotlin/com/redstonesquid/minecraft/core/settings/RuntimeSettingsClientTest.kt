@@ -44,7 +44,10 @@ class RuntimeSettingsClientTest {
             assertEquals("""{"welcome_channel_id":"1356094722531393681"}""", request.body)
             assertTrue(request.headers.getValue("Authorization").startsWith("Bearer sqpt_"))
             assertTrue(request.headers.containsKey("Idempotency-Key"))
-            assertEquals(origin == MinecraftOrigin.PAPER, request.headers.containsKey("Squid-Installation-ID"))
+            assertEquals(
+                if (origin == MinecraftOrigin.PAPER) installationId.toString() else null,
+                request.headers["Squid-Installation-ID"],
+            )
             assertTrue(request.requireNoStoreResponse)
         }
     }

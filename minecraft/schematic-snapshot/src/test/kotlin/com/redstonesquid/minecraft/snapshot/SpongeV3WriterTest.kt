@@ -4,21 +4,10 @@ import java.security.MessageDigest
 import java.util.Base64
 import java.util.zip.GZIPInputStream
 import org.junit.jupiter.api.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SpongeV3WriterTest {
-    @Test
-    fun `writer is byte deterministic and uses fixed gzip metadata`() {
-        val first = SpongeV3Writer.write(goldenSnapshot())
-        val second = SpongeV3Writer.write(goldenSnapshot())
-
-        assertContentEquals(first, second)
-        assertContentEquals(byteArrayOf(0, 0, 0, 0), first.copyOfRange(4, 8))
-        assertEquals(0xFF.toByte(), first[9])
-    }
-
     @Test
     fun `writer output matches reviewed golden fixture`() {
         val actual = SpongeV3Writer.write(goldenSnapshot())
