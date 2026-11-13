@@ -43,28 +43,17 @@ def test_with_context_mutates_exception_without_changing_type() -> None:
     assert updated.code is ErrorCode.BUILD_NOT_FOUND
 
 
-def test_with_context_can_restate_the_message() -> None:
-    """Updating an error message must also refresh args, str(error), and public details."""
+def test_with_context_replaces_the_complete_deferred_message() -> None:
+    """Replacing a message refreshes all bindings, args, and both rendered details."""
     error = BuildNotFoundError(42)
     build_id = 42
-
-    updated = error.with_context(
-        message=tr(t"test-deleted-build = Build {build_id} was deleted while you were editing it.")
-    )
-
-    assert "Build 42 was deleted" in updated.public_detail()
-    assert "Build 42 was deleted" in str(updated)
-    assert updated.args == (updated.backend_detail(),)
-
-
-def test_with_context_replaces_the_complete_deferred_message() -> None:
-    build_id = 42
     holder = "someone else"
-    error = BuildNotFoundError(build_id)
 
     updated = error.with_context(message=tr(t"test-held-build = Build {build_id} is held by {holder}."))
 
     assert "Build 42 is held by someone else." in updated.public_detail()
+    assert "Build 42 is held by someone else." in str(updated)
+    assert updated.args == (updated.backend_detail(),)
 
 
 def test_context_and_public_context_are_separate() -> None:
