@@ -617,10 +617,21 @@ def test_no_module_outside_the_adapter_names_the_native_engine() -> None:
     assert violations == []
 
 
+ENVIRONMENT_ALLOWLIST = frozenset(
+    {
+        # Settings are read from the environment here and nowhere else.
+        Path("squid/config.py"),
+        # Passes the worker's environment on to the native video helper with thread limits
+        # added; it reads no setting from it.
+        Path("squid/schematics/infrastructure/nucleation_adapter.py"),
+    }
+)
+
+
 def test_application_modules_do_not_read_process_environment_directly() -> None:
     violations: list[tuple[Path, int, str]] = []
     for path in _scanned_files():
-        if path == Path("squid/config.py"):
+        if path in ENVIRONMENT_ALLOWLIST:
             continue
         for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "os":

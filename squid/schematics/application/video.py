@@ -3,8 +3,11 @@
 from typing import Annotated, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from squid.schematics.domain.values import VerifiedResourcePack
+
+_INVALID_VALUE = "value_error"
 
 type VideoCoordinate = Annotated[int, Field(strict=True, ge=-(2**31), le=2**31 - 1)]
 type VideoPosition = tuple[VideoCoordinate, VideoCoordinate, VideoCoordinate]
@@ -41,13 +44,13 @@ class VideoRenderRequest(BaseModel):
     def check_interactions(self) -> Self:
         if not self.simulation_enabled and self.interactions:
             msg = "Static videos cannot contain input activations."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         if len(self.interactions) > 16 or any(item.tick >= self.duration_ticks for item in self.interactions):
             msg = "Video interactions must fit within the clip and contain at most 16 activations."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         if any(left.tick > right.tick for left, right in zip(self.interactions, self.interactions[1:], strict=False)):
             msg = "Video interactions must be in chronological order."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
 
