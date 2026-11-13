@@ -574,13 +574,22 @@ class FilesEditorScreen(sd.Screen[None]):
         if ws.notice:
             children.append(sd.v2.text(Message.join("", ("⚠️ ", ws.notice))))
         children.append(sd.v2.text(_files_text(ws, heading=False)))
+        schematic_count = sum(item.kind == "schematic" for item in files)
+        if schematic_count > 1:
+            children.append(
+                sd.v2.text(
+                    tr(
+                        t"draft-editor-main-schematic-help = Choose which schematic to use for this build's preview and schematic tools. Select that file below, then choose Use as main schematic."
+                    )
+                )
+            )
         if files:
             children.append(
                 sd.v2.select(
                     *(sd.v2.option(item.filename[:100], str(item.id), default=item is selected) for item in files),
                     on_select=self._select_file,
                     key="file",
-                    placeholder=tr(t"draft-editor-choose-file = Choose a file to replace or remove…"),
+                    placeholder=tr(t"draft-editor-choose-file = Choose a file to manage…"),
                 )
             )
         if selected is not None:
@@ -597,6 +606,8 @@ class FilesEditorScreen(sd.Screen[None]):
                         style=sl.primitives.ActionStyle.DANGER,
                     ),
                     selected.kind == "schematic"
+                    and selected.status is IntakeStatus.READY
+                    and schematic_count > 1
                     and sd.v2.button(
                         tr(t"draft-editor-main-schematic = Use as main schematic"),
                         self._make_main_schematic,

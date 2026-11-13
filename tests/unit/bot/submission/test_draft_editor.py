@@ -476,7 +476,8 @@ async def test_files_are_listed_with_a_status_only_when_they_need_attention() ->
 
     files = FilesEditorScreen(editor.workspace)
     await files._select_file(Mock(spec=sd.SelectionEvent, values=(str(intake.files[0].id),)))
-    assert {"Replace", "Remove", "Use as main schematic", "Add files", "Done"} <= set(labels(files.render()))
+    assert {"Replace", "Remove", "Add files", "Done"} <= set(labels(files.render()))
+    assert "Use as main schematic" not in labels(files.render())
 
 
 async def test_editor_messages_lock_once_the_draft_is_submitted() -> None:
