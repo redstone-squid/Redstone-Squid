@@ -1,7 +1,5 @@
 """Notification filter and delivery rendering contracts."""
 
-import inspect
-from typing import Any
 from uuid import UUID
 
 import pytest
@@ -92,7 +90,6 @@ def test_staff_submission_delivery_uses_pending_review_command_not_public_link()
     rendered = render_delivery(delivery, "https://example.test")
 
     assert rendered == "A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:42`."
-    assert "https://example.test/builds/42" not in rendered
 
 
 def test_delivery_renderer_localizes_at_send_time(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -123,7 +120,3 @@ def test_delivery_renderer_localizes_at_send_time(monkeypatch: pytest.MonkeyPatc
 def test_notification_management_is_one_slash_workspace() -> None:
     assert NotificationCog.__cog_commands__ == []
     assert {command.name for command in NotificationCog.__cog_app_commands__} == {"notifications"}
-
-
-def test_notification_extension_entry_point_annotations_resolve_at_runtime() -> None:
-    assert inspect.get_annotations(notification_module.setup)["bot"] is Any

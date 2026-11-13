@@ -79,8 +79,10 @@ async def test_service_reads_current_emojis_across_edits() -> None:
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
     assert await service.is_relevant_emoji(10, "⭐")
-    assert await service.is_relevant_emoji(10, "⭐")
-    assert len(repository.relevant_calls) == 2
+
+    committed.value.config = replace(committed.value.config, emojis=())
+
+    assert not await service.is_relevant_emoji(10, "⭐")
 
 
 async def test_service_combines_highest_role_and_emoji_multiplier() -> None:
