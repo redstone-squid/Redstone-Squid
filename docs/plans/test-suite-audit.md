@@ -96,3 +96,37 @@ change-scenario benchmark (5.29 s), followed by two catalog validation checks
 setup and garbage-collection costs under a fully loaded test process before
 reducing their meaningful cache-path assertions. These timings are not directly
 comparable with the earlier isolated Discord package runs.
+
+## Individual necessity review
+
+The follow-up reviews test bodies against production behavior and retained
+coverage. The [inventory](test-suite-audit-inventory.csv) records each file's
+status and decisions. Earlier area sampling does not count as individual review.
+The current checkpoint covers 137 of 635 tracked test files and 1,028 remaining
+test declarations, including embedded Rust tests. Parameterized cases are not
+counted separately. Newly added tests remain pending until reviewed.
+
+Accepted changes include:
+
+- Remove duplicate explicit logging-path coverage, constructor-algorithm echoes
+  in account normalization, and an internal legacy-name absence guard. Preserve
+  persisted legacy-key handling and database table compatibility.
+- Share configuration loads across ten rejected keys, merge observability
+  defaults, and remove duplicate submission-capacity projection coverage.
+  Keep unknown-key rejection from both environment and dotenv sources.
+- Replace web truthiness and substring checks with exact output or parsed JSON
+  contracts. Remove a message-regex matrix that also accepted undefined labels.
+- Make the Minecraft optional-control test actually include an unsupported
+  control, check the exact Paper installation header, and remove gzip checks
+  already proved by a complete compressed-byte golden.
+- Make Rust profile assertions unconditional and replace the replication undo
+  test's self-referential tree expectation with an explicit empty forest.
+
+Focused validation passed: configuration/runtime/service-graph tests (92 cases),
+record vocabulary/permission administration (20), Loro adapter (16), web units
+(152), the changed Chromium detail scenario, Rust CLI library (10), and the three
+affected Minecraft modules using JDK 25. These later changes improve test value;
+no additional suite-wide speedup has been measured. Extra boundary cases suggested
+by the Rust and Minecraft reviews are recorded as follow-ups, rather than added
+as part of this cleanup. Browser projects other than the focused Chromium case
+were not rerun.
