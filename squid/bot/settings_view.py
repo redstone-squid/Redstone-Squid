@@ -23,7 +23,7 @@ from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
 from squid.voting.domain.models import VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_i18n import Text, md_tr
+from squid_i18n import NUMBER, Text, md_tr
 
 if TYPE_CHECKING:
     from squid.settings.application import SettingsService
@@ -557,12 +557,16 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
             if preset is not None and preset.options
             else tr(t"bot-settings-view-none = _None_")
         )
-        weight_lines = [
-            md_tr(
-                t"bot-settings-role-multiplier = {(role := self._role_display(weight.role_id))} — {(multiplier := format(weight.multiplier, 'g'))}x",  # noqa: F841 - captured translation binding
+        weight_lines: list[Text] = []
+        for weight in self.configuration.weights:
+            role = self._role_display(weight.role_id)
+            multiplier = weight.multiplier
+            weight_lines.append(
+                md_tr(
+                    t"bot-settings-role-multiplier = {role} — "
+                    t"{NUMBER(multiplier, use_grouping=False, maximum_significant_digits=6)}x",
+                )
             )
-            for weight in self.configuration.weights
-        ]
         weights = sl.text.Text.join("\n", weight_lines) if weight_lines else tr(t"bot-settings-view-none = _None_")
         return [
             CardField(tr(t"bot-settings-view-emojis = Emojis"), emojis),

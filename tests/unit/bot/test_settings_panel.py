@@ -30,6 +30,7 @@ from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.voting.application import VoteService
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid.voting.domain.models import VoteConfiguration
+from squid_i18n import Localization, resolve_text
 from squid_reactivity.transactions import (
     readonly_transaction,
 )
@@ -465,3 +466,19 @@ async def test_voting_reset_restores_weights_and_can_be_redone() -> None:
     with sl.runtime.transaction():
         assert await panel.edits.redo() is not None
     assert panel.voting.weight_for(99) is None
+
+
+@pytest.mark.parametrize(("locale", "expected"), [("en", "1.23457x"), ("de", "1,23457x")])
+async def test_role_multiplier_uses_reader_locale(locale: str, expected: str) -> None:
+    panel, _, _ = make_component_panel()
+    with sl.runtime.transaction():
+        await panel.voting.set_weight(42, 1.23456789)
+    field = panel.voting._voting_fields()[1]
+    localization = Localization(
+        locale,
+        (
+            "bot-settings-role-multiplier = { $role } — "
+            "{ NUMBER($multiplier, useGrouping: 0, maximumSignificantDigits: 6) }x",
+        ),
+    )
+    assert resolve_text(field.value, localization).plain() == f"Deleted role (42) — {expected}"

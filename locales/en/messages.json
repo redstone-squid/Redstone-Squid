@@ -3079,7 +3079,7 @@
     ]
   },
   "bot-settings-role-multiplier": {
-    "fingerprint": "f6bd6b771b5d9e8a442b6b20d8e57e8dc997331a91a7b0fa3e9a9a651f4c0829",
+    "fingerprint": "ff8f9a09e40bde5746fa6dfa6e6247805f517250f6c566e4b6d85f5b75c5f708",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -3090,12 +3090,21 @@
       },
       {
         "name": "multiplier",
-        "function": null,
-        "options": []
+        "function": "NUMBER",
+        "options": [
+          [
+            "useGrouping",
+            false
+          ],
+          [
+            "maximumSignificantDigits",
+            6
+          ]
+        ]
       }
     ],
     "locations": [
-      "squid/bot/settings_view.py:556"
+      "squid/bot/settings_view.py:565"
     ]
   },
   "bot-settings-view-back": {

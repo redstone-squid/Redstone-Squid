@@ -925,8 +925,8 @@ bot-recount-that-vote-is-already-closed = That vote is already closed.
 # squid/bot/recount.py:100
 bot-recount-votes-recounted = Votes recounted.
 
-# squid/bot/settings_view.py:556
-bot-settings-role-multiplier = { $role } — { $multiplier }x
+# squid/bot/settings_view.py:565
+bot-settings-role-multiplier = { $role } — { NUMBER($multiplier, useGrouping: 0, maximumSignificantDigits: 6) }x
 
 # squid/bot/settings_view.py:148
 bot-settings-view-back = Back
