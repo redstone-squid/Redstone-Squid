@@ -1,6 +1,6 @@
 """Render command discovery, focused command help, and project links."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, Self, cast, override
 
 import discord
@@ -43,6 +43,31 @@ REGULATIONS_URL = "https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbV
 PROJECT_URL = "https://github.com/redstone-squid/Redstone-Squid"
 
 
+def _public_commands(commands_: Iterable[AnyCommand]) -> list[AnyCommand]:
+    """Hide internal commands and their descendants without running authorization checks.
+
+    Prefix commands use `hidden`; app-only commands can set `extras={"help_hidden": True}`.
+    Supply prefix entries first so hybrid commands retain their prefix visibility metadata.
+    Normal commands stay discoverable even when the reader cannot currently run them.
+    """
+    by_name: dict[str, AnyCommand] = {}
+    for command in commands_:
+        by_name.setdefault(command.qualified_name, command)
+
+    visible: list[AnyCommand] = []
+    for command in by_name.values():
+        ancestor: AnyCommand | None = command
+        while ancestor is not None:
+            ancestor = by_name.get(ancestor.qualified_name, ancestor)
+            if getattr(ancestor, "hidden", False) or ancestor.extras.get("help_hidden", False):
+                break
+            # discord.py annotates prefix parents as GroupMixin, but these are command groups.
+            ancestor = cast(AnyCommand | None, ancestor.parent)
+        else:
+            visible.append(command)
+    return visible
+
+
 class HelpClient(Protocol):
     """Bot facts rendered by the help screen."""
 
@@ -60,7 +85,7 @@ class HelpScreen(sd.Screen):
 
     def __init__(self, bot: HelpClient, commands_: Sequence[AnyCommand], command: str | None) -> None:
         self._bot = bot
-        self._commands = tuple(commands_)
+        self._commands = tuple(_public_commands(commands_))
         self._needle = command
         self._focused = self._find(command) if command is not None else None
         self._browser = sp.Browser(
@@ -90,9 +115,12 @@ class HelpScreen(sd.Screen):
             or getattr(command, "description", None)
             or tr(t"help-no-details-provided = No details provided")
         )
-        # Only the group variants of this union carry subcommands; the annotation keeps the
-        # duck-typed lookup from collapsing to an empty tuple type.
-        children: tuple[AnyCommand, ...] = tuple(getattr(command, "commands", ()))
+        children = tuple(
+            item
+            for item in self._commands
+            if isinstance(item.parent, Command | app_commands.Group)
+            and item.parent.qualified_name == command.qualified_name
+        )
         return sl.section(
             sl.heading(heading),
             sl.paragraph(description).truncate(),
@@ -187,20 +215,21 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def command_autocomplete(
         self, _interaction: discord.Interaction[BotT], needle: str
     ) -> list[app_commands.Choice[str]]:
-        """Complete a command or cog name.
+        """Complete public command names without evaluating caller permissions.
 
         Not a registry source: the candidates are this process's loaded command tree, which no
         other surface can see. It still ranks through the shared matcher so `/help` orders results
         the same way every other autocomplete does.
         """
+        public = _public_commands(self._all_commands())
         if not needle:
             return [
-                app_commands.Choice(name=cog_name, value=cog_name)
-                for cog_name, cog in self.bot.cogs.items()
-                if cog.get_commands()
+                app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
+                for command in public
+                if command.parent is None
             ][:MAX_SUGGESTIONS]
 
-        candidates = [Candidate.create(command.qualified_name) for command in self.bot.walk_commands()]
+        candidates = [Candidate.create(command.qualified_name) for command in public]
         return [
             app_commands.Choice(name=match.label, value=match.value)
             for match in rank(needle, candidates, limit=MAX_SUGGESTIONS)
