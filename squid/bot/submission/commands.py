@@ -179,20 +179,11 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
                 description=tr(t"bot-submission-search-open-this-build-directly = Open this build directly."),
                 autocomplete=suggests("builds"),
             ),
-            "query": sd.Option(
-                name=tr(t"command-build-browse-query-name = query"),
-                description=md_tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
-            ),
         },
     )
-    async def browse_builds(
-        self, request: sd.Request[Self], build_id: int | None = None, query: str | None = None
-    ) -> BuildBrowseScreen:
+    async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
         """Browse builds and record holders."""
-        screen = await self._catalogue(request, build_id=build_id)
-        if query is not None:
-            await screen._run_search(query, "")
-        return screen
+        return await self._catalogue(request, build_id=build_id)
 
     @sd.command(
         name=tr(t"command-records-name = records"),
