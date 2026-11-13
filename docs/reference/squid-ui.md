@@ -100,7 +100,7 @@ what a region *is*, and the planner decides what it looks like on each target.
 
 ::: squid_ui.md
 
-::: squid_ui.discord_md
+::: squid_ui.mention
 
 ::: squid_ui.md_tr
 

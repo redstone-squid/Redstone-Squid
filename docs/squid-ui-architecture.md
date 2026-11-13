@@ -417,17 +417,18 @@ Target-native features use Extension(kind, version, payload, fallback). A target
 prepares and measures the native resource once. Unsupported targets use the mandatory
 portable fallback. Extension payloads in scenes are versioned and JSON-safe.
 
-Strings and translations default to literal text. `md(t"Build {title}")` and
-`md_tr(t"build-title = Build {title}")` explicitly author shared Markdown, with
-escaped ordinary interpolations and composable typed text. `discord_md()` marks
-Discord-specific syntax explicitly. Scenes carry their markup dialect; Discord
-planning serializes text before measuring its payload size.
+Strings and translations default to literal text. `tr("Save", key="save")`,
+`md_tr(t"**Build** {title}", key="build-title")`, and `md()` all return the same
+composable `Text`. Markdown is one source syntax, parsed after localization while
+keeping captured values separate. Joining text combines structure, so fragments
+cannot complete one another's Markdown delimiters.
 
-Both HTML renderers share the same safe Markdown token renderer. Native inline
-containers render inline Markdown; the Components V2 preview also renders block
-syntax such as headings, lists, quotes, and fenced code. Raw HTML is disabled,
-and links and images are restricted to safe URL schemes. Discord mention, emoji, and timestamp
-tokens remain visible as text rather than being treated as HTML.
+The native HTML planner lowers that structure directly to safe scene elements.
+The Discord planner serializes before measuring, using its adapter's library-backed
+literal escaping. Mentions and timestamps are semantic values, not trusted raw
+Markdown. Scenes identify their serialized encoding explicitly; authored text does
+not carry a target dialect. The V2 HTML preview parses the serialized Markdown safely.
+Raw HTML is disabled, and HTML links and images accept only safe URL schemes.
 
 ### Declaring a component's dialect
 
