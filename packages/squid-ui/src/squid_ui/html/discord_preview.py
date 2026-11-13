@@ -32,7 +32,7 @@ border-radius:4px}.squid-gallery{display:grid;grid-template-columns:repeat(auto-
 .squid-spoiler{filter:blur(12px);transition:filter .15s}.squid-spoiler:hover,.squid-spoiler:focus{filter:none}
 """.strip()
 
-type FileResolver = Callable[[scene.File], str | None]
+type FileResolver = Callable[[scene.File | scene.GalleryItem], str | None]
 
 
 class DiscordPreviewRenderer:
@@ -77,13 +77,17 @@ class DiscordPreviewRenderer:
         )
         assets = {asset.key: asset for asset in document.assets}
 
-        def resolve_file(node: scene.File) -> str | None:
-            metadata = assets.get(node.asset_key)
+        def resolve_file(node: scene.File | scene.GalleryItem) -> str | None:
+            metadata = (
+                assets.get(node.asset_key)
+                if isinstance(node, scene.File)
+                else next((asset for asset in assets.values() if asset.name == node.asset_name), None)
+            )
             if metadata is None:
                 return None
             if self.asset_resolver is not None and (resolved := self.asset_resolver(metadata)) is not None:
                 return resolved
-            resource = plan.resources.get(f"asset:{node.asset_key}") if plan is not None else None
+            resource = plan.resources.get(f"asset:{metadata.key}") if plan is not None else None
             if not isinstance(resource, Asset):
                 return None
             if isinstance(resource.source, InlineAsset):
@@ -290,7 +294,7 @@ class DiscordPreviewRenderer:
                     f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
                     f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
                     for item in items
-                    if (safe := _safe_url(item.url)) is not None
+                    if (safe := resolve_file(item) if item.asset_name is not None else _safe_url(item.url)) is not None
                 )
                 return f'<div class="squid-gallery">{images}</div>'
             case scene.Extension(kind=kind, version=version):

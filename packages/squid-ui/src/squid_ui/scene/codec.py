@@ -405,7 +405,9 @@ def _embed_to_dict(embed: Embed) -> dict[str, Any]:
 
 
 def _media_to_dict(media: EmbedMedia | None) -> dict[str, Any] | None:
-    return None if media is None else {"url": media.url, "description": media.description}
+    return (
+        None if media is None else {"url": media.url, "description": media.description, "asset_name": media.asset_name}
+    )
 
 
 def _embed_from_dict(raw: JsonObject) -> Embed:
@@ -457,7 +459,11 @@ def _embed_from_dict(raw: JsonObject) -> Embed:
 def _media_from_dict(raw: object) -> EmbedMedia | None:
     if raw is None:
         return None
-    return EmbedMedia(url=_string(_object(raw), "url"), description=_optional_string(_object(raw), "description"))
+    return EmbedMedia(
+        url=_string(_object(raw), "url"),
+        description=_optional_string(_object(raw), "description"),
+        asset_name=_optional_string(_object(raw), "asset_name"),
+    )
 
 
 def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> dict[str, Any]:
@@ -592,7 +598,13 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
             return {
                 "kind": Gallery.KIND,
                 "items": [
-                    {"url": item.url, "description": item.description, "spoiler": item.spoiler} for item in items
+                    {
+                        "url": item.url,
+                        "description": item.description,
+                        "spoiler": item.spoiler,
+                        "asset_name": item.asset_name,
+                    }
+                    for item in items
                 ],
             }
         case Section(texts=texts, accessory=accessory):
@@ -763,6 +775,7 @@ def _node_from_dict(
                         url=_string(_object(item), "url"),
                         description=_optional_string(_object(item), "description"),
                         spoiler=_boolean(_object(item), "spoiler", default=False),
+                        asset_name=_optional_string(_object(item), "asset_name"),
                     )
                     for item in items
                 )

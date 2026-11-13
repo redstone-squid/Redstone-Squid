@@ -183,11 +183,12 @@ class Renderer:
             elif element.tag is scene.HtmlTag.A:
                 attributes.append('aria-disabled="true"')
         if element.asset is not None:
-            if element.tag is not scene.HtmlTag.A:
-                message = "HTML asset references require an anchor element"
+            if element.tag not in (scene.HtmlTag.A, scene.HtmlTag.IMG):
+                message = "HTML asset references require an anchor or image element"
                 raise DrawInvariantError(message)
             if (resolved := self._resolve_asset(element.asset, assets, plan)) is not None:
-                attributes.append(f'href="{_attribute(resolved)}"')
+                attribute_name = "href" if element.tag is scene.HtmlTag.A else "src"
+                attributes.append(f'{attribute_name}="{_attribute(resolved)}"')
             else:
                 attributes.append('aria-disabled="true"')
 

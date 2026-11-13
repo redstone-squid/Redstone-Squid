@@ -641,7 +641,11 @@ SCHEMA: dict[str, Any] = {
                 {
                     "type": "object",
                     "additionalProperties": False,
-                    "properties": {"url": {"type": "string"}, "description": {"type": ["string", "null"]}},
+                    "properties": {
+                        "url": {"type": "string"},
+                        "description": {"type": ["string", "null"]},
+                        "asset_name": {"type": ["string", "null"]},
+                    },
                     "required": ["url", "description"],
                 },
             ]
@@ -913,6 +917,7 @@ SCHEMA: dict[str, Any] = {
                 "url": {"type": "string"},
                 "description": {"type": ["string", "null"]},
                 "spoiler": {"type": "boolean"},
+                "asset_name": {"type": ["string", "null"]},
             },
             "required": ["url", "description"],
         },

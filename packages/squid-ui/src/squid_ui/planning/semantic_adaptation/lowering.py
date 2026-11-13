@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import assert_never, cast
 
+from squid_ui.assets import Asset
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
@@ -390,6 +391,11 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
         case Code(content=content, language=language):
             return [PrimitiveCode(_resolve(content, context), language, overflow=Never())]
         case Figure(media=media, caption=caption):
+            source = media.source
+            if isinstance(source, Asset):
+                context.assets.append(source)
+            url = source if isinstance(source, str) else ""
+            asset_name = source.name if isinstance(source, Asset) else None
             if media.spoiler and _cards(context):
                 message = (
                     f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
@@ -401,14 +407,15 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                 return [
                     Card(
                         image=CardMedia(
-                            media.url,
+                            url,
                             _resolve(media.description, context) if media.description is not None else None,
+                            asset_name,
                         ),
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
             # Use a separate name because `children` is a typed match capture in other branches.
-            gallery: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
+            gallery: list[Node] = [Gallery((GalleryItem(url, media.description, media.spoiler, asset_name),))]
             if caption is not None:
                 gallery.append(Footer(_resolve(caption, context)))
             return gallery

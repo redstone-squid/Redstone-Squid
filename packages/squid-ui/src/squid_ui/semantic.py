@@ -380,7 +380,7 @@ class Code(Adaptable[RenderTarget]):
 @dataclass(frozen=True, slots=True)
 class MediaItem:
     key: str
-    url: str
+    source: str | Asset
     description: TextLike | None = None
     spoiler: bool = False
 

@@ -467,9 +467,9 @@ def zoned_timestamp(value: ZonedDateTime, *, label: TextValue | None = None) -> 
     return ZonedTimestamp(value, _opt_text(label))
 
 
-def figure(media: MediaItem | str, *, caption: TextValue | None = None) -> Figure:
-    """One image with an optional caption; a bare URL becomes the media item."""
-    resolved = MediaItem("", media) if isinstance(media, str) else media
+def figure(media: MediaItem | str | Asset, *, caption: TextValue | None = None) -> Figure:
+    """One image with an optional caption, from a URL or asset."""
+    resolved = media_item(media) if isinstance(media, str | Asset) else media
     return Figure(resolved, _opt_text(caption))
 
 
@@ -632,21 +632,21 @@ def tally[ContextT = object](
     return stack(*bars, control)
 
 
-def media_item(url: str, *, key: str = "", description: TextValue | None = None) -> MediaItem:
-    """One image of a `media` collection."""
-    return MediaItem(key, url, _opt_text(description))
+def media_item(source: str | Asset, *, key: str = "", description: TextValue | None = None) -> MediaItem:
+    """One media preview, from a URL or an asset declared at its point of use."""
+    return MediaItem(key, source, _opt_text(description))
 
 
 def media(
-    *entries: Conditional[MediaItem | str],
+    *entries: Conditional[MediaItem | str | Asset],
     key: str,
     display: MediaDisplay = MediaDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Media:
-    """A set of images; a bare URL becomes an item. ``key`` carries the chosen display."""
-    collected = _collect(entries, (MediaItem, str), "sl.media()")
+    """A set of media previews; a bare URL or asset becomes an item. ``key`` carries the chosen display."""
+    collected = _collect(entries, (MediaItem, str, Asset), "sl.media()")
     return Media(
-        tuple(media_item(entry) if isinstance(entry, str) else entry for entry in collected),
+        tuple(media_item(entry) if isinstance(entry, str | Asset) else entry for entry in collected),
         key,
         display,
         flexibility,

@@ -782,13 +782,18 @@ class _Compiler:
         return self.element(tag, self.text(heading.content))
 
     def _image(self, item: sem.MediaItem) -> scene.HtmlElement:
+        if isinstance(item.source, Asset):
+            self._asset(item.source)
         return self.element(
             scene.HtmlTag.IMG,
             attributes=_attributes(
                 (scene.HtmlAttributeName.ALT, "" if item.description is None else self._resolved(item.description)),
                 (scene.HtmlAttributeName.CLASS, "squid-spoiler" if item.spoiler else None),
             ),
-            url=scene.HtmlUrlRef(item.url),
+            url=scene.HtmlUrlRef(item.source) if isinstance(item.source, str) else None,
+            asset=scene.HtmlAssetRef(item.source.key, item.source.name, item.source.media_type)
+            if isinstance(item.source, Asset)
+            else None,
         )
 
     def _asset(self, asset: Asset) -> None:

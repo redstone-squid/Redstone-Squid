@@ -256,9 +256,15 @@ class ClassicRenderer:
         if node.author is not None:
             embed.set_author(name=node.author.name, url=node.author.url, icon_url=node.author.icon_url)
         if node.image is not None:
-            embed.set_image(url=node.image.url)
+            embed.set_image(
+                url=f"attachment://{node.image.asset_name}" if node.image.asset_name is not None else node.image.url
+            )
         if node.thumbnail is not None:
-            embed.set_thumbnail(url=node.thumbnail.url)
+            embed.set_thumbnail(
+                url=f"attachment://{node.thumbnail.asset_name}"
+                if node.thumbnail.asset_name is not None
+                else node.thumbnail.url
+            )
         if len(embed.fields) != len(node.fields):
             message = f"embed {index} lost fields between the scene and discord.py"
             raise DrawInvariantError(message)

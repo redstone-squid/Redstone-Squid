@@ -172,6 +172,7 @@ class _V2Converter:
                             require_gallery_item(item).url,
                             resolved_optional_text(require_gallery_item(item).description),
                             require_gallery_item(item).spoiler,
+                            require_gallery_item(item).asset_name,
                         )
                         for item in items
                     )

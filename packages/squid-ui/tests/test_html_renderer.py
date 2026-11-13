@@ -161,3 +161,12 @@ def test_renderer_rejects_non_html_bodies_versions_and_invalid_reference_placeme
         Renderer().draw(replace(document, target_version=99))
     with pytest.raises(DrawInvariantError, match="anchor or image"):
         Renderer().draw(misplaced)
+
+
+@pytest.mark.parametrize("figure", [False, True])
+def test_renderer_resolves_media_assets(figure: bool) -> None:
+    asset = sl.document.Asset("image", "image.png", "image/png", sl.document.InlineAsset(b"image"))
+    document = sl.figure(asset) if figure else sl.media(asset, key="image")
+    result = sl.planning.plan(document, target=sl.html.target())
+    assert result.resources["asset:image"] == asset
+    assert 'src="data:image/png;base64,aW1hZ2U="' in Renderer().draw(result.scene, plan=result)

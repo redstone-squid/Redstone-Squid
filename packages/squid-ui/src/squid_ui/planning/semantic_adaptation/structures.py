@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from squid_ui.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.grids import GridCell
 from squid_ui.interactions import ActionBinding
@@ -251,13 +252,26 @@ def _media(node: Media, path: str, context: LoweringContext) -> list[Node]:
     strategy = _select_strategy(_media_axis(node, path, context.session), context)
     if not node.items:
         return []
+    shown = node.items[:1] if strategy == "featured" else node.items
+    context.assets.extend(item.source for item in shown if isinstance(item.source, Asset))
     if strategy == "featured":
         first = node.items[0]
         if first.spoiler and _cards(context):
             message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
             raise LayoutInvariantError(message)
         description = _resolve(first.description, context) if first.description is not None else None
-        result: list[Node] = [Gallery((GalleryItem(first.url, description, first.spoiler),))]
+        result: list[Node] = [
+            Gallery(
+                (
+                    GalleryItem(
+                        first.source if isinstance(first.source, str) else "",
+                        description,
+                        first.spoiler,
+                        first.source.name if isinstance(first.source, Asset) else None,
+                    ),
+                )
+            )
+        ]
         if first.description is not None:
             result.append(Footer(_resolve(first.description, context), overflow=Never()))
         return result
@@ -271,9 +285,10 @@ def _media(node: Media, path: str, context: LoweringContext) -> list[Node]:
         Gallery(
             tuple(
                 GalleryItem(
-                    item.url,
+                    item.source if isinstance(item.source, str) else "",
                     _resolve(item.description, context) if item.description is not None else None,
                     item.spoiler,
+                    item.source.name if isinstance(item.source, Asset) else None,
                 )
                 for item in node.items[start : start + context.limits.gallery_items]
             )

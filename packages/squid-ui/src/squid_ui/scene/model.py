@@ -192,6 +192,7 @@ class GalleryItem:
     url: str
     description: str | None = None
     spoiler: bool = False
+    asset_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,6 +536,7 @@ class EmbedMedia:
 
     url: str
     description: str | None = None
+    asset_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

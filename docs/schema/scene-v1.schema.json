@@ -315,6 +315,12 @@
         {
           "additionalProperties": false,
           "properties": {
+            "asset_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "description": {
               "type": [
                 "string",
@@ -554,6 +560,12 @@
     "gallery_item": {
       "additionalProperties": false,
       "properties": {
+        "asset_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",

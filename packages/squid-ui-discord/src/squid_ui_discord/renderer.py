@@ -467,7 +467,11 @@ class V2Renderer:
             case _V2Gallery(node=node):
                 return discord.ui.MediaGallery(
                     *(
-                        discord.MediaGalleryItem(entry.url, description=entry.description, spoiler=entry.spoiler)
+                        discord.MediaGalleryItem(
+                            f"attachment://{entry.asset_name}" if entry.asset_name is not None else entry.url,
+                            description=entry.description,
+                            spoiler=entry.spoiler,
+                        )
                         for entry in node.items
                     )
                 )

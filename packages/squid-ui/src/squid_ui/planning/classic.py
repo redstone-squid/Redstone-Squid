@@ -342,7 +342,11 @@ def _text(slot: MeasuredText | None) -> str | None:
 
 
 def _media(media: CardMedia | None) -> scene.EmbedMedia | None:
-    return None if media is None else scene.EmbedMedia(media.url, resolved_optional_text(media.description))
+    return (
+        None
+        if media is None
+        else scene.EmbedMedia(media.url, resolved_optional_text(media.description), media.asset_name)
+    )
 
 
 def _timestamp(value: ZonedDateTime | datetime | None) -> str | None:

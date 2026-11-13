@@ -28,7 +28,7 @@ from squid_ui.semantic import (
     TableRow,
 )
 from squid_ui.sources import Position
-from squid_ui_discord import DISCORD_V2_DPY27, render_static
+from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
 
 
 def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None:
@@ -293,3 +293,32 @@ def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
     body = "\n".join(child.content for child in panel.children if isinstance(child, scene.Text))
     assert all(f"**Field {index}:**" in body for index in range(20))
     assert "short" in body
+
+
+@pytest.mark.parametrize("media_type", ["image/png", "video/mp4"])
+def test_media_collects_assets_and_renders_attachment_previews(media_type: str) -> None:
+    asset = sl.document.Asset("preview", "preview.bin", media_type, sl.document.InlineAsset(b"preview"))
+    document = sl.stack(
+        sl.media(sl.media_item(asset, description="Preview"), "https://example.invalid/image.png", key="media"),
+        sl.download("Save", asset, key="save"),
+    )
+    result = plan(document, target=DISCORD_V2_DPY27)
+    assert len(result.scene.assets) == 1
+    assert result.resources["asset:preview"] == asset
+    assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene
+    gallery = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Gallery))
+    assert gallery.items[0].asset_name == "preview.bin"
+    assert gallery.items[1].url == "https://example.invalid/image.png"
+    presentation = render_static(document)
+    components = presentation.layout.to_components()
+    assert components[0]["items"][0]["media"]["url"] == "attachment://preview.bin"
+    assert components[0]["items"][0]["description"] == "Preview"
+
+
+def test_figure_collects_asset_for_classic_embed() -> None:
+    asset = sl.document.Asset("preview", "preview.png", "image/png", sl.document.InlineAsset(b"preview"))
+    result = plan(sl.figure(asset, caption="Preview"), target=DISCORD_V1_DPY27)
+    assert len(result.scene.assets) == 1
+    assert result.scene.body.embeds[0].image is not None
+    assert result.scene.body.embeds[0].image.asset_name == "preview.png"
+    assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene

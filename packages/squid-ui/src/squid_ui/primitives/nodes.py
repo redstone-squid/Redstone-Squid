@@ -353,6 +353,7 @@ class CardMedia:
 
     url: str
     description: TextLike | None = None
+    asset_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -418,6 +419,7 @@ class GalleryItem:
     url: str
     description: TextLike | None = None
     spoiler: bool = False
+    asset_name: str | None = None
 
 
 def normalize_gallery_item(value: str | GalleryItem) -> GalleryItem:

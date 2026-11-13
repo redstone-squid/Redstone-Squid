@@ -432,7 +432,10 @@ class _Lowerer:
         )
 
     def _gallery(self, node: scene.HtmlElement, path: str) -> tuple[scene.SlackBlock, ...]:
-        images = tuple(item for item in self._elements(node) if item.tag is scene.HtmlTag.IMG and item.url is not None)
+        all_images = tuple(item for item in self._elements(node) if item.tag is scene.HtmlTag.IMG)
+        if any(item.asset is not None for item in all_images):
+            self.event("slack.image.omitted", path, "Image without a public URL was omitted", PlanSeverity.DEGRADATION)
+        images = tuple(item for item in all_images if item.url is not None)
         cards: list[scene.SlackCard] = []
         for item in images[: self.limits.components.carousel_cards]:
             url = item.url
