@@ -277,14 +277,8 @@ def _draw_node(draw, kind: str):
 
 
 @given(documents())
-def test_rendered_documents_always_fit(nodes):
+def test_rendered_documents_fit_without_conform_interventions(nodes: list) -> None:
     view = sd.static_view(nodes)
+    # Check serialization before conform(), which can repair the view in place.
     assert_within_limits(view)
-
-
-@given(documents())
-def test_measurement_needs_no_conform_interventions(nodes):
-    # The engine must measure exactly: the boundary gate should never have to intervene.
-    measure(nodes)
-    view = sd.static_view(nodes)
     assert conform(view) == []

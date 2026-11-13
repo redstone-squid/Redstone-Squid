@@ -33,7 +33,7 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
-from squid_ui_discord import DISCORD_V2_DPY27, render_static
+from squid_ui_discord import DISCORD_V2_DPY27, render_message
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
@@ -265,20 +265,19 @@ class TestVariantLadders:
             Text(f"line {index}"),
         )
 
-    def test_a_ladder_steps_one_rung_per_iteration(self):
+    def test_equal_priority_ladders_step_breadth_first(self) -> None:
         # Nine ladders at 5 components each is 45; the limit is 40, and the first step of
         # each ladder frees two, so exactly three ladders reach their middle rung.
         result = _planned([self._rungs(index) for index in range(9)])
         rendered = _text(result)
         assert _components(result) <= LIMITS.total_components
         assert "h0.0" in rendered  # stepped once, not straight to the last rung
-        assert "line 0" not in rendered
-
-    def test_equal_priority_ladders_step_breadth_first(self):
-        rendered = _text(_planned([self._rungs(index) for index in range(9)]))
         # Three ladders take rung 1; none takes rung 2 while a sibling is still at rung 0.
         assert sum(f"h{index}.0" in rendered for index in range(9)) == 3
         assert not any(f"line {index}" in rendered for index in range(9))
+        steps = _step_events(result)
+        assert steps[0] == "$.0 stepped to variant 2 of 3 (priority 0) under layout pressure"
+        assert [message.split()[0] for message in steps] == ["$.0", "$.1", "$.2"]
 
     def test_priority_still_outranks_rung_depth(self):
         # Eight ladders at 5 plus four filler texts is 44 against a ceiling of 40, and each
@@ -290,11 +289,6 @@ class TestVariantLadders:
         rendered = _text(_planned([*ladders, *filler]))
         assert "line 0" in rendered  # the low-priority ladder is exhausted first
         assert all(f"p{index}.0" in rendered for index in range(1, 8))
-
-    def test_the_note_names_the_stepped_ladder_and_its_rung(self):
-        steps = _step_events(_planned([self._rungs(index) for index in range(9)]))
-        assert steps[0] == "$.0 stepped to variant 2 of 3 (priority 0) under layout pressure"
-        assert [message.split()[0] for message in steps] == ["$.0", "$.1", "$.2"]
 
     def test_global_search_skips_an_equal_priority_step_that_saves_nothing(self) -> None:
         filler = [Text(f"filler {index}") for index in range(37)]
@@ -347,6 +341,6 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
 
 
 @given(st.integers(min_value=1, max_value=20))
-def test_enough_steps_always_bring_the_document_within_limits(count):
-    assert _components(_planned(_ladder_document(count))) <= LIMITS.total_components
-    render_static(_ladder_document(count))
+def test_enough_steps_always_bring_the_document_within_limits(count: int) -> None:
+    rendered = render_message(_ladder_document(count))
+    assert _components(rendered.plan) <= LIMITS.total_components
