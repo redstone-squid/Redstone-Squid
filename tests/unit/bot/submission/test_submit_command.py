@@ -13,6 +13,7 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account
+from squid.bot.errors import build_error_notice
 from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
@@ -411,5 +412,12 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     cog.bot.is_owner.return_value = False
     member.roles = []
     assert not await editor.workspace.may_edit()
-    with pytest.raises(DraftAccessDeniedError):
+    with pytest.raises(DraftAccessDeniedError) as denied:
         await build_controls.reopen_draft(opened.source, str(draft.snapshot.id))
+    assert denied.value.public_context == {"reason": "staff_permission_required"}
+    notice = build_error_notice(denied.value)
+    assert notice.detail == (
+        "Your current permissions do not allow staff access to submission drafts (build.submission.edit)."
+    )
+    assert "account_id" not in notice.detail
+    assert "discord_user_id" not in notice.detail

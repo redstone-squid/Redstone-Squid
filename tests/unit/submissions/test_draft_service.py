@@ -716,8 +716,10 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
     corrected = await service.apply_change(DRAFT_ID, Actor(account_id=8), _change(), locale="en")
     assert corrected.draft.snapshot.owner_account_id == 7
     assert repository.actors == [8]
-    with pytest.raises(DraftAccessDeniedError):
+    with pytest.raises(DraftAccessDeniedError) as denied:
         await service.get_owned(DRAFT_ID, 8)
+    assert denied.value.public_context == {"reason": "owner_required"}
+    assert denied.value.public_detail() == "Only the account that owns this draft can perform this action."
     permissions.allowed = False
     with pytest.raises(DraftAccessDeniedError):
         await service.get_accessible(DRAFT_ID, Actor(account_id=8))
@@ -744,5 +746,14 @@ async def test_draft_access_requires_actor_even_when_account_owns_the_draft() ->
     # A dynamically typed caller must not restore the old implicit account-to-actor conversion.
     with pytest.raises(TypeError, match="requires an Actor"):
         await service.get_accessible(DRAFT_ID, cast(Actor, 7))
-    with pytest.raises(DraftAccessDeniedError):
+    with pytest.raises(DraftAccessDeniedError) as missing_account:
         await service.get_accessible(DRAFT_ID, Actor())
+    assert missing_account.value.public_context == {"reason": "missing_account"}
+    assert missing_account.value.public_detail() == "No linked account was found for this request."
+
+    with pytest.raises(DraftAccessDeniedError) as unconfigured:
+        await service.get_accessible(DRAFT_ID, Actor(account_id=8, is_bot_owner=True))
+    assert unconfigured.value.public_context == {"reason": "permissions_unconfigured"}
+    assert unconfigured.value.public_detail() == (
+        "Staff access to submission drafts is not configured for this service. Contact the service operator."
+    )

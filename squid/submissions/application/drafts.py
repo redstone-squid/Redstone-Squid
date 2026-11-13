@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID, uuid4
 
 from whenever import Instant
@@ -61,8 +61,34 @@ def draft_actor_id(actor: Actor) -> int:
         raise TypeError(message)
     identifier = actor.account_id
     if identifier is None or identifier < 1:
-        raise DraftAccessDeniedError
+        raise _access_denied(reason="missing_account")
     return identifier
+
+
+def _access_denied(
+    *,
+    reason: Literal["missing_account", "permissions_unconfigured", "staff_permission_required", "owner_required"],
+) -> DraftAccessDeniedError:
+    """Explain the failed rule without exposing the identities used to evaluate it."""
+    match reason:
+        case "missing_account":
+            message = tr(t"submissions-draft-account-required = No linked account was found for this request.")
+        case "permissions_unconfigured":
+            message = tr(
+                t"submissions-draft-staff-unconfigured = Staff access to submission drafts is not configured for this service. Contact the service operator."
+            )
+        case "staff_permission_required":
+            message = tr(
+                t"submissions-draft-staff-required = Your current permissions do not allow staff access to submission drafts (build.submission.edit)."
+            )
+        case "owner_required":
+            message = tr(
+                t"submissions-draft-owner-required = Only the account that owns this draft can perform this action."
+            )
+    return DraftAccessDeniedError(
+        message,
+        public_context={"reason": reason},
+    )
 
 
 class DraftPermissions(Protocol):
@@ -366,7 +392,9 @@ class SubmissionDraftService:
         async with self._uow_factory() as uow:
             draft_actor_id(actor)
             if self._permissions is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT):
-                raise DraftAccessDeniedError
+                raise _access_denied(
+                    reason="permissions_unconfigured" if self._permissions is None else "staff_permission_required",
+                )
             if not 1 <= limit <= 100:
                 message = "Draft inbox limit must be between 1 and 100."
                 raise InvalidStateError(message)
@@ -392,7 +420,9 @@ class SubmissionDraftService:
         if draft.snapshot.owner_account_id != account_id and (
             self._permissions is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
         ):
-            raise DraftAccessDeniedError
+            raise _access_denied(
+                reason="permissions_unconfigured" if self._permissions is None else "staff_permission_required",
+            )
         if draft.snapshot.status is DraftStatus.EXPIRED or (
             draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
             and draft.expires_at <= self._now()
@@ -585,7 +615,9 @@ class SubmissionDraftService:
     @staticmethod
     def _require_owner(draft: StoredDraft, account_id: int) -> None:
         if draft.snapshot.owner_account_id != account_id:
-            raise DraftAccessDeniedError
+            raise _access_denied(
+                reason="owner_required",
+            )
 
 
 class DraftUnitOfWork(PermissionUnitOfWork, Protocol):

@@ -208,7 +208,13 @@ class AuthenticationError(DomainError):
 
 
 class AuthorizationError(DomainError):
-    """The authenticated caller is not allowed to perform an operation."""
+    """The authenticated caller is not allowed to perform an operation.
+
+    When a known rule denies access, explain that rule in the public message and
+    provide a recovery action when one is known. Keep identities and evaluated
+    permission inputs in private context. Use the generic message only when a
+    more specific explanation is unavailable or would disclose protected data.
+    """
 
     default_message = tr(
         t"core-errors-you-do-not-have-permission-to-perform = You do not have permission to perform this action."
