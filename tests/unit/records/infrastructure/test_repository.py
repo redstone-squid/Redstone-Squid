@@ -126,7 +126,7 @@ async def test_standings_filter_is_applied_to_both_rows_and_count() -> None:
 
 
 def test_an_extender_without_measured_variants_competes_on_its_own_timings() -> None:
-    extender = ExtenderBuild(id=1, orientation="Up", extension_length=3, extension_time=4, retraction_time=6)
+    extender = ExtenderBuild(id=1, orientation="Upward", extension_length=3, extension_time=4, retraction_time=6)
 
     candidate = _extender_candidate(extender, ())
     measured = _extender_candidate(extender, (TimingVariant((1, 2, None, None)),))

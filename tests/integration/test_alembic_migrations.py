@@ -2121,3 +2121,40 @@ def test_extender_timings_move_out_of_submission_provenance_without_history(
         command.upgrade(config, "head")
     finally:
         engine.dispose()
+
+
+def test_short_extender_directions_are_spelled_in_full(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "4fd493faba21")
+    engine = create_engine(migration_database_url)
+    directions = ("Up", "Down", "Upward", "Horizontal", None)
+    try:
+        with engine.begin() as connection:
+            _begin_build_edit(connection)
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            builds = {}
+            for direction in directions:
+                build_id = connection.execute(
+                    text(
+                        "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
+                        "VALUES (0, 'Extender', :account, false) RETURNING id"
+                    ),
+                    {"account": account},
+                ).scalar_one()
+                connection.execute(
+                    text("INSERT INTO extenders (build_id, orientation) VALUES (:id, :orientation)"),
+                    {"id": build_id, "orientation": direction},
+                )
+                builds[build_id] = direction
+
+        command.upgrade(config, "d23840d16219")
+        with engine.connect() as connection:
+            stored = dict(connection.execute(text("SELECT build_id, orientation FROM extenders")).all())
+        assert [stored[build_id] for build_id in builds] == ["Upward", "Downward", "Upward", "Horizontal", None]
+        command.upgrade(config, "head")
+    finally:
+        engine.dispose()

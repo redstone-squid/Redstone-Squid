@@ -142,7 +142,9 @@ def test_name_and_visible_timings_preserve_explicit_clears() -> None:
 
 
 def test_extender_patch_preserves_omission_and_clear_semantics() -> None:
-    assert BuildPatch(extender=ExtenderPatch(orientation="Up")).edit_attributes() == {"extender_orientation": "Up"}
+    assert BuildPatch(extender=ExtenderPatch(orientation="Upward")).edit_attributes() == {
+        "extender_orientation": "Upward"
+    }
     assert BuildPatch(extender=ExtenderPatch(extension_length=None)).edit_attributes() == {"extension_length": None}
     assert BuildPatch(extender=ExtenderPatch(extension_time=4, retraction_time=None)).edit_attributes() == {
         "extension_time": 4,

@@ -81,7 +81,7 @@ def project_submission(
             }
         )
     elif category == "extender":
-        orientation = {"Horizontal": "horizontal", "Up": "vertical_up", "Down": "vertical_down"}.get(
+        orientation = {"Horizontal": "horizontal", "Upward": "vertical_up", "Downward": "vertical_down"}.get(
             source.extender_orientation or ""
         )
         values.update({"movement_orientation": orientation, "extension_length": source.extension_length})

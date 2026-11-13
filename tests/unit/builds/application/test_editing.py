@@ -12,7 +12,7 @@ from squid.core.sentinel import UNSET
 
 def test_combine_preserves_every_typed_patch_field() -> None:
     patch = BuildEditPatch(
-        extender_orientation="Up",
+        extender_orientation="Upward",
         extension_length=5,
         extension_time=6,
         retraction_time=7,
@@ -102,7 +102,7 @@ def test_taxonomy_replacements_remove_only_the_replaced_fields_proposals() -> No
 def test_extender_edits_normalize_preserve_and_clear_geometry() -> None:
     build = ExtenderBuild(orientation="Horizontal", extension_length=3)
     BuildEditPatch(extender_orientation="up").apply(build)
-    assert build.orientation == "Up"
+    assert build.orientation == "Upward"
     assert build.extension_length == 3
     BuildEditPatch(extension_length=None).apply(build)
     assert build.extension_length is None

@@ -15,9 +15,8 @@ the editor lists them, the user may remove them, and whatever remains is written
 never drops them silently. The build edit command turns the names back into tags, so it does not
 matter which restriction list a resolved name is sent in.
 
-An answer that did not change never reaches the patch, which matters for fields whose stored
-spelling differs from the form's: an extender stored as "Upward" by a submission would otherwise
-be rejected by the patch validation, which accepts only "Up".
+An answer that did not change never reaches the patch, so opening and saving a build without
+touching a field cannot rewrite how that field is stored.
 """
 
 from collections.abc import Mapping, Sequence
@@ -35,9 +34,7 @@ from squid.tags.domain import TagSemanticKind
 type CatalogueOptions = Mapping[str, Sequence[ChoiceOption]]
 """Choices by option source, such as `approved_restrictions`, as the form option service returns them."""
 
-_EXTENDER_DIRECTIONS = {"Horizontal": "horizontal", "Up": "vertical_up", "Down": "vertical_down"}
-# Submissions store the longer spellings; both mean the same direction.
-_STORED_EXTENDER_DIRECTIONS = {**_EXTENDER_DIRECTIONS, "Upward": "vertical_up", "Downward": "vertical_down"}
+_EXTENDER_DIRECTIONS = {"Horizontal": "horizontal", "Upward": "vertical_up", "Downward": "vertical_down"}
 _PATCH_EXTENDER_DIRECTIONS = {answer: stored for stored, answer in _EXTENDER_DIRECTIONS.items()}
 
 _SERVER_KEYS = {"server_ip": "server_ip", "coordinates": "coordinates", "command_to_get_to_build": "command_to_build"}
@@ -110,7 +107,7 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
         }
     if isinstance(build, ExtenderBuild):
         answers |= {
-            "movement_orientation": _STORED_EXTENDER_DIRECTIONS.get(build.orientation or ""),
+            "movement_orientation": _EXTENDER_DIRECTIONS.get(build.orientation or ""),
             "extension_length": build.extension_length,
         }
     return BuildAnswers(answers, unresolved)

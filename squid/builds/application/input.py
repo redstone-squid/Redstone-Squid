@@ -25,13 +25,27 @@ def parse_build_ticks(text: str) -> int:
     return ticks
 
 
+_EXTENDER_DIRECTIONS = {
+    "horizontal": "Horizontal",
+    "upward": "Upward",
+    "up": "Upward",
+    "downward": "Downward",
+    "down": "Downward",
+}
+
+
 def normalize_extender_orientation(value: str | None) -> str | None:
-    """Normalize an optional extender direction to the stored spelling."""
-    normalized = (value.strip().title() or None) if value is not None else None
-    if normalized not in {None, "Horizontal", "Up", "Down"}:
+    """Normalize an optional extender direction to the stored spelling: Horizontal, Upward, or Downward.
+
+    Up and Down are accepted as short forms. Blank text clears the direction.
+    """
+    text = value.strip().lower() if value is not None else ""
+    if not text:
+        return None
+    if text not in _EXTENDER_DIRECTIONS:
         message = tr(t"build-input-extender-orientation = Choose Horizontal, Up, or Down.")
         raise ValidationError(message)
-    return normalized
+    return _EXTENDER_DIRECTIONS[text]
 
 
 def validate_extension_length(value: int | None) -> int | None:

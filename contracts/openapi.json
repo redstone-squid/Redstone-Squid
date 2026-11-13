@@ -22463,8 +22463,8 @@
                 "type": "string",
                 "enum": [
                   "Horizontal",
-                  "Up",
-                  "Down"
+                  "Upward",
+                  "Downward"
                 ]
               },
               {

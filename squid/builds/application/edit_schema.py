@@ -64,7 +64,7 @@ class ExtenderPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    orientation: Literal["Horizontal", "Up", "Down"] | None = None
+    orientation: Literal["Horizontal", "Upward", "Downward"] | None = None
     extension_length: int | None = Field(default=None, ge=1, le=512)
     extension_time: int | None = Field(default=None, ge=0)
     retraction_time: int | None = Field(default=None, ge=0)

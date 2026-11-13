@@ -69,7 +69,7 @@ def test_door_types_use_the_stored_spelling() -> None:
     assert patch.door_orientation_type == "Skydoor"
 
 
-def test_an_extender_stored_by_a_submission_keeps_its_direction_unless_changed() -> None:
+def test_an_extender_keeps_its_direction_unless_changed() -> None:
     extender = ExtenderBuild(id=2, submission_status=Status.CONFIRMED, submitter_account_id=1)
     extender.orientation, extender.extension_length = "Upward", 4
     before = answers_from_build(extender, OPTIONS)
