@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  UV_VERSION: "0.11.32"
+  UV_VERSION: "0.13.7"
 
 concurrency:
   group: fuzzing
@@ -16,8 +16,9 @@ concurrency:
 
 jobs:
   version-parser:
-    # Restore when Atheris supports Python 3.15: https://github.com/google/atheris#installation-instructions
-    if: ${{ false }}
+    # Enable the repository variable once Atheris supports Python 3.15:
+    # https://github.com/google/atheris#installation-instructions
+    if: ${{ vars.ENABLE_ATHERIS_PY315 == 'true' }}
     name: Version parser
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -31,7 +32,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv and Python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.15"
@@ -57,7 +58,7 @@ jobs:
 
       - name: Upload evolved corpus and crash artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: version-parser-fuzz-${{ github.run_id }}
           path: .fuzz/

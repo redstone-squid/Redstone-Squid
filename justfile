@@ -36,7 +36,7 @@ sync:
 
 alias up := upgrade
 upgrade *packages:
-    uv sync {{ prepend("--upgrade-package ", packages) }}
+    uv sync {{ if packages == "" { "--upgrade" } else { prepend("--upgrade-package ", packages) } }}
 
 compile:
     uv export --locked --no-dev --no-emit-workspace --output-file requirements/base.txt
