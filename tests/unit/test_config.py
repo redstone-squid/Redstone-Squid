@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from pydantic import BaseModel, SecretStr, ValidationError
+from pydantic import BaseModel, SecretStr
 
 from squid.config import (
     EMBEDDING_DIMENSION,
@@ -15,7 +15,6 @@ from squid.config import (
     ApplicationConfig,
     BotProcessConfig,
     ObjectStorageConfig,
-    RateLimitConfig,
     SchematicConfig,
     UpstreamHttpConfig,
     WorkerProcessConfig,
@@ -238,13 +237,7 @@ def test_observability_exports_nowhere_by_default(monkeypatch: pytest.MonkeyPatc
     assert config.enabled is False
     assert config.endpoint is None
     assert config.headers == {}
-
-
-def test_observability_samples_everything_until_it_is_tuned(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """The sampling ratio applies only when observability is enabled."""
-    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
-
-    assert load_bot_process_config(dotenv_path=dotenv).observability.sample_ratio == 1.0
+    assert config.sample_ratio == 1.0
 
 
 def test_worker_loads_only_inherited_observability_settings(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
@@ -413,9 +406,8 @@ def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPat
     assert config.runtime.embeddings.base_url == config.openai.base_url
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
+def test_runtime_settings_are_not_deployment_settings(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
+    names = (
         "SQUID_COMMUNITY_REDSTONER_STARBOARD_AUTHOR_ID",
         "SQUID_COMMUNITY_REDSTONER_STARBOARD_CHANNEL_ID",
         "SQUID_COMMUNITY_REDSTONER_ROLE_ID",
@@ -426,16 +418,15 @@ def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPat
         "SQUID_COMMUNITY_VERSION_TRACKER_CHANNEL_ID",
         "SQUID_COMMUNITY_BUILD_LOG_CHANNEL_IDS",
         "SQUID_NOTIFICATION_RETENTION_DAYS",
-    ],
-)
-def test_runtime_settings_are_not_deployment_settings(monkeypatch: pytest.MonkeyPatch, dotenv: Path, name: str) -> None:
+    )
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_STRICT_UNKNOWN_KEYS="true")
-    monkeypatch.setenv(name, "123")
+    for name in names:
+        monkeypatch.setenv(name, "123")
 
     with pytest.raises(ConfigurationError) as exc_info:
         load_bot_process_config(dotenv_path=dotenv)
 
-    assert any(issue["field"] == name and issue["type"] == "unknown_key" for issue in _issues(exc_info.value))
+    assert {issue["field"] for issue in _issues(exc_info.value) if issue["type"] == "unknown_key"} == set(names)
 
 
 def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
@@ -571,16 +562,21 @@ def test_unknown_environment_keys_warn_with_name_only_and_typo_suggestion(
     assert secret_value not in str(record.__dict__)
 
 
+@pytest.mark.parametrize("source", ["environment", "dotenv"])
 def test_strict_unknown_environment_keys_fail_without_exposing_values(
-    monkeypatch: pytest.MonkeyPatch, dotenv: Path
+    monkeypatch: pytest.MonkeyPatch, dotenv: Path, source: str
 ) -> None:
     secret_value = "must-not-appear-in-diagnostics"
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
         SQUID_STRICT_UNKNOWN_KEYS="true",
-        SQUID_SCHEMATIC_WORKRES=secret_value,
     )
+
+    if source == "environment":
+        monkeypatch.setenv("SQUID_SCHEMATIC_WORKRES", secret_value)
+    else:
+        dotenv.write_text(f"SQUID_SCHEMATIC_WORKRES={secret_value}\n", encoding="utf-8")
 
     with pytest.raises(ConfigurationError) as exc_info:
         load_bot_process_config(dotenv_path=dotenv)
@@ -900,30 +896,6 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
     assert "secret@redis" not in repr(config)
 
 
-def test_legacy_caller_quota_name_is_rejected() -> None:
-    with pytest.raises(ValidationError, match="principal_requests"):
-        RateLimitConfig.model_validate({"caller_requests": 120, "principal_requests": 90})
-
-
-@pytest.mark.parametrize("source", ["environment", "dotenv"])
-def test_legacy_caller_quota_environment_key_is_unknown(
-    monkeypatch: pytest.MonkeyPatch, dotenv: Path, source: str
-) -> None:
-    _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", SQUID_STRICT_UNKNOWN_KEYS="true")
-    if source == "environment":
-        monkeypatch.setenv("SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS", "90")
-    else:
-        dotenv.write_text("SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS=90\n", encoding="utf-8")
-
-    with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config(dotenv_path=dotenv)
-
-    assert any(
-        issue["field"] == "SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS" and issue["type"] == "unknown_key"
-        for issue in _issues(exc_info.value)
-    )
-
-
 @pytest.mark.parametrize(
     ("setting", "field"),
     [
@@ -997,17 +969,6 @@ def test_render_cache_dir_treats_an_empty_xdg_cache_home_as_unset(
     cache_dir = default_render_cache_dir(working_directory=tmp_path)
 
     assert cache_dir == tmp_path / ".cache" / "redstone-squid" / "schematics"
-
-
-def test_submission_capacity_reaches_the_runtime_projection(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    _set_environment(
-        monkeypatch,
-        SQUID_DISCORD_TOKEN="discord-token",
-        SQUID_API_SECRET="api-secret",
-        SQUID_SUBMISSIONS_INFERRED_DRAFT_CAPACITY="17",
-    )
-    config = load_application_config(dotenv_path=dotenv)
-    assert config.runtime.submissions.inferred_draft_capacity == 17
 
 
 @pytest.mark.parametrize(

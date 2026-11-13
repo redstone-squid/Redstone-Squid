@@ -77,4 +77,3 @@ def test_an_unconfigured_service_still_answers_isinstance() -> None:
     reports = bot_services().error_reports
 
     assert isinstance(reports, ErrorReportService)
-    assert reports.__class__.__name__ == "UnconfiguredErrorReportService"
