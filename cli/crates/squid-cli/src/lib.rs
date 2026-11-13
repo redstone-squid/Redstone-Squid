@@ -3301,133 +3301,96 @@ mod tests {
     }
 
     #[test]
-    fn profile_lifecycle_has_stable_json() {
-        let directory = tempdir();
-        assert!(
-            directory.is_ok(),
-            "temporary directory failed: {directory:?}"
-        );
-        if let Ok(directory) = directory {
-            let store = ProfileStore::new(ProfilePaths::under(directory.path()));
-            let add = Cli::try_parse_from([
-                "squid",
-                "--output",
-                "json",
-                "profile",
-                "add",
-                "local",
-                "--origin",
-                "http://127.0.0.1:8000",
-                "--trust",
-                "--default-locale",
-                "zh-CN",
-                "--editor",
-                "prompt",
-                "--no-update-checks",
-            ]);
-            assert!(add.is_ok(), "profile add did not parse: {add:?}");
-            if let Ok(add) = add {
-                if let Command::Profile { command } = add.command {
-                    let mut output = Vec::new();
-                    let result =
-                        run_profile(command, OutputFormat::Json, Locale::En, &store, &mut output);
-                    assert!(result.is_ok(), "profile add failed: {result:?}");
-                    let value = serde_json::from_slice::<serde_json::Value>(&output);
-                    assert!(value.is_ok(), "profile add was not JSON: {value:?}");
-                    if let Ok(value) = value {
-                        assert_eq!(value["command"], "profile.add");
-                        assert_eq!(value["data"]["name"], "local");
-                        assert_eq!(value["data"]["origin"], "http://127.0.0.1:8000");
-                        assert_eq!(value["data"]["locale"], "zh-CN");
-                        assert_eq!(value["data"]["editor"], "prompt");
-                        assert_eq!(value["data"]["update_checks"], false);
-                    }
-                }
-            }
+    fn profile_lifecycle_has_stable_json() -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempdir()?;
+        let store = ProfileStore::new(ProfilePaths::under(directory.path()));
+        let add = Cli::try_parse_from([
+            "squid",
+            "--output",
+            "json",
+            "profile",
+            "add",
+            "local",
+            "--origin",
+            "http://127.0.0.1:8000",
+            "--trust",
+            "--default-locale",
+            "zh-CN",
+            "--editor",
+            "prompt",
+            "--no-update-checks",
+        ])?;
+        let Command::Profile { command } = add.command else {
+            return Err("profile add parsed as another command".into());
+        };
+        let mut output = Vec::new();
+        run_profile(command, OutputFormat::Json, Locale::En, &store, &mut output)
+            .map_err(|error| format!("{error:?}"))?;
+        let value: serde_json::Value = serde_json::from_slice(&output)?;
+        assert_eq!(value["command"], "profile.add");
+        assert_eq!(value["data"]["name"], "local");
+        assert_eq!(value["data"]["origin"], "http://127.0.0.1:8000");
+        assert_eq!(value["data"]["locale"], "zh-CN");
+        assert_eq!(value["data"]["editor"], "prompt");
+        assert_eq!(value["data"]["update_checks"], false);
 
-            let list = Cli::try_parse_from(["squid", "profile", "list"]);
-            assert!(list.is_ok(), "profile list did not parse: {list:?}");
-            if let Ok(list) = list {
-                if let Command::Profile { command } = list.command {
-                    let mut output = Vec::new();
-                    let result = run_profile(
-                        command,
-                        OutputFormat::Human,
-                        Locale::ZhCn,
-                        &store,
-                        &mut output,
-                    );
-                    assert!(result.is_ok(), "profile list failed: {result:?}");
-                    let rendered = String::from_utf8(output);
-                    assert!(rendered.is_ok(), "profile list was not UTF-8: {rendered:?}");
-                    if let Ok(rendered) = rendered {
-                        assert!(rendered.contains("* local"));
-                        assert!(rendered.contains("来源：http://127.0.0.1:8000"));
-                    }
-                }
-            }
+        let list = Cli::try_parse_from(["squid", "profile", "list"])?;
+        let Command::Profile { command } = list.command else {
+            return Err("profile list parsed as another command".into());
+        };
+        let mut output = Vec::new();
+        run_profile(
+            command,
+            OutputFormat::Human,
+            Locale::ZhCn,
+            &store,
+            &mut output,
+        )
+        .map_err(|error| format!("{error:?}"))?;
+        let rendered = String::from_utf8(output)?;
+        assert!(rendered.contains("* local"));
+        assert!(rendered.contains("来源：http://127.0.0.1:8000"));
 
-            let remove = Cli::try_parse_from([
-                "squid", "--output", "json", "profile", "remove", "local", "--yes",
-            ]);
-            assert!(remove.is_ok(), "profile remove did not parse: {remove:?}");
-            if let Ok(remove) = remove {
-                if let Command::Profile { command } = remove.command {
-                    let mut output = Vec::new();
-                    let result =
-                        run_profile(command, OutputFormat::Json, Locale::En, &store, &mut output);
-                    assert!(result.is_ok(), "profile remove failed: {result:?}");
-                    let value = serde_json::from_slice::<serde_json::Value>(&output);
-                    assert!(value.is_ok(), "profile remove was not JSON: {value:?}");
-                    if let Ok(value) = value {
-                        assert_eq!(value["data"]["removed"], true);
-                        assert_eq!(value["data"]["purged_credential_backend"], "system");
-                    }
-                    let loaded = store.load();
-                    assert!(loaded.is_ok(), "profile store failed: {loaded:?}");
-                    if let Ok(loaded) = loaded {
-                        assert!(loaded.profiles.is_empty());
-                    }
-                }
-            }
-        }
+        let remove = Cli::try_parse_from([
+            "squid", "--output", "json", "profile", "remove", "local", "--yes",
+        ])?;
+        let Command::Profile { command } = remove.command else {
+            return Err("profile remove parsed as another command".into());
+        };
+        let mut output = Vec::new();
+        run_profile(command, OutputFormat::Json, Locale::En, &store, &mut output)
+            .map_err(|error| format!("{error:?}"))?;
+        let value: serde_json::Value = serde_json::from_slice(&output)?;
+        assert_eq!(value["data"]["removed"], true);
+        assert_eq!(value["data"]["purged_credential_backend"], "system");
+        assert!(store.load()?.profiles.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn adding_profile_requires_explicit_trust() {
-        let directory = tempdir();
-        assert!(
-            directory.is_ok(),
-            "temporary directory failed: {directory:?}"
+    fn adding_profile_requires_explicit_trust() -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempdir()?;
+        let store = ProfileStore::new(ProfilePaths::under(directory.path()));
+        let cli = Cli::try_parse_from([
+            "squid",
+            "profile",
+            "add",
+            "main",
+            "--origin",
+            "https://example.com",
+        ])?;
+        let Command::Profile { command } = cli.command else {
+            return Err("profile add parsed as another command".into());
+        };
+        let result = run_profile(
+            command,
+            OutputFormat::Human,
+            Locale::En,
+            &store,
+            &mut Vec::new(),
         );
-        if let Ok(directory) = directory {
-            let store = ProfileStore::new(ProfilePaths::under(directory.path()));
-            let cli = Cli::try_parse_from([
-                "squid",
-                "profile",
-                "add",
-                "main",
-                "--origin",
-                "https://example.com",
-            ]);
-            assert!(cli.is_ok(), "profile add did not parse: {cli:?}");
-            if let Ok(cli) = cli {
-                if let Command::Profile { command } = cli.command {
-                    let result = run_profile(
-                        command,
-                        OutputFormat::Human,
-                        Locale::En,
-                        &store,
-                        &mut Vec::new(),
-                    );
-                    assert!(result.is_err());
-                    let loaded = store.load();
-                    assert!(loaded.is_ok(), "profile store failed: {loaded:?}");
-                    if let Ok(loaded) = loaded {
-                        assert!(loaded.profiles.is_empty());
-                    }
-                }
-            }
-        }
+        assert!(result.is_err());
+        assert!(store.load()?.profiles.is_empty());
+        Ok(())
     }
 }
