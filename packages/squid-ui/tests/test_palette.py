@@ -2,7 +2,9 @@
 
 import pytest
 
+import squid_ui as sl
 from squid_ui import Palette, PaletteRegistry
+from squid_ui.planning.structure import resolve_accent
 
 
 def test_registry_copies_its_input_and_resolves_the_default() -> None:
@@ -47,3 +49,22 @@ def test_registry_rejects_empty_registration_and_unknown_resolution() -> None:
         registry.set_default("missing")
 
     assert registry.resolve() == Palette()
+
+
+@pytest.mark.parametrize("accent", [*sl.Tone, sl.AccentRole.BRAND, sl.INHERIT, None, 0x123456])
+def test_accent_roles_follow_the_active_palette(accent: sl.Accent) -> None:
+    palette = Palette(brand=1, neutral=2, info=3, success=4, warning=5, danger=6)
+    expected = {
+        sl.Tone.NEUTRAL: 2,
+        sl.Tone.INFO: 3,
+        sl.Tone.SUCCESS: 4,
+        sl.Tone.WARNING: 5,
+        sl.Tone.DANGER: 6,
+        sl.AccentRole.BRAND: 1,
+        sl.INHERIT: 1,
+        None: None,
+        0x123456: 0x123456,
+    }[accent]
+    assert resolve_accent(accent, palette) == expected
+    if isinstance(accent, sl.Tone):
+        assert resolve_accent(accent, Palette(neutral=None, info=None, success=None, warning=None, danger=None)) is None

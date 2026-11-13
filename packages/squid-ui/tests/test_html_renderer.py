@@ -188,3 +188,17 @@ def test_separately_authored_markdown_fragments_stay_separate_in_html() -> None:
     html = Renderer().draw(result.scene, plan=result)
     assert "**Ada**" in html
     assert "<strong>Ada</strong>" not in html
+
+
+def test_semantic_accents_use_scoped_palette_colours() -> None:
+    document = sl.group(
+        sl.block("outer", accent=sl.Tone.SUCCESS),
+        sl.themed(sl.Palette(success=0x112233), sl.section(sl.heading("inner"), accent=sl.Tone.SUCCESS)),
+        sl.article(sl.heading("brand"), accent=sl.AccentRole.BRAND),
+    )
+    result = sl.planning.plan(document, target=sl.html.target(), palette=sl.Palette(success=0x445566, brand=0x778899))
+
+    rendered = Renderer().draw(result.scene)
+
+    for colour in ("#445566", "#112233", "#778899"):
+        assert f"--squid-accent:{colour}" in rendered

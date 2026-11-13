@@ -220,7 +220,7 @@ class Themed[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTa
 
 @dataclass(frozen=True, slots=True)
 class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
-    """An untitled semantic region with an exact or inherited accent."""
+    """An untitled semantic region with a palette role, exact colour, or inherited accent."""
 
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     accent: Accent = INHERIT
@@ -230,11 +230,9 @@ class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
 class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A titled block of related content.
 
-    ``accent`` is an exact colour override, not a semantic fact. Omit it to inherit the
-    active `Palette.brand`, pass ``None`` to opt out of an inherited accent, and pass a
-    colour when the exact value is data (such as a guild's configured colour). Colour that
-    *means* something — advisory, warning, failed — belongs on `Aside` or `Status` via
-    `Tone`, which the active palette maps without discarding the semantic meaning.
+    ``accent`` accepts a `Tone` or `AccentRole.BRAND`, resolved through the active palette.
+    Omit it to use `Palette.brand`, pass ``None`` for no accent, or pass an exact colour
+    when the value is data, such as a guild's configured colour.
 
     ``thumbnail`` is a lead image shown beside the required heading.
     """

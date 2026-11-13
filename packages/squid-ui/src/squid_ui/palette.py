@@ -17,6 +17,12 @@ class Tone(StrEnum):
     DANGER = "danger"
 
 
+class AccentRole(StrEnum):
+    """Palette roles for structural accents that do not express a tone."""
+
+    BRAND = "brand"
+
+
 class AccentDefault(StrEnum):
     """How an omitted structural accent obtains its presentation colour."""
 
@@ -24,7 +30,7 @@ class AccentDefault(StrEnum):
 
 
 INHERIT = AccentDefault.INHERIT
-type Accent = Color | AccentDefault | None
+type Accent = Color | Tone | AccentRole | AccentDefault | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +102,7 @@ __all__ = [
     "INHERIT",
     "Accent",
     "AccentDefault",
+    "AccentRole",
     "Palette",
     "PaletteRegistry",
     "Tone",

@@ -241,6 +241,8 @@ def test_palette_resolves_inherited_exact_and_explicitly_absent_accents() -> Non
         sl.block("inherited"),
         sl.block("absent", accent=None),
         sl.block("exact", accent=0x123456),
+        sl.section(sl.heading("brand"), accent=sl.AccentRole.BRAND),
+        sl.article(sl.heading("warning"), accent=sl.Tone.WARNING),
         sl.aside("semantic", tone=sl.Tone.WARNING),
     )
 
@@ -254,18 +256,20 @@ def test_palette_resolves_inherited_exact_and_explicitly_absent_accents() -> Non
         0xABCDEF,
         None,
         0x123456,
+        0xABCDEF,
+        0x654321,
         0x654321,
     ]
 
 
 def test_palette_scope_is_dynamic_and_does_not_leak_to_siblings() -> None:
     document = (
-        sl.block("outer before"),
-        sl.themed(sl.Palette(brand=0x222222), sl.block("inner")),
-        sl.block("outer after"),
+        sl.block("outer before", accent=sl.Tone.INFO),
+        sl.themed(sl.Palette(info=0x222222), sl.block("inner", accent=sl.Tone.INFO)),
+        sl.block("outer after", accent=sl.Tone.INFO),
     )
 
-    panels = plan(document, target=DISCORD_V2_DPY27, palette=sl.Palette(brand=0x111111)).scene.components_v2.children
+    panels = plan(document, target=DISCORD_V2_DPY27, palette=sl.Palette(info=0x111111)).scene.components_v2.children
 
     assert [panel.accent for panel in panels if isinstance(panel, scene.Panel)] == [0x111111, 0x222222, 0x111111]
 
