@@ -42,3 +42,25 @@ makes a screen longer and harder to scan.
 Browsers say Previous and Next. Pass `chronology=sl.sources.Chronology.NEWEST_FIRST` (or
 `OLDEST_FIRST`) only for lists sorted by time; they then say Newer and Older, pointing the way each
 step really goes. Check the query's sort order before declaring it.
+
+## Keeping screens within Discord limits
+
+Test the crowded states, not just the first render: full result pages, detailed cards,
+all permission-dependent actions, every tab, and the messages shown after form submission.
+`stage()` checks message limits after presentation and interactions, and raises layout
+failures even when the application's error policy reports them successfully.
+
+Choose overflow behavior where you compose the screen:
+
+- Put help or detailed content in a separate view when it competes with a browser for space.
+  Preserve the browser state so returning does not repeat the query.
+- Use `sl.fallback(primary, compact)` for equivalent authored representations. The planner
+  selects the compact form under pressure. Keep necessary information and actions reachable;
+  a fallback is a complete replacement, not permission to silently discard content.
+- Return `Document(..., key="screen")` for standalone content that can span message pages.
+  Navigation consumes budget too. Local and root pagination cannot run simultaneously.
+
+Search help demonstrates a structured reference with a compact text alternative. Test that
+both representations preserve the content, that the preferred form wins when it fits, and
+that exhausting every alternative produces a useful failure. Layout error reports include
+screen and action identities plus budget metadata without copying rendered content.

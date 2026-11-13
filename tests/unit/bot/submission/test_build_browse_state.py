@@ -23,7 +23,7 @@ from squid.records.application.models import PublishedTitle, RecordGap
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
-from squid.search.domain import SearchMode, SearchPage, SearchScope
+from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchMode, SearchPage, SearchScope
 from squid_reactivity import LocalTopicBus
 from squid_ui.testing import press_event, submit_event
 from squid_ui_discord.testing import stage
@@ -280,6 +280,13 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
         ui.control(ui.key_for("schematic-tools"))
         assert any("Submission ID: 7" in text for text in ui.texts())
         ui.assert_within_limits()
+        await ui.press(ui.key_for("search-help"))
+        for tab in ("fields", "syntax", "examples"):
+            await ui.press(ui.key_for(f"search-reference.{tab}"))
+            assert not any("Submission ID: 7" in text for text in ui.texts())
+            ui.assert_within_limits()
+        await ui.press(ui.key_for("search-help"))
+        assert any("Submission ID: 7" in text for text in ui.texts())
 
 
 async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
@@ -506,3 +513,40 @@ async def test_search_help_hides_and_restores_selected_build() -> None:
         await ui.press(ui.key_for("search-help"))
         assert "Build #7" in ui.texts()
         ui.assert_within_limits()
+
+
+@pytest.mark.parametrize("records", [False, True])
+async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
+    screen = _screen(initial_id=None)
+    queries = cast(AsyncMock, screen._queries)
+    queries.list_page.return_value = Page(
+        items=tuple(DoorBuild(id=index, submission_status=Status.CONFIRMED) for index in range(1, 9)),
+        total=8,
+        next=None,
+        prev=None,
+    )
+    screen._mode = "records" if records else "builds"
+    service = cast(AsyncMock, screen._search_service)
+    service.search.return_value = SearchPage(
+        hits=tuple(
+            RecordSearchHit(str(index), f"Fastest door {index}", "Java", index, f"Door {index}", "fastest", "all_time")
+            if records
+            else BuildSearchHit(str(index), f"Door {index}", "confirmed", "A detailed door description")
+            for index in range(1, 9)
+        ),
+        total=8,
+        next=None,
+        prev=None,
+    )
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("search-help"))
+        await ui.press(ui.key_for("search-help"))
+        form = await ui.press_for_form(ui.key_for("catalogue-search"))
+        await form.submit({"query": "door", "sort": ""})
+        await ui.press(ui.key_for("search-help"))
+        for tab in ("fields", "syntax", "examples"):
+            await ui.press(ui.key_for(f"search-reference.{tab}"))
+            ui.assert_within_limits()
+        await ui.press(ui.key_for("search-help"))
+        assert "## Search results" in ui.texts()
+        service.search.assert_awaited_once()

@@ -10,6 +10,8 @@ from squid.bot.ui import tr
 from squid.builds.domain import BuildCategory
 from squid.records.domain import BaseTitle, BuildKind, VersionScope
 from squid_i18n import md_tr
+from squid_ui.semantic import Fields, Paragraph
+from squid_ui.text import Text
 
 # Examples are also parsed in tests so the reference cannot drift from the query language.
 BUILD_EXAMPLES = (
@@ -112,7 +114,7 @@ def search_help(
             sp.Tab(
                 "fields",
                 tr(t"search-reference-fields = Fields & values"),
-                sl.section(sl.heading(tr(t"search-reference-fields = Fields & values")), *fields),
+                sl.section(sl.heading(tr(t"search-reference-fields = Fields & values")), _reference(fields)),
             ),
             sp.Tab(
                 "examples",
@@ -176,5 +178,15 @@ def search_help(
     )
 
 
-def _entry(label: str, value: sl.TextLike) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+def _entry(label: str, value: sl.TextLike) -> Fields:
     return sl.fields(sl.field(label, value))
+
+
+def _reference(entries: tuple[Fields | Paragraph, ...]) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    lines: list[sl.TextLike] = []
+    for entry in entries:
+        if isinstance(entry, Paragraph):
+            lines.append(entry.content)
+        else:
+            lines.extend(Text.join(": ", (field.label, field.value)) for field in entry.fields)
+    return sl.fallback(sl.stack(*entries), sl.paragraph(Text.join("\n\n", lines)))
