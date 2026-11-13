@@ -388,24 +388,24 @@ export type CreatorAliasDetail = {
  */
 export type CreatorProfileDetail = {
     id: string;
-    canonical_id: string | null;
     hidden: boolean;
-    aliases: Array<CreditedAliasDetail>;
-    display_name: string | null;
-    bio: string | null;
-    pronouns: string | null;
-    links: Array<CreatorsProfileLinkDetail>;
-    avatar_url: string | null;
-    joined_at: unknown | null;
-    identities: Array<PublicIdentityDetail>;
+    aliases?: Array<CreditedAlias>;
+    canonical_id?: string | null;
+    display_name?: string | null;
+    bio?: string | null;
+    pronouns?: string | null;
+    links?: Array<ProfileLink>;
+    avatar_url?: string | null;
+    joined_at?: string | null;
+    identities?: Array<IdentityDetails>;
 };
 
 /**
- * CreditedAliasDetail
+ * CreditedAlias
  */
-export type CreditedAliasDetail = {
+export type CreditedAlias = {
     name: string;
-    build_count: number;
+    build_count?: number;
 };
 
 /**
@@ -813,8 +813,17 @@ export type IdentityDetail = {
     provider: IdentityProvider;
     subject: string;
     display_name: string | null;
-    verified_at: unknown | null;
+    verified_at: string | null;
     is_public: boolean;
+};
+
+/**
+ * IdentityDetails
+ */
+export type IdentityDetails = {
+    provider: IdentityProvider;
+    subject: string;
+    display_name?: string | null;
 };
 
 /**
@@ -926,7 +935,7 @@ export type MediaKind = 'image' | 'video';
  */
 export type MergeCodeDetail = {
     code: string;
-    expires_at: unknown;
+    expires_at: string;
 };
 
 /**
@@ -1177,9 +1186,25 @@ export type ProfileDetail = {
     display_name: string | null;
     bio: string | null;
     pronouns: string | null;
-    links: Array<MeProfileLinkDetail>;
+    links: Array<ProfileLinkDetail>;
     hidden: boolean;
     avatar: AvatarDetail | null;
+};
+
+/**
+ * ProfileLink
+ */
+export type ProfileLink = {
+    label: string;
+    url: string;
+};
+
+/**
+ * ProfileLinkDetail
+ */
+export type ProfileLinkDetail = {
+    label: string;
+    url: string;
 };
 
 /**
@@ -1189,7 +1214,7 @@ export type ProfileUpdateRequest = {
     display_name?: string | null;
     bio?: string | null;
     pronouns?: string | null;
-    links?: Array<MeProfileLinkDetail> | null;
+    links?: Array<ProfileLinkDetail> | null;
     hidden?: boolean | null;
     avatar_identity_id?: number | null;
 };
@@ -1207,15 +1232,6 @@ export type ProtocolCapabilities = {
 export type ProtocolInterval = {
     minimum: number;
     maximum: number;
-};
-
-/**
- * PublicIdentityDetail
- */
-export type PublicIdentityDetail = {
-    provider: IdentityProvider;
-    subject: string;
-    display_name: string | null;
 };
 
 /**
@@ -1657,7 +1673,7 @@ export type UserMe = {
     id: number;
     revision: number;
     creator_id: string;
-    created_at: unknown | null;
+    created_at: string | null;
     consent_version: string | null;
     consent_pending: boolean;
     identities: Array<IdentityDetail>;
@@ -1863,22 +1879,6 @@ export type VoteTallies = {
  * How much of a generic poll's state is disclosed while it is open.
  */
 export type VoteVisibility = 'anonymous_live' | 'visible_live' | 'anonymous_hidden';
-
-/**
- * ProfileLinkDetail
- */
-export type CreatorsProfileLinkDetail = {
-    label: string;
-    url: string;
-};
-
-/**
- * ProfileLinkDetail
- */
-export type MeProfileLinkDetail = {
-    label: string;
-    url: string;
-};
 
 export type HealthLiveData = {
     body?: never;
