@@ -14,12 +14,17 @@ class _Reports(ErrorReportService):
         pass
 
 
-def test_empty_graphs_construct_with_every_service_left_unconfigured() -> None:
+def test_empty_graphs_leave_services_unconfigured_and_optional_collaborators_absent() -> None:
     bot = bot_services()
     worker = worker_services()
 
     assert isinstance(bot, BotServices)
-    assert not any(is_configured(getattr(bot, field)) for field in BotServices.__dataclass_fields__)
+    assert bot.schematic_summaries is None
+    assert not any(
+        is_configured(getattr(bot, field))
+        for field in BotServices.__dataclass_fields__
+        if field != "schematic_summaries"
+    )
     assert isinstance(worker, WorkerServices)
     assert worker.media_runner is None
 
