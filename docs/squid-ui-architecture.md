@@ -1146,8 +1146,13 @@ stale across processes.
 Root structural pagination is opt-in: return `Document(..., key="screen")` from the root
 component. If top-level structure still exceeds the component limit after lossless adaptation,
 the planner partitions it into measured whole-message pages. Local pagination has precedence.
-If a document needs active local and root pagers simultaneously, planning fails with remedies;
-the engine never presents two competing navigation systems.
+This legacy path rejects simultaneous local and root pagers. For independently navigable
+content, use `sl.region` on Components V2: its joint solver combines resource-vector
+frontiers for siblings and nested regions, including persistent content and navigation.
+Each allocation bounds every reachable page and is committed only after delivery.
+Page turns reuse the committed allocation; content or target changes permit replanning.
+See the [region API](squid-ui-quickstart.md#joint-page-regions) for identity, ownership,
+and bounded-search behavior.
 
 ## Scenes and renderers
 

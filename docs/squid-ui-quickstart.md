@@ -205,3 +205,70 @@ Synchronous HTML rendering and `build_files()` read synchronously. Custom async
 Discord destinations should use `await payload.prepare_files()` to avoid blocking
 the event loop. `Asset` and `StoredAsset` remain available for host-managed durable
 references; local paths and streams belong to the current process.
+
+## Joint page regions
+
+For Discord Components V2, `sl.region` allocates space together with sibling and
+nested regions. Use `header` and `footer` for content that must remain visible on
+every page of that region. `title` labels its Previous and Next controls; put a
+heading in `header` when the title should also appear above the content.
+
+```python
+return sl.Document(
+    (
+        sl.region(
+            sl.region(
+                *(sl.paragraph(item.description, key=str(item.id)) for item in results),
+                key="results",
+                title="Results",
+                header=(sl.heading("Results"),),
+            ),
+            sl.region(
+                render_overview(build),
+                render_timing(build),
+                key=f"build:{build.id}",
+                title="Build details",
+            ),
+            key="browser",
+            title="Build browser",
+            header=(workspace_controls(),),
+            footer=(close_action(),),
+        ),
+    ),
+    key="build-browser",
+)
+```
+
+The planner measures persistent content and navigation before choosing page
+boundaries. Each region reserves enough room for its largest page. Successful
+delivery commits those allocations and boundaries; subsequent page turns reuse
+them. Content, locale, target limits, or control-state changes permit a new
+allocation. Hidden regions keep their positions while they remain in the tree.
+The planner consumes the supplied data snapshot; it does not fetch more results.
+
+Use existing `key=` arguments for content identity. Paragraphs, groups, stacks,
+blocks, and sections accept optional keys. Keys are unique among siblings and
+region cursor paths include their ancestors. Keys preserve reading position
+across insertion and reordering; unkeyed content has no such guarantee. A key
+does not make content indivisible: groups and stacks may break between children.
+Wrap a group in `.unbreakable()` to keep it together, or use `.keep_with_next()`
+to prohibit the next break. Existing action keys retain their dispatch scopes.
+
+`page=` accepts the existing uncontrolled, controlled, and routed ownership
+policies. Planning never invokes change handlers. Explicit application page
+requests take precedence over remembered anchors. Existing `sl.paged` regions
+retain their character cap when composed inside a joint region; other local
+pagers are measured across every reachable page before their envelope is used.
+
+Use `sl.fallback(primary, compact)` to offer another representation. Allocation
+compares fidelity, total page turns, representation preference, then resource
+cost, with deterministic ties. Strict planning rejects a selected degradation.
+`result.report.regions` describes each region's allocation, page count, resolved
+page, and anchor. `result.cost` bounds the message across its region pages.
+
+Search is bounded by the request's `search_budget`: up to that many backend
+measurements and its square in frontier expansions. A document that fits without
+pagination uses a fast path. A proven lack of feasible allocations raises
+`UnsolvableLayoutError`; an unfinished search raises `LayoutSearchExhaustedError`.
+No partial result or cursor writes are published in either case. Other target
+families currently reject joint regions explicitly.

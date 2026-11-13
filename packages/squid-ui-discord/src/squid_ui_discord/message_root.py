@@ -40,7 +40,7 @@ from squid_reactivity.transactions import (
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
 from squid_ui.document import Document
-from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.forms import FormSpec, FormValidationMode, SubmitHandler
 from squid_ui.guards import Challenge, GuardLedger, approvals
 from squid_ui.interactions import (
@@ -847,7 +847,7 @@ class MessageRoot[
                     cache=self.runtime.plan_cache,
                     memo=self.runtime.plan_memo,
                 )
-            except UnsolvableLayoutError as error:
+            except (UnsolvableLayoutError, LayoutSearchExhaustedError) as error:
                 error.context["screen"] = f"{type(self.component).__module__}.{type(self.component).__qualname__}"
                 raise
             if planner_span is not None:
@@ -1720,7 +1720,7 @@ class MessageRoot[
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
-                if isinstance(error, UnsolvableLayoutError):
+                if isinstance(error, UnsolvableLayoutError | LayoutSearchExhaustedError):
                     error.context["action"] = key
                 profile.presentation = PresentationStatus.FAILED
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
@@ -1929,7 +1929,7 @@ class MessageRoot[
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
-                if isinstance(error, UnsolvableLayoutError):
+                if isinstance(error, UnsolvableLayoutError | LayoutSearchExhaustedError):
                     error.context["action"] = key
                 profile.presentation = PresentationStatus.FAILED
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
@@ -3025,7 +3025,7 @@ class MessageRoot[
         await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout, reason=CloseReason.TIMEOUT)
 
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
-        if isinstance(error, UnsolvableLayoutError):
+        if isinstance(error, UnsolvableLayoutError | LayoutSearchExhaustedError):
             error.context["screen"] = f"{type(self.component).__module__}.{type(self.component).__qualname__}"
             error.context["action"] = source
         if self.finished:

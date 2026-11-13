@@ -58,9 +58,17 @@ Choose overflow behavior where you compose the screen:
   selects the compact form under pressure. Keep necessary information and actions reachable;
   a fallback is a complete replacement, not permission to silently discard content.
 - Return `Document(..., key="screen")` for standalone content that can span message pages.
-  Navigation consumes budget too. Local and root pagination cannot run simultaneously.
+  Navigation consumes budget too. This legacy root pager cannot run alongside local pagers.
 
 Search help demonstrates a structured reference with a compact text alternative. Test that
 both representations preserve the content, that the preferred form wins when it fits, and
 that exhausting every alternative produces a useful failure. Layout error reports include
 screen and action identities plus budget metadata without copying rendered content.
+
+For multiple simultaneously visible pagers, use `sl.region` and let the joint
+allocator account for their worst-page costs. Keep screen-wide actions in the
+outer region's header or footer; keep item actions inside an unbreakable group
+with their item. The [joint region API](squid-ui-quickstart.md#joint-page-regions)
+explains identity, page ownership, and allocation diagnostics. Legacy keyed
+`Document` root pagination retains its existing restriction on local pagers;
+a tree of regions supplies the joint alternative.
