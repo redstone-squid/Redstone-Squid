@@ -51,6 +51,7 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # newly restricted or newly public commands visible in review.
     "errors": frozenset({"manage_guild"}),
     "access": frozenset({"manage_guild"}),
+    "paste": frozenset({"manage_messages"}),
     "redstoner": frozenset({"manage_roles"}),
     "settings": frozenset({"manage_guild"}),
     "starboard": frozenset({"manage_guild"}),
