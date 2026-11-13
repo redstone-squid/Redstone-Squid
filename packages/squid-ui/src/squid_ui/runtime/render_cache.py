@@ -34,6 +34,12 @@ class RenderCache[RenderTargetT: RenderTarget]:
         It must not retain this view across lifecycle reconciliation, which can replace
         the backing dictionaries. Failed renders do not clear invalidation causes.
         """
+        if self._force_all:
+            # Discard stale snapshots once. If discovery suspends, the completed work
+            # from this pass can be reused while the unfinished component retries.
+            self._renders.clear()
+            self._subtrees.clear()
+            self._force_all = False
         return IncrementalRender(
             render_cache=self._renders,
             dirty=self._dirty,

@@ -158,3 +158,32 @@ async def test_new_atomic_resource_suspends_without_accepting_an_old_render(nest
     assert not ready.suspended
     assert testing.texts(ready.nodes) == ["detail"]
     runtime.commit(ready)
+
+
+async def test_initial_atomic_suspension_reuses_completed_ancestor_render() -> None:
+    class Detail(ui.Component):
+        @ui.resource(pending=ui.resources.PendingMode.ATOMIC)
+        async def content(self) -> str:
+            return "detail"
+
+        @override
+        def render(self) -> ui.LayoutNode:
+            return ui.paragraph(self.content.value)
+
+    class CountingRoot(Root):
+        renders = 0
+
+        @override
+        def render(self) -> ui.LayoutNode:
+            self.renders += 1
+            return super().render()
+
+    detail = Detail()
+    root = CountingRoot(detail)
+    runtime = ComponentRuntime(root)
+    assert runtime.render(reuse_committed=True).suspended
+    await detail.content._load()
+    ready = runtime.render(reuse_committed=True)
+    assert testing.texts(ready.nodes) == ["detail"]
+    assert root.renders == 1
+    runtime.commit(ready)
