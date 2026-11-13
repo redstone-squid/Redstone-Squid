@@ -392,9 +392,7 @@ from squid_ui.planning.cursors import content_fingerprint
 
 assert content_fingerprint(["a\0b", "c"]) != content_fingerprint(["a", "b\0c"])
 assert content_fingerprint([]) != content_fingerprint([""])
-assert content_revision([Suggestion("a", "b\nc\0d")]) != content_revision(
-    [Suggestion("a", "b"), Suggestion("c", "d")]
-)
+assert content_revision([Suggestion("a", "b\nc\0d")]) != content_revision([Suggestion("a", "b"), Suggestion("c", "d")])
 assert _content_revision((ChoiceOption("a", "b\nc\0d"),)) != _content_revision(
     (ChoiceOption("a", "b"), ChoiceOption("c", "d"))
 )

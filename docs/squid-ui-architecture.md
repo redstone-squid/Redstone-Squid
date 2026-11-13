@@ -1215,8 +1215,7 @@ Group decorators can define a relative route inline. The decorated name is a cal
 
 ```python
 @builds.route("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
-async def edit_build(interaction: discord.Interaction[Bot], build_id: int) -> None:
-    ...
+async def edit_build(interaction: discord.Interaction[Bot], build_id: int) -> None: ...
 ```
 
 The group retains one handle per route and component kind. Redeclaring the same identity
