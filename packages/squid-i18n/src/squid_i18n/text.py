@@ -186,6 +186,8 @@ def discord_md(value: str | Template) -> ResolvedText:
 
 def plain(value: object) -> ResolvedText:
     """Create literal text which renderers must not interpret as Markdown."""
+    if isinstance(value, Template):
+        return ResolvedText(_resolve_template(value, Markup.PLAIN), Markup.PLAIN)
     temporal = _temporal_value(value, Markup.PLAIN)
     return ResolvedText(str(value) if temporal is None else temporal, Markup.PLAIN)
 
@@ -287,8 +289,9 @@ class _SafeFormatValue:
     def __format__(self, format_spec: str) -> str:
         if not format_spec:
             return _safe_value(self.value, self.markup)
-        if isinstance(self.value, ResolvedText):
-            return format(self.value.content, format_spec)
+        if isinstance(self.value, Message | ResolvedText):
+            resolved = resolve_text(self.value, current_localization())
+            return _content_for(replace(resolved, content=format(resolved.content, format_spec)), self.markup)
         return _safe_value(format(self.value, format_spec), self.markup)
 
 
@@ -301,7 +304,11 @@ def _interpolation(interpolation: Interpolation, markup: Markup) -> str:
     elif interpolation.conversion == "a":
         value = ascii(value)
     if interpolation.format_spec:
-        value = format(value, interpolation.format_spec)
+        if isinstance(value, Message | ResolvedText):
+            resolved = resolve_text(value, current_localization())
+            value = replace(resolved, content=format(resolved.content, interpolation.format_spec))
+        else:
+            value = format(value, interpolation.format_spec)
     return _safe_value(value, markup)
 
 

@@ -22,6 +22,10 @@ from squid_i18n.expressions import DateTimeExpression, NumberExpression
 logger = logging.getLogger(__name__)
 
 
+class _Binding(str):
+    """An interpolation string: selectors see its original value, output escapes it."""
+
+
 class _SafeText(str):
     """A value already escaped for the selected output dialect."""
 
@@ -38,7 +42,7 @@ class _Escaper:
         return True
 
     def escape(self, unescaped: str, /) -> _SafeText:
-        if self.markup is text.Markup.PLAIN:
+        if self.markup is text.Markup.PLAIN or not isinstance(unescaped, _Binding):
             return _SafeText(unescaped)
         return _SafeText(text._escape_markdown(unescaped).replace("@", "@\u200b"))
 
@@ -93,7 +97,7 @@ def _arguments(message: text.Message, localization: text.Localization) -> dict[s
         elif isinstance(value, int | float | Decimal | date):
             args[name] = value
         else:
-            args[name] = str(value)
+            args[name] = _Binding(str(value))
     return args
 
 

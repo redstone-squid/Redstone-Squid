@@ -148,3 +148,13 @@ def test_discord_serialization_is_explicit_and_neutralizes_plain_mentions() -> N
     assert text.markup is Markup.PLAIN
     assert text.resolve() == "Build #7. @everyone **literal**"
     assert discord_text(text) == r"Build #7. @" + "\u200b" + r"everyone \*\*literal\*\*"
+
+
+def test_format_specs_do_not_turn_typed_literal_values_into_markdown() -> None:
+    literal = plain("*x*")
+    formatted = md("**x**")
+
+    assert md("{value:>5}", value=literal).content == r"  \*x\*"
+    assert md(t"{literal:>5}").content == r"  \*x\*"
+    assert md("{value:>7}", value=formatted).content == "  **x**"
+    assert md(t"{formatted:>7}").content == "  **x**"

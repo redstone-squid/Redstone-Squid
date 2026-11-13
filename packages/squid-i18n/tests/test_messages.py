@@ -174,3 +174,20 @@ def test_plain_and_markdown_declarations_have_explicit_interpolation_rules() -> 
     assert source_text(literal) == "Hello *Ada* @everyone"
     assert resolve_text(formatted, Localization()).markup is Markup.MARKDOWN
     assert source_text(formatted) == "**Hello** \\*Ada\\* @\u200beveryone"
+
+
+def test_authored_fluent_string_literals_keep_markdown_but_bindings_stay_literal() -> None:
+    name = "*Ada* @everyone"
+    message = md_tr(t'authored-star = {{ "*" }}*Hello** {name}')
+
+    assert source_text(message) == "**Hello** \\*Ada\\* @\u200beveryone"
+
+
+def test_markdown_selectors_compare_original_bindings_before_escaping_output() -> None:
+    state = "needs-review"
+    message = md_tr(t"""markdown-status = {{ {state} ->
+        [needs-review] {state}
+       *[other] wrong
+    }}""")
+
+    assert source_text(message) == r"needs\-review"
