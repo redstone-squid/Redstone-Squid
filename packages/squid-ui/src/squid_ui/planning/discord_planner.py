@@ -899,6 +899,7 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
         local_pagers = [*broker.pagers, *measured.pagers]
         failure_context: dict[str, object] = {
             "budgets": tuple((str(axis), spent, capacity) for axis, spent, capacity in overspent),
+            "search_exhausted": semantic.search_fallback,
             "document_key": document.key,
             "pager_keys": tuple(pager.key for pager in local_pagers),
         }

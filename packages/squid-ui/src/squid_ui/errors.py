@@ -35,6 +35,10 @@ class UnsolvableLayoutError(LayoutError):
 class LayoutSearchExhaustedError(LayoutError):
     """The bounded search ended without establishing a feasible layout."""
 
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.context: dict[str, object] = {"reason": "search_budget_exhausted"}
+
 
 class DrawInvariantError(LayoutError):
     """A renderer produced output that violates its target contract."""

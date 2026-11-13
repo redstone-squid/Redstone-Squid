@@ -45,6 +45,19 @@ class StrategyState:
     strategy_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class RegionAllocation:
+    key: str
+    costs: tuple[tuple[str, int], ...]
+    page_sizes: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RegionLayoutState:
+    fingerprint: str
+    allocations: tuple[RegionAllocation, ...]
+
+
 @dataclass(slots=True)
 class PresentationState:
     """Navigation and control values for one mounted interface, indexed by node key.
@@ -58,6 +71,7 @@ class PresentationState:
     bypasses the check and can leave a previous plan reusable.
     """
 
+    region_layout: RegionLayoutState | None = field(default=None, kw_only=True)
     cursors: dict[str, CursorState] = field(default_factory=dict)
     selections: dict[str, SelectionState] = field(default_factory=dict)
     disclosures: dict[str, DisclosureState] = field(default_factory=dict)
@@ -155,6 +169,10 @@ class PresentationState:
         changed = False
         for update in updates:
             match update:
+                case RegionLayoutUpdate(state=state):
+                    if self.region_layout != state:
+                        self.region_layout = state
+                        changed = True
                 case CursorUpdate(key=key, state=cursor):
                     if self.cursors.get(key) != cursor:
                         self.cursors[key] = cursor
@@ -204,7 +222,12 @@ class ActivePagers:
     keys: frozenset[str]
 
 
-type SessionUpdate = CursorUpdate | StrategyUpdate | ToggleUpdate | ActivePagers
+@dataclass(frozen=True, slots=True)
+class RegionLayoutUpdate:
+    state: RegionLayoutState
+
+
+type SessionUpdate = CursorUpdate | StrategyUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
 """One presentation write that planning decided on but did not perform.
 
 Planning only reads the session, and returns what it would have written. A frontend
