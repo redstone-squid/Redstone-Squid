@@ -17,6 +17,7 @@ from squid.bot.ui import render_payload
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildService
 from squid.builds.application.edits import build_target
+from squid.builds.application.ports import BuildSchematicSummary
 from squid.builds.domain import Status
 from squid.builds.models import Build, BuildLink, DoorBuild
 from squid.edits.domain import Revision, RevisionConflictError
@@ -483,3 +484,88 @@ async def test_build_pending_colour_can_change_without_changing_other_warnings(d
     )
     payload = render_payload([layout]).layout.to_components()
     assert [item["accent_color"] for item in payload] == [0x123456, 0x654321]
+
+
+class SchematicSummaryReader:
+    def __init__(self, summary: BuildSchematicSummary | None, *, fail: bool = False) -> None:
+        self.summary = summary
+        self.fail = fail
+        self.calls: list[int] = []
+
+    async def summary_for(self, build_id: int) -> BuildSchematicSummary | None:
+        self.calls.append(build_id)
+        if self.fail:
+            raise OSError("database unavailable")
+        return self.summary
+
+
+def card_schematic(*, multiple: bool = False) -> BuildSchematicSummary:
+    return BuildSchematicSummary(
+        width=12,
+        height=8,
+        length=10,
+        schematic_id=42,
+        download_url="https://api.example.com/v1/builds/7/schematics/42/content",
+        filename="door [copy].litematic",
+        multiple_files=multiple,
+    )
+
+
+@pytest.mark.parametrize("multiple", [False, True])
+async def test_build_card_shows_compact_attachment_specific_dimensions(display_build: Build, multiple: bool) -> None:
+    display_build.submission_status = Status.CONFIRMED
+    reader = SchematicSummaryReader(card_schematic(multiple=multiple))
+    node = await render_build_card(display_build, MediaPreviewClient(), schematic_summaries=reader)
+    presentation = render_payload([node])
+    payload = str(presentation.layout.to_components())
+    assert "12 \u00d7 8 \u00d7 10 blocks" in payload
+    assert "/v1/builds/7/schematics/42/content" in payload
+    assert ("door" if multiple else "Download schematic") in payload
+    assert "palette" not in payload.lower()
+    assert "verified" not in payload.lower()
+    assert reader.calls == [7]
+    assert isinstance(node, sl.semantic.Section)
+    # The shorter resource entry retains the exact download, with no dimensions.
+    resource = next(
+        child
+        for child in node.children
+        if isinstance(child, sl.semantic.Section)
+        and any(
+            isinstance(part, sl.semantic.Fields)
+            and any("/schematics/42/content" in source_text(field.value) for field in part.fields)
+            for part in child.children
+        )
+    )
+    entries = next(part for part in resource.children if isinstance(part, sl.semantic.Fields))
+    measured = entries.fields[0]
+    assert "/schematics/42/content" in source_text(measured.fallbacks[0])
+    assert "12 \u00d7 8 \u00d7 10" not in source_text(measured.fallbacks[0])
+
+
+@pytest.mark.parametrize("status", [Status.PENDING, Status.DENIED])
+async def test_build_card_does_not_fetch_public_download_for_unpublished_build(
+    display_build: Build, status: Status
+) -> None:
+    display_build.submission_status = status
+    reader = SchematicSummaryReader(card_schematic())
+    await render_build_card(display_build, MediaPreviewClient(), schematic_summaries=reader)
+    assert reader.calls == []
+
+
+@pytest.mark.parametrize("fail", [False, True])
+async def test_missing_schematic_summary_keeps_the_ordinary_card(display_build: Build, fail: bool) -> None:
+    display_build.submission_status = Status.CONFIRMED
+    reader = SchematicSummaryReader(None, fail=fail)
+    payload = render_payload([await render_build_card(display_build, MediaPreviewClient(), schematic_summaries=reader)])
+    content = str(payload.layout.to_components())
+    assert "Submission ID: 7" in content
+    assert "Download schematic" not in content
+    assert "database unavailable" not in content
+
+
+async def test_unsaved_build_skips_schematic_lookup(display_build: Build) -> None:
+    display_build = DoorBuild(submission_status=Status.CONFIRMED)
+    display_build.submission_status = Status.CONFIRMED
+    reader = SchematicSummaryReader(card_schematic())
+    await render_build_card(display_build, MediaPreviewClient(), schematic_summaries=reader)
+    assert reader.calls == []

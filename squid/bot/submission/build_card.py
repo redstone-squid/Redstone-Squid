@@ -8,12 +8,15 @@ import logging
 import mimetypes
 from collections.abc import Sequence
 
+from discord.utils import escape_markdown
+
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.ui import (
     truncate_display_text,
 )
 from squid.bot.utils.web import MediaPreviewClient
+from squid.builds.application.ports import BuildSchematicSummaryProvider
 from squid.builds.domain import Status
 from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.builds.domain.titles import format_build_display_title
@@ -99,10 +102,33 @@ def _status_tone(status: Status | None, *, build_id: int | None) -> sl.Tone | sl
 
 
 async def render_build_card(
-    build: Build, media_previews: MediaPreviewClient
+    build: Build,
+    media_previews: MediaPreviewClient,
+    *,
+    schematic_summaries: BuildSchematicSummaryProvider | None = None,
 ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
     """Return a build card that callers can compose with other layout nodes."""
     metadata = build_metadata_fields(build)
+    schematic_field = None
+    if build.id is not None and build.submission_status is Status.CONFIRMED and schematic_summaries is not None:
+        try:
+            summary = await schematic_summaries.summary_for(build.id)
+        except Exception:
+            logger.warning("Could not read schematic measurements for build %s", build.id, exc_info=True)
+            summary = None
+        if summary is not None:
+            multiple = summary.multiple_files or len(build.schematic_urls) > 1
+            label = (
+                truncate_display_text(_compact_plain(summary.filename), 100)
+                if multiple and summary.filename
+                else "Download schematic"
+            )
+            link = f"[{escape_markdown(label)}]({summary.download_url})"
+            schematic_field = sl.field(
+                "Schematic",
+                sl.md(f"{link} · {summary.width} \u00d7 {summary.height} \u00d7 {summary.length} blocks"),
+                fallbacks=(sl.md(link),),
+            )
     performance_names = {
         "Dimensions",
         "Volume",
@@ -130,13 +156,15 @@ async def render_build_card(
     def group(title: str, names: set[str]) -> sl.LayoutNode | None:
         entries = tuple(
             sl.field(
-                name,
+                "Submitted schematic links" if name == "Schematic" and schematic_field is not None else name,
                 value,
                 fallbacks=ladders.get(name, ()),
             )
             for name, value in metadata.items()
             if name in names
         )
+        if title == "Resources" and schematic_field is not None:
+            entries = (schematic_field, *entries)
         return sl.section(sl.heading(title), sl.fields(*entries)) if entries else None
 
     # A draft preview renders an unsaved build, which has no ID yet.

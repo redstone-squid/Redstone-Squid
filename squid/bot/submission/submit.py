@@ -301,7 +301,9 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
             resolve_actor=partial(current_edit_actor, request),
-            render_card=lambda build: render_build_card(build, self.bot.media_previews),
+            render_card=lambda build: render_build_card(
+                build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+            ),
             notice=_unused_values_notice(unresolved, manifest, category_code),
         )
 

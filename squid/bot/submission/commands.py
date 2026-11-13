@@ -165,7 +165,9 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             request,
             page,
             load_build=self.queries.get,
-            render_build=lambda build: render_build_card(build, self.bot.media_previews),
+            render_build=lambda build: render_build_card(
+                build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+            ),
         )
 
     @BuildCommandGroup.build_group.command(
@@ -260,7 +262,9 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             self.bot.services.schematics,
             topics=self.bot.topic_bus,
             initial_id=build_id,
-            render_build=lambda build: render_build_card(build, self.bot.media_previews),
+            render_build=lambda build: render_build_card(
+                build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+            ),
             capabilities=capabilities,
             actor_account_id=subject.account_id,
             authorize=authorize,

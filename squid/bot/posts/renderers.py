@@ -39,7 +39,13 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         if build.submission_status != Status.CONFIRMED:
             return ()
 
-        payload = render_payload([await render_build_card(build, self.bot.media_previews)])
+        payload = render_payload(
+            [
+                await render_build_card(
+                    build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+                )
+            ]
+        )
         configured = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), "Builds")
         channels = (self.bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
         return [

@@ -63,7 +63,11 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
         UUID(draft_id),
         changes=interaction.client.topic_bus.topic("submission_draft", draft_id),
         resolve_actor=partial(current_edit_actor, request),
-        render_card=lambda build: render_build_card(build, interaction.client.media_previews),
+        render_card=lambda build: render_build_card(
+            build,
+            interaction.client.media_previews,
+            schematic_summaries=interaction.client.services.schematic_summaries,
+        ),
     )
     await request.respond(
         screen, audience="personal", session_key=sd.SessionKey.custom("draft", (interaction.user.id, draft_id))

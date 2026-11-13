@@ -24,6 +24,7 @@ from squid.artifacts import ArtifactStore
 from squid.auth.application import ApiKeyService
 from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
+from squid.builds.application.ports import BuildSchematicSummaryProvider
 from squid.cli_auth import CliAuthorizationService
 from squid.community.application import WelcomeRelayService
 from squid.diagnostics.application import ErrorReportService
@@ -160,6 +161,7 @@ class BotServices:
     domain_events: DomainEventService
     notifications: NotificationService
     welcome_relay: WelcomeRelayService
+    schematic_summaries: BuildSchematicSummaryProvider | None = None
 
 
 @dataclass(frozen=True, slots=True)

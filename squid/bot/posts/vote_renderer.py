@@ -81,7 +81,9 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             # a retried or partially delivered submission complete itself.
             channels.update({channel.id: channel.guild.id for channel in await configured_vote_channels(self.bot)})
 
-        card = await render_build_card(build, self.bot.media_previews)
+        card = await render_build_card(
+            build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+        )
         posts: list[DesiredPost] = []
         for channel_id, guild_id in channels.items():
             # Rendered per post: the guild decides which emoji the instructions name.

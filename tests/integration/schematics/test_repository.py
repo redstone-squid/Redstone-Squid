@@ -20,9 +20,10 @@ import squid.persistence.model_registry  # noqa: F401
 from squid.accounts.models import Account
 from squid.artifacts import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
+from squid.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.errors import DataIntegrityError
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.application import SchematicPublication
+from squid.schematics.application import SchematicPublication, SchematicService
 from squid.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
 from squid.schematics.application.storage import SchematicStorageService
 from squid.schematics.domain.models import (
@@ -34,7 +35,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
 )
 from tests.support.build_edits import build_edit_session
-from tests.unit.schematics.fakes import make_analysis
+from tests.unit.schematics.fakes import FakeSchematicAnalyzer, FakeVersionResolver, make_analysis
 
 pytestmark = pytest.mark.asyncio
 
@@ -676,3 +677,67 @@ async def test_preview_cleanup_commits_its_fence_before_deleting_storage(
         key, byte_size=42, sha256=hashlib.sha256(b"p" * 42).hexdigest()
     )
     assert replacement.upload_required
+
+
+async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
+    repository: SchematicStorageService,
+    preview_publisher: SchematicPreviewStorage,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with build_edit_session(async_session_factory) as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        account_id = account.id
+    now = Instant.now()
+    publication = SchematicPublication(
+        visibility=SchematicVisibility.PUBLIC_DOWNLOAD,
+        license=SchematicLicense.CC0_1_0,
+        rights_attested_at=now,
+        rights_attested_by_account_id=account_id,
+        published_at=now,
+    )
+    schematics = SchematicService(
+        FakeSchematicAnalyzer(),
+        repository,
+        preview_publisher,
+        FakeVersionResolver(),
+        engine_installed=False,
+    )
+    provider = SchematicServiceSummaryProvider(schematics, public_base_url="https://api.example.com")
+
+    async def generation() -> int:
+        async with async_session_factory() as session:
+            value = await session.scalar(
+                text("SELECT generation FROM discord_sync_queue WHERE resource_kind = 'build' AND source_key = '1'")
+            )
+            assert isinstance(value, int)
+            return value
+
+    first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
+    await repository.record_analysis(1, first_digest, make_analysis(), primary=True, publication=publication)
+    first = await provider.summary_for(1)
+    assert first is not None
+    first_generation = await generation()
+
+    second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
+    second_id = await repository.record_analysis(
+        1,
+        second_digest,
+        make_analysis(dimensions=(8, 9, 10)),
+        primary=True,
+        publication=publication,
+    )
+    second = await provider.summary_for(1)
+    assert second is not None
+    assert second.download_url != first.download_url
+    assert (second.width, second.height, second.length) == (8, 9, 10)
+    second_generation = await generation()
+    assert second_generation > first_generation
+
+    async with build_edit_session(async_session_factory) as session:
+        await session.execute(
+            text("UPDATE build_schematics SET withdrawn_at = now() WHERE id = :id"), {"id": second_id}
+        )
+    assert await provider.summary_for(1) is None
+    assert await generation() > second_generation

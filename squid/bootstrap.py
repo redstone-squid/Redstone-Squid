@@ -47,6 +47,7 @@ from squid.builds.application.edits import BUILD_EDIT, BUILD_STATUS_EDIT, BuildF
 from squid.builds.application.locks import BuildLockService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel
+from squid.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.community.application import WelcomeRelayService
@@ -843,6 +844,14 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         records=graph.records,
         record_computation=graph.record_computation,
         schematics=graph.schematics,
+        schematic_summaries=SchematicServiceSummaryProvider(
+            graph.schematics,
+            public_base_url=(
+                str(graph.config.schematics.render_public_base_url)
+                if graph.config.schematics.render_public_base_url
+                else None
+            ),
+        ),
         search=graph.search,
         tags=graph.tags,
         settings=graph.settings,

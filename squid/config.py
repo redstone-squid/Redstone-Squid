@@ -723,7 +723,7 @@ class SchematicConfig(_FrozenModel):
     render_pack_sha256: str | None = None
     """Expected lowercase SHA-256. Required for remote packs; local packs may derive it."""
     render_public_base_url: AnyHttpUrl | None = None
-    """Public API origin used for stable worker-published PNG URLs."""
+    """Public API origin used for schematic download links and worker-published PNG URLs."""
     render_cache_dir: Path = Field(default_factory=default_render_cache_dir)
     render_width: int = Field(default=768, ge=64, le=4096)
     render_height: int = Field(default=768, ge=64, le=4096)

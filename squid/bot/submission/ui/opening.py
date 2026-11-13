@@ -50,7 +50,9 @@ async def prepare_build_editor(
         return await client.services.permissions.allows(current_actor, BUILD_SUBMISSION_EDIT)
 
     async def render_build(current: Build) -> Any:
-        return await render_build_card(current, client.media_previews)
+        return await render_build_card(
+            current, client.media_previews, schematic_summaries=client.services.schematic_summaries
+        )
 
     async def refresh_posts(build_id: int) -> None:
         await client.refresh_posts("build", str(build_id))
