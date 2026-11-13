@@ -17,7 +17,7 @@ from squid.unit_of_work import UnitOfWork
 
 @dataclass(frozen=True, slots=True)
 class BuildSchematicSummary:
-    """Schematic measurements and sign text displayed on a build card.
+    """Public featured-file identity and saved measurements for a build card.
 
     This small value keeps build rendering independent of the full schematic
     analysis model. SchematicServiceSummaryProvider selects these fields from
@@ -27,11 +27,10 @@ class BuildSchematicSummary:
     width: int
     height: int
     length: int
-    block_count: int
-    palette_size: int
-    source_data_version: int | None = None
-    lattice_label: str | None = None
-    sign_texts: tuple[str, ...] = ()
+    schematic_id: int
+    download_url: str
+    filename: str | None
+    multiple_files: bool
 
 
 class BuildEditing(Protocol):
