@@ -23,6 +23,10 @@ from squid_i18n import Text
 
 logger = logging.getLogger(__name__)
 
+PENDING = sl.Role("build.pending", base=sl.Tone.WARNING, marker="⏳ ")
+CONFIRMED = sl.Role("build.confirmed", base=sl.Tone.SUCCESS)
+DENIED = sl.Role("build.denied", base=sl.Tone.DANGER)
+
 _SPONSOR_CREDIT_MAX_CHARACTERS = 255
 _SPONSOR_WEBSITE_MAX_CHARACTERS = 512
 _EVIDENCE_FIELD_MAX_CHARACTERS = 1_000
@@ -71,15 +75,15 @@ def _attachment_failure_summary(failures: Sequence[AttachmentFailureInfo]) -> st
     return truncate_display_text("\n".join(lines), _EVIDENCE_FIELD_MAX_CHARACTERS)
 
 
-def _status_tone(status: Status | None, *, build_id: int | None) -> sl.Tone:
+def _status_tone(status: Status | None, *, build_id: int | None) -> sl.Tone | sl.Role:
     """Return an exhaustive build-status accent, reporting invalid persisted state."""
     match status:
         case Status.PENDING:
-            return sl.Tone.WARNING
+            return PENDING
         case Status.CONFIRMED:
-            return sl.Tone.SUCCESS
+            return CONFIRMED
         case Status.DENIED:
-            return sl.Tone.DANGER
+            return DENIED
         case _:
             raw_status = status.name if isinstance(status, Status) else str(status)
             logger.error(

@@ -108,13 +108,13 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
 @pytest.mark.parametrize(
     ("status", "expected"),
     [
-        (Status.PENDING, sl.Tone.WARNING),
-        (Status.CONFIRMED, sl.Tone.SUCCESS),
-        (Status.DENIED, sl.Tone.DANGER),
+        (Status.PENDING, sl.Role("build.pending", sl.Tone.WARNING, marker="⏳ ")),
+        (Status.CONFIRMED, sl.Role("build.confirmed", sl.Tone.SUCCESS)),
+        (Status.DENIED, sl.Role("build.denied", sl.Tone.DANGER)),
     ],
 )
-def test_build_statuses_have_exhaustive_tones(status: Status, expected: sl.Tone) -> None:
-    assert build_card_module._status_tone(status, build_id=7) is expected
+def test_build_statuses_have_domain_roles(status: Status, expected: sl.Role) -> None:
+    assert build_card_module._status_tone(status, build_id=7) == expected
 
 
 @pytest.mark.parametrize("status", [None, cast(Status, "legacy")])
@@ -472,3 +472,14 @@ async def test_build_history_survives_a_failed_card_refresh(display_build: Build
             await component.controller.redo()
         assert builds.runner.build.description == "someone else's change"
         assert builds.runner.build.version_spec == before
+
+
+async def test_build_pending_colour_can_change_without_changing_other_warnings(display_build: Build) -> None:
+    card = await render_build_card(display_build, MediaPreviewClient())
+    layout = sl.themed(
+        sl.Palette(warning=0x654321, roles={"build.pending": 0x123456}),
+        card,
+        sl.block("General warning", accent=sl.Tone.WARNING),
+    )
+    payload = render_payload([layout]).layout.to_components()
+    assert [item["accent_color"] for item in payload] == [0x123456, 0x654321]
