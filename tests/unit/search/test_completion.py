@@ -14,6 +14,7 @@ from squid.search.application.completion import (
 )
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import QuerySyntaxError, SearchQueryParser
+from squid.search.domain import FieldExpression
 
 
 @pytest.mark.parametrize("query", ["restriction:", 'creator:"Nu', "width:[1 TO ", "restriction:*"])
@@ -153,13 +154,20 @@ def test_an_already_quoted_value_stays_quoted() -> None:
     assert render_value("seamless", quoted=True) == '"seamless"'
 
 
-def test_quotes_and_backslashes_in_a_value_are_escaped() -> None:
-    rendered = render_value('a "b" \\ c', quoted=False)
-    assert SearchQueryParser().parse(f"title:{rendered}") is not None
-
-
-def test_a_rendered_value_parses_back_as_the_value_that_was_chosen() -> None:
-    """The round trip that matters: completing must not silently widen the search."""
-    query = f"restriction:{render_value('Full Lamp', quoted=False)}"
+@pytest.mark.parametrize(
+    ("field", "value", "normalized"),
+    [
+        ("restriction", "Full Lamp", 'restriction:"Full Lamp"'),
+        ("title", 'a "b" \\ c', 'title:"a \\"b\\" \\\\ c"'),
+    ],
+)
+def test_a_rendered_value_round_trips_without_changing_the_chosen_value(
+    field: str, value: str, normalized: str
+) -> None:
+    """Quoting and escaping preserve the chosen value in the parsed expression."""
+    query = f"{field}:{render_value(value, quoted=False)}"
     parsed = SearchQueryParser().parse(query)
-    assert parsed.normalized == 'restriction:"Full Lamp"'
+
+    assert isinstance(parsed.expression, FieldExpression)
+    assert parsed.expression.value == value
+    assert parsed.normalized == normalized
