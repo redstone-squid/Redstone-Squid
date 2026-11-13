@@ -64,8 +64,12 @@ class ScoreSource:
         return Window(
             Position(resolved_anchor, offset),
             visible,
-            has_previous=offset > 0 and self.capabilities.backward,
-            has_next=offset + extent < len(self.entries),
+            previous=Position(resolved_anchor, max(0, offset - extent), sl.sources.Direction.BACKWARD)
+            if offset > 0 and self.capabilities.backward
+            else None,
+            next=Position(visible[-1][0], offset + len(visible), sl.sources.Direction.FORWARD)
+            if offset + extent < len(self.entries)
+            else None,
             total=total,
         )
 

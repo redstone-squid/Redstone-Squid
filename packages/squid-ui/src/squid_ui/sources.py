@@ -134,13 +134,26 @@ class SourceCapabilities:
 
 @dataclass(frozen=True, slots=True)
 class Window[ItemT]:
-    """One fetched slice, including its authoritative resolved position."""
+    """One fetched slice and the source's addresses for its neighbours.
+
+    The loader follows `previous` and `next` verbatim. An address may use an
+    offset or a source-defined anchor; the source owns their interpretation.
+    None means the source has reached that end of the collection.
+    """
 
     position: Position
     items: tuple[ItemT, ...]
-    has_previous: bool
-    has_next: bool
+    previous: Position | None = None
+    next: Position | None = None
     total: int | None = None
+
+    @property
+    def has_previous(self) -> bool:
+        return self.previous is not None
+
+    @property
+    def has_next(self) -> bool:
+        return self.next is not None
 
     def __post_init__(self) -> None:
         if self.position.direction is not Direction.AROUND:
@@ -181,8 +194,8 @@ class _ListSource[ItemT]:
         return Window(
             Position(offset=offset),
             visible,
-            has_previous=offset > 0,
-            has_next=offset + len(visible) < len(self.items),
+            previous=Position(offset=max(0, offset - extent)) if offset > 0 else None,
+            next=Position(offset=offset + len(visible)) if offset + len(visible) < len(self.items) else None,
             total=len(self.items),
         )
 
@@ -288,18 +301,14 @@ class WindowLoader[ItemT]:
         window = current.window
         if not window.has_next:
             return None
-        anchor = self.identity(window.items[-1]) if window.items else window.position.anchor
-        requested = Position(anchor, window.position.offset + len(window.items), Direction.FORWARD)
-        return await self.load(requested, previous=current)
+        return await self.load(window.next, previous=current)
 
     async def previous(self, current: LoadedWindow[ItemT]) -> LoadedWindow[ItemT] | None:
         """Load the window before the visible leading identity."""
         window = current.window
         if not self.source.capabilities.backward or not window.has_previous:
             return None
-        anchor = self.identity(window.items[0]) if window.items else window.position.anchor
-        requested = Position(anchor, max(0, window.position.offset - self.extent), Direction.BACKWARD)
-        return await self.load(requested, previous=current)
+        return await self.load(window.previous, previous=current)
 
     def _validate(self, window: Window[ItemT]) -> None:
         if len(window.items) > self.extent:

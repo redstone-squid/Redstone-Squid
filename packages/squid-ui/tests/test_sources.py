@@ -48,8 +48,10 @@ class ListSource:
         return Window(
             Position(anchor, offset),
             items,
-            has_previous=offset > 0,
-            has_next=offset + extent < len(self.keys),
+            previous=Position(anchor, max(0, offset - extent), Direction.BACKWARD) if offset > 0 else None,
+            next=Position(items[-1].key, offset + len(items), Direction.FORWARD)
+            if offset + extent < len(self.keys)
+            else None,
             total=len(self.keys),
         )
 
@@ -105,7 +107,9 @@ class RacingSource:
         assert position.anchor is not None
         self.started[position.anchor].set()
         await self.release[position.anchor].wait()
-        return Window(Position(position.anchor), (position.anchor,), has_previous=True, has_next=True)
+        return Window(
+            Position(position.anchor), (position.anchor,), previous=Position("previous"), next=Position("next")
+        )
 
 
 async def test_out_of_order_result_cannot_publish_state() -> None:
@@ -152,9 +156,9 @@ def test_capabilities_reject_claims_that_require_unknown_offsets() -> None:
 
 def test_window_requires_a_resolved_position() -> None:
     with pytest.raises(ValueError, match="AROUND"):
-        Window(Position("a", direction=Direction.FORWARD), ("a",), has_previous=False, has_next=False)
+        Window(Position("a", direction=Direction.FORWARD), ("a",))
     with pytest.raises(ValueError, match="negative offset"):
-        Window(Position("a", offset=-1), ("a",), has_previous=False, has_next=False)
+        Window(Position("a", offset=-1), ("a",))
 
 
 async def test_loader_rejects_results_that_contradict_capabilities() -> None:
@@ -168,7 +172,7 @@ async def test_loader_rejects_results_that_contradict_capabilities() -> None:
 
         async def fetch(self, position: Position, extent: int) -> Window[Entry]:
             del position, extent
-            return Window(Position(offset=1), (Entry("a"),), has_previous=False, has_next=False, total=1)
+            return Window(Position(offset=1), (Entry("a"),), total=1)
 
     with pytest.raises(ValueError, match="beyond its total"):
         await WindowLoader(InvalidExactSource(), 2, lambda entry: entry.key).load(Position(offset=1))
@@ -190,3 +194,26 @@ async def test_a_list_source_returns_exact_offset_windows_and_advertises_every_c
         jumpable=True,
         count=CountPrecision.EXACT,
     )
+
+
+async def test_loader_follows_source_addresses_without_reconstructing_them() -> None:
+    class TokenSource:
+        capabilities = SourceCapabilities(backward=True)
+
+        async def fetch(self, position: Position, extent: int) -> Window[str]:
+            assert extent == 2
+            match position.anchor:
+                case None | "return-to-first":
+                    return Window(Position("first"), ("a", "b"), next=Position("continue-at-c"))
+                case "continue-at-c":
+                    return Window(Position("second"), ("c",), previous=Position("return-to-first"))
+                case _:
+                    raise AssertionError(f"unexpected address {position}")
+
+    loader = WindowLoader(TokenSource(), 2, str)
+    first = await loader.load()
+    assert first is not None
+    second = await loader.next(first)
+    assert second is not None and second.window.items == ("c",)
+    returned = await loader.previous(second)
+    assert returned is not None and returned.window.items == ("a", "b")

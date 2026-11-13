@@ -100,8 +100,12 @@ class _BuildSource:
         return sl.sources.Window(
             sl.sources.Position(str(page.items[0].id) if page.items else None, position.offset),
             page.items,
-            has_previous=page.prev is not None,
-            has_next=page.next is not None,
+            previous=sl.sources.Position(offset=page.prev.offset)
+            if page.prev is not None and page.prev.offset is not None
+            else None,
+            next=sl.sources.Position(offset=page.next.offset)
+            if page.next is not None and page.next.offset is not None
+            else None,
             total=page.total,
         )
 

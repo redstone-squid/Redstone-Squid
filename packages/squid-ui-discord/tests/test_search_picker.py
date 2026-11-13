@@ -134,8 +134,6 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
             return sl.sources.Window(
                 position,
                 (Entry(self.query, self.query),),
-                has_previous=False,
-                has_next=False,
                 total=1,
             )
 

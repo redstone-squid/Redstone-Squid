@@ -48,8 +48,12 @@ class _SearchSource:
         window = sl.sources.Window(
             sl.sources.Position(_hit_identity(page.hits[0]) if page.hits else None, offset),
             page.hits,
-            has_previous=page.prev is not None,
-            has_next=page.next is not None,
+            previous=sl.sources.Position(offset=page.prev.offset)
+            if page.prev is not None and page.prev.offset is not None
+            else None,
+            next=sl.sources.Position(offset=page.next.offset)
+            if page.next is not None and page.next.offset is not None
+            else None,
             total=page.total,
         )
         fingerprint = window_fingerprint(page.hits, _hit_identity)
