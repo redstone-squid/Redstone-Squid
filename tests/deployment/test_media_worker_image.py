@@ -15,6 +15,7 @@ RUNTIME_TARGETS = {
     "runtime-media": (True, False),
     "runtime-software-gpu": (False, True),
     "runtime-media-software-gpu": (True, True),
+    "runtime-video": (True, True),
 }
 FFMPEG_VERSION = "7:7.1.5-0+deb13u1"
 
@@ -141,6 +142,17 @@ def test_runtime_targets_install_only_their_declared_features(runtime_images: di
         # FFmpeg also depends on the Vulkan loader; only Mesa supplies the software renderer.
         if with_software_gpu:
             _run_image(image, "/usr/bin/dpkg-query", "--show", "libvulkan1")
+
+
+@pytest.mark.docker
+def test_video_runtime_can_execute_helper(runtime_images: dict[str, str]) -> None:
+    # Exercise PATH lookup and dynamic linking as the image's unprivileged user.
+    result = _run_image(runtime_images["runtime-video"], "squid-schematic-video", check=False)
+
+    assert result.returncode == 2
+    assert "usage:" in result.stderr
+    for executable in ("ffmpeg", "ffprobe"):
+        _run_image(runtime_images["runtime-video"], executable, "-version")
 
 
 @pytest.mark.docker
