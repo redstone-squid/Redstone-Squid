@@ -375,7 +375,7 @@ async def test_search_help_stays_with_results_without_refetching(records: bool) 
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("search-help"))
         assert "## Search help" in ui.texts()
-        assert any(("all_time" if records else "creator:Steve") in text for text in ui.texts())
+        assert any((r"all\_time" if records else "creator:Steve") in text for text in ui.texts())
         service.search.assert_not_awaited()
         form = await ui.press_for_form(ui.key_for("catalogue-search"))
         await form.submit({"query": "door", "sort": ""})
@@ -438,7 +438,7 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
     screen._mode = "records" if records else "builds"
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("search-help"))
-        assert any(("fastest_smallest" if records else "completion_at") in text for text in ui.texts())
+        assert any((r"fastest\_smallest" if records else r"completion\_at") in text for text in ui.texts())
         await ui.press(ui.key_for("search-reference.syntax"))
         assert any("NOT excludes" in text for text in ui.texts())
         ui.assert_within_limits()

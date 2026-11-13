@@ -29,7 +29,7 @@ from squid.permissions.domain.catalogue import (
     RECORD_ENTRY_REBUILD,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid_i18n import tr
+from squid_i18n import md_tr, tr
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -127,7 +127,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             ),
             "query": sd.Option(
                 name=tr(t"command-search-query-name = query"),
-                description=tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
+                description=md_tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
                 autocomplete=suggests("search_query"),
             ),
         },
@@ -179,7 +179,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             ),
             "query": sd.Option(
                 name=tr(t"command-build-browse-query-name = query"),
-                description=tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
+                description=md_tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
             ),
         },
     )

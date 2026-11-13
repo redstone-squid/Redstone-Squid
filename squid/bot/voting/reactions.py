@@ -26,14 +26,14 @@ from squid.bot.reactions import (
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.actors import Actor
-from squid.core.i18n import tr
 from squid.core.locks import KeyedLock
 from squid.runtime import JobHandle
 from squid.voting.application.accounts import AccountConsentedVoterLookup
 from squid.voting.application.ports import VoteActorResolver
 from squid.voting.application.recount import BallotRecounter
 from squid.voting.domain import CastVoteResult, VoteRejection, VoteSessionSnapshot
-from squid_ui.text import Message, localization_scope, raw_md
+from squid_i18n import md_tr
+from squid_ui.text import Message, discord_md, localization_scope
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -293,5 +293,5 @@ class VoteReactionHandler:
 
 
 def _unconsented_vote_message(user: object) -> Message:
-    user = raw_md(user)
-    return tr(t"vote-consent-required = {user}, voting stores your Discord user ID. Run `/account consent` first.")
+    user = discord_md(str(user))
+    return md_tr(t"vote-consent-required = {user}, voting stores your Discord user ID. Run `/account consent` first.")

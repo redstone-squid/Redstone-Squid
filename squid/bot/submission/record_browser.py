@@ -3,8 +3,6 @@
 from collections.abc import Awaitable, Callable
 from functools import partial
 
-from discord.utils import escape_markdown
-
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
@@ -12,6 +10,7 @@ from squid.bot.ui import tr
 from squid.core.pagination import PageSelector
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle
+from squid_i18n import md_tr
 from squid_ui.sources import window_fingerprint
 
 
@@ -50,13 +49,13 @@ def record_browser(
 
     def detail(record: PublishedTitle) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         return sl.section(
-            sl.heading(escape_markdown(record.title)),
-            record.subtitle and sl.paragraph(escape_markdown(record.subtitle)),
+            sl.heading(record.title),
+            record.subtitle and sl.paragraph(record.subtitle),
             sl.note(f"{record.build_kind.value} · {record.version_scope.replace('_', ' ')}"),
             sl.action_controls(
                 *(
                     sl.action_control(
-                        tr(t"record-browse-open-holder = Open build #{(build_id_text := str(build_id))}"),  # noqa: F841
+                        md_tr(t"record-browse-open-holder = Open build #{(build_id_text := str(build_id))}"),  # noqa: F841
                         partial(open_build, build_id),
                         key=f"holder-{build_id}",
                     )
@@ -73,7 +72,7 @@ def record_browser(
         key="records",
         identity=lambda record: str(record.id),
         label=lambda record: record.title,
-        summary=lambda record: f"**{escape_markdown(record.title)}** — {record.version_scope.replace('_', ' ')}",
+        summary=lambda record: sl.md(t"**{record.title}** — {record.version_scope.replace('_', ' ')}"),
         detail=detail,
         page_size=8,
         title=tr(t"record-browse-title = Records"),

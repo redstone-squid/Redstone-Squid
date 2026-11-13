@@ -521,7 +521,7 @@ class Timestamp(Adaptable[RenderTarget]):
             raise ValueError(message)
         content = (
             self.instant.isoformat()
-            if markup is Markup.PLAIN
+            if markup is not Markup.DISCORD_MARKDOWN
             else (f"<t:{int(self.instant.timestamp())}:{self.style.value}>")
         )
         return ResolvedText(content, markup)

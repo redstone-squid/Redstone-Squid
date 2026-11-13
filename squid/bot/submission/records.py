@@ -17,6 +17,7 @@ from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
+from squid_i18n import md_tr
 
 
 class RecordOperations(Protocol):
@@ -221,7 +222,7 @@ class RecordsScreen(sd.Screen):
         definitions = summary.definitions
         resolved = summary.resolved
         await event.notice(
-            tr(t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.")
+            md_tr(t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.")
         )
 
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
@@ -239,7 +240,7 @@ class RecordsScreen(sd.Screen):
         resolved = summary.resolved
         unresolved = summary.unresolved
         await event.notice(
-            tr(
+            md_tr(
                 t"records-rebuild-summary = Rebuilt {definitions} "
                 t"definitions; {resolved} resolved; {unresolved} awaiting evidence."
             )

@@ -33,6 +33,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_REJECT,
 )
 from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
+from squid_i18n import md_tr
 from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
@@ -309,7 +310,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 else tr(t"admin-to-the-current-guild = to the current guild")
             )
             count = len(synced)
-            return text_node(tr(t"admin-synced-commands = Synced {count} commands {scope}."))
+            return text_node(md_tr(t"admin-synced-commands = Synced {count} commands {scope}."))
 
         ret = 0
         for guild in guilds:
@@ -322,7 +323,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
         synced = ret
         total = len(guilds)
-        return text_node(tr(t"admin-synced-the-tree-to = Synced the tree to {synced}/{total}."))
+        return text_node(md_tr(t"admin-synced-the-tree-to = Synced the tree to {synced}/{total}."))
 
     @sd.prefix_command(name="gdb", hidden=True)
     @commands.is_owner()

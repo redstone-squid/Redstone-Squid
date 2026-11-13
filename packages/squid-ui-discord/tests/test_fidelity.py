@@ -7,6 +7,7 @@ from squid_ui.errors import LayoutDegradedError
 from squid_ui.planning import plan
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.primitives import Fidelity, Panel, Text, Variant, Variants
+from squid_ui.text import Markup
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import testing as sd
 
@@ -32,7 +33,7 @@ class TestStrictMode:
         """Stepping is not loss. A smaller faithful shape must not fail `strict=True`."""
         document = plan(ladder(Variant((Text("compact"),))), target=TARGET, strict=True).scene
 
-        assert document.components_v2.children == (scene.Text("compact"),)
+        assert document.components_v2.children == (scene.Text("compact", markup=Markup.DISCORD_MARKDOWN),)
 
     def test_a_reformatted_rung_is_rejected_by_strict_planning(self) -> None:
         document = ladder(Variant((Text("compact"),), fidelity=Fidelity.REFORMATTED))
@@ -71,7 +72,9 @@ class TestOrdering:
             Variant((Text("exact"),)),
         )
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (scene.Text("exact"),)
+        assert plan(document, target=TARGET).scene.components_v2.children == (
+            scene.Text("exact", markup=Markup.DISCORD_MARKDOWN),
+        )
 
     def test_a_reformatted_rung_beats_a_lossy_earlier_one(self) -> None:
         document = ladder(
@@ -79,13 +82,17 @@ class TestOrdering:
             Variant((Text("reformatted"),), fidelity=Fidelity.REFORMATTED),
         )
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (scene.Text("reformatted"),)
+        assert plan(document, target=TARGET).scene.components_v2.children == (
+            scene.Text("reformatted", markup=Markup.DISCORD_MARKDOWN),
+        )
 
     def test_the_first_exact_rung_still_wins_among_equals(self) -> None:
         """With fidelity tied, rung distance decides — that is what preference means."""
         document = ladder(Variant((Text("first"),)), Variant((Text("second"),)))
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (scene.Text("first"),)
+        assert plan(document, target=TARGET).scene.components_v2.children == (
+            scene.Text("first", markup=Markup.DISCORD_MARKDOWN),
+        )
 
 
 class TestProfileAxes:

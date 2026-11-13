@@ -13,7 +13,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import tr
-from squid_i18n import Message
+from squid_i18n import Message, md_tr
 
 
 class InvalidAccountError(ValidationError):
@@ -327,7 +327,7 @@ class AliasAlreadyClaimedError(ConflictError):
         name = self.name
         return self.with_context(
             public_context={"holder_name": holder_name},
-            message=tr(
+            message=md_tr(
                 t"accounts-creator-already-credited = **{name}** is already credited "
                 t"to the creator known as **{holder_name}**."
             ),

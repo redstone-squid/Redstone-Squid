@@ -22,6 +22,7 @@ from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, ValidationError
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 _BUILD_KINDS = frozenset({"door", "entrance", "extender", "utility"})
 _BASE_TITLES = frozenset({"first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"})
@@ -280,12 +281,12 @@ class PendingNotificationDelivery:
 def _string_set(value: object, name: str) -> frozenset[str]:
     if not isinstance(value, list):
         raise DataIntegrityError(
-            tr(t"notifications-list-nonempty-strings = {name} must be a list of non-empty strings")
+            md_tr(t"notifications-list-nonempty-strings = {name} must be a list of non-empty strings")
         )
     items = cast(list[object], value)
     if not all(isinstance(item, str) and item for item in items):
         raise DataIntegrityError(
-            tr(t"notifications-list-nonempty-strings = {name} must be a list of non-empty strings")
+            md_tr(t"notifications-list-nonempty-strings = {name} must be a list of non-empty strings")
         )
     return frozenset(cast(str, item) for item in items)
 
@@ -294,4 +295,4 @@ def _validate_values(values: frozenset[str], allowed: frozenset[str], name: str)
     invalid = values - allowed
     if invalid:
         value = sorted(invalid)[0]
-        raise ValidationError(tr(t"notifications-domain-unsupported = unsupported {name}: {value}"))
+        raise ValidationError(md_tr(t"notifications-domain-unsupported = unsupported {name}: {value}"))

@@ -34,7 +34,7 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
-from squid_i18n import NUMBER
+from squid_i18n import NUMBER, md_tr
 from squid_ui.text import NEUTRAL, Message, TextLike, localization_scope
 
 logger = logging.getLogger(__name__)
@@ -195,7 +195,7 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
         # Give Discord users an in-bot recovery path when an operation requires consent.
         return _NoticeDraft(
             tr(t"errors-consent-required = Consent required"),
-            tr(t"errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it."),
+            md_tr(t"errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it."),
         )
     if isinstance(error, (DomainError, ServiceUnavailableError)):
         return _NoticeDraft(error.title, error.public_text())
@@ -220,7 +220,7 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
         seconds = error.retry_after
         return _NoticeDraft(
             tr(t"errors-command-on-cooldown = Command on cooldown"),
-            tr(
+            md_tr(
                 t"errors-try-again-in-seconds = Try again in {NUMBER(seconds, minimum_fraction_digits=1, maximum_fraction_digits=1)} seconds."
             ),
         )
@@ -270,8 +270,8 @@ def _resolved(text: TextLike) -> str:
 
 
 def _unexpected_error_detail(error_id: str) -> Message:
-    return tr(
-        t"errors-unexpected-reference = An unexpected error occurred. Reference: `{(error_id_text := str(error_id))}`"  # noqa: F841
+    return md_tr(
+        t"errors-unexpected-reference = An unexpected error occurred. Reference: `{(error_id_text := str(error_id))}`"  # noqa: F841 - captured translation binding
     )
 
 

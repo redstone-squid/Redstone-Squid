@@ -87,6 +87,12 @@ def _html_text(node: scene.HtmlNode) -> str:
     return separator.join(filter(None, (_html_text(child) for child in node.children)))
 
 
+def _node_markup(node: scene.HtmlNode) -> Markup:
+    if isinstance(node, scene.HtmlText):
+        return node.markup
+    return Markup.MARKDOWN if any(_node_markup(child) is not Markup.PLAIN for child in node.children) else Markup.PLAIN
+
+
 def _plain_text(value: str) -> str:
     value = _LINK.sub(r"\1", value)
     for token in ("**", "__", "~~", "`", "*", "_"):
@@ -94,7 +100,7 @@ def _plain_text(value: str) -> str:
     return value.replace("\\", "").strip()
 
 
-def _mrkdwn(value: str, markup: Markup = Markup.DISCORD_MARKDOWN) -> str:
+def _mrkdwn(value: str, markup: Markup) -> str:
     """Escape Slack control characters and translate a limited set of Markdown tokens."""
     escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     if markup is Markup.PLAIN:
@@ -177,15 +183,19 @@ class _Lowerer:
         )
         return fitted
 
-    def text(self, value: str, path: str, *, capacity: int | None = None) -> scene.SlackText:
-        rendered = _mrkdwn(value)
+    def text(
+        self, value: str, path: str, *, capacity: int | None = None, markup: Markup = Markup.PLAIN
+    ) -> scene.SlackText:
+        if markup is Markup.PLAIN:
+            return self.plain(value, path, capacity=capacity or self.limits.components.section_text)
+        rendered = _mrkdwn(value, markup)
         if capacity is not None:
             rendered = self.fit(rendered, capacity, path, "text")
         return scene.SlackText(rendered)
 
     def plain(self, value: str, path: str, *, capacity: int) -> scene.SlackText:
         return scene.SlackText(
-            self.fit(_plain_text(value), capacity, path, "plain_text"),
+            self.fit(value, capacity, path, "plain_text"),
             scene.SlackTextKind.PLAIN,
             emoji=True,
             verbatim=None,
@@ -210,7 +220,11 @@ class _Lowerer:
         if isinstance(node, scene.HtmlText):
             if not node.content.strip():
                 return ()
-            return (scene.SlackSection(self.text(node.content, path, capacity=self.limits.components.section_text)),)
+            return (
+                scene.SlackSection(
+                    self.text(node.content, path, capacity=self.limits.components.section_text, markup=node.markup)
+                ),
+            )
         if node.tag in _HEADINGS:
             return (scene.SlackHeader(self.plain(_html_text(node), path, capacity=self.limits.components.header_text)),)
         if node.tag is scene.HtmlTag.HR:
@@ -275,7 +289,11 @@ class _Lowerer:
                         style=self._alert_style(node),
                     ),
                 )
-            return (scene.SlackContext((self.text(content, path, capacity=self.limits.components.section_text),)),)
+            return (
+                scene.SlackContext(
+                    (self.text(content, path, capacity=self.limits.components.section_text, markup=_node_markup(node)),)
+                ),
+            )
         if node.tag in {
             scene.HtmlTag.P,
             scene.HtmlTag.SMALL,
@@ -294,7 +312,16 @@ class _Lowerer:
             if node.tag is scene.HtmlTag.PRE:
                 content = f"```\n{content}\n```"
             return (
-                scene.SlackSection(self.text(prefix + content, path, capacity=self.limits.components.section_text)),
+                scene.SlackSection(
+                    self.text(
+                        prefix + content,
+                        path,
+                        capacity=self.limits.components.section_text,
+                        markup=Markup.MARKDOWN
+                        if node.tag in {scene.HtmlTag.BLOCKQUOTE, scene.HtmlTag.PRE}
+                        else _node_markup(node),
+                    )
+                ),
             )
         return tuple(
             block for index, child in enumerate(node.children) for block in self.node_blocks(child, f"{path}.{index}")
@@ -392,7 +419,12 @@ class _Lowerer:
         rows: list[tuple[scene.SlackText, ...]] = []
         for row in (item for item in self._elements(node) if item.tag is scene.HtmlTag.TR):
             cells = tuple(
-                self.text(_html_text(cell), path, capacity=self.limits.components.section_field_text)
+                self.text(
+                    _html_text(cell),
+                    path,
+                    capacity=self.limits.components.section_field_text,
+                    markup=_node_markup(cell),
+                )
                 for cell in row.children
                 if isinstance(cell, scene.HtmlElement) and cell.tag in {scene.HtmlTag.TH, scene.HtmlTag.TD}
             )[: self.limits.components.table_columns]
@@ -427,7 +459,9 @@ class _Lowerer:
         return scene.SlackCard(
             title=title,
             description=(
-                None if not description else self.text(description, path, capacity=self.limits.components.card_body)
+                None
+                if not description
+                else self.text(description, path, capacity=self.limits.components.card_body, markup=_node_markup(node))
             ),
         )
 

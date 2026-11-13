@@ -19,6 +19,7 @@ from squid.notifications import (
 from squid.notifications.domain import NotificationKind
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
+from squid_i18n import md_tr
 from squid_ui.text import Message, localization_scope
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ def delivery_message(delivery: PendingNotificationDelivery) -> Message:
     build_id = delivery.payload.get("build_id")
     if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
         if isinstance(build_id, int):
-            return tr(t"""
+            return md_tr(t"""
                 notifications-build-review-link =
                     A new build is awaiting staff review.
                     Open it in Discord with `/build browse id:{(build_id_text := str(build_id))}`.
@@ -123,7 +124,7 @@ def delivery_message(delivery: PendingNotificationDelivery) -> Message:
     if delivery.kind is NotificationKind.RECORD_GAINED:
         raw_records = delivery.payload.get("records", [])
         count = len(raw_records) if isinstance(raw_records, list) else 1
-        return tr(t"""
+        return md_tr(t"""
             bot-notifications-a-credited-build-gained-record = {{ $count ->
                 [one] A credited build gained {count} record.
                *[other] A credited build gained {count} records.

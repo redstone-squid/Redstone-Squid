@@ -10,6 +10,7 @@ from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import DrawInvariantError
 from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.interactions import ActionMode
+from squid_ui.text import Markup
 
 
 def _scene() -> scene.Scene[scene.ComponentsV2]:
@@ -41,7 +42,7 @@ def test_html_renderer_preserves_structure_and_action_ids_without_callbacks() ->
     assert 'class="squid-panel"' in rendered
     assert 'data-squid-action="form.save"' in rendered
     assert 'data-squid-action="form.choice"' in rendered
-    assert 'data-squid-markup="discord-markdown"' in rendered
+    assert 'data-squid-markup="plain"' in rendered
     assert rendered.count('data-squid-mode="exclusive"') == 2
     assert "data-squid-dialect" not in rendered
     assert "data-squid-policy" not in rendered
@@ -94,8 +95,6 @@ def test_entity_select_shows_its_current_values_as_mentions() -> None:
 
 
 def test_preview_renders_markdown_blocks_and_preserves_literal_text() -> None:
-    from squid_ui.text import Markup
-
     document = replace(
         _scene(),
         body=scene.ComponentsV2(

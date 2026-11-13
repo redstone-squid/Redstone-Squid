@@ -12,6 +12,7 @@ from squid.bot.consent import ConsentPrompt
 from squid.bot.routes._root import _feature_group
 from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
+from squid_i18n import md_tr
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -35,7 +36,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await request.respond(
             text_node(
-                tr(t"""
+                md_tr(t"""
                     ingestion-consent-already-granted =
                         ### Consent Already Granted
                         Your account has already accepted the current privacy notice. Redstone Squid automatically indexes your submissions in build log channels.
@@ -62,13 +63,13 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         fields=(
             CardField(
                 tr(t"bot-submission-consent-banner-discord-account = Discord account"),
-                tr(
-                    t"bot-submission-consent-banner-value = <@{(user_id_text := str(user_id))}> ({(user_id_text := str(user_id))})"  # noqa: F841
+                md_tr(
+                    t"bot-submission-consent-banner-value = <@{(user_id_text := str(user_id))}> ({(user_id_text := str(user_id))})"  # noqa: F841 - captured translation binding
                 ),
             ),
             CardField(
                 tr(t"bot-submission-consent-banner-consent-recorded = Consent recorded"),
-                tr(t"ingestion-consent-timestamp-notice = Notice {version}, timed at the moment you agree."),
+                md_tr(t"ingestion-consent-timestamp-notice = Notice {version}, timed at the moment you agree."),
             ),
         ),
         accept_label=tr(t"ingestion-consent-accept-action = Agree & Enable Ingestion"),
@@ -82,7 +83,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(interaction.user.id), consent=result.value)
         await request.respond(
             text_node(
-                tr(t"""
+                md_tr(t"""
                     ingestion-consent-recorded-confirmation =
                         ### Consent Recorded!
                         Thank you! Your consent has been recorded under notice `{version}`. Your future builds posted in build-log channels will now be automatically ingested and submitted for voting.

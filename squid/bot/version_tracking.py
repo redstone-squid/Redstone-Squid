@@ -15,6 +15,7 @@ from squid.bot.utils.permissions import allows
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
 from squid.versions.errors import InvalidVersionError
+from squid_i18n import md_tr
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
 from squid_ui_discord.i18n import to_locale_str
@@ -111,7 +112,7 @@ class VersionScreen(sd.Screen):
         version_text = form.version
         version = str(await self._versions.add(version_text, edition=edition))
         await self._refresh()
-        await event.notice(tr(t"bot-version-tracking-added = Added {version}."))
+        await event.notice(md_tr(t"bot-version-tracking-added = Added {version}."))
 
 
 class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="VersionTracker"):
@@ -157,7 +158,9 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
             payload = render_payload(
                 [
                     text_node(
-                        tr(t"bot-version-tracking-version-added-successfully = Version added successfully: {version}")
+                        md_tr(
+                            t"bot-version-tracking-version-added-successfully = Version added successfully: {version}"
+                        )
                     )
                 ]
             )

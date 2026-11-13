@@ -36,6 +36,7 @@ from squid.tags.application.edits import (
 )
 from squid.tags.domain import TagModerationStatus, TagValueType
 from squid.tags.models import TagDefinition
+from squid_i18n import md_tr
 
 
 class TagOperations(Protocol):
@@ -207,7 +208,7 @@ class TagsScreen(sd.Screen):
             return (
                 sl.section(
                     sl.heading(tr(t"bot-tags-view-confirm-tag-moderation = Confirm tag moderation")),
-                    sl.paragraph(tr(t"bot-tags-view-value-3 = {action_label} **{tag_name}**?")),
+                    sl.paragraph(md_tr(t"bot-tags-view-value-3 = {action_label} **{tag_name}**?")),
                 ),
                 self._decision,
             )
@@ -219,7 +220,7 @@ class TagsScreen(sd.Screen):
         if self._actor_account_id is None:
             return (
                 sl.note(
-                    tr(
+                    md_tr(
                         t"tags-link-account-instructions = Link and consent an account in "
                         t"`/account` before proposing or applying tags."
                     )
@@ -282,8 +283,8 @@ class TagsScreen(sd.Screen):
             tr(t"tags-history-proposal = Propose showcase tag"),
         )
         await event.notice(
-            tr(
-                t"bot-tags-view-tag-is-awaiting-staff-approval = Tag #{(tag_id_text := str(tag_id))} is awaiting staff approval."  # noqa: F841
+            md_tr(
+                t"bot-tags-view-tag-is-awaiting-staff-approval = Tag #{(tag_id_text := str(tag_id))} is awaiting staff approval."  # noqa: F841 - captured translation binding
             )
         )
 
@@ -307,8 +308,8 @@ class TagsScreen(sd.Screen):
         )
         tag_name = self._tag_names.get(tag_id, str(tag_id))
         await event.notice(
-            tr(
-                t"bot-tags-view-attached-to-build = Attached **{tag_name}** to build #{(build_id_text := str(build_id))}."  # noqa: F841
+            md_tr(
+                t"bot-tags-view-attached-to-build = Attached **{tag_name}** to build #{(build_id_text := str(build_id))}."  # noqa: F841 - captured translation binding
             )
         )
 
@@ -374,7 +375,7 @@ class TagsScreen(sd.Screen):
         action_label = _action_label(action)
         self._pending_action = None
         self._decision = None
-        await event.source.notice(tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
+        await event.source.notice(md_tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):

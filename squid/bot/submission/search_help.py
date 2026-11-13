@@ -9,6 +9,7 @@ import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.builds.domain import BuildCategory
 from squid.records.domain import BaseTitle, BuildKind, VersionScope
+from squid_i18n import md_tr
 
 # Examples are also parsed in tests so the reference cannot drift from the query language.
 BUILD_EXAMPLES = (
@@ -71,7 +72,7 @@ def search_help(
             ),
             _entry(
                 "width · height · depth",
-                tr(
+                md_tr(
                     t"search-reference-size = Physical build dimensions in blocks and volume in blocks "
                     t"cubed, not the door opening size. Use width<=5 or width:[3 TO 5]."
                 ),
@@ -146,7 +147,7 @@ def search_help(
                         )
                     ),
                     sl.paragraph(
-                        tr(
+                        md_tr(
                             t'search-reference-operators = Quote phrases: title:"vault door". Numbers and '
                             t"dates support <, <=, >, >= and inclusive ranges such as width:[3 TO 5]. "
                             t"Wildcards (* and ?) are not supported."

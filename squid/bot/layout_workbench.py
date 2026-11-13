@@ -13,6 +13,7 @@ import squid_ui_discord as sd
 from squid.bot.edit_history import history_controls
 from squid.bot.layout_inspector import InspectablePanel
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, tr
+from squid_i18n import md_tr
 from squid_reactivity import transaction
 from squid_replication import LoroBackend, Replica
 
@@ -368,10 +369,10 @@ class BuildPreview(InspectablePanel):
         # Preserve the rendered intent if another editor changes the set before this press arrives.
         if selected:
             self.draft.tags.discard(tag)
-            self.history.record(tr(t"layout-workbench-remove-tag = Remove {tag}"))
+            self.history.record(md_tr(t"layout-workbench-remove-tag = Remove {tag}"))
         else:
             self.draft.tags.add(tag)
-            self.history.record(tr(t"layout-workbench-add-tag = Add {tag}"))
+            self.history.record(md_tr(t"layout-workbench-add-tag = Add {tag}"))
 
 
 def history_outcome(verb: str, result: sl.runtime.HistoryResult) -> str:

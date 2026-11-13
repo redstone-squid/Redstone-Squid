@@ -13,6 +13,7 @@ from squid.bot.profile_render import present_claimant
 from squid.bot.ui import DISCORD_BLUE, tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
+from squid_i18n import md_tr
 
 REVIEW_SECONDS = 300
 CLAIMS_PER_PAGE = 5
@@ -124,7 +125,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self._claims)
-        return tr(t"claims-view-page-of-in-total = Page {page} of {pages} — {total} in total")
+        return md_tr(t"claims-view-page-of-in-total = Page {page} of {pages} — {total} in total")
 
     async def _select_claim(self, event: sd.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
@@ -176,9 +177,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         name = resolved.alias_name
         claimant = sl.md(present_claimant(resolved))
         message = (
-            tr(t"claims-view-credited-to = Credited **{name}** to {claimant}.")
+            md_tr(t"claims-view-credited-to = Credited **{name}** to {claimant}.")
             if approve
-            else tr(t"claims-closed-uncredited = Closed {claimant}'s claim on **{name}** without crediting it.")
+            else md_tr(t"claims-closed-uncredited = Closed {claimant}'s claim on **{name}** without crediting it.")
         )
         await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
 
@@ -191,11 +192,11 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:
     claim_id = claim.id
     name = claim.alias_name
-    heading = tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
+    heading = md_tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
     claimant = sl.md(present_claimant(claim))
     age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
-    detail = tr(t"claims-view-opened = {claimant} — opened {age}")
-    return tr(t"""
+    detail = md_tr(t"claims-view-opened = {claimant} — opened {age}")
+    return md_tr(t"""
         bot-claims-view-value =
             {{ "*" }}*{heading}**
             {detail}
@@ -205,7 +206,7 @@ def _claim_entry(claim: AliasClaim) -> sl.TextLike:
 def _claim_label(claim: AliasClaim) -> sl.text.Message:
     claim_id = claim.id
     name = claim.alias_name
-    return tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
+    return md_tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
 
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:

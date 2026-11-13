@@ -9,6 +9,7 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain.forms import SubmissionOrigin
+from squid_i18n import md_tr
 
 _STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -115,8 +116,8 @@ class SubmissionAttentionIssue:
         if _STABLE_KEY.fullmatch(self.field_id) is None:
             field_id = self.field_id
             raise ValidationError(
-                tr(
-                    t"submissions-invalid-submission-attention = invalid submission attention field ID: {(field_id_text := str(field_id))}"  # noqa: F841
+                md_tr(
+                    t"submissions-invalid-submission-attention = invalid submission attention field ID: {(field_id_text := str(field_id))}"  # noqa: F841 - captured translation binding
                 )
             )
 
@@ -337,7 +338,7 @@ class NormalizedSubmission:
         if not compatible:
             category = self.category.value
             raise ValidationError(
-                tr(
+                md_tr(
                     t"submissions-submission-incompatible-category = {category} "
                     t"submission has incompatible category details"
                 )
@@ -397,10 +398,10 @@ type BuildSubmissionResult = FinalizedBuild | BuildSubmissionRejected
 
 def _require_stable_keys(values: tuple[str, ...], label: str) -> None:
     if len(values) != len(set(values)):
-        raise ValidationError(tr(t"submissions-keys-unique = {label} keys must be unique"))
+        raise ValidationError(md_tr(t"submissions-keys-unique = {label} keys must be unique"))
     if any(_STABLE_KEY.fullmatch(value) is None for value in values):
         raise ValidationError(
-            tr(t"submissions-keys-stable-lowercase = {label} keys must be stable lowercase identifiers")
+            md_tr(t"submissions-keys-stable-lowercase = {label} keys must be stable lowercase identifiers")
         )
 
 

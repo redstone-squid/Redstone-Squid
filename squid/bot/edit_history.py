@@ -7,6 +7,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
+from squid_i18n import md_tr
 from squid_reactivity.actions import ConflictDetail
 from squid_reactivity.errors import ReactiveConflictError
 from squid_ui.runtime import ReversibleOperation
@@ -53,7 +54,7 @@ async def apply_history(stack: sl.runtime.History, event: sl.PressEvent, *, redo
     result = await stack.redo() if redo else await stack.undo()
     if result.applied:
         label = result.entry.label if result.entry is not None else ""
-        await event.notice(tr(t"edit-history-applied = Applied: {label}"))
+        await event.notice(md_tr(t"edit-history-applied = Applied: {label}"))
     elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
         await event.notice(tr(t"edit-history-conflict = This edit changed elsewhere or is no longer permitted."))
     elif result.status is sl.runtime.HistoryResultStatus.NEEDS_RECONCILIATION:

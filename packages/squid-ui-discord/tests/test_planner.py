@@ -28,7 +28,7 @@ from squid_ui.primitives import (
 )
 from squid_ui.sources import Position
 from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import Localization
+from squid_ui.text import Localization, Markup
 from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui_discord import testing as sd
 from squid_ui_discord.renderer import V2Renderer
@@ -66,7 +66,7 @@ def test_planner_resolves_deferred_text_on_exact_primitives() -> None:
 
     result = plan(Text(tr(t"test-hello = Hello")), target=DISCORD_V2_DPY27, localization=localization)
 
-    assert result.scene.components_v2.children == (scene.Text("Bonjour"),)
+    assert result.scene.components_v2.children == (scene.Text("Bonjour", markup=Markup.DISCORD_MARKDOWN),)
 
 
 def test_duplicate_action_keys_fail_before_drawing() -> None:
@@ -104,7 +104,7 @@ def test_assets_are_scene_resources_not_visual_children() -> None:
     asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"full report"))
     result = plan(Document((Text("summary"),), (asset,)), target=DISCORD_V2_DPY27)
 
-    assert result.scene.components_v2.children == (scene.Text("summary"),)
+    assert result.scene.components_v2.children == (scene.Text("summary", markup=Markup.DISCORD_MARKDOWN),)
     assert result.scene.assets[0].key == "report"
     assert result.resources["asset:report"] is asset
 
@@ -231,8 +231,8 @@ def test_a_ladder_selects_by_capability_before_budget_degradation() -> None:
     basic_scene = plan(ladder, target=basic).scene
     rich_scene = plan(ladder, target=rich).scene
 
-    assert basic_scene.components_v2.children == (scene.Text("plain"),)
-    assert rich_scene.components_v2.children == (scene.Text("rich"),)
+    assert basic_scene.components_v2.children == (scene.Text("plain", markup=Markup.DISCORD_MARKDOWN),)
+    assert rich_scene.components_v2.children == (scene.Text("rich", markup=Markup.DISCORD_MARKDOWN),)
 
 
 def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
@@ -298,5 +298,5 @@ def test_unsupported_native_extension_uses_its_portable_fallback_without_buildin
     target = sd.target_profile("portable.test")
     result = plan(NativeItem(factory, fallback=Text("portable")), target=target)
 
-    assert result.scene.components_v2.children == (scene.Text("portable"),)
+    assert result.scene.components_v2.children == (scene.Text("portable", markup=Markup.DISCORD_MARKDOWN),)
     assert not called

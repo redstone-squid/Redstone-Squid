@@ -8,6 +8,7 @@ from typing import Literal, Self, SupportsFloat, cast
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 RESOURCE_PACK_MEDIA_TYPE: Literal["application/zip"] = "application/zip"
 
@@ -64,7 +65,7 @@ class VerifiedResourcePack:
             raise ValidationError(msg)
         if self.media_type != RESOURCE_PACK_MEDIA_TYPE:
             media_type = RESOURCE_PACK_MEDIA_TYPE
-            msg = tr(t"schematics-resource-packs-use = Resource packs must use {media_type}.")
+            msg = md_tr(t"schematics-resource-packs-use = Resource packs must use {media_type}.")
             raise ValidationError(msg)
         actual = hashlib.sha256(self.data).hexdigest()
         if self.sha256 != actual:

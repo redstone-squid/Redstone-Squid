@@ -17,7 +17,7 @@ from squid.accounts.domain.models import IdentityDetails, IdentityProvider
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.core.sentinel import UNSET
-from squid_i18n import Message
+from squid_i18n import Message, md_tr
 
 MAX_PROFILE_LINKS: Final = 10
 """Maximum number of external links on one profile."""
@@ -58,7 +58,7 @@ def _reject_control_characters(value: str, *, field_name: str | Message, allow_n
         if unicodedata.category(character) in {"Cc", "Cf"}:
             field = field_name
             raise ValidationError(
-                tr(t"accounts-profile-control-characters = {field} may not contain control characters.")
+                md_tr(t"accounts-profile-control-characters = {field} may not contain control characters.")
             )
 
 
@@ -75,7 +75,7 @@ def _normalize_text(
         field = field_name
         length = len(normalized)
         raise ValidationError(
-            tr(t"accounts-profile-field-too-long = {field} may be at most {limit} characters, got {length}.")
+            md_tr(t"accounts-profile-field-too-long = {field} may be at most {limit} characters, got {length}.")
         )
     _reject_control_characters(normalized, field_name=field_name, allow_newlines=allow_newlines)
     return normalized
@@ -101,13 +101,13 @@ class ProfileLink:
             raise ValidationError(tr(t"accounts-link-url-required = Every link needs a URL."))
         if len(clean_url) > MAX_LINK_URL_LENGTH:
             limit = MAX_LINK_URL_LENGTH
-            raise ValidationError(tr(t"accounts-link-url-too-long = Link URLs may be at most {limit} characters."))
+            raise ValidationError(md_tr(t"accounts-link-url-too-long = Link URLs may be at most {limit} characters."))
         _reject_control_characters(clean_url, field_name=tr(t"accounts-domain-profiles-link-url = Link URL"))
         parts = urlsplit(clean_url)
         if parts.scheme not in PROFILE_LINK_SCHEMES:
             scheme = parts.scheme or ""
             raise ValidationError(
-                tr(
+                md_tr(
                     t"accounts-link-invalid-scheme = Links must be https URLs, got {(scheme_text := repr(scheme))}"  # noqa: F841 - captured Fluent binding
                     t"."
                 )
@@ -173,7 +173,7 @@ class ProfileUpdate:
                 limit = MAX_PROFILE_LINKS
                 count = len(links)
                 raise ValidationError(
-                    tr(t"accounts-profile-link-limit = A profile may have at most {limit} links, got {count}.")
+                    md_tr(t"accounts-profile-link-limit = A profile may have at most {limit} links, got {count}.")
                 )
             changes["links"] = tuple(ProfileLink.parse(link.label, link.url) for link in links)
         return replace(self, **changes)  # type: ignore[arg-type]

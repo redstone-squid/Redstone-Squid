@@ -10,6 +10,7 @@ from squid.bot.utils.permissions import actor_for_interaction
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
 from squid.submissions.application.recalculation_values import RecalculationProposal
+from squid_i18n import md_tr
 
 
 class RecalculationProposalScreen(sd.Screen):
@@ -34,7 +35,7 @@ class RecalculationProposalScreen(sd.Screen):
         proposal = self.proposal
         if proposal.applied_revision is not None:
             build_id, revision = proposal.build_id, proposal.applied_revision
-            return (sl.status(tr(t"recalculation-applied = Applied to build #{build_id}, revision {revision}.")),)
+            return (sl.status(md_tr(t"recalculation-applied = Applied to build #{build_id}, revision {revision}.")),)
         changes = [
             f"{name.replace('_', ' ')}: {proposal.before.get(name)!s} → {value!s}"
             for name, value in proposal.after.items()
@@ -58,7 +59,7 @@ class RecalculationProposalScreen(sd.Screen):
                 nodes.append(
                     sl.choices(
                         *(
-                            sl.choice(tr(t"recalculation-target = Build #{target}"), key=str(target))
+                            sl.choice(md_tr(t"recalculation-target = Build #{target}"), key=str(target))
                             for target in self.targets[:25]
                         ),
                         key="target",
@@ -69,7 +70,7 @@ class RecalculationProposalScreen(sd.Screen):
                 nodes.append(sl.note(tr(t"recalculation-no-target = No existing build is linked to this message.")))
         else:
             build_id, revision = proposal.build_id, proposal.expected_revision
-            nodes.append(sl.note(tr(t"recalculation-reviewed = Build #{build_id}, reviewed revision {revision}.")))
+            nodes.append(sl.note(md_tr(t"recalculation-reviewed = Build #{build_id}, reviewed revision {revision}.")))
             nodes.append(
                 sl.action_controls(
                     sl.action_control(tr(t"recalculation-approve = Approve changes"), self._approve, key="approve"),

@@ -14,6 +14,7 @@ from squid.core.errors import SquidError
 from squid.runtime import BotServices
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
+from squid_i18n import md_tr
 
 
 class InferenceCandidatesScreen(sd.Screen):
@@ -192,6 +193,6 @@ class InferenceCandidatesScreen(sd.Screen):
 
 def _candidate_label(number: int, candidate: InferenceCandidate) -> sl.TextLike:
     if candidate.facts.category is None:
-        return tr(t"inference-candidate-uncategorized = Candidate {number}: choose a category")
+        return md_tr(t"inference-candidate-uncategorized = Candidate {number}: choose a category")
     category = candidate.facts.category.value
-    return tr(t"inference-candidate = Candidate {number}: {category}")
+    return md_tr(t"inference-candidate = Candidate {number}: {category}")

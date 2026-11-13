@@ -7,6 +7,7 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.schematics.domain.models import SchematicFormat, Vector3
 from squid.schematics.domain.values import RgbaColor
+from squid_i18n import md_tr
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +56,7 @@ class RenderRequest:
                 minimum = MIN_RENDER_EXTENT
                 maximum = MAX_RENDER_EXTENT
                 raise ValidationError(
-                    tr(t"schematics-pixels = Render {axis} must be between {minimum} and {maximum} pixels.")
+                    md_tr(t"schematics-pixels = Render {axis} must be between {minimum} and {maximum} pixels.")
                 )
         if self.zoom is not None and self.zoom <= 0:
             msg = tr(t"schematics-zoom-positive = Render zoom must be positive.")

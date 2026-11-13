@@ -156,7 +156,9 @@ def _generic_poll_nodes(
                 if vote.option_id == option.identifier
                 and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
             ]
-            voter_suffix = sl.raw_md(f" ({', '.join(voters)})" if poll.visibility == "visible_live" and voters else "")
+            voter_suffix = sl.discord_md(
+                f" ({', '.join(voters)})" if poll.visibility == "visible_live" and voters else ""
+            )
             label = option.label or option.identifier or option.emoji
             weighted_count = weighted.get(option_id, 0)
             tally_options.append(

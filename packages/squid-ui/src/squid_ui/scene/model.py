@@ -31,7 +31,7 @@ class Text:
     KIND: ClassVar[str] = "text"
 
     content: str
-    markup: Markup = Markup.DISCORD_MARKDOWN
+    markup: Markup = Markup.PLAIN
 
 
 @dataclass(frozen=True, slots=True)

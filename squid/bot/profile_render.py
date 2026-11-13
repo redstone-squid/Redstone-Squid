@@ -8,6 +8,7 @@ from squid.accounts.application.presentation import claimant_label
 from squid.accounts.domain import IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile, avatar_url_for
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
+from squid_i18n import md_tr
 from squid_ui.text import Message
 
 _PROVIDER_LABELS = {
@@ -31,9 +32,9 @@ def identity_label(identity: AccountIdentity) -> Message:
     provider = provider_label(identity.provider)
     if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
         subject = str(identity.discord_id)
-        return tr(t"bot-profile-render-value-2 = {provider} — <@{subject}>")
+        return md_tr(t"bot-profile-render-value-2 = {provider} — <@{subject}>")
     name = identity.display_name or identity.subject
-    return tr(t"bot-profile-render-value = {provider} — {name}")
+    return md_tr(t"bot-profile-render-value = {provider} — {name}")
 
 
 def render_links(links: tuple[ProfileLink, ...]) -> str:
@@ -95,11 +96,11 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
 def _public_identity_label(identity: IdentityDetails) -> Message:
     provider = provider_label(identity.provider)
     name = identity.display_name or identity.subject
-    return tr(t"bot-profile-render-value = {provider} — {name}")
+    return md_tr(t"bot-profile-render-value = {provider} — {name}")
 
 
 def _alias_credit_label(name: str, count: int) -> Message:
-    return tr(t"""
+    return md_tr(t"""
         bot-profile-render-build = {{ $count ->
             [one] {{ "*" }}*{name}** — {count} build
            *[other] {{ "*" }}*{name}** — {count} builds

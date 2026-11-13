@@ -29,6 +29,7 @@ from squid.notifications.edits import (
     notification_target,
 )
 from squid.notifications.models import InboxNotification, NotificationSubscription
+from squid_i18n import md_tr
 
 if TYPE_CHECKING:
     from squid.notifications.application import NotificationService
@@ -421,7 +422,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         if not self._settings.subscriptions:
             return tr(t"bot-notifications-view-nothing-yet = _Nothing yet._")
         lines: list[sl.TextLike] = [
-            tr(t"""
+            md_tr(t"""
                 bot-notifications-subscription =
                     {{ "*" }}*{(label := self.describe(subscription))}**
                     {(detail := self.detail(subscription))}
@@ -430,7 +431,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         ]
         hidden = len(self._settings.subscriptions) - len(self.subscriptions)
         if hidden > 0:
-            lines.append(tr(t"bot-notifications-remainder = …and {hidden} more."))
+            lines.append(md_tr(t"bot-notifications-remainder = …and {hidden} more."))
         return sl.text.Message.join("\n", lines)
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:

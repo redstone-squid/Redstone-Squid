@@ -125,7 +125,7 @@ class TestClassicShape:
         assert message.embeds[0].description == "a\n\nb\n\nc"
 
     def test_content_becomes_the_message_content_field(self) -> None:
-        assert body(Content("@here ready")).content == "@here ready"
+        assert body(Content("@here ready")).content == "@\u200bhere ready"
 
     def test_a_document_may_carry_only_one_content_field(self) -> None:
         with pytest.raises(LayoutInvariantError, match="only one Content node is legal"):
@@ -191,7 +191,7 @@ class TestIndependentTextPools:
         message = body([Content("@here " + "y" * 1900), *cards])
 
         assert message.content is not None
-        assert len(message.content) == 1906  # every character survived
+        assert len(message.content) == 1907  # includes the mention-neutralizing character
         assert sum(len(embed.description or "") for embed in message.embeds) <= CLASSIC_LIMITS.embed_text
 
     def test_filling_the_content_pool_leaves_embed_text_untouched(self) -> None:

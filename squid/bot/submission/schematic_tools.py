@@ -25,6 +25,7 @@ from squid.schematics.application import ConvertRequest, SchematicService, Store
 from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import SchematicRenderRefusedError
+from squid_i18n import md_tr
 
 
 class _VideoTaskHost(Protocol):
@@ -202,7 +203,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._video_job_id = status.id
         job_id = status.id
         await event.notice(
-            tr(t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.")
+            md_tr(t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.")
         )
         host = cast(_VideoTaskHost, request.client)
         host.background_tasks.start(self._follow_video(request, status.id), name=f"schematic-video-{status.id}")
@@ -242,7 +243,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             candidates = "; ".join(" ".join(map(str, position)) for position in status.input_candidates)
             await request.respond(
                 sl.paragraph(
-                    tr(
+                    md_tr(
                         t"schematic-video-input-choice = Choose an input position and request the video again: {candidates}"
                     )
                 ),
@@ -252,7 +253,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if status.status != "succeeded":
             reason = _video_failure_reason(status.error, expired=status.status == "expired")
             await request.respond(
-                sl.paragraph(tr(t"schematic-video-failure-detail = Video #{job_id}: {reason}")),
+                sl.paragraph(md_tr(t"schematic-video-failure-detail = Video #{job_id}: {reason}")),
                 audience="personal",
             )
             return True
@@ -264,7 +265,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             url = f"{service.public_base_url}/v1/schematic-videos/{job_id}/content"
             await request.respond(
                 sl.paragraph(
-                    tr(
+                    md_tr(
                         t"schematic-video-too-large = This video exceeds Discord's attachment limit. Download it while signed in: {url}"
                     )
                 ),
@@ -294,7 +295,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         self._asset = self._schematic_asset(data, WRITABLE_EXTENSIONS[file_format])
         loss_summary = summarise_losses(losses)
-        self._schematic_result = tr(
+        self._schematic_result = md_tr(
             t"bot-submission-build-browse-conversion-report = Conversion report: {loss_summary}"
         )
 

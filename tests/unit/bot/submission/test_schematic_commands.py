@@ -31,7 +31,7 @@ def test_the_info_card_names_why_a_build_will_never_get_a_preview() -> None:
     """ "No preview here" and "no preview yet" call for different moderator responses."""
     body = source_text(_describe(stored(), render_skip=RenderSkipReason.OVER_BLOCK_BUDGET))
 
-    assert f"**No preview**: {source_text(RenderSkipReason.OVER_BLOCK_BUDGET.description)}" in body
+    assert r"**No preview**: This schematic has too many blocks to preview\." in body
 
 
 def test_no_skip_reason_leaks_the_engine_or_its_configured_caps() -> None:

@@ -30,6 +30,7 @@ from squid.bot.ui import CardField, tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import EditValues, Revision, RevisionConflictError
+from squid_i18n import md_tr
 
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
@@ -231,7 +232,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         removed_label = _identity_label(identity)
         await event.notice(
-            tr(t"account-identity-unlinked = Unlinked {removed_label}. Any build credit you hold is unaffected.")
+            md_tr(t"account-identity-unlinked = Unlinked {removed_label}. Any build credit you hold is unaffected.")
         )
 
     async def _edit_page(self, event: sd.PressEvent) -> None:
@@ -313,7 +314,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
             if identity.verified_at is not None
             else tr(t"account-view-unknown = unknown")
         )
-        return tr(t"account-view-verified = {visibility} · verified {age}")
+        return md_tr(t"account-view-verified = {visibility} · verified {age}")
 
     def _unlink_warning(self) -> sl.TextLike:
         """What the reader is agreeing to, asked before the press rather than after it."""
@@ -321,7 +322,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if identity is None:
             return tr(t"account-view-remove-this-linked-account = Remove this linked account?")
         identity_label = _identity_label(identity)
-        warning = tr(
+        warning = md_tr(
             t"account-linked-identity-remove-warning = Remove {identity_label}? Any build credit you hold "
             t"is unaffected."
         )
@@ -330,7 +331,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 t"account-discord-unlink-warning = This is the Discord account you "
                 t"are using now. The bot will stop recognising you here."
             )
-            return tr(t"account-view-value = {warning} {consequence}")
+            return md_tr(t"account-view-value = {warning} {consequence}")
         return warning
 
     def _footer(self) -> sl.TextLike | None:

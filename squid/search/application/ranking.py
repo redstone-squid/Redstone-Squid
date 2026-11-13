@@ -14,6 +14,7 @@ from typing import Literal
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 
 class RankingBranch(StrEnum):
@@ -83,7 +84,7 @@ def reciprocal_rank_fusion(
         weight = weights.get(branch, 0)
         if weight < 0:
             branch_name = branch.value
-            raise ValidationError(tr(t"search-weight-negative = weight for {branch_name} cannot be negative"))
+            raise ValidationError(md_tr(t"search-weight-negative = weight for {branch_name} cannot be negative"))
         seen: set[tuple[str, str]] = set()
         rank = 0
         for candidate in candidates[:branch_limit]:

@@ -37,6 +37,7 @@ from squid.edits.application import EditRunner
 from squid.edits.domain import RevisionConflictError
 from squid.submissions.application.build_answers import BuildAnswers, answers_from_build, patch_from_answers
 from squid.submissions.domain import ChoiceOption, FormField, FormManifest, FormSection, SubmissionOrigin
+from squid_i18n import md_tr
 from squid_reactivity import TopicHandle
 from squid_ui.text import Message, TextLike, md
 
@@ -370,7 +371,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             )
             if unlisted:
                 names = ", ".join(unlisted)
-                text = Message.join("\n", (text, tr(t"build-editor-unlisted = Not in the catalogue: {names}")))
+                text = Message.join("\n", (text, md_tr(t"build-editor-unlisted = Not in the catalogue: {names}")))
             sections.append(EditorSection(section.id, text))
         return sections
 
@@ -390,7 +391,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 if not lines:
                     lines.append(md(t"**{section.title}**"))
                 names = ", ".join(removed)
-                lines.append(tr(t"build-editor-removed-unlisted = Removed: {names}"))
+                lines.append(md_tr(t"build-editor-removed-unlisted = Removed: {names}"))
                 removed = ()
             if lines:
                 sections.append(EditorSection(section.id, Message.join("\n", lines)))

@@ -23,6 +23,7 @@ from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.semantic_adaptation.common import (
+    _literal,
     _resolve,
 )
 from squid_ui.planning.semantic_adaptation.controls import (
@@ -319,7 +320,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
             Section(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
         ):
-            resolved_heading = _resolve(heading.content, context)
+            resolved_heading = (_literal if _cards(context) else _resolve)(heading.content, context)
             resolved_accent = _resolve_accent(accent, context.palette)
             if _cards(context):
                 # One semantic region, one card: its heading is the embed title, its accent is
@@ -389,7 +390,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                 value += f"\n— {_resolve(attribution, context)}"
             return [Text(value, overflow=Never())]
         case Code(content=content, language=language):
-            return [PrimitiveCode(_resolve(content, context), language, overflow=Never())]
+            return [PrimitiveCode(_literal(content, context), language, overflow=Never())]
         case Figure(media=media, caption=caption):
             source = media.source
             if isinstance(source, Asset):
@@ -408,7 +409,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                     Card(
                         image=CardMedia(
                             url,
-                            _resolve(media.description, context) if media.description is not None else None,
+                            _literal(media.description, context) if media.description is not None else None,
                             asset_name,
                         ),
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
@@ -434,7 +435,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                 resolved_label = f"-# {resolved_label}"
             text = resolved_label
             if description is not None:
-                text += f"\n{_resolve(description, context)}"
+                text += f"\n{_literal(description, context)}"
             if _cards(context):
                 if spoiler:
                     message = (
@@ -467,16 +468,16 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
         case ProgressBar(value=value, maximum=maximum, label=label):
             ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))
             filled = round(ratio * 10)
-            prefix = f"{_resolve(label, context)}: " if label is not None else ""
+            prefix = f"{_literal(label, context)}: " if label is not None else ""
             return [Text(f"{prefix}{'█' * filled}{'░' * (10 - filled)} {ratio:.0%}", overflow=Never())]
         case Metric(value=value, label=label, unit=unit):
             suffix = f" {unit}" if unit else ""
-            return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
+            return [Text(f"**{_literal(label, context)}:** {value}{suffix}", overflow=Never())]
         case Timestamp(instant=instant, style=style, label=label):
-            prefix = f"**{_resolve(label, context)}:** " if label is not None else None
+            prefix = f"**{_literal(label, context)}:** " if label is not None else None
             return [Time(instant, style.value, prefix)]
         case ZonedTimestamp(value=value, label=label):
-            prefix = f"**{_resolve(label, context)}:** " if label is not None else None
+            prefix = f"**{_literal(label, context)}:** " if label is not None else None
             return [ZonedTime(value, prefix)]
         case FormTrigger():
             return _form(node, context)
@@ -579,14 +580,15 @@ def _primitive(node: Node, context: LoweringContext) -> Node:
             Text(content=content, overflow=overflow)
             | PrimitiveHeading(content=content, overflow=overflow)
             | Footer(content=content, overflow=overflow)
-            | PrimitiveCode(content=content, overflow=overflow)
         ):
             return replace(node, content=_resolve(content, context), overflow=_localized_overflow(overflow, context))
+        case PrimitiveCode(content=content, overflow=overflow):
+            return replace(node, content=_literal(content, context), overflow=_localized_overflow(overflow, context))
         case Lines(lines=lines, overflow=overflow):
             resolved_lines = tuple(line if isinstance(line, Alt) else _resolve(line, context) for line in lines)
             return replace(node, lines=resolved_lines, overflow=_localized_overflow(overflow, context))
         case Button(label=label) | LinkButton(label=label) | RoutedButton(label=label):
-            return replace(node, label=None if label is None else _resolve(label, context))
+            return replace(node, label=None if label is None else _literal(label, context))
         case Row(items=items) | PrimitiveActionGroup(items=items):
             return replace(
                 node,
@@ -604,17 +606,17 @@ def _primitive(node: Node, context: LoweringContext) -> Node:
                 options=tuple(
                     replace(
                         option,
-                        label=_resolve(option.label, context),
-                        description=_resolve(option.description, context) if option.description is not None else None,
+                        label=_literal(option.label, context),
+                        description=_literal(option.description, context) if option.description is not None else None,
                     )
                     for option in options
                 ),
-                placeholder=_resolve(placeholder, context) if placeholder is not None else None,
+                placeholder=_literal(placeholder, context) if placeholder is not None else None,
             )
         case EntitySelect(placeholder=placeholder):
-            return replace(node, placeholder=_resolve(placeholder, context) if placeholder is not None else None)
+            return replace(node, placeholder=_literal(placeholder, context) if placeholder is not None else None)
         case Thumbnail(description=description):
-            return replace(node, description=_resolve(description, context) if description is not None else None)
+            return replace(node, description=_literal(description, context) if description is not None else None)
         case Gallery(items=items) | MediaCollection(items=items):
             return replace(
                 node,
@@ -626,7 +628,7 @@ def _primitive(node: Node, context: LoweringContext) -> Node:
             return replace(
                 node,
                 children=tuple(_primitive(child, context) for child in node.children),
-                title=_card_text(node.title, context),
+                title=_card_text(node.title, context, literal=True),
                 fields=tuple(
                     replace(
                         field,
@@ -638,13 +640,15 @@ def _primitive(node: Node, context: LoweringContext) -> Node:
                 footer=(
                     None
                     if node.footer is None
-                    else CardFooter(_required_card_text(node.footer.text, context), node.footer.icon_url)
+                    else CardFooter(_required_card_text(node.footer.text, context, literal=True), node.footer.icon_url)
                 ),
                 author=(
                     None
                     if node.author is None
                     else CardAuthor(
-                        _required_card_text(node.author.name, context), node.author.url, node.author.icon_url
+                        _required_card_text(node.author.name, context, literal=True),
+                        node.author.url,
+                        node.author.icon_url,
                     )
                 ),
                 image=_card_media(node.image, context),
@@ -683,17 +687,17 @@ def _primitive(node: Node, context: LoweringContext) -> Node:
             assert_never(unreachable)
 
 
-def _card_text(value: CardText | None, context: LoweringContext) -> Text | None:
+def _card_text(value: CardText | None, context: LoweringContext, *, literal: bool = False) -> Text | None:
     """Resolve one authored card slot while retaining its overflow policy."""
     if value is None:
         return None
     node = card_text(value)
-    return replace(node, content=_resolve(node.content, context))
+    return replace(node, content=(_literal if literal else _resolve)(node.content, context))
 
 
-def _required_card_text(value: CardText, context: LoweringContext) -> Text:
+def _required_card_text(value: CardText, context: LoweringContext, *, literal: bool = False) -> Text:
     """Resolve a card slot that its containing value requires."""
-    resolved = _card_text(value, context)
+    resolved = _card_text(value, context, literal=literal)
     assert resolved is not None
     return resolved
 
@@ -702,14 +706,14 @@ def _resolved_gallery_item(value: str | GalleryItem, context: LoweringContext) -
     """Resolve the optional description on one normalized gallery item."""
     item = require_gallery_item(value)
     description = item.description
-    return replace(item, description=None if description is None else _resolve(description, context))
+    return replace(item, description=None if description is None else _literal(description, context))
 
 
 def _card_media(value: CardMedia | None, context: LoweringContext) -> CardMedia | None:
     """Resolve one optional embed media description."""
     if value is None:
         return None
-    description = None if value.description is None else _resolve(value.description, context)
+    description = None if value.description is None else _literal(value.description, context)
     return replace(value, description=description)
 
 

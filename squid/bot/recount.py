@@ -23,6 +23,7 @@ from squid.bot.ui import text_node
 from squid.bot.utils.permissions import enforce
 from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
+from squid_i18n import md_tr
 from squid_ui.text import Message
 
 if TYPE_CHECKING:
@@ -146,7 +147,7 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
 def _cooldown(seconds: float) -> Message:
     whole = max(1, ceil(seconds))
-    return tr(t"recount-server-rate-limited = This server ran a recount recently. Try again in {whole} seconds.")
+    return md_tr(t"recount-server-rate-limited = This server ran a recount recently. Try again in {whole} seconds.")
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

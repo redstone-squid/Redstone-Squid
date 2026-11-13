@@ -14,6 +14,7 @@ from typing import Self
 
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -149,7 +150,7 @@ class FieldConstraints:
         for name in ("min_length", "max_length", "min_items", "max_items"):
             value = getattr(self, name)
             if value is not None and value < 0:
-                raise ValidationError(tr(t"submissions-negative = {name} cannot be negative"))
+                raise ValidationError(md_tr(t"submissions-negative = {name} cannot be negative"))
         if self.min_length is not None and self.max_length is not None and self.min_length > self.max_length:
             msg = tr(t"submissions-min-length-exceed = min_length cannot exceed max_length")
             raise ValidationError(msg)
@@ -200,38 +201,38 @@ class FormField:
         field_id = self.id
         if not self.label.strip():
             raise ValidationError(
-                tr(t"submissions-field-blank-label = field {(field_id_text := str(field_id))} has a blank label")
+                md_tr(t"submissions-field-blank-label = field {(field_id_text := str(field_id))} has a blank label")
             )
         if self.option_source is not None:
             _require_stable_id(self.option_source.replace(":", "_"), "option source")
         if self.options and self.option_source is not None:
             raise ValidationError(
-                tr(
+                md_tr(
                     t"submissions-field-inline-dynamic = field {(field_id_text := str(field_id))} cannot have inline and dynamic options"
                 )
             )
         if self.control in {ControlKind.CHOICE, ControlKind.MULTI_CHOICE} and not (self.options or self.option_source):
             raise ValidationError(
-                tr(
+                md_tr(
                     t"submissions-choice-options-required = choice field {(field_id_text := str(field_id))} requires options"
                 )
             )
         if self.repeatable and self.value_kind is not ValueKind.STRING_LIST:
             raise ValidationError(
-                tr(
+                md_tr(
                     t"submissions-repeatable-field-use = repeatable field {(field_id_text := str(field_id))} must use string_list values"
                 )
             )
         if not self.purposes:
             raise ValidationError(
-                tr(
+                md_tr(
                     t"submissions-field-purpose = field {(field_id_text := str(field_id))} must apply to at least one purpose"
                 )
             )
         if not self.origins:
             raise ValidationError(
-                tr(
-                    t"submissions-field-apply = field {(field_id_text := str(field_id))} must apply to at least one origin"  # noqa: F841
+                md_tr(
+                    t"submissions-field-apply = field {(field_id_text := str(field_id))} must apply to at least one origin"  # noqa: F841 - captured translation binding
                 )
             )
 
@@ -255,8 +256,8 @@ class FormSection:
         if not self.title.strip():
             section_id = self.id
             raise ValidationError(
-                tr(
-                    t"submissions-section-blank-title = section {(section_id_text := str(section_id))} has a blank title"  # noqa: F841
+                md_tr(
+                    t"submissions-section-blank-title = section {(section_id_text := str(section_id))} has a blank title"  # noqa: F841 - captured translation binding
                 )
             )
         _require_unique((item.id for item in self.fields), f"section {self.id} field IDs")
@@ -274,7 +275,7 @@ class CategoryForm:
         _require_stable_id(self.code, "category code")
         if not self.label.strip():
             category = self.code
-            raise ValidationError(tr(t"submissions-category-blank-label = category {category} has a blank label"))
+            raise ValidationError(md_tr(t"submissions-category-blank-label = category {category} has a blank label"))
         _require_unique((section.id for section in self.sections), f"category {self.code} section IDs")
         _require_unique(
             (item.id for section in self.sections for item in section.fields), f"category {self.code} field IDs"
@@ -322,7 +323,7 @@ class FormManifest:
                 category_code = category.code
                 fields = sorted(overlap)
                 raise ValidationError(
-                    tr(
+                    md_tr(
                         t"submissions-category-duplicates-common = category {category_code} duplicates "
                         t"common fields: {fields}"
                     )
@@ -349,7 +350,7 @@ class FormManifest:
                 return category
         category = code
         raise ValidationError(
-            tr(t"submissions-unknown-submission-category = unknown submission category: {category}"),
+            md_tr(t"submissions-unknown-submission-category = unknown submission category: {category}"),
             resource="submission_category",
             public_context={"category": code},
         )
@@ -526,7 +527,7 @@ def _matches_kind(value: JSONValue, kind: ValueKind) -> bool:
 def _require_stable_id(value: str, label: str) -> None:
     if _STABLE_ID.fullmatch(value) is None:
         raise ValidationError(
-            tr(
+            md_tr(
                 t"submissions-field-name-format = {label} must start with a "
                 t"letter and contain only lowercase letters, digits, or underscores"
             )
@@ -536,4 +537,4 @@ def _require_stable_id(value: str, label: str) -> None:
 def _require_unique(values: Iterable[str], label: str) -> None:
     materialized = tuple(values)
     if len(materialized) != len(set(materialized)):
-        raise ValidationError(tr(t"submissions-unique = {label} must be unique"))
+        raise ValidationError(md_tr(t"submissions-unique = {label} must be unique"))

@@ -28,6 +28,7 @@ from squid_ui.semantic import (
     TableRow,
 )
 from squid_ui.sources import Position
+from squid_ui.text import Markup
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
 
 
@@ -197,7 +198,7 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
     assert isinstance(lead, scene.Section)
     assert lead.texts[0].content == "## Title"
     assert lead.accessory == scene.Thumbnail("https://example.invalid/lead.png")
-    assert panel.children[-1] == scene.Text("-# Submission ID: 5")
+    assert panel.children[-1] == scene.Text("-# Submission ID: 5", markup=Markup.DISCORD_MARKDOWN)
 
 
 def test_nested_sections_flatten_inside_the_outer_discord_container() -> None:
@@ -276,9 +277,9 @@ def test_a_lead_image_sits_beside_the_required_heading() -> None:
 
     assert isinstance(panel, scene.Panel)
     assert panel.children[0] == scene.Section(
-        (scene.Text("## Title"),), scene.Thumbnail("https://example.invalid/lead.png")
+        (scene.Text("## Title", markup=Markup.DISCORD_MARKDOWN),), scene.Thumbnail("https://example.invalid/lead.png")
     )
-    assert panel.children[1] == scene.Text("body")
+    assert panel.children[1] == scene.Text("body", markup=Markup.DISCORD_MARKDOWN)
 
 
 def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:

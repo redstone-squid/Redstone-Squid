@@ -369,7 +369,9 @@ class OperationalInspector(sl.Component):
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading("Message roots"),
-                sl.bullets(*rows, key="roots", page_size=8) if rows else sl.paragraph("No message roots."),
+                sl.bullets(*(sl.discord_md(row) for row in rows), key="roots", page_size=8)
+                if rows
+                else sl.paragraph("No message roots."),
             ),
         ]
         if snapshot.message_roots:
@@ -432,7 +434,9 @@ class OperationalInspector(sl.Component):
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading("Live sessions"),
-                sl.bullets(*rows, key="sessions", page_size=8) if rows else sl.paragraph("No live sessions."),
+                sl.bullets(*(sl.discord_md(row) for row in rows), key="sessions", page_size=8)
+                if rows
+                else sl.paragraph("No live sessions."),
             ),
         ]
         if snapshot.sessions:
@@ -879,7 +883,7 @@ def metrics_text(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
     )
 
 
-def _summary(snapshot: squid_ui_discord.MessageRootSnapshot) -> list[str]:
+def _summary(snapshot: squid_ui_discord.MessageRootSnapshot) -> list[sl.TextLike]:
     entries = [
         f"**Component**\n`{snapshot.component}`",
         f"**Generation**\n{snapshot.generation} · {_flags(snapshot)} · {snapshot.suppressed} suppressed",
@@ -893,7 +897,7 @@ def _summary(snapshot: squid_ui_discord.MessageRootSnapshot) -> list[str]:
     else:
         where = "ephemeral" if address.ephemeral else f"<#{address.channel_id}>"
         entries.append(f"**Message**\n[{address.message_id}]({address.jump_url}) in {where}")
-    return entries
+    return [sl.discord_md(entry) for entry in entries]
 
 
 def _access_text(access: squid_ui_discord.AccessPolicy) -> str:

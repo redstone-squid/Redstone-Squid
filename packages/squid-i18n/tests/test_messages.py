@@ -14,9 +14,10 @@ from squid_i18n import (
     Markup,
     Message,
     ResolutionError,
+    discord_md,
     localization_scope,
+    md_tr,
     plain,
-    raw_md,
     resolve_text,
     source_text,
     tr,
@@ -25,7 +26,7 @@ from squid_i18n import (
 
 def test_values_remain_data_and_attributes_share_bindings() -> None:
     name = "}\ninjected = @everyone *x*"
-    message = tr(t"greeting = Hello {name}\n    .label = Label {name}")
+    message = md_tr(t"greeting = Hello {name}\n    .label = Label {name}")
     assert source_text(message) == "Hello \\}\ninjected = @\u200beveryone \\*x\\*"
     assert source_text(message.attribute("label")).startswith("Label \\}")
     with pytest.raises(DeclarationError, match="Unknown attribute"):
@@ -70,8 +71,8 @@ def test_walrus_binding_and_nested_messages() -> None:
     assert count == 2
     message = tr(t"outer = [{caption}]")
     assert source_text(message) == "[2 items]"
-    assert source_text(Message.join(" / ", [caption, plain("*literal*")])) == r"2 items / \*literal\*"
-    trusted = raw_md("**safe**")
+    assert source_text(Message.join(" / ", [caption, plain("*literal*")])) == "2 items / *literal*"
+    trusted = discord_md("**safe**")
     assert source_text(tr(t"trusted = {trusted}")) == "**safe**"
 
 
@@ -92,7 +93,7 @@ def test_string_selector_uses_unescaped_value() -> None:
         [needs-review] {state}
        *[other] wrong
     }}""")
-    assert source_text(message) == r"needs\-review"
+    assert source_text(message) == "needs-review"
 
 
 def test_invalid_authoring_is_rejected() -> None:
@@ -117,14 +118,14 @@ def test_dates_are_explicit_and_aware() -> None:
     with pytest.raises(DeclarationError, match="aware"):
         DATETIME(datetime(2026, 11, 10))  # noqa: DTZ001 - exercise naive date rejection
     instant = datetime(2026, 11, 10, tzinfo=UTC)
-    assert "<t:" in source_text(tr(t"instant = {instant}"))
+    assert source_text(tr(t"instant = {instant}")) == instant.isoformat()
 
 
 def test_bad_translation_falls_back_without_logging_values(caplog: pytest.LogCaptureFixture) -> None:
     name = "private-name"
     message = tr(t"hello = Hello {name}")
     locale = Localization("zh-CN", ("hello = { NUMBER($name) }\n",))
-    assert resolve_text(message, locale).content == r"Hello private\-name"
+    assert resolve_text(message, locale).content == "Hello private-name"
     assert "private-name" not in caplog.text
 
 
@@ -162,3 +163,14 @@ def test_multiline_declarations_preserve_newlines_and_blank_lines() -> None:
     assert source_text(message) == "Hello Ada.\n\nWelcome back."
     assert message.declaration is not None
     assert "\\u000A" not in message.declaration.source
+
+
+def test_plain_and_markdown_declarations_have_explicit_interpolation_rules() -> None:
+    name = "*Ada* @everyone"
+    literal = tr(t"plain-greeting = Hello {name}")
+    formatted = md_tr(t"markdown-greeting = **Hello** {name}")
+
+    assert resolve_text(literal, Localization()).markup is Markup.PLAIN
+    assert source_text(literal) == "Hello *Ada* @everyone"
+    assert resolve_text(formatted, Localization()).markup is Markup.MARKDOWN
+    assert source_text(formatted) == "**Hello** \\*Ada\\* @\u200beveryone"

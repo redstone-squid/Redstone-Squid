@@ -8,7 +8,7 @@ from squid_ui.planning.semantic_adaptation.model import LoweringContext
 from squid_ui.presentation import StrategyState, StrategyUpdate
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.semantic import Emphasis, Tone
-from squid_ui.text import TextLike, resolve_text
+from squid_ui.text import TextLike, discord_text, resolve_text
 
 
 def _select_strategy(axis: StrategyAxis, context: LoweringContext) -> str:
@@ -34,6 +34,10 @@ def _select_strategy(axis: StrategyAxis, context: LoweringContext) -> str:
 
 
 def _resolve(value: TextLike, context: LoweringContext) -> str:
+    return discord_text(resolve_text(value, context.localization))
+
+
+def _literal(value: TextLike, context: LoweringContext) -> str:
     return resolve_text(value, context.localization).content
 
 

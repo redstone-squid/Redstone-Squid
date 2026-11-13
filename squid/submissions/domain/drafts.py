@@ -18,6 +18,7 @@ from uuid import UUID
 
 from squid.core.errors import ConflictError, JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 _FIELD_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -86,7 +87,9 @@ class FieldOperation:
         if _FIELD_ID.fullmatch(self.field_id) is None:
             field_id = self.field_id
             raise ValidationError(
-                tr(t"submissions-invalid-draft-field-id = invalid draft field ID: {(field_id_text := str(field_id))}")  # noqa: F841
+                md_tr(
+                    t"submissions-invalid-draft-field-id = invalid draft field ID: {(field_id_text := str(field_id))}"  # noqa: F841 - captured translation binding
+                )
             )
         if self.kind is FieldOperationKind.UNSET and self.value is not None:
             msg = tr(t"submissions-unset-operations-carry = unset operations cannot carry a value")
@@ -126,7 +129,7 @@ class DraftChange:
         if len(self.operations) > MAX_DRAFT_OPERATIONS:
             limit = MAX_DRAFT_OPERATIONS
             raise ValidationError(
-                tr(t"submissions-draft-changes-exceed = draft changes cannot exceed {limit} operations")
+                md_tr(t"submissions-draft-changes-exceed = draft changes cannot exceed {limit} operations")
             )
         operation_ids = [operation.operation_id for operation in self.operations]
         if len(operation_ids) != len(set(operation_ids)):
@@ -187,7 +190,7 @@ class DraftSnapshot:
         if self.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             current_status = self.status.value
             raise ValidationError(
-                tr(t"submissions-state-edited = drafts in {current_status} state cannot be edited"),
+                md_tr(t"submissions-state-edited = drafts in {current_status} state cannot be edited"),
                 resource="submission_draft",
                 public_context={"status": self.status.value},
             )
@@ -229,7 +232,7 @@ class DraftSnapshot:
             current = self.status.value
             next_status = status.value
             raise ValidationError(
-                tr(t"submissions-draft-transition = draft cannot transition from {current} to {next_status}"),
+                md_tr(t"submissions-draft-transition = draft cannot transition from {current} to {next_status}"),
                 resource="submission_draft",
             )
         return replace(self, status=status)

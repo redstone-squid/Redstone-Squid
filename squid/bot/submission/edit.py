@@ -17,6 +17,7 @@ from squid.core.errors import JSONValue
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
 from squid.submissions.domain import match_choice
+from squid_i18n import md_tr
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
@@ -151,12 +152,12 @@ def _prefill(
     inapplicable = sorted({option for field_id, option in options.items() if field_id not in visible})
     if inapplicable:
         names = ", ".join(inapplicable)
-        return tr(
+        return md_tr(
             t"build-editor-fields-unavailable = This build has no {names}. Open the workspace to see what it does have."
         )
     if unknown:
         names = ", ".join(unknown)
-        return tr(
+        return md_tr(
             t"bot-submission-edit-unknown-names = Not in the catalogue: {names}. "
             t"Choose from the catalogue, or propose a new tag."
         )

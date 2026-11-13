@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from squid.core.errors import ErrorCode, ValidationError
-from squid.core.i18n import tr
 from squid.search.application import (
     RankedCandidate,
     RankingBranch,
@@ -35,6 +34,7 @@ from squid.search.domain import (
 )
 from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler
 from squid.search.models import SearchDocument, SearchDocumentFacet
+from squid_i18n import md_tr
 
 _CANDIDATE_LIMIT = 200
 _PUBLIC_BUILD_STATUSES = frozenset({"confirmed"})
@@ -85,7 +85,7 @@ class PostgresSearchBackend(SearchBackend):
             if field is None or not field.supports_sort:
                 field_name = request.sort.field
                 raise ValidationError(
-                    tr(t"search-search-results-sorted = Search results cannot be sorted by {field_name}."),
+                    md_tr(t"search-search-results-sorted = Search results cannot be sorted by {field_name}."),
                     code=ErrorCode.INVALID_QUERY,
                     public_context={"field": "sort", "value": request.sort.field},
                 )

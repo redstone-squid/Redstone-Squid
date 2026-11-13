@@ -1,11 +1,11 @@
-"""Prepare authored text for localization and target rendering.
+"""Localized text with explicit formatting.
 
-Bare strings are trusted Discord Markdown. Use plain for literal text, or md to keep
-template formatting while escaping interpolated values. Message defers translation
-until the render's Localization is known; resolution produces ResolvedText carrying
-both content and its markup type for the planner and renderer.
+Strings and translations are literal by default. md opts into shared Markdown;
+discord_md explicitly accepts Discord syntax. Interpolations preserve typed text
+and escape ordinary values. Discord serialization belongs at the target boundary.
 """
 
+import re
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -26,36 +26,26 @@ class Markup(StrEnum):
     """How a renderer should interpret resolved text."""
 
     PLAIN = "plain"
+    MARKDOWN = "markdown"
     DISCORD_MARKDOWN = "discord-markdown"
 
 
 @dataclass(frozen=True, slots=True)
 class ResolvedText:
-    """Text after interpolation and translation, before target planning.
-
-    Concatenating with `+` follows the same rules as `Message`. Joining resolved text with a
-    bare string or more resolved text gives resolved Markdown; joining it with a Message gives
-    a Message.
-    """
+    """Resolved source content and its explicit markup dialect."""
 
     content: str
-    markup: Markup = Markup.DISCORD_MARKDOWN
+    markup: Markup = Markup.PLAIN
 
-    @overload
-    def __add__(self, other: str | ResolvedText) -> ResolvedText: ...
-    @overload
-    def __add__(self, other: Message) -> Message: ...
-    def __add__(self, other: TextLike) -> ResolvedText | Message:
-        if isinstance(other, Message):
-            return Message.join("", (self, other))
-        return ResolvedText(discord_text(self) + discord_text(ResolvedText(other) if isinstance(other, str) else other))
+    def __add__(self, other: TextLike) -> Message:
+        return Message.join("", (self, other))
 
-    def __radd__(self, other: str) -> ResolvedText:
-        return ResolvedText(other + discord_text(self))
+    def __radd__(self, other: str) -> Message:
+        return Message.join("", (other, self))
 
     def resolve(self) -> str:
-        """Return this text as Discord Markdown."""
-        return discord_text(self)
+        """Return resolved source content without choosing an output platform."""
+        return self.content
 
 
 class MarkupText(Protocol):
@@ -71,13 +61,6 @@ class MarkupText(Protocol):
 
     @property
     def markup(self) -> Markup: ...
-
-
-@dataclass(frozen=True, slots=True)
-class RawMarkdown:
-    """An explicitly trusted Markdown interpolation value."""
-
-    content: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +100,7 @@ class Message:
 
     declaration: Declaration | None
     bindings: Mapping[str, object] = field(default_factory=dict)
-    markup: Markup = Markup.DISCORD_MARKDOWN
+    markup: Markup = Markup.PLAIN
     selected_attribute: str | None = None
     parts: tuple[TextLike, ...] = ()
     separator: str = ""
@@ -148,7 +131,7 @@ class Message:
         return Message(None, parts=tuple(parts), separator=separator)
 
     def resolve(self) -> str:
-        return discord_text(resolve_text(self, current_localization()))
+        return resolve_text(self, current_localization()).content
 
 
 type TextLike = str | ResolvedText | Message
@@ -188,9 +171,17 @@ def tr(template: Template, /) -> Message:
     return Message(declaration, MappingProxyType(bindings))
 
 
-def raw_md(value: object) -> RawMarkdown:
-    """Mark one interpolation as trusted Discord Markdown."""
-    return RawMarkdown(str(value))
+def md_tr(template: Template, /) -> Message:
+    """Declare localized Markdown with literal-by-default interpolation values."""
+    return replace(tr(template), markup=Markup.MARKDOWN)
+
+
+def discord_md(value: str | Template) -> ResolvedText:
+    """Accept explicitly authored Discord syntax, including mentions and custom emoji."""
+    return ResolvedText(
+        _resolve_template(value, Markup.DISCORD_MARKDOWN) if isinstance(value, Template) else value,
+        Markup.DISCORD_MARKDOWN,
+    )
 
 
 def plain(value: object) -> ResolvedText:
@@ -199,20 +190,26 @@ def plain(value: object) -> ResolvedText:
     return ResolvedText(str(value) if temporal is None else temporal, Markup.PLAIN)
 
 
-def md(value: str | Template, /, **values: object) -> ResolvedText:
-    """Resolve trusted Markdown with escaped dynamic interpolations.
+@overload
+def md(value: Message, /) -> Message: ...
+@overload
+def md(value: str | Template, /, **values: object) -> ResolvedText: ...
+def md(value: str | Template | Message, /, **values: object) -> ResolvedText | Message:
+    """Author Markdown, escaping ordinary bindings and preserving typed text.
 
-    Bare strings are the trusted template markup. Dynamic content is supplied either by a
-    Python 3.14 template string or by named values for translated format strings.
+    Wrap tr(...) to declare a localized Markdown message without changing extraction.
     """
+    if isinstance(value, Message):
+        if values:
+            message = "localized messages already contain their bindings"
+            raise TypeError(message)
+        return replace(value, markup=Markup.MARKDOWN)
     if isinstance(value, Template):
         if values:
             message = "template strings already contain their interpolation values"
             raise TypeError(message)
-        return ResolvedText(_resolve_template(value, Markup.DISCORD_MARKDOWN))
-    if not values:
-        return ResolvedText(value)
-    return ResolvedText(_resolve_named(value, values, Markup.DISCORD_MARKDOWN))
+        return ResolvedText(_resolve_template(value, Markup.MARKDOWN), Markup.MARKDOWN)
+    return ResolvedText(_resolve_named(value, values, Markup.MARKDOWN) if values else value, Markup.MARKDOWN)
 
 
 def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
@@ -221,21 +218,16 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
     if isinstance(value, str):
         return ResolvedText(value)
     if value.declaration is None:
-        parts = [
-            resolve_text(
-                replace(part, markup=Markup.PLAIN)
-                if value.markup is Markup.PLAIN and isinstance(part, Message)
-                else part,
-                localization,
-            )
-            for part in value.parts
-        ]
-        return ResolvedText(
-            value.separator.join(
-                discord_text(part) if value.markup is Markup.DISCORD_MARKDOWN else part.content for part in parts
-            ),
-            value.markup,
+        parts = [resolve_text(part, localization) for part in value.parts]
+        markup = (
+            Markup.DISCORD_MARKDOWN
+            if any(part.markup is Markup.DISCORD_MARKDOWN for part in parts)
+            else Markup.MARKDOWN
+            if value.markup is Markup.MARKDOWN or any(part.markup is Markup.MARKDOWN for part in parts)
+            else Markup.PLAIN
         )
+        separator = _escape_markdown(value.separator) if markup is not Markup.PLAIN else value.separator
+        return ResolvedText(separator.join(_content_for(part, markup) for part in parts), markup)
     return runtime.render_message(value, localization)
 
 
@@ -248,7 +240,16 @@ def source_text(value: TextLike, *, markup: Markup | None = None) -> str:
 
 
 def discord_text(value: MarkupText) -> str:
-    return value.content if value.markup is Markup.DISCORD_MARKDOWN else _escape_markdown(value.content)
+    if value.markup is not Markup.PLAIN:
+        return value.content
+    escaped = re.sub(r"(?m)([\\`*_~|<\[])|^([>#-])", r"\\\g<0>", value.content)
+    return escaped.replace("@", "@\u200b")
+
+
+def _content_for(value: MarkupText, markup: Markup) -> str:
+    if markup is Markup.PLAIN or value.markup is not Markup.PLAIN:
+        return value.content
+    return _escape_markdown(value.content).replace("@", "@\u200b")
 
 
 def _resolve_template(template: Template, markup: Markup) -> str:
@@ -286,7 +287,7 @@ class _SafeFormatValue:
     def __format__(self, format_spec: str) -> str:
         if not format_spec:
             return _safe_value(self.value, self.markup)
-        if isinstance(self.value, RawMarkdown):
+        if isinstance(self.value, ResolvedText):
             return format(self.value.content, format_spec)
         return _safe_value(format(self.value, format_spec), self.markup)
 
@@ -305,8 +306,8 @@ def _interpolation(interpolation: Interpolation, markup: Markup) -> str:
 
 
 def _safe_value(value: object, markup: Markup) -> str:
-    if isinstance(value, RawMarkdown):
-        return value.content
+    if isinstance(value, Message | ResolvedText):
+        return _content_for(resolve_text(value, current_localization()), markup)
     temporal = _temporal_value(value, markup)
     if temporal is not None:
         return temporal
@@ -326,7 +327,7 @@ def _temporal_value(value: object, markup: Markup) -> str | None:
     if instant.tzinfo is None or instant.utcoffset() is None:
         message = "timestamp interpolation requires an aware datetime"
         raise ValueError(message)
-    if markup is Markup.PLAIN:
+    if markup is not Markup.DISCORD_MARKDOWN:
         return instant.isoformat()
     return f"<t:{int(instant.timestamp())}:{style}>"
 

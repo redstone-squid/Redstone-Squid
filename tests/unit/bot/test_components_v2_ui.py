@@ -24,6 +24,7 @@ from squid.messages.domain import MessageRef
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
+from squid_i18n import source_text
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import (
     AsyncCallRecorder,
@@ -302,7 +303,9 @@ def test_build_card_does_not_repeat_headline_component_restrictions(display_buil
 def test_build_card_shows_the_submitter_description_escaped(display_build: Build) -> None:
     build = replace(display_build, description="Uses *two* observers")
 
-    assert build_description(build) == "\nUses \\*two\\* observers"
+    description = build_description(build)
+    assert description is not None
+    assert source_text(description) == "\nUses *two* observers"
 
 
 def test_build_card_credits_the_sponsoring_server_and_website(display_build: Build) -> None:

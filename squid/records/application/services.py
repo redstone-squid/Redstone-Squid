@@ -48,6 +48,7 @@ from squid.records.domain import (
 from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS, MaterializationSource
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from squid.unit_of_work import UnitOfWorkFactory
+from squid_i18n import md_tr
 
 
 class RecordComputationService:
@@ -364,7 +365,7 @@ class RecordService:
             actual = identity.kind.value
             requested = kind.value
             raise ValidationError(
-                tr(
+                md_tr(
                     t"records-record-category-category = Record category {(definition_id_text := str(definition_id))} is "  # noqa: F841 - captured text identifier
                     t"a {actual} category, not {requested}."
                 )
@@ -556,8 +557,8 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
     if facet.value_type == "boolean":
         if value not in {"true", "false"}:
             raise InvalidStateError(
-                tr(
-                    t"records-invalid-boolean-category = Invalid boolean category value {(value_text := repr(value))}."  # noqa: F841 - captured Fluent binding
+                md_tr(
+                    t"records-invalid-boolean-category = Invalid boolean category value {(value_text := repr(value))}."  # noqa: F841 - captured translation binding
                 )
             )
         return value == "true"
@@ -581,7 +582,7 @@ def _base_key(source: CandidateBuild) -> str:
         )
     build_id = source.candidate.build_id
     raise DataIntegrityError(
-        tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
+        md_tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
     )
 
 
@@ -610,7 +611,7 @@ def _category_with_restrictions(
         )
     build_id = source.candidate.build_id
     raise DataIntegrityError(
-        tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
+        md_tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
     )
 
 
@@ -621,7 +622,7 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
         return tuple(EXTENDER_TIMING_METHODS)
     kind_name = kind.value
     raise InvalidStateError(
-        tr(t"records-fastest-records-unsupported = Fastest records are not supported for {kind_name}.")
+        md_tr(t"records-fastest-records-unsupported = Fastest records are not supported for {kind_name}.")
     )
 
 
@@ -637,7 +638,7 @@ def _base_titles(kind: BuildKind) -> tuple[BaseTitle, ...]:
     if kind is BuildKind.EXTENDER:
         return shared
     kind_name = kind.value
-    raise InvalidStateError(tr(t"records-records-not-supported = Records are not supported for {kind_name}."))
+    raise InvalidStateError(md_tr(t"records-records-not-supported = Records are not supported for {kind_name}."))
 
 
 def _resolve_record(

@@ -17,6 +17,7 @@ from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.actors import Actor
 from squid.core.i18n import tr
 from squid.voting.domain import VoteRejection, VoteSessionSnapshot
+from squid_i18n import md_tr
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -80,7 +81,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
     if not result.complete:
         # Report unresolved voters as a count without exposing their account IDs.
         count = len(result.unresolved_account_ids)
-        text += " " + tr(
+        text += " " + md_tr(
             t"vote-unresolved-voter-cache-retained = {count} voter(s) could not be resolved, "
             t"so their cached weight was kept."
         )

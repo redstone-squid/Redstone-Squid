@@ -14,6 +14,7 @@ import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.suggestions.application import Candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
+from squid_i18n import md_tr
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
@@ -109,7 +110,7 @@ class HelpScreen(sd.Screen):
             needle = self._needle
             body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = sl.section(
                 sl.heading(tr(t"help-command-not-found = Command not found")),
-                sl.paragraph(tr(t"help-command-unavailable = No command named `{needle}` is available.")),
+                sl.paragraph(md_tr(t"help-command-unavailable = No command named `{needle}` is available.")),
             )
         elif self._focused is not None:
             body = self._detail(self._focused)

@@ -43,6 +43,7 @@ from squid.submissions.errors import (
     DraftValidationError,
 )
 from squid.unit_of_work import UnitOfWorkFactory
+from squid_i18n import md_tr
 
 MAX_FINALIZATION_JOB_CLAIM = 32
 DEFAULT_FINALIZATION_ATTEMPTS = 3
@@ -418,7 +419,7 @@ class SubmissionFinalizationWorker:
         if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
             maximum = MAX_FINALIZATION_JOB_CLAIM
             raise InvalidStateError(
-                tr(t"submissions-claim-limit = finalization claim limit must be between 1 and {maximum}")
+                md_tr(t"submissions-claim-limit = finalization claim limit must be between 1 and {maximum}")
             )
         claimed_at = now or Instant.now()
         if self._preparation is not None:

@@ -165,9 +165,10 @@ from squid_ui.target_types import (
 )
 from squid_ui.text import (
     TextLike,
+    discord_md,
     md,
+    md_tr,
     plain,
-    raw_md,
 )
 
 __all__ = [
@@ -237,6 +238,7 @@ __all__ = [
     "control_group",
     "controlled",
     "details",
+    "discord_md",
     "document",
     "download",
     "emoji",
@@ -264,6 +266,7 @@ __all__ = [
     "keep_with_next",
     "link",
     "md",
+    "md_tr",
     "media",
     "media_item",
     "metric",
@@ -283,7 +286,6 @@ __all__ = [
     "progress",
     "quote",
     "rating",
-    "raw_md",
     "resource",
     "resources",
     "roster",

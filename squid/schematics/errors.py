@@ -12,7 +12,7 @@ from squid.core.errors import (
 )
 from squid.core.i18n import tr
 from squid.schematics.domain.models import Vector3
-from squid_i18n import Message
+from squid_i18n import Message, md_tr
 
 
 class InvalidSchematicError(ValidationError):
@@ -57,7 +57,7 @@ class AmbiguousSimulationInputError(InvalidSchematicError):
                 t"schematics-schematic-no-input = This schematic has no "
                 t"input annotation and no lever or button to actuate."
             )
-            action = tr(
+            action = md_tr(
                 t"schematics-errors-add-an-io-input-sign-or-use = Add an @io.* input sign, or use a "
                 t"schematic with an interactable input."
             )
@@ -84,7 +84,7 @@ class SchematicTooLargeError(ValidationError):
 
     def __init__(self, *, actual: int, limit: int, measure: str) -> None:
         super().__init__(
-            tr(t"schematics-too-large-limit = The schematic is too large: {measure} is {actual}, limit is {limit}."),
+            md_tr(t"schematics-too-large-limit = The schematic is too large: {measure} is {actual}, limit is {limit}."),
             context={"measure": measure, "actual": actual, "limit": limit},
             public_context={"measure": measure, "limit": limit},
         )

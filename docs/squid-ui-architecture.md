@@ -417,14 +417,17 @@ Target-native features use Extension(kind, version, payload, fallback). A target
 prepares and measures the native resource once. Unsupported targets use the mandatory
 portable fallback. Extension payloads in scenes are versioned and JSON-safe.
 
-Discord Markdown is the default authored text dialect, not a structured inline-content tree. Bare
-strings are trusted author markup. `md(t"Build {title}")` safely escapes Python 3.14 template
-interpolations and neutralizes mentions; `plain()` requests literal text; `raw_md()` opts one
-known-safe interpolation back into trusted markup. Scenes preserve the dialect so each renderer
-can choose an appropriate Markdown implementation. The HTML renderer uses markdown-it-py's
-`js-default` configuration with raw HTML disabled, converts only allowlisted tokens, and validates
-links and images as recommended by its
-[security guidance](https://markdown-it-py.readthedocs.io/en/latest/security.html).
+Strings and translations default to literal text. `md(t"Build {title}")` and
+`md_tr(t"build-title = Build {title}")` explicitly author shared Markdown, with
+escaped ordinary interpolations and composable typed text. `discord_md()` marks
+Discord-specific syntax explicitly. Scenes carry their markup dialect; Discord
+planning serializes text before measuring its payload size.
+
+Both HTML renderers share the same safe Markdown token renderer. Native inline
+containers render inline Markdown; the Components V2 preview also renders block
+syntax such as headings, lists, quotes, and fenced code. Raw HTML is disabled,
+and links and images are restricted to safe URL schemes. Unsupported Discord
+syntax remains visible as text rather than being treated as HTML.
 
 ### Declaring a component's dialect
 

@@ -23,6 +23,7 @@ from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
+from squid_i18n import md_tr
 from squid_ui_discord.modal import EntityField
 
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -344,8 +345,8 @@ class AccountWorkspace(sd.Screen):
         claim_id = claim.id
         alias_name = claim.alias_name
         await event.notice(
-            tr(
-                t"account-claim-pending-review = Claim #{(claim_id_text := str(claim_id))} for **{alias_name}** is awaiting staff approval."  # noqa: F841
+            md_tr(
+                t"account-claim-pending-review = Claim #{(claim_id_text := str(claim_id))} for **{alias_name}** is awaiting staff approval."  # noqa: F841 - captured translation binding
             )
         )
 
@@ -353,7 +354,7 @@ class AccountWorkspace(sd.Screen):
         code, ticket = await self._accounts.create_merge_code(self._account_id())
         expiry = ticket.expires_at.to_stdlib().isoformat()
         await event.notice(
-            tr(
+            md_tr(
                 t"account-merge-code-warning = Merge code: `{code}`. It "
                 t"expires {expiry}. Keep it private: it hands this account over."
             )
@@ -369,7 +370,7 @@ class AccountWorkspace(sd.Screen):
         builds = preview.build_count
         self._merge_code = code
         self._merge_decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-            tr(
+            md_tr(
                 t"account-merge-transfer-preview = Move {aliases} creator "
                 t"names, {identities} identities, and {builds} build credits here? This cannot be undone."
             ),
@@ -392,7 +393,7 @@ class AccountWorkspace(sd.Screen):
         self._merge_decision = None
         await self._rebuild(changed_account_id=result.surviving_account_id)
         await event.source.notice(
-            tr(t"account-merge-complete = Merged. `{redirected}` now redirects to your creator page.")
+            md_tr(t"account-merge-complete = Merged. `{redirected}` now redirects to your creator page.")
         )
 
     def _account_id(self) -> int:

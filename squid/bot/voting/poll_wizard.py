@@ -19,6 +19,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_i18n import md_tr
 
 _DURATION = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 _DURATION_UNITS = {"m": 60, "h": 3600, "d": 86400}
@@ -57,7 +58,7 @@ def parse_poll_duration(value: str) -> int:
     match = _DURATION.fullmatch(value.strip())
     if match is None:
         raise InvalidVoteConfigurationError(
-            tr(t"poll-setup-duration-format-help = Duration must look like `30m`, `12h`, or `7d`.")
+            md_tr(t"poll-setup-duration-format-help = Duration must look like `30m`, `12h`, or `7d`.")
         )
     seconds = int(match.group(1)) * _DURATION_UNITS[match.group(2).lower()]
     if not MIN_POLL_DURATION_SECONDS <= seconds <= MAX_POLL_DURATION_SECONDS:
@@ -74,7 +75,7 @@ def format_duration(seconds: int) -> sl.TextLike:
             return label
     if seconds % 86400 == 0:
         count = seconds // 86400
-        return tr(t"""
+        return md_tr(t"""
             bot-voting-poll-wizard-day = {{ $count ->
                 [one] {count} day
                *[other] {count} days
@@ -82,14 +83,14 @@ def format_duration(seconds: int) -> sl.TextLike:
             """)
     if seconds % 3600 == 0:
         count = seconds // 3600
-        return tr(t"""
+        return md_tr(t"""
             bot-voting-poll-wizard-hour-2 = {{ $count ->
                 [one] {count} hour
                *[other] {count} hours
             }}
             """)
     count = seconds // 60
-    return tr(t"""
+    return md_tr(t"""
         bot-voting-poll-wizard-minute = {{ $count ->
             [one] {count} minute
            *[other] {count} minutes
@@ -135,7 +136,7 @@ def parse_option_lines(
             )
         if not emoji_is_usable(emoji):
             raise InvalidVoteConfigurationError(
-                tr(t"poll-setup-custom-emoji-unavailable = The custom emoji {emoji} is not accessible to this bot.")
+                md_tr(t"poll-setup-custom-emoji-unavailable = The custom emoji {emoji} is not accessible to this bot.")
             )
         options.append(
             VoteOption(
@@ -349,10 +350,11 @@ class PollScreen(sd.Screen[str]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.published_url is not None:
-            published_url = sl.raw_md(self.published_url)
+            published_url = sl.discord_md(self.published_url)
             return (
                 sl.status(
-                    tr(t"bot-voting-poll-wizard-poll-published = Poll published: {published_url}"), tone=sl.Tone.SUCCESS
+                    md_tr(t"bot-voting-poll-wizard-poll-published = Poll published: {published_url}"),
+                    tone=sl.Tone.SUCCESS,
                 ),
             )
         if self.cancelled:

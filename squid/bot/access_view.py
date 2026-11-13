@@ -47,6 +47,7 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE_GUILD,
 )
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
+from squid_i18n import md_tr
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
 type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -132,7 +133,9 @@ class AccessScreen(sd.Screen):
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
             tabs.append(sp.Tab("audit", tr(t"access-view-audit = Audit"), self._audit(audit)))
         subject_label = self._subject_label
-        self._tabs = sp.Tabs(tabs, key="access-tabs", title=tr(t"access-view-access-for = Access for {subject_label}"))
+        self._tabs = sp.Tabs(
+            tabs, key="access-tabs", title=md_tr(t"access-view-access-for = Access for {subject_label}")
+        )
 
     @property
     def _may_grant(self) -> bool:
@@ -150,7 +153,7 @@ class AccessScreen(sd.Screen):
                 sl.section(
                     sl.heading(tr(t"access-view-delete-internal-role = Delete internal role")),
                     sl.paragraph(
-                        tr(t"access-view-delete-and-its-assignments = Delete **{slug}** and its assignments?")
+                        md_tr(t"access-view-delete-and-its-assignments = Delete **{slug}** and its assignments?")
                     ),
                 ),
                 self._decision,
@@ -337,7 +340,7 @@ class AccessScreen(sd.Screen):
             return
         form = _CreateRoleForm.from_submission(event)
         slug = form.slug
-        label = tr(t"access-view-created-internal-role = Created internal role **{slug}**.")
+        label = md_tr(t"access-view-created-internal-role = Created internal role **{slug}**.")
         await self._save(
             ROLE_CREATE,
             RolePresenceValues(
@@ -405,7 +408,7 @@ class AccessScreen(sd.Screen):
         if not await self._authorize_mutation(event.source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
         slug, identity, revision = pending
-        label = tr(t"access-view-deleted-internal-role = Deleted internal role **{slug}**.")
+        label = md_tr(t"access-view-deleted-internal-role = Deleted internal role **{slug}**.")
         await self._save(ROLE_DELETE, RoleDeletionValues(role_id=identity), revision, label)
         await event.source.notice(label)
 

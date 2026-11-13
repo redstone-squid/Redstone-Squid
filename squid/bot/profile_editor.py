@@ -22,10 +22,11 @@ from squid.bot.edit_history import history_controls, track_local_edits
 from squid.bot.profile_render import own_profile_fields
 from squid.bot.ui import tr
 from squid.core.errors import ValidationError
+from squid_i18n import md_tr
 
 
 def _link_count(count: int) -> sl.text.Message:
-    return tr(t"account-view-links = {count} links")
+    return md_tr(t"account-view-links = {count} links")
 
 
 class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):

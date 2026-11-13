@@ -9,6 +9,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.planning.semantic_adaptation.common import (
     _button_style,
+    _literal,
     _page_items,
     _resolve,
     _select_strategy,
@@ -109,7 +110,7 @@ def form_button(node: FormTrigger, context: LoweringContext) -> FormButton:
         raise LayoutInvariantError(message)
     spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.components.modal_components)
     return FormButton(
-        _resolve(node.label, context),
+        _literal(node.label, context),
         PresentForm(spec, node.key, node.on_submit, node.mode, node.label, node.record),
         node.key,
         style=_button_style(node.tone, node.emphasis),
@@ -158,7 +159,7 @@ def _choices(node: Choices, path: str, context: LoweringContext) -> list[Node]:
     if node.maximum == 1 and 2 <= len(available) <= 5:
         buttons = [
             Button(
-                _resolve(choice.label, context),
+                _literal(choice.label, context),
                 ChooseChoice(commit, choice.key),
                 f"{node.key}.{choice.key}",
                 style=ActionStyle.PRIMARY if choice.key in previous else ActionStyle.SECONDARY,
@@ -177,9 +178,9 @@ def _choices(node: Choices, path: str, context: LoweringContext) -> list[Node]:
 
     options = tuple(
         Option(
-            _resolve(choice.label, context),
+            _literal(choice.label, context),
             choice.key,
-            _resolve(choice.description, context) if choice.description is not None else None,
+            _literal(choice.description, context) if choice.description is not None else None,
             choice.key in previous,
         )
         for choice in visible
@@ -214,7 +215,7 @@ def _entities(node: Entities, path: str, context: LoweringContext) -> list[Node]
                 node.entity_type,
                 SelectEntities(commit),
                 node.key,
-                placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
+                placeholder=_literal(node.placeholder, context) if node.placeholder is not None else None,
                 default_values=previous,
                 conversation_types=node.conversation_types,
                 min_values=node.minimum,
@@ -256,15 +257,15 @@ def _routed_choices(node: RoutedChoices, path: str, context: LoweringContext) ->
         RoutedSelect(
             options=tuple(
                 Option(
-                    _resolve(choice.label, context),
+                    _literal(choice.label, context),
                     choice.key,
-                    _resolve(choice.description, context) if choice.description is not None else None,
+                    _literal(choice.description, context) if choice.description is not None else None,
                     default=choice.key in node.selected,
                 )
                 for choice in available
             ),
             route_id=node.route_id,
-            placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
+            placeholder=_literal(node.placeholder, context) if node.placeholder is not None else None,
             min_values=node.minimum,
             max_values=min(node.maximum, len(available)),
             disabled=not node.available,
@@ -329,7 +330,7 @@ def _navigation(node: Navigation, path: str, context: LoweringContext) -> list[N
             SelectMenu(
                 tuple(
                     Option(
-                        _resolve(destination.label, context),
+                        _literal(destination.label, context),
                         destination.key,
                         default=destination.key == current,
                     )
@@ -343,7 +344,7 @@ def _navigation(node: Navigation, path: str, context: LoweringContext) -> list[N
         return result
     buttons = [
         Button(
-            _resolve(destination.label, context),
+            _literal(destination.label, context),
             GoToDestination(commit, destination.key),
             f"{node.key}.{destination.key}",
             style=ActionStyle.PRIMARY if destination.key == current else ActionStyle.SECONDARY,
@@ -365,7 +366,7 @@ def _details(
         Row(
             (
                 Button(
-                    _resolve(node.summary.content, context),
+                    _literal(node.summary.content, context),
                     ToggleDetails(node, open_, context.session),
                     toggle_action_key(node.key),
                 ),
@@ -388,7 +389,7 @@ def toggle_button(node: Toggle, context: LoweringContext) -> Button:
     state_label = node.on_label if on else node.off_label
     if state_label is None:
         state_label = context.chrome.on if on else context.chrome.off
-    label = f"{_resolve(node.label, context)}: {_resolve(state_label, context)}"
+    label = f"{_literal(node.label, context)}: {_literal(state_label, context)}"
     return Button(
         label,
         FlipToggle(node, on, context.session),

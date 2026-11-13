@@ -38,6 +38,7 @@ from squid.submissions.domain import (
 from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
+from squid_i18n import md_tr
 from squid_ui.interactions import PressHandler
 from squid_ui.text import Message, TextLike, md
 
@@ -205,13 +206,13 @@ class SectionEditorScreen(sd.Screen[None]):
         labels = {option.value: option.label for option in options}
         chosen = ", ".join(labels.get(item, item) for item in selected)
         name = (
-            tr(t"draft-editor-picker-required = **{(label := field.label)}** · Required")  # noqa: F841 - captured Fluent binding
+            md_tr(t"draft-editor-picker-required = **{(label := field.label)}** · Required")  # noqa: F841 - captured Fluent binding
             if field.required
             else md(t"**{field.label}**")
         )
         lines: list[TextLike] = [
             name,
-            md(t"{chosen}") if chosen else tr(t"draft-editor-nothing-chosen = *Nothing chosen yet.*"),
+            md(t"{chosen}") if chosen else md_tr(t"draft-editor-nothing-chosen = *Nothing chosen yet.*"),
         ]
         if not options:
             lines.append(tr(t"draft-editor-no-options = No options are available right now."))
@@ -223,12 +224,12 @@ class SectionEditorScreen(sd.Screen[None]):
         if pages > 1:
             page_number = page + 1
             lines.append(
-                tr(
+                md_tr(
                     t"draft-editor-picker-pages-multiple = -# Page {page_number} of {pages}. "
                     t"Choices on other pages are kept."
                 )
                 if multiple
-                else tr(t"draft-editor-picker-pages = -# Page {page_number} of {pages}.")
+                else md_tr(t"draft-editor-picker-pages = -# Page {page_number} of {pages}.")
             )
         children: list[Any] = [
             sd.v2.text(Message.join("\n", lines)),
@@ -332,7 +333,7 @@ def section_text(ws: AnswerWorkspace, section: FormSection, *, show_empty: bool 
     """
     lines = _answer_lines(ws, section.fields, ws.answers, show_empty=show_empty)
     if not lines:
-        lines = [tr(t"draft-editor-section-empty = *Optional. Nothing added yet.*")]
+        lines = [md_tr(t"draft-editor-section-empty = *Optional. Nothing added yet.*")]
     return Message.join("\n", (md(t"**{section.title}**"), *lines))
 
 
@@ -360,9 +361,9 @@ def _answer_lines(
         label = md(t"{field.label}: ")
         if is_empty(value):
             if field.required:
-                lines.append(label + tr(t"draft-editor-required = ⚠️ *Required*"))
+                lines.append(label + md_tr(t"draft-editor-required = ⚠️ *Required*"))
             elif show_empty:
-                lines.append(label + tr(t"draft-editor-not-set = *Not set*"))
+                lines.append(label + md_tr(t"draft-editor-not-set = *Not set*"))
             continue
         line = label + _value_text(ws, field, value)
         if (reason := errors.get(field.id)) is not None:
@@ -384,8 +385,8 @@ def _dimensions_line(
     reason = next((errors[field_id] for field_id in group.field_ids if field_id in errors), None)
     if all(value is None for value in values):
         if reason is not None:
-            return label + tr(t"draft-editor-required = ⚠️ *Required*")
-        return label + tr(t"draft-editor-not-set = *Not set*") if show_empty else None
+            return label + md_tr(t"draft-editor-required = ⚠️ *Required*")
+        return label + md_tr(t"draft-editor-not-set = *Not set*") if show_empty else None
     size = format_dimensions(tuple(value if isinstance(value, int) else None for value in values))
     line = label + md(t"{size}")
     return line if reason is None else Message.join("", (line, " — ⚠️ ", problem_text(reason)))

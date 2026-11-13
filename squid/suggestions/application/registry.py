@@ -12,6 +12,7 @@ from squid.core.errors import ErrorCode, InvalidStateError, NotFoundError
 from squid.core.i18n import tr
 from squid.suggestions.application.ports import ComposedSuggestionProvider, SuggestionProvider
 from squid.suggestions.domain import SourceKind, ValueType, Visibility
+from squid_i18n import md_tr
 
 SOURCE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 """Matches `OptionSource` in the submission API so every source is addressable as a form option."""
@@ -51,14 +52,14 @@ class SuggestionSource:
         source_id = self.id
         if not SOURCE_ID_PATTERN.match(self.id):
             raise InvalidStateError(
-                tr(
+                md_tr(
                     t"suggestions-invalid-suggestion-source = invalid suggestion "
                     t"source id: {(source_id_text := repr(source_id))}"
                 )
             )
         if (self.visibility is Visibility.REQUIRES_NODE) != (self.required_node is not None):
             raise InvalidStateError(
-                tr(
+                md_tr(
                     t"suggestions-required-node-set = {(source_id_text := str(source_id))}: "  # noqa: F841 - captured text identifier
                     t"required_node must be set exactly when visibility is requires_node"
                 )
@@ -79,8 +80,8 @@ class SuggestionRegistry:
             if source.id in registered:
                 source_id = source.id
                 raise InvalidStateError(
-                    tr(
-                        t"suggestions-duplicate-suggestion-source = duplicate suggestion source: {(source_id_text := str(source_id))}"  # noqa: F841
+                    md_tr(
+                        t"suggestions-duplicate-suggestion-source = duplicate suggestion source: {(source_id_text := str(source_id))}"  # noqa: F841 - captured translation binding
                     )
                 )
             registered[source.id] = source

@@ -2,6 +2,7 @@
 
 from squid.core.errors import ConflictError, DomainError, ErrorCode, NotFoundError, ValidationError
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 
 class InvalidBuildError(ValidationError):
@@ -95,7 +96,7 @@ class RestrictionNotFoundError(NotFoundError):
 
     def __init__(self, name: str) -> None:
         super().__init__(
-            tr(t"builds-restriction-does-not-exist = Restriction '{name}' does not exist."),
+            md_tr(t"builds-restriction-does-not-exist = Restriction '{name}' does not exist."),
             context={"name": name},
             public_context={"name": name},
         )

@@ -16,9 +16,6 @@ from squid_i18n import (
     Message as Message,
 )
 from squid_i18n import (
-    RawMarkdown as RawMarkdown,
-)
-from squid_i18n import (
     ResolvedText as ResolvedText,
 )
 from squid_i18n import (
@@ -26,6 +23,9 @@ from squid_i18n import (
 )
 from squid_i18n import (
     current_localization as current_localization,
+)
+from squid_i18n import (
+    discord_md as discord_md,
 )
 from squid_i18n import (
     discord_text as discord_text,
@@ -37,10 +37,10 @@ from squid_i18n import (
     md as md,
 )
 from squid_i18n import (
-    plain as plain,
+    md_tr as md_tr,
 )
 from squid_i18n import (
-    raw_md as raw_md,
+    plain as plain,
 )
 from squid_i18n import (
     resolve_text as resolve_text,

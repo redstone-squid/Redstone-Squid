@@ -9,6 +9,7 @@ from whenever import Instant
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 
 class MinecraftClientOrigin(StrEnum):
@@ -39,7 +40,7 @@ class PublicServerProfile:
         for label, value, maximum in values:
             if value is not None and (not value.strip() or len(value) > maximum):
                 raise ValidationError(
-                    tr(
+                    md_tr(
                         t"minecraft-auth-server-profile-length = Server "
                         t"profile {label} must contain 1 to {maximum} characters."
                     )

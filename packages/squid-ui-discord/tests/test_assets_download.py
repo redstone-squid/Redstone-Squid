@@ -14,6 +14,7 @@ from squid_ui import scene
 from squid_ui.document import DocumentLike
 from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.runtime.component import Component
+from squid_ui.text import Markup
 from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
 from squid_ui_discord.renderer import V2Renderer
 
@@ -30,7 +31,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
 
     assert isinstance(node, sl.semantic.Download)
     assert result.scene.components_v2.children == (
-        scene.Text("Report\nGenerated now"),
+        scene.Text("Report\nGenerated now", Markup.DISCORD_MARKDOWN),
         scene.File("report", "report.txt", "text/plain"),
     )
     assert result.scene.assets == (sl.scene.Asset("report", "report.txt", "text/plain"),)
@@ -40,7 +41,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
 def test_download_uses_localized_chrome_when_the_explicit_label_is_none() -> None:
     result = sl.planning.plan(sl.download(_inline(), label=None, key="report-download"), target=DISCORD_V2_DPY27)
 
-    assert result.scene.components_v2.children[0] == scene.Text("Download")
+    assert result.scene.components_v2.children[0] == scene.Text("Download", Markup.DISCORD_MARKDOWN)
 
 
 def test_equal_asset_keys_deduplicate_but_conflicting_assets_raise() -> None:

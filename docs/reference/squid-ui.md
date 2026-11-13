@@ -100,7 +100,9 @@ what a region *is*, and the planner decides what it looks like on each target.
 
 ::: squid_ui.md
 
-::: squid_ui.raw_md
+::: squid_ui.discord_md
+
+::: squid_ui.md_tr
 
 ::: squid_ui.plain
 
@@ -332,4 +334,4 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.sources` | Position tokens and asynchronous window loading. |
 | `squid_ui.temporal` | Portable exact-time values and local-time resolution. |
 | `squid_ui.testing` | Tree queries, frontend doubles, and determinism controls for tests. |
-| `squid_ui.text` | Resolved text values and safe Discord Markdown interpolation. |
+| `squid_ui.text` | Resolved text values and explicit Markdown interpolation. |

@@ -47,11 +47,11 @@ from squid.accounts.domain.consent import AccountConsent, consent_refresh_requir
 from squid.accounts.domain.models import _POSITIVE_DECIMAL, _identity_order
 from squid.accounts.domain.profiles import ProfileLink
 from squid.core.errors import ValidationError
-from squid.core.i18n import tr
 from squid.persistence.base import Base
 from squid.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
 from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC, StrEnumText
+from squid_i18n import md_tr
 
 _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
 """Generated from the enum so the CHECK cannot drift from the domain."""
@@ -196,7 +196,7 @@ class AccountIdentity(CreatedAtMixin, Base, kw_only=True):
             case IdentityProvider.DISCORD:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**63:
                     raise ValidationError(
-                        tr(
+                        md_tr(
                             t"accounts-discord-identity-subjects = Discord "
                             t"identity subjects must be positive signed 64-bit integers, got {(subject_text := repr(subject))}."
                         )
@@ -205,7 +205,7 @@ class AccountIdentity(CreatedAtMixin, Base, kw_only=True):
             case IdentityProvider.BEDROCK:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**64:
                     raise ValidationError(
-                        tr(
+                        md_tr(
                             t"accounts-bedrock-xuids-unsigned = Bedrock XUIDs must "
                             t"be unsigned 64-bit integers, got {(subject_text := repr(subject))}."
                         )
@@ -218,9 +218,9 @@ class AccountIdentity(CreatedAtMixin, Base, kw_only=True):
                     canonical = str(uuid.UUID(subject))
                 except ValueError as error:
                     raise ValidationError(
-                        tr(
+                        md_tr(
                             t"accounts-java-identity-subjects = Java identity "
-                            t"subjects must be UUIDs, got {(subject_text := repr(subject))}."  # noqa: F841 - captured Fluent binding
+                            t"subjects must be UUIDs, got {(subject_text := repr(subject))}."  # noqa: F841 - captured translation binding
                         )
                     ) from error
                 return cls(provider=provider, subject=canonical, display_name=display_name, verified_at=verified_at)

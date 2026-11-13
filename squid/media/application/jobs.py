@@ -57,6 +57,7 @@ from squid.media.errors import (
     MediaUploadConflictError,
 )
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)
 
@@ -412,7 +413,7 @@ class MediaNormalizationJobService:
             if byte_size > self._limits.max_source_bytes:
                 limit = self._limits.max_source_bytes
                 raise ValidationError(
-                    tr(t"media-media-upload-exceeds = Media upload exceeds the {limit}-byte source limit.")
+                    md_tr(t"media-media-upload-exceeds = Media upload exceeds the {limit}-byte source limit.")
                 )
             digest = hashlib.sha256(submission.source).hexdigest()
         upload_id = submission.upload_id or uuid4()
@@ -505,7 +506,7 @@ class MediaNormalizationJobService:
             if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
                 maximum = MAX_MEDIA_JOB_CLAIM
                 raise InvalidStateError(
-                    tr(t"media-media-job-claim = Media job claim limit must be between 1 and {maximum}.")
+                    md_tr(t"media-media-job-claim = Media job claim limit must be between 1 and {maximum}.")
                 )
             result = await uow.media_jobs.claim(limit=limit)
             await uow.commit()
@@ -555,7 +556,7 @@ class MediaNormalizationJobService:
             if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
                 maximum = MAX_MEDIA_JOB_CLEANUP
                 raise InvalidStateError(
-                    tr(t"media-media-source-cleanup = Media source cleanup limit must be between 1 and {maximum}.")
+                    md_tr(t"media-media-source-cleanup = Media source cleanup limit must be between 1 and {maximum}.")
                 )
             return await uow.media_jobs.terminal_sources(limit=limit)
 
@@ -591,7 +592,7 @@ class MediaNormalizationJobService:
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
             maximum = MAX_MEDIA_JOB_CLEANUP
             raise InvalidStateError(
-                tr(t"media-media-artifact-cleanup = Media artifact cleanup limit must be between 1 and {maximum}.")
+                md_tr(t"media-media-artifact-cleanup = Media artifact cleanup limit must be between 1 and {maximum}.")
             )
         async with self._uow_factory() as uow:
             claims = await uow.media_jobs.claim_artifact_cleanup(limit=limit)
@@ -883,7 +884,7 @@ def _staged_source_metadata(path: Path, max_bytes: int) -> tuple[int, str]:
         if initial.st_size > max_bytes:
             limit = max_bytes
             raise ValidationError(
-                tr(t"media-media-upload-exceeds = Media upload exceeds the {limit}-byte source limit.")
+                md_tr(t"media-media-upload-exceeds = Media upload exceeds the {limit}-byte source limit.")
             )
         digest = hashlib.sha256()
         with os.fdopen(descriptor, "rb") as stream:

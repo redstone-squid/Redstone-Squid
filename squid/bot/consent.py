@@ -23,6 +23,7 @@ from squid.accounts.domain import (
 )
 from squid.bot.ui import CardField, text_node, tr
 from squid.core.sentinel import NOT_ASKED
+from squid_i18n import md_tr
 
 type ConsentContinuation = Callable[[sd.ActionEvent, AccountConsent | None], Awaitable[None]]
 """What to do once the reader accepts, run with fresh parent action authority.
@@ -114,9 +115,9 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
     credit = preview.credit
     if credit is None:
         username = preview.username
-        return tr(t"consent-no-credits-notice = No build credits **{username}** yet, so nothing is reattributed.")
+        return md_tr(t"consent-no-credits-notice = No build credits **{username}** yet, so nothing is reattributed.")
     count = credit.build_count
-    builds = tr(t"""
+    builds = md_tr(t"""
         bot-consent-build = {{ $count ->
             [one] {count} build
            *[other] {count} builds
@@ -124,12 +125,12 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
         """)
     if credit.is_contested:
         name = credit.name
-        return tr(
+        return md_tr(
             t"consent-existing-credit-warning = **{name}** ({builds}) is already credited to "
             t"another creator, so agreeing moves nothing and opens a claim for staff to review."
         )
     name = credit.name
-    return tr(t"consent-credit-attribution = **{name}** ({builds}) becomes attributed to your account.")
+    return md_tr(t"consent-credit-attribution = **{name}** ({builds}) becomes attributed to your account.")
 
 
 def _consent_prompt(
@@ -151,11 +152,13 @@ def _consent_prompt(
             fields=(
                 CardField(
                     tr(t"consent-discord-account = Discord account"),
-                    tr(t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"),
+                    md_tr(
+                        t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"
+                    ),
                 ),
                 CardField(
                     tr(t"consent-consent-recorded = Consent recorded"),
-                    tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
+                    md_tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
                 ),
             ),
             accept_label=tr(t"consent-agree = Agree"),
@@ -164,7 +167,7 @@ def _consent_prompt(
     uuid = preview.java_uuid
     return ConsentPrompt(
         user_id=user_id,
-        title=tr(t"consent-link-to-your-discord-account = Link {username} to your Discord account"),
+        title=md_tr(t"consent-link-to-your-discord-account = Link {username} to your Discord account"),
         summary=tr(
             t"consent-agreement-details = Agreeing stores your Discord user "
             t"ID, your Minecraft UUID and your current Minecraft username, and records this consent. "
@@ -173,7 +176,7 @@ def _consent_prompt(
         fields=(
             CardField(
                 tr(t"consent-minecraft-account = Minecraft account"),
-                tr(t"""
+                md_tr(t"""
                     bot-consent-value =
                         {{ "*" }}*{username}**
                         `{uuid}`
@@ -181,12 +184,12 @@ def _consent_prompt(
             ),
             CardField(
                 tr(t"consent-discord-account = Discord account"),
-                tr(t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"),  # noqa: F841 - captured text identifier
+                md_tr(t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"),  # noqa: F841 - captured text identifier
             ),
             CardField(tr(t"consent-build-credit = Build credit"), _link_credit_value(preview)),
             CardField(
                 tr(t"consent-consent-recorded = Consent recorded"),
-                tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
+                md_tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
             ),
         ),
         accept_label=tr(t"consent-agree-and-link = Agree and link"),

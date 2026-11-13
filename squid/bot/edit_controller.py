@@ -20,6 +20,7 @@ from squid.edits.domain import (
     EditValues,
     Revision,
 )
+from squid_i18n import md_tr
 from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_ui.text import TextLike
 
@@ -258,7 +259,7 @@ class EditController:
         except DomainError:
             return tr(t"edit-history-conflict = This edit changed elsewhere or is no longer permitted.")
         label = "" if entry is None else entry.label
-        return tr(t"edit-history-applied = Applied: {label}")
+        return md_tr(t"edit-history-applied = Applied: {label}")
 
 
 def _require_writable_action() -> None:

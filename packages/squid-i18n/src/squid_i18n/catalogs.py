@@ -28,12 +28,12 @@ class LocatedDeclaration:
 
 
 def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]:
-    """Read literal tr(t"...") calls, including imported aliases, without executing them."""
+    """Read literal tr(t"...") and md_tr(t"...") calls, including imported aliases, without executing them."""
     tree = python.parse(source, filename)
-    names = {"tr"}
+    names = {"tr", "md_tr"}
     for node in python.walk(tree):
         if isinstance(node, python.ImportFrom):
-            names.update(alias.asname or alias.name for alias in node.names if alias.name == "tr")
+            names.update(alias.asname or alias.name for alias in node.names if alias.name in {"tr", "md_tr"})
     found: list[LocatedDeclaration] = []
     for node in python.walk(tree):
         if not isinstance(node, python.Call):
@@ -43,7 +43,7 @@ def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]
             continue
         location = f"{filename}:{node.lineno}"
         if len(node.args) != 1 or node.keywords or not isinstance(node.args[0], python.TemplateStr):
-            msg = f"{location}: use tr() with one literal t-string declaration"
+            msg = f"{location}: use tr() or md_tr() with one literal t-string declaration"
             raise DeclarationError(msg)
         strings = [""]
         expressions: list[str] = []

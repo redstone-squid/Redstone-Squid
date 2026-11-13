@@ -170,3 +170,13 @@ def test_catalog_check_rejects_edited_english_resource(tmp_path: Path) -> None:
     (tmp_path / "locales/en/messages.ftl").write_text("hello = Wrong\n")
     with pytest.raises(CatalogError, match="generated catalog is stale"):
         run("check", tmp_path)
+
+
+def test_markdown_declarations_and_imported_aliases_extract_without_execution() -> None:
+    found = extract(
+        "from squid_i18n import md_tr as translated_markdown\n"
+        'md_tr(t"ready = **Ready**")\n'
+        'translated_markdown(t"hello = Hello {name}")'
+    )
+
+    assert [item.declaration.identifier for item in found] == ["ready", "hello"]

@@ -32,6 +32,7 @@ from squid.submissions.errors import (
     DraftValidationError,
 )
 from squid.unit_of_work import UnitOfWorkFactory
+from squid_i18n import md_tr
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
 DEFAULT_ACCOUNT_DRAFT_CAPACITY = 10
@@ -344,7 +345,7 @@ class SubmissionDraftService:
             if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
                 maximum = DEFAULT_ACCOUNT_DRAFT_CAPACITY
                 raise InvalidStateError(
-                    tr(t"submissions-draft-discovery-limit = draft discovery limit must be between 1 and {maximum}")
+                    md_tr(t"submissions-draft-discovery-limit = draft discovery limit must be between 1 and {maximum}")
                 )
             return await uow.submission_drafts.list_active_for_account(account_id, now=self._now(), limit=limit)
 

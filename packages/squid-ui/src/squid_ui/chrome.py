@@ -9,46 +9,46 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import ceil
 
-from squid_i18n import tr
+from squid_i18n import md_tr, tr
 from squid_ui.context import ContextKey
 from squid_ui.text import Localization, TextLike, resolve_text
 
 
 def _default_and_n_more(count: int) -> TextLike:
-    return tr(t"ui-chrome-and-n-more = …and {count} more")
+    return md_tr(t"ui-chrome-and-n-more = …and {count} more")
 
 
 def _default_step_progress(step: int, steps: int) -> TextLike:
-    return tr(t"ui-chrome-step-progress = Step {step} of {steps}")
+    return md_tr(t"ui-chrome-step-progress = Step {step} of {steps}")
 
 
 def _default_page_footer(page: int, pages: int) -> TextLike:
-    return tr(t"ui-chrome-page-footer = Page {page} of {pages}")
+    return md_tr(t"ui-chrome-page-footer = Page {page} of {pages}")
 
 
 def _default_range_footer(first: int, last: int) -> TextLike:
-    return tr(t"ui-chrome-range-footer = {first}\N{EN DASH}{last}")
+    return md_tr(t"ui-chrome-range-footer = {first}\N{EN DASH}{last}")
 
 
 def _default_approximate_total_footer(first: int, last: int, total: int) -> TextLike:
-    return tr(t"ui-chrome-approximate-total-footer = {first}\N{EN DASH}{last} of ~{total}")
+    return md_tr(t"ui-chrome-approximate-total-footer = {first}\N{EN DASH}{last} of ~{total}")
 
 
 def _default_total_range_footer(first: int, last: int, total: int) -> TextLike:
-    return tr(t"ui-chrome-total-range-footer = {first}\N{EN DASH}{last} of {total}")
+    return md_tr(t"ui-chrome-total-range-footer = {first}\N{EN DASH}{last} of {total}")
 
 
 def _default_page_option(page: int) -> TextLike:
-    return tr(t"ui-chrome-page-option = Page {page}")
+    return md_tr(t"ui-chrome-page-option = Page {page}")
 
 
 def _default_decided(label: TextLike) -> TextLike:
-    return tr(t"ui-chrome-decided = You chose {label}.")
+    return md_tr(t"ui-chrome-decided = You chose {label}.")
 
 
 def _default_try_again_in(seconds: float) -> TextLike:
     whole = max(1, ceil(seconds))
-    return tr(t"""
+    return md_tr(t"""
         ui-chrome-try-again-in = {{ {whole} ->
             [one] Try again in {whole} second.
            *[other] Try again in {whole} seconds.
@@ -58,14 +58,14 @@ def _default_try_again_in(seconds: float) -> TextLike:
 
 def _default_slot_count(count: int, capacity: int | None) -> TextLike:
     return (
-        tr(t"ui-chrome-slot-count = {count}")
+        md_tr(t"ui-chrome-slot-count = {count}")
         if capacity is None
-        else tr(t"ui-chrome-slot-capacity = {count}/{capacity}")
+        else md_tr(t"ui-chrome-slot-capacity = {count}/{capacity}")
     )
 
 
 def _default_approved_count(count: int, total: int) -> TextLike:
-    return tr(t"ui-chrome-approved-count = Approved: {count}/{total}")
+    return md_tr(t"ui-chrome-approved-count = Approved: {count}/{total}")
 
 
 @dataclass(frozen=True, slots=True)

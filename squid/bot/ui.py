@@ -17,6 +17,7 @@ import discord
 import squid_ui as ui
 import squid_ui_discord as sd
 from squid.core.i18n import tr
+from squid_i18n import md_tr
 
 
 class DiscordColour(IntEnum):
@@ -78,11 +79,11 @@ class CardSection:
 def _try_again_in(seconds: float) -> ui.text.Message:
     """Round a guard's remaining cooldown up to whole seconds before wording it."""
     whole = max(1, ceil(seconds))
-    return tr(t"bot-ui-try-again-in-seconds = Try again in {whole} seconds.")
+    return md_tr(t"bot-ui-try-again-in-seconds = Try again in {whole} seconds.")
 
 
 CHROME = ui.chrome.Chrome(
-    and_n_more=lambda count: tr(t"bot-ui-and-more = …and {count} more."),
+    and_n_more=lambda count: md_tr(t"bot-ui-and-more = …and {count} more."),
     not_yours=tr(t"ui-list-controls-not-owned = These list controls belong to someone else."),
     session_ended=tr(t"bot-ui-this-session-has-ended = This session has ended."),
     not_now=tr(t"bot-ui-you-can-t-do-that-right-now = You can't do that right now."),
@@ -114,7 +115,7 @@ CHROME = ui.chrome.Chrome(
     unsaved=tr(t"bot-ui-unsaved-changes = Unsaved changes"),
     search=tr(t"bot-ui-search = Search"),
     no_results=tr(t"bot-ui-no-results = No results"),
-    decided=lambda label: tr(t"bot-ui-you-chose = You chose {label}."),
+    decided=lambda label: md_tr(t"bot-ui-you-chose = You chose {label}."),
     add=tr(t"bot-ui-add = Add"),
     edit=tr(t"bot-ui-edit = Edit"),
     remove=tr(t"bot-ui-remove = Remove"),
@@ -123,7 +124,7 @@ CHROME = ui.chrome.Chrome(
     review=tr(t"bot-ui-review = Review"),
     finish=tr(t"bot-ui-finish = Finish"),
     unanswered=tr(t"bot-ui-not-answered-yet = Not answered yet"),
-    page_footer=lambda page, pages: tr(t"bot-ui-page-of = Page {page} of {pages}"),
+    page_footer=lambda page, pages: md_tr(t"bot-ui-page-of = Page {page} of {pages}"),
 )
 _OPEN_LINK = tr(t"bot-ui-open-link = Open link")
 

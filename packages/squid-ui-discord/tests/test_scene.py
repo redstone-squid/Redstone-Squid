@@ -13,6 +13,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionMode
 from squid_ui.primitives.nodes import Text
 from squid_ui.primitives.styles import ActionStyle
+from squid_ui.text import Markup
 
 
 def _scene() -> scene.Scene:
@@ -24,7 +25,7 @@ def _scene() -> scene.Scene:
             (
                 scene.Panel(
                     (
-                        scene.Text("hello"),
+                        scene.Text("hello", markup=Markup.DISCORD_MARKDOWN),
                         scene.Time("2026-08-22T14:30:00+00:00", "R", "Updated: "),
                         scene.ZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
                         scene.Row(
@@ -117,7 +118,10 @@ def test_protocol_one_decodes_payloads_without_new_optional_fields() -> None:
 def test_scene_fingerprint_is_stable_and_content_sensitive() -> None:
     first = _scene()
     second = scene.Scene(
-        scene.Codec.protocol, first.target, first.target_version, scene.ComponentsV2((scene.Text("different"),))
+        scene.Codec.protocol,
+        first.target,
+        first.target_version,
+        scene.ComponentsV2((scene.Text("different", markup=Markup.DISCORD_MARKDOWN),)),
     )
     assert scene.Codec.fingerprint(first) == scene.Codec.fingerprint(scene.Codec.loads(scene.Codec.dumps(first)))
     assert scene.Codec.fingerprint(first) != scene.Codec.fingerprint(second)

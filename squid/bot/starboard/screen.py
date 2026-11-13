@@ -31,6 +31,7 @@ from squid.starboard.application.edits import (
 from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
+from squid_i18n import md_tr
 
 type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ChannelValidator = Callable[[int], Awaitable[None]]
@@ -133,7 +134,9 @@ class StarboardScreen(sd.Screen):
                 sl.section(
                     sl.heading(tr(t"bot-starboard-screen-delete-starboard = Delete starboard")),
                     sl.paragraph(
-                        tr(t"starboard-delete-confirmation = Delete **{board_name}** and stop mirroring new entries?")
+                        md_tr(
+                            t"starboard-delete-confirmation = Delete **{board_name}** and stop mirroring new entries?"
+                        )
                     ),
                 ),
                 self._decision,
@@ -222,7 +225,7 @@ class StarboardScreen(sd.Screen):
             values.values(), tr(t"starboard-history-create = Create starboard")
         )
         created_name = created.name
-        await event.notice(tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
+        await event.notice(md_tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
 
     async def _edit(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_EDIT):

@@ -42,7 +42,7 @@ from squid_ui.semantic import (
     Stack,
     Uncontrolled,
 )
-from squid_ui.text import Localization
+from squid_ui.text import Localization, Markup
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
 from squid_ui_discord import testing as sd
 
@@ -96,8 +96,8 @@ def test_plan_cache_separates_targets_with_different_capabilities() -> None:
     second = plan(document, target=rich, cache=cache)
 
     assert not second.metrics.cache_hit
-    assert first.scene.components_v2.children == (scene.Text("plain"),)
-    assert second.scene.components_v2.children == (scene.Text("rich"),)
+    assert first.scene.components_v2.children == (scene.Text("plain", markup=Markup.DISCORD_MARKDOWN),)
+    assert second.scene.components_v2.children == (scene.Text("rich", markup=Markup.DISCORD_MARKDOWN),)
 
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:

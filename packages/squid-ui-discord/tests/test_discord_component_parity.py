@@ -20,6 +20,7 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
+from squid_ui.text import Markup
 from squid_ui_discord import DISCORD_V2_DPY27, classic, render_static
 from squid_ui_discord.testing import without_capabilities
 
@@ -113,4 +114,4 @@ def test_non_discord_target_requires_explicit_premium_fallback() -> None:
         target=target,
     )
 
-    assert result.scene.components_v2.children == (scene.Text("Purchase unavailable"),)
+    assert result.scene.components_v2.children == (scene.Text("Purchase unavailable", markup=Markup.DISCORD_MARKDOWN),)

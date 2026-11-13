@@ -8,8 +8,6 @@ import logging
 import mimetypes
 from collections.abc import Sequence
 
-from discord.utils import escape_markdown
-
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.ui import (
@@ -25,6 +23,7 @@ from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicate
 from squid.builds.domain.titles import format_build_display_title
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.observability import add_counter
+from squid_i18n import Message
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ _EVIDENCE_LINE_MAX_CHARACTERS = 240
 
 
 def _compact_plain(value: str) -> str:
-    return escape_markdown(" ".join(value.replace("@", "@\u200b").split()))
+    return " ".join(value.split())
 
 
 def _duplicate_summary(duplicates: Sequence[SchematicDuplicateInfo]) -> str:
@@ -132,8 +131,8 @@ async def render_build_card(
         entries = tuple(
             sl.field(
                 name,
-                escape_markdown(value),
-                fallbacks=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),
+                value,
+                fallbacks=ladders.get(name, ()),
             )
             for name, value in metadata.items()
             if name in names
@@ -156,7 +155,7 @@ async def render_build_card(
     media = await _get_media_urls(build, media_previews)
     extra_media = media[1:]
     return sl.section(
-        sl.heading(format_build_display_title(build, markdown=True)),
+        sl.heading(sl.md(format_build_display_title(build, markdown=True))),
         # Allow the description to shrink when the full card exceeds the layout budget.
         description and sl.paragraph(description).truncate(),
         group("Review warnings", review_names),
@@ -165,7 +164,7 @@ async def render_build_card(
         group("Credits", credit_names),
         group("Resources", resource_names),
         bool(extra_media) and sl.media(*extra_media, key="media"),
-        sl.note(footer),
+        sl.note(sl.discord_md(footer)),
         *rows,
         accent=_status_colour(build.submission_status, build_id=build.id),
         thumbnail=media[0] if media else None,
@@ -226,24 +225,24 @@ async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> l
     return media[:10]
 
 
-def build_description(build: Build) -> str | None:
+def build_description(build: Build) -> Message | None:
     """Describe locational/directional restrictions and escaped submitter notes, or return None."""
-    desc = []
+    desc: list[sl.TextLike] = []
 
     if "Locational" in build.miscellaneous_restrictions:
-        desc.append("**Locational**.")
+        desc.append(sl.md("**Locational**."))
     elif "Locational with fixes" in build.miscellaneous_restrictions:
-        desc.append("**Locational** with known fixes for each location.")
+        desc.append(sl.md("**Locational** with known fixes for each location."))
 
     if "Directional" in build.miscellaneous_restrictions:
-        desc.append("**Directional**.")
+        desc.append(sl.md("**Directional**."))
     elif "Directional with fixes" in build.miscellaneous_restrictions:
-        desc.append("**Directional** with known fixes for each direction.")
+        desc.append(sl.md("**Directional** with known fixes for each direction."))
 
     if build.description:
-        desc.append("\n" + escape_markdown(build.description))
+        desc.append("\n" + build.description)
 
-    return "\n".join(desc) if desc else None
+    return Message.join("\n", desc) if desc else None
 
 
 def build_metadata_fields(build: Build) -> dict[str, str]:

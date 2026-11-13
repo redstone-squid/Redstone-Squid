@@ -77,11 +77,7 @@ def _arguments(message: text.Message, localization: text.Localization) -> dict[s
             resolved = text.resolve_text(
                 replace(value, markup=text.Markup.PLAIN) if message.markup is text.Markup.PLAIN else value, localization
             )
-            args[name] = _SafeText(
-                text.discord_text(resolved) if message.markup is text.Markup.DISCORD_MARKDOWN else resolved.content
-            )
-        elif isinstance(value, text.RawMarkdown):
-            args[name] = _SafeText(value.content)
+            args[name] = _SafeText(text._content_for(resolved, message.markup))
         elif isinstance(value, NumberExpression):
             args[name] = fluent_number(value.value, **dict(value.options))
         elif isinstance(value, DateTimeExpression):

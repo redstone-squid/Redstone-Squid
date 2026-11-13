@@ -59,6 +59,7 @@ from squid_ui.primitives.nodes import (
     Variants,
 )
 from squid_ui.target_types import ComponentsV2Target
+from squid_ui.text import Markup
 
 if TYPE_CHECKING:
     from squid_ui.planning.discord_planner import DiscordPlanner
@@ -93,7 +94,7 @@ class _V2Converter:
     def node(self, node: Realized, path: str) -> scene.Node:
         match node:
             case MeasuredText(content=content):
-                return scene.Text(content)
+                return scene.Text(content, Markup.DISCORD_MARKDOWN)
             case MeasuredTime(instant=instant, style=style, prefix=prefix):
                 return scene.Time(instant.astimezone(UTC).isoformat(), style, prefix)
             case MeasuredZonedTime(value=value, prefix=prefix):
@@ -106,7 +107,7 @@ class _V2Converter:
                 )
             case MeasuredSection(texts=texts, accessory=accessory):
                 return scene.Section(
-                    tuple(scene.Text(text.content) for text in texts),
+                    tuple(scene.Text(text.content, Markup.DISCORD_MARKDOWN) for text in texts),
                     self.accessory(accessory, f"{path}.accessory"),
                 )
             case Sep(large=large, visible=visible):

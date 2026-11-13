@@ -51,11 +51,11 @@ from squid.accounts.models import (
 )
 from squid.accounts.models import VerificationAttempt as VerificationAttemptModel
 from squid.accounts.models import VerificationCode as VerificationCodeModel
-from squid.core.i18n import tr
 from squid.edits.domain import Revision
 from squid.persistence.account_merge import AccountMergeContext
 from squid.persistence.revisions import flush_revision
 from squid.persistence.types import InstantUTC
+from squid_i18n import md_tr
 
 _BUILD_CREDITS = table("build_creators", column("alias_id"))
 """A lightweight handle on the one column of `build_creators` this module reads.
@@ -625,7 +625,7 @@ class AccountRepository:
                     holder_account_id=alias.account_id,
                     # Staff audience: the flag that moves a held credit already exists, so say so
                     # rather than telling a reviewer to ask staff.
-                    end_user_action=tr(
+                    end_user_action=md_tr(
                         t"accounts-claim-reassign-required = "
                         t"Approve with `reassign: True` to move the name to the claimant."
                     ),

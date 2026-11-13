@@ -10,6 +10,7 @@ from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.planning.semantic_adaptation.common import (
     _button_style,
+    _literal,
     _page_items,
     _resolve,
     _select_strategy,
@@ -355,7 +356,7 @@ def _folded_actions(node: ActionControls, path: str, context: LoweringContext) -
                     group_actions.append(control)
                 else:
                     direct.append(_control_button(control, context))
-            groups.append((item.key, tuple(group_actions), _resolve(item.label, context) if item.label else None))
+            groups.append((item.key, tuple(group_actions), _literal(item.label, context) if item.label else None))
         elif isinstance(item, ActionControl):
             implicit.append(item)
         else:
@@ -437,14 +438,14 @@ def _picker(actions: Sequence[ActionControl], key: str, label: str | None, conte
             action.on_trigger,
             action.mode,
             guard=action.guard,
-            label=_resolve(action.label, context),
+            label=_literal(action.label, context),
             record=action.record,
         )
         for action in actions
     }
 
     return SelectMenu(
-        tuple(Option(_resolve(action.label, context), action.key) for action in actions),
+        tuple(Option(_literal(action.label, context), action.key) for action in actions),
         RouteSelection(routes),
         key,
         placeholder=label or "Choose an action",
@@ -454,7 +455,7 @@ def _picker(actions: Sequence[ActionControl], key: str, label: str | None, conte
 
 def _unbound_button(item: Link | RoutedActionControl, context: LoweringContext) -> LinkButton | RoutedButton:
     """Lower a control the mount never dispatches: a URL, or a router's own custom id."""
-    label = _resolve(item.label, context)
+    label = _literal(item.label, context)
     if isinstance(item, Link):
         return LinkButton(label, item.url)
     return RoutedButton(
@@ -464,7 +465,7 @@ def _unbound_button(item: Link | RoutedActionControl, context: LoweringContext) 
 
 def _button(action: ActionControl, context: LoweringContext) -> Button:
     return Button(
-        _resolve(action.label, context),
+        _literal(action.label, context),
         action.on_trigger,
         action.key,
         style=_button_style(action.tone, action.emphasis),

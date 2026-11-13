@@ -12,6 +12,7 @@ from typing import Literal
 from squid.core.i18n import tr
 from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
 from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError
+from squid_i18n import md_tr
 
 type AttachmentKind = Literal["image", "video", "schematic"]
 
@@ -55,7 +56,7 @@ def classify_attachment(filename: str, content_type: str | None, size: int, *, m
             return ClassifiedAttachment("video", filename, resolved)
 
     raise InvalidSchematicError(
-        tr(t"build-attachment-type-rejected = `{filename}` is not a file type this command accepts."),
+        md_tr(t"build-attachment-type-rejected = `{filename}` is not a file type this command accepts."),
         context={"filename": filename, "content_type": content_type},
         public_context={"filename": filename, "accepted_extensions": list(ACCEPTED_EXTENSIONS)},
         # The accepted extensions are carried in the public context rather than interpolated

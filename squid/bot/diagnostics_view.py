@@ -17,6 +17,7 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics_refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
 from squid.diagnostics.models import ErrorReport
+from squid_i18n import md_tr
 
 SESSION_SECONDS = 300
 RECENT_LIMIT = 100
@@ -34,7 +35,7 @@ class ErrorReportOperations(Protocol):
 
 def _traceback_footer(page: int, pages: int) -> sl.TextLike:
     section = tr(t"diagnostics-view-traceback = Traceback")
-    return tr(
+    return md_tr(
         t"diagnostics-attachment-page-hint = {section} — page {page} of {pages} · the attachment has the whole report"
     )
 
@@ -241,11 +242,8 @@ class ErrorReportScreen(sd.Screen[int]):
                     sl.section(
                         sl.heading(tr(t"diagnostics-view-errors-cleared = Errors cleared")),
                         sl.paragraph(
-                            tr(
-                                (
-                                    t"diagnostics-view-deleted-stored-error-reports = Deleted {count} stored error "
-                                    t"reports."
-                                )
+                            md_tr(
+                                t"diagnostics-view-deleted-stored-error-reports = Deleted {count} stored error reports."
                             )
                         ),
                     ),
@@ -281,7 +279,7 @@ class ErrorReportScreen(sd.Screen[int]):
             t"diagnostics-view-no-traceback-was-recorded = No traceback was recorded."
         )
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sd.v2.heading(tr(t"diagnostics-view-error = Error {reference}")),
+            sd.v2.heading(md_tr(t"diagnostics-view-error = Error {reference}")),
             # Opens at the end because the failing frame is the last one.
             sd.v2.code(
                 traceback_text,
@@ -371,7 +369,7 @@ def report_asset(report: ErrorReport) -> sl.document.Asset:
 
 
 def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field]:
-    identifier = sl.raw_md(f"`{report.correlation_id}`")
+    identifier = sl.discord_md(f"`{report.correlation_id}`")
     entries = [
         sl.field(
             tr(t"diagnostics-view-when = When"),
@@ -395,12 +393,12 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
         entries.append(
             sl.field(
                 tr(t"diagnostics-view-ambiguous = Ambiguous"),
-                tr(t"diagnostics-shared-reference-note = {count} reports share this reference; this is the newest."),
+                md_tr(t"diagnostics-shared-reference-note = {count} reports share this reference; this is the newest."),
             )
         )
     return entries
 
 
-def _list_line(report: ErrorReport) -> str:
+def _list_line(report: ErrorReport) -> sl.TextLike:
     marker = ":warning: " if report.work_lost else ""
-    return f"{marker}`{report.reference}` — {report.exception_type} in {report.origin or report.surface}"
+    return sl.md(t"{marker}`{report.reference}` — {report.exception_type} in {report.origin or report.surface}")

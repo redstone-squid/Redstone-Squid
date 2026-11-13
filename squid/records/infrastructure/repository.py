@@ -17,7 +17,6 @@ from whenever import Instant
 from squid.builds.domain import Status
 from squid.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError
-from squid.core.i18n import tr
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.application.models import (
     CandidateBuild,
@@ -60,6 +59,7 @@ from squid.records.models import (
 )
 from squid.tags.infrastructure.loading import assignment_units
 from squid.tags.models import TagAssignment, TagDefinition, display_conversion_scale
+from squid_i18n import md_tr
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "3"
@@ -508,9 +508,9 @@ class PostgresRecordRepository:
         identity = parse_category_key(key)
         if identity is None:
             raise DataIntegrityError(
-                tr(
+                md_tr(
                     t"records-record-definition-stores = "
-                    t"Record definition {(definition_id_text := str(definition_id))} stores a category key that does not parse."  # noqa: F841 - captured text identifier
+                    t"Record definition {(definition_id_text := str(definition_id))} stores a category key that does not parse."  # noqa: F841 - captured translation binding
                 )
             )
         return identity
