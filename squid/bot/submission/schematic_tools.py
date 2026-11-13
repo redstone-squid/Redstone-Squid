@@ -56,16 +56,15 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._delivered_videos: set[int] = set()
 
     @override
-    def render(self) -> sl.Document[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._show_details is not None and not self._show_details():
-            return sl.Document(())
+            return ()
         nodes = list(self._schematic_nodes())
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
         if self._asset is not None and self._asset.media_type.startswith("image/"):
-            nodes.append(sl.media(f"attachment://{self._asset.name}", key="schematic-preview"))
-            return sl.Document(tuple(nodes), (self._asset,))
-        if self._asset is not None:
+            nodes.append(sl.media(self._asset, key="schematic-preview"))
+        elif self._asset is not None:
             nodes.append(
                 sl.download(
                     tr(t"bot-submission-build-browse-download-result = Download result"),
@@ -73,7 +72,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     key="build-download",
                 )
             )
-        return sl.Document(tuple(nodes))
+        return tuple(nodes)
 
     def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if not self._schematics.available:
@@ -284,12 +283,9 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             sl.document.InlineAsset(content),
         )
         await request.respond(
-            sl.Document(
-                (
-                    sl.paragraph(tr(t"schematic-video-ready = Your schematic video is ready.")),
-                    sl.media(f"attachment://{asset.name}", key="schematic-video-preview"),
-                ),
-                (asset,),
+            (
+                sl.paragraph(tr(t"schematic-video-ready = Your schematic video is ready.")),
+                sl.media(asset, key="schematic-video-preview"),
             ),
             audience="personal",
         )
