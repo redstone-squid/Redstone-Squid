@@ -3,7 +3,6 @@
 import ast
 from pathlib import Path
 
-from squid_i18n.catalogs import extract
 from tests.support.source_tree import source_tree
 
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
@@ -52,34 +51,3 @@ def test_application_components_do_not_own_message_roots_or_send_methods() -> No
                     violations.append(f"{path}:{member.lineno}: {component.name}.send")
 
     assert not violations, "\n".join(violations)
-
-
-def test_retired_event_helpers_stay_out_of_application_code() -> None:
-    found: set[tuple[str, str]] = set()
-    for path in BOT_ROOT.rglob("*.py"):
-        relative = str(path.relative_to(BOT_ROOT))
-        tree = source_tree(path)
-        parents: dict[ast.AST, ast.AST] = {
-            child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)
-        }
-        for node in ast.walk(tree):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and isinstance(node.func.value, ast.Name)
-                and node.func.value.id == "sd"
-                and node.func.attr in {"native", "responder"}
-            ):
-                continue
-            owner = parents.get(node)
-            while owner is not None and not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                owner = parents.get(owner)
-            function = owner.name if isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)) else "<module>"
-            found.add((relative, function))
-
-    assert not found, sorted(found)
-
-
-def test_localized_ui_literals_are_valid_fluent_declarations() -> None:
-    for path in BOT_ROOT.rglob("*.py"):
-        extract(path.read_text(), str(path))

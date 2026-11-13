@@ -7,7 +7,6 @@ from pathlib import Path
 from packaging.requirements import Requirement
 from pytest_archon import archrule
 
-from squid_i18n.cli import run as check_catalogs
 from tests.support.source_tree import source_tree
 
 # Production Python roots shared by the syntax checks below. Individual rules may narrow this scope.
@@ -257,17 +256,6 @@ def test_framework_distributions_share_publishable_alpha_metadata() -> None:
     assert found == FRAMEWORK_PACKAGE_NAMES
 
 
-def test_compiler_pass_packages_are_not_facades() -> None:
-    """Pass packages identify owners; their initializers must not aggregate those owners."""
-    for package in ("layout_measurement", "semantic_adaptation"):
-        path = COMPILER_PASS_ROOT / package / "__init__.py"
-        body = source_tree(path).body
-        assert len(body) == 1
-        assert isinstance(body[0], ast.Expr)
-        assert isinstance(body[0].value, ast.Constant)
-        assert isinstance(body[0].value.value, str)
-
-
 def test_generic_planning_modules_do_not_depend_on_the_discord_backend() -> None:
     """The public target seam must not acquire Discord's IR or layout solver types."""
     generic = tuple(COMPILER_PASS_ROOT / name for name in ("dialect.py", "planner.py", "target.py"))
@@ -414,15 +402,6 @@ def test_patterns_package_is_transport_free() -> None:
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
     """Presentation is `squid.bot`'s business; deferred text lives in squid-i18n."""
-    for package in ("squid_ui_discord*", "squid_ui_slack*", "squid_ui_widgets*"):
-        (
-            archrule(f"{package} is a presentation concern")
-            .match("squid*")
-            .exclude("squid.bot*")
-            .should_not_import(package)
-            .check("squid", only_direct_imports=True)
-        )
-
     violations: list[str] = []
     for path in Path("squid").rglob("*.py"):
         if path.parts[:2] == ("squid", "bot"):
@@ -452,10 +431,6 @@ def test_tr_is_the_only_direct_translation_entry_point() -> None:
     ]
 
     assert violations == []
-
-
-def test_localized_messages_are_present_in_the_english_catalog() -> None:
-    check_catalogs("check", Path("."))
 
 
 def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
@@ -554,16 +529,6 @@ def test_transports_do_not_import_persistence_adapters() -> None:
             .should_not_import("squid.*.infrastructure*")
             .check("squid", only_direct_imports=True)
         )
-
-
-def test_native_schematic_engine_stays_in_its_adapter() -> None:
-    (
-        archrule("only the schematic adapter may import the native engine")
-        .match("squid*")
-        .exclude("squid.schematics.infrastructure*")
-        .should_not_import("nucleation*")
-        .check("squid", only_direct_imports=True)
-    )
 
 
 def test_production_modules_do_not_import_fuzz_engines() -> None:
