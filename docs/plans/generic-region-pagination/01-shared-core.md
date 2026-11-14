@@ -230,10 +230,26 @@ The initial responsibility map for the replacement is:
 | Representation selection, allocation, fragmentation, and state reconciliation | Shared core, with target-specific constraints. |
 | Final scene construction and target validation | Target extensions; construction must honor the selected plan. |
 
-This is an ownership direction, not a chosen intermediate representation or interface. The next
-investigation is what information must survive between authored semantics and target realization,
-including alternatives, containers, resources, and interaction bindings. Compare a shared semantic
-planning model with target-owned fragments before fixing their boundary.
+This establishes ownership. Decision 3 below chooses the working direction for the planning
+model; concrete interfaces still require evidence from composition and state experiments.
 
 No production behavior has changed. Composition experiments, the full matrix, fidelity policy,
 and the final architectural recommendation remain pending.
+
+
+## Decision 3 Preserve decision-relevant semantics in the core
+
+Status: agreed working direction. The core should understand content structure, author policies,
+interaction identity, composition dependencies, and representation choices throughout planning.
+Target payloads may remain opaque only when all behavior relevant to a planning decision is exposed.
+
+Start from the existing authored semantic vocabulary. Investigate how to preserve its information
+and associate planning decisions with it before inventing a parallel vocabulary. Targets contribute
+realizations, costs, constraints, and effects while choices remain open. The core must be able to
+consider representation changes and fragmentation together; neither target scene assembly nor an
+opaque leaf compiler should settle those choices prematurely.
+
+A rich semantic model does not require the core to know target output fields or perform frontend
+rendering. It requires enough information to distinguish meaningful units, legal transformations,
+resource sharing, and interactions. The next experiments establish what information that means
+for tables, shared resources, and nested regions. Exact types and extension APIs remain open.
