@@ -32,7 +32,7 @@ test('plans the exact allowlisted PNG tree without side effects', () => {
   assert.deepEqual(
     plan.blobs.map(({path, mode, type, encoding}) => ({path, mode, type, encoding})),
     EXPECTED_SCREENSHOTS.map((name) => ({
-      path: `catalogue-screenshots/${name}`,
+      path: `web/screenshots/${name}`,
       mode: '100644',
       type: 'blob',
       encoding: 'base64',

@@ -122,7 +122,7 @@ function planScreenshotArtifact(entries) {
     }
     validatePng(file.name, entry.contents);
     return Object.freeze({
-      path: `catalogue-screenshots/${file.name}`,
+      path: `web/screenshots/${file.name}`,
       mode: '100644',
       type: 'blob',
       content: entry.contents.toString('base64'),

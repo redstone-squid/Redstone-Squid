@@ -24,7 +24,7 @@ test("captures curated documentation layouts", async ({ page }, testInfo) => {
   for (const [name, pagePath] of pages) {
     await page.goto(pagePath);
     await page.screenshot({
-      path: path.resolve(process.cwd(), "../catalogue-screenshots", `${language}-${name}.png`),
+      path: path.resolve(process.cwd(), "screenshots", `${language}-${name}.png`),
       fullPage: true,
       animations: "disabled",
     });
