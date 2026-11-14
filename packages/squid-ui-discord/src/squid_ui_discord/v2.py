@@ -24,6 +24,7 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.styles import Color
 from squid_ui.target_types import ComponentsV2Target, Renderable
+from squid_ui.text import Text as TextExpression
 from squid_ui.text import TextLike
 from squid_ui_discord._factories import (
     button,
@@ -64,11 +65,13 @@ def separator(*, large: bool = False, visible: bool = True) -> Sep:
 
 def thumbnail(url: str, *, description: TextLike | None = None, spoiler: bool = False) -> Thumbnail:
     """Build an exact section thumbnail."""
+    description = None if description is None else TextExpression(description)
     return Thumbnail(url, description, spoiler)
 
 
 def gallery_item(url: str, *, description: TextLike | None = None, spoiler: bool = False) -> GalleryItem:
     """Build one exact gallery item."""
+    description = None if description is None else TextExpression(description)
     return GalleryItem(url, description, spoiler)
 
 
@@ -107,7 +110,7 @@ def panel[ContextT = object](
         if isinstance(child, Renderable):
             normalized.append(cast(Node[ContextT], child))
         else:
-            normalized.append(Text(child))
+            normalized.append(text(child))
     return Panel(tuple(normalized), accent, spoiler)
 
 
@@ -116,7 +119,7 @@ def _text_child(value: SectionText, origin: str, index: int) -> Text | Heading |
         message = f"{origin} argument {index}: omitted content reached normalization"
         raise TypeError(message)
     check_content(value, origin, index)
-    return value if isinstance(value, Text | Heading | Footer) else Text(value)
+    return value if isinstance(value, Text | Heading | Footer) else text(value)
 
 
 __all__ = [

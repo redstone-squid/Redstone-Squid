@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +16,9 @@ class Private:
     """
 
     reason: TextLike
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reason", Text(self.reason))
 
 
 type Visibility = Literal["public", "personal"] | Private

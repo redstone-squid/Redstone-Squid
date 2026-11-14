@@ -5,6 +5,7 @@
 import pytest
 
 import squid_ui_discord as sd
+from squid_i18n import plain
 from squid_ui.assets import Asset, InlineAsset
 from squid_ui.interactions import PressEvent
 from squid_ui.primitives import (
@@ -37,13 +38,13 @@ def test_v2_factories_build_the_exact_primitive_ir() -> None:
     press = sd.v2.button("Open", handler, key="open", style=ActionStyle.PRIMARY)
     accessory = sd.v2.thumbnail("https://example.com/thumb.png", description="Preview")
 
-    assert press == Button("Open", handler, "open", ActionStyle.PRIMARY)
+    assert press == Button(plain("Open"), handler, "open", ActionStyle.PRIMARY)
     assert sd.v2.section(sd.v2.heading("Title"), "Body", None, False, accessory=accessory) == Section(
-        (Heading("Title"), Text("Body")),
-        Thumbnail("https://example.com/thumb.png", "Preview"),
+        (Heading(plain("Title")), Text(plain("Body"))),
+        Thumbnail("https://example.com/thumb.png", plain("Preview")),
     )
     assert sd.v2.panel("Body", None, False, press, accent=0x123456) == Panel(
-        (Text("Body"), press),
+        (Text(plain("Body")), press),
         accent=0x123456,
     )
     assert sd.v2.separator(large=True) == Sep(large=True)
@@ -64,7 +65,7 @@ def test_classic_factories_build_the_exact_primitive_ir() -> None:
     footer = sd.classic.card_footer("Footer", icon_url="https://example.com/icon.png")
     image = sd.classic.card_media("https://example.com/image.png", description="Image")
 
-    assert sd.classic.content("Preview") == Content("Preview")
+    assert sd.classic.content("Preview") == Content(plain("Preview"))
     assert sd.classic.card(
         "Description",
         None,
@@ -75,12 +76,12 @@ def test_classic_factories_build_the_exact_primitive_ir() -> None:
         footer=footer,
         image=image,
     ) == Card(
-        (Text("Description"),),
-        title="Card",
-        fields=(CardField("Name", "Value", inline=True),),
-        author=CardAuthor("Author", url="https://example.com"),
-        footer=CardFooter("Footer", icon_url="https://example.com/icon.png"),
-        image=CardMedia("https://example.com/image.png", description="Image"),
+        (Text(plain("Description")),),
+        title=plain("Card"),
+        fields=(CardField(plain("Name"), plain("Value"), inline=True),),
+        author=CardAuthor(plain("Author"), url="https://example.com"),
+        footer=CardFooter(plain("Footer"), icon_url="https://example.com/icon.png"),
+        image=CardMedia("https://example.com/image.png", description=plain("Image")),
     )
 
 

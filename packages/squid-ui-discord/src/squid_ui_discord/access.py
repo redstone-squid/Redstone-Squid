@@ -11,7 +11,7 @@ from typing import Protocol
 
 import discord
 
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +24,9 @@ class Denied:
     """An access policy refused the interaction, optionally with host-supplied wording."""
 
     reason: TextLike | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reason", None if self.reason is None else Text(self.reason))
 
 
 type AccessDecision = Allowed | Denied

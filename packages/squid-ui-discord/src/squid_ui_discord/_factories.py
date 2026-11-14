@@ -40,6 +40,7 @@ from squid_ui.primitives.nodes import (
     Text,
 )
 from squid_ui.primitives.styles import ActionStyle
+from squid_ui.text import Text as TextExpression
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
@@ -51,6 +52,7 @@ type Control[ContextT = object] = LinkButton | PremiumButton | Button[ContextT] 
 
 def text(content: TextLike, *, overflow: Overflow | None = None, priority: int = 0) -> Text:
     """Build exact Discord text."""
+    content = TextExpression(content)
     return Text(content, overflow=Truncate() if overflow is None else overflow, priority=priority)
 
 
@@ -62,11 +64,13 @@ def heading(
     priority: int = 10,
 ) -> Heading:
     """Build an exact Discord heading."""
+    content = TextExpression(content)
     return Heading(content, level=level, overflow=Truncate() if overflow is None else overflow, priority=priority)
 
 
 def footer(content: TextLike, *, overflow: Overflow | None = None, priority: int = -10) -> Footer:
     """Build exact small footer text."""
+    content = TextExpression(content)
     return Footer(content, overflow=Truncate() if overflow is None else overflow, priority=priority)
 
 
@@ -78,6 +82,7 @@ def code(
     priority: int = 0,
 ) -> Code:
     """Build an exact fenced code block."""
+    content = TextExpression(content)
     return Code(content, lang=lang, overflow=Truncate() if overflow is None else overflow, priority=priority)
 
 
@@ -88,6 +93,7 @@ def lines(
     priority: int = 0,
 ) -> Lines:
     """Build exact line-oriented text from positional entries."""
+    entries = tuple(item if isinstance(item, Alt) else TextExpression(item) for item in entries)
     return Lines(tuple(entries), join=join, overflow=Spill() if overflow is None else overflow, priority=priority)
 
 
@@ -105,6 +111,7 @@ def button[ContextT = object](
     record: History | None = None,
 ) -> Button[ContextT]:
     """Build an exact dispatchable button."""
+    label = None if label is None else TextExpression(label)
     return Button(label, on_click, key, style, emoji, disabled, mode, guard, busy, record)
 
 
@@ -116,6 +123,7 @@ def link_button(
     disabled: bool = False,
 ) -> LinkButton:
     """Build an exact link button."""
+    label = None if label is None else TextExpression(label)
     return LinkButton(label, url, emoji, disabled)
 
 
@@ -133,6 +141,7 @@ def routed_button(
     disabled: bool = False,
 ) -> RoutedButton:
     """Build an exact routed button."""
+    label = None if label is None else TextExpression(label)
     return RoutedButton(label, route_id, style, emoji, disabled)
 
 
@@ -145,6 +154,8 @@ def option(
     emoji: EmojiLike | None = None,
 ) -> Option:
     """Build an exact string-select option."""
+    label = TextExpression(label)
+    description = None if description is None else TextExpression(description)
     return Option(label, value, description, default, emoji)
 
 
@@ -160,6 +171,7 @@ def select[ContextT = object](
     routes: Mapping[str, ActionBinding] | None = None,
 ) -> SelectMenu[ContextT]:
     """Build an exact dispatchable string select."""
+    placeholder = None if placeholder is None else TextExpression(placeholder)
     return SelectMenu(
         tuple(options),
         on_select,
@@ -187,6 +199,7 @@ def entity_select[ContextT = object](
     mode: ActionMode = ActionMode.EXCLUSIVE,
 ) -> EntitySelect[ContextT]:
     """Build an exact entity select."""
+    placeholder = None if placeholder is None else TextExpression(placeholder)
     return EntitySelect(
         entity_type,
         on_select,
@@ -210,6 +223,7 @@ def routed_select(
     disabled: bool = False,
 ) -> RoutedSelect:
     """Build an exact routed string select."""
+    placeholder = None if placeholder is None else TextExpression(placeholder)
     return RoutedSelect(tuple(options), route_id, placeholder, min_values, max_values, disabled)
 
 

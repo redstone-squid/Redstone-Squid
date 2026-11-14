@@ -254,7 +254,7 @@ class TestParityWithCards:
     def test_field_fallbacks_are_resolved_like_any_other_text(self) -> None:
         node = sl.field("Videos", "a, b, c", fallbacks=(t"{3} videos", "3"))
 
-        assert node.fallbacks == (sl.plain(t"{3} videos"), "3")
+        assert node.fallbacks == (sl.plain(t"{3} videos"), sl.plain("3"))
 
     def test_note_is_small_print(self) -> None:
         assert sl.note("Submission ID: 5") == sl.semantic.Note("Submission ID: 5", sl.semantic.Importance.LOW)
@@ -265,19 +265,19 @@ class TestRating:
         node = sl.rating(key="stars")
 
         assert [choice.key for choice in node.choices] == ["1", "2", "3", "4", "5"]
-        assert [choice.label for choice in node.choices] == ["★", "★★", "★★★", "★★★★", "★★★★★"]
+        assert [sl.text.source_text(choice.label) for choice in node.choices] == ["★", "★★", "★★★", "★★★★", "★★★★★"]
         assert (node.minimum, node.maximum) == (1, 1)
 
     def test_a_wider_scale_numbers_its_points(self) -> None:
         node = sl.rating(key="score", maximum=10)
 
-        assert [choice.label for choice in node.choices] == [str(point) for point in range(1, 11)]
+        assert [sl.text.source_text(choice.label) for choice in node.choices] == [str(point) for point in range(1, 11)]
 
     def test_named_points_replace_their_stars(self) -> None:
         node = sl.rating(key="stars", labels={1: "Poor", 5: t"Excellent"})
 
-        assert node.choices[0].label == "Poor"
-        assert node.choices[1].label == "★★"
+        assert node.choices[0].label == sl.plain("Poor")
+        assert node.choices[1].label == sl.plain("★★")
         assert node.choices[4].label == sl.plain(t"Excellent")
 
     def test_a_managed_value_seeds_the_selection_as_its_option_key(self) -> None:

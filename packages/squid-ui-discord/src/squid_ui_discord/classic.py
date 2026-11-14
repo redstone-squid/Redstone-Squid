@@ -46,6 +46,7 @@ from squid_ui.runtime.component import Component
 from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import NEUTRAL, Localization, TextLike
+from squid_ui.text import Text as TextExpression
 from squid_ui_discord._draw import plan_and_draw
 from squid_ui_discord._factories import (
     button,
@@ -90,26 +91,32 @@ type Child = Renderable[ClassicTarget] | TextLike | Literal[False] | None
 
 def content(value: TextLike, *, overflow: Overflow | None = None, priority: int = 0) -> Content:
     """Build the exact classic message content field."""
+    value = TextExpression(value)
     return Content(value, overflow=Never() if overflow is None else overflow, priority=priority)
 
 
 def card_field(name: CardText, value: CardText, *, inline: bool = False) -> CardField:
     """Build one exact classic card field."""
+    name = name if isinstance(name, Text) else TextExpression(name)
+    value = value if isinstance(value, Text) else TextExpression(value)
     return CardField(name, value, inline)
 
 
 def card_author(name: CardText, *, url: str | None = None, icon_url: str | None = None) -> CardAuthor:
     """Build exact classic card author metadata."""
+    name = name if isinstance(name, Text) else TextExpression(name)
     return CardAuthor(name, url, icon_url)
 
 
 def card_footer(value: CardText, *, icon_url: str | None = None) -> CardFooter:
     """Build exact classic card footer metadata."""
+    value = value if isinstance(value, Text) else TextExpression(value)
     return CardFooter(value, icon_url)
 
 
 def card_media(url: str, *, description: TextLike | None = None) -> CardMedia:
     """Build exact classic card image or thumbnail metadata."""
+    description = None if description is None else TextExpression(description)
     return CardMedia(url, description)
 
 
@@ -126,6 +133,7 @@ def card(
     timestamp: ZonedDateTime | datetime | None = None,
 ) -> Card:
     """Build an exact classic embed with normalized description children."""
+    title = title if title is None or isinstance(title, Text) else TextExpression(title)
     normalized: list[Node] = []
     for index, child in enumerate(children):
         if child is None or child is False:
@@ -134,7 +142,7 @@ def card(
         if isinstance(child, Renderable):
             normalized.append(cast(Node, child))
         else:
-            normalized.append(Text(child))
+            normalized.append(text(child))
     return Card(tuple(normalized), title, url, fields, footer, author, accent, image, thumbnail, timestamp)
 
 
