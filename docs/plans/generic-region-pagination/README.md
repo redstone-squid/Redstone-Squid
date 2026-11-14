@@ -1,7 +1,8 @@
 # Generic region pagination roadmap
 
 Status: phases 1–3 complete. [Shared allocation search](03-joint-search.md) documents the implemented
-opt-in solver, validation, and phase 4 handoff. Mounted pagination integration is next.
+opt-in solver, validation, and phase 4 handoff. [Pagination and presentation state](04-pagination-state.md)
+plans the next phase, including recovery when a reading anchor disappears.
 
 Make joint region pagination part of the generic planning architecture. Sibling and nested
 regions should share target limits while preserving content, navigation, and reading position.
@@ -112,13 +113,15 @@ Depends on phase 2.
 
 ## Phase 4 Integrate pagination and presentation state
 
+Implementation plan: [Pagination and presentation state](04-pagination-state.md).
+
 Bring root pagination, explicit regions, and existing layout-driven local pagers onto the shared
 foundation. Preserve authored policies through wrappers and containers, or make any intentional
 behavior change explicit with a migration. Keep data fetching and application-owned selection
 windows distinct from layout fragmentation unless the detailed plan establishes a reason to
 change that boundary.
 
-Integrate identity, anchor reconciliation, hidden regions, stable allocations, and controlled,
+Integrate identity, anchor reconciliation and recovery, hidden regions, stable allocations, and controlled,
 uncontrolled, and routed pages. Preserve the delivery boundary: planning stages presentation
 changes, and failed delivery cannot publish unseen controls or advance committed layout state.
 
