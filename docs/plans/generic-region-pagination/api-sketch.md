@@ -11,8 +11,9 @@ content, and controls describe interaction behavior. Built-in lossless realizati
 automatically. Authors can constrain them or express preferences without enumerating each target's
 widgets. Existing APIs may change where the new model calls for it.
 
-Use one entry point for authored alternatives. The first representation supplies the semantic
-reference; other representations describe their fidelity and preference relative to it:
+Use one entry point for authored alternatives, with the same shape for every candidate. All
+presentations declare fidelity and preference relative to shared semantic meaning. The first
+candidate has no special authority. How the shared semantic reference is supplied remains open:
 
 ```python
 full = sl.stack(
@@ -25,7 +26,12 @@ compact = sl.stack(
 )
 
 summary = sl.alternatives(
-    full,
+    sl.alternative(
+        full,
+        key="full",
+        fidelity=sl.equivalent(),
+        preference=0,
+    ),
     sl.alternative(
         compact,
         key="compact",
@@ -44,9 +50,10 @@ summary = sl.alternatives(
 
 Proposed defaults and interpretation:
 
-- The primary is always a candidate, with local preference zero. Lower preference values are
-  favored among otherwise comparable admissible choices. This does not define the global
-  tradeoff between fidelity, stability, preference, and page turns; that belongs to phase 3.
+- Every candidate has the same fidelity, preference, and identity rules. `full` is simply a
+  descriptive name; position in the list does not make it the semantic reference. Lower preference
+  values are favored among otherwise comparable admissible choices. The global tradeoff between
+  fidelity, stability, preference, and page turns belongs to phase 3.
 - An alternative must explicitly declare its fidelity. Omitting a declaration does not silently
   assert equivalence. Supplying `losses(...)` authorizes those specific effects in non-strict mode,
   subject to inherited hard requirements. It does not authorize unrelated loss elsewhere. Strict
@@ -54,17 +61,19 @@ Proposed defaults and interpretation:
 - `equivalent()` is the author's assertion that content, relationships, and behavior are preserved.
   Structural checks can validate identities and associations, but cannot prove arbitrary prose
   equivalence. Built-in transformations must establish their preservation contracts through tests.
-- `omit("edition")` refers to a semantic unit in the primary, scoped to `build-summary`.
+- `omit("edition")` refers to a unit in the shared semantic contract, scoped to `build-summary`.
   Unknown or ambiguous references are errors. Loss declarations describe changes rather than
   assigning a generic quality score. More detailed helpers will cover shortening and specific
   interaction changes; their parameters still need design.
 - An alternative's own key identifies the choice. Content keys identify semantic units across
   choices. Switching from `full` to `compact` must not make `dimensions` a new logical item.
 
-The primary-reference approach is a proposal, not an additional agreed policy. An alternative
-could instead be a realization of an explicit semantic source shared by every presentation.
-The primary is a convenient source when existing semantic authoring already captures the content;
-a separate source may be useful when none of the presentations is a natural canonical form.
+The shared semantic reference must be independent of candidate order and selection. For built-in
+representations, the authored semantic node already supplies it. For arbitrary authored alternatives,
+we still need to design how authors supply or establish that common meaning and correspondence.
+An explicit shared content source and declarations relating peer presentations are possibilities.
+Simply taking the first candidate, or unioning keys from all candidates, does not establish the
+contract. The example illustrates the symmetric candidate API; it does not settle that reference API.
 
 ## Regions and identity
 
@@ -191,8 +200,8 @@ the same semantic information directly and contributes its own realizations and 
 
 ## Review points before implementation
 
-1. Whether the primary authored representation is a sufficient semantic reference, and how combined
-   or split presentations map their semantic units back to it.
+1. How arbitrary authored alternatives establish a shared semantic reference without privileging
+   one presentation, and how combined or split presentations map their units to that reference.
 2. Which fidelity effects and reference helpers make common loss declarations concise and precise.
 3. Whether the four target operations expose enough structure for contextual composition without
    encouraging another hidden backend search.

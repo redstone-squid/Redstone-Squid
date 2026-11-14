@@ -24,7 +24,9 @@ Alternatives carry explicit fidelity and preference metadata. Fidelity describes
 of content, relationships, and behavior; preference ranks permitted choices. Strictness and hard
 requirements determine admissibility independently of presentation preference.
 
-The exact metadata types, default values, and syntax remain to be designed. An authored declaration
+All candidates use the same API shape; the first presentation is not a special semantic reference.
+How arbitrary authored alternatives establish their shared semantic meaning remains an open design
+question. The exact metadata types, default values, and syntax remain to be designed. An authored declaration
 of equivalence is not proof that arbitrary prose has the same meaning; the core must distinguish
 what it can validate structurally from what the author declares.
 
