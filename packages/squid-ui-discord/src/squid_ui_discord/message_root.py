@@ -68,7 +68,7 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.planning.planner import plan as plan_document
-from squid_ui.planning.result import PlanResult
+from squid_ui.planning.result import PlanResult, PlanSeverity
 from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
@@ -860,8 +860,11 @@ class MessageRoot[
             profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
             profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
             profile.increment("planner.states_explored", result.metrics.states_explored)
-        if result.report.events:
-            logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
+        # Adaptation events record ordinary layout choices, such as showing actions as buttons.
+        # Only lost content or a warning is worth logging.
+        degraded = tuple(event for event in result.report.events if event.severity != PlanSeverity.ADAPTATION)
+        if degraded:
+            logger.warning("layout degraded: %s", "; ".join(event.message for event in degraded))
         handlers: dict[str, ActionBinding] = {}
         for key in _scene_action_keys(result.scene):
             binding = result.bindings.get(key)

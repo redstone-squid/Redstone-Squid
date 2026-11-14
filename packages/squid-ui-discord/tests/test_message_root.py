@@ -4657,3 +4657,32 @@ class TestBusyFeedback:
 
         assert busy.shown is False
         assert interaction.response.edit_message.await_count == 0
+
+
+class _ActionsOnly(Component[sl.ComponentsV2Target]):
+    @override
+    def render(self):
+        return sl.action_controls(sl.action_control("Go", self.go, key="go"), key="actions")
+
+    async def go(self, event: PressEvent) -> None: ...
+
+
+class _OverlongText(Component[sl.ComponentsV2Target]):
+    @override
+    def render(self):
+        return Text("x" * 5000)
+
+
+async def test_an_ordinary_layout_choice_is_not_logged_as_degraded(caplog: pytest.LogCaptureFixture) -> None:
+    # The planner reports which strategy it chose for every ActionControls, even the preferred one.
+    with caplog.at_level("WARNING", logger="squid_ui_discord.message_root"):
+        commit_render(MessageRoot(_ActionsOnly(), access=Everyone(), timeout=None))
+
+    assert "layout degraded" not in caplog.text
+
+
+async def test_truncated_content_is_logged_as_degraded(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="squid_ui_discord.message_root"):
+        commit_render(MessageRoot(_OverlongText(), access=Everyone(), timeout=None))
+
+    assert "layout degraded" in caplog.text
