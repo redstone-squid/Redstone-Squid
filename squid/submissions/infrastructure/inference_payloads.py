@@ -14,6 +14,7 @@ from squid.builds.domain import (
     MediaTypeLiteral,
     Status,
 )
+from squid.builds.domain.credits import Credit, name_credits
 from squid.builds.models import BuildLink
 from squid.messages.domain import MessageSnapshot
 from squid.sponsors import PublicSponsor
@@ -89,6 +90,7 @@ class BuildDraftPayload:
 
     extra_info: Info = field(default_factory=Info)
     creators_ign: list[str] = field(default_factory=list)
+    credits: list[Credit] = field(default_factory=list)
     links: list[BuildLinkPayload] = field(default_factory=list)
 
     display_name: str | None = None
@@ -121,6 +123,7 @@ class BuildDraftPayload:
     def from_draft(cls, draft: BuildDraft) -> BuildDraftPayload:
         """Capture inferred values without storing SQLAlchemy state."""
         values = {item.name: getattr(draft, item.name) for item in fields(cls)}
+        values["creators_ign"] = []
         values["links"] = [
             BuildLinkPayload(link.url, link.media_type) for link in draft.links if link.media_type is not None
         ]
@@ -142,6 +145,8 @@ class BuildDraftPayload:
     def to_draft(self) -> BuildDraft:
         """Restore editable facts from the captured payload."""
         values = {item.name: getattr(self, item.name) for item in fields(self)}
+        legacy_names = values.pop("creators_ign")
+        values["credits"] = self.credits or name_credits(legacy_names, legacy=True)
         values["links"] = [BuildLink(link.url, link.media_type) for link in self.links]
         values["tags"] = [
             TagAssignment(

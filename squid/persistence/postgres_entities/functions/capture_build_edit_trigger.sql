@@ -34,7 +34,7 @@ BEGIN
         RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
     END IF;
     IF TG_TABLE_NAME = 'creator_aliases' THEN
-        SELECT array_agg(build_id ORDER BY build_id) INTO build_ids FROM public.build_creators
+        SELECT array_agg(build_id ORDER BY build_id) INTO build_ids FROM public.build_credits
         WHERE alias_id IN ((old_value->>'id')::bigint, (new_value->>'id')::bigint);
     ELSIF TG_TABLE_NAME = 'versions' THEN
         SELECT array_agg(build_id ORDER BY build_id) INTO build_ids FROM public.build_versions

@@ -10,6 +10,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir EXTENSIONS/unaccent.sql
 \ir EXTENSIONS/vector.sql
 \ir public/FUNCTIONS/begin_build_edit.sql
+\ir public/FUNCTIONS/build_credit_accounts.sql
 \ir public/FUNCTIONS/build_history_snapshot_v1.sql
 \ir public/TRIGGER_FUNCTIONS/bump_permission_epoch.sql
 \ir public/FUNCTIONS/capture_build_edit.sql
@@ -43,7 +44,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/SEQUENCES/alembic_migration_history_id_seq.sql
 \ir public/TABLES/api_keys.sql
 \ir public/SEQUENCES/api_keys_id_seq.sql
-\ir public/TABLES/build_creators.sql
+\ir public/TABLES/build_credits.sql
 \ir public/TABLES/build_edit_history.sql
 \ir public/SEQUENCES/build_edit_history_id_seq.sql
 \ir public/TABLES/build_edit_pending.sql

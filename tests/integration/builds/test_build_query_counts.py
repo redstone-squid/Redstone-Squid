@@ -3,11 +3,13 @@
 from functools import partial
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
+from squid.builds.domain.credits import Credit, CreditKind, CreditRole, name_credits
 from squid.builds.models import OtherBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.models import Version
@@ -44,7 +46,7 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -
             submission_status=Status.PENDING,
             submitter_account_id=account_id,
             versions=["Java 1.21.0"],
-            creators_ign=[f"Builder {index}"],
+            credits=name_credits([f"Builder {index}"], legacy=True),
             ai_generated=False,
         )
         await transact(
@@ -110,3 +112,26 @@ async def test_get_builds_by_id_preserves_positions_including_duplicates(
         build_ids[1],
         build_ids[0],
     ]
+
+
+async def test_typed_credits_keep_same_names_separate_and_resolve_verified_subjects(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id, _ = await _seed(migrated_session_factory, 1)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    credits = [
+        Credit(name="Alex", kind=CreditKind.DISCORD, subject="123456789", username="alex_d"),
+        Credit(name="Alex", kind=CreditKind.MINECRAFT_JAVA, username="Alex", role=CreditRole.LAYOUT),
+        Credit(name="Alex"),
+    ]
+    build = OtherBuild(submission_status=Status.PENDING, submitter_account_id=account_id, credits=credits)
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
+    assert build.id is not None
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert loaded is not None
+    assert loaded.credits == credits
+    async with migrated_session_factory() as session:
+        resolved = (
+            await session.execute(text("SELECT name, account_id FROM build_credit_accounts(:id)"), {"id": build.id})
+        ).all()
+    assert resolved == [("Alex", account_id)]

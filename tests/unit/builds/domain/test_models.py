@@ -5,6 +5,7 @@ import json
 import pytest
 
 from squid.builds.domain import BuildCategory, BuildDraft, Status
+from squid.builds.domain.credits import name_credits
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, UtilityBuild
@@ -28,7 +29,7 @@ def sample_build() -> DoorBuild:
         wiring_placement_restrictions=["1-wide"],
         component_restrictions=["No pistons"],
         miscellaneous_restrictions=[],
-        creators_ign=["testuser"],
+        credits=name_credits(["testuser"], legacy=True),
         version_spec="1.19+",
         versions=["Java 1.19.0", "Java 1.19.1", "Java 1.19.2", "Java 1.20.0"],
         ai_generated=False,
@@ -97,7 +98,7 @@ class TestBuildDraft:
         ],
     )
     def test_finalize_produces_the_category_subclass(self, category: BuildCategory, expected_type: type[Build]) -> None:
-        draft = BuildDraft(category=category, width=3, creators_ign=["Alice"])
+        draft = BuildDraft(category=category, width=3, credits=name_credits(["Alice"], legacy=True))
         build = draft.finalize()
         assert type(build) is expected_type
         assert build.width == 3

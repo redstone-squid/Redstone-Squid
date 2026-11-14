@@ -1,5 +1,6 @@
 """Public build domain API."""
 
+from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, creator_names, name_credits
 from squid.builds.domain.models import (
     BUILD_TYPES,
     DOOR_ORIENTATION_NAMES,
@@ -29,6 +30,10 @@ __all__ = [
     "BuildCategory",
     "BuildCategoryLiteral",
     "BuildDraft",
+    "Credit",
+    "CreditAttribution",
+    "CreditKind",
+    "CreditRole",
     "DoorOrientationLiteral",
     "Info",
     "MediaTypeLiteral",
@@ -38,6 +43,8 @@ __all__ = [
     "ServerInfo",
     "Status",
     "UnresolvedTaxonomy",
+    "creator_names",
+    "name_credits",
     "normalize_tag_name",
     "parse_time_string",
     "sort_restrictions",

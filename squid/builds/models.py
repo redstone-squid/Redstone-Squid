@@ -40,6 +40,7 @@ from squid.builds.domain import (
     MediaTypeLiteral,
     Status,
 )
+from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, StagedCredits
 from squid.builds.domain.models import StagedMedia, StagedTaxonomy, freeze_fields, frozen_field
 from squid.builds.errors import InvalidBuildError
 from squid.config import EMBEDDING_DIMENSION
@@ -53,7 +54,7 @@ from squid.tags.models import TagAssignment
 
 
 @freeze_fields
-class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
+class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
     """A build submitted by a user."""
 
     __tablename__ = "builds"
@@ -161,7 +162,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     # PostgreSQL deletes related rows through ON DELETE CASCADE. passive_deletes
     # avoids loading unloaded collections just to delete them. delete-orphan still
     # removes items dropped from a collection while the parent remains.
-    build_creators: Mapped[list[BuildCreator]] = relationship(
+    build_credits: Mapped[list[BuildCredit]] = relationship(
         back_populates="build",
         default_factory=list,
         lazy="raise_on_sql",
@@ -204,7 +205,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     animated_restrictions: list[str] = field(default_factory=list)
     component_restrictions: list[str] = field(default_factory=list)
     miscellaneous_restrictions: list[str] = field(default_factory=list)
-    creators_ign: list[str] = field(default_factory=list)
+    credits: list[Credit] = field(default_factory=list)
     sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
     """Public sponsor details captured at submission time."""
     submitter_discord_id: int | None = None
@@ -255,6 +256,8 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     def edit_values(self) -> dict[str, Any]:
         """Return comparable fields, replacing related objects with their display data."""
         values = {item.name: getattr(self, item.name) for item in fields(self) if item.compare}
+        values["credits"] = [credit.to_json() for credit in self.credits]
+        values["creators_ign"] = self.creators_ign
         values["links"] = [{"url": link.url, "media_type": link.media_type} for link in self.links]
         values["tags"] = [
             {
@@ -450,25 +453,63 @@ class OtherBuild(Build, kw_only=True):
     )
 
 
-class BuildCreator(Base):
-    """Association table between builds and the creator names credited on them."""
+class BuildCredit(Base):
+    """A build contribution and the observed identity used to attribute it."""
 
-    __tablename__ = "build_creators"
-    __table_args__ = (Index("build_creators_alias_idx", "alias_id"),)
+    __tablename__ = "build_credits"
+    __table_args__ = (
+        Index("build_credits_alias_idx", "alias_id"),
+        Index("build_credits_subject_idx", "kind", "subject"),
+        CheckConstraint("position >= 0", name="build_credits_position_nonnegative"),
+        CheckConstraint("name = btrim(name) AND char_length(name) BETWEEN 1 AND 255", name="build_credits_name_valid"),
+        CheckConstraint(
+            "kind IN ('name','discord','minecraft_java','minecraft_bedrock')", name="build_credits_kind_valid"
+        ),
+        CheckConstraint("role IN ('creator','designer','layout','contributor')", name="build_credits_role_valid"),
+        CheckConstraint(
+            "attribution IN ('explicit','assumed_sender','confirmed','legacy')", name="build_credits_attribution_valid"
+        ),
+        CheckConstraint(
+            "kind <> 'name' OR (subject IS NULL AND username IS NULL)", name="build_credits_generic_reference"
+        ),
+    )
     build_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("builds.id", name="build_creators_build_id_fkey", ondelete="CASCADE"),
+        ForeignKey("builds.id", name="build_credits_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
         compare=False,
     )
-    alias_id: Mapped[int] = mapped_column(
+    position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(Text)
+    kind: Mapped[CreditKind] = mapped_column(StrEnumText(CreditKind), default=CreditKind.NAME)
+    username: Mapped[str | None] = mapped_column(Text, default=None)
+    subject: Mapped[str | None] = mapped_column(Text, default=None)
+    role: Mapped[CreditRole] = mapped_column(StrEnumText(CreditRole), default=CreditRole.CREATOR)
+    attribution: Mapped[CreditAttribution] = mapped_column(
+        StrEnumText(CreditAttribution), default=CreditAttribution.EXPLICIT
+    )
+    source_message_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("messages.id", ondelete="RESTRICT"), default=None
+    )
+    alias_id: Mapped[int | None] = mapped_column(
         Integer,
-        ForeignKey("creator_aliases.id", name="build_creators_alias_id_fkey", ondelete="RESTRICT"),
-        primary_key=True,
+        ForeignKey("creator_aliases.id", name="build_credits_alias_id_fkey", ondelete="RESTRICT"),
+        default=None,
     )
 
-    build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False, default=None)
+    build: Mapped[Build] = relationship(back_populates="build_credits", lazy="raise_on_sql", repr=False, default=None)
+
+    def to_credit(self) -> Credit:
+        return Credit(
+            name=self.name,
+            kind=self.kind,
+            username=self.username,
+            subject=self.subject,
+            role=self.role,
+            attribution=self.attribution,
+            source_message_id=self.source_message_id,
+        )
 
 
 # BuildLoader joins these links to messages in one batch query. A separate

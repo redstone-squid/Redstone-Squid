@@ -145,3 +145,17 @@ def creator_names(credits: Iterable[Credit]) -> list[str]:
     return list(
         dict.fromkeys(credit.name for credit in credits if credit.role in {CreditRole.CREATOR, CreditRole.DESIGNER})
     )
+
+
+class StagedCredits:
+    """Expose the string-only creator view for older adapters."""
+
+    credits: list[Credit]
+
+    @property
+    def creators_ign(self) -> list[str]:
+        return creator_names(self.credits)
+
+    @creators_ign.setter
+    def creators_ign(self, names: Iterable[str]) -> None:
+        self.credits = name_credits(names, legacy=True)

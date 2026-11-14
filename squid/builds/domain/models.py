@@ -19,6 +19,7 @@ from typing import (
 
 from whenever import Instant
 
+from squid.builds.domain.credits import Credit, StagedCredits
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.messages.domain import MessageSnapshot
@@ -299,7 +300,7 @@ class StagedTaxonomy:
 
 
 @dataclass(kw_only=True)
-class BuildDraft(StagedMedia, StagedTaxonomy):
+class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
     """Build details collected before the category and required fields are known.
 
     This is an in-memory staging object used by inference and build creation.
@@ -328,7 +329,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
     tags: list[TagAssignment] = field(default_factory=list)
 
     extra_info: Info = field(default_factory=Info)
-    creators_ign: list[str] = field(default_factory=list)
+    credits: list[Credit] = field(default_factory=list)
     links: list[BuildLink] = field(default_factory=list)
 
     display_name: str | None = None
@@ -403,7 +404,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
             "miscellaneous_restrictions": list(self.miscellaneous_restrictions),
             "tags": list(self.tags),
             "extra_info": self.extra_info,
-            "creators_ign": list(self.creators_ign),
+            "credits": list(self.credits),
             "links": list(self.links),
             "display_name": self.display_name,
             "source_submission_draft_id": self.source_submission_draft_id,

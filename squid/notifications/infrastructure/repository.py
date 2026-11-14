@@ -15,7 +15,7 @@ from squid.accounts.domain import IdentityProvider
 from squid.accounts.infrastructure.consent import account_consent_current
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
-from squid.builds.models import Build, BuildCreator
+from squid.builds.models import Build
 from squid.events.models import DomainEvent, DomainEventDeliveryRecord
 from squid.notifications.domain import (
     InboxVisibility,
@@ -740,14 +740,13 @@ class PostgresNotificationRepository:
 
     @staticmethod
     async def _creator_public_ids(session: AsyncSession, build_id: int) -> Sequence[UUID]:
+        credits = func.build_credit_accounts(build_id).table_valued(
+            "build_id", "position", "account_id", "name", "role"
+        )
         return tuple(
             (
                 await session.execute(
-                    select(Account.public_creator_id)
-                    .join(CreatorAlias, CreatorAlias.account_id == Account.id)
-                    .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
-                    .where(BuildCreator.build_id == build_id)
-                    .distinct()
+                    select(Account.public_creator_id).join(credits, credits.c.account_id == Account.id).distinct()
                 )
             ).scalars()
         )
@@ -804,12 +803,13 @@ class PostgresNotificationRepository:
         recipients = {build_id: set() for build_id in build_ids}
         if not build_ids:
             return recipients
+        credits = func.build_credit_accounts().table_valued("build_id", "position", "account_id", "name", "role")
         creator_rows = (
             await session.execute(
-                select(BuildCreator.build_id, Account.id, Account.public_creator_id)
-                .join(CreatorAlias, BuildCreator.alias_id == CreatorAlias.id)
-                .join(Account, Account.id == CreatorAlias.account_id)
-                .where(BuildCreator.build_id.in_(build_ids))
+                select(credits.c.build_id, Account.id, Account.public_creator_id)
+                .select_from(credits)
+                .join(Account, Account.id == credits.c.account_id)
+                .where(credits.c.build_id.in_(build_ids))
             )
         ).all()
         creator_ids: dict[int, set[UUID]] = defaultdict(set)

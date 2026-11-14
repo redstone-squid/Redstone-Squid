@@ -34,7 +34,7 @@ BEGIN
         WHERE assignment.tag_id = target_id;
     ELSIF TG_TABLE_NAME = 'creator_aliases' THEN
         PERFORM public.upsert_search_projection_request('build', bc.build_id::text, 'upsert')
-        FROM public.build_creators bc
+        FROM public.build_credits bc
         WHERE bc.alias_id = target_id;
     ELSIF TG_TABLE_NAME = 'versions' THEN
         PERFORM public.upsert_search_projection_request('build', bv.build_id::text, 'upsert')

@@ -7,6 +7,7 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import make_transient_to_detached
 
 from squid.builds.application import BuildEmbeddingService
+from squid.builds.domain.credits import name_credits
 from squid.builds.models import DoorBuild, OtherBuild
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
@@ -87,7 +88,7 @@ async def test_prepare_embeds_build_facts_without_rendering_unloaded_tag_relatio
         orientation="Door",
         patterns=["Regular"],
         tags=[TagAssignment(definition)],
-        creators_ign=["Builder"],
+        credits=name_credits(["Builder"], legacy=True),
         description="A compact door",
         extra_info={"unknown_restrictions": {"component_restrictions": ["Sandless"]}},
     )

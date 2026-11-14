@@ -41,7 +41,8 @@ _TABLES = [
     # The preview counts build credits, so the association table and its `builds` parent are real
     # here rather than faked; `builds` only depends on `accounts`, which is already above.
     Base.metadata.tables["builds"],
-    Base.metadata.tables["build_creators"],
+    Base.metadata.tables["messages"],
+    Base.metadata.tables["build_credits"],
 ]
 
 
@@ -316,8 +317,19 @@ async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
             )
         ).all()
         await session.execute(
-            insert(Base.metadata.tables["build_creators"]),
-            [{"build_id": build_id, "alias_id": alias.id} for build_id in build_ids],
+            insert(Base.metadata.tables["build_credits"]),
+            [
+                {
+                    "build_id": build_id,
+                    "alias_id": alias.id,
+                    "position": 0,
+                    "name": alias.name,
+                    "kind": "name",
+                    "role": "creator",
+                    "attribution": "legacy",
+                }
+                for build_id in build_ids
+            ],
         )
 
     reservation = await transact(

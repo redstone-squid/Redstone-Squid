@@ -23,6 +23,7 @@ from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy, replace_showcase_tags
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, Status
+from squid.builds.domain.credits import name_credits
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
@@ -163,7 +164,7 @@ def _make_build(category: BuildCategory, account_id: int) -> Build:
         "animated_restrictions": [KNOWN_RESTRICTIONS["animated"]],
         "component_restrictions": [KNOWN_RESTRICTIONS["component"]],
         "miscellaneous_restrictions": [KNOWN_RESTRICTIONS["miscellaneous"]],
-        "creators_ign": ["Alice", "Bob"],
+        "credits": name_credits(["Alice", "Bob"], legacy=True),
         "links": [
             BuildLink(url="https://example.com/a.png", media_type="image"),
             BuildLink(url="https://example.com/a.mp4", media_type="video"),
@@ -710,7 +711,9 @@ def _build_values(draw: st.DrawFn) -> tuple[BuildCategory, dict[str, object]]:
         "height": draw(st.none() | st.integers(min_value=1, max_value=100)),
         "depth": draw(st.none() | st.integers(min_value=1, max_value=100)),
         "description": draw(st.none() | st.text(st.characters(codec="utf-8", exclude_categories=("C",)), max_size=80)),
-        "creators_ign": draw(st.lists(st.sampled_from(["Alice", "Bob", "Charlie"]), max_size=3, unique=True)),
+        "credits": name_credits(
+            draw(st.lists(st.sampled_from(["Alice", "Bob", "Charlie"]), max_size=3, unique=True)), legacy=True
+        ),
         "links": [
             *(BuildLink(url=url, media_type="image") for url in draw(_IMAGE_URLS)),
             *(BuildLink(url=url, media_type="video") for url in draw(_VIDEO_URLS)),

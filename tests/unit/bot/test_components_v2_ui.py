@@ -19,6 +19,7 @@ from squid.builds.application import BuildService
 from squid.builds.application.edits import build_target
 from squid.builds.application.ports import BuildSchematicSummary
 from squid.builds.domain import Status
+from squid.builds.domain.credits import name_credits
 from squid.builds.models import Build, BuildLink, DoorBuild
 from squid.edits.domain import Revision, RevisionConflictError
 from squid.messages.domain import MessageRef
@@ -81,7 +82,7 @@ def display_build() -> Build:
         patterns=["Regular"],
         orientation="Door",
         component_restrictions=["Observerless"],
-        creators_ign=["Builder"],
+        credits=name_credits(["Builder"], legacy=True),
         version_spec="1.20+",
         versions=["Java 1.20"],
         links=[BuildLink(url="https://example.com/build.png", media_type="image")],

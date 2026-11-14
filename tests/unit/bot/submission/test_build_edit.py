@@ -10,6 +10,7 @@ import squid_ui_discord as sd
 from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.builds.application import BuildService
 from squid.builds.domain import Status, UnresolvedTaxonomy
+from squid.builds.domain.credits import name_credits
 from squid.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
 from squid_ui.testing import press_event, texts
@@ -35,6 +36,8 @@ def rendered(screen: BuildEditScreen) -> str:
 
 
 def _door(**values: Any) -> DoorBuild:
+    if "creators_ign" in values:
+        values["credits"] = name_credits(values.pop("creators_ign"), legacy=True)
     return DoorBuild(id=1, submission_status=Status.CONFIRMED, submitter_account_id=1, **values)
 
 

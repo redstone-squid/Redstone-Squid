@@ -7,12 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.accounts.domain import IdentityProvider
-from squid.accounts.models import AccountIdentity, CreatorAlias
-from squid.builds.domain import BuildCategory
+from squid.accounts.models import AccountIdentity
+from squid.builds.domain import BuildCategory, Credit
 from squid.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
     Build,
-    BuildCreator,
+    BuildCredit,
     BuildSourceMessage,
     BuildVersion,
 )
@@ -28,7 +28,7 @@ from squid.versions.models import Version
 class _CrossContextValues:
     """Creator, account, version, and source-message details indexed for a batch of builds."""
 
-    creators: Mapping[int, list[str]]
+    credits: Mapping[int, list[Credit]]
     submitter_discord_ids: Mapping[int, int]
     versions: Mapping[int, list[str]]
     source_messages: Mapping[int, list[MessageRef]]
@@ -62,13 +62,13 @@ class BuildLoader:
             if sql_build.submitter_account_id is not None  # pyright: ignore[reportUnnecessaryComparison]
         }
 
-        creators: dict[int, list[str]] = {build_id: [] for build_id in build_ids}
-        for build_id, name in await session.execute(
-            select(BuildCreator.build_id, CreatorAlias.name)
-            .join(CreatorAlias, BuildCreator.alias_id == CreatorAlias.id)
-            .where(BuildCreator.build_id.in_(build_ids))
+        credits: dict[int, list[Credit]] = {build_id: [] for build_id in build_ids}
+        for row in await session.scalars(
+            select(BuildCredit)
+            .where(BuildCredit.build_id.in_(build_ids))
+            .order_by(BuildCredit.build_id, BuildCredit.position)
         ):
-            creators[build_id].append(name)
+            credits[row.build_id].append(row.to_credit())
 
         submitter_discord_ids: dict[int, int] = {}
         if account_ids:
@@ -100,7 +100,7 @@ class BuildLoader:
         ):
             source_messages[build_id].append(MessageRef(message_id, channel_id=channel_id, guild_id=guild_id))
 
-        return _CrossContextValues(creators, submitter_discord_ids, versions, source_messages)
+        return _CrossContextValues(credits, submitter_discord_ids, versions, source_messages)
 
     @staticmethod
     def _populate(sql_build: Build, values: _CrossContextValues) -> Build:
@@ -144,7 +144,7 @@ class BuildLoader:
         sql_build.miscellaneous_restrictions = [
             r.display_name for r in official_restrictions if r.restriction_type == "miscellaneous"
         ]
-        sql_build.creators_ign = list(values.creators.get(sql_build.id, ()))
+        sql_build.credits = list(values.credits.get(sql_build.id, ()))
         sql_build.submitter_discord_id = submitter_discord_id
         # These facts are immutable to callers; loading supplies their initial values.
         object.__setattr__(sql_build, "__frozen_source_messages", source_messages)

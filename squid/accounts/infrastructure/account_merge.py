@@ -115,8 +115,7 @@ async def merge_accounts(session: AsyncSession, context: AccountMergeContext) ->
         text("""
             SELECT id FROM builds WHERE id IN (
                 SELECT id FROM builds WHERE submitter_account_id = :absorbed
-                UNION SELECT c.build_id FROM build_creators c JOIN creator_aliases a ON a.id = c.alias_id
-                    WHERE a.account_id = :absorbed
+                UNION SELECT c.build_id FROM build_credit_accounts() c WHERE c.account_id = :absorbed
                 UNION SELECT build_id FROM build_schematics WHERE rights_attested_by_account_id = :absorbed
             ) ORDER BY id FOR UPDATE
         """),

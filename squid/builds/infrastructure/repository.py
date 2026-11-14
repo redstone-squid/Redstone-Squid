@@ -20,7 +20,7 @@ from whenever import Instant
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.models import Account, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
-from squid.builds.domain import BuildCategory, Info, Status, UnresolvedTaxonomy
+from squid.builds.domain import BuildCategory, Credit, CreditAttribution, Info, Status, UnresolvedTaxonomy
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.builds.infrastructure.edit_scope import build_edit_scope
@@ -28,7 +28,7 @@ from squid.builds.infrastructure.loading import BuildLoader
 from squid.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
     Build,
-    BuildCreator,
+    BuildCredit,
     BuildLink,
     BuildSourceMessage,
     BuildVersion,
@@ -73,7 +73,7 @@ def _mapper_load_options() -> tuple[Any, ...]:
     return (
         selectinload(Build.tags).options(*assignment_units()),
         selectinload(Build.links),
-        raiseload(Build.build_creators),
+        raiseload(Build.build_credits),
         raiseload(Build.build_versions),
     )
 
@@ -83,7 +83,7 @@ def _write_load_options() -> tuple[Any, ...]:
     return (
         selectinload(Build.tags).options(*assignment_units()),
         selectinload(Build.links),
-        selectinload(Build.build_creators),
+        selectinload(Build.build_credits),
         selectinload(Build.build_versions),
     )
 
@@ -91,7 +91,7 @@ def _write_load_options() -> tuple[Any, ...]:
 def _public_summary_from_selected_row(
     row: Mapping[str, Any],
     *,
-    creators: Sequence[str],
+    credits: Sequence[Credit],
     versions: Sequence[str],
     links: Sequence[BuildLink],
     tags: Sequence[PublicBuildTag],
@@ -130,7 +130,7 @@ def _public_summary_from_selected_row(
         "component_restrictions": list(taxonomy["component"]),
         "miscellaneous_restrictions": list(taxonomy["miscellaneous"]),
         "extra_info": extra_info,
-        "creators_ign": list(creators),
+        "credits": list(credits),
         "links": list(links),
         "display_name": row["display_name"],
         "submission_time": row["submission_time"],
@@ -259,14 +259,13 @@ class BuildRepository:
         if not public_ids:
             return ()
 
-        creators: dict[int, list[str]] = defaultdict(list)
-        for build_id, name in await session.execute(
-            select(BuildCreator.build_id, CreatorAlias.name)
-            .join(CreatorAlias, CreatorAlias.id == BuildCreator.alias_id)
-            .where(BuildCreator.build_id.in_(public_ids))
-            .order_by(BuildCreator.build_id, BuildCreator.alias_id)
+        credits: dict[int, list[Credit]] = defaultdict(list)
+        for credit in await session.scalars(
+            select(BuildCredit)
+            .where(BuildCredit.build_id.in_(public_ids))
+            .order_by(BuildCredit.build_id, BuildCredit.position)
         ):
-            creators[build_id].append(name)
+            credits[credit.build_id].append(credit.to_credit())
 
         versions: dict[int, list[str]] = defaultdict(list)
         for build_id, edition, major, minor, patch in await session.execute(
@@ -337,7 +336,7 @@ class BuildRepository:
         by_id = {
             row["id"]: _public_summary_from_selected_row(
                 cast(Mapping[str, Any], row),
-                creators=creators[row["id"]],
+                credits=credits[row["id"]],
                 versions=versions[row["id"]],
                 links=links[row["id"]],
                 tags=public_tags[row["id"]],
@@ -587,11 +586,38 @@ class BuildRepository:
 
     async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: Build) -> None:
         """Rebuild creator, version, and tag relationships from the prepared build."""
-        sql_build.build_creators = []
+        sql_build.build_credits = []
         sql_build.build_versions = []
-        if build.creators_ign:
-            alias_ids = await self._get_or_create_aliases(session, build.creators_ign)
-            sql_build.build_creators.extend(BuildCreator(alias_id=alias_id) for alias_id in alias_ids)
+        legacy = list(
+            {
+                fold_creator_name(credit.name): credit.name
+                for credit in build.credits
+                if credit.attribution is CreditAttribution.LEGACY
+            }.values()
+        )
+        aliases = dict(
+            zip(
+                map(fold_creator_name, legacy),
+                await self._get_or_create_aliases(session, legacy),
+                strict=True,
+            )
+        )
+        sql_build.build_credits.extend(
+            BuildCredit(
+                position=position,
+                name=credit.name,
+                kind=credit.kind,
+                username=credit.username,
+                subject=credit.subject,
+                role=credit.role,
+                attribution=credit.attribution,
+                source_message_id=credit.source_message_id,
+                alias_id=aliases.get(fold_creator_name(credit.name))
+                if credit.attribution is CreditAttribution.LEGACY
+                else None,
+            )
+            for position, credit in enumerate(build.credits)
+        )
 
         await self._setup_tag_assignments(build, session, sql_build)
 

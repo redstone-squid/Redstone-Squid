@@ -30,7 +30,7 @@ from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.loading import BuildLoader
 from squid.builds.models import (
     Build,
-    BuildCreator,
+    BuildCredit,
     BuildVersion,
 )
 from squid.core.errors import DataIntegrityError
@@ -350,10 +350,7 @@ class SearchProjectionLoader:
         creators = tuple(
             (
                 await self._session.scalars(
-                    select(CreatorAlias)
-                    .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
-                    .where(BuildCreator.build_id == build_id)
-                    .order_by(CreatorAlias.name)
+                    select(BuildCredit).where(BuildCredit.build_id == build_id).order_by(BuildCredit.position)
                 )
             ).all()
         )

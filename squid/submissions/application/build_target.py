@@ -5,6 +5,7 @@ from typing import Any, Protocol, cast
 from uuid import UUID
 
 from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info, Status, UnresolvedTaxonomy
+from squid.builds.domain.credits import name_credits
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError, JSONValue
@@ -210,7 +211,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
         "miscellaneous_restrictions": restriction_values["miscellaneous_restrictions"],
         "tags": showcase_assignments,
         "extra_info": cast(Info, extra_info),
-        "creators_ign": [creator.strip() for creator in submission.creators if creator.strip()],
+        "credits": name_credits(submission.creators, legacy=True),
         "completion_time": submission.completion,
         "description": submission.description,
         "sponsor": submission.sponsor,
@@ -359,7 +360,7 @@ def preview_build(
             if key in definitions
         ],
         "extra_info": cast(Info, extra_info),
-        "creators_ign": [creator.strip() for creator in keys("creators") if creator.strip()],
+        "credits": name_credits(keys("creators"), legacy=True),
         "completion_time": text("completion"),
         "description": text("description"),
     }

@@ -57,10 +57,10 @@ from squid.persistence.revisions import flush_revision
 from squid.persistence.types import InstantUTC
 from squid_i18n import md_tr
 
-_BUILD_CREDITS = table("build_creators", column("alias_id"))
-"""A lightweight handle on the one column of `build_creators` this module reads.
+_BUILD_CREDITS = table("build_credits", column("alias_id"))
+"""A lightweight handle on the one column of `build_credits` this module reads.
 
-Deliberately not `squid.builds.models.BuildCreator`: importing that mapper pulls the
+Deliberately not `squid.builds.models.BuildCredit`: importing that mapper pulls the
 whole `Build` relationship graph into the accounts context, which both couples the two contexts and
 makes importing this module depend on the builds taxonomy being imported first. All that is wanted
 here is a count.
@@ -505,12 +505,22 @@ class AccountRepository:
                 .order_by(CreatorAlias.normalized_name)
             )
         ).all()
+        resolved = func.build_credit_accounts().table_valued("build_id", "position", "account_id", "name", "role")
+        provider_rows = (
+            await session.execute(
+                select(resolved.c.name, func.count(func.distinct(resolved.c.build_id)))
+                .where(resolved.c.account_id == account.id)
+                .group_by(resolved.c.name)
+            )
+        ).all()
+        counts = {name: count for name, count in alias_rows}
+        counts.update({name: count for name, count in provider_rows})
         return CreatorProfileRecord(
             public_id=public_id,
             account_id=account.id,
             profile=profile,
             identities=tuple(identity for identity in identities),
-            aliases=tuple(CreditedAlias(name=name, build_count=count) for name, count in alias_rows),
+            aliases=tuple(CreditedAlias(name=name, build_count=count) for name, count in sorted(counts.items())),
             joined_at=account.created_at,
             canonical_public_id=canonical_id,
         )
