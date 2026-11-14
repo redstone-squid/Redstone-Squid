@@ -19,7 +19,7 @@ from squid_ui.guards import (
 from squid_ui.interactions import ActionEvent
 from squid_ui.palette import Tone
 from squid_ui.runtime.component import Component
-from squid_ui.text import Text, TextLike
+from squid_ui.text import TextLike
 from squid_ui_widgets.decision import DecisionState
 from squid_ui_widgets.decision import confirm as confirm_shell
 from squid_ui_widgets.drivers import TransitionEvent
@@ -35,10 +35,6 @@ class _Confirm:
     danger: bool
     deadline: float | None
     on_decline: TextLike | None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "prompt", Text(self.prompt))
-        object.__setattr__(self, "on_decline", None if self.on_decline is None else Text(self.on_decline))
 
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult:
         """Consume prior approval or request a confirmation challenge."""

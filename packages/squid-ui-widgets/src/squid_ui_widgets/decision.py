@@ -23,9 +23,6 @@ class DecisionOption:
     tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-
 
 @dataclass(frozen=True, slots=True)
 class DecisionState:

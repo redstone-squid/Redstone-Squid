@@ -22,7 +22,7 @@ from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
 from squid_ui.interactions import ActionEvent
-from squid_ui.text import Text, TextLike
+from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
     from squid_ui.runtime.definition import Component
@@ -41,9 +41,6 @@ class GuardDecision:
     """Author wording for a denial; `None` falls back to chrome."""
     retry_after: float | None = None
     """Seconds until the same press would be admitted, when the guard can say."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "reason", None if self.reason is None else Text(self.reason))
 
 
 ADMIT = GuardDecision(allowed=True)
@@ -87,9 +84,6 @@ class Challenge:
     on_decline: TextLike | None = None
     """Private wording shown when the actor declines; `None` says nothing, because a dialog
     that closes is already the answer."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "on_decline", None if self.on_decline is None else Text(self.on_decline))
 
 
 type GuardResult = GuardDecision | Challenge
@@ -280,9 +274,6 @@ class _When:
     predicate: Callable[[ActionEvent], bool | Awaitable[bool]]
     reason: TextLike
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "reason", Text(self.reason))
-
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         del ledger
         decision = self.predicate(event)
@@ -294,9 +285,6 @@ class _When:
 class _Permission:
     check: Callable[[ActionEvent], Awaitable[bool]]
     reason: TextLike | None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "reason", None if self.reason is None else Text(self.reason))
 
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         del ledger
@@ -348,7 +336,6 @@ class _Until:
     reason: TextLike | None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "reason", None if self.reason is None else Text(self.reason))
         if self.deadline.tzinfo is None or self.deadline.utcoffset() is None:
             message = "until() needs an aware deadline; a naive one has no instant to compare against"
             raise ValueError(message)

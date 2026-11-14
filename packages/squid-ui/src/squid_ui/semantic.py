@@ -273,9 +273,6 @@ class Heading(Adaptable[RenderTarget]):
     level: int = 2
     importance: Importance = Importance.HIGH
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
-
 
 @dataclass(frozen=True, slots=True)
 class Paragraph(Adaptable[RenderTarget]):
@@ -284,18 +281,12 @@ class Paragraph(Adaptable[RenderTarget]):
 
     key: str | None = None
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
-
 
 @dataclass(frozen=True, slots=True)
 class ListItem:
     key: str
     content: TextLike
     importance: Importance = Importance.NORMAL
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,11 +324,6 @@ class Field:
     importance: Importance = Importance.NORMAL
     fallbacks: tuple[TextLike, ...] = ()
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-        object.__setattr__(self, "value", Text(self.value))
-        object.__setattr__(self, "fallbacks", tuple(Text(item) for item in self.fallbacks))
-
 
 @dataclass(frozen=True, slots=True)
 class Fields(Adaptable[RenderTarget]):
@@ -349,9 +335,6 @@ class Column:
     key: str
     heading: TextLike
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "heading", Text(self.heading))
-
 
 @dataclass(frozen=True, slots=True)
 class Columns:
@@ -362,9 +345,6 @@ class Columns:
 class TableRow:
     key: str
     cells: tuple[TextLike, ...]
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "cells", tuple(Text(item) for item in self.cells))
 
 
 @dataclass(frozen=True, slots=True)
@@ -392,18 +372,11 @@ class Note(Adaptable[RenderTarget]):
     content: TextLike
     importance: Importance = Importance.LOW
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
-
 
 @dataclass(frozen=True, slots=True)
 class Quote(Adaptable[RenderTarget]):
     content: TextLike
     attribution: TextLike | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
-        object.__setattr__(self, "attribution", None if self.attribution is None else Text(self.attribution))
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,17 +392,11 @@ class MediaItem:
     description: TextLike | None = None
     spoiler: bool = False
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "description", None if self.description is None else Text(self.description))
-
 
 @dataclass(frozen=True, slots=True)
 class Figure(Adaptable[RenderTarget]):
     media: MediaItem
     caption: TextLike | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "caption", None if self.caption is None else Text(self.caption))
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,9 +410,6 @@ class Media(Adaptable[RenderTarget]):
 @dataclass(frozen=True, slots=True)
 class Summary:
     content: TextLike
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
 
 
 @dataclass(frozen=True, slots=True)
@@ -475,11 +439,6 @@ class Toggle[ContextT = object](Adaptable[RenderTarget, ContextT]):
     tone: Tone | Role = Tone.NEUTRAL
     available: bool = True
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-        object.__setattr__(self, "on_label", None if self.on_label is None else Text(self.on_label))
-        object.__setattr__(self, "off_label", None if self.off_label is None else Text(self.off_label))
-
 
 @dataclass(frozen=True, slots=True)
 class Download(Adaptable[RenderTarget]):
@@ -492,10 +451,6 @@ class Download(Adaptable[RenderTarget]):
     emphasis: Emphasis = Emphasis.NORMAL
     spoiler: bool = False
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
-        object.__setattr__(self, "description", None if self.description is None else Text(self.description))
-
 
 @dataclass(frozen=True, slots=True)
 class Status(Adaptable[RenderTarget]):
@@ -503,18 +458,12 @@ class Status(Adaptable[RenderTarget]):
     tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
-
 
 @dataclass(frozen=True, slots=True)
 class ProgressBar(Adaptable[RenderTarget]):
     value: float
     label: TextLike | None = None
     maximum: float = 1.0
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
 
 
 @dataclass(frozen=True, slots=True)
@@ -564,9 +513,6 @@ class Metric(Adaptable[RenderTarget]):
     label: TextLike
     unit: str | None = None
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-
 
 @dataclass(frozen=True, slots=True)
 class Timestamp(Adaptable[RenderTarget]):
@@ -575,9 +521,6 @@ class Timestamp(Adaptable[RenderTarget]):
     instant: datetime
     style: TimeStyle = TimeStyle.SHORT_DATETIME
     label: TextLike | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
 
     def as_text(self) -> Text:
         return timestamp_text(self.instant, style=self.style.value)
@@ -589,9 +532,6 @@ class ZonedTimestamp(Adaptable[RenderTarget]):
 
     value: ZonedDateTime
     label: TextLike | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
 
 
 @dataclass(frozen=True, slots=True)
@@ -609,9 +549,6 @@ class FormTrigger[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """Admission for the press that opens the form; the submission is not re-admitted."""
     record: History | None = None
     """History the successful submission enters under this trigger's label."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
 
 
 @dataclass(frozen=True, slots=True)
@@ -631,9 +568,6 @@ class ActionControl[ContextT = object]:
     record: History | None = None
     """History this press enters itself into, under `label`, before `on_trigger` runs."""
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-
 
 @dataclass(frozen=True, slots=True)
 class Link:
@@ -641,9 +575,6 @@ class Link:
     label: TextLike
     url: str
     emphasis: Emphasis = Emphasis.NORMAL
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
 
 
 @dataclass(frozen=True, slots=True)
@@ -664,18 +595,12 @@ class RoutedActionControl:
     emphasis: Emphasis = Emphasis.NORMAL
     available: bool = True
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-
 
 @dataclass(frozen=True, slots=True)
 class ControlGroup[ContextT = object]:
     key: str
     controls: tuple[ActionControl[ContextT] | Link | RoutedActionControl, ...]
     label: TextLike | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
 
 
 @dataclass(frozen=True, slots=True)
@@ -709,10 +634,6 @@ class Choice:
     description: TextLike | None = None
     available: bool = True
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-        object.__setattr__(self, "description", None if self.description is None else Text(self.description))
-
 
 @dataclass(frozen=True, slots=True)
 class ChoiceEvent[ContextT = object](ActionEvent[ContextT]):
@@ -734,10 +655,6 @@ class EntityChoice:
     label: TextLike
     description: TextLike | None = None
     available: bool = True
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
-        object.__setattr__(self, "description", None if self.description is None else Text(self.description))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -787,7 +704,6 @@ class Entities[ContextT = object](Adaptable[RenderTarget, ContextT]):
     flexibility: Flexibility = Flexibility.NORMAL
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
         if self.conversation_types and self.entity_type is not EntityType.CONVERSATION:
             message = "conversation_types is only valid for conversation entity pickers"
             raise ValueError(message)
@@ -809,16 +725,10 @@ class RoutedChoices(Adaptable[RenderTarget]):
     available: bool = True
     selected: tuple[str, ...] = ()
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
-
 
 @dataclass(frozen=True, slots=True)
 class ItemLabel:
     content: TextLike
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "content", Text(self.content))
 
 
 @dataclass(frozen=True, slots=True)
@@ -827,9 +737,6 @@ class Item[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTar
     label: ItemLabel
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     summary: TextLike | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "summary", None if self.summary is None else Text(self.summary))
 
 
 @dataclass(frozen=True, slots=True)
@@ -846,9 +753,6 @@ class NavOption:
     key: str
     label: TextLike
     available: bool = True
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
 
 
 @dataclass(frozen=True, slots=True)
@@ -949,7 +853,6 @@ class Region[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTa
     page: PageOwnership = FIRST_PAGE
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "title", Text(self.title))
         if not self.key:
             msg = "region key must not be empty"
             raise ValueError(msg)

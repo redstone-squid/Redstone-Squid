@@ -14,7 +14,7 @@ from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Text, TextLike, tr
+from squid_ui.text import TextLike, tr
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 
 
@@ -26,7 +26,6 @@ class AgreementParticipant:
     display: TextLike
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "display", Text(self.display))
         if not self.actor_id:
             message = "agreement participant actor id must not be empty"
             raise ValueError(message)

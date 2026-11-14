@@ -5,8 +5,8 @@ from typing import ClassVar, Literal, cast, override
 
 from squid_ui.capabilities import Capability
 from squid_ui.entity import EntityType
-from squid_ui.forms import ChoiceOption, ExtensionField, FormField, FormValueError, MultiChoiceField, UploadedFile
-from squid_ui.text import Text, TextLike
+from squid_ui.forms import ChoiceOption, ExtensionField, FormValueError, MultiChoiceField, UploadedFile
+from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,10 +18,6 @@ class EntityField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Ex
     maximum: int = 1
     placeholder: TextLike | None = None
     capability: ClassVar[str] = Capability.FORMS_DISCORD_ENTITY
-
-    def __post_init__(self) -> None:
-        FormField.__post_init__(self)
-        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
 
     @override
     def parse(self, raw: object) -> object | None:
@@ -80,7 +76,6 @@ class CheckboxGroupField[ValueT, RequiredT: (Literal[True], Literal[False]) = Li
     capability: ClassVar[str] = Capability.FORMS_DISCORD_CHECKBOX_GROUP
 
     def __post_init__(self) -> None:
-        FormField.__post_init__(self)
         self._portable_field()
 
     @override

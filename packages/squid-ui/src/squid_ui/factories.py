@@ -232,7 +232,7 @@ def _children[RenderTargetT = RenderTarget, ContextT = object](
         if isinstance(value, str | Text | Template):
             # A paragraph renders on every target, but its own annotation names the base
             # `RenderTarget`, so it cannot be spelled as satisfying an arbitrary one.
-            collected.append(cast(LayoutNode[RenderTargetT, ContextT], Paragraph(value)))
+            collected.append(cast(LayoutNode[RenderTargetT, ContextT], Paragraph(Text(value))))
         elif is_layout_node(value):
             collected.append(value)
         else:
@@ -351,6 +351,7 @@ def details[RenderTargetT = RenderTarget, ContextT = object](
 
 def summary(content: TextValue) -> Summary:
     """The control text that identifies a `details` region."""
+    content = Text(content)
     return Summary(content)
 
 
@@ -371,6 +372,7 @@ def form[ContextT = object](
     ``guard`` gates the press that opens the form; the submission that follows completes an
     already-admitted press and is not checked again.
     """
+    label = Text(label)
     resolved, handler, default_mode = bind_form(spec, on_submit)
     selected_mode = mode or default_mode
     if record is not None and selected_mode is ActionMode.PARALLEL_READ:
@@ -383,11 +385,13 @@ def item[RenderTargetT = RenderTarget, ContextT = object](
     label: ItemLabel, *children: ChildLike[RenderTargetT, ContextT], key: str, summary: TextValue | None = None
 ) -> Item[RenderTargetT, ContextT]:
     """One entry of an `items` collection."""
+    summary = None if summary is None else Text(summary)
     return Item(key, label, _children(children, "sl.item()"), summary)
 
 
 def item_label(content: TextValue) -> ItemLabel:
     """The identity shown for one `items` entry."""
+    content = Text(content)
     return ItemLabel(content)
 
 
@@ -407,21 +411,25 @@ def items[RenderTargetT = RenderTarget, ContextT = object](
 
 def heading(content: TextValue, *, level: int = 2, importance: Importance = Importance.HIGH) -> Heading:
     """A standalone heading."""
+    content = Text(content)
     return Heading(content, level, importance)
 
 
 def paragraph(content: TextValue, *, importance: Importance = Importance.NORMAL, key: str | None = None) -> Paragraph:
     """A block of prose."""
+    content = Text(content)
     return Paragraph(content, importance, key)
 
 
 def status(content: TextValue, *, tone: Tone | Role = Tone.NEUTRAL, emphasis: Emphasis = Emphasis.NORMAL) -> Status:
     """A short outcome or state message."""
+    content = Text(content)
     return Status(content, tone, emphasis)
 
 
 def note(content: TextValue, *, importance: Importance = Importance.LOW) -> Note:
     """Small print: an id, a timestamp, a caveat the reader may skip."""
+    content = Text(content)
     return Note(content, importance)
 
 
@@ -432,16 +440,20 @@ def code(content: str, *, language: str = "") -> Code:
 
 def quote(content: TextValue, *, attribution: TextValue | None = None) -> Quote:
     """Quoted text with optional attribution."""
+    content = Text(content)
+    attribution = None if attribution is None else Text(attribution)
     return Quote(content, attribution)
 
 
 def progress(value: float, *, label: TextValue | None = None, maximum: float = 1.0) -> ProgressBar:
     """Completion of a known-length task."""
+    label = None if label is None else Text(label)
     return ProgressBar(value, label, maximum)
 
 
 def metric(value: int | float | str, label: TextValue, *, unit: str | None = None) -> Metric:
     """A single labelled quantity."""
+    label = Text(label)
     return Metric(value, label, unit)
 
 
@@ -452,6 +464,7 @@ def timestamp(
     label: TextValue | None = None,
 ) -> Timestamp:
     """A typed instant; naive datetimes are rejected before rendering."""
+    label = None if label is None else Text(label)
     if instant.tzinfo is None or instant.utcoffset() is None:
         message = "sl.timestamp() requires an aware datetime"
         raise ValueError(message)
@@ -460,6 +473,7 @@ def timestamp(
 
 def zoned_timestamp(value: ZonedDateTime, *, label: TextValue | None = None) -> ZonedTimestamp:
     """An exact instant displayed with its IANA timezone identity."""
+    label = None if label is None else Text(label)
     return ZonedTimestamp(value, label)
 
 
@@ -471,6 +485,7 @@ def figure(
     media_type: str | None = None,
 ) -> Figure:
     """One media preview with an optional caption."""
+    caption = None if caption is None else Text(caption)
     if isinstance(source, MediaItem) and (filename is not None or media_type is not None):
         message = "figure file metadata belongs on its media_item()"
         raise ValueError(message)
@@ -490,6 +505,9 @@ def field(
     fallbacks: Iterable[TextValue] = (),
 ) -> Field:
     """One labelled value; ``fallbacks`` are shorter forms tried under budget pressure."""
+    label = Text(label)
+    value = Text(value)
+    fallbacks = tuple(Text(value) for value in fallbacks)
     return Field(key, label, value, importance, tuple(fallbacks))
 
 
@@ -500,6 +518,7 @@ def fields(*entries: Conditional[Field]) -> Fields:
 
 def bullet(content: TextValue, *, key: str = "", importance: Importance = Importance.NORMAL) -> ListItem:
     """One entry of a `bullets` list."""
+    content = Text(content)
     return ListItem(key, content, importance)
 
 
@@ -523,6 +542,7 @@ def bullets(
 
 def column(heading: TextValue, *, key: str = "") -> Column:
     """One column of a `table`."""
+    heading = Text(heading)
     return Column(key, heading)
 
 
@@ -537,6 +557,7 @@ def columns(*entries: Conditional[Column]) -> Columns:
 
 def table_row(*cells: TextValue, key: str = "") -> TableRow:
     """One row of a `table`; cells are positional, in column order."""
+    cells = tuple(Text(value) for value in cells)
     return TableRow(key, tuple(cells))
 
 
@@ -647,6 +668,7 @@ def media_item(
     spoiler: bool = False,
 ) -> MediaItem:
     """Describe one gallery entry. Use this for per-item metadata in a gallery."""
+    description = None if description is None else Text(description)
     asset = file(source, filename=filename, media_type=media_type)
     return MediaItem(key, asset.url or asset, description, spoiler)
 
@@ -666,6 +688,7 @@ def media(
     Bytes and unnamed streams need filename=. Metadata keywords describe a single
     source; for galleries, use media_item() on entries that need metadata.
     """
+    description = None if description is None else Text(description)
     entries = tuple(source for source in sources if source is not None and source is not False)
     metadata = filename is not None or media_type is not None or description is not None or spoiler
     if metadata and (len(entries) != 1 or isinstance(entries[0], MediaItem)):
@@ -718,6 +741,7 @@ def action_control[ContextT = object](
     inside the handler instead. Combining that call with ``record=`` raises HistoryError
     because both would reserve the same history entry.
     """
+    label = Text(label)
     if record is not None and mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
         raise ValueError(message)
@@ -735,6 +759,9 @@ def toggle[ContextT = object](
     available: bool = True,
 ) -> Toggle[ContextT]:
     """A boolean control; ``on`` declares whether the author or session owns its state."""
+    label = Text(label)
+    on_label = None if on_label is None else Text(on_label)
+    off_label = None if off_label is None else Text(off_label)
     return Toggle(key, label, on, on_label, off_label, tone, available)
 
 
@@ -754,6 +781,8 @@ def download(
     Bytes and unnamed streams need filename=. The default label is localized.
     Input ownership and snapshot behavior are the same as file().
     """
+    label = None if label is None else Text(label)
+    description = None if description is None else Text(description)
     return Download(
         key,
         label,
@@ -766,6 +795,7 @@ def download(
 
 def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.NORMAL) -> Link:
     """A control that opens ``url``."""
+    label = Text(label)
     return Link(key, label, url, emphasis)
 
 
@@ -783,6 +813,7 @@ def routed_action_control(
     Build ``route_id`` with a `squid_ui.routing.Route` rather than by hand, so an id
     over Discord's budget fails here and not at send time.
     """
+    label = Text(label)
     return RoutedActionControl(key, label, route_id, tone, emphasis, available)
 
 
@@ -792,6 +823,7 @@ def control_group[ContextT = object](
     label: TextValue | None = None,
 ) -> ControlGroup[ContextT]:
     """Controls that belong together and degrade together."""
+    label = None if label is None else Text(label)
     return ControlGroup(key, _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.control_group()"), label)
 
 
@@ -823,6 +855,8 @@ def action_controls[ContextT = object](
 
 def choice(label: TextValue, *, key: str, description: TextValue | None = None, available: bool = True) -> Choice:
     """One option of a `choices` control; ``key`` is the value it submits."""
+    label = Text(label)
+    description = None if description is None else Text(description)
     return Choice(key, label, description, available)
 
 
@@ -853,6 +887,8 @@ def entity_choice(
     available: bool = True,
 ) -> EntityChoice:
     """One enumerated fallback for an entity picker."""
+    label = Text(label)
+    description = None if description is None else Text(description)
     return EntityChoice(ref, label, description, available)
 
 
@@ -868,6 +904,7 @@ def entities[ContextT = object](
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Entities[ContextT]:
     """Select frontend-resolved entities, optionally with an enumerated fallback."""
+    placeholder = None if placeholder is None else Text(placeholder)
     return Entities(
         key,
         entity_type,
@@ -899,7 +936,9 @@ def rating[ContextT = object](
         raise ValueError(message)
     points = range(1, maximum + 1)
     named = {} if labels is None else labels
-    entries = tuple(Choice(str(point), named[point] if point in named else _stars(point, maximum)) for point in points)
+    entries = tuple(
+        choice(named[point] if point in named else _stars(point, maximum), key=str(point)) for point in points
+    )
     if isinstance(value, Uncontrolled):
         selection: ChoiceOwnership[ContextT] = Uncontrolled(() if value.initial is None else (str(value.initial),))
     else:
@@ -932,6 +971,7 @@ def routed_choices(
     selected: tuple[str, ...] = (),
 ) -> RoutedChoices:
     """A stateless string picker dispatched by ``route_id`` with selected choice keys."""
+    placeholder = None if placeholder is None else Text(placeholder)
     return RoutedChoices(
         key,
         _collect(entries, (Choice,), "sl.routed_choices()"),
@@ -946,6 +986,7 @@ def routed_choices(
 
 def nav_option(label: TextValue, *, key: str, available: bool = True) -> NavOption:
     """One place `navigation` can go."""
+    label = Text(label)
     return NavOption(key, label, available)
 
 
@@ -1069,4 +1110,5 @@ def region[RenderTargetT = RenderTarget, ContextT = object](
     page: PageOwnership = FIRST_PAGE,
 ) -> Region[RenderTargetT, ContextT]:
     """Let the planner allocate space jointly with sibling and nested regions."""
+    title = Text(title)
     return Region(_children(children, "sl.region()"), key, title, tuple(header), tuple(footer), page)

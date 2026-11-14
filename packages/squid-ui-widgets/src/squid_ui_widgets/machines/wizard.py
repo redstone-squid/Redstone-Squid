@@ -42,10 +42,6 @@ class WizardReview[RenderTargetT: RenderTarget = RenderTarget, ContextT = object
     note: TextLike | None = None
     """Shown just above Finish, for example to say that finishing cannot be undone."""
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
-        object.__setattr__(self, "note", None if self.note is None else Text(self.note))
-
 
 @dataclass(frozen=True, slots=True)
 class WizardState:

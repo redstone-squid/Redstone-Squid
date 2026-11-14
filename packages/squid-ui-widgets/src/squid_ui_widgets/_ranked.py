@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.text import Text, TextLike, md
+from squid_ui.text import TextLike, md
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,9 +13,6 @@ class RankedEntry:
     label: TextLike
     value: object
     key: str = ""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
 
 
 type Projector[EntryT] = str | Callable[[EntryT], object]

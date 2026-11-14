@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from squid_reactivity.actions import ActionContext
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.entity import EntityRef
-from squid_ui.text import Text, TextLike
+from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
     from squid_ui.forms import FormIssue, FormLike, SubmitHandler
@@ -39,9 +39,6 @@ class BusySpec:
     """What the pressed control says while the handler runs; `None` uses chrome."""
     restore_on_error: bool = True
     """Put the previous scene back before the error hook runs."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "pending", None if self.pending is None else Text(self.pending))
 
 
 class InteractionKind(StrEnum):
@@ -282,9 +279,6 @@ class ActionBinding[EventT: ActionEvent = Any]:
     """Control label also used for framework-created history entries."""
     record: History | None = None
     """History this action enters itself into, under `label`, before the handler runs."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "label", Text(self.label))
 
     def routed(self, values: tuple[str, ...]) -> ActionBinding[Any] | None:
         """Resolve a grouped control to its logical action binding."""
