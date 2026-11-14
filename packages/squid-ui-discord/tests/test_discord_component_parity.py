@@ -8,6 +8,7 @@ from squid_ui.emoji import Emoji
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.planning import plan
+from squid_ui.presentations import Replacement, corresponds, losses, ref
 from squid_ui.primitives import (
     Gallery,
     GalleryItem,
@@ -107,9 +108,18 @@ def test_non_discord_target_requires_explicit_premium_fallback() -> None:
     result = plan(
         Variants(
             (
-                Variant((Row((PremiumButton(42),)),), requires=frozenset({"actions.discord.premium"})),
-                Variant((Text("Purchase unavailable"),)),
-            )
+                Variant(
+                    (Row((PremiumButton(42),)),),
+                    requires=frozenset({"actions.discord.premium"}),
+                    correspondence=(corresponds("@content", "@0"),),
+                ),
+                Variant(
+                    (Text("Purchase unavailable"),),
+                    contract=losses(Replacement(ref("@0"))),
+                    correspondence=(corresponds("@content", "@0"),),
+                ),
+            ),
+            content=PremiumButton(42),
         ),
         target=target,
     )

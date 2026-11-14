@@ -6,12 +6,13 @@ import discord
 import pytest
 
 from squid_i18n import tr
-from squid_ui import Document, scene, zoned_timestamp
+from squid_ui import Document, paragraph, scene, zoned_timestamp
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterCapability
+from squid_ui.presentations import corresponds
 from squid_ui.primitives import (
     Button,
     Code,
@@ -197,9 +198,10 @@ def test_exact_row_overflow_is_a_typed_planning_error() -> None:
         plan(Row(buttons), target=DISCORD_V2_DPY27)
 
 
-def test_planner_requires_explicit_unique_pager_keys() -> None:
-    with pytest.raises(LayoutInvariantError, match="requires an explicit key"):
-        plan(Text("content", overflow=Paginate()), target=DISCORD_V2_DPY27)
+def test_planner_accepts_positional_pagers_but_rejects_duplicate_authored_keys() -> None:
+    result = plan(Text("content", overflow=Paginate()), target=DISCORD_V2_DPY27)
+    assert result.allocation is not None
+    assert next(iter(result.allocation.regions.values())).cursor_key.startswith("$/")
 
     with pytest.raises(LayoutInvariantError, match="duplicate semantic identity"):
         plan(
@@ -265,10 +267,15 @@ def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
     ladders = [
         Variants(
             (
-                Variant((rung(index, 6),), requires=frozenset({"rich-text"})),
-                Variant((rung(index, 4),)),
-                Variant((Text(f"line {index}"),)),
-            )
+                Variant(
+                    (rung(index, 6),),
+                    requires=frozenset({"rich-text"}),
+                    correspondence=(corresponds("@content", "source"),),
+                ),
+                Variant((rung(index, 4),), correspondence=(corresponds("@content", "source"),)),
+                Variant((Text(f"line {index}"),), correspondence=(corresponds("@content", "source"),)),
+            ),
+            content=paragraph(f"Fixture {index}", key="source"),
         )
         for index in range(9)
     ]

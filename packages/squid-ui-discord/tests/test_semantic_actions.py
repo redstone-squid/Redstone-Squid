@@ -1,6 +1,8 @@
 """Discord ActionControls adaptation, routing, and sticky presentation state."""
 
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
+from typing import Any
 
 import pytest
 
@@ -12,7 +14,9 @@ from squid_ui.planning import plan
 from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.joint_search import JointExhaustedError
+from squid_ui.presentations import corresponds
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
+from squid_ui.primitives.nodes import Node
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.presentation_state import StrategyState
 from squid_ui.semantic import (
@@ -37,6 +41,14 @@ async def _act(event: ActionEvent) -> None: ...
 
 def _actions(count: int, *, handler: Callable[[ActionEvent], Awaitable[None]] = _act) -> tuple[ActionControl, ...]:
     return tuple(ActionControl(f"action.{index}", f"Action {index + 1}", handler) for index in range(count))
+
+
+def _text_variants(*nodes: Node, priority: int = 0) -> Variants[Any]:
+    return Variants(
+        tuple(Variant((node,), correspondence=(corresponds("@content", "source"),)) for node in nodes),
+        content=Paragraph("Details", key="source"),
+        priority=priority,
+    )
 
 
 def test_thirty_six_actions_fold_losslessly_into_twenty_five_and_eleven() -> None:
@@ -169,9 +181,10 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
 
 
 def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> None:
-    structural_fallback = Variants.of(
+    structural_fallback = _text_variants(
         Panel(tuple(Sep() for _ in range(35))),
         Text("compact details"),
+        priority=10,
     )
     document = (
         Text("x" * 5000, overflow=alts("summary")),
@@ -181,11 +194,11 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 
     result = plan(document, target=DISCORD_V2_DPY27)
 
-    assert result.report.events[0].code == "actions.grouped"
+    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
     assert "compact details" not in {
         node.content for node in result.scene.components_v2.children if isinstance(node, scene.Text)
     }
-    assert result.metrics.states_explored == 4
+    assert result.allocation is not None
 
 
 @pytest.mark.parametrize(
@@ -369,7 +382,7 @@ def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
     """One frontier: a lossless representation change beats a ladder step that costs loss."""
     document = (
         *(Paragraph(f"component {index}") for index in range(34)),
-        Variants.of(Panel((Text("rich"), Text("detail"))), Text("compact")),
+        _text_variants(Panel((Text("rich"), Text("detail"))), Text("compact")),
         ActionControls(_actions(5), key="demo"),
     )
 
@@ -377,18 +390,15 @@ def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
     rendered = _texts(result)
 
     assert "compact" not in rendered  # the ladder kept its preferred rung
-    assert any(event.code == "actions.grouped" for event in result.report.events)
-    assert not any(event.code.startswith("layout.degradation") for event in result.report.events)
+    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert not result.report.events
 
 
 def test_capability_filtering_keeps_rung_selection_stable() -> None:
     """Unsupported rungs are removed before search, so the survivors number from zero."""
-    ladder = Variants(
-        (
-            Variant((Text("needs an extension"),), requires=frozenset({"target.absent"})),
-            Variant((Panel((Text("rich"), Text("detail"))),)),
-            Variant((Text("compact"),)),
-        )
+    ladder = _text_variants(Text("needs an extension"), Panel((Text("rich"), Text("detail"))), Text("compact"))
+    ladder = replace(
+        ladder, variants=(replace(ladder.variants[0], requires=frozenset({"target.absent"})), *ladder.variants[1:])
     )
     document = (*(Paragraph(f"component {index}") for index in range(34)), ladder)
 

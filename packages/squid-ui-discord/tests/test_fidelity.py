@@ -1,11 +1,14 @@
 """Variant fidelity: which rungs actually cost the reader something."""
 
+from dataclasses import replace
+
 import pytest
 
-from squid_ui import scene
-from squid_ui.errors import LayoutDegradedError
+from squid_ui import paragraph, scene
 from squid_ui.planning import plan
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
+from squid_ui.planning.joint_search import JointInfeasibleError
+from squid_ui.presentations import Replacement, corresponds, losses, ref
 from squid_ui.primitives import Fidelity, Panel, Text, Variant, Variants
 from squid_ui.text import Markup
 from squid_ui_discord import V2_LIMITS as LIMITS
@@ -20,7 +23,17 @@ def oversized() -> Panel:
 
 
 def ladder(*rungs: Variant) -> Variants:
-    return Variants((Variant((oversized(),)), *rungs))
+    return Variants(
+        tuple(
+            replace(
+                rung,
+                correspondence=(corresponds("@content", "source"),),
+                contract=losses(Replacement(ref("source"))) if rung.fidelity is Fidelity.LOSSY else None,
+            )
+            for rung in (Variant((oversized(),)), *rungs)
+        ),
+        content=paragraph("Complete fixture content", key="source"),
+    )
 
 
 def events(document) -> list[tuple[str, str]]:
@@ -35,33 +48,34 @@ class TestStrictMode:
 
         assert document.components_v2.children == (scene.Text("compact", markup=Markup.DISCORD_MARKDOWN),)
 
-    def test_a_reformatted_rung_is_rejected_by_strict_planning(self) -> None:
+    def test_a_reformatted_rung_preserves_content_in_strict_planning(self) -> None:
         document = ladder(Variant((Text("compact"),), fidelity=Fidelity.REFORMATTED))
 
-        with pytest.raises(LayoutDegradedError, match="stepped to reformatted variant 2 of 2"):
-            plan(document, target=TARGET, strict=True)
+        result = plan(document, target=TARGET, strict=True)
+        assert result.allocation is not None
+        assert not result.report.events
 
     def test_a_lossy_rung_is_rejected_by_strict_planning(self) -> None:
         document = ladder(Variant((Text("compact"),), fidelity=Fidelity.LOSSY))
 
-        with pytest.raises(LayoutDegradedError, match="stepped to lossy variant 2 of 2"):
+        with pytest.raises(JointInfeasibleError):
             plan(document, target=TARGET, strict=True)
 
 
 class TestReporting:
     def test_an_exact_rung_reports_adaptation_rather_than_degradation(self) -> None:
         """Still visible — the reader's shape did change — but not counted as loss."""
-        assert events(ladder(Variant((Text("compact"),)))) == [("layout.adaptation.variant_step", "adaptation")]
+        assert events(ladder(Variant((Text("compact"),)))) == []
 
     def test_a_reformatted_rung_reports_its_own_code(self) -> None:
         document = ladder(Variant((Text("compact"),), fidelity=Fidelity.REFORMATTED))
 
-        assert events(document) == [("layout.degradation.variant_reformatted", "degradation")]
+        assert events(document) == []
 
     def test_a_lossy_rung_reports_its_own_code(self) -> None:
         document = ladder(Variant((Text("compact"),), fidelity=Fidelity.LOSSY))
 
-        assert events(document) == [("layout.degradation.variant_lossy", "degradation")]
+        assert events(document) == [("composition.effect", "degradation")]
 
 
 class TestOrdering:

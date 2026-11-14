@@ -20,6 +20,7 @@ from squid_ui.planning.cache import CachedPlan
 from squid_ui.planning.navigation import TurnPage, default_nav
 from squid_ui.planning.result import PlanMetrics, PlanReport, PlanReuse
 from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
+from squid_ui.presentations import corresponds, losses, omit, ref
 from squid_ui.primitives import (
     Button,
     Code,
@@ -202,20 +203,30 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
     cache = PlanCache()
 
     def document(handler):
+        button = Button("Run", handler, "run")
         return (
             *(Text(f"filler {index}") for index in range(35)),
-            Variants.of(
-                Panel(tuple(Text(f"detail {index}") for index in range(5))),
-                Row((Button("Run", handler, "run"),)),
+            Variants(
+                (
+                    Variant(
+                        (Panel((*tuple(Text(f"detail {index}") for index in range(5)), Row((button,)))),),
+                        correspondence=tuple(
+                            corresponds(ref("@content", "@0", f"@{index}"), "details") for index in range(5)
+                        ),
+                    ),
+                    Variant((Row((button,)),), contract=losses(omit("details"))),
+                ),
+                content=Stack((Paragraph("Details", key="details"), button)),
             ),
         )
 
     miss = plan(document(_first), target=DISCORD_V2_DPY27, cache=cache)
     hit = plan(document(_second), target=DISCORD_V2_DPY27, cache=cache)
 
-    assert not miss.metrics.cache_hit
-    assert hit.metrics.cache_hit
-    assert hit.scene is miss.scene
+    assert not miss.metrics.partition_hint
+    assert hit.metrics.partition_hint
+    assert hit.metrics.target_evaluations > 0
+    assert hit.scene == miss.scene
     assert hit.bindings["run"].handler is _second
 
 

@@ -15,6 +15,7 @@ from typing import Any, Protocol, override
 import discord
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
+from squid_ui.presentations import change_interaction, corresponds, losses, ref
 from squid_ui.primitives.nodes import (
     ControlGroup,
     Heading,
@@ -470,7 +471,26 @@ class RolePanel(Component[DiscordTarget, Any]):
                 min_values=category.cardinality.minimum,
                 max_values=maximum,
             )
-            nodes.append(Variants((Variant((ControlGroup(buttons),)), Variant((select,)))))
+            # Setting a selection replaces per-role toggles with a different route and
+            # cardinality. Declare that behavior change against each original button.
+            changes = tuple(
+                change_interaction(ref("@content", "@0", f"@{index}"), attribute=attribute)
+                for index in range(len(buttons))
+                for attribute in ("kind", "route_id", "disabled")
+            )
+            nodes.append(
+                Variants(
+                    (
+                        Variant((ControlGroup(buttons),)),
+                        Variant(
+                            (select,),
+                            contract=losses(*changes),
+                            correspondence=(corresponds("@content", "@content"),),
+                        ),
+                    ),
+                    key=category.key,
+                )
+            )
         return nodes
 
     async def _handle_toggle(

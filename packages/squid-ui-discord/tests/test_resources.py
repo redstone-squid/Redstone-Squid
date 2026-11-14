@@ -2,6 +2,7 @@
 
 import pytest
 
+from squid_ui import paragraph
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning import measure, plan
 from squid_ui.planning.layout_measurement.costing import measure_nodes
@@ -9,7 +10,8 @@ from squid_ui.planning.layout_measurement.model import MeasuredText
 from squid_ui.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
 from squid_ui.planning.limits import Axis
 from squid_ui.planning.resources import ResourceCost
-from squid_ui.primitives import Never, Panel, Text, Variants
+from squid_ui.presentations import corresponds
+from squid_ui.primitives import Never, Panel, Text, Variant, Variants
 from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import testing as sd
@@ -139,7 +141,13 @@ class TestParetoSearch:
         A search pruning on a single scalar prices the two steps against each other and can
         walk the wrong one twice; both budgets have to be satisfied, so both must step.
         """
-        wide = Variants.of(Panel(children=tuple(Text(f"w{index}") for index in range(20))), Text("w"))
+        wide = Variants(
+            tuple(
+                Variant((node,), correspondence=(corresponds("@content", "source"),))
+                for node in (Panel(tuple(Text(f"w{index}") for index in range(20))), Text("w"))
+            ),
+            content=paragraph("Wide fixture", key="source"),
+        )
         long = Variants.of(Text("x" * 3990, overflow=Never()), Text("x"))
         filler = [Text(f"f{index}") for index in range(19)]
 
