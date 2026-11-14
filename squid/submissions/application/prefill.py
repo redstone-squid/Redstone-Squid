@@ -97,7 +97,14 @@ def project_submission(
         orientation = {"Horizontal": "horizontal", "Upward": "vertical_up", "Downward": "vertical_down"}.get(
             source.extender_orientation or ""
         )
-        values.update({"movement_orientation": orientation, "extension_length": source.extension_length})
+        values.update(
+            {
+                "movement_orientation": orientation,
+                "extension_length": source.extension_length,
+                "extension_time": source.extension_time,
+                "retraction_time": source.retraction_time,
+            }
+        )
     answers.update({key: value for key, value in values.items() if value is not None and value != []})
     versions = options.get("approved_source_versions", ())
     exact_version = match_choice(

@@ -120,6 +120,8 @@ class BuildDraftPayload:
     extender_orientation: str | None = None
     extension_length: int | None = None
     extender_type: str | None = None
+    extension_time: int | None = None
+    retraction_time: int | None = None
 
     @classmethod
     def from_draft(cls, draft: BuildDraft) -> BuildDraftPayload:

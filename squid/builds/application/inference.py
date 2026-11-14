@@ -37,7 +37,10 @@ class InferredTiming(BaseModel):
 
     value: str | None = Field(description="One duration with a unit, such as 1.35s or 27gt; no prose or arithmetic.")
     qualifier: str | None = Field(
-        description="Source-stated input delay, estimates, or measurement caveats; not the same duration in another unit."
+        description=(
+            "Source-stated input delays, reset/seamless timings, estimates, or caveats; "
+            "never add these to the duration or repeat equivalent units."
+        )
     )
 
 
@@ -103,6 +106,12 @@ class InferredBuild(BaseModel):
     visible_closing_time: InferredTiming | None = Field(
         description="Explicitly stated visible closing duration, separately from full/true duration."
     )
+    extender_orientation: Literal["Horizontal", "Upward", "Downward"] | None = None
+    extension_length: int | None = Field(
+        default=None, description="Extender stroke in blocks; double/triple piston extenders have length 2/3."
+    )
+    extension_time: InferredTiming | None = Field(default=None, description="Explicit extender extension duration.")
+    retraction_time: InferredTiming | None = Field(default=None, description="Explicit extender retraction duration.")
     credits: list[InferredCredit] = Field(
         description="Every explicit attribution, including MC Username or IGN labels."
     )
@@ -465,6 +474,9 @@ class BuildInferenceService:
         build.door_expansion = inferred.door_expansion
         build.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
         build.dimensions = (inferred.build_width, inferred.build_height, inferred.build_depth)
+        if build.category is BuildCategory.EXTENDER:
+            build.extender_orientation = inferred.extender_orientation
+            build.extension_length = inferred.extension_length
         sources = {message.id: " ".join((message.content or "").split()) for message in build.source_messages}
         notes: list[str] = []
         for note in inferred.author_notes:
@@ -479,6 +491,8 @@ class BuildInferenceService:
             ("Closing", inferred.closing_time, "normal_closing_time"),
             ("Visible opening", inferred.visible_opening_time, "visible_opening_time"),
             ("Visible closing", inferred.visible_closing_time, "visible_closing_time"),
+            ("Extension", inferred.extension_time, "extension_time"),
+            ("Retraction", inferred.retraction_time, "retraction_time"),
         ):
             if timing is None:
                 continue

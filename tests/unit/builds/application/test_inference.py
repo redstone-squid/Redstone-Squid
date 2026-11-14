@@ -5,7 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from squid.builds.application import (
     BuildInferenceInput,
@@ -21,6 +21,7 @@ from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, C
 from squid.submissions.application.forms import build_submission_manifest
 from squid.submissions.application.prefill import project_submission
 from squid.submissions.domain import SubmissionOrigin
+from squid.submissions.infrastructure.inference_payloads import BuildDraftPayload
 from squid.versions.errors import InvalidVersionError
 from tests.support.expansion import expansion_document
 
@@ -640,3 +641,48 @@ def test_invalid_credit_names_are_isolated_and_keep_the_sender_fallback(name: st
     credits = BuildInferenceService._credits(value, source().primary)
     assert len(credits) == 1
     assert credits[0].attribution is CreditAttribution.ASSUMED_SENDER
+
+
+async def test_extender_stroke_and_timings_survive_retained_candidates_and_prefill() -> None:
+    value = inferred(
+        build_category="Piston Extender",
+        door_type=[],
+        door_orientation=None,
+        door_width=None,
+        door_height=None,
+        door_depth=None,
+        opening_time=None,
+        closing_time=None,
+        extender_orientation="Upward",
+        extension_length=2,
+        extension_time={"value": "0s", "qualifier": None},
+        retraction_time={"value": "0.25s", "qualifier": "6gt clockable"},
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    [build] = await service.infer(source(), model="test")
+    retained = (
+        TypeAdapter(BuildDraftPayload)
+        .validate_json(TypeAdapter(BuildDraftPayload).dump_json(BuildDraftPayload.from_draft(build)))
+        .to_draft()
+    )
+    projected = project_submission(retained, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+    assert projected.answers["movement_orientation"] == "vertical_up"
+    assert projected.answers["extension_length"] == 2
+    assert projected.answers["extension_time"] == 0
+    assert projected.answers["retraction_time"] == 5
+    description = projected.answers["description"]
+    assert isinstance(description, str)
+    assert "Retraction: 0.25s; 6gt clockable" in description
+
+
+async def test_seamless_and_reset_measurements_remain_separate_from_the_duration() -> None:
+    value = inferred(opening_time={"value": "0.1s", "qualifier": "0.25s seamless, 0.05s reset"})
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    [build] = await service.infer(source(), model="test")
+    assert build.normal_opening_time == 2
+    assert build.visible_opening_time is None
+    assert build.description == "Opening: 0.1s; 0.25s seamless, 0.05s reset"
