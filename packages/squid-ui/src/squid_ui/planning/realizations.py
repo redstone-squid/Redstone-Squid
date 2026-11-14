@@ -91,6 +91,10 @@ class FlowRealization:
 @dataclass(frozen=True, slots=True)
 class PanelRealization:
     accent: Color | None
+    framed: bool = True
+    thumbnail: str | None = None
+    heading: str = ""
+    kind: Literal["block", "section", "article"] = "block"
 
 
 @dataclass(frozen=True, slots=True)
@@ -719,7 +723,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 continuations=True,
             )
         return (RealizationOffer(occurrence, "text", payload, fragments=fragments),)
-    if isinstance(value, sem.Block | sem.Section | sem.Article) and not panels:
+    if isinstance(value, sem.Block) and not panels:
         return ()
     if isinstance(
         value,
@@ -743,8 +747,6 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.Unbreakable
         | sem.KeepWithNext,
     ):
-        if isinstance(value, sem.Section | sem.Article) and value.thumbnail is not None:
-            return ()
         refs = list(occurrence.graph.children.get(occurrence.reference, ()))
         context.work.consume(len(refs))
         if isinstance(value, sem.Region):
@@ -771,15 +773,22 @@ def semantic_offers[RenderTargetT, ContextT](
             )
             for ref in refs
         )
-        payload = (
-            PanelRealization(resolve_accent(value.accent, context.palette))
-            if isinstance(value, sem.Block | sem.Section | sem.Article)
-            and panels
-            and (nested_panels or not inside_panel or isinstance(value, sem.Block))
-            else ActionsRealization()
-            if isinstance(value, sem.ActionControls | sem.ControlGroup)
-            else FlowRealization()
-        )
+        if isinstance(value, sem.Section | sem.Article):
+            payload = PanelRealization(
+                resolve_accent(value.accent, context.palette),
+                framed=panels and (nested_panels or not inside_panel),
+                thumbnail=value.thumbnail,
+                heading="".join(
+                    tree.plain(node) for node in resolve_text(value.heading.content, context.localization).nodes
+                ),
+                kind="section" if isinstance(value, sem.Section) else "article",
+            )
+        elif isinstance(value, sem.Block):
+            payload = PanelRealization(resolve_accent(value.accent, context.palette))
+        elif isinstance(value, sem.ActionControls | sem.ControlGroup):
+            payload = ActionsRealization()
+        else:
+            payload = FlowRealization()
         region = None
         if isinstance(value, sem.Region | sem.Paged):
             parent = occurrence.graph.units[occurrence.reference].parent

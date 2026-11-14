@@ -262,12 +262,28 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                             download.asset.key, download.asset.name, download.asset.media_type, download.spoiler
                         ),
                     )
-                case PanelRealization():
-                    components += 1
-                    if in_panel:
+                case PanelRealization() as panel:
+                    components += int(panel.framed)
+                    if in_panel and panel.framed:
                         violations.append(ConstraintViolation(part.offer.occurrence.identity, "nested V2 container"))
-                    children = tuple(node for child in part.children for node in visit(child, in_panel=True))
-                    return (scene.Panel(children, part.offer.payload.accent),)
+                    children = tuple(
+                        node for child in part.children for node in visit(child, in_panel=in_panel or panel.framed)
+                    )
+                    if panel.thumbnail is not None:
+                        if not children or not isinstance(children[0], scene.Text):
+                            violations.append(
+                                ConstraintViolation(part.offer.occurrence.identity, "thumbnail needs a heading")
+                            )
+                        else:
+                            components += 2
+                            if self.limits.section_texts < 1:
+                                violations.append(
+                                    LocalCapacityExceeded(
+                                        part.offer.occurrence.identity, "section.texts", 1, self.limits.section_texts
+                                    )
+                                )
+                            children = (scene.Section((children[0],), scene.Thumbnail(panel.thumbnail)), *children[1:])
+                    return (scene.Panel(children, panel.accent),) if panel.framed else children
                 case FlowRealization():
                     return tuple(node for child in part.children for node in visit(child, in_panel=in_panel))
                 case unknown:
@@ -377,6 +393,17 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     if use is None or (node.name, node.media_type) != (use.value.name, use.value.media_type):
                         message = "built file disagrees with its declared shared asset"
                         raise DrawInvariantError(message)
+                case scene.Section(texts=children, accessory=accessory):
+                    if not 1 <= len(children) <= self.limits.section_texts or not isinstance(
+                        accessory, scene.Thumbnail
+                    ):
+                        message = "built thumbnail section violates its structure"
+                        raise DrawInvariantError(message)
+                    for child in children:
+                        visit(child, in_panel=in_panel)
+                    visit(accessory, in_panel=in_panel)
+                case scene.Thumbnail():
+                    pass
                 case scene.Panel():
                     if in_panel:
                         message = "built V2 container is nested inside another container"

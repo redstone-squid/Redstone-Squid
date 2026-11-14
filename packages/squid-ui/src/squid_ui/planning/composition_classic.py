@@ -128,15 +128,30 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                 case TableRealization() as table:
                     for nodes in record_text(table):
                         text(markdown(nodes))
-                case PanelRealization(accent=accent):
-                    if embedded:
-                        violations.append(UnsupportedCapability(identity, "nested classic embeds"))
-                    description: list[str] = []
-                    for child in part.children:
-                        visit(child, description, embedded=True)
-                    value = "\n".join(description)
-                    limit("embed.description", len(value), self.limits.embeds.description)
-                    embeds.append(scene.Embed(description=value or None, colour=accent))
+                case PanelRealization() as panel:
+                    if not panel.framed:
+                        if panel.thumbnail is not None:
+                            violations.append(
+                                UnsupportedCapability(identity, "thumbnail inside an enclosing classic embed")
+                            )
+                        for child in part.children:
+                            visit(child, output, embedded=embedded)
+                    else:
+                        if embedded:
+                            violations.append(UnsupportedCapability(identity, "nested classic embeds"))
+                        description: list[str] = []
+                        for child in part.children:
+                            visit(child, description, embedded=True)
+                        value = "\n".join(description)
+                        limit("embed.description", len(value), self.limits.embeds.description)
+                        embeds.append(
+                            scene.Embed(
+                                description=value or None,
+                                colour=panel.accent,
+                                thumbnail=scene.EmbedMedia(panel.thumbnail) if panel.thumbnail is not None else None,
+                            )
+                        )
+
                 case ControlRealization() as control:
                     limit("row.buttons", 1, self.limits.components.row_buttons)
                     limit("button.label", len(control.label), self.limits.components.button_label)

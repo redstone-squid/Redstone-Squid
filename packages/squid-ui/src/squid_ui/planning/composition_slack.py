@@ -25,6 +25,7 @@ from squid_ui.planning.realizations import (
     ControlRealization,
     FlowRealization,
     ImageRealization,
+    PanelRealization,
     Realization,
     RowRealization,
     SelectRealization,
@@ -397,6 +398,18 @@ class SlackCompositionRules[
                         texts.append(media.description)
                         prepared_blocks.append(scene.SlackImage(media.source, media.description))
                         blocks += 1
+                case PanelRealization() as panel:
+                    if panel.framed:
+                        violations.append(UnsupportedCapability(identity, "Slack panel framing"))
+                    if panel.accent is not None:
+                        violations.append(UnsupportedCapability(identity, "Slack section accent"))
+                    for index, child in enumerate(part.children):
+                        visit(child)
+                        if index == 0 and panel.thumbnail is not None:
+                            limit("image.url", len(panel.thumbnail), self.limits.components.url)
+                            prepared_blocks.append(scene.SlackImage(panel.thumbnail, panel.heading))
+                            texts.append(panel.heading)
+                            blocks += 1
                 case FlowRealization():
                     for child in part.children:
                         visit(child)

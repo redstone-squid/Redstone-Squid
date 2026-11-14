@@ -280,10 +280,19 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                     )
                 case FlowRealization() | RowRealization() | ActionsRealization():
                     return tuple(node for child in part.children for node in visit(child))
-                case PanelRealization(accent=accent):
+                case PanelRealization() as panel:
                     children = tuple(node for child in part.children for node in visit(child))
-                    colour = scene.HtmlColourRef(accent) if accent is not None else None
-                    return (scene.HtmlElement(scene.HtmlTag.DIV, children, colour=colour),)
+                    if panel.thumbnail is not None:
+                        thumbnail = scene.HtmlElement(
+                            scene.HtmlTag.IMG,
+                            (),
+                            attributes=(scene.HtmlAttribute(scene.HtmlAttributeName.ALT, panel.heading),),
+                            url=scene.HtmlUrlRef(panel.thumbnail),
+                        )
+                        children = (*children[:1], thumbnail, *children[1:])
+                    colour = scene.HtmlColourRef(panel.accent) if panel.accent is not None else None
+                    tag = scene.HtmlTag.DIV if panel.kind == "block" else scene.HtmlTag(panel.kind)
+                    return (scene.HtmlElement(tag, children, colour=colour),)
                 case ImageRealization() as media:
                     asset = media.source if isinstance(media.source, Asset) else None
                     if asset is not None:

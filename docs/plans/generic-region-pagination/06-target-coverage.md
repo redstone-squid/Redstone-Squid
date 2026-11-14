@@ -64,7 +64,10 @@ realizations remain target-specific: for example, classic displays an image's
 alternative description as embed text, and Slack requires plain text in headers
 and native table cells. Slack rich inline text is encoded directly; combinations
 that cannot preserve literal punctuation in mrkdwn are refused instead of silently
-changing it. Section/article thumbnails are not shared offers yet.
+changing it. Section/article thumbnails repeat with their headings on every page.
+V2 uses a heading accessory, classic uses the owning embed thumbnail, HTML keeps
+the native section/article element, and Slack places an image after the heading.
+Classic rejects thumbnails inside an enclosing embed; Slack rejects section accents.
 
 Actions keep ordered button rows and may offer a select when every action permits
 grouping. A select must fit the target's option and cardinality limits; cross-page
@@ -93,9 +96,9 @@ arbitrary replacement text. Native extensions are usable through explicit custom
 composition rules, rather than an opaque production backend probe.
 
 Stateful semantic widgets beyond choices/toggles (such as disclosure/item navigation
-and native entity discovery), and section thumbnails still retain their non-region
-planners. Palette overrides and status/progress content now use shared composition. Their current adapters
-combine state selection, adaptation, and target lowering; migrating them requires
+and native entity discovery) still retain their non-region planners. Palette overrides,
+status/progress content and section thumbnails now use shared composition. The
+remaining widget adapters combine state selection, adaptation, and target lowering; migrating them requires
 explicit offers that preserve those contracts. This is a consciously deferred
 vocabulary extension, not a claim that the underlying platforms lack these features.
 The retained fitters remain active machinery and are not removed as dead code.
@@ -154,3 +157,10 @@ The core UI suite and focused Discord region/pressure suites pass (1,164 tests).
 Whole-project type checking found no errors in these changes, but currently fails
 on an unrelated in-progress range-publication test comparing an optional SQL scalar
 to an integer. Phase 6 remains open for the other integration work above.
+
+## Continuation: section and article thumbnails
+
+Thumbnail placement and costs now participate in shared composition. Tests cover
+repeated headings, reserved capacity, nested V2 sections, explicit classic/Slack
+limitations, and retained-allocation invalidation when an image changes. The core
+UI suite passes (1,143 tests), and whole-project Pyrefly reports zero errors.
