@@ -78,8 +78,8 @@ class PresentForm[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
 
 
 @dataclass(frozen=True, slots=True)
-class ChoiceCommit(_HandlerComposition):
-    ownership: ChoiceOwnership
+class ChoiceCommit[ContextT = object](_HandlerComposition):
+    ownership: ChoiceOwnership[ContextT]
     key: str
     previous: tuple[str, ...]
     session: PresentationState
@@ -89,7 +89,7 @@ class ChoiceCommit(_HandlerComposition):
         ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
-    async def commit(self, event: ActionEvent, selected: tuple[str, ...]) -> None:
+    async def commit(self, event: ActionEvent[ContextT], selected: tuple[str, ...]) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
                 await on_change(
@@ -111,8 +111,8 @@ class ChoiceCommit(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class ChooseChoice(GeneratedHandler[PressEvent]):
-    commit: ChoiceCommit
+class ChooseChoice[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+    commit: ChoiceCommit[ContextT]
     key: str
 
     @override
@@ -121,13 +121,13 @@ class ChooseChoice(GeneratedHandler[PressEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: PressEvent) -> None:
+    async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.commit.commit(event, (self.key,))
 
 
 @dataclass(frozen=True, slots=True)
-class SelectChoices(GeneratedHandler[SelectionEvent]):
-    commit: ChoiceCommit
+class SelectChoices[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]]):
+    commit: ChoiceCommit[ContextT]
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -135,13 +135,13 @@ class SelectChoices(GeneratedHandler[SelectionEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: SelectionEvent) -> None:
+    async def __call__(self, event: SelectionEvent[ContextT]) -> None:
         await self.commit.commit(event, event.values)
 
 
 @dataclass(frozen=True, slots=True)
-class EntityCommit(_HandlerComposition):
-    ownership: EntityOwnership
+class EntityCommit[ContextT = object](_HandlerComposition):
+    ownership: EntityOwnership[ContextT]
     key: str
     previous: tuple[EntityRef, ...]
     session: PresentationState
@@ -151,7 +151,7 @@ class EntityCommit(_HandlerComposition):
         ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
-    async def commit(self, event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
+    async def commit(self, event: ActionEvent[ContextT], selected: tuple[EntityRef, ...]) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
                 await on_change(
@@ -173,8 +173,8 @@ class EntityCommit(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class SelectEntities(GeneratedHandler[EntitySelectionEvent]):
-    commit: EntityCommit
+class SelectEntities[ContextT = object](GeneratedHandler[EntitySelectionEvent[ContextT]]):
+    commit: EntityCommit[ContextT]
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -182,13 +182,13 @@ class SelectEntities(GeneratedHandler[EntitySelectionEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: EntitySelectionEvent) -> None:
+    async def __call__(self, event: EntitySelectionEvent[ContextT]) -> None:
         await self.commit.commit(event, event.values)
 
 
 @dataclass(frozen=True, slots=True)
-class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
-    commit: EntityCommit
+class SelectEntityFallback[ContextT = object](GeneratedHandler[ChoiceEvent[ContextT]]):
+    commit: EntityCommit[ContextT]
     by_key: Mapping[str, EntityRef]
 
     @override
@@ -197,7 +197,7 @@ class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: ChoiceEvent) -> None:
+    async def __call__(self, event: ChoiceEvent[ContextT]) -> None:
         await self.commit.commit(event, tuple(self.by_key[key] for key in event.selected if key in self.by_key))
 
 
@@ -255,8 +255,8 @@ class FocusItem(GeneratedHandler[SelectionEvent]):
 
 
 @dataclass(frozen=True, slots=True)
-class NavigationCommit(_HandlerComposition):
-    ownership: NavOwnership
+class NavigationCommit[ContextT = object](_HandlerComposition):
+    ownership: NavOwnership[ContextT]
     key: str
     session: PresentationState
 
@@ -265,7 +265,7 @@ class NavigationCommit(_HandlerComposition):
         ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
-    async def commit(self, event: ActionEvent, destination: str) -> None:
+    async def commit(self, event: ActionEvent[ContextT], destination: str) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
                 await on_change(
@@ -280,8 +280,8 @@ class NavigationCommit(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class SelectDestination(GeneratedHandler[SelectionEvent]):
-    commit: NavigationCommit
+class SelectDestination[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]]):
+    commit: NavigationCommit[ContextT]
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -289,14 +289,14 @@ class SelectDestination(GeneratedHandler[SelectionEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: SelectionEvent) -> None:
+    async def __call__(self, event: SelectionEvent[ContextT]) -> None:
         if event.values:
             await self.commit.commit(event, event.values[0])
 
 
 @dataclass(frozen=True, slots=True)
-class GoToDestination(GeneratedHandler[PressEvent]):
-    commit: NavigationCommit
+class GoToDestination[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+    commit: NavigationCommit[ContextT]
     key: str
 
     @override
@@ -305,7 +305,7 @@ class GoToDestination(GeneratedHandler[PressEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: PressEvent) -> None:
+    async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.commit.commit(event, self.key)
 
 

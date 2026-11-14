@@ -7,7 +7,7 @@ from typing import Literal
 
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.interaction_semantics import Interaction, interaction_changes
+from squid_ui.planning.interaction_semantics import Interaction, NavigationChoice, interaction_changes
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import (
     Alternative,
@@ -130,6 +130,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.FormTrigger()
             | sem.Choices()
             | sem.Entities()
+            | sem.Navigation()
             | sem.Toggle()
             | sem.RoutedChoices()
             | sem.Region()
@@ -224,6 +225,10 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, item in enumerate(value.items):
                     visit(item, root, i)
+            case sem.Navigation():
+                root = add(value, path, parent, atomic=False)
+                for option in value.options:
+                    add(NavigationChoice(value, option), (*path, option.key), root, atomic=True)
             case sem.ActionControls():
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
@@ -307,6 +312,7 @@ def interaction[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, Con
             | sem.FormTrigger()
             | sem.Choices()
             | sem.Entities()
+            | NavigationChoice()
             | sem.RoutedChoices()
         ):
             return value
@@ -472,7 +478,7 @@ class SourceScope[RenderTargetT, ContextT]:
     def page_boundary(self, presentation: SemanticRef) -> SemanticRef:
         """Locate a preserved pager in the authored graph, across nested alternatives."""
         value = self.checked.presentation.units[presentation].value
-        if not isinstance(value, sem.Region | sem.Paged | sem.List | TextPages):
+        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | TextPages):
             message = "page boundary resolution needs a pagination scope"
             raise LayoutInvariantError(message)
         covered = frozenset(
@@ -484,7 +490,7 @@ class SourceScope[RenderTargetT, ContextT]:
         matches = [
             reference
             for reference, unit in self.checked.source.units.items()
-            if isinstance(unit.value, sem.Region | sem.Paged | sem.List | TextPages)
+            if isinstance(unit.value, sem.Region | sem.Paged | sem.List | sem.Navigation | TextPages)
             and type(unit.value) is type(value)
             and unit.value.key == value.key
             and covered <= self.checked.source.atoms(reference)
@@ -502,7 +508,15 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
         constraint = unit.value
         if not isinstance(
             constraint,
-            Budget | sem.Budgeted | sem.Unbreakable | sem.KeepWithNext | sem.Paged | sem.Region | sem.List | TextPages,
+            Budget
+            | sem.Budgeted
+            | sem.Unbreakable
+            | sem.KeepWithNext
+            | sem.Paged
+            | sem.Region
+            | sem.List
+            | sem.Navigation
+            | TextPages,
         ):
             continue
         inside = checked.source.atoms(reference)
@@ -546,6 +560,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.header,
                         other.footer,
                     )
+                case sem.Navigation(), sem.Navigation():
+                    preserved = (constraint.key, constraint.current) == (other.key, other.current)
                 case sem.List(), sem.List():
                     preserved = (constraint.key, constraint.page, constraint.page_size) == (
                         other.key,

@@ -86,6 +86,8 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             )
         case ((sem.Choices() | sem.Entities()), (sem.Choices() | sem.Entities())):
             return isinstance(left.selection, Controlled) and left == right
+        case sem.Navigation(), sem.Navigation():
+            return isinstance(left.current, Controlled) and left == right
         case sem.Toggle(), sem.Toggle():
             # Session-owned values can change without changing the authored node.
             return isinstance(left.on, Controlled) and left == right

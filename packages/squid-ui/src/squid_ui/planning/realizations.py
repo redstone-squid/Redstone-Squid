@@ -38,6 +38,7 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
+from squid_ui.planning.interaction_semantics import NavigationChoice
 from squid_ui.planning.pagination_content import RootRegion, TextPages
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_adaptation.common import _button_style
@@ -45,14 +46,17 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     ChoiceCommit,
     EntityCommit,
     FlipToggle,
+    GoToDestination,
+    NavigationCommit,
     PresentForm,
     RouteSelection,
     SelectChoices,
+    SelectDestination,
     SelectEntities,
     SelectEntityFallback,
 )
 from squid_ui.planning.semantics import SourceScope, StructuralGroup, UnsupportedSemanticError, check_alternative
-from squid_ui.planning.structure import resolve_accent, toggle_state
+from squid_ui.planning.structure import navigation_current, resolve_accent, toggle_state
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
@@ -169,6 +173,7 @@ class ControlRealization:
     disabled: bool = False
     mode: ActionMode = ActionMode.EXCLUSIVE
     emoji: Emoji | None = None
+    current: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,10 +185,16 @@ class RowRealization:
 class ActionsRealization:
     """Ordered buttons that may occupy multiple target action rows."""
 
+    navigation: bool = False
+
 
 @dataclass(frozen=True, slots=True)
 class SelectRealization:
     node: scene.Select | scene.RoutedSelect
+    navigation: bool = False
+
+    def fragment(self, start: int, end: int) -> Realization:
+        return replace(self, node=replace(self.node, options=self.node.options[start:end]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -558,6 +569,96 @@ def semantic_offers[RenderTargetT, ContextT](
         if isinstance(resolved, UnsupportedText):
             return ()
         return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
+    if isinstance(value, NavigationChoice):
+        navigation, option = value.navigation, value.option
+        current = navigation_current(navigation, context.presentation)
+        key = _control_key(occurrence, context)
+        label = "".join(tree.plain(node) for node in resolve_text(option.label, context.localization).nodes)
+        return (
+            RealizationOffer(
+                occurrence,
+                "destination",
+                ControlRealization(
+                    label,
+                    action=key,
+                    style=ActionStyle.PRIMARY if option.key == current else ActionStyle.SECONDARY,
+                    current=option.key == current,
+                ),
+                interaction=True,
+                binding=ActionBinding(
+                    key,
+                    GoToDestination(
+                        NavigationCommit(navigation.current, navigation.key, context.presentation), option.key
+                    ),
+                    label=option.label,
+                ),
+            ),
+        )
+    if isinstance(value, sem.Navigation):
+        refs = occurrence.graph.children.get(occurrence.reference, ())
+        available = tuple((ref, option) for ref, option in zip(refs, value.options, strict=True) if option.available)
+        context.work.consume(len(refs))
+        cursor_key = f"{value.key}.destinations"
+        contract = RegionContract(
+            cursor_key, RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key), cursor_key=cursor_key
+        )
+        individual = RealizationOffer(
+            occurrence,
+            "navigation.individual",
+            ActionsRealization(navigation=True),
+            tuple(
+                SemanticOccurrence(
+                    OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                    occurrence.graph,
+                    ref,
+                    occurrence.placement,
+                    occurrence.origin,
+                    palette=context.palette,
+                )
+                for ref, _ in available
+            ),
+            flow=True,
+            region=contract,
+        )
+        if not available:
+            return (individual,)
+        current = navigation_current(value, context.presentation)
+        key = _control_key(occurrence, context)
+        payload = SelectRealization(
+            scene.Select(
+                tuple(
+                    scene.Option(
+                        "".join(tree.plain(node) for node in resolve_text(option.label, context.localization).nodes),
+                        option.key,
+                        default=option.key == current,
+                    )
+                    for _, option in available
+                ),
+                key,
+            ),
+            navigation=True,
+        )
+        grouped = RealizationOffer(
+            occurrence,
+            "navigation.grouped",
+            payload,
+            interaction=True,
+            binding=ActionBinding(
+                key, SelectDestination(NavigationCommit(value.current, value.key, context.presentation))
+            ),
+            fragments=FragmentContract(
+                tuple(frozenset({ref}) for ref, _ in available), tuple(range(1, len(available) + 1)), payload.fragment
+            ),
+            region=contract,
+        )
+        prefer_grouped = value.display == sem.NavigationDisplay.GROUPED or (
+            value.display == sem.NavigationDisplay.AUTO and len(available) > 5
+        )
+        return (
+            (grouped, replace(individual, preference=1))
+            if prefer_grouped
+            else (individual, replace(grouped, preference=1))
+        )
     if isinstance(value, sem.Entities):
         previous = (
             value.selection.value

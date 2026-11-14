@@ -91,7 +91,7 @@ def test_navigation_groups_six_destinations() -> None:
     assert isinstance(plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
 
 
-def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
+def test_large_semantic_pickers_keep_keyed_pages_within_native_limits() -> None:
     choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)))
     items = Items(
         "catalog",
@@ -111,7 +111,15 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     navigation_select = next(
         node for node in navigation_plan.scene.components_v2.children if isinstance(node, scene.Select)
     )
-    assert [len(choice_select.options), len(item_select.options), len(navigation_select.options)] == [11, 11, 11]
+    assert [len(choice_select.options), len(item_select.options)] == [11, 11]
+    assert 1 <= len(navigation_select.options) <= 25
+    first_navigation = plan(navigation, target=DISCORD_V2_DPY27)
+    first_select = next(
+        node for node in first_navigation.scene.components_v2.children if isinstance(node, scene.Select)
+    )
+    assert [option.value for option in (*first_select.options, *navigation_select.options)] == [
+        str(i) for i in range(36)
+    ]
     assert [(pager.key, pager.page, pager.pages) for pager in choice_plan.scene.pagers] == [("size.choices", 1, 2)]
     assert [(pager.key, pager.page, pager.pages) for pager in item_plan.scene.pagers] == [("catalog.items", 1, 2)]
     assert [(pager.key, pager.page, pager.pages) for pager in navigation_plan.scene.pagers] == [

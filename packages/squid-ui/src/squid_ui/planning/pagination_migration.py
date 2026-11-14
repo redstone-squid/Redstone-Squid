@@ -45,7 +45,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     def visit(node: Renderable[RenderTargetT]) -> Renderable[RenderTargetT]:
         nonlocal pageable, combinations
         match node:
-            case sem.Region() | sem.Paged() | sem.List():
+            case sem.Region() | sem.Paged() | sem.List() | sem.Navigation():
                 pageable = True
                 if isinstance(node, sem.Paged):
                     if not isinstance(limits, V2Limits):
@@ -59,7 +59,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                         header=tuple(map(visit, node.header)),
                         footer=tuple(map(visit, node.footer)),
                     )
-                if node.page_size is not None:
+                if isinstance(node, sem.List) and node.page_size is not None:
                     combinations *= max(1, (len(node.items) + node.page_size - 1) // node.page_size)
                 return node
             case sem.Group() | sem.Stack() | sem.Block() | sem.Cluster() | sem.Section() | sem.Article() | sem.Themed():

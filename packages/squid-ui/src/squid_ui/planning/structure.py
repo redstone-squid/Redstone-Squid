@@ -95,7 +95,7 @@ def item_state(node: Items[Any], session: PresentationState) -> tuple[str | None
             return opened, node.key in session.selections or initial is not None
 
 
-def navigation_current(node: Navigation, session: PresentationState) -> str | None:
+def navigation_current[ContextT](node: Navigation[ContextT], session: PresentationState) -> str | None:
     """The current destination, defaulting to the first available one.
 
     A remembered destination that has since gone unavailable is the engine's own stale

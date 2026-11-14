@@ -96,7 +96,8 @@ arbitrary replacement text. Native extensions are usable through explicit custom
 composition rules, rather than an opaque production backend probe.
 
 Stateful semantic widgets beyond choices/toggles/entities (such as disclosure and
-item navigation) still retain their non-region planners. Palette overrides,
+item selection) still retain their non-region planners. Navigation now uses shared
+offers with destination ownership separate from layout page coordinates. Palette overrides,
 status/progress content and section thumbnails now use shared composition. The
 remaining widget adapters combine state selection, adaptation, and target lowering; migrating them requires
 explicit offers that preserve those contracts. This is a consciously deferred
@@ -174,3 +175,12 @@ role/mentionable discovery or incompatible conversation filters directly. Contro
 on other pages produce no live bindings; session selection changes rebuild output.
 The core UI and focused Discord entity/region suites pass (1,207 tests), and
 whole-project Pyrefly reports zero errors.
+
+## Continuation: navigation ownership
+
+Navigation now offers individual buttons and grouped selectors through shared
+search. Destination options retain their owner in the semantic graph, so checked
+alternatives cannot silently replace callbacks. Crowded menus use an independent
+layout pager and preserve their selected destination across page turns. HTML keeps
+its navigation element and current-page marker. Exact legacy cuts may change;
+coverage and native option limits remain enforced.

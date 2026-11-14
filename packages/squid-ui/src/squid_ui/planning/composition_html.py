@@ -119,6 +119,8 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                     attributes = (
                         (scene.HtmlAttribute(scene.HtmlAttributeName.DISABLED, "disabled"),) if control.disabled else ()
                     )
+                    if control.current:
+                        attributes += (scene.HtmlAttribute(scene.HtmlAttributeName.ARIA_CURRENT, "page"),)
                     return (
                         scene.HtmlElement(
                             scene.HtmlTag.A if control.url is not None else scene.HtmlTag.BUTTON,
@@ -199,7 +201,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             form=scene.HtmlFormRef(control.action, control.action),
                         ),
                     )
-                case SelectRealization(node=control):
+                case SelectRealization(node=control, navigation=navigation):
                     if not 0 <= control.min_values <= control.max_values <= len(control.options):
                         violations.append(ConstraintViolation(part.offer.occurrence.identity, "select cardinality"))
                     texts.extend(option.label for option in control.options)
@@ -223,7 +225,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         )
                         for option in control.options
                     )
-                    return (
+                    result = (
                         scene.HtmlElement(
                             scene.HtmlTag.SELECT,
                             options,
@@ -244,6 +246,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             else None,
                         ),
                     )
+                    return (scene.HtmlElement(scene.HtmlTag.NAV, result),) if navigation else result
                 case TextSequenceRealization() as sequence:
                     if sequence.list_ordered is not None:
                         items = tuple(
@@ -345,6 +348,12 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                                 scene.HtmlElement(scene.HtmlTag.THEAD, (heading,)),
                                 scene.HtmlElement(scene.HtmlTag.TBODY, rows),
                             ),
+                        ),
+                    )
+                case ActionsRealization(navigation=True):
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.NAV, tuple(node for child in part.children for node in visit(child))
                         ),
                     )
                 case FlowRealization() | RowRealization() | ActionsRealization():
