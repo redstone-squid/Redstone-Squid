@@ -9,7 +9,8 @@ is needed for those messages.
     async def edit_build(interaction: discord.Interaction[Bot], build_id: int) -> None: ...
 
 Decorated handlers expose ``.id(...)`` to build control IDs and ``.route`` for the
-underlying Route. Their handles stay current when the same router or group is reloaded. Parameter names are checked when the handler registers, so a misspelling fails
+underlying Route. Their handles stay current when the same router or group is reloaded.
+Parameter names are checked when the handler registers, so a misspelling fails
 at registration instead of on a click. Call ``router.register(client)`` after defining
 routes to install dispatch; existing handlers can later be replaced during reloads.
 
@@ -21,35 +22,35 @@ Use ``squid_ui_discord.testing.interaction_harness`` with ``Router.dispatch`` to
 handlers without a bot, gateway, or real message.
 """
 
-from squid_ui.routing import Route as Route
+from squid_ui.routing import Route
 
+from ._client import routers
 from ._contracts import (
-    GoneHook as GoneHook,
+    GoneHook,
+    Middleware,
+    RouteComponent,
+    RouteDescription,
+    RouteHandle,
+    RouteHandler,
+    RouteLike,
+    RouteProceed,
+    RouteRequest,
 )
-from ._contracts import (
-    Middleware as Middleware,
-)
-from ._contracts import (
-    RouteComponent as RouteComponent,
-)
-from ._contracts import (
-    RouteDescription as RouteDescription,
-)
-from ._contracts import (
-    RouteHandle as RouteHandle,
-)
-from ._contracts import (
-    RouteHandler as RouteHandler,
-)
-from ._contracts import (
-    RouteLike as RouteLike,
-)
-from ._contracts import (
-    RouteProceed as RouteProceed,
-)
-from ._contracts import (
-    RouteRequest as RouteRequest,
-)
-from ._groups import RouteGroup as RouteGroup
-from ._router import Router as Router
-from ._router import routers as routers
+from ._groups import RouteGroup
+from ._router import Router
+
+__all__ = [
+    "GoneHook",
+    "Middleware",
+    "Route",
+    "RouteComponent",
+    "RouteDescription",
+    "RouteGroup",
+    "RouteHandle",
+    "RouteHandler",
+    "RouteLike",
+    "RouteProceed",
+    "RouteRequest",
+    "Router",
+    "routers",
+]

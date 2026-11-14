@@ -2,25 +2,21 @@
 
 import logging
 import re
-import weakref
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from types import MappingProxyType
-from typing import Any, Concatenate, Self, cast, override
+from typing import Any, Concatenate
 
-import anyio
 import discord
 
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceResult, TraceStatus
+from squid_ui.profiling import NoOpProfiler, Profiler
 from squid_ui.routing import Route
 from squid_ui.target_types import DiscordPyAdapter
-from squid_ui.text import NEUTRAL, localization_scope
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.message_root_contracts import ErrorHook
-from squid_ui_discord.request import request as resolve_request
-from squid_ui_discord.runtime import DiscordUIRuntimeMissing
 
+from ._client import install
 from ._contracts import (
     GoneHook,
     Middleware,
@@ -29,24 +25,15 @@ from ._contracts import (
     RouteHandle,
     RouteHandler,
     RouteLike,
-    RouteProceed,
     RouteRequest,
     _accepted,
     _Registration,
 )
+from ._dispatch import execute
 from ._groups import RouteGroup
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("squid_ui_discord.routing")
 _NOOP_PROFILER = NoOpProfiler()
-
-_INSTALLED: weakref.WeakKeyDictionary[discord.Client, list[Router[Any]]] = weakref.WeakKeyDictionary()
-"""Routers installed per client, so `register` can refuse the second router a click would wake."""
-
-
-def routers[ClientT: discord.Client](client: ClientT) -> tuple[Router[ClientT], ...]:
-    """Return a read-only snapshot of the routers installed on ``client``."""
-    installed = cast(list[Router[ClientT]], _INSTALLED.get(client, ()))
-    return tuple(installed)
 
 
 class Router[BotT: discord.Client]:
@@ -348,19 +335,7 @@ class Router[BotT: discord.Client]:
         Different routers with overlapping IDs are rejected because discord.py dispatches
         every matching dynamic-item template, which would run more than one handler per click.
         """
-        for group in self._groups:
-            group._freeze()
-        installed = _INSTALLED.setdefault(client, [])
-        if self in installed:
-            return
-        for other in installed:
-            collision = self._collision(other)
-            if collision is not None:
-                message = f"client already has a router this one collides with: {collision}"
-                raise ValueError(message)
-        self._registered = True
-        installed.append(self)
-        client.add_dynamic_items(_dispatch_item(self))
+        install(self, client)
 
     def _collision(self, other: Router[Any]) -> str | None:
         """Why this router's accepted ids intersect ``other``'s, or None if disjoint.
@@ -442,172 +417,16 @@ class Router[BotT: discord.Client]:
             matched_alias=(registration is not None and registration.route.pattern.fullmatch(custom_id) is None),
         )
 
-        middleware = self._middleware_for(request.group_prefix)
-        trace_name = registration.route.format if registration is not None else source
-        with self.profiler.operation(
-            OperationKind.ROUTE_DISPATCH,
-            name=trace_name,
-            attributes={
-                "component": component.value,
-                "matched_alias": request.matched_alias,
-                "middleware": len(middleware),
-                "actor": interaction.user.id,
-            },
-        ) as profile:
-            acknowledgement = profile.start_span("acknowledgement")
-
-            def finish_acknowledgement(source: str) -> None:
-                if interaction.response.is_done():
-                    acknowledgement.set_attribute("source", source)
-                    acknowledgement.finish()
-
-            async def endpoint() -> None:
-                with profile.span("handler"):
-                    await operation()
-                finish_acknowledgement("handler")
-
-            async def dispatch_operation() -> None:
-                try:
-                    localization = (await resolve_request(interaction)).localization
-                except DiscordUIRuntimeMissing:
-                    localization = NEUTRAL
-                try:
-                    with localization_scope(localization):
-                        handled = await self._run_middleware(middleware, request, endpoint, profile=profile)
-                except Exception as error:
-                    profile.set_result(
-                        TraceResult(TraceStatus.FAILED, f"{type(error).__module__}.{type(error).__qualname__}")
-                    )
-                    with localization_scope(localization), profile.span("error_hook"):
-                        await self._handle_error(interaction, error, source)
-                    finish_acknowledgement("error_hook")
-                else:
-                    profile.set_result(TraceResult(TraceStatus.COMPLETED, None if handled else "short_circuited"))
-
-            async def watchdog() -> None:
-                await anyio.sleep(self.acknowledgement_timeout)
-                deferred = await self._acknowledge_safely(interaction, source)
-                finish_acknowledgement("watchdog" if deferred else "handler")
-                if deferred:
-                    profile.mark_deadline_missed()
-
-            async with anyio.create_task_group() as tasks:
-                tasks.start_soon(watchdog)
-                try:
-                    await dispatch_operation()
-                finally:
-                    tasks.cancel_scope.cancel()
-            deferred = await self._acknowledge_safely(interaction, source)
-            finish_acknowledgement("final_defer" if deferred else "handler")
-
-    async def _run_middleware(
-        self,
-        middleware: tuple[Middleware[BotT], ...],
-        request: RouteRequest[BotT],
-        endpoint: RouteProceed,
-        *,
-        profile: OperationRecorder,
-    ) -> bool:
-        """Compose a one-shot middleware chain in first-added, outermost order."""
-        handled = False
-
-        async def invoke(index: int) -> None:
-            nonlocal handled
-            if index == len(middleware):
-                handled = True
-                await endpoint()
-                return
-
-            active = True
-            called = False
-
-            async def proceed() -> None:
-                nonlocal called
-                if not active:
-                    message = "route middleware proceed() is only valid during dispatch()"
-                    raise RuntimeError(message)
-                if called:
-                    message = "route middleware proceed() may only be called once"
-                    raise RuntimeError(message)
-                called = True
-                await invoke(index + 1)
-
-            try:
-                kind = type(middleware[index])
-                with profile.span(f"middleware:{kind.__module__}.{kind.__qualname__}"):
-                    await middleware[index].dispatch(request, proceed)
-            finally:
-                active = False
-
-        await invoke(0)
-        return handled
-
-    async def _handle_error(
-        self,
-        interaction: discord.Interaction[Any],
-        error: Exception,
-        source: str,
-    ) -> None:
-        """Present one dispatch failure without allowing the error hook to escape."""
-        if self.on_error is None:
-            logger.error("routed handler failed in %s", source, exc_info=error)
-            return
-        try:
-            await self.on_error(interaction, error, source)
-        except Exception:
-            logger.exception("routed error hook failed in %s", source)
-
-    async def _acknowledge_safely(self, interaction: discord.Interaction[Any], source: str) -> bool:
-        """Acknowledge an unused response slot, tolerating a concurrent handler response."""
-        if interaction.response.is_done():
-            return False
-        try:
-            await interaction.response.defer()
-        except discord.InteractionResponded:
-            return False
-        except discord.HTTPException as error:
-            # The handler may reach Discord before discord.py records its response.
-            if error.code != 40060:
-                logger.exception("could not acknowledge %s", source)
-            return False
-        except Exception:
-            logger.exception("could not acknowledge %s", source)
-            return False
-        return True
+        await execute(
+            request,
+            operation,
+            self._middleware_for(request.group_prefix),
+            source=source,
+            profiler=self.profiler,
+            on_error=self.on_error,
+            acknowledgement_timeout=self.acknowledgement_timeout,
+        )
 
     def _in_namespace(self, custom_id: str) -> bool:
         """Whether ``custom_id`` belongs to this router's reserved namespace."""
         return self.namespace is not None and custom_id.startswith(f"{self.namespace}:")
-
-
-def _dispatch_item(router: Router[Any]) -> type[discord.ui.DynamicItem[discord.ui.Item[Any]]]:
-    """Build the one `DynamicItem` subclass that carries ``router``'s whole route table."""
-
-    class RoutedDispatch(  # pyrefly: ignore[invalid-inheritance]
-        discord.ui.DynamicItem[discord.ui.Item[Any]],
-        template=router.template(),
-    ):
-        @classmethod
-        @override
-        async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-            cls,
-            interaction: discord.Interaction[Any],
-            item: discord.ui.Item[Any],
-            match: re.Match[str],
-            /,
-        ) -> Self:
-            return cls(item)
-
-        @override
-        async def callback(self, interaction: discord.Interaction[Any]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-            if isinstance(self.item, discord.ui.Select):
-                await router.dispatch(
-                    interaction,
-                    self.custom_id,
-                    component=RouteComponent.SELECT,
-                    values=tuple(self.item.values),
-                )
-                return
-            await router.dispatch(interaction, self.custom_id)
-
-    return RoutedDispatch

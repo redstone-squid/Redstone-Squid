@@ -21,7 +21,7 @@ from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
 from squid_ui_discord import render_static
 from squid_ui_discord import testing as sd
 from squid_ui_discord.routing import Router
-from squid_ui_discord.routing._router import _dispatch_item
+from squid_ui_discord.routing._client import _dispatch_item
 from squid_ui_discord.testing import interaction_harness
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
@@ -916,9 +916,13 @@ class TestAcknowledgement:
         interaction = interaction_harness()
         interaction.response.defer.error = sd.http_error(400, code=50035)
 
-        assert not await Router()._acknowledge_safely(interaction, "route:test")
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
+        await router.dispatch(interaction, POLL_CLOSE.id())
 
-        assert "could not acknowledge route:test" in caplog.text
+        assert not interaction.response.is_done()
+
+        assert "could not acknowledge route:poll:close" in caplog.text
 
     async def test_a_handler_that_returns_without_responding_is_acknowledged(self) -> None:
         interaction = interaction_harness()
