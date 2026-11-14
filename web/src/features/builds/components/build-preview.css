@@ -1,3 +1,4 @@
+@layer tokens, base, components;
 @layer components {
   .sq-build-card {
     overflow: hidden;
@@ -50,5 +51,41 @@
   .sq-metrics dd {
     margin: var(--space-1) 0 0;
     font-family: var(--font-mono);
+  }
+}
+@layer components {
+  .sq-build-image {
+    position: relative;
+  }
+  .sq-build-image > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .sq-build-image > img[hidden] {
+    display: none;
+  }
+  .sq-build-body h3 a {
+    text-decoration: none;
+  }
+  .sq-build-body h3 a:hover {
+    text-decoration: underline;
+  }
+  .sq-build-body {
+    overflow-wrap: anywhere;
+  }
+  .sq-build-version {
+    font: 0.6875rem var(--font-mono);
+  }
+}
+
+@layer components {
+  .sq-image-error {
+    visibility: hidden;
+  }
+  .sq-build-image:has(> img[hidden]) .sq-image-error {
+    visibility: visible;
   }
 }

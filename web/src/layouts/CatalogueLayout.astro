@@ -1,0 +1,93 @@
+---
+import type { ComponentProps } from "astro/types";
+import DocumentHead from "./DocumentHead.astro";
+import { getRuntimeConfig } from "../lib/config";
+import { localizePath, translate, type StaticMessageKey } from "../lib/i18n";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
+import "@fontsource/noto-sans-sc/400.css";
+import "@fontsource/noto-sans-sc/600.css";
+import "../ui/base.css";
+import "./catalogue-layout.css";
+import "../features/catalogue/catalogue.css";
+type Props = ComponentProps<typeof DocumentHead> & { locale: "en" | "zh-CN" };
+const { locale } = Astro.props;
+const t = (key: StaticMessageKey) => translate(locale, key);
+const config = getRuntimeConfig();
+const otherLocale = locale === "en" ? "zh-CN" : "en";
+const activePath = Astro.url.pathname.replace(/^\/zh-cn(?=\/|$)/, "") || "/";
+const nav = [
+  ["nav.builds", "/builds"],
+  ["nav.records", "/records"],
+  ["nav.search", "/search"],
+  ["nav.about", "/about"],
+] as const;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <DocumentHead {...Astro.props} themeColor="#f5f5f4" />
+  </head>
+  <body>
+    <a class="catalogue-skip" href="#main-content">
+      {t("nav.skip")}
+    </a>
+    <header class="catalogue-header">
+      <div class="catalogue-container catalogue-nav">
+        <a class="catalogue-brand" href={localizePath("/", locale)} aria-label={t("nav.home")}>
+          <span class="catalogue-mark" aria-hidden="true">
+            R
+          </span>
+          <span>{t("site.name")}</span>
+        </a>
+        <nav aria-label={t("nav.primary")}>
+          {nav.map(([key, href]) => (
+            <a
+              href={localizePath(href, locale)}
+              aria-current={
+                activePath === href || activePath.startsWith(`${href}/`) ? "page" : undefined
+              }
+            >
+              {t(key)}
+            </a>
+          ))}
+        </nav>
+        <div class="catalogue-actions">
+          <a
+            class="sq-button sq-button--quiet"
+            href={localizePath(`${Astro.url.pathname}${Astro.url.search}`, otherLocale)}
+            hreflang={otherLocale}
+          >
+            {t("nav.language")}
+          </a>
+          <a class="sq-button sq-button--primary" href={localizePath("/submit", locale)}>
+            {t("nav.submit")} <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </div>
+    </header>
+    <main id="main-content">
+      <slot />
+    </main>
+    <footer class="catalogue-footer catalogue-container">
+      <div>
+        <a class="catalogue-brand" href={localizePath("/", locale)}>
+          <span class="catalogue-mark" aria-hidden="true">
+            R
+          </span>
+          {t("site.name")}
+        </a>
+        <p class="sq-muted">{t("footer.note")}</p>
+      </div>
+      <nav aria-label={t("nav.community")}>
+        <a href={config.discordCommunityUrl} rel="noreferrer">
+          {t("footer.discord")}
+        </a>
+        <a href={config.botInviteUrl} rel="noreferrer">
+          {t("footer.invite")}
+        </a>
+      </nav>
+    </footer>
+  </body>
+</html>

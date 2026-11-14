@@ -1,3 +1,4 @@
+@layer tokens, base, components;
 @layer components {
   .sq-muted,
   .sq-lede {
@@ -177,5 +178,48 @@
     .sq-panel {
       padding: var(--space-4);
     }
+  }
+}
+@layer components {
+  .sq-autocomplete {
+    position: relative;
+    min-width: 0;
+  }
+  .sq-autocomplete textarea {
+    resize: vertical;
+  }
+  .sq-suggestions {
+    position: absolute;
+    z-index: 10;
+    inset: 100% 0 auto;
+    list-style: none;
+    padding: var(--space-1);
+    margin: var(--space-1) 0 0;
+    max-height: 16rem;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+  }
+  .sq-suggestions button {
+    display: grid;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+  .sq-suggestions button[aria-selected="true"],
+  .sq-suggestions button:hover {
+    background: var(--surface-muted);
+  }
+  .sq-suggestions button span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
   }
 }

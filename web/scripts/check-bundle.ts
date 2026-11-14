@@ -7,10 +7,11 @@ import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
   {
-    entries: ["src/components/SearchComposer.tsx"],
+    entries: ["src/features/search/SearchComposer.svelte"],
+    renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
     label: "Public search / catalogue",
-    initialKiB: 100,
-    completeKiB: 125,
+    initialKiB: 55,
+    completeKiB: 75,
   },
   {
     entries: ["src/components/MediaGallery.tsx"],

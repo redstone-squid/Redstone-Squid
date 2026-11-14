@@ -1,3 +1,4 @@
+@layer tokens, base, components;
 @layer components {
   .sq-topbar {
     display: flex;

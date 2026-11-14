@@ -15,9 +15,21 @@ icons; icon-only buttons need accessible names. The layout serves Inter,
 JetBrains Mono, and Noto Sans SC from installed Fontsource packages so fonts do
 not depend on a third-party request during rendering or screenshot capture.
 
-The workbench layout is the reference for the replacement website. Existing
-catalogue routes still use the old layout until their workflows are rebuilt.
+Home, builds, and search use `CatalogueLayout` and the shared design primitives.
+The home search is a native GET form; catalogue filters and suggestions use one
+Svelte island. Detail, record, and account pages retain the old layout until rebuilt.
+Both layouts share `DocumentHead` for canonical URLs, alternates, and metadata.
 The illustrations in `public/fixtures` are schematic examples, not real builds.
+
+Each layered stylesheet declares `tokens, base, components` before its rules.
+Astro may load feature CSS before layout CSS; this keeps base styles from winning
+over buttons or other components when bundles are split differently.
+
+The shared autocomplete supports cursor-based replacements in advanced queries,
+IME input, cancellation, and dismissal. Feature code supplies its data loader;
+UI code knows neither locale catalogs nor API routes. Guided forms submit named
+fields with `mode=guided`, and the server composes their query. Mode links also
+work without JavaScript; hydrated switches retain both drafts and sort selection.
 
 ## Localization
 
@@ -43,7 +55,7 @@ browser first with `bunx playwright install chromium`. The tests start the app
 and fixture API. They check keyboard behavior, accessibility, server-rendered
 content, and eight visual combinations of language, theme, and viewport.
 
-`bun run test:compatibility` runs the framework comparison in Firefox and WebKit;
+`bun run test:compatibility` runs the framework comparison and public discovery in Firefox and WebKit;
 install them with `bunx playwright install --with-deps firefox webkit`. These
 checks also run in CI, with reports under `playwright-report/compatibility/`.
 Draft-form axe scans run in Chromium because Playwright's Firefox revision 1572
@@ -90,5 +102,5 @@ is additional Svelte tooling and slower combined builds while React coexists.
 Browser interaction tests remain authoritative for focus and layout; jsdom unit
 tests also cover binding, composition, validation, and cancellation. Keep the
 React trial as a migration reference, not a second API for new product features.
-Remove the comparison implementation after the first production feature proves
-the selected patterns, retaining these measurements and the shared scenarios.
+Retire the mutation comparison when a production editing feature proves those
+patterns, retaining these measurements and the shared scenarios.

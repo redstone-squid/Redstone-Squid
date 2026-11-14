@@ -170,6 +170,8 @@ function problem(request: Request, status: number, code: string): Response {
 }
 
 function buildPage(url: URL): BuildsListResponse {
+  if (url.searchParams.get("page_size") === "6")
+    return { items: builds, total: builds.length, next: null, prev: null };
   if (url.searchParams.get("after_id") === "2") {
     return {
       items: [builds[2]],
@@ -179,6 +181,7 @@ function buildPage(url: URL): BuildsListResponse {
     };
   }
   const query = url.searchParams.get("q") ?? "";
+  if (query.includes("no-matches")) return { items: [], total: 0, next: null, prev: null };
   const selected = query.includes("Space Builder") ? [builds[1]] : builds.slice(0, 2);
   return {
     items: selected,
@@ -189,6 +192,8 @@ function buildPage(url: URL): BuildsListResponse {
 }
 
 function recordPage(url: URL): RecordsListResponse {
+  if (url.searchParams.get("page_size") === "3")
+    return { items: records, total: records.length, next: null, prev: null };
   if (url.searchParams.get("after_id") === "1") {
     return {
       items: [records[1]],

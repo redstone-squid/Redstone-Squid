@@ -2,8 +2,22 @@
 import type { PageAnchor } from "../generated/types.gen";
 import { translate, type Locale } from "../lib/i18n";
 
-type Props = { locale: Locale; next: PageAnchor | null; prev: PageAnchor | null; url: URL };
-const { locale, next, prev, url } = Astro.props;
+type Props = {
+  locale: Locale;
+  next: PageAnchor | null;
+  prev: PageAnchor | null;
+  url: URL;
+  class?: string;
+  linkClass?: string;
+};
+const {
+  locale,
+  next,
+  prev,
+  url,
+  class: className = "pagination",
+  linkClass = "pagination-link",
+} = Astro.props;
 
 /** Address one adjacent page, replacing whichever parameter addressed the current one. */
 function link(anchor: PageAnchor | null): string | null {
@@ -21,14 +35,14 @@ const nextHref = link(next);
 ---
 
 {(previousHref || nextHref) && (
-  <nav class="pagination" aria-label="Pagination">
+  <nav class={className} aria-label={translate(locale, "nav.pagination")}>
     {previousHref && (
-      <a class="pagination-link" href={previousHref} rel="prev">
+      <a class={linkClass} href={previousHref} rel="prev">
         {translate(locale, "common.previous")}
       </a>
     )}
     {nextHref && (
-      <a class="pagination-link" href={nextHref} rel="next">
+      <a class={linkClass} href={nextHref} rel="next">
         {translate(locale, "common.loadMore")}
       </a>
     )}

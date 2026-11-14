@@ -42,7 +42,7 @@ export function localizePath(path: string, locale: Locale): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-/** Format catalog messages in both Astro and React; fall back to English for incomplete translations. */
+/** Format catalog messages in Astro and browser islands; fall back to English for incomplete translations. */
 export function translate(locale: Locale, key: StaticMessageKey): string;
 export function translate<K extends keyof MessageVariables>(
   locale: Locale,

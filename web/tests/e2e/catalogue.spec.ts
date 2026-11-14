@@ -34,7 +34,7 @@ test("guided search creates a shareable creator query", async ({ page }) => {
   await page.getByLabel("Creator").fill("Space Builder");
   await page.getByLabel("Category").selectOption("entrance");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page).toHaveURL(/creator%3A%22Space\+Builder%22/);
+  await expect(page).toHaveURL(/creator=Space\+Builder/);
   await expect(page.getByRole("link", { name: "Observerless Iris" })).toBeVisible();
   await expect(page.getByText("Copper Bolt 5×5")).toHaveCount(0);
   expect(new URL(page.url()).searchParams.has("status")).toBe(false);

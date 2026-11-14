@@ -1,8 +1,8 @@
+import { MAX_SUGGESTION_QUERY_LENGTH } from "./suggestion-limits";
 import { asCatalogueError, fetchSuggestionPage } from "./api";
 import { translate, type Locale } from "./i18n";
 
 const SOURCE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
-const MAX_QUERY_LENGTH = 200;
 
 /**
  * Proxy a suggestion source using the locale selected by the route.
@@ -20,7 +20,7 @@ export async function respondWithSuggestions(
     return Response.json({ title: "Unknown suggestion source", status: 404 }, { status: 404 });
   }
   const q = url.searchParams.get("q") ?? "";
-  if (q.length > MAX_QUERY_LENGTH) {
+  if (q.length > MAX_SUGGESTION_QUERY_LENGTH) {
     return Response.json({ title: "Query too long", status: 400 }, { status: 400 });
   }
   const rawCursor = url.searchParams.get("cursor");

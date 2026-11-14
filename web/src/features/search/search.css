@@ -1,0 +1,77 @@
+@layer tokens, base, components;
+@layer components {
+  .search-composer {
+    padding: var(--space-6);
+  }
+  .search-modes {
+    display: flex;
+    gap: var(--space-5);
+    margin-bottom: var(--space-5);
+    border-bottom: 1px solid var(--border);
+  }
+  .search-modes a {
+    padding: var(--space-2) 0 var(--space-3);
+    text-decoration: none;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .search-modes a[aria-current] {
+    color: var(--accent);
+    box-shadow: 0 2px var(--accent);
+  }
+  .search-fields {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .search-filters {
+    margin-top: var(--space-5);
+  }
+  .search-filters summary {
+    cursor: pointer;
+    width: fit-content;
+    padding-block: var(--space-2);
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+  .search-filters[open] summary {
+    margin-bottom: var(--space-3);
+  }
+  .search-actions {
+    display: flex;
+    align-items: end;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+    margin-top: var(--space-5);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border);
+  }
+  .search-actions .sq-field {
+    width: min(100%, 15rem);
+    margin-right: auto;
+  }
+  .search-actions a {
+    align-self: center;
+    font-size: 0.875rem;
+  }
+  @media (max-width: 65rem) {
+    .search-fields {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 40rem) {
+    .search-composer {
+      padding: var(--space-4);
+    }
+    .search-fields {
+      grid-template-columns: 1fr;
+    }
+    .search-actions .sq-field {
+      width: 100%;
+    }
+    .search-actions {
+      gap: var(--space-4);
+    }
+  }
+}

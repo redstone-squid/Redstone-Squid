@@ -1,39 +1,41 @@
 ---
-import BuildCard from "../components/BuildCard.astro";
-import ErrorState from "../components/ErrorState.astro";
-import RecordCard from "../components/RecordCard.astro";
-import SearchComposer from "../components/SearchComposer";
-import BaseLayout from "../layouts/BaseLayout.astro";
+import BuildCard from "../features/builds/components/BuildCard.astro";
+import ErrorPanel from "../features/catalogue/ErrorPanel.astro";
+import RecordSummary from "../features/catalogue/RecordSummary.astro";
+import CatalogueLayout from "../layouts/CatalogueLayout.astro";
+import LinkButton from "../ui/astro/LinkButton.astro";
 import { asCatalogueError, fetchBuilds, fetchRecords } from "../lib/api";
 import { getRuntimeConfig } from "../lib/config";
-import { localizePath, translate, type Locale } from "../lib/i18n";
-
+import { localizePath, translate, type Locale, type StaticMessageKey } from "../lib/i18n";
 type Props = { locale: Locale };
 const { locale } = Astro.props;
+const t = (key: StaticMessageKey) => translate(locale, key);
 const config = getRuntimeConfig();
-let error;
-let builds;
-let records;
-try {
-  [builds, records] = await Promise.all([
-    fetchBuilds(locale, { pageSize: 6 }),
-    fetchRecords(locale, { pageSize: 3 }),
-  ]);
-} catch (caught) {
-  error = asCatalogueError(caught);
-  Astro.locals.responseStatus = error.status;
-}
+const [buildResult, recordResult] = await Promise.allSettled([
+  fetchBuilds(locale, { pageSize: 6 }),
+  fetchRecords(locale, { pageSize: 3 }),
+]);
+const builds = buildResult.status === "fulfilled" ? buildResult.value : undefined;
+const records = recordResult.status === "fulfilled" ? recordResult.value : undefined;
+const buildError =
+  buildResult.status === "rejected" ? asCatalogueError(buildResult.reason) : undefined;
+const recordError =
+  recordResult.status === "rejected" ? asCatalogueError(recordResult.reason) : undefined;
+const error = buildError ?? recordError;
+if (error) Astro.locals.responseStatus = error.status;
 const searchAction = localizePath("/builds", locale);
+const featured = builds?.items[0];
 ---
 
-<BaseLayout
-  title={translate(locale, "nav.home")}
-  locale={locale}
+<CatalogueLayout
+  title={t("nav.home")}
+  {locale}
   canonicalPath={localizePath("/", locale)}
+  noindex={Boolean(error)}
   structuredData={{
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: translate(locale, "site.name"),
+    name: t("site.name"),
     url: new URL(localizePath("/", locale), config.siteUrl).toString(),
     potentialAction: {
       "@type": "SearchAction",
@@ -42,62 +44,91 @@ const searchAction = localizePath("/builds", locale);
     },
   }}
 >
-  {error ? (
-    <ErrorState locale={locale} error={error} retryHref={localizePath("/", locale)} />
-  ) : (
-    <>
-      <section class="hero">
-        <div class="page-shell hero-content">
-          <div class="eyebrow">{translate(locale, "home.eyebrow")}</div>
-          <h1>{translate(locale, "home.title")}</h1>
-          <p class="lede">{translate(locale, "home.intro")}</p>
-          <SearchComposer client:load locale={locale} action={searchAction} />
+  <section class="catalogue-hero">
+    <div class="catalogue-container catalogue-hero-inner">
+      <div>
+        <p class="sq-kicker">{t("home.eyebrow")}</p>
+        <h1>{t("home.title")}</h1>
+        <p class="sq-lede">{t("home.intro")}</p>
+        <form class="catalogue-search" method="get" action={searchAction}>
+          <input type="hidden" name="mode" value="guided" />
+          <div class="sq-field">
+            <label for="home-keywords">{t("search.keywords")}</label>
+            <input class="sq-input" id="home-keywords" name="keywords" type="search" />
+          </div>
+          <button class="sq-button sq-button--primary" type="submit">
+            {t("search.submit")} <span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <div class="sq-row catalogue-hero-links">
+          <a href={searchAction}>{t("catalogue.browse")} →</a>
+          <a href={localizePath("/records", locale)}>{t("nav.records")}</a>
         </div>
-      </section>
-      <div class="page-shell section-stack">
-        <section aria-labelledby="latest-heading">
-          <div class="section-heading">
-            <div>
-              <h2 id="latest-heading">{translate(locale, "home.latest")}</h2>
-              <p>{translate(locale, "home.latestIntro")}</p>
-            </div>
-            <a href={localizePath("/builds", locale)}>{translate(locale, "nav.builds")} →</a>
-          </div>
-          <div class="card-grid">
-            {builds!.items.map((build) => (
-              <BuildCard build={build} locale={locale} />
-            ))}
-          </div>
-        </section>
-        <section aria-labelledby="records-heading">
-          <div class="section-heading">
-            <div>
-              <h2 id="records-heading">{translate(locale, "home.records")}</h2>
-              <p>{translate(locale, "home.recordsIntro")}</p>
-            </div>
-            <a href={localizePath("/records", locale)}>{translate(locale, "nav.records")} →</a>
-          </div>
-          <div class="card-grid">
-            {records!.items.map((record) => (
-              <RecordCard record={record} locale={locale} />
-            ))}
-          </div>
-        </section>
-        <section class="cta">
-          <div>
-            <h2>{translate(locale, "home.communityTitle")}</h2>
-            <p>{translate(locale, "home.communityBody")}</p>
-          </div>
-          <div class="cta-actions">
-            <a class="button button--primary" href={config.discordCommunityUrl} rel="noreferrer">
-              {translate(locale, "footer.discord")}
-            </a>
-            <a class="button" href={config.botInviteUrl} rel="noreferrer">
-              {translate(locale, "footer.invite")}
-            </a>
-          </div>
-        </section>
       </div>
-    </>
-  )}
-</BaseLayout>
+      {featured && (
+        <div class="catalogue-feature">
+          <h2 class="sq-kicker">{t("catalogue.featured")}</h2>
+          <BuildCard build={featured} {locale} eager />
+        </div>
+      )}
+    </div>
+  </section>
+  <div class="catalogue-container catalogue-stack">
+    {builds?.items.length !== 1 && (
+      <section aria-labelledby="latest-heading">
+        <div class="catalogue-section-heading">
+          <div>
+            <h2 id="latest-heading">{t("home.latest")}</h2>
+            <p class="sq-muted">{t("home.latestIntro")}</p>
+          </div>
+          <LinkButton href={searchAction}>{t("nav.builds")} →</LinkButton>
+        </div>
+        {buildError ? (
+          <ErrorPanel {locale} error={buildError} retryHref={localizePath("/", locale)} />
+        ) : builds!.items.length > 1 ? (
+          <div class="catalogue-grid">
+            {builds!.items.slice(1).map((build) => (
+              <BuildCard {build} {locale} />
+            ))}
+          </div>
+        ) : !featured ? (
+          <p class="sq-panel sq-muted">{t("builds.empty")}</p>
+        ) : null}
+      </section>
+    )}
+    <section aria-labelledby="records-heading">
+      <div class="catalogue-section-heading">
+        <div>
+          <h2 id="records-heading">{t("home.records")}</h2>
+          <p class="sq-muted">{t("home.recordsIntro")}</p>
+        </div>
+        <LinkButton href={localizePath("/records", locale)}>{t("nav.records")} →</LinkButton>
+      </div>
+      {recordError ? (
+        <ErrorPanel {locale} error={recordError} retryHref={localizePath("/", locale)} />
+      ) : records!.items.length ? (
+        <div class="catalogue-grid">
+          {records!.items.map((record) => (
+            <RecordSummary {record} {locale} />
+          ))}
+        </div>
+      ) : (
+        <p class="sq-panel sq-muted">{t("records.empty")}</p>
+      )}
+    </section>
+    <section class="catalogue-community">
+      <div>
+        <h2>{t("home.communityTitle")}</h2>
+        <p>{t("home.communityBody")}</p>
+      </div>
+      <div class="sq-row">
+        <LinkButton href={config.discordCommunityUrl} variant="primary" rel="noreferrer">
+          {t("footer.discord")}
+        </LinkButton>
+        <LinkButton href={config.botInviteUrl} rel="noreferrer">
+          {t("footer.invite")}
+        </LinkButton>
+      </div>
+    </section>
+  </div>
+</CatalogueLayout>

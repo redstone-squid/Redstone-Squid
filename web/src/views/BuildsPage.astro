@@ -1,9 +1,10 @@
 ---
-import BuildCard from "../components/BuildCard.astro";
-import ErrorState from "../components/ErrorState.astro";
+import LinkButton from "../ui/astro/LinkButton.astro";
+import BuildCard from "../features/builds/components/BuildCard.astro";
+import ErrorPanel from "../features/catalogue/ErrorPanel.astro";
 import Pagination from "../components/Pagination.astro";
-import SearchComposer from "../components/SearchComposer";
-import BaseLayout from "../layouts/BaseLayout.astro";
+import SearchComposer from "../features/search/SearchComposer.svelte";
+import CatalogueLayout from "../layouts/CatalogueLayout.astro";
 import { asCatalogueError, fetchBuilds } from "../lib/api";
 import { localizePath, translate, type Locale } from "../lib/i18n";
 import { isPaged, PAGE_PARAMS, readPageParams } from "../lib/pagination";
@@ -27,18 +28,18 @@ try {
 }
 ---
 
-<BaseLayout
+<CatalogueLayout
   title={translate(locale, "builds.title")}
   description={translate(locale, "meta.buildsDescription")}
   locale={locale}
   canonicalPath={`${canonicalUrl.pathname}${canonicalUrl.search}`}
-  noindex={isPaged(page_)}
+  noindex={isPaged(page_) || Boolean(error)}
 >
-  <div class="page-shell section-stack">
-    <header class="page-heading">
-      <div class="eyebrow">{translate(locale, "site.tagline")}</div>
+  <div class="catalogue-container catalogue-stack">
+    <header class="catalogue-heading">
+      <div class="sq-kicker">{translate(locale, "site.tagline")}</div>
       <h1>{translate(locale, "builds.title")}</h1>
-      <p class="lede">{translate(locale, "builds.intro")}</p>
+      <p class="sq-lede">{translate(locale, "builds.intro")}</p>
     </header>
     <SearchComposer
       client:load
@@ -50,25 +51,38 @@ try {
       initialMode={initialMode}
     />
     {error ? (
-      <ErrorState
+      <ErrorPanel
         locale={locale}
         error={error}
         retryHref={`${Astro.url.pathname}${Astro.url.search}`}
       />
     ) : page!.items.length > 0 ? (
-      <section aria-labelledby="catalogue-results">
+      <section class="catalogue-results" aria-labelledby="catalogue-results">
         <h2 id="catalogue-results">
           {q ? translate(locale, "search.results") : translate(locale, "builds.latest")}
         </h2>
-        <div class="card-grid">
+        <div class="catalogue-grid">
           {page!.items.map((build) => (
             <BuildCard build={build} locale={locale} />
           ))}
         </div>
-        <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
+        <Pagination
+          class="catalogue-pagination"
+          linkClass="sq-button sq-button--secondary"
+          locale={locale}
+          next={page!.next}
+          prev={page!.prev}
+          url={Astro.url}
+        />
       </section>
     ) : (
-      <div class="empty-state">{translate(locale, "builds.empty")}</div>
+      <section class="sq-panel catalogue-empty">
+        <h2>{translate(locale, "catalogue.emptyTitle")}</h2>
+        <p class="sq-muted">{translate(locale, "builds.empty")}</p>
+        <LinkButton href={localizePath("/builds", locale)}>
+          {translate(locale, "catalogue.clear")}
+        </LinkButton>
+      </section>
     )}
   </div>
-</BaseLayout>
+</CatalogueLayout>

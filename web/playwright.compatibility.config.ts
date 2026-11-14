@@ -3,7 +3,7 @@ import review from "./playwright.review.config";
 
 export default defineConfig({
   ...review,
-  testMatch: "framework-trial.spec.ts",
+  testMatch: ["framework-trial.spec.ts", "discovery.spec.ts"],
   outputDir: "test-results/compatibility",
   reporter: [
     ["line"],

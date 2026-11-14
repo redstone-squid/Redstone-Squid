@@ -1,9 +1,10 @@
 ---
-import BuildCard from "../components/BuildCard.astro";
-import ErrorState from "../components/ErrorState.astro";
+import LinkButton from "../ui/astro/LinkButton.astro";
+import BuildCard from "../features/builds/components/BuildCard.astro";
+import ErrorPanel from "../features/catalogue/ErrorPanel.astro";
 import Pagination from "../components/Pagination.astro";
-import SearchComposer from "../components/SearchComposer";
-import BaseLayout from "../layouts/BaseLayout.astro";
+import SearchComposer from "../features/search/SearchComposer.svelte";
+import CatalogueLayout from "../layouts/CatalogueLayout.astro";
 import { asCatalogueError, fetchSearch } from "../lib/api";
 import { localizePath, translate, type Locale } from "../lib/i18n";
 import { PAGE_PARAMS, readOffset } from "../lib/pagination";
@@ -27,18 +28,18 @@ if (q) {
 }
 ---
 
-<BaseLayout
+<CatalogueLayout
   title={translate(locale, "search.title")}
   description={translate(locale, "meta.searchDescription")}
   locale={locale}
   canonicalPath={`${canonicalUrl.pathname}${canonicalUrl.search}`}
   noindex={Boolean(offset || error)}
 >
-  <div class="page-shell section-stack">
-    <header class="page-heading">
-      <div class="eyebrow">{translate(locale, "site.tagline")}</div>
+  <div class="catalogue-container catalogue-stack">
+    <header class="catalogue-heading">
+      <div class="sq-kicker">{translate(locale, "site.tagline")}</div>
       <h1>{translate(locale, "search.title")}</h1>
-      <p class="lede">{translate(locale, "search.intro")}</p>
+      <p class="sq-lede">{translate(locale, "search.intro")}</p>
     </header>
     <SearchComposer
       client:load
@@ -50,31 +51,37 @@ if (q) {
       initialMode={initialMode}
     />
     {error ? (
-      <ErrorState
+      <ErrorPanel
         locale={locale}
         error={error}
         retryHref={`${Astro.url.pathname}${Astro.url.search}`}
       />
     ) : !q ? (
-      <div class="empty-state">{translate(locale, "search.prompt")}</div>
+      <div class="sq-panel catalogue-empty">{translate(locale, "search.prompt")}</div>
     ) : page!.items.length === 0 ? (
-      <div class="empty-state">{translate(locale, "search.empty")}</div>
+      <section class="sq-panel catalogue-empty">
+        <h2>{translate(locale, "catalogue.emptyTitle")}</h2>
+        <p class="sq-muted">{translate(locale, "search.empty")}</p>
+        <LinkButton href={localizePath("/search", locale)}>
+          {translate(locale, "catalogue.clear")}
+        </LinkButton>
+      </section>
     ) : (
-      <section aria-labelledby="search-results-heading">
+      <section class="catalogue-results" aria-labelledby="search-results-heading">
         <h2 id="search-results-heading">{translate(locale, "search.results")}</h2>
-        <div class="search-results">
+        <div class="catalogue-grid">
           {page!.items.map((result) => {
             if ("build" in result) return <BuildCard build={result.build} locale={locale} />;
             if ("record" in result)
               return (
-                <article class="search-result">
-                  <span class="result-kind">{translate(locale, "search.resultRecord")}</span>
+                <article class="sq-panel catalogue-record">
+                  <span class="sq-badge">{translate(locale, "search.resultRecord")}</span>
                   <div>
                     <h2>{result.record.title}</h2>
                     <p>{result.record.subtitle ?? result.record.build_title}</p>
                   </div>
                   <a
-                    class="button"
+                    class="sq-button sq-button--secondary"
                     href={localizePath(`/records/${result.record.record_id}`, locale)}
                   >
                     {translate(locale, "common.viewRecord")}
@@ -82,19 +89,26 @@ if (q) {
                 </article>
               );
             return (
-              <article class="search-result">
-                <span class="result-kind">{translate(locale, "search.resultMetadata")}</span>
+              <article class="sq-panel catalogue-record">
+                <span class="sq-badge">{translate(locale, "search.resultMetadata")}</span>
                 <div>
                   <h2>{result.metadata.title}</h2>
                   <p>{result.metadata.description ?? result.metadata.aliases.join(" · ")}</p>
                 </div>
-                <span class="chip">{result.metadata.metadata_kind}</span>
+                <span class="sq-badge">{result.metadata.metadata_kind}</span>
               </article>
             );
           })}
         </div>
-        <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
+        <Pagination
+          class="catalogue-pagination"
+          linkClass="sq-button sq-button--secondary"
+          locale={locale}
+          next={page!.next}
+          prev={page!.prev}
+          url={Astro.url}
+        />
       </section>
     )}
   </div>
-</BaseLayout>
+</CatalogueLayout>

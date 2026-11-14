@@ -1,0 +1,30 @@
+---
+import type { PublishedTitle } from "../../generated/types.gen";
+import {
+  formatDate,
+  localizePath,
+  translate,
+  translateTaxonomy,
+  type Locale,
+} from "../../lib/i18n";
+type Props = { record: PublishedTitle; locale: Locale };
+const { record, locale } = Astro.props;
+---
+
+<article class="sq-panel catalogue-record">
+  <span class="sq-kicker">
+    #{record.id} / {translateTaxonomy(locale, record.base_title)}
+  </span>
+  <h3>
+    <a href={localizePath(`/records/${record.id}`, locale)}>{record.title}</a>
+  </h3>
+  {record.subtitle && <p class="sq-muted">{record.subtitle}</p>}
+  <div class="sq-row">
+    <span class="sq-badge">{translateTaxonomy(locale, record.build_kind)}</span>
+    <span class="sq-badge">{translateTaxonomy(locale, record.version_scope)}</span>
+  </div>
+  <p class="sq-muted">
+    {translate(locale, "record.holderCount", { count: record.holder_build_ids.length })} ·{" "}
+    {formatDate(locale, record.computed_at)}
+  </p>
+</article>
