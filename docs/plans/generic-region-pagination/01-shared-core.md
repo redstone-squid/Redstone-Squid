@@ -189,30 +189,51 @@ this behavior is a compatibility decision, not just moving code between modules.
 
 ## Decision 1 Who authorizes content loss
 
-Status: open for discussion. Stop here before selecting a core representation or migrating
-backend behavior.
+Status: agreed. Permission to truncate or omit content belongs to shared policy and requires
+an authored or explicit request choice. Targets describe valid representations, limits, and
+effects; the core chooses among permitted candidates. Target conversion cannot introduce
+additional unapproved loss after selection.
 
-The proposed shared core can have one content-policy contract, or it can orchestrate targets
-that retain their different fitting defaults. These choices have different consequences:
-
-- A shared contract makes permission to truncate or omit content an authored or explicit
-  request policy. Targets describe valid representations, limits, and effects; the core chooses
-  among permitted candidates. Target conversion cannot silently introduce additional loss after
-  selection. This changes Slack's current non-strict defaults and requires migration decisions.
-- Preserving target-specific defaults reduces immediate behavioral changes. Slack could keep
-  offering implicit omission while Discord does not. The core would still need to see these
-  choices before selection, but portable authored content would retain different loss permissions
-  depending on its target.
-
-Recommendation for discussion: make content-loss permission a shared policy, and make permissive
-fitting an explicit choice. The exact API and default migration strategy remain open. Targets
-still supply their own representations and unavoidable conversion effects; the core needs to
-know those effects to determine whether a candidate is permitted.
+This changes Slack's current non-strict defaults. Preserve permissive fitting through an explicit
+policy where callers need it, with migration details to be designed in the implementation phase.
+Keeping different implicit loss permissions for each target was considered and not selected.
 
 This does not decide whether selecting an authored alternative should count as degradation,
 which alternatives are equivalent, or how strict mode should treat them. The experiment shows
 that strict mode currently rejects even the complete compact alternative on V2 and under an
-HTML budget. Those fidelity questions need their own decision after the ownership boundary.
+HTML budget. Those fidelity questions remain open.
 
-No production behavior has changed. Composition experiments, the full matrix, and the final
-architectural recommendation remain pending this discussion.
+## Decision 2 Slack must participate directly in shared planning
+
+Status: agreed direction. Replace the implicit path through the HTML planner with Slack-specific
+participation in the shared core. HTML and Slack are peer targets; a completed HTML scene is not
+the shared planning representation. Slack constraints and representation choices must be available
+before the core selects content, page boundaries, and visible controls.
+
+The current path reuses more than HTML formatting: it resolves semantic choices, paging, state,
+and handlers before Slack conversion. `_Lowerer.node_blocks` then reconstructs meaning from HTML
+tags, classes such as `squid-gallery` and `squid-actions`, and attributes. For modal forms it also
+returns to the original semantic form schema. These are evidence that the HTML scene is carrying
+responsibilities beyond a target output format.
+
+The replacement should retain reusable mechanisms, including text parsing, identity, cursor
+reconciliation, and binding management, in appropriate shared code. It should not duplicate all
+of those mechanisms in a new standalone Slack compiler. Target-specific formatting and final
+scene construction remain extension responsibilities.
+
+The initial responsibility map for the replacement is:
+
+| Responsibility | Intended owner |
+| --- | --- |
+| Authored structure, identity, and permission to change content | Shared core. |
+| Valid representations, resource and nesting constraints, and conversion effects | Target extensions, available to shared planning before selection. |
+| Representation selection, allocation, fragmentation, and state reconciliation | Shared core, with target-specific constraints. |
+| Final scene construction and target validation | Target extensions; construction must honor the selected plan. |
+
+This is an ownership direction, not a chosen intermediate representation or interface. The next
+investigation is what information must survive between authored semantics and target realization,
+including alternatives, containers, resources, and interaction bindings. Compare a shared semantic
+planning model with target-owned fragments before fixing their boundary.
+
+No production behavior has changed. Composition experiments, the full matrix, fidelity policy,
+and the final architectural recommendation remain pending.

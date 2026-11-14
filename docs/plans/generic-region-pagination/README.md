@@ -55,7 +55,8 @@ Inventory the whole planning pipeline across targets, including semantic interpr
 representation selection, composition, measurement, search, pagination, state reconciliation,
 caching, diagnostics, and scene construction. Identify duplicated responsibilities and actual
 target differences. The direction is one planning core with explicit target extensions;
-joint pagination belongs inside that core.
+joint pagination belongs inside that core. Content-loss permission is shared policy, and Slack
+will participate directly rather than compile through the HTML target first.
 
 Use representative examples to establish shared behavior and the information targets must
 supply. Include persistent content, nested containers, shared resources, alternatives,
