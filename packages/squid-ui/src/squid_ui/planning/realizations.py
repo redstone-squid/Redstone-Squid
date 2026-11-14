@@ -25,6 +25,7 @@ from squid_ui.forms import FormBinding
 from squid_ui.grids import _coordinate
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.ownership import Controlled
+from squid_ui.planning.classic_content import CardSlot
 from squid_ui.planning.composition import (
     CandidateComposition,
     DiscoveryCompletion,
@@ -42,6 +43,7 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
+from squid_ui.planning.limits import EmbedLimits
 from squid_ui.planning.navigation import PagerNav, default_nav
 from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.resources import Axis
@@ -314,6 +316,16 @@ class PremiumRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class ClassicContentRealization:
+    declarations: int
+
+
+@dataclass(frozen=True, slots=True)
+class CardRealization:
+    node: primitive.Card
+
+
+@dataclass(frozen=True, slots=True)
 class RowRealization:
     pass
 
@@ -351,6 +363,8 @@ type Realization = (
     TextSequenceRealization
     | ActionsRealization
     | RowRealization
+    | ClassicContentRealization
+    | CardRealization
     | SelectRealization
     | EntityRealization
     | TextRealization
@@ -654,6 +668,7 @@ def semantic_offers[RenderTargetT, ContextT](
     heading_limit: int | None = None,
     native_v2: bool = False,
     grid_columns: int | None = None,
+    embed_limits: EmbedLimits | None = None,
 ) -> (
     tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
     | OfferDiscovery[RenderTargetT, ContextT, Realization]
@@ -665,7 +680,9 @@ def semantic_offers[RenderTargetT, ContextT](
     spill = False
     inside_panel = False
     for ancestor in occurrence.ancestors():
-        inside_panel |= isinstance(ancestor, sem.Block | sem.Section | sem.Article | sem.Aside | primitive.Panel)
+        inside_panel |= isinstance(
+            ancestor, sem.Block | sem.Section | sem.Article | sem.Aside | primitive.Panel | primitive.Card
+        )
         if isinstance(ancestor, sem.Truncated):
             keep = ancestor.keep
             spill = False
@@ -687,6 +704,14 @@ def semantic_offers[RenderTargetT, ContextT](
         )
         if cap is not None:
             text_capacity = min(text_capacity, cap) if text_capacity is not None else cap
+
+    if isinstance(value, CardSlot):
+        if embed_limits is None:
+            return ()
+        text_capacity = getattr(embed_limits, value.kind)
+        value = value.text
+    if any(isinstance(ancestor, primitive.Content) for ancestor in occurrence.ancestors()):
+        text_capacity = context.capacities.get(Axis.CONTENT_TEXT, text_capacity)
 
     def text_offers(
         full: RealizationOffer[RenderTargetT, ContextT, Realization],
@@ -939,6 +964,12 @@ def semantic_offers[RenderTargetT, ContextT](
         if not native_controls or not isinstance(overflow, Never | Truncate | Alts | Drop | Paginate):
             return ()
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)
+        if isinstance(occurrence.graph.units[occurrence.reference].value, CardSlot):
+            slot_plain = "".join(tree.plain(node) for node in payload.nodes)
+            payload = replace(
+                payload,
+                nodes=_slice(payload.nodes, len(slot_plain) - len(slot_plain.lstrip()), len(slot_plain.rstrip())),
+            )
         if isinstance(value, primitive.Heading):
             payload = replace(payload, role="heading", level=value.level)
         elif isinstance(value, primitive.Footer):
@@ -1119,7 +1150,17 @@ def semantic_offers[RenderTargetT, ContextT](
             if native_v2
             else ()
         )
-    if isinstance(value, primitive.Row | primitive.ControlGroup | primitive.Section | primitive.Panel):
+    if isinstance(
+        value,
+        primitive.Row
+        | primitive.ControlGroup
+        | primitive.Section
+        | primitive.Panel
+        | primitive.Card
+        | primitive.Content,
+    ):
+        if isinstance(value, primitive.Card | primitive.Content) and embed_limits is None:
+            return ()
         if not native_controls or (isinstance(value, primitive.Section | primitive.Panel) and not native_v2):
             return ()
         children = tuple(
@@ -1138,7 +1179,13 @@ def semantic_offers[RenderTargetT, ContextT](
             RealizationOffer(
                 occurrence,
                 "native-layout",
-                RowRealization()
+                CardRealization(value)
+                if isinstance(value, primitive.Card)
+                else ClassicContentRealization(
+                    sum(isinstance(unit.value, primitive.Content) for unit in occurrence.graph.units.values())
+                )
+                if isinstance(value, primitive.Content)
+                else RowRealization()
                 if isinstance(value, primitive.Row)
                 else ActionsRealization()
                 if isinstance(value, primitive.ControlGroup)
@@ -2096,7 +2143,8 @@ def semantic_offers[RenderTargetT, ContextT](
                 occurrence.graph,
                 ref,
                 Placement.HEADER
-                if (isinstance(value, sem.Region) and ref.keys[-1] == "@header")
+                if (isinstance(value, RootRegion) and isinstance(occurrence.graph.units[ref].value, primitive.Content))
+                or (isinstance(value, sem.Region) and ref.keys[-1] == "@header")
                 or (isinstance(value, sem.Section | sem.Article | RosterSection) and ref.keys[-1] == "@heading")
                 else Placement.FOOTER
                 if (isinstance(value, sem.Region) and ref.keys[-1] == "@footer")

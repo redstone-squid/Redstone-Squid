@@ -203,6 +203,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                 | primitive.Time()
                 | primitive.ZonedTime()
                 | primitive.Gallery()
+                | primitive.Card()
                 | primitive.MediaCollection()
                 | primitive.File()
             ),
@@ -212,6 +213,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
         case (
             (
                 primitive.Lines(overflow=Paginate() as a)
+                | primitive.Content(overflow=Paginate() as a)
                 | primitive.Text(overflow=Paginate() as a)
                 | primitive.Heading(overflow=Paginate() as a)
                 | primitive.Footer(overflow=Paginate() as a)
@@ -219,6 +221,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             ),
             (
                 primitive.Lines(overflow=Paginate() as b)
+                | primitive.Content(overflow=Paginate() as b)
                 | primitive.Text(overflow=Paginate() as b)
                 | primitive.Heading(overflow=Paginate() as b)
                 | primitive.Footer(overflow=Paginate() as b)
@@ -229,7 +232,12 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                 right, overflow=replace(b, page=_page_configuration(b.page))
             )
         case (
-            primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code() | primitive.Lines(),
+            primitive.Content()
+            | primitive.Text()
+            | primitive.Heading()
+            | primitive.Footer()
+            | primitive.Code()
+            | primitive.Lines(),
             _,
         ):
             return left == right

@@ -30,6 +30,8 @@ from squid_ui.planning.composition_discord import discord_text, discord_time_pre
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.realizations import (
     ActionsRealization,
+    CardRealization,
+    ClassicContentRealization,
     ControlRealization,
     DownloadRealization,
     EntityRealization,
@@ -469,6 +471,11 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     )
                 case FlowRealization():
                     return tuple(node for child in part.children for node in visit(child, in_panel=in_panel))
+                case CardRealization() | ClassicContentRealization():
+                    violations.append(
+                        UnsupportedCapability(part.offer.occurrence.identity, "classic message structure")
+                    )
+                    return ()
                 case unknown:
                     assert_never(unknown)
 

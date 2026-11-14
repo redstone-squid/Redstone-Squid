@@ -28,6 +28,8 @@ from squid_ui.planning.composition_discord import discord_text, select_violation
 from squid_ui.planning.limits import ClassicLimits
 from squid_ui.planning.realizations import (
     ActionsRealization,
+    CardRealization,
+    ClassicContentRealization,
     ControlRealization,
     DownloadRealization,
     EntityRealization,
@@ -49,6 +51,18 @@ from squid_ui.planning.realizations import (
 )
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import FidelityEffect, SemanticRef
+from squid_ui.temporal import ZonedDateTime
+from squid_ui.text import resolve_text
+
+
+def embed_text_size(embed: scene.Embed) -> int:
+    return (
+        len(embed.title or "")
+        + len(embed.description or "")
+        + sum(len(field.name) + len(field.value) for field in embed.fields)
+        + (len(embed.footer.text) if embed.footer else 0)
+        + (len(embed.author.name) if embed.author else 0)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +85,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             native_controls=True,
             panel_text_limit=self.limits.embeds.description,
             grid_columns=self.limits.components.row_buttons,
+            embed_limits=self.limits.embeds,
         )
 
     def evaluate(
@@ -90,6 +105,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         scopes: dict[OccurrenceId, ResourceCost] = {}
         scoped_resources: dict[OccurrenceId, frozenset[ResourceIdentity]] = {}
         field_stack: list[list[scene.EmbedField]] = [[]]
+        native_contents = 0
 
         def field_text(fields: list[scene.EmbedField] | tuple[scene.EmbedField, ...]) -> int:
             return sum(len(field.name) + len(field.value) for field in fields)
@@ -112,6 +128,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             embedded: bool = False,
             row: list[scene.Control] | None = None,
         ) -> None:
+            nonlocal native_contents
             context.work.consume()
             identity = part.offer.occurrence.identity
             start, embed_start, row_start, use_start = len(output), len(embeds), len(rows), len(uses)
@@ -134,6 +151,87 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     violations.append(LocalCapacityExceeded(identity, name, used, capacity))
 
             match part.offer.payload:
+                case ClassicContentRealization(declarations=declarations):
+                    native_contents += 1
+                    if embedded or declarations > 1 or native_contents > 1:
+                        violations.append(
+                            ConstraintViolation(identity, "a message permits one top-level Content field")
+                        )
+                    for child in part.children:
+                        visit(child, output, embedded=embedded)
+                case CardRealization(node=card):
+                    if embedded:
+                        violations.append(ConstraintViolation(identity, "native cards cannot be nested"))
+                    slots: dict[str, str] = {}
+                    for child in part.children:
+                        pieces: list[str] = []
+                        visit(child, pieces, embedded=True)
+                        slots[child.offer.occurrence.reference.keys[-1]] = "\n\n".join(pieces)
+                    if len(embeds) != embed_start or len(rows) != row_start:
+                        violations.append(ConstraintViolation(identity, "card descriptions must contain text blocks"))
+                    entries = [
+                        scene.EmbedField(slots[f"@field-{index}-name"], slots[f"@field-{index}-value"], field.inline)
+                        for index, field in enumerate(card.fields)
+                    ]
+                    for name, size, cap in (
+                        ("embed.title", len(slots.get("@title", "")), self.limits.embeds.title),
+                        ("embed.description", len(slots.get("@description", "")), self.limits.embeds.description),
+                        ("embed.footer", len(slots.get("@footer", "")), self.limits.embeds.footer),
+                        ("embed.author", len(slots.get("@author", "")), self.limits.embeds.author),
+                        ("embed.fields", len(entries), self.limits.embeds.fields),
+                    ):
+                        limit(name, size, cap)
+                    for entry in entries:
+                        limit("embed.field_name", len(entry.name), self.limits.embeds.field_name)
+                        limit("embed.field_value", len(entry.value), self.limits.embeds.field_value)
+                        if not entry.name or not entry.value:
+                            violations.append(ConstraintViolation(identity, "embed field needs a name and value"))
+                    media: dict[str, scene.EmbedMedia | None] = {}
+                    for name, item in (("image", card.image), ("thumbnail", card.thumbnail)):
+                        if item is None:
+                            media[name] = None
+                            continue
+                        url = item.url
+                        if item.asset_name is not None:
+                            matches = [asset for asset in context.assets if asset.name == item.asset_name]
+                            if len(matches) != 1:
+                                violations.append(
+                                    ConstraintViolation(identity, "embed media must match one declared attachment")
+                                )
+                            else:
+                                uses.append(
+                                    SharedUse(
+                                        ResourceIdentity("attachment", matches[0].key),
+                                        matches[0],
+                                        ResourceCost({Axis.ATTACHMENTS: 1}),
+                                    )
+                                )
+                            url = f"attachment://{item.asset_name}"
+                        media_description = (
+                            resolve_text(item.description, context.localization).plain()
+                            if item.description is not None
+                            else None
+                        )
+                        media[name] = scene.EmbedMedia(url, media_description, item.asset_name)
+                    timestamp = card.timestamp.instant if isinstance(card.timestamp, ZonedDateTime) else card.timestamp
+                    embeds.append(
+                        scene.Embed(
+                            title=slots.get("@title") or None,
+                            url=card.url,
+                            description=slots.get("@description") or None,
+                            fields=tuple(entries),
+                            footer=scene.EmbedFooter(slots.get("@footer", ""), card.footer.icon_url)
+                            if card.footer and slots.get("@footer")
+                            else None,
+                            author=scene.EmbedAuthor(slots.get("@author", ""), card.author.url, card.author.icon_url)
+                            if card.author and slots.get("@author")
+                            else None,
+                            colour=card.accent,
+                            image=media["image"],
+                            thumbnail=media["thumbnail"],
+                            timestamp=timestamp.isoformat() if timestamp else None,
+                        )
+                    )
                 case FieldRealization(label=label, value=value):
                     name, content = markdown(label), markdown(value)
                     limit("embed.field_name", len(name), self.limits.embeds.field_name)
@@ -336,7 +434,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     {
                         Axis.CONTENT_TEXT: 0 if embedded else len("\n".join(output[start:])),
                         Axis.EMBED_TEXT: (len("\n".join(output[start:])) if embedded else 0)
-                        + sum(len(item.description or "") + field_text(item.fields) for item in embeds[embed_start:])
+                        + sum(embed_text_size(item) for item in embeds[embed_start:])
                         + field_text(fields[field_start:]),
                         Axis.EMBEDS: len(embeds) - embed_start,
                         Axis.ROWS: len(rows) - row_start,
@@ -372,10 +470,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         return ResourceCost(
             {
                 Axis.CONTENT_TEXT: len(body.content or ""),
-                Axis.EMBED_TEXT: sum(
-                    len(embed.description or "") + sum(len(field.name) + len(field.value) for field in embed.fields)
-                    for embed in body.embeds
-                ),
+                Axis.EMBED_TEXT: sum(embed_text_size(embed) for embed in body.embeds),
                 Axis.EMBEDS: len(body.embeds),
                 Axis.ROWS: len(body.rows),
                 Axis.CONTROLS: sum(len(row.controls) for row in body.rows),
@@ -395,7 +490,13 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             body != expected.preparation
             or actual != expected.cost
             or not actual.within(self.limits.capacities)
-            or any(len(embed.description or "") > self.limits.embeds.description for embed in body.embeds)
+            or any(
+                len(embed.description or "") > self.limits.embeds.description
+                or len(embed.title or "") > self.limits.embeds.title
+                or (len(embed.footer.text) if embed.footer else 0) > self.limits.embeds.footer
+                or (len(embed.author.name) if embed.author else 0) > self.limits.embeds.author
+                for embed in body.embeds
+            )
             or any(len(embed.fields) > self.limits.embeds.fields for embed in body.embeds)
             or any(
                 not field.name

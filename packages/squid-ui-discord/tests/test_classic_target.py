@@ -7,6 +7,7 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning import plan
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
 from squid_ui.primitives import (
     Card,
@@ -78,8 +79,9 @@ class TestClassicShape:
         assert body(Content("@here ready")).content == "@\u200bhere ready"
 
     def test_a_document_may_carry_only_one_content_field(self) -> None:
-        with pytest.raises(LayoutInvariantError, match="only one Content node is legal"):
+        with pytest.raises(JointInfeasibleError) as error:
             plan([Content("a"), Content("b")], target=DISCORD_V1_DPY27)
+        assert "one top-level Content field" in str(error.value.diagnostics)
 
     def test_rows_become_classic_rows(self) -> None:
         message = body(Row((LinkButton("Docs", "https://example.invalid"),)))
@@ -94,8 +96,9 @@ class TestClassicShape:
         assert body(Card(title="   ", children=(Text("body"),))).embeds[0].title is None
 
     def test_a_field_that_trims_to_nothing_is_rejected_rather_than_dropped(self) -> None:
-        with pytest.raises(LayoutInvariantError, match="non-empty name and value"):
+        with pytest.raises(JointInfeasibleError) as error:
             plan(Card(fields=(CardField("  ", "value"),)), target=DISCORD_V1_DPY27)
+        assert "embed field needs a name and value" in str(error.value.diagnostics)
 
 
 class TestGating:
@@ -114,8 +117,9 @@ class TestGating:
 class TestLocalCaps:
     def test_a_direct_value_over_its_cap_is_a_planning_error(self) -> None:
         """Silently clipping a title the author wrote whole is worse than refusing it."""
-        with pytest.raises(LayoutInvariantError, match="embed title is 300 characters; the cap is 256"):
+        with pytest.raises(JointInfeasibleError) as error:
             plan(Card(title="x" * 300), target=DISCORD_V1_DPY27)
+        assert "embed.title" in str(error.value.diagnostics)
 
     def test_an_explicit_policy_makes_the_same_value_legal(self) -> None:
         title = body(Card(title=Text("x" * 300, overflow=Truncate()))).embeds[0].title
@@ -124,14 +128,16 @@ class TestLocalCaps:
         assert len(title) == CLASSIC_LIMITS.embeds.title
 
     def test_a_field_value_over_its_cap_names_the_field_and_the_cap(self) -> None:
-        with pytest.raises(LayoutInvariantError, match="field value is 2000 characters; the cap is 1024"):
+        with pytest.raises(JointInfeasibleError) as error:
             plan(Card(fields=(CardField("n", "x" * 2000),)), target=DISCORD_V1_DPY27)
+        assert "embed.field_value" in str(error.value.diagnostics)
 
     def test_more_than_twenty_five_fields_is_refused_at_the_card(self) -> None:
         fields = tuple(CardField(f"n{index}", "v") for index in range(26))
 
-        with pytest.raises(LayoutInvariantError, match="card has 26 fields; the cap is 25"):
+        with pytest.raises(JointInfeasibleError) as error:
             plan(Card(fields=fields), target=DISCORD_V1_DPY27)
+        assert "embed.fields" in str(error.value.diagnostics)
 
 
 class TestIndependentTextPools:
@@ -152,14 +158,14 @@ class TestIndependentTextPools:
         assert message.embeds[0].description == "z" * 500
 
     def test_content_that_cannot_shrink_and_does_not_fit_is_a_failure(self) -> None:
-        with pytest.raises(UnsolvableLayoutError, match="Never nodes need"):
+        with pytest.raises(UnsolvableLayoutError):
             plan(Content("y" * 3000), target=DISCORD_V1_DPY27)
 
     def test_the_pools_do_not_lend_to_each_other(self) -> None:
         """An empty content field does not buy an embed a single extra character."""
         overlong = Card(children=(Text("x" * 6100, overflow=Never()),))
 
-        with pytest.raises(UnsolvableLayoutError, match="Never nodes need"):
+        with pytest.raises(UnsolvableLayoutError):
             plan(overlong, target=DISCORD_V1_DPY27)
 
 

@@ -45,6 +45,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     combinations = 1
     text_choices = 0
     shortening_depth = 0
+    card_depth = 0
     text_ladder = (
         limits.total_text
         if isinstance(limits, V2Limits)
@@ -56,7 +57,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     )
 
     def visit[NodeTargetT](node: Renderable[NodeTargetT]) -> Renderable[NodeTargetT]:
-        nonlocal pageable, combinations, shortening_depth, text_choices
+        nonlocal pageable, combinations, shortening_depth, text_choices, card_depth
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation() | sem.Grid():
                 pageable = True
@@ -136,6 +137,34 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                         raise UnsupportedSemanticError(message)
                     return replace(node, texts=tuple(map(visit, node.texts)), accessory=visit(node.accessory))
                 return node
+            case primitive.Content():
+                if not isinstance(limits, ClassicLimits):
+                    msg = "native classic message content on another target"
+                    raise UnsupportedSemanticError(msg)
+                pageable = True
+                visit(primitive.Text(node.content, overflow=node.overflow, priority=node.priority))
+                return node
+            case primitive.Card():
+                if not isinstance(limits, ClassicLimits):
+                    msg = "native classic embed on another target"
+                    raise UnsupportedSemanticError(msg)
+                pageable = True
+                card_depth += 1
+                try:
+                    for child in node.children:
+                        visit(child)
+                    slots = [entry for field in node.fields for entry in (field.name, field.value)]
+                    if node.title is not None:
+                        slots.append(node.title)
+                    if node.footer is not None:
+                        slots.append(node.footer.text)
+                    if node.author is not None:
+                        slots.append(node.author.name)
+                    for slot in slots:
+                        visit(primitive.card_text(slot))
+                finally:
+                    card_depth -= 1
+                return node
             case primitive.Budget() | primitive.Break():
                 if not isinstance(limits, V2Limits | ClassicLimits):
                     msg = "Discord native layout policy on a non-Discord target"
@@ -187,6 +216,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     msg = "Discord text primitives on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 overflow = node.overflow
+                if card_depth and isinstance(overflow, Paginate):
+                    msg = "embed text cannot contain pager controls; paginate the enclosing cards"
+                    raise UnsupportedSemanticError(msg)
                 if isinstance(node, primitive.Lines) and isinstance(
                     overflow, Never | Truncate | Spill | Drop | Condense
                 ):

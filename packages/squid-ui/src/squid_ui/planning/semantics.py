@@ -7,6 +7,7 @@ from typing import Literal, cast
 
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.classic_content import CardSlot
 from squid_ui.planning.interaction_semantics import (
     DisclosureToggle,
     Interaction,
@@ -89,6 +90,9 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | AtomicNode[RenderTargetT, ContextT]
     | RosterSection
     | RosterLabel
+    | CardSlot
+    | primitive.Card
+    | primitive.Content
     | TableCell
     | FieldPart
     | TextPresentation
@@ -383,6 +387,53 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
                     visit(control, root, i)
+            case primitive.Content():
+                root = add(value, path, parent, atomic=False)
+                add(
+                    primitive.Text(value.content, overflow=value.overflow, priority=value.priority),
+                    (*path, "@text"),
+                    root,
+                    atomic=True,
+                )
+            case primitive.Card():
+                root = add(value, path, parent, atomic=False)
+                description = add(
+                    sem.Group[RenderTargetT, ContextT]((), key="@description"),
+                    (*path, "@description"),
+                    root,
+                    atomic=False,
+                )
+                for i, child in enumerate(value.children):
+                    visit(child, description, i)
+                if value.title is not None:
+                    add(CardSlot("title", primitive.card_text(value.title)), (*path, "@title"), root, atomic=True)
+                if value.footer is not None:
+                    add(
+                        CardSlot("footer", primitive.card_text(value.footer.text)),
+                        (*path, "@footer"),
+                        root,
+                        atomic=True,
+                    )
+                if value.author is not None:
+                    add(
+                        CardSlot("author", primitive.card_text(value.author.name)),
+                        (*path, "@author"),
+                        root,
+                        atomic=True,
+                    )
+                for i, entry in enumerate(value.fields):
+                    add(
+                        CardSlot("field_name", primitive.card_text(entry.name)),
+                        (*path, f"@field-{i}-name"),
+                        root,
+                        atomic=True,
+                    )
+                    add(
+                        CardSlot("field_value", primitive.card_text(entry.value)),
+                        (*path, f"@field-{i}-value"),
+                        root,
+                        atomic=True,
+                    )
             case primitive.Gallery() | primitive.MediaCollection():
                 root = add(value, path, parent, atomic=False)
                 for i, item in enumerate(value.items):
@@ -773,6 +824,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | primitive.Section
             | primitive.Panel
             | primitive.Gallery
+            | primitive.Card
+            | primitive.Content
             | RosterSection
             | primitive.Budget
             | primitive.Break,
@@ -869,6 +922,28 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     preserved = len(constraint.texts) == len(other.texts)
                 case RosterSection(), RosterSection():
                     preserved = constraint == other
+                case primitive.Card(), primitive.Card():
+                    preserved = (
+                        constraint.url,
+                        constraint.accent,
+                        constraint.image,
+                        constraint.thumbnail,
+                        constraint.timestamp,
+                        tuple(entry.inline for entry in constraint.fields),
+                        constraint.footer.icon_url if constraint.footer else None,
+                        (constraint.author.url, constraint.author.icon_url) if constraint.author else None,
+                    ) == (
+                        other.url,
+                        other.accent,
+                        other.image,
+                        other.thumbnail,
+                        other.timestamp,
+                        tuple(entry.inline for entry in other.fields),
+                        other.footer.icon_url if other.footer else None,
+                        (other.author.url, other.author.icon_url) if other.author else None,
+                    )
+                case primitive.Content(), primitive.Content():
+                    preserved = True
                 case primitive.Gallery(), primitive.Gallery():
                     preserved = len(constraint.items) == len(other.items)
                 case primitive.Panel(), primitive.Panel():

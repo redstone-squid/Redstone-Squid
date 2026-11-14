@@ -120,6 +120,13 @@ galleries and expose image boundaries to enclosing regions. Descriptions, spoile
 flags, and attachment identity survive page turns. Missing assets or mismatched
 file metadata are infeasible rather than silently rewritten.
 
+Classic native `Content` and `Card` now compose directly. Exact cards retain their
+title, fields, author, footer, colour, media and timestamp; every text slot keeps
+its overflow policy and local limit. Aggregate embed cost includes titles, authors
+and footers. Cards remain indivisible, and message content repeats on keyed root
+pages. Embed slots cannot host pager controls: paginate the enclosing cards.
+Failures use shared constraint diagnostics rather than legacy fitter messages.
+
 ## Compatibility and deferred contracts
 
 `regions.py` and its backend-probing frontier search are removed. Discovery lives
