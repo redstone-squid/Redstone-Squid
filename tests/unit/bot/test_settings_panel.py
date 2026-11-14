@@ -8,10 +8,10 @@ from typing import Any, cast, override
 import discord
 import pytest
 
-import squid.bot.settings_view as settings_view
+import squid.bot.settings.screen as settings_view
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
+from squid.bot.settings.screen import SettingsCapabilities, SettingsPanel
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.domain import (

@@ -14,7 +14,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.diagnostics_refresh import ErrorReportRefresh
+from squid.bot.diagnostics.refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
 from squid.diagnostics.models import ErrorReport
 from squid_i18n import md_tr

@@ -203,7 +203,7 @@ account, a Discord identity, and a name-only credit are not interchangeable.
 Account/settings sources: [account_workspace.py](../../squid/bot/accounts/workspace.py),
 [account_view.py](../../squid/bot/accounts/overview.py),
 [profile_editor.py](../../squid/bot/accounts/profile_editor.py),
-[settings_view.py](../../squid/bot/settings_view.py). Remaining entries are rooted
+[settings_view.py](../../squid/bot/settings/screen.py). Remaining entries are rooted
 in the production extension list in [app.py](../../squid/bot/app.py).
 
 ## Interaction design

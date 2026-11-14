@@ -20,7 +20,7 @@ COMMAND_MODULES = [
     "squid.bot.help",
     "squid.bot.notifications",
     "squid.bot.permissions",
-    "squid.bot.settings",
+    "squid.bot.settings.cog",
     "squid.bot.starboard.cog",
     "squid.bot.submission.edit",
     "squid.bot.submission.records",

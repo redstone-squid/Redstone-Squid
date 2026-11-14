@@ -131,7 +131,7 @@ async def test_the_error_browser_is_app_only(loaded_bot: commands.Bot) -> None:
 
     assert lookup is not None
     assert raiser is not None
-    assert lookup.module == "squid.bot.diagnostics"
+    assert lookup.module == "squid.bot.diagnostics.cog"
     assert type(raiser.cog).__name__ == "Admin"
     assert loaded_bot.get_command("e") is raiser
     assert loaded_bot.get_command("error") is None

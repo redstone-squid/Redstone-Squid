@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Self
 from discord import app_commands
 
 import squid_ui_discord as sd
-from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
+from squid.bot.settings.screen import SettingsCapabilities, SettingsPanel
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode

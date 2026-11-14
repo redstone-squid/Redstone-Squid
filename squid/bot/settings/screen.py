@@ -10,8 +10,8 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.i18n import localization_for
+from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor
 from squid.bot.ui import CardField, tr
-from squid.bot.vote_emoji_editor import VoteEmojiEditor
 from squid.core.actors import Actor
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.edits.application import EditRunner

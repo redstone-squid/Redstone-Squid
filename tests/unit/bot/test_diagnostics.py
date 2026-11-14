@@ -12,7 +12,7 @@ from whenever import Instant
 
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.diagnostics_view import ERROR_CHROME, ErrorReportScreen, report_attachment
+from squid.bot.diagnostics.screen import ERROR_CHROME, ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.models import ErrorReport
 from squid_ui.pages import PagePosition
@@ -386,7 +386,7 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
 
     from anyio.abc import TaskStatus
 
-    from squid.bot.diagnostics_refresh import ErrorReportRefresh
+    from squid.bot.diagnostics.refresh import ErrorReportRefresh
 
     stopped = anyio.Event()
 
@@ -401,7 +401,7 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
             finally:
                 stopped.set()
 
-    monkeypatch.setattr("squid.bot.diagnostics_view.ErrorReportRefresh", ObservedRefresh)
+    monkeypatch.setattr("squid.bot.diagnostics.screen.ErrorReportRefresh", ObservedRefresh)
     async with running_execution_host() as execution_host:
         screen = make_screen((make_report("aaa111"),))
         root, _ = await message_root_browser(screen, execution_host=execution_host)
