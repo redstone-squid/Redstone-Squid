@@ -209,3 +209,23 @@ async def test_an_unreachable_message_goes_stale_and_is_repainted_when_pressed()
 
     assert payload_texts(interaction.response.edit_message.records[0].kwargs["view"]) == ["Renamed", "Note 0"]
     assert root._candidates.stale == frozenset()
+
+
+async def test_a_press_renews_the_credentials_that_delete_its_message() -> None:
+    delivery = Delivery()
+    root, panel = await mounted(delivery)
+    grown = press_from(delivery, 1)
+    panel.notes = 6
+    await root.refresh(grown)
+    third = root._continuations.slots[1]
+    # The follow-up's own token has expired; a later press on the message still reaches it.
+    grown.expired = True
+    assert third.message_id is not None
+    press = interaction_harness(message_id=third.message_id)
+    await root.dispatch("inc", press)
+
+    panel.notes = 1
+    await root.refresh(press_from(delivery, 0))
+
+    assert len(press.deletions) == 1
+    assert grown.deletions == []

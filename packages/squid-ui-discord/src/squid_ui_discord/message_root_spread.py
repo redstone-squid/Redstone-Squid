@@ -10,6 +10,7 @@ Continuations are numbered from 1 in reading order; 0 always means the first mes
 
 import logging
 from dataclasses import dataclass
+from typing import cast
 
 import discord
 
@@ -47,10 +48,17 @@ class _Continuations:
         return 0
 
     def renew(self, index: int, handle: deliver.EditHandle) -> None:
-        """Trade up to fresher credentials, as `MessageRoot._renew` does for the first message."""
+        """Trade up to fresher credentials, as `MessageRoot._renew` does for the first message.
+
+        Discord lets an interaction token edit or delete only messages of that interaction,
+        so the token that sent a follow-up stops working after 15 minutes. A press on the
+        message carries a token that reaches it again, for deleting as well as editing.
+        """
         slot = self.slots[index - 1]
         if slot.handle is None or not slot.handle.permanent:
             slot.handle = handle
+            if hasattr(handle, "delete"):
+                slot.delete_handle = cast(deliver.DeleteHandle, handle)
 
     async def write(
         self,
