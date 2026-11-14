@@ -123,3 +123,57 @@ async def test_filter_edit_and_remove_share_one_action_row() -> None:
             for row in rows
         )
         assert "width:3" in edit.payload["label"]
+
+
+async def test_guided_edits_preserve_or_and_negation() -> None:
+    screen = editor('(closing_time>"5" OR opening_time>"5") AND NOT width:3')
+    async with stage(screen, owner=object()) as ui:
+        first = await ui.press_for_form(ui.key_for("edit-0"))
+        assert {item.custom_id for item in first.modal.walk_children() if hasattr(item, "custom_id")} == {
+            "value",
+            "operator",
+            "upper",
+        }
+        await first.submit({"value": "7", "operator": "3"})
+        assert screen.query == '(closing_time>7 OR opening_time>"5") AND NOT width:3'
+        await ui.press(ui.key_for("remove-1"))
+        assert screen.query == "closing_time>7 AND NOT width:3"
+        second = await ui.press_for_form(ui.key_for("edit-1"))
+        await second.submit({"value": "4", "operator": "0"})
+        assert screen.query == "closing_time>7 AND NOT width:4"
+
+
+async def test_guided_range_edit_prefills_and_preserves_bounds() -> None:
+    screen = editor("width:[3 TO 5] OR height:7")
+    async with stage(screen, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("edit-0"))
+        await form.submit({"value": "4", "upper": "6", "operator": "5"})
+        assert screen.query == "width:[4 TO 6] OR height:7"
+
+
+async def test_keyword_edit_treats_query_syntax_as_literal_text() -> None:
+    screen = editor("door OR width:3")
+    async with stage(screen, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("edit-0"))
+        await form.submit({"value": "door AND height:99"})
+        assert screen.query == '"door AND height:99" OR width:3'
+
+
+async def test_filter_picker_has_specific_search_copy_and_shows_search_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = RecordingProvider((Candidate.create("width", "Width"),))
+    service = SuggestionService(SuggestionRegistry.of((RegisteredSource("search_fields", provider),)))
+    screen = editor()
+    async with stage(screen, owner=object()) as ui:
+        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
+        monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
+        await ui.press(ui.key_for("field"))
+        assert "## Search" not in ui.texts()
+        assert ui.control(ui.key_for("search-lookup.search")).payload["label"] == "Search filter"
+        form = await ui.press_for_form(ui.key_for("search-lookup.search"))
+        await form.submit({"query": "wid"})
+        assert "wid" in ui.texts()
+        with anyio.fail_after(2):
+            while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
+                await anyio.sleep(0.01)
+        await ui.select(ui.key_for("search-lookup.results"), ["width"])
+        assert ui.control(ui.key_for("field")).payload["label"] == "Filter: Width"

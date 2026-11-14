@@ -37,7 +37,7 @@ def search_help(
     records: bool,
     apply_example: Callable[[str, sl.PressEvent], Awaitable[None]],
 ) -> sp.Tabs[sl.ComponentsV2Target, sd.Request]:
-    """Build the tabbed reference shown in place of browser results."""
+    """Build the tabbed reference appended below the catalogue or its results."""
     if records:
         fields = (
             sl.paragraph(
@@ -94,20 +94,20 @@ def search_help(
             ),
         )
     examples = RECORD_EXAMPLES if records else BUILD_EXAMPLES
-    example_nodes = tuple(
-        sl.section(
-            sl.heading(title, level=3),
-            sl.code(query),
-            sl.action_controls(
-                sl.action_control(
-                    tr(t"search-reference-try = Try this search"),
-                    partial(apply_example, query),
-                    key=f"example-{index}",
-                ),
-                key=f"example-actions-{index}",
+    example_nodes = (
+        sl.paragraph(
+            Text.join(
+                "\n\n",
+                (md_tr(t"search-reference-example-description = **{title}** — `{query}`") for title, query in examples),
+            )
+        ),
+        sl.action_controls(
+            *(
+                sl.action_control(title, partial(apply_example, query), key=f"example-{index}")
+                for index, (title, query) in enumerate(examples)
             ),
-        )
-        for index, (title, query) in enumerate(examples)
+            key="example-actions",
+        ),
     )
     return sp.Tabs(
         (
@@ -134,40 +134,44 @@ def search_help(
                 tr(t"search-reference-syntax = Syntax & sorting"),
                 sl.section(
                     sl.heading(tr(t"search-reference-syntax = Syntax & sorting")),
-                    sl.paragraph(
-                        tr(
-                            t"search-reference-and = Spaces mean AND: door width<=5 requires both. OR "
-                            t"accepts either: (door OR extender) width<=5 applies the width limit to both "
-                            t"alternatives."
-                        )
-                    ),
-                    sl.paragraph(
-                        tr(
-                            t"search-reference-not = NOT excludes a match: door NOT "
-                            t"restriction:observerless. AND binds more tightly than OR; use parentheses to "
-                            t"group alternatives."
-                        )
-                    ),
-                    sl.paragraph(
-                        md_tr(
-                            t'search-reference-operators = Quote phrases: title:"vault door". Numbers and '
-                            t"dates support <, <=, >, >= and inclusive ranges such as width:[3 TO 5]. "
-                            t"Wildcards (* and ?) are not supported.",
-                        )
-                    ),
-                    sl.paragraph(
-                        tr(
-                            t"search-reference-sort = Put one field in Sort, not in the query. Available "
-                            t"fields: width, height, depth, created_at, updated_at. Prefix with - to reverse "
-                            t"order. Dimensions apply to Builds. Blank uses relevance for keywords; "
-                            t"filter-only searches use the default result order."
-                        )
-                    ),
-                    sl.paragraph(
-                        tr(
-                            t"search-reference-empty = No matches? Turn off type toggles, remove one filter "
-                            t"at a time, and check Fields & values. Records only includes populated "
-                            t"standings; hidden builds are never made visible by a filter."
+                    _reference(
+                        (
+                            sl.paragraph(
+                                tr(
+                                    t"search-reference-and = Spaces mean AND: door width<=5 requires both. OR "
+                                    t"accepts either: (door OR extender) width<=5 applies the width limit to both "
+                                    t"alternatives."
+                                )
+                            ),
+                            sl.paragraph(
+                                tr(
+                                    t"search-reference-not = NOT excludes a match: door NOT "
+                                    t"restriction:observerless. AND binds more tightly than OR; use parentheses to "
+                                    t"group alternatives."
+                                )
+                            ),
+                            sl.paragraph(
+                                md_tr(
+                                    t'search-reference-operators = Quote phrases: title:"vault door". Numbers and '
+                                    t"dates support <, <=, >, >= and inclusive ranges such as width:[3 TO 5]. "
+                                    t"Wildcards (* and ?) are not supported.",
+                                )
+                            ),
+                            sl.paragraph(
+                                tr(
+                                    t"search-reference-sort = Put one field in Sort, not in the query. Available "
+                                    t"fields: width, height, depth, created_at, updated_at. Prefix with - to reverse "
+                                    t"order. Dimensions apply to Builds. Blank uses relevance for keywords; "
+                                    t"filter-only searches use the default result order."
+                                )
+                            ),
+                            sl.paragraph(
+                                tr(
+                                    t"search-reference-empty = No matches? Turn off type toggles, remove one filter "
+                                    t"at a time, and check Fields & values. Records only includes populated "
+                                    t"standings; hidden builds are never made visible by a filter."
+                                )
+                            ),
                         )
                     ),
                 ),

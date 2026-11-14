@@ -740,3 +740,75 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         assert screen._guided is None
         assert screen._results is results
         ui.assert_within_limits()
+
+
+async def test_records_default_to_standings_and_highlight_active_controls() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records, initial_records=True)
+    async with stage(screen, owner=object()) as ui:
+        assert "## Records" in ui.texts()
+        assert "## Find a record" not in ui.texts()
+        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert ui.control(ui.key_for("guided-search")).payload["style"] == 2
+        assert not any(key.endswith("open-id") for key in ui.root.snapshot().handler_keys)
+        await ui.press(ui.key_for("guided-search"))
+        assert ui.control(ui.key_for("guided-search")).payload["style"] == 3
+        ui.control(ui.key_for("open-id"))
+        assert not any(key.endswith("cancel") for key in ui.root.snapshot().handler_keys)
+        await ui.press(ui.key_for("search-help"))
+        assert ui.control(ui.key_for("search-help")).payload["style"] == 3
+        assert "## Records" in ui.texts()
+        assert "## Search help" in ui.texts()
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "kind:door"})
+        assert ui.control(ui.key_for("all-standings")).payload["style"] == 2
+        await ui.press(ui.key_for("all-standings"))
+        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert screen._guided is not None
+        assert screen._guided.query == ""
+        assert "## Records" in ui.texts()
+
+
+async def test_collapsed_query_and_sort_share_summary_with_reset() -> None:
+    screen = _screen(initial_id=None)
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, "width:3", "-height")
+        summaries = [text for text in ui.texts() if "Query:" in text]
+        assert len(summaries) == 1
+        assert "width:3" in summaries[0]
+        assert "Height ↓" in summaries[0]
+        assert screen._guided is None
+        ui.control(ui.key_for("reset"))
+        await ui.press(ui.key_for("reset"))
+        assert screen._query == screen._sort == ""
+        assert screen._results is None
+        assert "## Build catalogue" in ui.texts()
+
+
+@pytest.mark.parametrize("records", [False, True])
+async def test_expanded_editor_results_and_help_fit_together(records: bool) -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records" if records else "builds"
+    cast(AsyncMock, screen._search_service).search.return_value = SearchPage(
+        hits=tuple(
+            RecordSearchHit(str(index), f"Fastest door {index}", "Java", index, f"Door {index}", "fastest", "all_time")
+            if records
+            else BuildSearchHit(str(index), f"Door {index}", "confirmed", "A detailed door description")
+            for index in range(8)
+        ),
+        total=8,
+        next=None,
+        prev=None,
+    )
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("guided-search"))
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "kind:door AND title:door" if records else "width:3 AND height:5"})
+        await ui.press(ui.key_for("search-help"))
+        for tab in ("fields", "syntax", "examples"):
+            await ui.press(ui.key_for(f"search-reference.{tab}"))
+            assert "## Search results" in ui.texts()
+            ui.control(ui.key_for("advanced"))
+            ui.control(ui.key_for("reset"))
+            ui.assert_within_limits()
