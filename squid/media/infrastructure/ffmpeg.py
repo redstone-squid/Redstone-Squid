@@ -9,7 +9,7 @@ import shutil
 import signal
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from fractions import Fraction
 from pathlib import Path
@@ -278,7 +278,17 @@ class FfmpegMediaNormalizer:
             )
             video_size = _bounded_size(video_temporary, limits.max_output_bytes)
             output_probe = await self.probe(video_temporary)
-            _validate_video_output(probe, output_probe, strip_audio=request.strip_audio)
+            validation_source, validation_output = probe, output_probe
+            if (
+                probe.frame_count is not None
+                and output_probe.frame_count is not None
+                and probe.frame_count != output_probe.frame_count
+            ):
+                # MP4 sample counts can include frames the demuxer does not expose.
+                # Count decoded frames before treating a header mismatch as frame loss.
+                validation_source = replace(probe, frame_count=await self._decoded_frame_count(request.source_path))
+                validation_output = replace(output_probe, frame_count=await self._decoded_frame_count(video_temporary))
+            _validate_video_output(validation_source, validation_output, strip_audio=request.strip_audio)
 
             # Derive the thumbnail from the normalized video so both show the same content.
             seek_milliseconds = min((probe.duration_milliseconds or 0) // 2, 30_000)
@@ -369,6 +379,41 @@ class FfmpegMediaNormalizer:
             poster_path=request.poster_path,
             report=report,
         )
+
+    async def _decoded_frame_count(self, source_path: Path) -> int:
+        """Count decoded video frames when container counts disagree after normalization."""
+        stdout = await self._run(
+            self._ffprobe,
+            (
+                "-v",
+                "error",
+                "-protocol_whitelist",
+                _INPUT_PROTOCOLS,
+                "-protocol_blacklist",
+                _NETWORK_PROTOCOLS,
+                "-threads",
+                str(self._process_limits.threads),
+                "-count_frames",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=nb_read_frames",
+                "-of",
+                "json",
+                str(source_path.absolute()),
+            ),
+            operation="count_frames",
+            timeout_seconds=self._process_limits.video_timeout_seconds,
+            max_file_bytes=_MAX_PROBE_OUTPUT_BYTES,
+            capture_stdout=True,
+        )
+        try:
+            frame_count = _optional_non_negative_int(json.loads(stdout)["streams"][0]["nb_read_frames"])
+            if frame_count is not None and frame_count > 0:
+                return frame_count
+        except KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError:
+            pass
+        raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="count_frames")
 
     async def _run(
         self,
@@ -489,13 +534,20 @@ def _ffmpeg_input_arguments(source_path: Path, limits: MediaProcessLimits) -> tu
 def _validate_video_output(source: MediaProbe, output: MediaProbe, *, strip_audio: bool) -> None:
     expected_audio = source.has_audio and not strip_audio
     duration_tolerance = max(250, _frame_duration_milliseconds(source) * 2)
+    # Average rates depend on the muxer's first/last sample durations. Allow at most
+    # one frame of rate drift over the clip; dimensions, duration and counts still apply.
+    rate_difference = abs(
+        Fraction(output.frame_rate_numerator, output.frame_rate_denominator)
+        - Fraction(source.frame_rate_numerator, source.frame_rate_denominator)
+    )
+    clip_duration = max(source.duration_milliseconds or 0, output.duration_milliseconds or 0)
     if (
         output.video_codec != "h264"
         or "mp4" not in output.container_names
         or output.width != source.width
         or output.height != source.height
-        or output.frame_rate_numerator * source.frame_rate_denominator
-        != source.frame_rate_numerator * output.frame_rate_denominator
+        or output.frame_rate_numerator <= 0
+        or rate_difference * clip_duration > 1000
         or output.has_audio != expected_audio
         or (output.has_audio and output.audio_codec != "aac")
         or output.duration_milliseconds is None
