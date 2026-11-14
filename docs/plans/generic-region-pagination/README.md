@@ -1,6 +1,7 @@
 # Generic region pagination roadmap
 
-Status: phase 1 in progress. Each phase is a separate task and starts with its own detailed plan.
+Status: phase 1 investigation complete; phase 2 planning is next. Each phase is a separate task
+and starts with its own detailed plan.
 
 Make joint region pagination part of the generic planning architecture. Sibling and nested
 regions should share target limits while preserving content, navigation, and reading position.
@@ -49,7 +50,8 @@ phase checks the assembled system rather than postponing correctness work until 
 
 ## Phase 1 Establish a shared planning core
 
-Detailed task: [Shared core boundaries and behavior](01-shared-core.md).
+Completed investigation: [Shared core boundaries and behavior](01-shared-core.md), including
+the agreed decisions, evidence, and phase 2 handoff.
 
 Inventory the whole planning pipeline across targets, including semantic interpretation,
 representation selection, composition, measurement, search, pagination, state reconciliation,
@@ -161,6 +163,7 @@ Depends on phases 4 and 5. Target integration can begin earlier where contracts 
 - Cross-target tests and application scenarios support the documented behavior.
 - Remaining limitations are deliberate and documented; obsolete parallel machinery is removed.
 
-Phase 1 starts with investigation and design. Its findings may revise the later phases to
-account for convergence of the whole planning pipeline. Production changes follow the
-relevant phase plans; an open design question is not an implementation decision.
+Phase 1 established shared content-loss policy, fidelity-based strictness, a rich semantic core,
+and direct target participation. The next task is the phase 2 detailed plan, using the handoff
+in that investigation. Production changes follow the relevant phase plans; an open design
+question is not an implementation decision.

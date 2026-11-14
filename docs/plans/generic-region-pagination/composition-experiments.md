@@ -127,7 +127,7 @@ preserves the semantic item it previously anchored.
 Requirement: keep the identities of semantic items separate from occurrence paths, chosen
 representation, page partitions, and committed cursor state. The final design must establish
 which identifiers remain stable through each transformation and which changes trigger replanning.
-Allocation stability and content-change reconciliation still need a complete behavior matrix.
+The [phase plan](01-shared-core.md) records the subsequent state probes and representative behavior matrix.
 
 ## Information the experiments require
 

@@ -1,7 +1,7 @@
 # Shared planning core boundaries and behavior
 
-Status: in progress. This phase investigates and designs the shared core; architectural
-choices are discussed as they arise. Production planner changes are not underway.
+Status: complete as an investigation and architectural direction. The agreed decisions and
+phase 2 handoff are recorded below. Production planner changes are not underway.
 
 The direction is one core that owns planning decisions, with extensions for behavior that
 actually depends on the target. The investigation covers the whole planning pipeline so
@@ -81,10 +81,10 @@ concrete requirements and unresolved limits rather than a speculative API to imp
 ## Progress
 
 - [x] Map pipeline responsibilities and existing sharing in an initial code inventory.
-- [ ] Establish the behavior and capability matrix.
+- [x] Establish the representative behavior and target capability matrix.
 - [x] Agree shared content-loss policy, direct target participation, and rich semantic planning.
-- [ ] Complete composition and state probes; initial table and resource findings are recorded.
-- [ ] Record the architectural direction and phase 2 handoff.
+- [x] Probe semantic preservation, resource composition, and state transitions.
+- [x] Record the architectural direction and phase 2 handoff.
 
 ## Initial pipeline inventory
 
@@ -126,9 +126,9 @@ that every node placement has been tested.
 | Slack modal | Block limits and form-specific structure; requires one top-level form trigger. | HTML intermediate plus modal-specific conversion and validation. |
 
 Joint regions currently reject non-V2 bodies before any of these backend paths run. That
-restriction is an implementation gap, not evidence of target capability. The full behavior
-matrix remains unfinished; the first executable comparison below concerns alternatives and
-content loss, without any region nodes.
+restriction is an implementation gap, not evidence of target capability. The executable
+comparison below concerns alternatives and content loss without any region nodes. The final
+representative behavior matrix follows the agreed decisions.
 
 ## Experiment 1 Alternatives under target pressure
 
@@ -198,10 +198,9 @@ This changes Slack's current non-strict defaults. Preserve permissive fitting th
 policy where callers need it, with migration details to be designed in the implementation phase.
 Keeping different implicit loss permissions for each target was considered and not selected.
 
-This does not decide whether selecting an authored alternative should count as degradation,
-which alternatives are equivalent, or how strict mode should treat them. The experiment shows
-that strict mode currently rejects even the complete compact alternative on V2 and under an
-HTML budget. Those fidelity questions remain open.
+Decision 4 below establishes how strict mode treats equivalent representations. The experiment
+shows that current strict mode rejects even the complete compact alternative on V2 and under
+an HTML budget. The metadata for declaring equivalence remains part of the phase 2 design.
 
 ## Decision 2 Slack must participate directly in shared planning
 
@@ -233,8 +232,8 @@ The initial responsibility map for the replacement is:
 This establishes ownership. Decision 3 below chooses the working direction for the planning
 model; concrete interfaces still require evidence from composition and state experiments.
 
-No production behavior has changed. The experiments below advance the investigation; the full
-matrix and final architectural recommendation remain unfinished.
+No production behavior has changed. The experiments and final handoff below establish the
+requirements for the next implementation phase.
 
 
 ## Decision 3 Preserve decision-relevant semantics in the core
@@ -260,8 +259,8 @@ for tables, shared resources, and nested regions. Exact types and extension APIs
 The [composition experiments](composition-experiments.md) probe tables, shared attachments,
 and the existing nested-region behavior. They establish requirements for semantic identity,
 content effects, contextual resource accounting, and state reconciliation. They also record
-current defects that migration must address. The broader capability matrix and architecture
-handoff remain incomplete.
+current defects that migration must address. The behavior matrix and architecture handoff
+below combine those findings with the agreed policies.
 
 ### Decision 4 Separate fidelity from representation preference
 
@@ -293,3 +292,116 @@ The agreed policy is:
 Representation preference belongs in candidate ranking, while fidelity and hard requirements
 determine admissibility. The precise ranking and representation metadata remain to be designed.
 No production behavior has changed.
+
+
+## Representative behavior matrix and state findings
+
+This matrix covers the cases needed to establish the planning boundary. It is not an exhaustive
+cross-product of semantic nodes, parameters, targets, and frontends; that conformance work belongs
+to migration and target completion.
+
+| Case | Current evidence | Requirement for the shared core |
+| --- | --- | --- |
+| Independently paged siblings | Region tests visit every coordinate of a small sibling pair and check allocations remain stable. | Cursor-only movement reuses the committed page layout; one region does not unexpectedly repartition its sibling. |
+| Nested regions and persistent content | Tests cover hidden child cursors, visible bindings, repeated headers/footers, and section shells. | Retain logical positions while content remains in the tree; account for persistent content and navigation on every reachable page. |
+| Legal breaks and container policies | Region tests cover `unbreakable` and `keep_with_next`; the sequence breaker and HTML paging test soft fill preferences. The joint legacy conversion omits `min_fill` and `widows`. | Preserve hard break rules and keep soft preferences distinct; carry wrapper context through transformations instead of silently dropping it. |
+| Complete alternative under pressure | Experiment 1 distinguishes Discord selection, Slack post-conversion omission, and unbounded HTML behavior. | Consider permitted representations against the actual target constraints while choices remain open. |
+| Structured content and shared resources | Composition probes expose lost table information, unreported table slicing, and double-counted shared attachments. | Preserve semantic units, relationships, effects, and resource identity through composition and selection. |
+| Content insertion or target change | A direct state probe preserved the surviving anchor after insertion and after a capacity change. | Permit replanning when relevant inputs change, then reconcile reading position through stable semantic identity. |
+| Explicit navigation or missing anchor | The probe confirmed a requested page overrides the remembered anchor; removing the anchor reset to page zero under the existing policy. | Preserve the established position policy. A future change to nearest-survivor behavior would be a separate UX decision. |
+| Controlled and routed ownership | Existing tests check application values, absence of managed cursor writes, and generated routes. | Planning must not take ownership of application state or invoke change handlers. |
+| Failed delivery and stale controls | Mounted tests cover failed edit, retry, sibling state, and generation checks. | Return proposed state and bindings; the frontend retains authority over successful publication and interaction admission. |
+| HTML without message limits | HTML keeps the preferred full representation unless authored constraints apply. | An unbounded target remains valid; absence of global limits must not invent a pagination requirement. |
+
+The additional state probe planned seven keyed paragraphs in a region with a six-component target.
+Planning the initial requested page left the session empty until its updates were applied. A later
+page request proposed a different cursor while keeping the committed allocation and cursor intact.
+Insertion preserved the old anchor; removal of that anchor used the current first-page fallback.
+Increasing capacity allowed a single page while the proposed report still identified the old anchor.
+This last observation does not assert that inactive pager state is retained after committing a
+single-page result; cursor collection is a separate part of the existing lifecycle.
+
+Validation: 101 cursor identity, navigation, region, pagination, and ownership tests passed. The
+direct probe exercised candidate state before applying updates as well as the content/target-change
+cases. The underlying precedence policy is in `pages.resolve_page_position`; `CursorCoordinator`
+applies it to a selected partition, and `PresentationState.apply_updates` commits proposed state.
+
+The shared coordinator still constructs Discord primitive navigation in its `controls` method.
+Its generic position resolution and state logic can be retained, while control realization must
+move to target-specific participation. Source pagination and selection windows already share some
+navigation vocabulary, but their data ownership remains outside layout fragmentation.
+
+## Architectural direction
+
+Use one planning core that retains the authored semantic information and owns the decisions that
+change its presentation. Targets contribute possible realizations and their constraints while
+those decisions remain open. A complete target scene is an output, not the common planning input.
+
+The conceptual responsibilities are:
+
+1. Establish semantic occurrences, identity, inherited policies, and application-owned state from
+   the authored graph. Preserve the original content and relationships as choices are explored.
+2. Obtain target realizations and their effects, costs, contextual constraints, and resource
+   dependencies. A realization may need target-specific construction to measure it; this must not
+   erase the semantic information or secretly select additional adaptations.
+3. Coordinate representation choices, composition, and fragmentation in one search. Apply shared
+   permission and strictness rules; compare admissible candidates using the eventual ranking policy.
+4. Reconcile positions against the selected page structure and collect the visible interactions,
+   resources, diagnostics, and proposed presentation updates.
+5. Build and validate the target scene from the selected result. Scene construction cannot silently
+   truncate, omit, or otherwise revise a decision to make it fit.
+
+These are responsibilities and dependencies, not a mandated sequence of whole-tree passes. Search,
+measurement, and composition may need to interact incrementally. The next phase must establish the
+contract that makes those interactions correct and bounded.
+
+Keep content preservation, hard requirements, representation preference, and resource consumption
+separate in the planning model. Equal resource vectors do not imply equivalent candidates. A
+preservation claim must include relationships and interaction behavior, not only retained strings.
+
+The existing semantic nodes are the starting point. Planning may annotate occurrences or derive a
+richer graph, but should not create a competing authored vocabulary merely to unify the backends.
+An opaque native extension can remain atomic only if its placement constraints, resources, and
+other decision-relevant behavior are exposed. Missing information must limit the transformations
+available to the core rather than invite guesses about the extension's contents.
+
+Preserve reusable mechanisms where their contracts fit: cursor precedence and ownership, exact
+sequence breaking, localization and text parsing, staged state publication, and separation of
+serializable scenes from live bindings. Do not carry Discord primitive assumptions into the shared
+contracts simply because these mechanisms currently reside beside them.
+
+## Phase 2 handoff
+
+The next task is a separate detailed plan for establishing composition across targets. Its scope
+includes the first usable core/target boundary, rather than a utility that merely concatenates
+independently completed scenes.
+
+The plan needs to resolve:
+
+- How authored semantics and planning decisions are represented and related, including occurrence
+  identity and inherited policies. Choose concrete types only after tracing these requirements.
+- How targets expose alternatives, semantic effects, legal breaks, continuation requirements,
+  measurements, and context-dependent composition constraints without owning another complete search.
+- How composition preserves resource sharing and what comparisons are safe before full context is
+  known. Begin with the shared-attachment counterexample, not scalar costs alone.
+- How preservation is declared and checked for built-in realizations, arbitrary authored alternatives,
+  and native extensions. Decide the exact metadata and author API for equivalent alternatives.
+- How target participation reports failures and consumes shared work budgets, leaving the full
+  allocation algorithm and ranking policy to phase 3.
+- How existing callers remain usable while responsibilities move into the core. Temporary bridges
+  must have explicit removal points; no new implicit Slack-to-HTML planning path should be introduced.
+
+Exercise the proposed boundary on V2 and Slack messages, with HTML checking that an unbounded target
+remains natural. Include a table, alternative representations, shared attachments, and a repeated
+container/navigation cost. Target families may migrate incrementally; phase 6 completes their
+coverage, while phases 3 through 5 supply the joint search, state integration, and reuse machinery.
+
+Migration must address the concrete gaps recorded here: selective wrapper handling, lost table
+identity and display policies, unreported table slicing, implicit Slack content loss, attachment
+accounting, unconditional fallback degradation, duplicate planning paths, and inconsistent work
+metrics. These are acceptance cases for the relevant phase, not permission to expand phase 1 into
+an unplanned implementation.
+
+No further Phase 1 policy choice is blocking the next plan. Exact interfaces, ranking, optimization,
+and compatibility mechanics remain deliberate work for the subsequent phase plans. Production
+behavior has not changed during this investigation.
