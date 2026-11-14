@@ -1,6 +1,7 @@
 """Direct Components V2 rules for the shared composition boundary."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import assert_never
 
 from squid_i18n import tree
@@ -25,7 +26,7 @@ from squid_ui.planning.composition import (
     SharedUse,
     UnsupportedCapability,
 )
-from squid_ui.planning.composition_discord import discord_text, select_violations
+from squid_ui.planning.composition_discord import discord_text, discord_time_prefix, select_violations
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.realizations import (
     ActionsRealization,
@@ -46,12 +47,14 @@ from squid_ui.planning.realizations import (
     TextRealization,
     TextSequenceRealization,
     ThumbnailRealization,
+    TimeRealization,
     record_text,
     semantic_offers,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.primitives import nodes as primitive
+from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Markup
 
 
@@ -288,6 +291,14 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         *rendered_text(rendered),
                         *(node for child in part.children for node in visit(child, in_panel=in_panel)),
                     )
+                case TimeRealization() as time:
+                    rendered_text(discord_text(time, context.escape_text))
+                    prefix = discord_time_prefix(time, context.escape_text) or None
+                    return (
+                        scene.Time(time.instant, time.style or "f", prefix)
+                        if time.timezone is None
+                        else scene.ZonedTime(time.instant, time.timezone, prefix),
+                    )
                 case TextRealization() as payload:
                     return rendered_text(discord_text(payload, context.escape_text))
                 case TableRealization() as table:
@@ -463,6 +474,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         raise DrawInvariantError(msg_0)
                 case scene.Text(content=content):
                     texts.append(content)
+                case scene.Time():
+                    instant = datetime.fromisoformat(node.instant)
+                    texts.append((node.prefix or "") + f"<t:{int(instant.timestamp())}:{node.style}>")
+                case scene.ZonedTime():
+                    zoned = ZonedDateTime(datetime.fromisoformat(node.instant), node.timezone)
+                    texts.append((node.prefix or "") + zoned.isoformat())
                 case scene.Gallery(items=items):
                     if len(items) > self.limits.gallery_items or any(
                         len(item.description or "") > self.limits.gallery_item_description for item in items

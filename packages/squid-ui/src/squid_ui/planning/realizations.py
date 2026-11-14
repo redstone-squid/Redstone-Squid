@@ -88,7 +88,7 @@ from squid_ui.presentations import (
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import FIRST_PAGE, Alt, Alts, Condense, Drop, Never, PageOwnership, Spill, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.text import TextLike, resolve_text
+from squid_ui.text import TextLike, resolve_text, timestamp_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +130,23 @@ class StatusRealization(TextRealization):
 
 
 @dataclass(frozen=True, slots=True)
+class MetricRealization(TextRealization):
+    label: tuple[tree.Node, ...] = ()
+    value: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class TimeRealization(TextRealization):
+    instant: str = ""
+    display: str = ""
+    style: str | None = None
+    timezone: str | None = None
+    prefix: tuple[tree.Node, ...] = ()
+    native_prefix: str | None = None
+    label: tuple[tree.Node, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ProgressRealization(TextRealization):
     value: float = 0
     maximum: float = 1
@@ -157,8 +174,9 @@ class PanelRealization:
     framed: bool = True
     thumbnail: str | None = None
     heading: str = ""
-    kind: Literal["block", "section", "article"] = "block"
+    kind: Literal["block", "section", "article", "aside"] = "block"
     spoiler: bool = False
+    tone: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -587,7 +605,7 @@ def semantic_offers[RenderTargetT, ContextT](
     spill = False
     inside_panel = False
     for ancestor in occurrence.ancestors():
-        inside_panel |= isinstance(ancestor, sem.Block | sem.Section | sem.Article | primitive.Panel)
+        inside_panel |= isinstance(ancestor, sem.Block | sem.Section | sem.Article | sem.Aside | primitive.Panel)
         if isinstance(ancestor, sem.Truncated):
             keep = ancestor.keep
             spill = False
@@ -1558,6 +1576,59 @@ def semantic_offers[RenderTargetT, ContextT](
             case sem.Link():
                 payload = ControlRealization(label, url=value.url)
         return (RealizationOffer(occurrence, "button", payload, interaction=True, binding=binding, form=form),)
+    if isinstance(value, sem.Metric):
+        label = resolve_text(value.label, context.localization).nodes
+        rendered = f"{value.value}{' ' + value.unit if value.unit is not None else ''}"
+        nodes = (
+            tree.Node("strong", children=(*label, tree.literal(":")), tag="strong", markup="**"),
+            tree.literal(" " + rendered),
+        )
+        return (RealizationOffer(occurrence, "metric", MetricRealization(nodes, label=label, value=rendered)),)
+    if isinstance(value, sem.Timestamp | sem.ZonedTimestamp | primitive.Time | primitive.ZonedTime):
+        if isinstance(value, primitive.Time | primitive.ZonedTime) and not native_controls:
+            return ()
+        label = (
+            resolve_text(value.label, context.localization).nodes
+            if isinstance(value, sem.Timestamp | sem.ZonedTimestamp) and value.label is not None
+            else ()
+        )
+        if isinstance(value, sem.Timestamp | primitive.Time):
+            instant = value.instant
+            style = sem.TimeStyle(value.style).value
+            timestamp = timestamp_text(instant, style=style)
+            time_nodes = resolve_text(timestamp, context.localization).nodes
+            display = instant.isoformat()
+            timezone = None
+        else:
+            instant = value.value.instant
+            style = None
+            display = value.value.isoformat()
+            time_nodes = (tree.literal(display),)
+            timezone = value.value.timezone
+        prefix = (
+            (tree.Node("strong", children=(*label, tree.literal(":")), tag="strong", markup="**"), tree.literal(" "))
+            if label
+            else ()
+        )
+        if isinstance(value, primitive.Time | primitive.ZonedTime) and value.prefix is not None:
+            prefix = resolve_text(value.prefix, context.localization).nodes
+            label = prefix
+        return (
+            RealizationOffer(
+                occurrence,
+                "time",
+                TimeRealization(
+                    (*prefix, *time_nodes),
+                    instant=instant.isoformat(),
+                    display=display,
+                    style=style,
+                    timezone=timezone,
+                    label=label,
+                    prefix=prefix,
+                    native_prefix=value.prefix if isinstance(value, primitive.Time | primitive.ZonedTime) else None,
+                ),
+            ),
+        )
     if isinstance(value, sem.Status):
         nodes = (tree.literal(value.tone.status_marker), *resolve_text(value.content, context.localization).nodes)
         return (
@@ -1653,6 +1724,7 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.Stack
         | sem.Section
         | sem.Article
+        | sem.Aside
         | sem.Fields
         | sem.Media
         | sem.Figure
@@ -1708,6 +1780,13 @@ def semantic_offers[RenderTargetT, ContextT](
                     tree.plain(node) for node in resolve_text(value.heading.content, context.localization).nodes
                 ),
                 kind="section" if isinstance(value, sem.Section) else "article",
+            )
+        elif isinstance(value, sem.Aside):
+            payload = PanelRealization(
+                context.palette.tone(value.tone),
+                framed=panels and (nested_panels or not inside_panel),
+                kind="aside",
+                tone=value.tone.base.value,
             )
         elif isinstance(value, sem.Block):
             payload = PanelRealization(resolve_accent(value.accent, context.palette))

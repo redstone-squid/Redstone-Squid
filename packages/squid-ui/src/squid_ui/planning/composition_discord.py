@@ -1,12 +1,13 @@
 """Discord formatting and control constraints shared by both message surfaces."""
 
 from collections.abc import Callable
+from datetime import datetime
 
 from squid_i18n import tree
 from squid_ui import scene
 from squid_ui.entity import ConversationType
 from squid_ui.planning.limits import ComponentLimits
-from squid_ui.planning.realizations import TextRealization
+from squid_ui.planning.realizations import TextRealization, TimeRealization
 
 
 def select_violations(
@@ -56,6 +57,11 @@ def select_violations(
 
 
 def discord_text(payload: TextRealization, escape: Callable[[str], str] | None = None) -> str:
+    if isinstance(payload, TimeRealization):
+        prefix = discord_time_prefix(payload, escape)
+        if payload.timezone is not None:
+            return prefix + payload.display
+        return prefix + f"<t:{int(datetime.fromisoformat(payload.instant).timestamp())}:{payload.style}>"
     if payload.shortening is not None and not payload.visible_nodes:
         return ""
     if payload.role == "code":
@@ -69,3 +75,10 @@ def discord_text(payload: TextRealization, escape: Callable[[str], str] | None =
     if payload.role == "quote":
         return "\n".join("> " + line for line in content.splitlines())
     return content
+
+
+def discord_time_prefix(payload: TimeRealization, escape: Callable[[str], str] | None = None) -> str:
+    if payload.native_prefix is not None:
+        return payload.native_prefix
+    # Serialize the label separately so a trailing space cannot become an HTML entity.
+    return tree.markdown(payload.prefix[:-1], discord=True, escape=escape) + " " if payload.prefix else ""

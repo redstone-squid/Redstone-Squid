@@ -58,7 +58,7 @@ regions still uses its existing target fitter; the report names that route.
 | Slack modal | Existing form planner and modal limits. | The surface requires one top-level form trigger. Region navigation is rejected with this reason; it cannot preserve a submitted form's ownership contract. |
 
 Shared vocabulary now includes headings, paragraphs, notes, code, quotations,
-fields, tables, lists, images and figures, actions, choices, toggles, form triggers,
+fields, tables, lists, metrics, timestamps, images and figures, actions, choices, toggles, form triggers,
 checked alternatives, regions, and the supported grouping/budget wrappers. Actual
 realizations remain target-specific: for example, classic displays an image's
 alternative description as embed text, and Slack requires plain text in headers
@@ -68,6 +68,12 @@ changing it. Section/article thumbnails repeat with their headings on every page
 V2 uses a heading accessory, classic uses the owning embed thumbnail, HTML keeps
 the native section/article element, and Slack places an image after the heading.
 Classic rejects thumbnails inside an enclosing embed; Slack rejects section accents.
+Asides preserve their tone and palette colour across continuation pages on Discord
+and HTML; Slack reports its missing accent capability. Nested Discord asides follow
+the same flattening rule as semantic sections. HTML metrics retain definition-list
+markup. Timestamps retain typed time metadata in HTML and V2, native date tokens
+in classic Discord and Slack, and visible named zones for exact zoned times.
+Native Discord `Time` and `ZonedTime` also compose directly.
 
 Actions keep ordered button rows and may offer a select when every action permits
 grouping. A select must fit the target's option and cardinality limits; cross-page

@@ -1,6 +1,7 @@
 """Direct Slack realization rules; no HTML planning or HTML scene is involved."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import cast
 
 from squid_i18n import tree
@@ -38,6 +39,7 @@ from squid_ui.planning.realizations import (
     TableRealization,
     TextRealization,
     TextSequenceRealization,
+    TimeRealization,
     record_text,
     semantic_offers,
 )
@@ -341,6 +343,33 @@ class SlackCompositionRules[
                         )
                     for child in part.children:
                         visit(child)
+                case TimeRealization() as time:
+                    prefix = _mrkdwn(time.prefix)
+                    if prefix is None:
+                        violations.append(UnsupportedCapability(identity, "Slack time label markup"))
+                    else:
+                        display = time.display.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        if time.timezone is None:
+                            token = {
+                                "t": "{time}",
+                                "T": "{time_secs}",
+                                "d": "{date_num}",
+                                "D": "{date_long}",
+                                "f": "{date_short_pretty} at {time}",
+                                "F": "{date_long_pretty} at {time}",
+                                "R": "{ago}",
+                            }[time.style or "f"]
+                            epoch = int(datetime.fromisoformat(time.instant).timestamp())
+                            display = f"<!date^{epoch}^{token}|{display}>"
+                        else:
+                            display = f"`{time.display}`"
+                        rendered = prefix + display
+                        limit("text", len(rendered), self.limits.components.section_text)
+                        texts.append(rendered)
+                        prepared_blocks.append(
+                            scene.SlackSection(scene.SlackText(rendered, scene.SlackTextKind.MARKDOWN))
+                        )
+                        blocks += 1
                 case TextRealization() as payload:
                     nodes = payload.visible_nodes
                     if payload.shortening is not None and not nodes:

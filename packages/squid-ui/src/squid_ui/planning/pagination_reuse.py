@@ -66,8 +66,26 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                 right, page=_page_configuration(right.page)
             )
         case (
-            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster() | sem.Themed()),
-            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster() | sem.Themed()),
+            (
+                sem.Group()
+                | sem.Stack()
+                | sem.Block()
+                | sem.Section()
+                | sem.Article()
+                | sem.Aside()
+                | sem.Cluster()
+                | sem.Themed()
+            ),
+            (
+                sem.Group()
+                | sem.Stack()
+                | sem.Block()
+                | sem.Section()
+                | sem.Article()
+                | sem.Aside()
+                | sem.Cluster()
+                | sem.Themed()
+            ),
         ):
             return replace(left, children=()) == replace(right, children=()) and _same_children(
                 left.children, right.children
@@ -137,6 +155,9 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             | sem.Quote()
             | sem.Status()
             | sem.ProgressBar()
+            | sem.Metric()
+            | sem.Timestamp()
+            | sem.ZonedTimestamp()
             | sem.Fields()
             | sem.Media()
             | sem.Figure()
@@ -170,7 +191,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             )
         case primitive.Section(), primitive.Section():
             return _same_children(left.texts, right.texts) and _same_node(left.accessory, right.accessory)
-        case ((primitive.Thumbnail() | primitive.Sep()), _):
+        case ((primitive.Thumbnail() | primitive.Sep() | primitive.Time() | primitive.ZonedTime()), _):
             return left == right
         case (
             primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code() | primitive.Lines(),

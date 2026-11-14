@@ -30,6 +30,7 @@ from squid_ui.planning.realizations import (
     FieldsRealization,
     FlowRealization,
     ImageRealization,
+    MetricRealization,
     PanelRealization,
     ProgressRealization,
     Realization,
@@ -40,6 +41,7 @@ from squid_ui.planning.realizations import (
     TableRealization,
     TextRealization,
     TextSequenceRealization,
+    TimeRealization,
     record_text,
     semantic_offers,
 )
@@ -343,6 +345,25 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             ),
                         ),
                     )
+                case MetricRealization() as metric:
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.DL,
+                            (
+                                scene.HtmlElement(scene.HtmlTag.DT, (text(metric.label),)),
+                                scene.HtmlElement(scene.HtmlTag.DD, (text((tree.literal(metric.value),)),)),
+                            ),
+                            attributes=(scene.HtmlAttribute(scene.HtmlAttributeName.CLASS, "squid-metric"),),
+                        ),
+                    )
+                case TimeRealization() as time:
+                    prefix = (text(time.prefix),) if time.prefix else ()
+                    content = scene.HtmlElement(
+                        scene.HtmlTag.TIME,
+                        (text((tree.literal(time.display),)),),
+                        time=scene.HtmlTimeRef(time.instant, timezone=time.timezone, style=time.style),
+                    )
+                    return (scene.HtmlElement(scene.HtmlTag.P, (*prefix, content)),)
                 case TextRealization() as payload:
                     if payload.shortening is not None and not payload.visible_nodes:
                         return ()
@@ -429,7 +450,15 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         children = (*children[:1], thumbnail, *children[1:])
                     colour = scene.HtmlColourRef(panel.accent) if panel.accent is not None else None
                     tag = scene.HtmlTag.DIV if panel.kind == "block" else scene.HtmlTag(panel.kind)
-                    return (scene.HtmlElement(tag, children, colour=colour),)
+                    attributes = (
+                        (
+                            scene.HtmlAttribute(scene.HtmlAttributeName.CLASS, "squid-aside"),
+                            scene.HtmlAttribute(scene.HtmlAttributeName.TONE, panel.tone),
+                        )
+                        if panel.tone is not None
+                        else ()
+                    )
+                    return (scene.HtmlElement(tag, children, colour=colour, attributes=attributes),)
                 case ImageRealization() as media:
                     asset = media.source if isinstance(media.source, Asset) else None
                     if asset is not None:

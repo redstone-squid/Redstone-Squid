@@ -83,7 +83,16 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.Details():
                 pageable = True
                 return replace(node, children=tuple(map(visit, node.children)))
-            case sem.Group() | sem.Stack() | sem.Block() | sem.Cluster() | sem.Section() | sem.Article() | sem.Themed():
+            case (
+                sem.Group()
+                | sem.Stack()
+                | sem.Block()
+                | sem.Cluster()
+                | sem.Section()
+                | sem.Article()
+                | sem.Aside()
+                | sem.Themed()
+            ):
                 return replace(node, children=tuple(map(visit, node.children)))
             case sem.OptionalContent():
                 pageable = True
@@ -109,6 +118,11 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                         message = "pagination cannot be nested in a Section; paginate its enclosing region"
                         raise UnsupportedSemanticError(message)
                     return replace(node, texts=tuple(map(visit, node.texts)), accessory=visit(node.accessory))
+                return node
+            case primitive.Time() | primitive.ZonedTime():
+                if not isinstance(limits, V2Limits | ClassicLimits):
+                    msg = "Discord native time on a non-Discord target"
+                    raise UnsupportedSemanticError(msg)
                 return node
             case primitive.Row() | primitive.ControlGroup():
                 if not isinstance(limits, V2Limits | ClassicLimits):
@@ -218,6 +232,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 | sem.Quote()
                 | sem.Status()
                 | sem.ProgressBar()
+                | sem.Metric()
+                | sem.Timestamp()
+                | sem.ZonedTimestamp()
                 | sem.Media()
                 | sem.Figure()
                 | sem.Paragraph()

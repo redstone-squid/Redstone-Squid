@@ -100,6 +100,8 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | primitive.Panel[ContextT]
     | primitive.Thumbnail
     | primitive.Sep
+    | primitive.Time
+    | primitive.ZonedTime
 )
 
 
@@ -356,6 +358,9 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Quote()
                 | sem.Status()
                 | sem.ProgressBar()
+                | sem.Metric()
+                | sem.Timestamp()
+                | sem.ZonedTimestamp()
                 | sem.Download()
                 | TextPresentation()
                 | AtomicNode()
@@ -381,6 +386,8 @@ def semantic_graph[RenderTargetT, ContextT](
                 | primitive.Code()
                 | primitive.Thumbnail()
                 | primitive.Sep()
+                | primitive.Time()
+                | primitive.ZonedTime()
             ):
                 add(value, path, parent, atomic=True)
             case _:
