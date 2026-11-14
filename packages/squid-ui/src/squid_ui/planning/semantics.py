@@ -8,7 +8,15 @@ from typing import Literal
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.interaction_semantics import Interaction, interaction_changes
-from squid_ui.presentations import Alternative, Alternatives, InteractionChange, Omission, SemanticRef, Shortening
+from squid_ui.presentations import (
+    Alternative,
+    Alternatives,
+    InteractionChange,
+    Omission,
+    SemanticRef,
+    Shortening,
+    TextPresentation,
+)
 from squid_ui.target_types import Renderable
 from squid_ui.text import TextLike
 
@@ -17,6 +25,12 @@ from squid_ui.text import TextLike
 class TableCell:
     row: str
     column: str
+    content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
+class FieldPart:
+    part: Literal["label", "value"]
     content: TextLike
 
 
@@ -33,6 +47,8 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | sem.Adaptation[RenderTargetT, ContextT]
     | EmbeddedValue[ContextT]
     | TableCell
+    | FieldPart
+    | TextPresentation
     | StructuralGroup
 )
 
@@ -96,6 +112,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Region()
             | sem.Paged()
             | sem.Download()
+            | TextPresentation()
         ):
             return value.key
         case _:
@@ -159,6 +176,10 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, entry in enumerate(value.fields):
                     visit(entry, root, i)
+            case sem.Field():
+                root = add(value, path, parent, atomic=False)
+                add(FieldPart("label", value.label), (*path, "label"), root, atomic=True)
+                add(FieldPart("value", value.value), (*path, "value"), root, atomic=True)
             case sem.List():
                 root = add(value, path, parent, atomic=False)
                 for i, item in enumerate(value.items):
@@ -204,7 +225,7 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Code()
                 | sem.Quote()
                 | sem.Download()
-                | sem.Field()
+                | TextPresentation()
                 | sem.Column()
                 | sem.ListItem()
                 | sem.ActionControl()
@@ -249,6 +270,8 @@ class CheckedAlternative[RenderTargetT, ContextT]:
     presentation: SemanticGraph[RenderTargetT, ContextT]
     coverage: Mapping[SemanticRef, frozenset[SemanticRef]]
     omitted: frozenset[SemanticRef]
+    asserted: frozenset[SemanticRef]
+    """Presentation units whose textual equivalence depends on the author's claim."""
 
 
 def check_alternative[RenderTargetT, ContextT](
@@ -270,6 +293,7 @@ def check_alternative[RenderTargetT, ContextT](
 
     omitted: set[SemanticRef] = set()
     changed: dict[SemanticRef, set[str]] = {}
+    shortenings: dict[SemanticRef, Shortening] = {}
     for effect in choice.fidelity.effects:
         affected = source.atoms(effect.source)
         if isinstance(effect, Omission):
@@ -281,16 +305,39 @@ def check_alternative[RenderTargetT, ContextT](
                     raise LayoutInvariantError(msg)
                 changed.setdefault(unit, set()).add(effect.attribute)
         elif isinstance(effect, Shortening):
-            for unit in affected:
-                value = source.units[unit].value
-                if not isinstance(value, sem.Paragraph | sem.Heading | sem.Note | sem.Code | sem.Field | TableCell):
-                    msg = "shortening requires a text semantic unit"
-                    raise LayoutInvariantError(msg)
+            unit = source.resolve(effect.source)
+            source_text(source.units[unit].value)
+            if unit in shortenings:
+                message = f"duplicate shortening declaration at {unit.keys!r}"
+                raise LayoutInvariantError(message)
+            shortenings[unit] = effect
 
     coverage: dict[SemanticRef, frozenset[SemanticRef]] = {}
+    asserted: set[SemanticRef] = set()
+    applied_shortening: set[SemanticRef] = set()
     for target in presentation.leaves:
         owners = [item for item in explicit if target.keys[: len(item.keys)] == item.keys]
-        if owners:
+        target_value = presentation.units[target].value
+        if isinstance(target_value, TextPresentation):
+            if owners:
+                message = "text fragments carry their own correspondence"
+                raise LayoutInvariantError(message)
+            covered_units: set[SemanticRef] = set()
+            for part in target_value.parts:
+                if not isinstance(part, SemanticRef | Shortening):
+                    continue
+                source_ref = source.resolve(part.source if isinstance(part, Shortening) else part)
+                source_text(source.units[source_ref].value)
+                covered_units.add(source_ref)
+                if isinstance(part, Shortening):
+                    declared = shortenings.get(source_ref)
+                    if declared is None or (declared.max_chars, declared.keep) != (part.max_chars, part.keep):
+                        message = f"undeclared shortening operation at {source_ref.keys!r}"
+                        raise LayoutInvariantError(message)
+                    applied_shortening.add(source_ref)
+            covered = frozenset(covered_units)
+        elif owners:
+            asserted.add(target)
             selected = max(owners, key=lambda item: len(item.keys))
             covered = explicit[selected]
         else:
@@ -308,6 +355,8 @@ def check_alternative[RenderTargetT, ContextT](
                 msg = f"presentation unit {target.keys!r} needs an explicit correspondence"
                 raise LayoutInvariantError(msg)
             covered = frozenset(matches)
+            if source.units[matches[0]].value != target_value:
+                asserted.add(target)
         coverage[target] = covered
         target_behavior = interaction(presentation.units[target].value)
         for unit in covered:
@@ -316,9 +365,26 @@ def check_alternative[RenderTargetT, ContextT](
                 msg = f"undeclared interaction change at {unit.keys!r}"
                 raise LayoutInvariantError(msg)
 
+    if applied_shortening != shortenings.keys():
+        message = "shortening declarations require source-referenced text fragments"
+        raise LayoutInvariantError(message)
     retained = frozenset(unit for covered in coverage.values() for unit in covered)
     missing = source.leaves - retained
     if missing != omitted:
         msg = f"declared omissions do not match missing semantic units: {missing ^ omitted}"
         raise LayoutInvariantError(msg)
-    return CheckedAlternative(choice, source, presentation, MappingProxyType(coverage), frozenset(omitted))
+    return CheckedAlternative(
+        choice, source, presentation, MappingProxyType(coverage), frozenset(omitted), frozenset(asserted)
+    )
+
+
+def source_text[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, ContextT]) -> TextLike:
+    """Return one source text unit; containers need references to their individual parts."""
+    match value:
+        case sem.Paragraph() | sem.Heading() | sem.Note() | sem.Code() | sem.ListItem() | TableCell() | FieldPart():
+            return value.content
+        case sem.Column():
+            return value.heading
+        case _:
+            message = f"a text fragment must reference one text unit, not {type(value).__name__}"
+            raise LayoutInvariantError(message)

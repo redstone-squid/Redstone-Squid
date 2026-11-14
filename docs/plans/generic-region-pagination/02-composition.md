@@ -92,8 +92,10 @@ The semantic walker uses explicit typed node handling. Unsupported vocabulary ra
 error until its semantics are implemented; a node with `children` or `key` attributes is not
 implicitly supported. Current checks cover unit correspondence, known omissions, and action,
 route, link, picker, toggle, and form behavior. Source constraints remain in the graph.
-Shortening bounds and inherited layout requirements still need contextual evaluation; these
-checks alone do not certify a candidate as a valid plan.
+Source-referenced text fragments now resolve shortening after localization, preserving source
+ranges and inline styling. Arbitrary prose remains an author assertion; unsupported rich inline
+shortening returns a candidate failure. Inherited layout requirements and strict admission still
+need contextual composition evaluation; these checks alone do not certify a valid plan.
 
 ### 2 Establish composition and target contracts
 

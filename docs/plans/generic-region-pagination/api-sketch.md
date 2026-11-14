@@ -1,7 +1,8 @@
 # Shared planner API sketch
 
-Status: working Phase 2 design. All new API names and types below are illustrative;
-the examples are not executable against the current package. This sketch applies the agreed
+Status: working Phase 2 design. The declaration and correspondence types now exist in
+`squid_ui.presentations`; public exports and planning integration remain in progress.
+The `sl.*` examples below describe the intended integrated API. This sketch applies the agreed
 policies in [the Phase 2 draft](02-composition.md), without fixing the solver algorithm.
 
 ## Authoring content and alternatives
@@ -66,8 +67,8 @@ Proposed defaults and interpretation:
   equivalence. Built-in transformations must establish their preservation contracts through tests.
 - `omit("edition")` refers to a unit in the shared semantic contract, scoped to `build-summary`.
   Unknown or ambiguous references are errors. Loss declarations describe changes rather than
-  assigning a generic quality score. More detailed helpers will cover shortening and specific
-  interaction changes; their parameters still need design.
+  assigning a generic quality score. `shorten(source, max_chars=..., keep="head" | "tail")` and
+  `change_interaction(source, attribute=...)` identify concrete text and behavior changes.
 - An alternative's own key identifies the choice. Content keys identify semantic units across
   choices. Switching from `full` to `compact` must not make `dimensions` a new logical item.
 
@@ -83,6 +84,38 @@ semantic units and their identities permits structural checks; combining or spli
 an explicit correspondence. An arbitrary paraphrase still relies on an author assertion of
 preservation. The core records that distinction and rejects known omissions even when a candidate
 claims equivalence. It does not try to prove natural-language meaning from text similarity.
+
+
+### Source-referenced text
+
+Use structured fragments when a text transformation needs machine-checked provenance. Literal
+connective text is separate from source references; arbitrary authored prose still relies on an
+author assertion. For example:
+
+```python
+operation = sl.shorten("description", max_chars=100)
+compact = sl.present_text(operation, " · ", sl.ref("edition"), key="summary")
+choice = sl.alternative(
+    compact,
+    key="compact",
+    fidelity=sl.losses(operation),
+)
+```
+
+A `ref` fragment retains the source unit's full structured text. A `shorten` fragment performs the
+declared operation after localization and records the retained source range in Unicode code
+points. Its loss declaration must match the operation. The presentation's correspondence follows
+from these fragments; authors do not repeat a separate mapping.
+
+A field has separate `label` and `value` units, so `ref("width", "value")` cannot claim to preserve
+its label. References must identify one text unit; a whole table or control cannot be flattened
+implicitly. Full references preserve links and other rich text. Current shortening handles plain
+and styled inline text; unsupported rich behavior rejects that candidate explicitly. More inline
+semantics must be modeled before expanding those transformations.
+
+The structural check records which presentations depend on authored equivalence. It cannot certify
+that a manually rewritten paragraph is a character-limited version of a source unit. Layout
+requirements and strict admission remain responsibilities of contextual composition evaluation.
 
 ## Regions and identity
 

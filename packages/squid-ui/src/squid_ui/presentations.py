@@ -9,6 +9,7 @@ from typing import Literal
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.target_types import Renderable, RenderTarget
+from squid_ui.text import Text, TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,3 +169,27 @@ def alternatives[RenderTargetT, ContextT](
     key: str,
 ) -> Alternatives[RenderTargetT, ContextT]:
     return Alternatives(content, choices, key)
+
+
+@dataclass(frozen=True, slots=True)
+class TextPresentation(Renderable[RenderTarget]):
+    """Text assembled from source references, with literal connective text.
+
+    A Shortening fragment applies that exact operation to its source unit after
+    localization. Its effect must also be declared by the containing alternative.
+    References retain their complete structured text, including links and styling.
+    """
+
+    parts: tuple[Text | SemanticRef | Shortening, ...]
+    key: str
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "a text presentation needs a stable key"
+            raise LayoutInvariantError(message)
+
+
+def present_text(*parts: TextLike | SemanticRef | Shortening, key: str) -> TextPresentation:
+    return TextPresentation(
+        tuple(part if isinstance(part, SemanticRef | Shortening) else Text(part) for part in parts), key
+    )
