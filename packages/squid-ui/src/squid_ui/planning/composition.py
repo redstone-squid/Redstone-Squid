@@ -192,6 +192,8 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     fragments: FragmentContract[PayloadT] | None = None
     region: RegionContract[RenderTargetT, ContextT, PayloadT] | None = None
     navigation: NavigationInput | None = None
+    preference_priority: int | None = None
+    """Compare this subtree as a sibling preference scope, even without a pager."""
 
 
 class DiscoveryCompletion(StrEnum):

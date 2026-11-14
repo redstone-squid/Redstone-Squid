@@ -69,7 +69,7 @@ from squid_ui.planning.semantics import (
 )
 from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, resolve_accent, toggle_state
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
-from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
+from squid_ui.presentations import Alternatives, Budget, Omission, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.styles import ActionStyle, Color
@@ -506,6 +506,32 @@ def semantic_offers[RenderTargetT, ContextT](
         parent = ancestor.parent
     if isinstance(value, sem.Budgeted | sem.Paged) and not character_budgets:
         return ()
+    if isinstance(value, sem.OptionalContent):
+        ref = occurrence.graph.children[occurrence.reference][0]
+        child = SemanticOccurrence(
+            OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+            occurrence.graph,
+            ref,
+            occurrence.placement,
+            occurrence.origin,
+            palette=context.palette,
+        )
+        sources = sorted(occurrence.sources, key=lambda source: source.keys)
+        context.work.consume(len(sources))
+        return (
+            RealizationOffer(
+                occurrence, "retain", FlowRealization(), (child,), flow=True, preference_priority=value.importance
+            ),
+            RealizationOffer(
+                occurrence,
+                "omit",
+                FlowRealization(),
+                effects=tuple(Omission(source) for source in sources),
+                preference=1,
+                flow=True,
+                preference_priority=value.importance,
+            ),
+        )
     if isinstance(value, Alternatives):
         choices: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
         for choice in value.choices:

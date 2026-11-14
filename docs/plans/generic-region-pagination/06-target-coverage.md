@@ -206,3 +206,12 @@ Progress text retains both exact quantities and the percentage bars used by tall
 
 Both complete UI package suites pass after these changes (3,132 tests with
 `--no-cov`). Whole-project Pyrefly reports zero errors.
+
+## Continuation: optional content
+
+Optional content now participates in shared search, including its authored
+importance. Omission removes live bindings and reports the exact affected sources;
+strict mode refuses it. Lossless page families precede omission. All five document
+targets share these rules, while unsupported children still identify the remaining
+compatibility route. The core UI suite passes (1,266 tests with `--no-cov`), and
+whole-project Pyrefly reports zero errors.

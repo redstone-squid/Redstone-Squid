@@ -105,8 +105,10 @@ def _preferences[RenderTargetT, ContextT, PayloadT](
         context.work.consume()
         own.append(ranks[part.offer.occurrence.identity])
         for child in part.children:
-            if child.offer.region is not None:
-                priority = policies.get(child.offer.occurrence.identity, RegionPolicy()).priority
+            if child.offer.region is not None or child.offer.preference_priority is not None:
+                priority = policies.get(
+                    child.offer.occurrence.identity, RegionPolicy(priority=child.offer.preference_priority or 0)
+                ).priority
                 children.append((priority, _preferences(child, ranks, policies, context)))
             else:
                 visit(child)

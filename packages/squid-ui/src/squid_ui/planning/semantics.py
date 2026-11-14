@@ -205,7 +205,9 @@ def semantic_graph[RenderTargetT, ContextT](
             case Alternatives():
                 root = add(value, path, parent, atomic=False)
                 visit(value.content, root, 0)
-            case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.Paged() | Budget():
+            case (
+                sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.Paged() | sem.OptionalContent() | Budget()
+            ):
                 root = add(value, path, parent, atomic=False)
                 visit(value.node, root, 0)
             case sem.Table():

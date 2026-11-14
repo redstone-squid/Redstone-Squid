@@ -72,6 +72,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 return replace(node, children=tuple(map(visit, node.children)))
             case sem.Group() | sem.Stack() | sem.Block() | sem.Cluster() | sem.Section() | sem.Article() | sem.Themed():
                 return replace(node, children=tuple(map(visit, node.children)))
+            case sem.OptionalContent():
+                pageable = True
+                return replace(node, node=visit(node.node))
             case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | Budget():
                 return replace(node, node=visit(node.node))
             case primitive.Text() | primitive.Code() | primitive.Lines() | primitive.Heading() | primitive.Footer():
