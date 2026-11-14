@@ -232,7 +232,8 @@ def _crossing(
         middle = (low + high) // 2
         # Reverse decreasing runs so both searches use an increasing predicate.
         value = _evaluate(coefficients, middle, budget) * interval.sign
-        if value > 0 if strict else value >= 0:
+        crossed = value > 0 if strict else value >= 0
+        if crossed:
             high = middle
         else:
             low = middle + 1

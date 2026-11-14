@@ -19,9 +19,10 @@ Implementation order:
 1. **Storage and historical ingestion (implemented):** preserve source claims,
    partial domains, parameters, formula branches, and evidence through inference,
    draft persistence, build finalization, and history. Do not require a solver.
-2. **Arithmetic feasibility spike:** validate exact one-variable crossovers,
-   periodic domains, three-axis comparisons, fixed-build exceptions, missing
-   timings, and timeouts before committing to computation schemas.
+2. **Arithmetic feasibility spike (partly implemented):** one-variable smallest
+   regions now cover exact crossovers, periodic domains, rounded formulas, fixed
+   exceptions, and bounded work. Multi-axis regions, timing-based titles, and
+   subprocess execution still need validation before computation schemas.
 3. **Concrete evaluation and live point lookup (implemented):** compare supported configurations
    through the existing ranking semantics, without materializing query sizes.
 4. **Symbolic regions and publication:** compute regions, prove nonemptiness
@@ -259,6 +260,44 @@ Proposed adapters:
 ISL is not initially needed: linear integer-set manipulation alone does not
 handle nonlinear volume boundaries. The spike must verify dependency support
 for the repository's Python version before adoption.
+
+## One-variable smallest regions
+
+`smallest_record_regions` in `squid/records/domain/regions.py` is the first pure
+region compiler. Its inputs are configurations already expressed in one shared
+integer opening coordinate, with verified domains represented as unions of
+bounded or unbounded progressions. Fixed doors use singleton domains. Unknown
+domains produce `unsupported`; an empty domain means proven exclusion.
+
+The compiler returns disjoint progressions covering the requested interval,
+including no-candidate and unresolved regions. Each progression's minimum is a
+nonempty witness, checked against the original volume formula and the existing
+smallest-record resolver. Completion ties and alternative branches retain the
+same build-level behavior as live lookup. Invalid or unknown primary volumes
+are excluded according to the existing rules.
+
+For example, compare volumes `n^3+1000` and
+`n^3+1000+(n-5)(n-9)(n-15)` on positive integer openings. The first wins at
+6–8 and from 16 onward; 5, 9, and 15 are ties requiring completion evidence.
+Adding a smaller fixed door at n=7 creates a singleton exception.
+
+`region_math.py` uses rational finite differences to split cubic integer
+sequences into monotone runs, then binary search to locate sign changes.
+A coefficient bound closes the unbounded tail. Floor/ceiling expressions,
+including nested rounding, become polynomial formulas on residue classes;
+nonintegral measurements remain excluded. This subset needs no SymPy or Z3
+dependency. The proposed adapters above remain options for the broader spike.
+
+Defaults bound candidate configurations to 32, domain pieces per configuration
+to 128, combined residue classes to 128, output regions to 4096, and arithmetic
+steps to 50,000. Input bounds and polynomial coefficients use at most 256 bits.
+Exhausting a limit returns `limit_exceeded` with no partial awards. These are
+deterministic work limits, not a substitute for the planned worker isolation.
+
+This compiler does not yet translate raw expansion documents into verified
+region inputs, query live candidates, expose a range API, or publish snapshots.
+Only smallest records in one coordinate are supported. Existing concrete lookup
+continues to handle all five titles and supported multivariate configurations.
 
 ## Queries, persistence, and workers
 
