@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import replace
 from typing import cast
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -40,6 +41,7 @@ from squid.submissions.infrastructure.finalization_payloads import decode_submis
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
+from squid.versions.errors import InvalidVersionError
 from tests.support.expansion import expansion_document
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")
@@ -102,6 +104,9 @@ class FakeVersions:
 
     async def list_all(self) -> tuple[MinecraftVersion, ...]:
         return self.versions
+
+    async def resolve_spec(self, version_spec: str) -> list[str]:
+        raise ValueError("No compatibility resolution configured")
 
 
 def _definition(
@@ -579,3 +584,32 @@ async def test_expansion_survives_finalization_payload_and_build_preparation() -
     build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(decoded)
     assert isinstance(build, DoorBuild)
     assert build.expansion == document
+
+
+async def test_discord_compatibility_survives_durable_payload_without_a_capture_version() -> None:
+    versions = FakeVersions((MinecraftVersion("Java", 1, 16, 0), MinecraftVersion("Java", 1, 16, 1)))
+    versions.resolve_spec = AsyncMock(return_value=["Java 1.16.0", "Java 1.16.1", "Java 1.16.0"])
+    submission = replace(
+        _submission(SubmissionCategory.DOOR),
+        origin=SubmissionOrigin.DISCORD,
+        source_version=None,
+        version_compatibility="Java 1.16+",
+    )
+    restored = decode_submission(encode_submission(submission))
+    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), versions).prepare(restored)
+    assert isinstance(result, Build)
+    assert result.versions == ["Java 1.16.0", "Java 1.16.1"]
+    assert result.version_spec == "Java 1.16+"
+
+
+@pytest.mark.parametrize("error", [ValueError("invalid number"), InvalidVersionError("invalid range")])
+async def test_unparseable_compatibility_keeps_the_claim_without_failing_the_build(error: Exception) -> None:
+    versions = FakeVersions()
+    versions.resolve_spec = AsyncMock(side_effect=error)
+    submission = replace(
+        _submission(SubmissionCategory.DOOR), source_version=None, version_compatibility="Java unknown"
+    )
+    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), versions).prepare(submission)
+    assert isinstance(result, Build)
+    assert result.versions == []
+    assert result.version_spec == "Java unknown"

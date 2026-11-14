@@ -1,6 +1,7 @@
 """Adapter from normalized synchronized submissions to the build aggregate."""
 
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from typing import Any, Protocol, cast
 from uuid import UUID
 
@@ -23,6 +24,7 @@ from squid.submissions.domain.links import LINK_FIELDS
 from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
 from squid.versions.domain import MinecraftVersion
+from squid.versions.errors import InvalidVersionError
 
 _CATEGORY_MAP = {
     SubmissionCategory.DOOR: BuildCategory.DOOR,
@@ -67,9 +69,11 @@ class ApprovedSubmissionTags(Protocol):
 
 
 class CanonicalSubmissionVersions(Protocol):
-    """Read exact version names recognized by build persistence."""
+    """Resolve compatibility claims and read canonical version names."""
 
     async def list_all(self) -> Sequence[MinecraftVersion]: ...
+
+    async def resolve_spec(self, version_spec: str) -> list[str]: ...
 
 
 class SubmissionBuildPreparation:
@@ -105,9 +109,17 @@ class SubmissionBuildPreparation:
         definitions = await self._resolve_tags(submission)
         if isinstance(definitions, BuildSubmissionRejected):
             return definitions
+        build = _to_build(submission, definitions)
+        if submission.version_compatibility:
+            # Keep an unparseable claim as editable text without guessing
+            # compatible releases or refusing an otherwise usable build.
+            with suppress(ValueError, InvalidVersionError):
+                build.versions = list(
+                    dict.fromkeys(await self._versions.resolve_spec(submission.version_compatibility))
+                )
         try:
             return await self._builds.prepare_for_account(
-                _to_build(submission, definitions),
+                build,
                 submitter_account_id=submission.owner_account_id,
                 source_submission_draft_id=submission.source_draft_id,
                 display_name=submission.display_name,
