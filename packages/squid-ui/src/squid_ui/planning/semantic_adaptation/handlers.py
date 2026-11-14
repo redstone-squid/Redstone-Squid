@@ -8,7 +8,7 @@ adapters with the current render's callbacks and state.
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Self, cast, override
+from typing import TYPE_CHECKING, Any, Self, cast, override
 
 from squid_ui.entity import EntityRef
 from squid_ui.forms import FormSpec, SubmitHandler
@@ -310,14 +310,14 @@ class GoToDestination[ContextT = object](GeneratedHandler[PressEvent[ContextT]])
 
 
 @dataclass(frozen=True, slots=True)
-class ToggleDetails(GeneratedHandler[PressEvent]):
-    node: Details
+class ToggleDetails[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+    node: Details[Any, ContextT]
     open: bool
     session: PresentationState
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
-        def bind_node() -> Details:
+        def bind_node() -> Details[Any, ContextT]:
             ownership = bind_ownership(self.node.open, binder)
             return replace(self.node, open=ownership) if ownership is not self.node.open else self.node
 
@@ -325,7 +325,7 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
         return replace(self, node=node) if node is not self.node else self
 
     @override
-    async def __call__(self, event: PressEvent) -> None:
+    async def __call__(self, event: PressEvent[ContextT]) -> None:
         match self.node.open:
             case Controlled(on_change=on_change):
                 await on_change(

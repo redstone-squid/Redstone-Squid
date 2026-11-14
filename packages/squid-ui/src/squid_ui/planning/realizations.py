@@ -38,7 +38,7 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
-from squid_ui.planning.interaction_semantics import NavigationChoice
+from squid_ui.planning.interaction_semantics import DisclosureToggle, NavigationChoice
 from squid_ui.planning.pagination_content import RootRegion, TextPages
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_adaptation.common import _button_style
@@ -54,9 +54,10 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectDestination,
     SelectEntities,
     SelectEntityFallback,
+    ToggleDetails,
 )
 from squid_ui.planning.semantics import SourceScope, StructuralGroup, UnsupportedSemanticError, check_alternative
-from squid_ui.planning.structure import navigation_current, resolve_accent, toggle_state
+from squid_ui.planning.structure import disclosure_state, navigation_current, resolve_accent, toggle_state
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
@@ -94,6 +95,11 @@ class ProgressRealization(TextRealization):
 @dataclass(frozen=True, slots=True)
 class FlowRealization:
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class DisclosureRealization(FlowRealization):
+    open: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,13 +432,24 @@ def _control_key[RenderTargetT, ContextT](
     occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
 ) -> str:
     sources = occurrence.sources
+    if occurrence.origin is None and isinstance(occurrence.graph.units[occurrence.reference].value, sem.Navigation):
+        sources = frozenset({occurrence.reference})
     if len(sources) == 1 and occurrence.origin is None:
-        key = next(iter(sources)).keys[-1]
+        source = next(iter(sources))
+        key = source.keys[-1]
+        source_key = key
+        value = occurrence.graph.units[source].value
+        if isinstance(value, DisclosureToggle):
+            source_key = value.details.key
+            key = f"{source_key}.toggle"
+        elif isinstance(value, NavigationChoice):
+            source_key = value.navigation.key
+            key = f"{source_key}.{value.option.key}"
         context.work.consume(len(occurrence.graph.units))
         if (
             not key.startswith("@")
             and len(key) <= 64
-            and sum(ref.keys[-1] == key for ref in occurrence.graph.units) == 1
+            and sum(ref.keys[-1] in (source_key, key) for ref in occurrence.graph.units) == 1
         ):
             return key
     encoded = json.dumps(sorted(ref.keys for ref in sources), ensure_ascii=True)
@@ -569,6 +586,37 @@ def semantic_offers[RenderTargetT, ContextT](
         if isinstance(resolved, UnsupportedText):
             return ()
         return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
+    if isinstance(value, DisclosureToggle):
+        details = value.details
+        open_ = disclosure_state(details, context.presentation)
+        key = _control_key(occurrence, context)
+        label = "".join(tree.plain(node) for node in resolve_text(details.summary.content, context.localization).nodes)
+        return (
+            RealizationOffer(
+                occurrence,
+                "disclosure-toggle",
+                ControlRealization(label, action=key),
+                interaction=True,
+                binding=ActionBinding(key, ToggleDetails(details, open_, context.presentation)),
+            ),
+        )
+    if isinstance(value, sem.Details):
+        open_ = disclosure_state(value, context.presentation)
+        refs = occurrence.graph.children.get(occurrence.reference, ())
+        visible = refs if open_ else refs[:1]
+        context.work.consume(len(visible))
+        children = tuple(
+            SemanticOccurrence(
+                OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                occurrence.graph,
+                ref,
+                Placement.HEADER if open_ and len(refs) > 1 and index == 0 else occurrence.placement,
+                occurrence.origin,
+                palette=context.palette,
+            )
+            for index, ref in enumerate(visible)
+        )
+        return (RealizationOffer(occurrence, "disclosure", DisclosureRealization(open_), children, flow=True),)
     if isinstance(value, NavigationChoice):
         navigation, option = value.navigation, value.option
         current = navigation_current(navigation, context.presentation)

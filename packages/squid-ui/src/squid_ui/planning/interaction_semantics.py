@@ -1,7 +1,7 @@
 """Compare interaction behavior without inspecting dataclass fields or invoking handlers."""
 
 from dataclasses import dataclass
-from typing import assert_never
+from typing import Any, assert_never
 
 from squid_ui import semantic as sem
 
@@ -14,6 +14,13 @@ class NavigationChoice[ContextT]:
     option: sem.NavOption
 
 
+@dataclass(frozen=True, slots=True)
+class DisclosureToggle[ContextT]:
+    """The disclosure action is distinct from the content it reveals."""
+
+    details: sem.Details[Any, ContextT]
+
+
 type Interaction[ContextT] = (
     sem.ActionControl[ContextT]
     | sem.RoutedActionControl
@@ -24,6 +31,7 @@ type Interaction[ContextT] = (
     | sem.FormTrigger[ContextT]
     | sem.Toggle[ContextT]
     | NavigationChoice[ContextT]
+    | DisclosureToggle[ContextT]
 )
 
 
@@ -39,6 +47,9 @@ def interaction_changes[ContextT](
     if source is None:
         return frozenset() if target is None else interaction_changes(target, None)
     match source:
+        case DisclosureToggle():
+            other = target if isinstance(target, DisclosureToggle) else None
+            changes = (("open", other is None or source.details.open != other.details.open),)
         case NavigationChoice():
             other = target if isinstance(target, NavigationChoice) else None
             changes = (

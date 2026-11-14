@@ -60,7 +60,9 @@ def resolve_accent(accent: Accent, palette: Palette) -> Color | None:
     return accent
 
 
-def disclosure_state(node: Details[Any], session: PresentationState) -> bool:
+def disclosure_state[RenderTargetT, ContextT](
+    node: Details[RenderTargetT, ContextT], session: PresentationState
+) -> bool:
     """Whether a disclosure is open: the author's word when controlled, session memory otherwise."""
     match node.open:
         case Controlled(value=value):

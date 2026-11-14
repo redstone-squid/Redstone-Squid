@@ -7,7 +7,7 @@ from typing import Literal
 
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.interaction_semantics import Interaction, NavigationChoice, interaction_changes
+from squid_ui.planning.interaction_semantics import DisclosureToggle, Interaction, NavigationChoice, interaction_changes
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import (
     Alternative,
@@ -131,6 +131,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Choices()
             | sem.Entities()
             | sem.Navigation()
+            | sem.Details()
             | sem.Toggle()
             | sem.RoutedChoices()
             | sem.Region()
@@ -229,6 +230,11 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for option in value.options:
                     add(NavigationChoice(value, option), (*path, option.key), root, atomic=True)
+            case sem.Details():
+                root = add(value, path, parent, atomic=False)
+                add(DisclosureToggle(value), (*path, "@toggle"), root, atomic=True)
+                for i, child in enumerate(value.children):
+                    visit(child, root, i)
             case sem.ActionControls():
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
@@ -313,6 +319,7 @@ def interaction[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, Con
             | sem.Choices()
             | sem.Entities()
             | NavigationChoice()
+            | DisclosureToggle()
             | sem.RoutedChoices()
         ):
             return value

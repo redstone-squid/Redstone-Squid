@@ -95,8 +95,8 @@ or typed atomic target rules inside regions. No equivalence is inferred from
 arbitrary replacement text. Native extensions are usable through explicit custom
 composition rules, rather than an opaque production backend probe.
 
-Stateful semantic widgets beyond choices/toggles/entities (such as disclosure and
-item selection) still retain their non-region planners. Navigation now uses shared
+Item selection still retains its non-region planner. Disclosures now expose only
+their open content to shared allocation. Navigation now uses shared
 offers with destination ownership separate from layout page coordinates. Palette overrides,
 status/progress content and section thumbnails now use shared composition. The
 remaining widget adapters combine state selection, adaptation, and target lowering; migrating them requires
@@ -184,3 +184,13 @@ alternatives cannot silently replace callbacks. Crowded menus use an independent
 layout pager and preserve their selected destination across page turns. HTML keeps
 its navigation element and current-page marker. Exact legacy cuts may change;
 coverage and native option limits remain enforced.
+
+## Continuation: disclosure visibility
+
+Closed disclosures expose their toggle but no body bindings or pager updates.
+Opening them makes the body available to shared search; continuation pages repeat
+the toggle. Closing a disclosure preserves previously delivered nested cursors,
+so reopening restores the remembered page. HTML keeps native details/summary
+markup but now materializes body content only while open, matching mounted state
+ownership across targets. Public disclosure and navigation control keys remain
+stable where their source identity is unambiguous.

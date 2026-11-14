@@ -1,6 +1,6 @@
 """Unbounded HTML realization through the shared composition contract."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from squid_i18n import tree
 from squid_ui import scene
@@ -22,6 +22,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
+    DisclosureRealization,
     DownloadRealization,
     EntityRealization,
     FlowRealization,
@@ -348,6 +349,22 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                                 scene.HtmlElement(scene.HtmlTag.THEAD, (heading,)),
                                 scene.HtmlElement(scene.HtmlTag.TBODY, rows),
                             ),
+                        ),
+                    )
+                case DisclosureRealization(open=open_):
+                    children = tuple(node for child in part.children for node in visit(child))
+                    toggle = children[0]
+                    if not isinstance(toggle, scene.HtmlElement) or toggle.action is None:
+                        message = "disclosure needs its toggle control"
+                        raise DrawInvariantError(message)
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.DETAILS,
+                            (replace(toggle, tag=scene.HtmlTag.SUMMARY, action=None), *children[1:]),
+                            attributes=(scene.HtmlAttribute(scene.HtmlAttributeName.OPEN, value=True),)
+                            if open_
+                            else (),
+                            action=toggle.action,
                         ),
                     )
                 case ActionsRealization(navigation=True):

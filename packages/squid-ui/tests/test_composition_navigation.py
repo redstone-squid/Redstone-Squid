@@ -53,7 +53,9 @@ async def test_destination_callbacks_preserve_controlled_ownership(
     assert "Unavailable" not in scene.Codec.dumps(result.scene)
     assert not received and not session.selections
     if display == NavigationDisplay.INDIVIDUAL:
-        await result.bindings["b"].handler(PressEvent(Actor("reader"), Mock(spec=ActionResponder), context=None))
+        await result.bindings["destinations.b"].handler(
+            PressEvent(Actor("reader"), Mock(spec=ActionResponder), context=None)
+        )
         if isinstance(result.scene.body, scene.HtmlBody):
             nav = result.scene.body.children[0]
             assert isinstance(nav, scene.HtmlElement) and nav.tag == scene.HtmlTag.NAV

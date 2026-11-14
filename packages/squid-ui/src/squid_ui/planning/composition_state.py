@@ -11,16 +11,18 @@ from squid_ui.document import Document, DocumentLike, as_document
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ownership import Controlled
 from squid_ui.pages import PagePosition
-from squid_ui.planning.composition import OccurrenceId
+from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.planning.pagination_reuse import same_allocation_document
+from squid_ui.planning.realizations import region_cursor_key
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
 from squid_ui.planning.semantics import semantic_graph
+from squid_ui.planning.structure import disclosure_state
 from squid_ui.presentation import (
     ActivePagers,
     RegionAllocation,
@@ -30,7 +32,7 @@ from squid_ui.presentation import (
 )
 from squid_ui.presentations import SemanticRef
 from squid_ui.primitives.constraints import FIRST_PAGE, RoutedPage
-from squid_ui.semantic import Group, List, Paged, Region
+from squid_ui.semantic import Details, Group, List, Navigation, Paged, Region
 
 
 def _navigation_version(nav: PlannedNav | None) -> int | None:
@@ -156,6 +158,28 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
     updates = list(coordinator.updates[:-1])
     active = coordinator.updates[-1]
     assert isinstance(active, ActivePagers)
+    # A closed disclosure hides its layout scopes without deleting their delivered cursors.
+    # Hidden pagers receive no new position or allocation until the reader opens them.
+    for reference, unit in graph.units.items():
+        if not isinstance(unit.value, Region | Paged | List | Navigation | TextPages):
+            continue
+        parent = unit.parent
+        hidden = nested_region = False
+        while parent is not None:
+            ancestor = graph.units[parent]
+            hidden |= isinstance(ancestor.value, Details) and not disclosure_state(ancestor.value, request.presentation)
+            nested_region |= isinstance(ancestor.value, Region)
+            parent = ancestor.parent
+        if hidden:
+            key = (
+                region_cursor_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))
+                if isinstance(unit.value, Region) or (isinstance(unit.value, Paged) and nested_region)
+                else f"{unit.value.key}.destinations"
+                if isinstance(unit.value, Navigation)
+                else unit.value.key
+            )
+            if key in request.presentation.cursors:
+                retained.add(key)
     updates.append(ActivePagers(active.keys | retained))
     layout = RegionLayoutState(
         fingerprint,
