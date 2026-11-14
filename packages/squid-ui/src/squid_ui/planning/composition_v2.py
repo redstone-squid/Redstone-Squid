@@ -34,7 +34,9 @@ from squid_ui.planning.realizations import (
     DownloadRealization,
     EntityRealization,
     FieldsRealization,
+    FileRealization,
     FlowRealization,
+    GalleryRealization,
     ImageRealization,
     NativeSectionRealization,
     PanelRealization,
@@ -329,6 +331,62 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     if table.form != TableForm.RECORDS:
                         violations.append(UnsupportedCapability(part.offer.occurrence.identity, "native table"))
                     return tuple(node for row in record_text(table) for node in text(row))
+                case FileRealization(node=node):
+                    identity = part.offer.occurrence.identity
+                    matches = [asset for asset in context.assets if asset.key == node.asset_key]
+                    if len(matches) != 1 or (node.name, node.media_type) != (matches[0].name, matches[0].media_type):
+                        violations.append(ConstraintViolation(identity, "file must match one declared asset"))
+                    else:
+                        uses.append(
+                            SharedUse(
+                                ResourceIdentity("attachment", node.asset_key),
+                                matches[0],
+                                ResourceCost({Axis.ATTACHMENTS: 1}),
+                            )
+                        )
+                    components += 1
+                    return (node,)
+                case GalleryRealization(items=items, collection=collection):
+                    identity = part.offer.occurrence.identity
+                    if (not items and not collection) or self.limits.gallery_items < 1:
+                        violations.append(ConstraintViolation(identity, "gallery needs an item and positive capacity"))
+                    if not collection and len(items) > self.limits.gallery_items:
+                        violations.append(
+                            LocalCapacityExceeded(identity, "gallery.items", len(items), self.limits.gallery_items)
+                        )
+                    for item in items:
+                        context.work.consume()
+                        if len(item.description or "") > self.limits.gallery_item_description:
+                            violations.append(
+                                LocalCapacityExceeded(
+                                    identity,
+                                    "gallery.description",
+                                    len(item.description or ""),
+                                    self.limits.gallery_item_description,
+                                )
+                            )
+                        if item.asset_name is not None:
+                            matches = [asset for asset in context.assets if asset.name == item.asset_name]
+                            if len(matches) != 1 or item.url != f"attachment://{item.asset_name}":
+                                violations.append(
+                                    ConstraintViolation(identity, "gallery image must match one declared attachment")
+                                )
+                            else:
+                                uses.append(
+                                    SharedUse(
+                                        ResourceIdentity("attachment", matches[0].key),
+                                        matches[0],
+                                        ResourceCost({Axis.ATTACHMENTS: 1}),
+                                    )
+                                )
+                        elif item.url.startswith("attachment://"):
+                            violations.append(ConstraintViolation(identity, "gallery attachment needs its asset name"))
+                    size = max(1, self.limits.gallery_items) if collection else max(1, len(items))
+                    galleries = tuple(
+                        scene.Gallery(items[start : start + size]) for start in range(0, len(items), size)
+                    )
+                    components += len(galleries)
+                    return galleries
                 case ImageRealization() as media:
                     components += 1
                     if len(media.description) > self.limits.gallery_item_description:

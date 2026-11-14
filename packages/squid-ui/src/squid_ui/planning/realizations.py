@@ -273,6 +273,20 @@ class ImageRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class GalleryRealization:
+    items: tuple[scene.GalleryItem, ...]
+    collection: bool = False
+
+    def fragment(self, start: int, end: int) -> Realization:
+        return replace(self, items=self.items[start:end])
+
+
+@dataclass(frozen=True, slots=True)
+class FileRealization:
+    node: scene.File
+
+
+@dataclass(frozen=True, slots=True)
 class DownloadRealization:
     asset: Asset
     label: tuple[tree.Node, ...]
@@ -346,6 +360,8 @@ type Realization = (
     | SeparatorRealization
     | TableRealization
     | ImageRealization
+    | GalleryRealization
+    | FileRealization
     | DownloadRealization
     | ControlRealization
     | PremiumRealization
@@ -1038,6 +1054,50 @@ def semantic_offers[RenderTargetT, ContextT](
             payload,
             overflow.keep if isinstance(overflow, Truncate) else None,
             value.priority,
+        )
+    if isinstance(value, primitive.Gallery | primitive.MediaCollection):
+        if not native_v2:
+            return ()
+        context.work.consume(len(value.items))
+        gallery = GalleryRealization(
+            tuple(
+                scene.GalleryItem(
+                    item.url or (f"attachment://{item.asset_name}" if item.asset_name is not None else ""),
+                    resolve_text(item.description, context.localization).plain()
+                    if item.description is not None
+                    else None,
+                    item.spoiler,
+                    item.asset_name,
+                )
+                for raw in value.items
+                for item in (primitive.normalize_gallery_item(raw),)
+            ),
+            collection=isinstance(value, primitive.MediaCollection),
+        )
+        refs = occurrence.graph.children.get(occurrence.reference, ())
+        return (
+            RealizationOffer(
+                occurrence,
+                "native-gallery",
+                gallery,
+                fragments=FragmentContract(
+                    tuple(frozenset({ref}) for ref in refs), tuple(range(1, len(refs) + 1)), gallery.fragment
+                )
+                if gallery.collection and refs
+                else None,
+            ),
+        )
+    if isinstance(value, primitive.File):
+        return (
+            (
+                RealizationOffer(
+                    occurrence,
+                    "native-file",
+                    FileRealization(scene.File(value.asset_key, value.name, value.media_type, value.spoiler)),
+                ),
+            )
+            if native_v2
+            else ()
         )
     if isinstance(value, primitive.Thumbnail):
         if not native_v2:

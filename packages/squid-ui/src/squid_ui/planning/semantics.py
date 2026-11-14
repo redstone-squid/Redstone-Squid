@@ -72,6 +72,7 @@ type EmbeddedValue[ContextT] = (
     | sem.Field
     | sem.ListItem
     | sem.MediaItem
+    | primitive.GalleryItem
     | sem.ControlGroup[ContextT]
     | Interaction[ContextT]
 )
@@ -99,6 +100,9 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | primitive.Budget[RenderTargetT, ContextT]
     | primitive.Break[RenderTargetT, ContextT]
     | primitive.Panel[ContextT]
+    | primitive.Gallery
+    | primitive.MediaCollection
+    | primitive.File
     | primitive.Thumbnail
     | primitive.Sep
     | primitive.Time
@@ -323,6 +327,10 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
                     visit(control, root, i)
+            case primitive.Gallery() | primitive.MediaCollection():
+                root = add(value, path, parent, atomic=False)
+                for i, item in enumerate(value.items):
+                    visit(primitive.normalize_gallery_item(item), root, i)
             case primitive.Lines():
                 root = add(value, path, parent, atomic=False)
                 for i, line in enumerate(value.lines):
@@ -380,6 +388,8 @@ def semantic_graph[RenderTargetT, ContextT](
                             visit(child, slot, i)
             case (
                 sem.MediaItem()
+                | primitive.GalleryItem()
+                | primitive.File()
                 | sem.Paragraph()
                 | sem.Heading()
                 | sem.Note()
@@ -706,6 +716,7 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | primitive.Row
             | primitive.Section
             | primitive.Panel
+            | primitive.Gallery
             | primitive.Budget
             | primitive.Break,
         ) and not (
@@ -799,6 +810,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     preserved = True
                 case primitive.Section(), primitive.Section():
                     preserved = len(constraint.texts) == len(other.texts)
+                case primitive.Gallery(), primitive.Gallery():
+                    preserved = len(constraint.items) == len(other.items)
                 case primitive.Panel(), primitive.Panel():
                     preserved = (constraint.accent, constraint.spoiler) == (other.accent, other.spoiler)
             if preserved:

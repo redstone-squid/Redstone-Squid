@@ -106,6 +106,12 @@ annotations retain unbreakable groups and keep-with-next boundaries. Classic
 Discord rejects native character reservations within shared regions because its
 content and embed capacities are separate; use explicit resource budgets there.
 
+Native V2 galleries and file widgets share the declared attachment pool. Exact
+galleries remain indivisible; media collections pack images into target-sized
+galleries and expose image boundaries to enclosing regions. Descriptions, spoiler
+flags, and attachment identity survive page turns. Missing assets or mismatched
+file metadata are infeasible rather than silently rewritten.
+
 ## Compatibility and deferred contracts
 
 `regions.py` and its backend-probing frontier search are removed. Discovery lives

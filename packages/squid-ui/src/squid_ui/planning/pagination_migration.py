@@ -109,7 +109,15 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.Fields():
                 pageable |= any(entry.fallbacks for entry in node.fields)
                 return node
-            case primitive.Panel() | primitive.Section() | primitive.Thumbnail() | primitive.Sep():
+            case (
+                primitive.Panel()
+                | primitive.Section()
+                | primitive.Thumbnail()
+                | primitive.Sep()
+                | primitive.Gallery()
+                | primitive.MediaCollection()
+                | primitive.File()
+            ):
                 if not isinstance(limits, V2Limits):
                     message = "native Components V2 layout on another target"
                     raise UnsupportedSemanticError(message)

@@ -195,7 +195,18 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             )
         case primitive.Section(), primitive.Section():
             return _same_children(left.texts, right.texts) and _same_node(left.accessory, right.accessory)
-        case ((primitive.Thumbnail() | primitive.Sep() | primitive.Time() | primitive.ZonedTime()), _):
+        case (
+            (
+                primitive.Thumbnail()
+                | primitive.Sep()
+                | primitive.Time()
+                | primitive.ZonedTime()
+                | primitive.Gallery()
+                | primitive.MediaCollection()
+                | primitive.File()
+            ),
+            _,
+        ):
             return left == right
         case (
             (
