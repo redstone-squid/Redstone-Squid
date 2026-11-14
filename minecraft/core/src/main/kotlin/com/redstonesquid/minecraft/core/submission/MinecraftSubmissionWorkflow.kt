@@ -990,8 +990,8 @@ public class MinecraftSubmissionWorkflow(
     }
 
     private companion object {
-        val SUPPORTED_CONTROLS: Set<String> = setOf("text", "number", "choice", "multi_choice", "duration", "boolean")
-        val CLIENT_CAPABILITIES: Set<String> = setOf("repeatable_text")
+        val SUPPORTED_CONTROLS: Set<String> = setOf("text", "number", "choice", "multi_choice", "duration", "boolean", "credits")
+        val CLIENT_CAPABILITIES: Set<String> = setOf("repeatable_text", "typed_credits")
         val EDITABLE_DRAFT_STATUSES: Set<String> = setOf("editing", "needs_attention")
         const val MAX_CREATE_ATTEMPTS: Int = 4
         const val DEFAULT_CREATE_RETRY_DELAY_SECONDS: Long = 1

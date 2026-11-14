@@ -4,6 +4,8 @@ import com.redstonesquid.minecraft.protocol.ChoiceOption
 import com.redstonesquid.minecraft.protocol.FormField
 import java.math.BigDecimal
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
@@ -29,6 +31,24 @@ public object DraftFieldValueParser {
                 JsonPrimitive(number)
             }
             "boolean" -> JsonPrimitive(parseBoolean(field, rawValue))
+            "credit_list" -> JsonArray(parseList(field, rawValue).map { entry ->
+                val parts = entry.split(" | ", limit = 2)
+                val reference = parts[0]
+                val prefix = reference.substringBefore(':', "")
+                val kind = when (prefix) {
+                    "discord" -> "discord"
+                    "java" -> "minecraft_java"
+                    "bedrock" -> "minecraft_bedrock"
+                    else -> "name"
+                }
+                val name = if (kind == "name") reference else reference.substringAfter(':').removePrefix("@")
+                buildJsonObject {
+                    put("name", name)
+                    put("kind", kind)
+                    put("role", parts.getOrElse(1) { "creator" })
+                    if (kind != "name") put("username", name)
+                }
+            })
             "string_list" -> JsonArray(parseList(field, rawValue).map(::JsonPrimitive))
             "game_ticks" -> JsonPrimitive(parseGameTicks(field, rawValue))
             else -> invalid(field, "value kind '${field.valueKind}' is not supported in-game")

@@ -27,6 +27,15 @@ class DraftFieldValueParserTest {
     }
 
     @Test
+    fun `credits distinguish names providers and contributions`() {
+        val credits = DraftFieldValueParser.parse(field("credit_list", "credits"), "Alex, java:Alex | layout").jsonArray
+        assertEquals("name", credits[0].jsonObject.getValue("kind").jsonPrimitive.content)
+        assertEquals("minecraft_java", credits[1].jsonObject.getValue("kind").jsonPrimitive.content)
+        assertEquals("layout", credits[1].jsonObject.getValue("role").jsonPrimitive.content)
+        assertEquals("Alex", credits[1].jsonObject.getValue("username").jsonPrimitive.content)
+    }
+
+    @Test
     fun `parser enforces inline and dynamic choices`() {
         val choice = field("string", "choice", listOf(ChoiceOption("door", "Door")))
         val dynamic = field("string_list", "multi_choice")
