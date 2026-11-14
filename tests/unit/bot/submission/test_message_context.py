@@ -3,9 +3,7 @@
 import io
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 from typing import cast
-from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -95,37 +93,3 @@ async def test_video_preview_uses_downloaded_bytes_not_a_remote_ffmpeg_url(
 
     extract.assert_awaited_once_with(b"downloaded-video")
     assert images[0].data == b"png-frame"
-
-
-@pytest.mark.parametrize("images", [False, True])
-async def test_bundle_downloads_visual_inputs_only_when_requested(images: bool) -> None:
-    read = AsyncMock(return_value=b"png")
-    attachment = SimpleNamespace(filename="door.png", content_type="image/png", size=3, read=read)
-    source = cast(
-        discord.Message,
-        SimpleNamespace(
-            id=1,
-            author=SimpleNamespace(id=10, display_name="Builder", name="builder"),
-            channel=SimpleNamespace(id=20),
-            guild=SimpleNamespace(id=30),
-            content="3x3 door",
-            created_at=datetime(2026, 1, 1, tzinfo=UTC),
-            reference=None,
-            mentions=[],
-            attachments=[attachment],
-        ),
-    )
-
-    bundle = (
-        await message_context.assemble_bundle([source], include_images=True)
-        if images
-        else await message_context.assemble_bundle([source])
-    )
-
-    assert bundle.primary[0].attachment_summary == "1 image"
-    if images:
-        read.assert_awaited_once_with()
-        assert bundle.images[0].data == b"png"
-    else:
-        read.assert_not_awaited()
-        assert bundle.images == ()

@@ -453,7 +453,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             if request.interaction is not None
             else uuid4()
         )
-        bundle = await assemble_bundle([message], preceding=())
+        bundle = await assemble_bundle([message], preceding=(), include_images=True)
         candidates = await self.bot.services.submission_inference.infer(
             run_id,
             owner_account_id,

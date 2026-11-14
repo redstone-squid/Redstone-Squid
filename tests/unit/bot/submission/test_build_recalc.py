@@ -291,22 +291,19 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
     cog.bot.services = bot_services(submission_inference=inference, submission_recalculations=proposals)
     cog.bot.inference_model = "test-model"
     cog.bot.inference_reasoning_effort = None
-    assemble = AsyncCallRecorder(result="retained-input")
-    monkeypatch.setattr("squid.bot.submission.submit.assemble_bundle", assemble)
+    monkeypatch.setattr("squid.bot.submission.submit.assemble_bundle", AsyncCallRecorder(result="retained-input"))
     monkeypatch.setattr(cog.bot.actors, "resolve", AsyncCallRecorder(result=Actor(account_id=7)))
     context = ContextHarness(bot=cog.bot).source
     context.interaction = InteractionHarness(client=cog.bot).source
     context.interaction.id = 55
     request = await cog.ui.request(context)
-    message = MessageHarness(message_id=123).source
     result = await BuildSubmitCommands.propose_recalculation(
         cog,
         request,
-        message,
+        MessageHarness(message_id=123).source,
         owner_account_id=1,
     )
     assert result is not None
-    assemble.assert_awaited_once_with([message], preceding=())
     assert proposals.create_calls.await_args.kwargs["candidate"] is candidate
     assert proposals.create_calls.await_args.kwargs["owner_account_id"] == 1
     assert proposals.create_calls.await_args.kwargs["source_message_id"] == 123

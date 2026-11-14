@@ -43,7 +43,7 @@ class ImportOptions:
     limit: int | None = None
     group_window: float = 300
     group_max_messages: int = 8
-    include_images: bool = False
+    include_images: bool = True
     dry_run: bool = False
     channel_consent: bool = False
     retry_failed: bool = False
@@ -294,10 +294,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--concurrency", type=_positive_int, default=4)
     parser.add_argument("--group-window", type=_window, default=300)
     parser.add_argument("--group-max-messages", type=_positive_int, default=8)
-    images = parser.add_mutually_exclusive_group()
-    images.add_argument("--images", action="store_true", help="Send images and video previews as extra model context.")
-    images.add_argument("--no-images", dest="images", action="store_false", help=argparse.SUPPRESS)
-    parser.set_defaults(images=False)
+    parser.add_argument("--no-images", action="store_true")
     parser.add_argument(
         "--retry-failed",
         action="store_true",
@@ -335,7 +332,7 @@ async def main(arguments: argparse.Namespace) -> int:
         limit=arguments.limit,
         group_window=arguments.group_window,
         group_max_messages=arguments.group_max_messages,
-        include_images=arguments.images,
+        include_images=not arguments.no_images,
         dry_run=arguments.dry_run,
         channel_consent=arguments.channel_consent,
         retry_failed=arguments.retry_failed,

@@ -30,10 +30,8 @@ uv run --locked python scripts/populate_db_with_logs_historical_messages.py \
 ```
 
 A dry run calls the configured model and logs inferred candidates, so it incurs inference
-costs, but saves no accounts, inference inputs, candidates, or drafts. Inference uses message
-text and attachment summaries by default. Add `--images` to include images and video previews
-as extra model context for sparse posts. Source attachments are retained in real imports
-regardless of that option. Authors without current consent are skipped in both modes by default.
+costs, but saves no accounts, inference inputs, candidates, or drafts. `--no-images` disables
+visual inference inputs. Authors without current consent are skipped in both modes by default.
 For channels whose posting policy already permits collection, pass `--channel-consent` to
 use that policy for this import only. This works in dry runs and real imports, without
 recording account-wide consent or changing live ingestion. Real imports still create author
