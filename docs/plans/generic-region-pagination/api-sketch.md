@@ -168,14 +168,14 @@ A possible contract has four operations. These signatures describe responsibilit
 Python types or package locations:
 
 ```python
-class TargetRules[PayloadT, BodyT](Protocol):
+class TargetRules[PayloadT, PreparationT, BodyT](Protocol):
     def offers(
         self, occurrence: SemanticOccurrence, context: PlanningContext
     ) -> Iterable[RealizationOffer[PayloadT]]: ...
 
     def evaluate(self, candidate: CandidateComposition[PayloadT], context: PlanningContext) -> Evaluation: ...
 
-    def build(self, selected: SelectedComposition[PayloadT], context: BuildContext) -> BodyT: ...
+    def build(self, preparation: PreparationT, context: PlanningContext) -> BodyT: ...
 
     def validate(self, body: BodyT, expected: Evaluation) -> None: ...
 ```
@@ -189,7 +189,8 @@ of transformations the candidate already chose. It must not silently choose more
 truncate content, or run an independent fitting search. An infeasible candidate returns structured
 constraint results so the core can explore other choices.
 
-`build` constructs the selected visible body. The core assembles the surrounding plan result,
+A feasible evaluation includes a typed immutable preparation. `build` consumes that preparation
+without reinterpreting the candidate or serializing its content again. The core assembles the surrounding plan result,
 including resources, bindings, diagnostics, and proposed presentation updates. `validate` checks
 that the built body honors the selected constraints and measured contract. A mismatch is an
 implementation error; it is not permission for a final trimming pass.

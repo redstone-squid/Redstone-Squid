@@ -65,7 +65,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
         blocks = 0
-        expected_blocks: list[scene.SlackBlock] = []
+        prepared_blocks: list[scene.SlackBlock] = []
 
         def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> None:
             nonlocal blocks
@@ -93,7 +93,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                     if rendered == "":
                         texts.pop()
                     elif rendered is not None:
-                        expected_blocks.append(
+                        prepared_blocks.append(
                             scene.SlackSection(scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False))
                         )
                 case TableRealization() as table:
@@ -102,9 +102,15 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                         limit("table.columns", len(table.columns), self.limits.components.table_columns)
                         limit("table.rows", len(table.rows) + 1, self.limits.components.table_rows)
                         start = len(texts)
+                        prepared_rows: list[tuple[scene.SlackText, ...]] = []
                         for row in (table.columns, *(row.cells for row in table.rows)):
+                            cells: list[scene.SlackText] = []
                             for cell in row:
-                                text(cell.nodes, capacity=self.limits.components.table_text, name="table.text")
+                                value = text(cell.nodes, capacity=self.limits.components.table_text, name="table.text")
+                                if value is not None:
+                                    cells.append(scene.SlackText(value, scene.SlackTextKind.PLAIN, emoji=False))
+                            prepared_rows.append(tuple(cells))
+                        prepared_blocks.append(scene.SlackTable(tuple(prepared_rows)))
                         limit(
                             "table.text", sum(len(value) for value in texts[start:]), self.limits.components.table_text
                         )
@@ -115,7 +121,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                             if rendered == "":
                                 texts.pop()
                             elif rendered is not None:
-                                expected_blocks.append(
+                                prepared_blocks.append(
                                     scene.SlackSection(
                                         scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False)
                                     )
@@ -143,48 +149,13 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
             cost,
             violations=tuple(violations),
             effects=tuple(effects),
-            evidence=scene.SlackMessage("\n".join(texts), tuple(expected_blocks)),
+            preparation=scene.SlackMessage("\n".join(texts), tuple(prepared_blocks)),
             text=tuple(texts),
         )
 
-    def build(
-        self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
-    ) -> scene.SlackMessage:
-        texts: list[str] = []
-
-        def text(nodes: tuple[tree.Node, ...]) -> scene.SlackText:
-            content = _plain(nodes)
-            if content is None:
-                message = "selected Slack text has no supported realization"
-                raise DrawInvariantError(message)
-            texts.append(content)
-            return scene.SlackText(content, scene.SlackTextKind.PLAIN, emoji=False)
-
-        def section(nodes: tuple[tree.Node, ...]) -> tuple[scene.SlackBlock, ...]:
-            value = text(nodes)
-            if not value.content:
-                texts.pop()
-                return ()
-            return (scene.SlackSection(value),)
-
-        def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> tuple[scene.SlackBlock, ...]:
-            context.work.consume()
-            match part.offer.payload:
-                case TextRealization(nodes=nodes):
-                    return section(nodes)
-                case TableRealization() as table:
-                    if table.form == TableForm.NATIVE:
-                        rows = (table.columns, *(row.cells for row in table.rows))
-                        return (scene.SlackTable(tuple(tuple(text(cell.nodes) for cell in row) for row in rows)),)
-                    return tuple(block for row in record_text(table) for block in section(row))
-                case FlowRealization():
-                    return tuple(block for child in part.children for block in visit(child))
-                case _:
-                    message = "unsupported selected Slack realization"
-                    raise DrawInvariantError(message)
-
-        blocks = visit(candidate)
-        return scene.SlackMessage("\n".join(texts), blocks)
+    def build(self, preparation: scene.SlackMessage, context: PlanningContext) -> scene.SlackMessage:
+        context.work.consume()
+        return preparation
 
     def validate(
         self, body: scene.SlackMessage, expected: Evaluation[Asset, scene.SlackMessage], context: PlanningContext
@@ -223,7 +194,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
         cost = ResourceCost({Axis.BLOCKS: len(body.blocks)})
         if (
             cost != expected.cost
-            or body != expected.evidence
+            or body != expected.preparation
             or not cost.within(self.limits.capacities)
             or tuple(texts) != expected.text
             or body.text != "\n".join(texts)

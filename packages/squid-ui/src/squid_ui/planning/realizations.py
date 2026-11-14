@@ -184,9 +184,9 @@ def record_text(table: TableRealization) -> tuple[tuple[tree.Node, ...], ...]:
     return tuple(result)
 
 
-def select_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, EvidenceT](
+def select_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
     occurrence: SemanticOccurrence[RenderTargetT, ContextT],
-    rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, EvidenceT],
+    rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT],
     context: PlanningContext,
     *,
     selections: Mapping[OccurrenceId, str],

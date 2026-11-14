@@ -72,7 +72,7 @@ class TextRules:
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTarget, object, str], context: PlanningContext
-    ) -> Evaluation[Asset]:
+    ) -> Evaluation[Asset, str]:
         context.work.consume()
         length = len(candidate.offer.payload)
         violations = (
@@ -81,14 +81,17 @@ class TextRules:
             else ()
         )
         return Evaluation(
-            ResourceCost({Axis.DISPLAY_TEXT: length}), violations=violations, effects=candidate.offer.effects
+            ResourceCost({Axis.DISPLAY_TEXT: length}),
+            violations=violations,
+            effects=candidate.offer.effects,
+            preparation=candidate.offer.payload,
         )
 
-    def build(self, candidate: CandidateComposition[RenderTarget, object, str], context: PlanningContext) -> str:
+    def build(self, preparation: str, context: PlanningContext) -> str:
         context.work.consume()
-        return candidate.offer.payload + self.construction_suffix
+        return preparation + self.construction_suffix
 
-    def validate(self, body: str, expected: Evaluation[Asset], context: PlanningContext) -> None:
+    def validate(self, body: str, expected: Evaluation[Asset, str], context: PlanningContext) -> None:
         context.work.consume()
         if len(body) != expected.cost.get(Axis.DISPLAY_TEXT):
             message = "built text disagrees with evaluated cost"
@@ -163,7 +166,7 @@ def test_target_cannot_introduce_undeclared_loss_in_nonstrict_mode() -> None:
         @override
         def evaluate(
             self, candidate: CandidateComposition[RenderTarget, object, str], context: PlanningContext
-        ) -> Evaluation[Asset]:
+        ) -> Evaluation[Asset, str]:
             return replace(super().evaluate(candidate, context), effects=(omit("text"),))
 
     rules, context = LosingRules(), PlanningContext(WorkBudget(100), strict=False)

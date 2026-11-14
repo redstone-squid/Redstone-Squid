@@ -109,48 +109,20 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                 case unknown:
                     assert_never(unknown)
 
-        evidence = scene.ComponentsV2(visit(candidate, in_panel=False))
+        preparation = scene.ComponentsV2(visit(candidate, in_panel=False))
         resources = SharedResources.combine(uses)
         additive = ResourceCost({Axis.COMPONENTS: components, Axis.DISPLAY_TEXT: sum(map(len, texts))})
         violations.extend(
             CapacityExceeded(candidate.offer.occurrence.identity, axis, used, capacity)
             for axis, used, capacity in (additive + resources.cost).over(self.limits.capacities)
         )
-        return Evaluation(additive, resources, tuple(violations), tuple(effects), evidence=evidence, text=tuple(texts))
+        return Evaluation(
+            additive, resources, tuple(violations), tuple(effects), preparation=preparation, text=tuple(texts)
+        )
 
-    def build(
-        self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
-    ) -> scene.ComponentsV2:
-        def text(nodes: tuple[tree.Node, ...]) -> tuple[scene.Node, ...]:
-            rendered = _text(nodes)
-            return (scene.Text(rendered, Markup.DISCORD_MARKDOWN),) if rendered else ()
-
-        def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> tuple[scene.Node, ...]:
-            context.work.consume()
-            match part.offer.payload:
-                case TextRealization(nodes=nodes):
-                    return text(nodes)
-                case TableRealization() as table:
-                    if table.form != TableForm.RECORDS:
-                        message = "selected V2 representation is not supported"
-                        raise DrawInvariantError(message)
-                    return tuple(node for row in record_text(table) for node in text(row))
-                case DownloadRealization() as download:
-                    return (
-                        *text(download.label),
-                        *text(download.description),
-                        scene.File(
-                            download.asset.key, download.asset.name, download.asset.media_type, download.spoiler
-                        ),
-                    )
-                case FlowRealization():
-                    return tuple(node for child in part.children for node in visit(child))
-                case PanelRealization(accent=accent):
-                    return (scene.Panel(tuple(node for child in part.children for node in visit(child)), accent),)
-                case unknown:
-                    assert_never(unknown)
-
-        return scene.ComponentsV2(visit(candidate))
+    def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:
+        context.work.consume()
+        return preparation
 
     def validate(
         self, body: scene.ComponentsV2, expected: Evaluation[Asset, scene.ComponentsV2], context: PlanningContext
@@ -190,7 +162,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         if (
             actual != expected.cost
             or tuple(texts) != expected.text
-            or body != expected.evidence
+            or body != expected.preparation
             or not actual.within(self.limits.capacities)
         ):
             message = "built V2 composition disagrees with evaluation"

@@ -163,10 +163,11 @@ HTML, visible interaction bindings, native atomic extensions, inherited requirem
 public migration boundary remains work in this phase. Unsupported vocabulary fails explicitly.
 Existing production planners and their known limitations remain in place until that migration.
 
-The working target rules expose a construction question: evaluation currently prepares enough
-structure to verify the entire output, then construction repeats the serialization. Decide
-whether construction should instead consume a typed immutable preparation before extending the
-contract to HTML and native resources. This does not move semantic selection into target rules.
+Evaluation now returns a typed immutable preparation, which construction consumes directly.
+V2 and Slack serialize a candidate once; independent validation checks the constructed body,
+resource counts, text, and structure. A feasible selection without a preparation is a target
+contract error. Semantic selection remains in the core, and rejected candidates never construct
+or publish a body.
 
 ## Validation and acceptance
 

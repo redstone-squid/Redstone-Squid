@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import squid_ui as sl
+from squid_i18n import tree
 from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.composition import (
@@ -138,7 +139,8 @@ def test_independent_validation_detects_changed_text_even_at_equal_cost() -> Non
     candidate = select_composition(occurrence, rules, context, selections={})
     assert isinstance(candidate, CandidateComposition)
     evaluation = rules.evaluate(candidate, context)
-    body = rules.build(candidate, context)
+    assert evaluation.preparation is not None
+    body = rules.build(evaluation.preparation, context)
     text = body.children[0]
     assert isinstance(text, scene.Text)
     corrupt = replace(body, children=(replace(text, content="replaced"),))
@@ -153,7 +155,8 @@ def test_v2_validation_checks_container_metadata() -> None:
     candidate = select_composition(occurrence, rules, context, selections={})
     assert isinstance(candidate, CandidateComposition)
     evaluation = rules.evaluate(candidate, context)
-    body = rules.build(candidate, context)
+    assert evaluation.preparation is not None
+    body = rules.build(evaluation.preparation, context)
     panel = body.children[0]
     assert isinstance(panel, scene.Panel)
     with pytest.raises(DrawInvariantError, match="disagrees with evaluation"):
@@ -169,10 +172,59 @@ def test_slack_validation_preserves_cell_relationships_at_equal_text_and_cost() 
     candidate = select_composition(occurrence, rules, context, selections={occurrence.identity: "table"})
     assert isinstance(candidate, CandidateComposition)
     evaluation = rules.evaluate(candidate, context)
-    body = rules.build(candidate, context)
+    assert evaluation.preparation is not None
+    body = rules.build(evaluation.preparation, context)
     table = body.blocks[0]
     assert isinstance(table, scene.SlackTable)
     a, b, one, two = (cell for row in table.rows for cell in row)
     corrupt = replace(body, blocks=(replace(table, rows=((a,), (b, one, two))),))
     with pytest.raises(DrawInvariantError, match="disagrees with evaluation"):
         rules.validate(corrupt, evaluation, context)
+
+
+def test_slack_builds_the_prepared_native_table_without_losing_rows() -> None:
+    node = sl.table(
+        sl.columns(sl.column("A", key="a"), sl.column("B", key="b")), sl.table_row("1", "2", key="r"), key="table"
+    )
+    rules, context = SlackCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("table"))
+    candidate = select_composition(occurrence, rules, context, selections={occurrence.identity: "table"})
+    assert isinstance(candidate, CandidateComposition)
+    result = build_composition(candidate, rules, context)
+    assert isinstance(result, BuiltComposition)
+    assert result.body is result.evaluation.preparation
+    table = result.body.blocks[0]
+    assert isinstance(table, scene.SlackTable)
+    assert tuple(tuple(cell.content for cell in row) for row in table.rows) == (("A", "B"), ("1", "2"))
+
+
+def test_v2_constructs_and_validates_without_serializing_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    node = sl.paragraph("Content", key="text")
+    rules, context = V2CompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("text"))
+    candidate = select_composition(occurrence, rules, context, selections={})
+    assert isinstance(candidate, CandidateComposition)
+    evaluated = rules.evaluate(candidate, context)
+    assert evaluated.preparation is not None
+    monkeypatch.setattr("squid_ui.planning.composition_v2._text", reject_reserialization)
+    body = rules.build(evaluated.preparation, context)
+    rules.validate(body, evaluated, context)
+    assert body is evaluated.preparation
+
+
+def test_slack_constructs_and_validates_without_serializing_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    node = sl.paragraph("Content", key="text")
+    rules, context = SlackCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("text"))
+    candidate = select_composition(occurrence, rules, context, selections={})
+    assert isinstance(candidate, CandidateComposition)
+    evaluated = rules.evaluate(candidate, context)
+    assert evaluated.preparation is not None
+    monkeypatch.setattr("squid_ui.planning.composition_slack._plain", reject_reserialization)
+    body = rules.build(evaluated.preparation, context)
+    rules.validate(body, evaluated, context)
+    assert body is evaluated.preparation
+
+
+def reject_reserialization(nodes: tuple[tree.Node, ...]) -> str:
+    raise AssertionError("construction and validation must consume prepared target text")

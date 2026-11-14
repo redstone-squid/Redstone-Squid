@@ -195,7 +195,7 @@ type CandidateViolation = CapacityExceeded | UnsupportedCapability | ConstraintV
 
 
 @dataclass(frozen=True, slots=True)
-class Evaluation[ResourceT, EvidenceT = None]:
+class Evaluation[ResourceT, PreparationT = None]:
     """Facts about one composition, never a proof that every layout is infeasible.
 
     Additive cost excludes identified shared resources. Their costs are charged
@@ -207,7 +207,8 @@ class Evaluation[ResourceT, EvidenceT = None]:
     violations: tuple[CandidateViolation, ...] = ()
     effects: tuple[FidelityEffect, ...] = ()
     interactions: frozenset[SemanticRef] = frozenset()
-    evidence: EvidenceT | None = None
+    preparation: PreparationT | None = None
+    """Immutable target preparation; required for a feasible, selected candidate."""
     text: tuple[str, ...] = ()
     """Expected visible text in target traversal order, for independent construction checks."""
 
@@ -220,33 +221,33 @@ class Evaluation[ResourceT, EvidenceT = None]:
         return not self.violations
 
 
-class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, EvidenceT = None](Protocol):
+class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT = None](Protocol):
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
     ) -> tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]: ...
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT], context: PlanningContext
-    ) -> Evaluation[ResourceT, EvidenceT]: ...
+    ) -> Evaluation[ResourceT, PreparationT]: ...
 
-    def build(
-        self, candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT], context: PlanningContext
-    ) -> BodyT: ...
+    def build(self, preparation: PreparationT, context: PlanningContext) -> BodyT: ...
 
-    def validate(self, body: BodyT, expected: Evaluation[ResourceT, EvidenceT], context: PlanningContext) -> None: ...
+    def validate(
+        self, body: BodyT, expected: Evaluation[ResourceT, PreparationT], context: PlanningContext
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
-class BuiltComposition[ResourceT, BodyT, EvidenceT = None]:
+class BuiltComposition[ResourceT, BodyT, PreparationT = None]:
     body: BodyT
-    evaluation: Evaluation[ResourceT, EvidenceT]
+    evaluation: Evaluation[ResourceT, PreparationT]
 
 
-def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, EvidenceT](
+def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
     candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT],
-    rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, EvidenceT],
+    rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT],
     context: PlanningContext,
-) -> BuiltComposition[ResourceT, BodyT, EvidenceT] | Evaluation[ResourceT, EvidenceT]:
+) -> BuiltComposition[ResourceT, BodyT, PreparationT] | Evaluation[ResourceT, PreparationT]:
     """Evaluate and validate a fixed selection without publishing state or retrying it."""
     allowed: set[FidelityEffect] = set()
     pending = [candidate]
@@ -270,8 +271,11 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Evide
         return replace(evaluation, violations=(*evaluation.violations, violation))
     if not evaluation.feasible:
         return evaluation
+    if evaluation.preparation is None:
+        message = "feasible target evaluation did not prepare construction"
+        raise DrawInvariantError(message)
     context.work.consume()
-    body = rules.build(candidate, context)
+    body = rules.build(evaluation.preparation, context)
     context.work.consume()
     rules.validate(body, evaluation, context)
     return BuiltComposition(body, evaluation)
