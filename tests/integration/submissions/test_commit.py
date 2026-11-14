@@ -19,8 +19,8 @@ from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.messages.domain import MessageRef, MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import Decision, Reason
-from squid.permissions.errors import require_decisions
+from squid.permissions.domain import Decision, PermissionCheck, Reason
+from squid.permissions.errors import require_check
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.submissions.application.commit import BuildSubmissionExecutor
@@ -211,8 +211,14 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     class Permissions:
         allowed = True
 
-        async def require_in(self, uow: PermissionUnitOfWork, subject: Actor, *nodes: PermissionNode | str) -> None:
-            require_decisions(tuple(Decision(str(node), allowed=self.allowed, reason=Reason.DEFAULT) for node in nodes))
+        async def require(
+            self, subject: Actor, *nodes: PermissionNode | str, uow: PermissionUnitOfWork | None = None
+        ) -> None:
+            require_check(
+                PermissionCheck(
+                    tuple(Decision(str(node), allowed=self.allowed, reason=Reason.DEFAULT) for node in nodes)
+                )
+            )
 
     permissions = Permissions()
 

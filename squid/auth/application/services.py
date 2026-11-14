@@ -116,7 +116,7 @@ class ApiKeyService:
             return
         subject = Actor(account_id=owner_account_id)
         requested_nodes = frozenset(node for pattern in patterns for node in CATALOGUE.expand(pattern))
-        held = await self._permissions.capabilities_in(uow, subject, requested_nodes)
+        held = (await self._permissions.check(subject, *requested_nodes, uow=uow)).allowed_nodes
         for pattern in patterns:
             reached = CATALOGUE.expand(pattern)
             if missing := sorted(reached - held):

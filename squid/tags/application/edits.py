@@ -196,7 +196,7 @@ class TagAliasEdit(FieldCommand[TagAliasUnitOfWork, TagDefinition, AliasValues])
             return definition
 
         async def authorize(uow: TagAliasUnitOfWork, actor: Actor, root: TagDefinition) -> None:
-            await permissions.require_in(uow, actor, RESTRICTION_ALIAS_CREATE)
+            await permissions.require(actor, RESTRICTION_ALIAS_CREATE, uow=uow)
 
         async def flush(uow: TagAliasUnitOfWork, root: TagDefinition, expected: Revision) -> Revision:
             return await uow.tags.flush_definition_revision(root, expected)
@@ -378,7 +378,7 @@ class TagModerationEdit(FieldCommand[TagEditUnitOfWork, TagDefinition, Moderatio
         }.get(after.status)
         if node is None:
             raise ValidationError
-        await self._permissions.require_in(uow, actor, node)
+        await self._permissions.require(actor, node, uow=uow)
         return after
 
     async def prepare(

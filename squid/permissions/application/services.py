@@ -10,60 +10,34 @@ Assembled rules can be cached across checks. Resolution still evaluates expiry,
 scope, and precedence for each requested capability.
 """
 
-from collections.abc import Iterable
+from contextlib import nullcontext
 
 from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
 from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
+from squid.permissions.application.roles import role_specs
 from squid.permissions.domain import (
-    BUILTIN_ROLES_BY_KEY,
     CATALOGUE,
     BuiltinRoleKeys,
     Catalogue,
-    Decision,
+    CheckMode,
     Effect,
-    InvalidPatternError,
-    NodeScope,
     Origin,
     Pattern,
+    PermissionCheck,
     PermissionNode,
     RoleSpec,
     Rule,
     SubjectKind,
     expand_role,
     resolve,
-    resolve_many,
     rules_from_role,
 )
-from squid.permissions.errors import CheckMode, require_decisions
-from squid.permissions.models import PermissionGrant, PermissionRole
+from squid.permissions.errors import require_check
+from squid.permissions.models import PermissionGrant
 from squid.unit_of_work import UnitOfWorkFactory
-
-
-def _role_specs(roles: Iterable[PermissionRole]) -> dict[str, RoleSpec]:
-    """Combine stored role patterns with code-defined built-in patterns.
-
-    Stored patterns extend built-ins, but cannot override their code-defined
-    exclusions. Exclusions apply after the union, preserving the built-in limits
-    on destructive and bot-wide permissions.
-    """
-    specs: dict[str, RoleSpec] = {}
-    for role in roles:
-        includes = list(role.includes)
-        excludes = list(role.excludes)
-        builtin = BUILTIN_ROLES_BY_KEY.get(role.builtin_key or "")
-        if builtin is not None:
-            includes = [*builtin.includes, *includes]
-            excludes = [*builtin.excludes, *excludes]
-        specs[str(role.id)] = RoleSpec(
-            key=str(role.id),
-            includes=tuple(dict.fromkeys(includes)),
-            excludes=tuple(dict.fromkeys(excludes)),
-            includes_roles=tuple(str(edge) for edge in role.includes_roles),
-        )
-    return specs
 
 
 def _grant_rule(record: PermissionGrant) -> Rule:
@@ -98,76 +72,56 @@ class PermissionService:
         """The node catalogue this service resolves against."""
         return self._catalogue
 
-    @property
-    def cache(self) -> SubjectRuleCache | None:
-        """The rule-set cache this service reads through, if it has one."""
-        return self._cache
+    async def check(
+        self,
+        subject: Actor,
+        *nodes: PermissionNode | str,
+        uow: PermissionUnitOfWork | None = None,
+        mode: CheckMode = "all",
+    ) -> PermissionCheck:
+        """Evaluate requested nodes once, retaining both grants and denial reasons.
 
-    async def rules_for(self, subject: Actor) -> tuple[Rule, ...]:
-        """Load and expand the subject's rules; the resolver still checks expiry and scope."""
+        Supplying `uow` reads its current rules without consulting or populating
+        the cache, and leaves its transaction lifecycle to the caller. Otherwise
+        the service uses its normal cached lookup.
+        """
+        rules = await self._rules_for(subject, uow=uow)
+        now = Instant.now()
+        return PermissionCheck(
+            tuple(resolve(node, subject, rules, catalogue=self._catalogue, now=now) for node in nodes), mode=mode
+        )
+
+    async def require(
+        self,
+        subject: Actor,
+        *nodes: PermissionNode | str,
+        uow: PermissionUnitOfWork | None = None,
+        mode: CheckMode = "all",
+    ) -> None:
+        """Enforce the same check and raise the shared explanatory ACL error on denial."""
+        require_check(await self.check(subject, *nodes, uow=uow, mode=mode))
+
+    async def _rules_for(self, subject: Actor, *, uow: PermissionUnitOfWork | None) -> tuple[Rule, ...]:
         if subject.is_bot_owner:
-            # The owner short-circuits before any rule is read, so loading them
-            # would be pure cost.
             return ()
-
+        cache = self._cache if uow is None else None
         key = cache_key(subject)
-        if self._cache is not None and (cached := self._cache.get(key)) is not None:
+        if cache is not None and (cached := cache.get(key)) is not None:
             return cached
-
-        async with self._uow_factory() as uow:
-            records = await uow.permissions.load_for_subject(
+        async with self._uow_factory() if uow is None else nullcontext(uow) as scope:
+            records = await scope.permissions.load_for_subject(
                 account_id=subject.account_id,
                 discord_role_ids=subject.discord_role_ids,
                 guild_id=subject.guild_id,
             )
-        rules = self.assemble(records, subject)
-        if self._cache is not None:
-            self._cache.put(key, rules, epoch=records.epoch)
+        rules = self._assemble(records, subject)
+        if cache is not None:
+            cache.put(key, rules, epoch=records.epoch)
         return rules
 
-    async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool:
-        """Check one permission using the caller's transaction and current stored rules."""
-        return (await self.check_in(uow, subject, node)).allowed
-
-    async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision:
-        """Retain the explanation from a permission check using current transactional rules."""
-        return (await self.decisions_in(uow, subject, (node,)))[0]
-
-    async def decisions_in(
-        self, uow: PermissionUnitOfWork, subject: Actor, nodes: Iterable[PermissionNode | str]
-    ) -> tuple[Decision, ...]:
-        """Resolve current transactional rules once, without using the rule cache."""
-        if subject.is_bot_owner:
-            rules: tuple[Rule, ...] = ()
-        else:
-            records = await uow.permissions.load_for_subject(
-                account_id=subject.account_id,
-                discord_role_ids=subject.discord_role_ids,
-                guild_id=subject.guild_id,
-            )
-            rules = self.assemble(records, subject)
-        now = Instant.now()
-        return tuple(resolve(node, subject, rules, catalogue=self._catalogue, now=now) for node in nodes)
-
-    async def capabilities_in(
-        self, uow: PermissionUnitOfWork, subject: Actor, nodes: Iterable[PermissionNode | str]
-    ) -> frozenset[str]:
-        """Return the allowed nodes from current transactional decisions."""
-        return frozenset(item.node for item in await self.decisions_in(uow, subject, nodes) if item.allowed)
-
-    async def require_in(
-        self, uow: PermissionUnitOfWork, subject: Actor, *nodes: PermissionNode | str, mode: CheckMode = "all"
-    ) -> None:
-        """Enforce current transactional permissions with a shared ACL explanation."""
-        require_decisions(await self.decisions_in(uow, subject, nodes), mode=mode)
-
-    async def require(self, subject: Actor, *nodes: PermissionNode | str, mode: CheckMode = "all") -> None:
-        """Enforce permissions with a shared ACL explanation."""
-        require_decisions(await self.decisions(subject, nodes), mode=mode)
-
-    def assemble(self, records: SubjectRecords, subject: Actor) -> tuple[Rule, ...]:
+    def _assemble(self, records: SubjectRecords, subject: Actor) -> tuple[Rule, ...]:
         """Convert stored grants and role assignments into rules, including the guild-admin bridge."""
-        specs = _role_specs(records.roles)
+        specs = role_specs(records.roles)
         rules = [_grant_rule(grant) for grant in records.grants]
         rules.extend(self._assignment_rules(records, specs))
 
@@ -221,55 +175,3 @@ class PermissionService:
                 source="discord:manage-server",
             )
         )
-
-    async def check(self, subject: Actor, node: PermissionNode | str) -> Decision:
-        """Decide one node, with the trace that `/perm can` renders."""
-        return resolve(node, subject, await self.rules_for(subject), catalogue=self._catalogue)
-
-    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
-        """Whether `subject` holds `node`."""
-        return (await self.check(subject, node)).allowed
-
-    async def decisions(
-        self,
-        subject: Actor,
-        nodes: Iterable[PermissionNode | str],
-    ) -> tuple[Decision, ...]:
-        """Decide several nodes from one rule load, retaining each decision's explanation.
-
-        Callers can distinguish an explicit forbid from a missing grant, which a
-        set of allowed capability names alone would not show.
-        """
-        rules = await self.rules_for(subject)
-        return tuple(resolve(node, subject, rules, catalogue=self._catalogue) for node in nodes)
-
-    async def capabilities(
-        self,
-        subject: Actor,
-        nodes: Iterable[PermissionNode | str],
-    ) -> frozenset[str]:
-        """The subset of `nodes` that `subject` holds, from one load."""
-        return resolve_many(nodes, subject, await self.rules_for(subject), catalogue=self._catalogue)
-
-    def role_leaves(self, role: PermissionRole, roles: Iterable[PermissionRole]) -> tuple[str, ...]:
-        """Return sorted node names after role composition and exclusions.
-
-        Expansion uses the current catalogue and is not persisted.
-        """
-        specs = _role_specs(roles)
-        expansion = expand_role(str(role.id), specs, catalogue=self._catalogue)
-        leaves: set[str] = set()
-        for pattern in expansion.includes:
-            leaves |= self._catalogue.expand(pattern)
-        return tuple(sorted(leaves - expansion.excluded))
-
-    def is_delegable_by_guild_admin(self, pattern: str) -> bool:
-        """Return whether a valid pattern selects only guild-scoped catalogue nodes.
-
-        Malformed patterns and patterns matching no current node return False.
-        """
-        try:
-            scopes = self._catalogue.scopes_reached(pattern)
-        except InvalidPatternError:
-            return False
-        return bool(scopes) and scopes <= {NodeScope.GUILD}

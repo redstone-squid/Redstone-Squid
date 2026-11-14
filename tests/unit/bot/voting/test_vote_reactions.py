@@ -1,7 +1,7 @@
 """Reaction adaptation with real consent, actor resolution, routing and task ownership."""
 
 import asyncio
-from collections.abc import AsyncIterator, Iterable, Sequence
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast, override
@@ -19,7 +19,8 @@ from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.voting.vote import VoteCog
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode
+from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
 from squid.runtime import BackgroundTaskSupervisor
 from squid.settings.application import SettingsService
 from squid.voting.application import VoteService
@@ -162,9 +163,17 @@ class Permissions(PermissionService):
     subjects: list[Actor] = field(default_factory=list)
 
     @override
-    async def capabilities(self, subject: Actor, nodes: Iterable[PermissionNode | str]) -> frozenset[str]:
+    async def check(
+        self,
+        subject: Actor,
+        *nodes: PermissionNode | str,
+        uow: PermissionUnitOfWork | None = None,
+        mode: CheckMode = "all",
+    ) -> PermissionCheck:
         self.subjects.append(subject)
-        return frozenset()
+        return PermissionCheck(
+            tuple(Decision(str(node), allowed=False, reason=Reason.DEFAULT) for node in nodes), mode=mode
+        )
 
 
 @dataclass

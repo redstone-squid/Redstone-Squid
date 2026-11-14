@@ -44,9 +44,9 @@ class SettingsCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Setting
         subject = await actor_for_interaction(request)
         permissions = self.bot.services.permissions
         capabilities = SettingsCapabilities(
-            view_server=await permissions.allows(subject, SETTINGS_SERVER_VIEW),
-            edit_server=await permissions.allows(subject, SETTINGS_SERVER_EDIT),
-            edit_voting=await permissions.allows(subject, SETTINGS_VOTING_EDIT),
+            view_server=(await permissions.check(subject, SETTINGS_SERVER_VIEW)).allowed,
+            edit_server=(await permissions.check(subject, SETTINGS_SERVER_EDIT)).allowed,
+            edit_voting=(await permissions.check(subject, SETTINGS_VOTING_EDIT)).allowed,
         )
 
         async def authorize(node: PermissionNode) -> bool:

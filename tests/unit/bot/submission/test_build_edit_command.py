@@ -21,7 +21,8 @@ from squid.builds.domain import Status
 from squid.builds.models import DoorBuild, OtherBuild
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode
+from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
 from squid.settings.application import SettingsService
 from squid.submissions.application import FormOptionSet, SubmissionFormService
 from squid.submissions.application.forms import build_edit_manifest
@@ -92,8 +93,16 @@ class PermissionRecorder(PermissionService):
         self.allowed = allowed
 
     @override
-    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
-        return self.allowed
+    async def check(
+        self,
+        subject: Actor,
+        *nodes: PermissionNode | str,
+        uow: PermissionUnitOfWork | None = None,
+        mode: CheckMode = "all",
+    ) -> PermissionCheck:
+        return PermissionCheck(
+            tuple(Decision(str(node), allowed=self.allowed, reason=Reason.DEFAULT) for node in nodes), mode=mode
+        )
 
 
 class AccountIdResolver:

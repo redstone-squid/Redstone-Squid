@@ -82,7 +82,7 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         subject = await actor_for_interaction(request)
         capability_list: list[PermissionNode] = []
         for node in ACCESS_NODES:
-            if await self.bot.services.permissions.allows(subject, node):
+            if (await self.bot.services.permissions.check(subject, node)).allowed:
                 capability_list.append(node)  # noqa: PERF401 - await comprehensions confuse Pyrefly.
         capabilities = frozenset(capability_list)
 

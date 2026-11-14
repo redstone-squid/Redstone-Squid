@@ -215,7 +215,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         permissions = self.bot.services.permissions
 
         async def held(node: PermissionNode) -> bool:
-            return await permissions.allows(subject, node)
+            return (await permissions.check(subject, node)).allowed
 
         capabilities = BuildCapabilities(
             view_pending=await held(BUILD_SUBMISSION_VIEW_PENDING),

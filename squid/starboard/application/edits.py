@@ -139,7 +139,7 @@ class StarboardOperations:
         if actor.guild_id != guild_id:
             raise GuildContextRequiredError
         if nodes:
-            await self._permissions.require_in(uow, actor, *sorted(nodes, key=lambda node: node.name))
+            await self._permissions.require(actor, *sorted(nodes, key=lambda node: node.name), uow=uow)
 
     @staticmethod
     async def board_values(uow: StarboardEditUnitOfWork, row: StarboardConfig) -> BoardValues:

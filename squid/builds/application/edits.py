@@ -224,7 +224,7 @@ class BuildStatusEdit:
                 raise InvalidStateError
             decision = status
         permission = BUILD_SUBMISSION_APPROVE if decision is Status.CONFIRMED else BUILD_SUBMISSION_REJECT
-        await self._permissions.require_in(uow, actor, permission)
+        await self._permissions.require(actor, permission, uow=uow)
         assert previous is not None
         return PreparedBuildEdit(
             EditValues.of({"submission_status": previous.value}),

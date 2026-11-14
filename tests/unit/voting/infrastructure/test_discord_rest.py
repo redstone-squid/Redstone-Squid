@@ -4,7 +4,6 @@ Script discord.py HTTP responses to check how interactive lookups and background
 weight refreshes distinguish absent members from unavailable membership information.
 """
 
-from collections.abc import Iterable
 from typing import Any, cast
 
 import aiohttp
@@ -14,6 +13,7 @@ from discord.errors import DiscordServerError, Forbidden, HTTPException, NotFoun
 from discord.http import HTTPClient, Route
 
 from squid.core.actors import Actor
+from squid.permissions.domain import Decision, PermissionCheck, Reason
 from squid.voting.domain import VoteKind
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 from squid.voting.infrastructure.discord_rest import (
@@ -55,12 +55,12 @@ class StubHTTPClient:
         self.closes += 1
 
 
-class FakeCapabilities:
+class FakePermissions:
     """Grants the delete-log node to holders of role 11, as a role grant would."""
 
-    async def capabilities(self, actor: Actor, nodes: Iterable[str]) -> frozenset[str]:
+    async def check(self, actor: Actor, *nodes: str) -> PermissionCheck:
         held = "vote.log_delete.cast" if 11 in actor.discord_role_ids else ""
-        return frozenset({node for node in nodes if node == held})
+        return PermissionCheck(tuple(Decision(node, allowed=node == held, reason=Reason.DEFAULT) for node in nodes))
 
 
 class FakeDiscordIds:
@@ -81,7 +81,7 @@ def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestActorResolve
 async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
     """Resolve capabilities from the returned roles as well as retaining the raw role IDs."""
     http = StubHTTPClient({"roles": ["11", "22"]})
-    resolver = resolver_for(http, capabilities=FakeCapabilities())
+    resolver = resolver_for(http, permissions=FakePermissions())
 
     actor = await resolver.member(1, 10, VoteKind.BUILD)
 

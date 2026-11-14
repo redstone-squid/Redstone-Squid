@@ -630,3 +630,32 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
     for slug in (CUSTOM_A, CUSTOM_B):
         leaves = frozenset(service.resolved_leaves(await service.role(slug), roles))
         assert leaves <= initial_held
+
+
+class TestGuildScopePatterns:
+    @pytest.mark.parametrize(
+        "pattern",
+        ["settings.server.**", "settings.server.edit", "starboard.*.edit", "vote.**"],
+    )
+    def test_guild_only_patterns_are_delegable(self, pattern: str) -> None:
+        service = admin(stored())
+
+        assert service._is_delegable_by_guild_admin(pattern)
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "settings.**",  # includes global runtime settings
+            "settings.runtime.edit",
+            "build.**",  # reaches global nodes
+            "**",  # reaches everything
+            "@destructive",  # spans both scopes
+            "perm.grant.*",  # perm.grant.global is global
+            "nonsense.**",  # reaches nothing at all
+            "not a pattern",
+        ],
+    )
+    def test_anything_reaching_a_global_node_is_refused(self, pattern: str) -> None:
+        service = admin(stored())
+
+        assert not service._is_delegable_by_guild_admin(pattern)

@@ -51,8 +51,7 @@ async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member
     it does not create an account or refresh Discord membership.
     """
     subject = await build_actor(bot, member, member.guild.id)
-    capabilities = await bot.services.permissions.capabilities(
-        subject,
-        (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),
-    )
+    capabilities = (
+        await bot.services.permissions.check(subject, *(VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY))
+    ).allowed_nodes
     return replace(subject, account_id=account_id, capabilities=capabilities)

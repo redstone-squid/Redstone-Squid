@@ -219,7 +219,7 @@ async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
     service, _, actor, build = await setup(sessions)
     assert build.id is not None
     permissions = AsyncMock(spec=PermissionService)
-    permissions.require_in.return_value = None
+    permissions.require.return_value = None
     executor = EditExecutor(partial(SqlAlchemyUnitOfWork, sessions), {BUILD_STATUS_EDIT: BuildStatusEdit(permissions)})
     command = EditCommand(
         BUILD_STATUS_EDIT,

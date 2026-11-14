@@ -68,7 +68,9 @@ def draft_actor_id(actor: Actor) -> int:
 class DraftPermissions(Protocol):
     """Live permission checks used for staff correction of account-owned drafts."""
 
-    async def require_in(self, uow: PermissionUnitOfWork, subject: Actor, *nodes: PermissionNode | str) -> None: ...
+    async def require(
+        self, subject: Actor, *nodes: PermissionNode | str, uow: PermissionUnitOfWork | None = None
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -400,7 +402,7 @@ class SubmissionDraftService:
     async def _require_staff(self, uow: DraftUnitOfWork, actor: Actor) -> None:
         if self._permissions is None:
             raise DraftAccessDeniedError(reason="permissions_unconfigured")
-        await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_EDIT)
+        await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         """Delete an owned draft only while it remains user-editable."""

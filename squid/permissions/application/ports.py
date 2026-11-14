@@ -7,6 +7,7 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.permissions.domain import PermissionCheck
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.unit_of_work import UnitOfWork
 
@@ -45,16 +46,10 @@ class PermissionStore(Protocol):
         ...
 
 
-class ActorCapabilityResolver(Protocol):
-    """Supply resolved permission names when adapters construct voting or reaction actors.
+class ActorPermissionChecker(Protocol):
+    """Evaluate permission nodes when an adapter constructs a voting actor."""
 
-    Their policies receive a set of allowed names rather than a permission service,
-    so evaluating a policy does not itself perform permission queries.
-    """
-
-    async def capabilities(self, subject: Actor, nodes: Iterable[str]) -> frozenset[str]:
-        """Return the subset of requested nodes held by this actor."""
-        ...
+    async def check(self, subject: Actor, *nodes: str) -> PermissionCheck: ...
 
 
 @dataclass(frozen=True, slots=True)

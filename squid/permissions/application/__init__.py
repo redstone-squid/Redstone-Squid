@@ -4,7 +4,7 @@ from squid.permissions.application.administration import PermissionAdministratio
 from squid.permissions.application.cache import CacheKey, SubjectRuleCache, cache_key
 from squid.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.permissions.application.ports import (
-    ActorCapabilityResolver,
+    ActorPermissionChecker,
     AuditEntry,
     PermissionAdminStore,
     PermissionStore,
@@ -13,7 +13,7 @@ from squid.permissions.application.ports import (
 from squid.permissions.application.services import PermissionService
 
 __all__ = [
-    "ActorCapabilityResolver",
+    "ActorPermissionChecker",
     "AuditEntry",
     "CacheKey",
     "PermissionAdminStore",

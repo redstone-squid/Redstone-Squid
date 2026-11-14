@@ -20,8 +20,8 @@ from squid.accounts.domain import IdentityProvider
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import CATALOGUE, PermissionNode
-from squid.permissions.errors import CheckMode, PermissionDeniedError, require_decisions
+from squid.permissions.domain import CATALOGUE, CheckMode, PermissionNode
+from squid.permissions.errors import PermissionDeniedError, require_check
 
 if TYPE_CHECKING:
     from discord.ext.commands._types import Check
@@ -152,7 +152,7 @@ def _permissions_of(caller: sd.Request[Any]) -> PermissionService:
 async def allows(caller: sd.Request[Any], node: PermissionNode | str) -> bool:
     """Whether the user behind `caller` holds `node`."""
     subject = await actor_for_interaction(caller)
-    return await _permissions_of(caller).allows(subject, node)
+    return (await _permissions_of(caller).check(subject, node)).allowed
 
 
 async def enforce(
@@ -170,8 +170,8 @@ async def enforce(
     """
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
     subject = await actor_for_interaction(caller)
-    decisions = await _permissions_of(caller).decisions(subject, resolved)
-    require_decisions(decisions, mode=mode, error_type=PermissionNodeRequired)
+    result = await _permissions_of(caller).check(subject, *resolved, mode=mode)
+    require_check(result, error_type=PermissionNodeRequired)
 
 
 def requires(
@@ -195,8 +195,8 @@ def requires(
         if guild_only and ctx.guild is None:
             raise NoPrivateMessage()
         subject = await actor_for(ctx)
-        decisions = await ctx.bot.services.permissions.decisions(subject, resolved)
-        require_decisions(decisions, mode=mode, error_type=PermissionNodeRequired)
+        result = await ctx.bot.services.permissions.check(subject, *resolved, mode=mode)
+        require_check(result, error_type=PermissionNodeRequired)
         return True
 
     # Stamped on the predicate so the taxonomy test can read a command's real

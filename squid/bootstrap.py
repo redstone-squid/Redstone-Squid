@@ -673,7 +673,7 @@ class _ServiceGraph:
             return None
         resolver = DiscordRestActorResolver(
             client,
-            capabilities=self.permissions,
+            permissions=self.permissions,
             discord_ids=AccountVoterDiscordIdLookup(self.accounts),
         )
         self.votes.set_actor_resolver(resolver)

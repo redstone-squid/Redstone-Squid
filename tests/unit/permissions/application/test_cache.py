@@ -119,8 +119,8 @@ class TestServiceCaching:
         permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=SubjectRuleCache())
         subject = Actor(account_id=7, guild_id=GUILD)
 
-        assert await permissions.allows(subject, "vote.log_delete.cast")
-        assert await permissions.allows(subject, "vote.weight.staff")
+        assert (await permissions.check(subject, "vote.log_delete.cast")).allowed
+        assert (await permissions.check(subject, "vote.weight.staff")).allowed
         assert store.loads == 1
 
     async def test_a_write_elsewhere_forces_a_reload(self) -> None:
@@ -130,10 +130,10 @@ class TestServiceCaching:
         watcher = PermissionEpochWatcher(cache, uow_factory=permission_uow_factory(store))
         subject = Actor(account_id=7, guild_id=GUILD)
 
-        await permissions.allows(subject, "vote.log_delete.cast")
+        await permissions.check(subject, "vote.log_delete.cast")
         store.epoch_version = 2
         await watcher.refresh()
-        await permissions.allows(subject, "vote.log_delete.cast")
+        await permissions.check(subject, "vote.log_delete.cast")
 
         assert store.loads == 2
 
@@ -143,7 +143,7 @@ class TestServiceCaching:
         cache = SubjectRuleCache()
         permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=cache)
 
-        assert await permissions.allows(Actor(account_id=1, is_bot_owner=True), "bot.tree.sync")
+        assert (await permissions.check(Actor(account_id=1, is_bot_owner=True), "bot.tree.sync")).allowed
         assert store.loads == 0
         assert len(cache) == 0
 

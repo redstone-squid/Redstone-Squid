@@ -29,7 +29,7 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
     permissions = PermissionService(uow_factory=factory, cache=cache)
     subject = Actor(account_id=account_id)
     node = "build.submission.approve"
-    assert not await permissions.allows(subject, node)
+    assert not (await permissions.check(subject, node)).allowed
     async with factory() as uow:
         epoch = await uow.permissions.epoch()
         await uow.permission_admin.upsert_grant(
@@ -44,19 +44,19 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
             reason=None,
             audit=AuditEntry(action="grant", subject_kind="account", subject_id=account_id, pattern=node),
         )
-        assert await permissions.capabilities_in(uow, subject, [node]) == frozenset({node})
+        assert (await permissions.check(subject, *[node], uow=uow)).allowed_nodes == frozenset({node})
         assert len(await uow.permission_admin.list_audit()) == 1
         if commit:
             await uow.commit()
 
     # Transaction-local authorization must not replace cached committed rules.
-    assert not await permissions.allows(subject, node)
+    assert not (await permissions.check(subject, node)).allowed
     async with factory() as uow:
         assert bool(await uow.permission_admin.list_rules(subject_account_id=account_id)) == commit
         assert bool(await uow.permission_admin.list_audit()) == commit
         assert (await uow.permissions.epoch() > epoch) == commit
     await PermissionEpochWatcher(cache, uow_factory=factory).refresh()
-    assert await permissions.allows(subject, node) == commit
+    assert (await permissions.check(subject, node)).allowed == commit
 
 
 async def test_role_creation_commits_with_audit_and_rolls_back_if_audit_fails(

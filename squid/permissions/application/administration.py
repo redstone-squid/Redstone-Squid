@@ -24,8 +24,18 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.core.i18n import tr
 from squid.permissions.application.ports import AuditEntry, PermissionAdminUnitOfWork
+from squid.permissions.application.roles import role_specs
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import CATALOGUE, BuiltinRoleKeys, Catalogue, Effect, Pattern
+from squid.permissions.domain import (
+    CATALOGUE,
+    BuiltinRoleKeys,
+    Catalogue,
+    Effect,
+    InvalidPatternError,
+    NodeScope,
+    Pattern,
+    expand_role,
+)
 from squid.permissions.domain.catalogue import (
     PERM_GRANT_GLOBAL,
     PERM_GRANT_GUILD,
@@ -111,7 +121,7 @@ class PermissionAdministrationService:
             held = (
                 frozenset()
                 if subject.is_bot_owner
-                else await self._permissions.capabilities_in(uow, subject, self._catalogue)
+                else (await self._permissions.check(subject, *self._catalogue, uow=uow)).allowed_nodes
             )
             return replace(subject, capabilities=held, highest_permission_rank=await self._highest_rank(uow, subject))
 
@@ -191,7 +201,7 @@ class PermissionAdministrationService:
         if scope_guild_id is None or scope_guild_id != actor.guild_id:
             msg = "You may only grant permissions scoped to this server."
             raise PermissionAuthorityError(msg, public_context={"scope_guild_id": scope_guild_id})
-        if not self._permissions.is_delegable_by_guild_admin(pattern):
+        if not self._is_delegable_by_guild_admin(pattern):
             msg = f"{pattern} reaches permissions that are not this server's to grant."
             raise PermissionAuthorityError(msg, public_context={"pattern": pattern})
 
@@ -284,7 +294,7 @@ class PermissionAdministrationService:
         self._require_role_management(actor, role)
         if mode == INCLUDE_MODE:
             self._require_authority(actor, (pattern,))
-            if role.guild_id is not None and not self._permissions.is_delegable_by_guild_admin(pattern):
+            if role.guild_id is not None and not self._is_delegable_by_guild_admin(pattern):
                 msg = f"{pattern} reaches permissions outside this server's scope."
                 raise PermissionAuthorityError(msg, public_context={"pattern": pattern})
 
@@ -501,7 +511,24 @@ class PermissionAdministrationService:
 
     def resolved_leaves(self, role: PermissionRole, roles: Sequence[PermissionRole]) -> tuple[str, ...]:
         """The node names a role actually confers, composition and subtraction applied."""
-        return self._permissions.role_leaves(role, roles)
+        specs = role_specs(roles)
+        catalogue = self._permissions.catalogue
+        expansion = expand_role(str(role.id), specs, catalogue=catalogue)
+        leaves: set[str] = set()
+        for pattern in expansion.includes:
+            leaves |= catalogue.expand(pattern)
+        return tuple(sorted(leaves - expansion.excluded))
+
+    def _is_delegable_by_guild_admin(self, pattern: str) -> bool:
+        """Return whether a valid pattern selects only guild-scoped catalogue nodes.
+
+        Malformed patterns and patterns matching no current node return False.
+        """
+        try:
+            scopes = self._permissions.catalogue.scopes_reached(pattern)
+        except InvalidPatternError:
+            return False
+        return bool(scopes) and scopes <= {NodeScope.GUILD}
 
     async def reserve_role_identity(self) -> int:
         async with self._read() as uow:

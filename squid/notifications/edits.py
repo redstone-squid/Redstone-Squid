@@ -68,7 +68,7 @@ async def authorize(
 ) -> None:
     if actor.account_id != account_id:
         raise OwnershipRequiredError
-    await permissions.require_in(uow, actor, ACCOUNT_SELF_MANAGE)
+    await permissions.require(actor, ACCOUNT_SELF_MANAGE, uow=uow)
     if not (await uow.notifications.get_preferences(account_id)).has_current_consent:
         raise ConsentRequiredError(account_id=account_id)
 
@@ -313,7 +313,7 @@ class InboxReadEdit:
             message = "Read-state edits must guard exactly the selected inbox items."
             raise ValidationError(message)
         visibility = InboxVisibility(
-            include_staff=await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_VIEW_PENDING)
+            include_staff=(await self._permissions.check(actor, BUILD_SUBMISSION_VIEW_PENDING, uow=uow)).allowed
         )
         rows = await uow.notifications.lock_inbox(account_id, tuple(sorted(values.states)), visibility=visibility)
         if {row.id for row in rows} != values.states.keys():

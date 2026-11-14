@@ -23,7 +23,7 @@ from discord.http import HTTPClient, Route
 from discord.utils import MISSING
 
 from squid.core.actors import Actor
-from squid.permissions.application.ports import ActorCapabilityResolver
+from squid.permissions.application.ports import ActorPermissionChecker
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.voting.domain import VoteKind
 from squid.voting.errors import DiscordMemberServiceUnavailableError
@@ -154,13 +154,13 @@ class DiscordRestActorResolver:
         self,
         client: discord.Client,
         *,
-        capabilities: ActorCapabilityResolver | None = None,
+        permissions: ActorPermissionChecker | None = None,
         discord_ids: VoterDiscordIdLookup | None = None,
         cache_ttl_seconds: float = 300,
         clock: Callable[[], float] = monotonic,
     ) -> None:
         self._client = client
-        self._capabilities = capabilities
+        self._permissions = permissions
         self._discord_ids = discord_ids
         self._cache_ttl_seconds = cache_ttl_seconds
         self._clock = clock
@@ -259,11 +259,12 @@ class DiscordRestActorResolver:
         except (TypeError, ValueError) as error:
             raise self._malformed_member(guild_id) from error
         actor = Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id, discord_role_ids=role_ids)
-        if self._capabilities is not None:
-            capabilities = await self._capabilities.capabilities(
-                actor,
-                (VOTE_LOG_DELETE_CAST.name, VOTE_WEIGHT_STAFF.name, VOTE_POLL_CLOSE_ANY.name),
-            )
+        if self._permissions is not None:
+            capabilities = (
+                await self._permissions.check(
+                    actor, *(VOTE_LOG_DELETE_CAST.name, VOTE_WEIGHT_STAFF.name, VOTE_POLL_CLOSE_ANY.name)
+                )
+            ).allowed_nodes
             actor = replace(actor, capabilities=capabilities)
         return actor
 

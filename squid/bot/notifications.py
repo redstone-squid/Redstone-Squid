@@ -65,7 +65,9 @@ class NotificationCog(sd.Cog[Any]):
         async def visibility() -> InboxVisibility:
             current = await actor()
             return InboxVisibility(
-                include_staff=await self.bot.services.permissions.allows(current, BUILD_SUBMISSION_VIEW_PENDING)
+                include_staff=(
+                    await self.bot.services.permissions.check(current, BUILD_SUBMISSION_VIEW_PENDING)
+                ).allowed
             )
 
         return NotificationScreen(

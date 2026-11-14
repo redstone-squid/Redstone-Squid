@@ -1,6 +1,5 @@
 """Small typed harnesses shared by Discord boundary tests."""
 
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -16,7 +15,8 @@ from squid.bot.ui import HOST_DEFAULTS
 from squid.core.actors import Actor
 from squid.diagnostics.application import ErrorReportService
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import Decision, PermissionNode, Reason
+from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
 from squid.runtime import BotServices
 from squid.suggestions.application import SuggestionService
 from squid_reactivity import LocalTopicBus
@@ -169,24 +169,18 @@ class _AutocompletePermissions(PermissionService):
         self.allowed_nodes = allowed_nodes
 
     @override
-    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
-        del subject
-        return str(getattr(node, "name", node)) in self.allowed_nodes
-
-    @override
-    async def decisions(
+    async def check(
         self,
         subject: Actor,
-        nodes: Iterable[PermissionNode | str],
-    ) -> tuple[Decision, ...]:
-        del subject
-        return tuple(
-            Decision(
-                node=str(getattr(node, "name", node)),
-                allowed=str(getattr(node, "name", node)) in self.allowed_nodes,
-                reason=Reason.DEFAULT,
-            )
-            for node in nodes
+        *nodes: PermissionNode | str,
+        uow: PermissionUnitOfWork | None = None,
+        mode: CheckMode = "all",
+    ) -> PermissionCheck:
+        return PermissionCheck(
+            tuple(
+                Decision(str(node), allowed=str(node) in self.allowed_nodes, reason=Reason.DEFAULT) for node in nodes
+            ),
+            mode=mode,
         )
 
 

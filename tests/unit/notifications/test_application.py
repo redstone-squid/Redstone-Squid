@@ -33,7 +33,7 @@ async def test_edits_require_consent_before_target_lookup(kind: str) -> None:
     uow.notifications.lock_settings.return_value = 1
     uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=True)
     permissions = AsyncMock(spec=PermissionService)
-    permissions.allows_in.return_value = True
+    permissions.require.return_value = None
     handler = (
         NotificationPreferencesEdit(permissions)
         if kind == PREFERENCES_EDIT
@@ -56,7 +56,7 @@ async def test_subscription_target_is_checked_before_persistence() -> None:
     uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=False)
     uow.notifications.subscription_target_exists.return_value = False
     permissions = AsyncMock(spec=PermissionService)
-    permissions.allows_in.return_value = True
+    permissions.require.return_value = None
     with pytest.raises(NotificationSubscriptionNotFoundError):
         await NotificationSubscriptionsEdit(permissions).prepare(
             uow,

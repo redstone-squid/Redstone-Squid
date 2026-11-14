@@ -43,7 +43,7 @@ class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, R
         async def authorize(uow: SettingsEditUnitOfWork, actor: Actor, row: RuntimeSetting) -> None:
             if actor.account_id is None:
                 raise AccountRequiredError
-            await permissions.require_in(uow, actor, SETTINGS_RUNTIME_EDIT)
+            await permissions.require(actor, SETTINGS_RUNTIME_EDIT, uow=uow)
 
         async def audit(
             uow: SettingsEditUnitOfWork, actor: Actor, before: RuntimeSettings, after: RuntimeSettings
@@ -130,7 +130,7 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
         if "voting" in checked:
             nodes.add(SETTINGS_VOTING_EDIT)
         if nodes:
-            await self._permissions.require_in(uow, actor, *sorted(nodes, key=lambda node: node.name))
+            await self._permissions.require(actor, *sorted(nodes, key=lambda node: node.name), uow=uow)
         for kind, configuration in after.voting.items():
             if configuration.preset is not None and (
                 configuration.preset.guild_id != guild_id

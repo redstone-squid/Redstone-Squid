@@ -77,7 +77,7 @@ class RecalculationProposalService:
         async with self._uow_factory() as uow:
             if actor.account_id is None:
                 raise AccountRequiredError
-            await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_RECALC)
+            await self._permissions.require(actor, BUILD_SUBMISSION_RECALC, uow=uow)
             now = Instant.now()
             result = await uow.recalculation_proposals.create(
                 RecalculationProposal(
@@ -121,7 +121,7 @@ class RecalculationProposalService:
             actor.account_id not in {proposal.owner_account_id, proposal.requested_by_account_id}
             for proposal in proposals
         ):
-            await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_EDIT)
+            await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
     async def match(
         self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False

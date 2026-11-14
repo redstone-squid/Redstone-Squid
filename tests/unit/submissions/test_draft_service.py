@@ -10,8 +10,8 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import Decision, Reason
-from squid.permissions.errors import PermissionDeniedError, require_decisions
+from squid.permissions.domain import Decision, PermissionCheck, Reason
+from squid.permissions.errors import PermissionDeniedError, require_check
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
@@ -696,11 +696,15 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
     class Permissions:
         allowed = True
 
-        async def require_in(self, uow: PermissionUnitOfWork, subject: Actor, *nodes: PermissionNode | str) -> None:
-            require_decisions(
-                tuple(
-                    Decision(str(node), allowed=subject.account_id == 8 and self.allowed, reason=Reason.DEFAULT)
-                    for node in nodes
+        async def require(
+            self, subject: Actor, *nodes: PermissionNode | str, uow: PermissionUnitOfWork | None = None
+        ) -> None:
+            require_check(
+                PermissionCheck(
+                    tuple(
+                        Decision(str(node), allowed=subject.account_id == 8 and self.allowed, reason=Reason.DEFAULT)
+                        for node in nodes
+                    )
                 )
             )
 

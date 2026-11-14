@@ -217,7 +217,7 @@ class BuildService:
             and build.submitter_account_id == actor.subject.account_id
         )
         if not owns:
-            await self._permissions.require_in(uow, actor.subject, BUILD_SUBMISSION_EDIT)
+            await self._permissions.require(actor.subject, BUILD_SUBMISSION_EDIT, uow=uow)
 
     async def prepare_edit(self, actor: BuildEditor, build: Build, patch: BuildEditPatch) -> Build:
         """Apply an authorized patch and prepare derived values without saving.

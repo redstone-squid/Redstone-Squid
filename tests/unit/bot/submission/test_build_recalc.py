@@ -1,6 +1,5 @@
 """The "Scan Build Message" context menu: who may run it, and on what."""
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Literal, cast, override
 from unittest.mock import MagicMock
@@ -20,7 +19,8 @@ from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import Decision, PermissionNode, Reason
+from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
@@ -51,14 +51,15 @@ class StubPermissions(PermissionService):
         self.allowed = allowed
 
     @override
-    async def decisions(self, subject: Actor, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
-        return tuple(
-            Decision(
-                node=node.name if isinstance(node, PermissionNode) else node,
-                allowed=self.allowed,
-                reason=Reason.DEFAULT,
-            )
-            for node in nodes
+    async def check(
+        self,
+        subject: Actor,
+        *nodes: PermissionNode | str,
+        uow: PermissionUnitOfWork | None = None,
+        mode: CheckMode = "all",
+    ) -> PermissionCheck:
+        return PermissionCheck(
+            tuple(Decision(str(node), allowed=self.allowed, reason=Reason.DEFAULT) for node in nodes), mode=mode
         )
 
 

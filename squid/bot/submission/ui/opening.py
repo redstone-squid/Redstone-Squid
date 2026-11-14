@@ -47,7 +47,7 @@ async def prepare_build_editor(
             and current.submitter_account_id == actor_account_id
         ):
             return True
-        return await client.services.permissions.allows(current_actor, BUILD_SUBMISSION_EDIT)
+        return (await client.services.permissions.check(current_actor, BUILD_SUBMISSION_EDIT)).allowed
 
     async def render_build(current: Build) -> Any:
         return await render_build_card(

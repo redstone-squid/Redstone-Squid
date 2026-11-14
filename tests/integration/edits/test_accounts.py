@@ -134,7 +134,7 @@ async def test_staff_clear_is_final_revision_checked_and_permanently_attributed(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     permissions = AsyncMock(spec=PermissionService)
-    permissions.require_in.return_value = None
+    permissions.require.return_value = None
     executor = EditExecutor(factory, {PROFILE_CLEAR: AccountProfileClear(permissions)})
     async with factory() as uow:
         account = await uow.accounts.create(
@@ -153,7 +153,7 @@ async def test_staff_clear_is_final_revision_checked_and_permanently_attributed(
     with pytest.raises(RevisionConflictError):
         await executor.execute(EditCommand(PROFILE_CLEAR, command.expected, command.values), actor)
     await executor.execute(command, actor)
-    permissions.require_in.side_effect = AuthorizationError
+    permissions.require.side_effect = AuthorizationError
     with pytest.raises(AuthorizationError):
         await executor.execute(EditCommand(PROFILE_CLEAR, result.outcome.revisions, command.values), actor)
     async with factory() as uow:

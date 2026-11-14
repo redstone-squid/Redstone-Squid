@@ -148,7 +148,7 @@ async def test_the_new_resolver_matches_the_old_tiers(
     session_factory, accounts = backfilled
     permissions = PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory))
 
-    assert await permissions.allows(_subject(accounts, who), node) is expected
+    assert (await permissions.check(_subject(accounts, who), node)).allowed is expected
 
 
 async def test_the_original_grant_provenance_survives(

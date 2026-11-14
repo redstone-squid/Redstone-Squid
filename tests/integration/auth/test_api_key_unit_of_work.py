@@ -43,7 +43,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
             audit=AuditEntry(action="grant", subject_kind="account", subject_id=account_id, pattern=node),
         )
         await uow.commit()
-    assert await permissions.allows(subject, node)
+    assert (await permissions.check(subject, node)).allowed
     issued = await api_keys.issue(label="Before revocation", scopes=[node], owner_account_id=account_id)
     assert issued.key.id > 0
 
@@ -57,7 +57,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
         )
         await uow.commit()
     # Keep the cache stale: key issuance must read authority inside its own transaction.
-    assert await permissions.allows(subject, node)
+    assert (await permissions.check(subject, node)).allowed
     with pytest.raises(AuthorizationError):
         await api_keys.issue(label="After revocation", scopes=[node], owner_account_id=account_id)
     async with migrated_session_factory() as session:

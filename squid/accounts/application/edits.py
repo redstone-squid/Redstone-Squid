@@ -89,7 +89,7 @@ class AccountEdits:
     async def authorize(self, uow: AccountEditUnitOfWork, actor: Actor, account: Account) -> None:
         if actor.account_id != account.id:
             raise OwnershipRequiredError
-        await self._permissions.require_in(uow, actor, ACCOUNT_SELF_MANAGE)
+        await self._permissions.require(actor, ACCOUNT_SELF_MANAGE, uow=uow)
         if not await uow.accounts.has_current_consent(account.id):
             raise ConsentRequiredError(account_id=account.id)
 
@@ -178,7 +178,7 @@ class AccountProfileClear(AccountEdits):
             raise ValidationError
         if actor.account_id is None:
             raise AccountRequiredError
-        await self._permissions.require_in(uow, actor, ACCOUNT_PROFILE_MODERATE)
+        await self._permissions.require(actor, ACCOUNT_PROFILE_MODERATE, uow=uow)
         account = await self.aggregate.lock(uow, command)
         # Even an empty profile records the staff action, without keeping erased content in a receipt.
         return PreparedEdit(

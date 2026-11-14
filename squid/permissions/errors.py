@@ -1,14 +1,9 @@
 """Shared ACL enforcement and public explanations, without rule subjects."""
 
-from collections.abc import Sequence
-from typing import Literal
-
 from squid.core.errors import AuthorizationError, JSONValue
 from squid.core.i18n import tr
-from squid.permissions.domain import Decision, Reason
+from squid.permissions.domain import CheckMode, Decision, PermissionCheck, Reason
 from squid_i18n import Text
-
-type CheckMode = Literal["all", "any"]
 
 
 def _explanation(decision: Decision) -> tuple[str, Text]:
@@ -22,7 +17,7 @@ def _explanation(decision: Decision) -> tuple[str, Text]:
 class PermissionDeniedError(AuthorizationError):
     """The denied nodes of an all-or-any permission requirement.
 
-    Construct this from denied decisions only. `require_decisions` evaluates the
+    Construct this from denied decisions only. `require_check` evaluates the
     requirement before selecting those denials, so allowed alternatives never
     appear in the error and one blocked alternative cannot reject an any-check.
     """
@@ -91,17 +86,11 @@ class CredentialPermissionDeniedError(AuthorizationError):
         )
 
 
-def require_decisions(
-    decisions: Sequence[Decision],
-    *,
-    mode: CheckMode = "all",
-    error_type: type[PermissionDeniedError] = PermissionDeniedError,
-) -> None:
-    """Enforce one requirement and report only its denied nodes."""
-    if not decisions:
+def require_check(result: PermissionCheck, *, error_type: type[PermissionDeniedError] = PermissionDeniedError) -> None:
+    """Enforce an evaluated requirement and report only its denied nodes."""
+    if not result.decisions:
         message = "A permission requirement must include at least one node."
         raise ValueError(message)
-    satisfied = any(item.allowed for item in decisions) if mode == "any" else all(item.allowed for item in decisions)
-    if not satisfied:
-        denied = tuple(item for item in decisions if not item.allowed)
-        raise error_type(denied[0], *denied[1:], mode=mode)
+    if not result.allowed:
+        denied = tuple(item for item in result.decisions if not item.allowed)
+        raise error_type(denied[0], *denied[1:], mode=result.mode)

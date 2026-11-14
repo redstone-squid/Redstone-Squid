@@ -147,8 +147,7 @@ class DiscordPollPublisher:
     async def may_create_network(self, member: discord.Member) -> bool:
         """Whether `member` may publish a poll into every server's vote channel."""
         subject = await build_actor(self._bot, member, member.guild.id)
-        capabilities = await self._bot.services.permissions.capabilities(subject, (VOTE_POLL_NETWORK_CREATE,))
-        return VOTE_POLL_NETWORK_CREATE.name in capabilities
+        return (await self._bot.services.permissions.check(subject, VOTE_POLL_NETWORK_CREATE)).allowed
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> PollPublication:
         """Send and attach one card, preserving retry state if either step fails."""

@@ -215,7 +215,7 @@ class SubmissionInferenceRuns:
         if self._permissions is None:
             message = "Staff access to inferred submissions is not configured for this service."
             raise AuthorizationError(message)
-        await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_EDIT)
+        await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
     async def list_active(self, actor: Actor, *, inbox: bool = False) -> tuple[UUID, ...]:
         """List retained runs for the actor, or for all accounts after a staff check."""
