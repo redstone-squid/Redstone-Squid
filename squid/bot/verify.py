@@ -6,14 +6,13 @@ from uuid import UUID
 
 import discord
 
-import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
 from squid.accounts.models import Account
 from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
-from squid.bot.follows import follow_control
+from squid.bot.follows import FollowCard
 from squid.bot.profile_render import (
     public_profile_fields,
 )
@@ -140,14 +139,15 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
                 ),
                 fields=public_profile_fields(public),
             )
-        return sl.stack(
+        return FollowCard(
             card_node(
                 public.display_name or fallback_name,
                 public.bio,
                 fields=public_profile_fields(public),
                 media=() if public.avatar_url is None else (public.avatar_url,),
             ),
-            sl.action_controls(follow_control(SubscriptionKind.CREATOR, public_id), key="creator-follow"),
+            SubscriptionKind.CREATOR,
+            public_id,
         )
 
     async def _refresh_discord_avatar_key(self, account: Account, user: discord.Member | discord.User) -> None:

@@ -19,15 +19,15 @@ class SearchFieldProvider:
         self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        del request
-        return await self._cache.get(None)
+        items = await self._cache.get(None)
+        return tuple(item for item in items if _in_scope(item.suggestion.value, request.context.get("scope")))
 
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
         registry = await self._search.fields()
         return tuple(
             Candidate.create(
                 value=field.name,
-                label=field.name,
+                label=field.name.replace("_", " ").title(),
                 description=f"{field.value_type.value}, ranges supported"
                 if field.supports_range
                 else field.value_type.value,
@@ -64,3 +64,28 @@ class SearchSortProvider:
             results.append(Candidate.create(field.name, f"{field.name} (ascending)", kind="sort"))
             results.append(Candidate.create(f"-{field.name}", f"{field.name} (descending)", kind="sort"))
         return tuple(results)
+
+
+def _in_scope(name: str, scope: str | None) -> bool:
+    if scope == "builds":
+        return name not in {"base_title", "version_scope", "record_state"}
+    if scope == "records":
+        return name in {
+            "title",
+            "description",
+            "kind",
+            "base_title",
+            "version_scope",
+            "status",
+            "record_state",
+            "creator",
+            "restriction",
+            "pattern",
+            "type",
+            "version",
+            "width",
+            "height",
+            "depth",
+            "volume",
+        }
+    return True

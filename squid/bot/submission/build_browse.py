@@ -13,6 +13,7 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.consent import with_consented_account
 from squid.bot.edit_controller import BoundEdit, EditController
+from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
 from squid.bot.submission.record_browser import record_browser
 from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.schematic_tools import SchematicTools
@@ -398,6 +399,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     _show_standings: bool = sl.state(False)
     _query: str = sl.state("")
     _sort: str = sl.state("")
+    _guided: SearchSelection | None = sl.state(None, persist=False)
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")
     _selected: sp.Browser[Build, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
@@ -532,6 +534,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._sort = ""
         self._show_standings = False
         self._record_categories = frozenset()
+        self._guided = None
         self._mode = mode
         self._selected = None
         await self._browser._back(_event)
@@ -549,8 +552,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                     key="open-id",
                     on_submit=self._open_id,
                 ),
+                sl.action_control(
+                    tr(t"build-browser-search-filters = Search & filters"), self._guided_search, key="guided-search"
+                ),
                 sl.form(
-                    tr(t"build-browser-search-filters = Search & filters"),
+                    tr(t"build-browser-advanced-search = Advanced search"),
                     _SearchForm(query=self._query, sort=self._sort).spec(),
                     key="catalogue-search",
                     on_submit=self._search,
@@ -604,8 +610,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             nodes.append(
                 sl.note(
                     tr(
-                        t"build-filter-hint = Search by name, or add filters such as creator:Steve or width:5. "
-                        t"See Search help for examples."
+                        t"build-filter-hint = Search by keywords, choose filters, or use Advanced search for query expressions."
                     )
                 )
             )
@@ -670,7 +675,30 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
 
+    async def _guided_search(self, event: sl.PressEvent) -> None:
+        assert self._search_service is not None
+        mode = self._mode
+        child = GuidedSearch(
+            self._search_service,
+            scope="records" if mode == "records" else "builds",
+            query=self._query,
+            sort=self._sort,
+            previous=self._guided,
+        )
+
+        async def selected(result: sd.ScreenResultEvent[SearchSelection]) -> None:
+            if self._mode != mode:
+                await result.notice(
+                    tr(t"guided-search-mode-changed = The catalogue changed. Open search again for this view.")
+                )
+                return
+            await self._run_search(result.value.query, result.value.sort)
+            self._guided = result.value
+
+        await self.open_child(cast(sd.PressEvent[RedstoneSquid], event), child, on_result=selected)
+
     async def _search(self, event: sl.SubmitEvent) -> None:
+        self._guided = None
         form = _SearchForm.from_submission(event)
         await self._run_search(form.query or "", form.sort or "")
 
