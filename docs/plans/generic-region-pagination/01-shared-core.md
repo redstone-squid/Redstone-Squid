@@ -82,8 +82,8 @@ concrete requirements and unresolved limits rather than a speculative API to imp
 
 - [x] Map pipeline responsibilities and existing sharing in an initial code inventory.
 - [ ] Establish the behavior and capability matrix.
-- [ ] Discuss the shared policy and target extension boundary.
-- [ ] Probe composition and state assumptions.
+- [x] Agree shared content-loss policy, direct target participation, and rich semantic planning.
+- [ ] Complete composition and state probes; initial table and resource findings are recorded.
 - [ ] Record the architectural direction and phase 2 handoff.
 
 ## Initial pipeline inventory
@@ -233,8 +233,8 @@ The initial responsibility map for the replacement is:
 This establishes ownership. Decision 3 below chooses the working direction for the planning
 model; concrete interfaces still require evidence from composition and state experiments.
 
-No production behavior has changed. Composition experiments, the full matrix, fidelity policy,
-and the final architectural recommendation remain pending.
+No production behavior has changed. The experiments below advance the investigation; the full
+matrix, fidelity policy, and final architectural recommendation remain unfinished.
 
 
 ## Decision 3 Preserve decision-relevant semantics in the core
@@ -251,5 +251,44 @@ opaque leaf compiler should settle those choices prematurely.
 
 A rich semantic model does not require the core to know target output fields or perform frontend
 rendering. It requires enough information to distinguish meaningful units, legal transformations,
-resource sharing, and interactions. The next experiments establish what information that means
+resource sharing, and interactions. The composition experiments establish initial information requirements
 for tables, shared resources, and nested regions. Exact types and extension APIs remain open.
+
+
+## Composition findings and the next decision
+
+The [composition experiments](composition-experiments.md) probe tables, shared attachments,
+and the existing nested-region behavior. They establish requirements for semantic identity,
+content effects, contextual resource accounting, and state reconciliation. They also record
+current defects that migration must address. The broader capability matrix and architecture
+handoff remain incomplete.
+
+### Decision 4 Separate fidelity from representation preference
+
+Status: open for discussion. Pause before deciding how representations declare their effects.
+
+The core needs to distinguish a different presentation of the same content from a representation
+that omits or changes content or behavior. Existing Discord strategies already make some exact
+presentation changes without degradation. Authored `fallback` branches, however, always receive
+a semantic-loss penalty, and strict mode rejects them even when an author intended an equivalent
+compact form. Slack's table slicing demonstrates the opposite problem: actual visible content
+loss can go unreported.
+
+Recommendation for discussion:
+
+- Treat content and behavior preservation separately from representation preference and navigation
+  effort. Exact representation changes and lossless pagination can satisfy strict planning.
+- Continue to enforce authored hard requirements independently. Preserving all cells does not
+  authorize ignoring a requirement to retain a particular structure or interaction model.
+- For built-in transformations, establish preservation through their contract and tests, with
+  semantic identities and relationships available for validation.
+- For arbitrary authored alternatives, do not infer equivalence from text or similar tree shapes.
+  Let authors explicitly declare equivalent alternatives; conservatively classify undeclared
+  replacements. The classification, default, and API remain to be agreed.
+- Keep opted-in content loss available to non-strict planning. Under this proposal, strict mode
+  still refuses actual loss, even when an author supplied a permissive adaptation.
+
+The choice is whether strict planning promises preservation of content and behavior while allowing
+permitted changes of form, or also treats moving away from a preferred representation as a strict
+failure. That decision affects the candidate model and ranking before any method signatures are
+chosen. No production behavior has changed.
