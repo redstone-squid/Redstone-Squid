@@ -1,6 +1,6 @@
 """Classic Discord realizes shared candidates into separate text and control pools."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from squid_i18n import tree
 from squid_ui import scene
@@ -30,6 +30,8 @@ from squid_ui.planning.realizations import (
     ControlRealization,
     DownloadRealization,
     EntityRealization,
+    FieldRealization,
+    FieldsRealization,
     FlowRealization,
     ImageRealization,
     PanelRealization,
@@ -80,6 +82,21 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         interactions: set[SemanticRef] = set()
         scopes: dict[OccurrenceId, ResourceCost] = {}
         scoped_resources: dict[OccurrenceId, frozenset[ResourceIdentity]] = {}
+        field_stack: list[list[scene.EmbedField]] = [[]]
+
+        def field_text(fields: list[scene.EmbedField] | tuple[scene.EmbedField, ...]) -> int:
+            return sum(len(field.name) + len(field.value) for field in fields)
+
+        def cards(fields: list[scene.EmbedField], base: scene.Embed) -> None:
+            size = max(1, self.limits.embeds.fields)
+            if fields and self.limits.embeds.fields == 0:
+                violations.append(ConstraintViolation(candidate.offer.occurrence.identity, "embed fields unavailable"))
+            embeds.extend(
+                replace(
+                    base if start == 0 else scene.Embed(colour=base.colour), fields=tuple(fields[start : start + size])
+                )
+                for start in range(0, max(1, len(fields)), size)
+            )
 
         def visit(
             part: CandidateComposition[RenderTargetT, ContextT, Realization],
@@ -92,6 +109,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             identity = part.offer.occurrence.identity
             start, embed_start, row_start, use_start = len(output), len(embeds), len(rows), len(uses)
             control_start = len(row) if row is not None else 0
+            fields, field_start = field_stack[-1], len(field_stack[-1])
             effects.extend(part.offer.effects)
             if part.offer.interaction:
                 interactions.update(part.offer.occurrence.sources)
@@ -109,6 +127,28 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     violations.append(LocalCapacityExceeded(identity, name, used, capacity))
 
             match part.offer.payload:
+                case FieldRealization(label=label, value=value):
+                    name, content = markdown(label), markdown(value)
+                    limit("embed.field_name", len(name), self.limits.embeds.field_name)
+                    limit("embed.field_value", len(content), self.limits.embeds.field_value)
+                    if not name or not content:
+                        violations.append(ConstraintViolation(identity, "embed field needs a name and value"))
+                    entry = scene.EmbedField(name, content)
+                    if len(field_stack) == 1:
+                        cards([entry], scene.Embed())
+                    else:
+                        fields.append(entry)
+                    texts.extend((name, content))
+                case FieldsRealization():
+                    entries: list[scene.EmbedField] = []
+                    field_stack.append(entries)
+                    for child in part.children:
+                        visit(child, output, embedded=True)
+                    field_stack.pop()
+                    if embedded:
+                        fields.extend(entries)
+                    elif entries:
+                        cards(entries, scene.Embed())
                 case TextRealization() as payload:
                     text(discord_text(payload, context.escape_text))
                 case TextSequenceRealization() as sequence:
@@ -143,16 +183,20 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         if embedded:
                             violations.append(UnsupportedCapability(identity, "nested classic embeds"))
                         description: list[str] = []
+                        entries = []
+                        field_stack.append(entries)
                         for child in part.children:
                             visit(child, description, embedded=True)
+                        field_stack.pop()
                         value = "\n".join(description)
                         limit("embed.description", len(value), self.limits.embeds.description)
-                        embeds.append(
+                        cards(
+                            entries,
                             scene.Embed(
                                 description=value or None,
                                 colour=panel.accent,
                                 thumbnail=scene.EmbedMedia(panel.thumbnail) if panel.thumbnail is not None else None,
-                            )
+                            ),
                         )
 
                 case ControlRealization() as control:
@@ -264,12 +308,10 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             scopes[identity] = (
                 ResourceCost(
                     {
-                        Axis.EMBED_TEXT if embedded else Axis.CONTENT_TEXT: len("\n".join(output[start:])),
-                        **(
-                            {Axis.EMBED_TEXT: sum(len(item.description or "") for item in embeds[embed_start:])}
-                            if not embedded
-                            else {}
-                        ),
+                        Axis.CONTENT_TEXT: 0 if embedded else len("\n".join(output[start:])),
+                        Axis.EMBED_TEXT: (len("\n".join(output[start:])) if embedded else 0)
+                        + sum(len(item.description or "") + field_text(item.fields) for item in embeds[embed_start:])
+                        + field_text(fields[field_start:]),
                         Axis.EMBEDS: len(embeds) - embed_start,
                         Axis.ROWS: len(rows) - row_start,
                         Axis.CONTROLS: sum(len(item.controls) for item in rows[row_start:])
@@ -304,7 +346,10 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         return ResourceCost(
             {
                 Axis.CONTENT_TEXT: len(body.content or ""),
-                Axis.EMBED_TEXT: sum(len(embed.description or "") for embed in body.embeds),
+                Axis.EMBED_TEXT: sum(
+                    len(embed.description or "") + sum(len(field.name) + len(field.value) for field in embed.fields)
+                    for embed in body.embeds
+                ),
                 Axis.EMBEDS: len(body.embeds),
                 Axis.ROWS: len(body.rows),
                 Axis.CONTROLS: sum(len(row.controls) for row in body.rows),
@@ -325,6 +370,15 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             or actual != expected.cost
             or not actual.within(self.limits.capacities)
             or any(len(embed.description or "") > self.limits.embeds.description for embed in body.embeds)
+            or any(len(embed.fields) > self.limits.embeds.fields for embed in body.embeds)
+            or any(
+                not field.name
+                or not field.value
+                or len(field.name) > self.limits.embeds.field_name
+                or len(field.value) > self.limits.embeds.field_value
+                for embed in body.embeds
+                for field in embed.fields
+            )
             or any(len(row.controls) > self.limits.components.row_buttons for row in body.rows)
         ):
             message = "built classic composition disagrees with evaluation"

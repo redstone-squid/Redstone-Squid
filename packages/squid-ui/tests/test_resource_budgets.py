@@ -151,8 +151,8 @@ def test_empty_budget_adds_no_constraints(target: Literal["v2", "html", "slack"]
 
 @pytest.mark.parametrize("target", ["html", "slack"])
 def test_unsupported_axis_is_rejected_even_with_zero_usage(target: Literal["html", "slack"]) -> None:
-    result = on_target(budget(sl.paragraph(""), limits={Axis.DISPLAY_TEXT: 0}), target)
-    assert result.violations == (UnsupportedCapability(OccurrenceId(("root",)), "resource budget: display_text"),)
+    result = on_target(budget(sl.paragraph(""), limits={Axis.COMPONENTS: 0}), target)
+    assert result.violations == (UnsupportedCapability(OccurrenceId(("root",)), "resource budget: components"),)
 
 
 def test_supported_axis_with_zero_usage_passes_a_zero_limit() -> None:

@@ -41,6 +41,13 @@ class Omission:
 
 
 @dataclass(frozen=True, slots=True)
+class Replacement:
+    """A whole authored replacement whose equivalence has not been declared."""
+
+    source: SemanticRef
+
+
+@dataclass(frozen=True, slots=True)
 class Shortening:
     source: SemanticRef
     max_chars: int
@@ -66,7 +73,7 @@ class InteractionChange:
             raise LayoutInvariantError(msg)
 
 
-type FidelityEffect = Omission | Shortening | InteractionChange
+type FidelityEffect = Omission | Replacement | Shortening | InteractionChange
 
 
 @dataclass(frozen=True, slots=True)

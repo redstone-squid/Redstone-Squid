@@ -1041,6 +1041,8 @@ def fallback(primary: AnyLayoutNode, /, *alternates: AnyLayoutNode) -> FallbackC
 
     Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner
     steps down the ladder one rung at a time under component pressure.
+    Shared planning reports replacements as fidelity loss. Use checked ``alternatives``
+    to declare equivalence when strict mode must permit a different representation.
     """
     if not alternates:
         message = "sl.fallback() needs at least one alternate"

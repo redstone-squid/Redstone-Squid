@@ -262,8 +262,9 @@ use explicit regions or lists; a character grant does not map unambiguously to
 classic's separate text pools or Slack's block budget.
 
 Use `sl.alternatives` with explicit fidelity declarations to offer another
-representation. `sl.fallback` has no source correspondence and cannot be used
-inside a shared region. Strict planning permits equivalent presentations and
+representation. Legacy `sl.fallback` ladders also work in shared regions, but selecting
+a replacement reports a fidelity effect because equivalence was not declared.
+Strict planning permits equivalent presentations and
 lossless pagination, but rejects declared content loss. Section headings repeat
 on continuation pages. Exact page counts and historical breaks are not a
 compatibility guarantee.

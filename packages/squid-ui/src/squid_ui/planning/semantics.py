@@ -23,6 +23,7 @@ from squid_ui.presentations import (
     Budget,
     InteractionChange,
     Omission,
+    Replacement,
     SemanticRef,
     Shortening,
     TextPresentation,
@@ -76,6 +77,7 @@ type EmbeddedValue[ContextT] = (
 type SemanticValue[RenderTargetT, ContextT] = (
     sem.SemanticNode[RenderTargetT, ContextT]
     | sem.Adaptation[RenderTargetT, ContextT]
+    | sem.FallbackContent[RenderTargetT, ContextT]
     | EmbeddedValue[ContextT]
     | Budget[RenderTargetT, ContextT]
     | Alternatives[RenderTargetT, ContextT]
@@ -215,6 +217,10 @@ def semantic_graph[RenderTargetT, ContextT](
             case Alternatives():
                 root = add(value, path, parent, atomic=False)
                 visit(value.content, root, 0)
+            case sem.FallbackContent():
+                root = add(value, path, parent, atomic=False)
+                for i, branch in enumerate((value.primary, *value.alternates)):
+                    visit(sem.Group((branch,), key=f"@fallback-{i}"), root, i)
             case (
                 sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.Paged() | sem.OptionalContent() | Budget()
             ):
@@ -416,12 +422,15 @@ def check_alternative[RenderTargetT, ContextT](
         explicit[target] = frozenset(unit for item in mapping.content for unit in source.atoms(item))
 
     omitted: set[SemanticRef] = set()
+    replaced: set[SemanticRef] = set()
     changed: dict[SemanticRef, set[str]] = {}
     shortenings: dict[SemanticRef, Shortening] = {}
     for effect in choice.fidelity.effects:
         affected = source.atoms(effect.source)
         if isinstance(effect, Omission):
             omitted.update(affected)
+        elif isinstance(effect, Replacement):
+            replaced.update(affected)
         elif isinstance(effect, InteractionChange):
             for unit in affected:
                 if effect.attribute not in interaction_changes(interaction(source.units[unit].value), None):
@@ -486,6 +495,8 @@ def check_alternative[RenderTargetT, ContextT](
         coverage[target] = covered
         target_behavior = interaction(presentation.units[target].value)
         for unit in covered:
+            if unit in replaced:
+                continue
             changed_attributes = interaction_changes(interaction(source.units[unit].value), target_behavior)
             if changed_attributes - changed.get(unit, set()):
                 msg = f"undeclared interaction change at {unit.keys!r}"
@@ -496,7 +507,7 @@ def check_alternative[RenderTargetT, ContextT](
         raise LayoutInvariantError(message)
     retained = frozenset(unit for covered in coverage.values() for unit in covered)
     missing = source.leaves - retained
-    if missing != omitted:
+    if missing != omitted | (replaced - retained):
         msg = f"declared omissions do not match missing semantic units: {missing ^ omitted}"
         raise LayoutInvariantError(msg)
     checked = CheckedAlternative(

@@ -9,6 +9,7 @@ from squid_ui.document import Asset, InlineAsset
 from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
+from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.presentation_state import StrategyState
@@ -132,7 +133,7 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
     assert not result.metrics.search_fallback
 
 
-def test_inactive_fallback_axes_do_not_spend_the_global_search_budget() -> None:
+def test_inactive_fallbacks_do_not_replace_the_primary_or_publish_effects() -> None:
     session = PresentationState(strategies={"visible": StrategyState("visible", "discord.actions", 1, "individual")})
     inactive = Stack(tuple(ActionControls(_actions(1), key=f"inactive-{index}") for index in range(9)))
     document = (
@@ -143,8 +144,9 @@ def test_inactive_fallback_axes_do_not_spend_the_global_search_budget() -> None:
 
     result = plan(document, target=DISCORD_V2_DPY27, session=session)
 
-    assert any(event.code == "actions.grouped" and event.path == "$.36" for event in result.report.events)
-    assert result.metrics.states_explored == 2
+    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert "primary" in _texts(result)
+    assert not any(event.code == "composition.effect" for event in result.report.events)
     assert not result.metrics.search_fallback
 
 
@@ -159,8 +161,7 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
 
     result = plan(document, target=DISCORD_V2_DPY27)
 
-    assert any(event.code == "actions.grouped" and event.path == "$.35.alternate.0" for event in result.report.events)
-    assert any(event.code == "layout.degradation.semantic_fallback" for event in result.report.events)
+    assert any(event.code == "composition.effect" and event.message == "Replacement" for event in result.report.events)
     assert sum(isinstance(node, scene.Select) for node in result.scene.components_v2.children) == 1
     assert not result.metrics.search_fallback
 
@@ -317,7 +318,7 @@ def test_an_unopened_branch_leaves_no_trace_of_itself() -> None:
 
 
 def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> None:
-    """Two spellings of one candidate would cost an extra evaluation; there is only one."""
+    """Selected effects and bindings belong only to the active replacement branches."""
     inner = fallback(
         Stack(tuple(Paragraph(f"inner primary {index}") for index in range(8))),
         ActionControls(_actions(5), key="inner-actions"),
@@ -338,17 +339,14 @@ def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> Non
     result = plan(document, target=DISCORD_V2_DPY27)  # pyrefly: ignore[bad-argument-type]
     rendered = _texts(result)
 
-    # individual, grouped, the opened branch, then the nested branch: four, not five. The
-    # outer picker's strategy does not survive its branch closing to spell a fifth.
-    assert result.metrics.states_explored == 4
-    assert not any(event.path.startswith("$.33.primary") for event in result.report.events)
-    assert any(
-        event.code == "actions.individual" and event.path == "$.33.alternate.0.alternate.0"
-        for event in result.report.events
-    )
+    assert result.report.search is not None
+    assert isinstance(result.allocation, CertifiedAllocation)
+    assert not any("outer-actions" in identity.path for identity, _ in result.allocation.selection)
     assert "outer 0" not in rendered
     assert "inner primary 0" not in rendered
-    assert len([event for event in result.report.events if event.code.endswith("semantic_fallback")]) == 2
+    replacements = [event for event in result.report.events if event.message == "Replacement"]
+    assert replacements
+    assert any("@fallback-1" in event.path for event in replacements)
 
 
 def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:

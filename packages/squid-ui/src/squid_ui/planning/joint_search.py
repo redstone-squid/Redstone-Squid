@@ -79,6 +79,7 @@ class JointResult[RenderTargetT, ContextT, PayloadT, OutputT]:
 class _Assignment[RenderTargetT, ContextT, PayloadT]:
     pending: tuple[SemanticOccurrence[RenderTargetT, ContextT], ...]
     choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...] = ()
+    probe: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,6 +285,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     seen_partitions: set[tuple[int, tuple[tuple[int, ...], ...], bool]] = set()
     seen_occurrences: set[OccurrenceId] = set()
     seen_regions: set[OccurrenceId] = set()
+    degradation_probed = False
 
     def push(
         task: _Assignment[RenderTargetT, ContextT, PayloadT] | _Partitions[RenderTargetT, ContextT, PayloadT],
@@ -298,7 +300,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         generated += 1
         ranks = tuple(sorted((rank for _, rank in task.choices if rank), reverse=True))
         turns = sum(len(cuts) - 1 for cuts in task.cuts) if isinstance(task, _Partitions) else 0
-        probe = isinstance(task, _Partitions) and task.probe
+        probe = task.probe
         heappush(queue, (0 if probe else 1, ranks, turns, -len(task.choices), next(serials), task))
 
     def expand(task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
@@ -338,21 +340,29 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     context.work.consume(len(offers))
                     ranks = dense_ranks(tuple(offer.preference for offer in offers))
                     keys: set[str] = set()
-                    for offer, rank in sorted(
-                        zip(offers, ranks, strict=True), key=lambda entry: (entry[1], entry[0].key)
-                    ):
+                    for offer in offers:
                         context.work.consume()
                         if offer.key in keys or offer.occurrence != occurrence:
                             message = "offers must have unique keys and retain their requested occurrence"
                             raise LayoutInvariantError(message)
                         keys.add(offer.key)
+                    ordered = sorted(zip(offers, ranks, strict=True), key=lambda entry: (entry[1], entry[0].key))
+                    if task.probe:
+                        eligible = [
+                            entry
+                            for entry in ordered
+                            if (occurrence.identity not in selected or entry[0].key == selected[occurrence.identity])
+                            and not (context.strict and entry[0].effects)
+                        ]
+                        ordered = eligible[-1:]
+                    for offer, rank in ordered:
                         if occurrence.identity in selected and selected[occurrence.identity] != offer.key:
                             continue
                         context.work.consume(len(task.choices))
                         if any(previous.occurrence.identity == occurrence.identity for previous, _ in task.choices):
                             message = "cyclic or duplicate occurrence in offer structure"
                             raise LayoutInvariantError(message)
-                        push(_Assignment((*offer.children, *rest), (*task.choices, (offer, rank))))
+                        push(_Assignment((*offer.children, *rest), (*task.choices, (offer, rank)), probe=task.probe))
                     if occurrence.identity in selected and selected[occurrence.identity] not in keys:
                         message = f"unknown fixed offer for {occurrence.identity.path!r}"
                         raise LayoutInvariantError(message)
@@ -540,6 +550,12 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     retained.append((quality, allocation))
             if feasible and satisfied:
                 continue
+            if not feasible and not task.regions and not degradation_probed:
+                # Find a compact certificate before enumerating combinations of
+                # independent ladders. This changes work order only: ordinary
+                # assignments remain queued and still establish optimality.
+                degradation_probed = True
+                push(_Assignment((root,), probe=True))
             if task.probe:
                 # Balanced refinement is only a work-order heuristic. Every legal
                 # cut is still enqueued below; no fit assumption prunes that domain.

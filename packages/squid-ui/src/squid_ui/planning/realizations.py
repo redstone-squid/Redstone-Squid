@@ -69,7 +69,7 @@ from squid_ui.planning.semantics import (
 )
 from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, resolve_accent, toggle_state
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
-from squid_ui.presentations import Alternatives, Budget, Omission, SemanticRef, TextPresentation
+from squid_ui.presentations import Alternatives, Budget, Omission, Replacement, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership
 from squid_ui.primitives.styles import ActionStyle, Color
@@ -89,6 +89,12 @@ class TextRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class FieldRealization(TextRealization):
+    label: tuple[tree.Node, ...] = ()
+    value: tuple[tree.Node, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class StatusRealization(TextRealization):
     colour: Color | None = None
     tone: str = "neutral"
@@ -104,6 +110,11 @@ class ProgressRealization(TextRealization):
 
 @dataclass(frozen=True, slots=True)
 class FlowRealization:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class FieldsRealization(FlowRealization):
     pass
 
 
@@ -569,6 +580,35 @@ def semantic_offers[RenderTargetT, ContextT](
         parent = ancestor.parent
     if isinstance(value, sem.Budgeted | sem.Paged) and not character_budgets:
         return ()
+    if isinstance(value, sem.FallbackContent):
+        refs = occurrence.graph.children[occurrence.reference]
+        primary = refs[0]
+        sources = (
+            occurrence.origin.references(primary) if occurrence.origin is not None else occurrence.graph.atoms(primary)
+        )
+        context.work.consume(len(sources) + len(refs))
+        effects = tuple(Replacement(source) for source in sorted(sources or {primary}, key=lambda ref: ref.keys))
+        return tuple(
+            RealizationOffer(
+                occurrence,
+                f"fallback-{index}",
+                FlowRealization(),
+                (
+                    SemanticOccurrence(
+                        OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                        occurrence.graph,
+                        ref,
+                        occurrence.placement,
+                        occurrence.origin,
+                        palette=context.palette,
+                    ),
+                ),
+                effects=effects if index else (),
+                preference=index,
+                flow=True,
+            )
+            for index, ref in enumerate(refs)
+        )
     if isinstance(value, sem.OptionalContent):
         ref = occurrence.graph.children[occurrence.reference][0]
         child = SemanticOccurrence(
@@ -1158,12 +1198,21 @@ def semantic_offers[RenderTargetT, ContextT](
             payload = replace(payload, role="quote")
         return (RealizationOffer(occurrence, "text", payload),)
     if isinstance(value, sem.Field):
-        nodes = (
-            *resolve_text(value.label, context.localization).nodes,
-            tree.literal(": "),
-            *resolve_text(value.value, context.localization).nodes,
+        label = resolve_text(value.label, context.localization).nodes
+        effects = occurrence.scope_effects((Replacement(SemanticRef((*occurrence.reference.keys, "value"))),))
+        context.work.consume(1 + len(value.fallbacks))
+        return tuple(
+            RealizationOffer(
+                occurrence,
+                "field" if index == 0 else f"field-fallback-{index}",
+                FieldRealization((*label, tree.literal(": "), *nodes), label=label, value=nodes),
+                effects=effects if index else (),
+                preference=index,
+                preference_priority=value.importance if value.fallbacks else None,
+            )
+            for index, content in enumerate((value.value, *value.fallbacks))
+            for nodes in (resolve_text(content, context.localization).nodes,)
         )
-        return (RealizationOffer(occurrence, "field", TextRealization(nodes)),)
     if isinstance(value, sem.Paragraph):
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)
         length = sum(len(tree.plain(node)) for node in payload.nodes)
@@ -1241,6 +1290,8 @@ def semantic_offers[RenderTargetT, ContextT](
             payload = PanelRealization(resolve_accent(value.accent, context.palette))
         elif isinstance(value, sem.ActionControls | sem.ControlGroup):
             payload = ActionsRealization()
+        elif isinstance(value, sem.Fields):
+            payload = FieldsRealization()
         else:
             payload = FlowRealization()
         region = None

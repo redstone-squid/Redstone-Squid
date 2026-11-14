@@ -219,10 +219,8 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
     assert hit.bindings["run"].handler is _second
 
 
-def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> None:
-    """A cached fallback choice must retain its layout while using the new callback."""
-    import squid_ui.planning.discord_planner as planner_module
-
+def test_cached_fallback_hint_recertifies_the_current_callback() -> None:
+    """Shared hints reuse layout choices without retaining a previous render's callbacks."""
     cache = PlanCache()
 
     def document(handler):
@@ -235,11 +233,11 @@ def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> Non
         )
 
     miss = plan(document(_first), target=DISCORD_V2_DPY27, cache=cache)
-    monkeypatch.setattr(planner_module, "measure", _never_measured)
     hit = plan(document(_second), target=DISCORD_V2_DPY27, cache=cache)
 
-    assert hit.metrics.cache_hit
-    assert hit.scene is miss.scene
+    assert hit.metrics.partition_hint
+    assert hit.metrics.target_evaluations > 0
+    assert hit.scene == miss.scene
     assert hit.bindings["run"].handler is _second
 
 

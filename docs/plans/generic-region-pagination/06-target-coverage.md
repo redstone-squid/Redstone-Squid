@@ -52,7 +52,7 @@ regions still uses its existing target fitter; the report names that route.
 | --- | --- | --- |
 | Discord V2 | Regions, root pages, lists, character-based `Paged`, and keyed primitive `Paginate`; component, text, and attachment capacities. | Explicit nested blocks cannot become nested V2 containers. Nested semantic sections retain headings inside the enclosing panel. |
 | Classic Discord | Regions, root pages, lists, count-based keyed primitive `Paginate`; independent content, embed text, embed count, row, control, and attachment capacities. Blocks become embeds; loose prose uses message content. | Character grants have no single text pool. Inline download widgets and spoiler embed images have no classic representation; document attachments remain available. |
-| HTML | Regions, root pages, lists; no invented global message budget. | Character grants are not HTML layout constraints. Native extensions need typed target rules. |
+| HTML | Regions, root pages, lists; visible text is measured for authored budgets, with no global message budget. | Character-based `Paged` still uses its compatibility path. Native extensions need typed target rules. |
 | Slack message | Regions, root pages, lists; block capacity, local text/control limits, and message fallback-text capacity. | No disabled buttons/selects, inline attachments, spoiler images, or accent-bearing panels. Images require public URLs. |
 | Slack Home | Same direct block composition and navigation as messages, using Home's block capacity. | Same block vocabulary constraints; no message fallback-text budget. |
 | Slack modal | Existing form planner and modal limits. | The surface requires one top-level form trigger. Region navigation is rejected with this reason; it cannot preserve a submitted form's ownership contract. |
@@ -87,7 +87,7 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Legacy `fallback`, primitive truncation/spill/condensation ladders, line alternatives,
+Primitive truncation/spill/condensation ladders, line alternatives,
 and rich primitive text fragmentation retain their existing non-region paths.
 They do not declare the source correspondence and permitted fragments required
 for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
@@ -185,6 +185,26 @@ all text across the resulting page family. Legacy reports and small choice contr
 may change representation when their enclosing layout first enters shared planning.
 Both UI suites pass (3,173 tests with `--no-cov`), and whole-project Pyrefly reports
 zero errors.
+
+## Continuation: replacement ladders
+
+Legacy `fallback` branches and field value ladders now use shared offers. Selecting
+a replacement records a `Replacement` effect; strict mode requires the primary to
+fit or an explicitly equivalent checked alternative. Only the selected branch
+publishes bindings, assets and pagers. Field labels remain intact, and replacement
+effects identify their values. HTML measures visible text for authored resource
+budgets without imposing a global message limit.
+Classic Discord retains native embed fields, including on continuation pages.
+Names, values, per-embed counts and aggregate embed text all participate in shared
+resource accounting.
+
+After a fixed layout fails, search probes the end of its ladders before enumerating
+all combinations. This provides a bounded certificate for many independent field
+ladders. It changes work order only; exhaustive comparison remains queued, and
+the search report distinguishes a certificate from proven optimality.
+
+Both complete UI suites pass (3,202 tests with `--no-cov`), and whole-project
+Pyrefly reports zero errors.
 
 ## Continuation: navigation ownership
 

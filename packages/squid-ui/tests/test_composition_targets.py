@@ -12,13 +12,13 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
+    CapacityExceeded,
     ConstraintViolation,
     Evaluation,
     LocalCapacityExceeded,
     OccurrenceId,
     PlanningContext,
     SemanticOccurrence,
-    UnsupportedCapability,
     WorkBudget,
     build_composition,
 )
@@ -243,7 +243,8 @@ def test_html_has_no_implicit_message_size_limit() -> None:
     result = build_composition(candidate, rules, context)
     assert isinstance(result, BuiltComposition)
     assert result.evaluation.text == (content,)
-    assert result.evaluation.cost.axes == ()
+    assert result.evaluation.cost.get(Axis.DISPLAY_TEXT) == len(content)
+    assert not context.capacities
     assert result.body is result.evaluation.preparation
 
 
@@ -268,12 +269,15 @@ def test_html_preserves_table_structure_and_source_references() -> None:
     )
 
 
-def test_unbounded_html_refuses_unimplemented_authored_constraints() -> None:
+def test_unbounded_html_enforces_authored_text_budgets() -> None:
     node = sl.paragraph("Too much for an authored budget", key="text").budget(min=0, prefer=3)
     rules, context = HtmlCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
     occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("@0"))
-    rejected = select_composition(occurrence, rules, context, selections={})
-    assert rejected == UnsupportedCapability(occurrence.identity, "Budgeted")
+    candidate = select_composition(occurrence, rules, context, selections={})
+    assert isinstance(candidate, CandidateComposition)
+    rejected = build_composition(candidate, rules, context)
+    assert isinstance(rejected, Evaluation)
+    assert rejected.violations == (CapacityExceeded(occurrence.identity, Axis.DISPLAY_TEXT, 31, 3),)
 
 
 def test_html_retains_styled_links_and_shared_asset_references(tmp_path: Path) -> None:

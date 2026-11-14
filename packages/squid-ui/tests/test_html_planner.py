@@ -30,6 +30,7 @@ from squid_ui.forms import (
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.limits import Axis
 from squid_ui.planning.result import PlanResult
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
@@ -309,9 +310,11 @@ def test_html_searches_authored_fallbacks_only_under_an_explicit_budget() -> Non
     assert "short" in [
         node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
-    assert constrained.metrics.states_explored == 2
-    assert any(event.code == "html.budget.fallback" for event in constrained.report.events)
-    with pytest.raises(LayoutDegradedError, match="representation 2 of 2"):
+    assert constrained.report.search is not None
+    assert any(
+        event.code == "composition.effect" and event.message == "Replacement" for event in constrained.report.events
+    )
+    with pytest.raises(JointInfeasibleError):
         sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=sl.html.target(), strict=True)
 
 

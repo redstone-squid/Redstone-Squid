@@ -302,7 +302,7 @@ def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
 
     assert isinstance(panel, scene.Panel)
     body = "\n".join(child.content for child in panel.children if isinstance(child, scene.Text))
-    assert all(f"**Field {index}:**" in body for index in range(20))
+    assert all(f"Field {index}:" in body for index in range(20))
     assert "short" in body
 
 

@@ -75,6 +75,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.OptionalContent():
                 pageable = True
                 return replace(node, node=visit(node.node))
+            case sem.Fields():
+                pageable |= any(entry.fallbacks for entry in node.fields)
+                return node
             case primitive.Row() | primitive.ControlGroup():
                 if not isinstance(limits, V2Limits | ClassicLimits):
                     msg = "Discord native controls on a non-Discord target"
@@ -166,7 +169,6 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 | sem.Quote()
                 | sem.Status()
                 | sem.ProgressBar()
-                | sem.Fields()
                 | sem.Media()
                 | sem.Figure()
                 | sem.Paragraph()
@@ -187,8 +189,8 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.ActionControls():
                 return node
             case sem.FallbackContent():
-                msg = "FallbackContent has no declared source correspondence; use alternatives"
-                raise UnsupportedSemanticError(msg)
+                pageable = True
+                return replace(node, primary=visit(node.primary), alternates=tuple(map(visit, node.alternates)))
             case Alternatives():
                 return replace(
                     node,

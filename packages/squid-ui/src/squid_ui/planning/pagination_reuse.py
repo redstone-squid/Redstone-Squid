@@ -110,6 +110,8 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                     for a, b in zip(left.choices, right.choices, strict=True)
                 )
             )
+        case sem.FallbackContent(), sem.FallbackContent():
+            return _same_node(left.primary, right.primary) and _same_children(left.alternates, right.alternates)
         case (
             sem.Heading()
             | sem.Note()

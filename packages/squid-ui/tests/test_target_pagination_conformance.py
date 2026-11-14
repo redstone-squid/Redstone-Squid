@@ -148,10 +148,15 @@ def test_modal_regions_explain_the_form_surface_constraint() -> None:
     assert "one top-level form trigger" in str(caught.value.diagnostics.violations)
 
 
-def test_unmapped_fallback_in_a_region_requires_explicit_correspondence() -> None:
-    with pytest.raises(JointUnsupportedError) as caught:
-        plan(sl.region(sl.fallback(sl.paragraph("full"), sl.paragraph("short")), key="r", title="R"), target=TARGETS[0])
-    assert "FallbackContent" in str(caught.value.diagnostics.violations)
+def test_legacy_fallback_in_a_region_retains_the_primary_without_loss() -> None:
+    result = plan(
+        sl.region(sl.fallback(sl.paragraph("full"), sl.paragraph("short")), key="r", title="R"),
+        target=TARGETS[0],
+        strict=True,
+    )
+    assert result.allocation is not None
+    assert "full" in scene.Codec.dumps(result.scene)
+    assert not any(event.code == "composition.effect" for event in result.report.events)
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)

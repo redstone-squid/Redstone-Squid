@@ -11,6 +11,7 @@ from squid_ui.planning.composition import (
     CandidateViolation,
     ConstraintViolation,
     Evaluation,
+    OccurrenceId,
     PlanningContext,
     RealizationOffer,
     ResourceIdentity,
@@ -40,7 +41,7 @@ from squid_ui.planning.realizations import (
     record_text,
     semantic_offers,
 )
-from squid_ui.planning.resources import EMPTY_COST
+from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.text_nodes import html_text
 from squid_ui.presentations import FidelityEffect, SemanticRef
 
@@ -85,7 +86,9 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
     ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
-        return semantic_offers(occurrence, context, table_forms=(TableForm.NATIVE, TableForm.RECORDS), panels=True)
+        return semantic_offers(
+            occurrence, context, table_forms=(TableForm.NATIVE, TableForm.RECORDS), panels=True, character_budgets=True
+        )
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
@@ -97,8 +100,16 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
         interactions: set[SemanticRef] = set()
+        scopes: dict[OccurrenceId, ResourceCost] = {}
 
         def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> tuple[scene.HtmlNode, ...]:
+            start = len(texts)
+            rendered = render(part)
+            context.work.consume(1 + len(texts) - start)
+            scopes[part.offer.occurrence.identity] = ResourceCost({Axis.DISPLAY_TEXT: sum(map(len, texts[start:]))})
+            return rendered
+
+        def render(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> tuple[scene.HtmlNode, ...]:
             context.work.consume()
             effects.extend(part.offer.effects)
             if part.offer.interaction:
@@ -451,6 +462,9 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
 
         body = scene.HtmlBody(visit(candidate), locale=context.localization.locale)
         return Evaluation(
+            additive_cost=scopes[candidate.offer.occurrence.identity],
+            scoped_costs=scopes,
+            resource_axes=frozenset({Axis.DISPLAY_TEXT}),
             resources=SharedResources.combine(uses),
             violations=tuple(violations),
             effects=tuple(effects),
@@ -494,7 +508,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
             body != expected.preparation
             or tuple(texts) != expected.text
             or assets != expected.resources.uses.keys()
-            or expected.cost != EMPTY_COST
+            or expected.cost != ResourceCost({Axis.DISPLAY_TEXT: sum(map(len, texts))})
         ):
             message = "built HTML composition disagrees with evaluation"
             raise DrawInvariantError(message)
