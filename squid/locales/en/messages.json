@@ -7727,7 +7727,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:167"
+      "squid/bot/give_redstoner.py:166"
     ]
   },
   "command-redstoner-name": {
@@ -7736,7 +7736,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:166"
+      "squid/bot/give_redstoner.py:165"
     ]
   },
   "command-runtime-settings-help": {
@@ -10486,7 +10486,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:255"
+      "squid/bot/give_redstoner.py:254"
     ]
   },
   "give-redstoner-deploy-role-controls": {
@@ -10495,7 +10495,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:126"
+      "squid/bot/give_redstoner.py:125"
     ]
   },
   "give-redstoner-gave-the-redstoner-role": {
@@ -10510,7 +10510,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:289"
+      "squid/bot/give_redstoner.py:288"
     ]
   },
   "give-redstoner-in": {
@@ -10530,7 +10530,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:243"
+      "squid/bot/give_redstoner.py:242"
     ]
   },
   "give-redstoner-redstoner-automation": {
@@ -10539,7 +10539,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:131"
+      "squid/bot/give_redstoner.py:130"
     ]
   },
   "give-redstoner-redstoner-role-controls": {
@@ -10548,7 +10548,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:154"
+      "squid/bot/give_redstoner.py:153"
     ]
   },
   "give-redstoner-role": {
@@ -10557,7 +10557,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:134"
+      "squid/bot/give_redstoner.py:133"
     ]
   },
   "give-redstoner-server": {
@@ -10566,7 +10566,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:141"
+      "squid/bot/give_redstoner.py:140"
     ]
   },
   "give-redstoner-source-channel": {
@@ -10575,7 +10575,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:138"
+      "squid/bot/give_redstoner.py:137"
     ]
   },
   "give-redstoner-value": {
@@ -10590,7 +10590,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:135"
+      "squid/bot/give_redstoner.py:134"
     ]
   },
   "give-redstoner-value-2": {
@@ -10605,7 +10605,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:139"
+      "squid/bot/give_redstoner.py:138"
     ]
   },
   "guided-search-add-filter": {
@@ -14532,7 +14532,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:177"
+      "squid/bot/give_redstoner.py:176"
     ]
   },
   "redstoner-deploy-forbidden": {
@@ -14541,7 +14541,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:150"
+      "squid/bot/give_redstoner.py:149"
     ]
   },
   "redstoner-role-earned": {
@@ -14566,7 +14566,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:296"
+      "squid/bot/give_redstoner.py:295"
     ]
   },
   "redstoner-role-restored": {
@@ -14581,7 +14581,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:284"
+      "squid/bot/give_redstoner.py:283"
     ]
   },
   "redstoner-role-self-removed": {
@@ -14601,7 +14601,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:279"
+      "squid/bot/give_redstoner.py:278"
     ]
   },
   "schematic-back-to-tools": {
@@ -18413,7 +18413,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/routes/_root.py:63"
+      "squid/bot/routes.py:48"
     ]
   },
   "ui-list-controls-not-owned": {

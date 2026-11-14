@@ -9,7 +9,7 @@ from discord import Interaction
 import squid_ui_discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.navigation.destinations import DraftDetail
-from squid.bot.routes._root import _feature_group
+from squid.bot.routes import routes
 from squid.bot.submission.ui import inference, opening, recalculation
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import text_node
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 
-builds, _builds_created = _feature_group("builds")
+builds = routes.group("builds")
 
 
 @builds.route("{build_id:int}:tags")

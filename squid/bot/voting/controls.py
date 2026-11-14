@@ -11,7 +11,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.routes._root import _feature_group
+from squid.bot.routes import routes
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.actors import Actor
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from squid.bot.voting.vote import VoteCog
 
 
-polls, _polls_created = _feature_group("polls")
+polls = routes.group("polls")
 poll_close = polls.define("close", aliases=("poll:close",))
 poll_refresh = polls.define("refresh", aliases=("poll:refresh",))
 

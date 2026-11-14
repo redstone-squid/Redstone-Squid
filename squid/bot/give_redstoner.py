@@ -12,7 +12,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import localization_for, resolve_locale
-from squid.bot.routes._root import _feature_group
+from squid.bot.routes import routes
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.community.application import RedstonerService
@@ -46,9 +46,8 @@ class OwnerGuildOnly[BotT: discord.Client](sd.routing.Middleware[BotT]):
         await proceed()
 
 
-redstoner_roles, _new_redstoner_roles = _feature_group("redstoner-roles")
-if _new_redstoner_roles:
-    redstoner_roles.add_middleware(OwnerGuildOnly())
+redstoner_roles = routes.group("redstoner-roles")
+redstoner_roles.add_middleware(OwnerGuildOnly(), key="owner-guild")
 remove_redstoner_role = redstoner_roles.define("self:remove", aliases=("remove:role:redstoner",))
 
 

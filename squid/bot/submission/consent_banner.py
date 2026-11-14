@@ -9,7 +9,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.accounts.consent import ConsentPrompt
-from squid.bot.routes._root import _feature_group
+from squid.bot.routes import routes
 from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
 from squid_i18n import md_tr
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-build_log_consents, _consents_created = _feature_group("build-log-consents")
+build_log_consents = routes.group("build-log-consents")
 build_log_consent = build_log_consents.define("new", aliases=("build_log:consent",))
 
 CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()

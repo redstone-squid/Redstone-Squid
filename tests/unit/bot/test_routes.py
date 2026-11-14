@@ -106,3 +106,16 @@ def test_reloading_build_controls_keeps_imported_handles_current() -> None:
     resolved = router.resolve(imported.id(build_id=5))
     assert resolved is not None
     assert resolved[0].handler is imported.__wrapped__
+
+
+def test_reloading_role_controls_replaces_middleware_without_duplicating_it() -> None:
+    controls = import_module("squid.bot.give_redstoner")
+    group = controls.redstoner_roles
+    previous = group._middleware[0]
+
+    reload(controls)
+
+    assert controls.redstoner_roles is group
+    assert len(group._middleware) == 1
+    assert group._middleware[0] is not previous
+    assert isinstance(group._middleware[0], controls.OwnerGuildOnly)

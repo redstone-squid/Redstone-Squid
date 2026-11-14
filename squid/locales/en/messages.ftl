@@ -2339,10 +2339,10 @@ command-recount-message-name = message
 # squid/bot/recount.py:52
 command-recount-name = recount
 
-# squid/bot/give_redstoner.py:167
+# squid/bot/give_redstoner.py:166
 command-redstoner-help = Inspect and deploy Redstoner automation
 
-# squid/bot/give_redstoner.py:166
+# squid/bot/give_redstoner.py:165
 command-redstoner-name = redstoner
 
 # squid/bot/admin.py:201
@@ -3191,37 +3191,37 @@ events-consumer-non-empty = consumer must be a non-empty name
 # squid/events/application.py:60
 events-max-attempts-positive = max_attempts must be positive
 
-# squid/bot/give_redstoner.py:255
+# squid/bot/give_redstoner.py:254
 give-redstoner-could-not-find-the-redstoner = Could not find the redstoner role.
 
-# squid/bot/give_redstoner.py:126
+# squid/bot/give_redstoner.py:125
 give-redstoner-deploy-role-controls = Deploy role controls
 
-# squid/bot/give_redstoner.py:289
+# squid/bot/give_redstoner.py:288
 give-redstoner-gave-the-redstoner-role = Gave { $member } the redstoner role.
 
-# squid/bot/give_redstoner.py:243
+# squid/bot/give_redstoner.py:242
 give-redstoner-in = { $reason } in { $url }
 
-# squid/bot/give_redstoner.py:131
+# squid/bot/give_redstoner.py:130
 give-redstoner-redstoner-automation = Redstoner automation
 
-# squid/bot/give_redstoner.py:154
+# squid/bot/give_redstoner.py:153
 give-redstoner-redstoner-role-controls = Redstoner role controls deployed.
 
-# squid/bot/give_redstoner.py:134
+# squid/bot/give_redstoner.py:133
 give-redstoner-role = Role
 
-# squid/bot/give_redstoner.py:141
+# squid/bot/give_redstoner.py:140
 give-redstoner-server = Server
 
-# squid/bot/give_redstoner.py:138
+# squid/bot/give_redstoner.py:137
 give-redstoner-source-channel = Source channel
 
-# squid/bot/give_redstoner.py:135
+# squid/bot/give_redstoner.py:134
 give-redstoner-value = { $role_mention }
 
-# squid/bot/give_redstoner.py:139
+# squid/bot/give_redstoner.py:138
 give-redstoner-value-2 = { $source_channel_mention }
 
 # squid/bot/submission/guided_search.py:170, squid/bot/submission/guided_search.py:411
@@ -4449,19 +4449,19 @@ recount-server-rate-limited = This server ran a recount recently. Try again in {
 # squid/bot/recount.py:102
 recount-votes-already-current = Votes recounted; nothing had been missed.
 
-# squid/bot/give_redstoner.py:177
+# squid/bot/give_redstoner.py:176
 redstoner-control-bot-only = This is only available in the bot's home server.
 
-# squid/bot/give_redstoner.py:150
+# squid/bot/give_redstoner.py:149
 redstoner-deploy-forbidden = You are no longer allowed to deploy Redstoner controls.
 
-# squid/bot/give_redstoner.py:296
+# squid/bot/give_redstoner.py:295
 redstoner-role-earned = Hi { $member }, you received the { $role } role after reaching 15 upvotes in { $url }.
 
-# squid/bot/give_redstoner.py:284
+# squid/bot/give_redstoner.py:283
 redstoner-role-restored = { $member } — just kidding, here is your role back.
 
-# squid/bot/give_redstoner.py:279
+# squid/bot/give_redstoner.py:278
 redstoner-role-self-removed = { $owner }, { $member } has removed their own redstoner role.
 
 # squid/bot/submission/schematic_tools.py:166
@@ -5569,7 +5569,7 @@ tags-tag-name-length = Tag names must contain between 1 and 80 characters.
 # squid/tags/errors.py:11
 tags-tag-not-found-title = Tag not found
 
-# squid/bot/routes/_root.py:63
+# squid/bot/routes.py:48
 ui-control-expired = This control is no longer available.
 
 # squid/bot/ui.py:87

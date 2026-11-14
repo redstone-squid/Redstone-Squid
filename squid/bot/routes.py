@@ -24,20 +24,6 @@ if TYPE_CHECKING:
 routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
 """The ordinary root group reserving the bot's durable ``r:`` namespace."""
 
-_FEATURE_GROUPS: dict[str, sd.routing.RouteGroup[RedstoneSquid]] = {}
-
-
-def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], bool]:
-    """Return the cached feature group and whether it was newly created.
-
-    Callers use the boolean to install middleware only once across extension reloads.
-    """
-    if group := _FEATURE_GROUPS.get(prefix):
-        return group, False
-    group = routes.group(prefix)
-    _FEATURE_GROUPS[prefix] = group
-    return group, True
-
 
 class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""

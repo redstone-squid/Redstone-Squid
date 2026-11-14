@@ -8,7 +8,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.navigation.destinations import Destination
 from squid.bot.navigation.router import InvalidAddress, ScreenRouter
-from squid.bot.routes._root import _feature_group
+from squid.bot.routes import routes
 from squid.bot.ui import text_node
 from squid.core.i18n import tr
 from squid_i18n import TextLike
@@ -16,7 +16,7 @@ from squid_i18n import TextLike
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
-navigation, _created = _feature_group("navigation")
+navigation = routes.group("navigation")
 
 
 def invalid_address_response() -> sd.Response:
