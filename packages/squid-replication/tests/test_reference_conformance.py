@@ -13,12 +13,15 @@ import weakref
 import pytest
 
 from squid_reactivity import (
+    CellAddress,
     ChangeReport,
     ConflictDetail,
     EventLedger,
     Reactive,
     ReactiveConflictError,
+    Subscriptions,
     TransactionCommit,
+    addresses,
     observe_events,
     state,
     strong_read,
@@ -74,6 +77,31 @@ def test_staging_reads_its_branch_without_mutating_canonical_state() -> None:
         assert seen == [0]
 
     assert votes.value == 2
+
+
+def test_document_reads_produce_subscribable_dependencies() -> None:
+    document = Replica("a").open("project")
+    votes = document.counter("votes")
+    dependencies = addresses(lambda: votes.value)
+    assert dependencies == (CellAddress(document, "version"),)
+    seen: list[int] = []
+    subscriptions = Subscriptions(lambda _address: seen.append(votes.value))
+    subscriptions.stage(dependencies)
+    subscriptions.commit()
+
+    with transaction():
+        votes.increment(2)
+        assert seen == []
+    assert seen == [2]
+
+    with pytest.raises(ValueError, match="discard"), transaction():
+        votes.increment(3)
+        raise ValueError("discard")
+    assert seen == [2]
+    subscriptions.close()
+    with transaction():
+        votes.increment(1)
+    assert seen == [2]
 
 
 def test_reference_backend_refuses_container_classes_it_cannot_merge() -> None:

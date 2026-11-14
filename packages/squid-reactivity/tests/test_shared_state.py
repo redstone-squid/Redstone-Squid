@@ -26,7 +26,7 @@ def test_shared_commit_publishes_the_exact_cell() -> None:
     preferences = Preferences()
     address = CellAddress(preferences, "theme")
     seen: list[Address] = []
-    subscriptions = Subscriptions(None, seen.append)
+    subscriptions = Subscriptions(seen.append)
     subscriptions.stage([address])
     subscriptions.commit()
 

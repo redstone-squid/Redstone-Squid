@@ -7,10 +7,11 @@ is checked by the project type checker and is not a pytest runtime test.
 
 from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from typing import Any, assert_type, override
+from typing import assert_type, override
 
 import squid_ui as sl
-from squid_reactivity.topics import LocalTopicBus
+from squid_reactivity.addresses import CellAddress
+from squid_reactivity.topics import LocalTopicBus, Topic
 from squid_ui import Component, ContextKey, Reactive, paragraph, resource, state
 from squid_ui.runtime import (
     AtomicResource,
@@ -62,7 +63,7 @@ class UserSettings(Reactive):
 
 assert_type(Anonymous().flag, bool)
 assert_type(UserSettings().theme, str)
-assert_type(addresses(lambda: UserSettings().theme), tuple[Any, ...])
+assert_type(addresses(lambda: UserSettings().theme), tuple[Topic | CellAddress, ...])
 
 
 class ResourceTypes(Component):

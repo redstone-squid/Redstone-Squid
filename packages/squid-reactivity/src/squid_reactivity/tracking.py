@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
 
 if TYPE_CHECKING:
+    from squid_reactivity.topics import Topic
     from squid_reactivity.transactions import _Transaction
 
 from squid_reactivity.errors import (
@@ -94,7 +95,7 @@ class _Cell:
 
     __slots__ = ("__weakref__", "address", "identity", "value", "version")
 
-    def __init__(self, value: Any = _MISSING, version: int = 0, address: Any = None) -> None:
+    def __init__(self, value: Any = _MISSING, version: int = 0, address: Topic | CellAddress | None = None) -> None:
         self.identity = uuid.uuid7()
         self.value = value
         self.version = version
@@ -160,7 +161,7 @@ class _ReactiveSource(Protocol):
     """
 
     @property
-    def address(self) -> Any: ...
+    def address(self) -> Topic | CellAddress | None: ...
 
     def dependencies(self) -> Iterable[_ReactiveSource]: ...
 
@@ -338,7 +339,7 @@ class Dependencies:
         """
         return all(source.settle() == seen for source, seen in tuple(self.sources.items()))
 
-    def addresses(self) -> tuple[Any, ...]:
+    def addresses(self) -> tuple[Topic | CellAddress, ...]:
         """Every addressed cell this run reached, deduplicated, in read order.
 
         Anything with sources of its own is walked rather than re-run -- a cached computed, a
@@ -346,7 +347,7 @@ class Dependencies:
         still depends on every one of them, so a topic watched two loaders down is still this
         render's dependency. One that carries an address of its own contributes that too.
         """
-        found: list[Any] = []
+        found: list[Topic | CellAddress] = []
         seen: set[int] = set()
 
         def walk(sources: Iterable[_ReactiveSource]) -> None:
@@ -383,7 +384,7 @@ def observe_reads() -> Iterator[Dependencies]:
         yield dependencies
 
 
-def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
+def addresses(read: Callable[[], object]) -> tuple[Topic | CellAddress, ...]:
     """Return the addresses read by a callable, raising if none are found.
 
     For example, ``addresses(lambda: preferences.theme)`` returns the address

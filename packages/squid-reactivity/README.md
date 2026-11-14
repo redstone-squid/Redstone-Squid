@@ -81,12 +81,12 @@ the block read a computed `parity := count % 2`, changing `count` from 1 to 3 no
 but `parity` is the same and `current()` is still true. Check `current()` when you are
 notified, and skip the recomputation if nothing you read has a new value.
 
-To listen, give the addresses to `Subscriptions`:
+To listen, give the resolved addresses (`Topic` or `CellAddress`) to `Subscriptions`:
 
 ```python
 from squid_reactivity import Subscriptions
 
-subscriptions = Subscriptions(None, lambda address: print("changed:", address))
+subscriptions = Subscriptions(lambda address: print("changed:", address))
 subscriptions.stage(dependencies.addresses())
 subscriptions.commit()
 ...

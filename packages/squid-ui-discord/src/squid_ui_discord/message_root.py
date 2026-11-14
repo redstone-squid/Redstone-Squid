@@ -31,7 +31,7 @@ from squid_reactivity.addresses import CellAddress
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_reactivity.subscriptions import Subscriptions
-from squid_reactivity.topics import Address, TopicName
+from squid_reactivity.topics import Address
 from squid_reactivity.transaction_context import (
     ActorRef,
     TransactionContext,
@@ -144,7 +144,6 @@ from squid_ui_discord.message_root_contracts import (
     ProfiledScheduler,
     ReactiveScheduler,
     RenewEphemeral,
-    TopicScheduler,
 )
 from squid_ui_discord.message_root_lifecycle import _CandidateLifecycle
 from squid_ui_discord.message_root_spread import _Continuations
@@ -498,7 +497,6 @@ class MessageRoot[
         self._owns_render_cache = (render_cache := config.render_cache) is None
         self.render_cache = render_cache if render_cache is not None else RenderProgramCache()
         self.scheduler = scheduler
-        topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
         subscriptions_ref: weakref.ReferenceType[Subscriptions] | None = None
 
         def collected(_reference: weakref.ReferenceType[Any]) -> None:
@@ -520,7 +518,6 @@ class MessageRoot[
             else:
                 current._note_unscheduled_change(address)
 
-        self.runtime.subscriptions.bus = topic_bus
         self.runtime.on_reactive_invalidate = refresh
         self._subscriptions = self.runtime.subscriptions
         subscriptions_ref = weakref.ref(self._subscriptions)
@@ -567,7 +564,6 @@ class MessageRoot[
         # still knows what it is looking at, which lets its own writes repaint it. A follow is
         # acquired at stage time because a write landing between the read and subscription is
         # lost, but only a delivered render may retire one.
-        self._follow_warned = False
 
     @property
     def handle(self) -> deliver.EditHandle | None:
@@ -947,20 +943,6 @@ class MessageRoot[
             anchors,
         )
 
-    def _warn_unwatched_topics(self, tree: ComponentTree[RenderTargetT, Any]) -> None:
-        observed = tree.observations
-        if (
-            any(isinstance(address, TopicName) for address in observed)
-            and self._subscriptions.bus is None
-            and not self._follow_warned
-        ):
-            self._follow_warned = True
-            logger.warning(
-                "mount %s renders a watched topic but its scheduler has no "
-                "topic bus, so changes made elsewhere will not refresh it",
-                self.id,
-            )
-
     def _draw(
         self,
         tree: ComponentTree[RenderTargetT, Any],
@@ -970,7 +952,6 @@ class MessageRoot[
         planned: _PlannedCandidate[RenderTargetT] | None = None,
     ) -> _Candidate[RenderTargetT]:
         """Plan and draw one rendered tree into a candidate generation."""
-        self._warn_unwatched_topics(tree)
         try:
             staged = planned if planned is not None else self._plan_tree(tree, profile)
         except BaseException:
@@ -1066,7 +1047,6 @@ class MessageRoot[
         profile: OperationRecorder | None = None,
     ) -> _ApplicationCandidate[RenderTargetT]:
         """Plan first, returning an undrawn candidate only when the live scene already matches."""
-        self._warn_unwatched_topics(tree)
         if (
             tree is self._candidates.planned_tree
             and self._candidates.plan is not None

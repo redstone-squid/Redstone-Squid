@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Callable
-from typing import override
+from typing import Any, cast, override
 
 import pytest
 
@@ -72,34 +72,38 @@ def test_publish_moves_a_watched_version_without_subscribers() -> None:
 def test_subscriptions_keeps_committed_and_one_staged_set() -> None:
     bus = LocalTopicBus()
     seen: list[Address] = []
-    subscriptions = Subscriptions(bus, seen.append)
+    build = bus.topic(BUILD.kind, BUILD.key)
+    other = bus.topic(OTHER.kind, OTHER.key)
+    subscriptions = Subscriptions(seen.append)
 
-    subscriptions.stage((BUILD, BUILD))
-    assert subscriptions.subscribed_addresses == (BUILD,)
+    subscriptions.stage((build, build))
+    assert subscriptions.subscribed_addresses == (build,)
     subscriptions.commit()
 
-    subscriptions.stage((OTHER,))
-    assert subscriptions.subscribed_addresses == (BUILD, OTHER)
+    subscriptions.stage((other,))
+    assert subscriptions.subscribed_addresses == (build, other)
     with pytest.raises(RuntimeError, match="already staged"):
-        subscriptions.stage((BUILD,))
+        subscriptions.stage((build,))
     subscriptions.discard()
 
-    assert subscriptions.committed == (BUILD,)
-    assert subscriptions.subscribed_addresses == (BUILD,)
+    assert subscriptions.committed == (build,)
+    assert subscriptions.subscribed_addresses == (build,)
     bus.publish(BUILD, OTHER)
-    assert seen == [BUILD]
+    assert seen == [build]
 
 
 def test_subscriptions_commit_promotes_and_close_releases() -> None:
     bus = LocalTopicBus()
-    subscriptions = Subscriptions(bus, lambda _address: None)
-    subscriptions.stage((BUILD,))
+    build = bus.topic(BUILD.kind, BUILD.key)
+    other = bus.topic(OTHER.kind, OTHER.key)
+    subscriptions = Subscriptions(lambda _address: None)
+    subscriptions.stage((build,))
     subscriptions.commit()
-    subscriptions.stage((OTHER,))
+    subscriptions.stage((other,))
     subscriptions.commit()
 
-    assert subscriptions.committed == (OTHER,)
-    assert subscriptions.subscribed_addresses == (OTHER,)
+    assert subscriptions.committed == (other,)
+    assert subscriptions.subscribed_addresses == (other,)
     subscriptions.close()
     subscriptions.close()
     assert bus.snapshot().topics == ()
@@ -116,14 +120,33 @@ def test_subscriptions_unwinds_a_partial_stage() -> None:
             return super().subscribe(address, callback)
 
     bus = BrokenBus()
-    subscriptions = Subscriptions(bus, lambda _address: None)
+    build = bus.topic(BUILD.kind, BUILD.key)
+    other = bus.topic(OTHER.kind, OTHER.key)
+    subscriptions = Subscriptions(lambda _address: None)
 
     with pytest.raises(RuntimeError, match="cannot subscribe"):
-        subscriptions.stage((BUILD, OTHER))
+        subscriptions.stage((build, other))
 
     assert subscriptions.staged is None
     assert subscriptions.subscribed_addresses == ()
     assert bus.snapshot().topics == ()
+
+
+def test_subscriptions_reject_unresolved_names_without_replacing_current_dependencies() -> None:
+    bus = LocalTopicBus()
+    topic = bus.topic(BUILD.kind, BUILD.key)
+    seen: list[Address] = []
+    subscriptions = Subscriptions(seen.append)
+    subscriptions.stage((topic,))
+    subscriptions.commit()
+
+    with pytest.raises(TypeError, match="resolve topic names"):
+        subscriptions.stage((cast(Any, OTHER),))
+
+    assert subscriptions.staged is None
+    assert subscriptions.committed == (topic,)
+    topic.publish()
+    assert seen == [topic]
 
 
 def test_delivery_skips_removed_callbacks_and_defers_new_subscriptions() -> None:
@@ -184,7 +207,7 @@ def test_handles_follow_their_owner_without_an_explicit_bus() -> None:
         handle.watch()
     source, version = next(iter(observation.sources.items()))
     seen: list[Address] = []
-    subscriptions = Subscriptions(None, seen.append)
+    subscriptions = Subscriptions(seen.append)
     subscriptions.stage(observation.addresses())
     subscriptions.commit()
 

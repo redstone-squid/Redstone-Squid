@@ -256,7 +256,7 @@ async def test_a_commit_publishes_once_to_every_subscriber(bus: LocalTopicBus, p
     def subscriber(topic: object) -> None:
         seen.append(topic)
 
-    subscriptions = [Subscriptions(None, subscriber) for _ in range(2)]
+    subscriptions = [Subscriptions(subscriber) for _ in range(2)]
     for subscription in subscriptions:
         subscription.stage([address(preferences, "theme")])
         subscription.commit()
@@ -272,7 +272,7 @@ async def test_a_rolled_back_action_publishes_nothing(bus: LocalTopicBus, prefer
     def subscriber(topic: object) -> None:
         seen.append(topic)
 
-    subscription = Subscriptions(None, subscriber)
+    subscription = Subscriptions(subscriber)
     subscription.stage([address(preferences, "theme")])
     subscription.commit()
     with pytest.raises(RuntimeError, match="no"), transaction():

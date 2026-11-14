@@ -44,7 +44,7 @@ def follow() -> Iterator[Follow]:
     subscriptions: list[Subscriptions] = []
 
     def observe(address: CellAddress, callback: Callable[[Address], None]) -> Callable[[], None]:
-        subscription_set = Subscriptions(None, callback)
+        subscription_set = Subscriptions(callback)
         subscription_set.stage([address])
         subscription_set.commit()
         subscriptions.append(subscription_set)

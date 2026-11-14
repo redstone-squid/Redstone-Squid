@@ -97,7 +97,7 @@ async def test_shared_resource_publishes_its_cell_address() -> None:
     preferences = Preferences()
     address = preferences.theme.address
     assert address is not None
-    subscriptions = Subscriptions(None, published.append)
+    subscriptions = Subscriptions(published.append)
     subscriptions.stage([address])
     subscriptions.commit()
 
@@ -294,7 +294,7 @@ async def test_standalone_resource_notifies_readers_without_an_owner_callback() 
     with observe_reads() as observation:
         assert value.status == Pending()
     seen = []
-    subscriptions = Subscriptions(None, seen.append)
+    subscriptions = Subscriptions(seen.append)
     subscriptions.stage(observation.addresses())
     subscriptions.commit()
 

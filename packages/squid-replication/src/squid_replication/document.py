@@ -10,6 +10,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.errors import (
     ReactiveConflictError,
 )
@@ -259,7 +260,8 @@ class ReplicatedDocument:
         self.document_id = document_id
         self.engine = engine
         self.closed = False
-        self._version_cell = _Cell(engine.snapshot(), address=f"replicated:{document_id}")
+        self._reactive_subscribers: SubscriberRegistry = {}
+        self._version_cell = _Cell(engine.snapshot(), address=CellAddress(self, "version"))
         self._listeners: set[Any] = set()
         self._update_listeners: set[Callable[[ReplicationUpdate], None]] = set()
         self._pending_updates: deque[ReplicationUpdate] = deque(maxlen=_PENDING_UPDATE_LIMIT)
@@ -484,6 +486,7 @@ class ReplicatedDocument:
         """Reject future document operations and clear subscriptions and transport buffers."""
         self.closed = True
         self._listeners.clear()
+        self._reactive_subscribers.clear()
         self._update_listeners.clear()
         self._pending_updates.clear()
         self._seen_updates.clear()
@@ -500,6 +503,7 @@ class ReplicatedDocument:
         return participant
 
     def _notify(self) -> None:
+        publish(CellAddress(self, "version"))
         for callback in tuple(self._listeners):
             callback(self.snapshot())
 
