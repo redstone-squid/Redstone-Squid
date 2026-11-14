@@ -13,7 +13,8 @@ SUBMISSION_ONLY = {
     "pattern_proposals",
     "source_version",
 }
-EDIT_ONLY = {"versions", "image_urls", "video_urls", "world_download_urls", "server_ip", "coordinates"}
+EDIT_ONLY = {"versions", "server_ip", "coordinates"}
+SHARED_LINKS = {"image_urls", "video_urls", "world_download_urls"}
 
 
 def _field_ids(manifest: FormManifest, category: str) -> set[str]:
@@ -28,7 +29,8 @@ def test_each_projection_shows_only_its_own_fields() -> None:
         expected = SUBMISSION_ONLY if category in {"door", "extender"} else SUBMISSION_ONLY - {"pattern_proposals"}
         assert _field_ids(submission, category) >= expected
         assert not EDIT_ONLY & _field_ids(submission, category)
-        assert _field_ids(edit, category) >= EDIT_ONLY
+        assert _field_ids(edit, category) >= EDIT_ONLY | SHARED_LINKS
+        assert _field_ids(submission, category) >= SHARED_LINKS
         assert not SUBMISSION_ONLY & _field_ids(edit, category)
 
 
@@ -39,9 +41,11 @@ def test_both_projections_share_section_order_and_titles() -> None:
     edited = [(section.id, section.title) for section in edit.common_sections]
 
     # Only the context section is retitled, because editing leaves just the completion date.
-    assert [section_id for section_id, _ in edited] == [*(section_id for section_id, _ in shared), "links_location"]
+    assert [section_id for section_id, _ in edited] == [section_id for section_id, _ in shared]
     assert dict(edited)["identity"] == dict(shared)["identity"]
     assert [title for section_id, title in edited if section_id == "submission_context"] == ["About this build"]
+    assert dict(shared)["links_location"] == "External links"
+    assert dict(edited)["links_location"] == "Links and location"
 
 
 def test_editing_uses_the_limits_a_saved_build_may_hold() -> None:

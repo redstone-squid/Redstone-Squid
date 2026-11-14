@@ -15,6 +15,7 @@ from typing import Self
 from squid.builds.domain.credits import read_credits
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.submissions.domain.links import LINK_FIELDS, valid_link_url
 from squid_i18n import md_tr
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -471,6 +472,12 @@ def _field_for(item: FormField, purpose: FormPurpose) -> FormField:
 
 def _validate_value(field: FormField, value: JSONValue) -> str | None:
     if not _matches_kind(value, field.value_kind):
+        return "wrong_type"
+    if (
+        field.id in LINK_FIELDS
+        and isinstance(value, list)
+        and any(not isinstance(url, str) or not valid_link_url(url) for url in value)
+    ):
         return "wrong_type"
     constraints = field.constraints
     if constraints.must_equal is not None and value != constraints.must_equal:

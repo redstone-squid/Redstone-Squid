@@ -1,6 +1,7 @@
 """Inference prefill cannot fabricate required facts or promote unknown taxonomy."""
 
 from squid.builds.domain import BuildCategory, BuildDraft
+from squid.builds.models import BuildLink
 from squid.submissions.application.forms import build_submission_manifest
 from squid.submissions.application.prefill import project_submission
 from squid.submissions.domain import ChoiceOption, SubmissionOrigin
@@ -103,3 +104,20 @@ def test_names_inference_could_not_resolve_become_proposals() -> None:
     assert result.answers["restriction_proposals"] == ["Floating wires"]
     assert result.answers["patterns"] == ["regular"]
     assert result.answers["pattern_proposals"] == ["Spiral"]
+
+
+def test_external_links_are_form_answers_in_revision_six_and_remain_references_on_older_forms() -> None:
+    source = BuildDraft(
+        category=BuildCategory.DOOR,
+        links=[
+            BuildLink(url="https://imgur.com/a/example", media_type="image"),
+            BuildLink(url="https://youtu.be/example", media_type="video"),
+            BuildLink(url="https://example.test/world.zip", media_type="world-download"),
+        ],
+    )
+    result = project_submission(source, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+    assert result.answers["image_urls"] == ["https://imgur.com/a/example"]
+    assert result.answers["video_urls"] == ["https://youtu.be/example"]
+    assert result.answers["world_download_urls"] == ["https://example.test/world.zip"]
+    old = project_submission(source, build_submission_manifest(revision=5), {}, origin=SubmissionOrigin.DISCORD)
+    assert {"image_urls", "video_urls", "world_download_urls"}.isdisjoint(old.answers)

@@ -37,8 +37,8 @@ from squid_i18n import Text, localization_scope
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
 # Older revisions remain immutable for pinned drafts and queued submissions.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 5
-_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5})
+CURRENT_SUBMISSION_SCHEMA_REVISION = 6
+_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6})
 
 
 class FormManifestRegistry(Protocol):
@@ -431,7 +431,7 @@ def _build_form_manifest(revision: int) -> FormManifest:
                 ),
             ),
         ),
-        _links_and_location(localize),
+        _links_and_location(localize, revision),
     )
     return FormManifest(
         schema_id=CURRENT_SUBMISSION_SCHEMA,
@@ -594,8 +594,8 @@ def _extender_form(localize: Callable[[Text], str]) -> CategoryForm:
     )
 
 
-def _links_and_location(localize: Callable[[Text], str]) -> FormSection:
-    """Media links and server details, which a submission collects as files and context instead."""
+def _links_and_location(localize: Callable[[Text], str], revision: int) -> FormSection:
+    """External references for submissions, and location details for saved-build editing."""
 
     def links(field_id: str, label: Text) -> FormField:
         return FormField(
@@ -605,9 +605,11 @@ def _links_and_location(localize: Callable[[Text], str]) -> FormSection:
             control=ControlKind.TEXT,
             value_kind=ValueKind.STRING_LIST,
             repeatable=True,
-            constraints=FieldConstraints(max_items=100),
+            constraints=FieldConstraints(max_length=2048, max_items=100)
+            if revision >= 6
+            else FieldConstraints(max_items=100),
             required_capability="repeatable_text",
-            purposes=_EDIT_ONLY,
+            purposes=frozenset({FormPurpose.SUBMIT, FormPurpose.EDIT}) if revision >= 6 else _EDIT_ONLY,
         )
 
     def text(field_id: str, label: Text, max_length: int) -> FormField:
@@ -622,7 +624,12 @@ def _links_and_location(localize: Callable[[Text], str]) -> FormSection:
 
     return FormSection(
         id="links_location",
-        title=localize(tr(t"build-edit-form-links-location = Links and location")),
+        title=(
+            localize(tr(t"submissions-external-links = External links"))
+            if revision >= 6
+            else localize(tr(t"build-edit-form-links-location = Links and location"))
+        ),
+        edit_title=localize(tr(t"build-edit-form-links-location = Links and location")),
         fields=(
             links("image_urls", tr(t"build-edit-form-images = Image links")),
             links("video_urls", tr(t"build-edit-form-videos = Video links")),

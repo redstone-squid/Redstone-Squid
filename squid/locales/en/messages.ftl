@@ -1871,31 +1871,31 @@ build-drafts-state-waiting = Waiting for files
 # squid/submissions/application/forms.py:403
 build-edit-form-about = About this build
 
-# squid/submissions/application/forms.py:632
+# squid/submissions/application/forms.py:639
 build-edit-form-command = Command to get there
 
-# squid/submissions/application/forms.py:631
+# squid/submissions/application/forms.py:638
 build-edit-form-coordinates = Coordinates
 
-# squid/submissions/application/forms.py:627
+# squid/submissions/application/forms.py:634
 build-edit-form-images = Image links
 
-# squid/submissions/application/forms.py:625
+# squid/submissions/application/forms.py:630, squid/submissions/application/forms.py:632
 build-edit-form-links-location = Links and location
 
 # squid/submissions/application/forms.py:604
 build-edit-form-one-per-line = One link per line.
 
-# squid/submissions/application/forms.py:630
+# squid/submissions/application/forms.py:637
 build-edit-form-server = Server address
 
 # squid/submissions/application/forms.py:286
 build-edit-form-versions = Minecraft versions
 
-# squid/submissions/application/forms.py:628
+# squid/submissions/application/forms.py:635
 build-edit-form-videos = Video links
 
-# squid/submissions/application/forms.py:629
+# squid/submissions/application/forms.py:636
 build-edit-form-world-downloads = World download links
 
 # squid/bot/submission/ui/build_edit.py:151
@@ -4819,10 +4819,10 @@ submissions-application-forms-build-identity = Name and creators
 # squid/submissions/application/forms.py:238
 submissions-application-forms-build-width = Build width
 
-# squid/submissions/application/forms.py:703
+# squid/submissions/application/forms.py:710
 submissions-application-forms-cc = CC0 1.0
 
-# squid/submissions/application/forms.py:704
+# squid/submissions/application/forms.py:711
 submissions-application-forms-cc-by = CC BY 4.0
 
 # squid/submissions/application/forms.py:527
@@ -4864,13 +4864,13 @@ submissions-application-forms-extension-time = Extension time
 # squid/submissions/application/forms.py:557
 submissions-application-forms-horizontal = Horizontal
 
-# squid/submissions/application/forms.py:644
+# squid/submissions/application/forms.py:651
 submissions-application-forms-known-patterns = Patterns
 
 # squid/submissions/application/forms.py:308
 submissions-application-forms-known-restrictions = Restrictions
 
-# squid/submissions/application/forms.py:640
+# squid/submissions/application/forms.py:647
 submissions-application-forms-mechanism-patterns = Patterns
 
 # squid/submissions/application/forms.py:551
@@ -4933,34 +4933,34 @@ submissions-attention-retention-positive = finalization attention retention must
 # squid/submissions/domain/drafts.py:121
 submissions-base-revision-negative = base_revision cannot be negative
 
-# squid/submissions/domain/forms.py:283
+# squid/submissions/domain/forms.py:284
 submissions-category-blank-label = category { $category } has a blank label
 
-# squid/submissions/domain/forms.py:331
+# squid/submissions/domain/forms.py:332
 submissions-category-duplicates-common = category { $category_code } duplicates common fields: { $fields }
 
-# squid/submissions/application/forms.py:707
+# squid/submissions/application/forms.py:714
 submissions-cc-by-nc = CC BY-NC 4.0
 
-# squid/submissions/application/forms.py:709
+# squid/submissions/application/forms.py:716
 submissions-cc-by-nc-nd = CC BY-NC-ND 4.0
 
-# squid/submissions/application/forms.py:708
+# squid/submissions/application/forms.py:715
 submissions-cc-by-nc-sa = CC BY-NC-SA 4.0
 
-# squid/submissions/application/forms.py:706
+# squid/submissions/application/forms.py:713
 submissions-cc-by-nd = CC BY-ND 4.0
 
-# squid/submissions/application/forms.py:705
+# squid/submissions/application/forms.py:712
 submissions-cc-by-sa = CC BY-SA 4.0
 
-# squid/submissions/domain/forms.py:87
+# squid/submissions/domain/forms.py:88
 submissions-choice-characters-without = choice values must be 1-120 characters without surrounding whitespace
 
-# squid/submissions/domain/forms.py:93
+# squid/submissions/domain/forms.py:94
 submissions-choice-labels-blank = choice labels cannot be blank
 
-# squid/submissions/domain/forms.py:221
+# squid/submissions/domain/forms.py:222
 submissions-choice-options-required = choice field { $field_id } requires options
 
 # squid/submissions/application/forms.py:352
@@ -5062,34 +5062,37 @@ submissions-draft-staff-unconfigured = Staff access to submission drafts is not 
 # squid/submissions/domain/drafts.py:237
 submissions-draft-transition = draft cannot transition from { $current } to { $next_status }
 
-# squid/submissions/application/forms.py:692
+# squid/submissions/application/forms.py:699
 submissions-enter-game-ticks = Include a unit: 30gt, 15rt, or 1.5s.
 
 # squid/submissions/application/forms.py:259
 submissions-exact-source-minecraft = Minecraft version
 
-# squid/submissions/domain/finalization.py:276
+# squid/submissions/domain/finalization.py:277
 submissions-extender-length-positive = extender length must be positive
 
-# squid/submissions/domain/forms.py:239
+# squid/submissions/application/forms.py:628
+submissions-external-links = External links
+
+# squid/submissions/domain/forms.py:240
 submissions-field-apply = field { $field_id } must apply to at least one origin
 
-# squid/submissions/domain/forms.py:207
+# squid/submissions/domain/forms.py:208
 submissions-field-blank-label = field { $field_id } has a blank label
 
-# squid/submissions/domain/forms.py:215
+# squid/submissions/domain/forms.py:216
 submissions-field-inline-dynamic = field { $field_id } cannot have inline and dynamic options
 
-# squid/submissions/domain/forms.py:541
+# squid/submissions/domain/forms.py:548
 submissions-field-name-format = { $label } must start with a letter and contain only lowercase letters, digits, or underscores
 
-# squid/submissions/domain/normalization.py:164
+# squid/submissions/domain/normalization.py:172
 submissions-field-not-integer = validated field { $field_id } is not an integer
 
-# squid/submissions/domain/normalization.py:130, squid/submissions/domain/normalization.py:143
+# squid/submissions/domain/normalization.py:138, squid/submissions/domain/normalization.py:151
 submissions-field-not-string = validated field { $field_id } is not a string
 
-# squid/submissions/domain/forms.py:233
+# squid/submissions/domain/forms.py:234
 submissions-field-purpose = field { $field_id } must apply to at least one purpose
 
 # squid/submissions/application/finalization.py:260
@@ -5098,10 +5101,10 @@ submissions-finalization-job-missing = processing draft has no active finalizati
 # squid/submissions/application/finalization.py:266
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
-# squid/submissions/domain/finalization.py:387
+# squid/submissions/domain/finalization.py:389
 submissions-finalized-build-identity = finalized build identity is invalid
 
-# squid/submissions/domain/forms.py:317
+# squid/submissions/domain/forms.py:318
 submissions-form-revision-protocol = form revision and protocol bounds must be positive and ordered
 
 # squid/submissions/application/forms.py:385
@@ -5110,46 +5113,46 @@ submissions-i-permission-distribute = I have permission to distribute this schem
 # squid/submissions/domain/drafts.py:90
 submissions-invalid-draft-field-id = invalid draft field ID: { $field_id }
 
-# squid/submissions/domain/finalization.py:120
+# squid/submissions/domain/finalization.py:121
 submissions-invalid-submission-attention = invalid submission attention field ID: { $field_id }
 
 # squid/submissions/domain/drafts.py:259
 submissions-json-contain-too = draft JSON values contain too many nodes
 
-# squid/submissions/domain/finalization.py:411
+# squid/submissions/domain/finalization.py:413
 submissions-keys-stable-lowercase = { $label } keys must be stable lowercase identifiers
 
-# squid/submissions/domain/finalization.py:408
+# squid/submissions/domain/finalization.py:410
 submissions-keys-unique = { $label } keys must be unique
 
-# squid/submissions/domain/forms.py:161
+# squid/submissions/domain/forms.py:162
 submissions-min-items-exceed = min_items cannot exceed max_items
 
-# squid/submissions/domain/forms.py:158
+# squid/submissions/domain/forms.py:159
 submissions-min-length-exceed = min_length cannot exceed max_length
 
-# squid/submissions/domain/forms.py:151
+# squid/submissions/domain/forms.py:152
 submissions-minimum-exceed-maximum = minimum cannot exceed maximum
 
 # squid/submissions/application/forms.py:188
 submissions-name-and-credits = Name and credits
 
-# squid/submissions/domain/forms.py:156
+# squid/submissions/domain/forms.py:157
 submissions-negative = { $name } cannot be negative
 
-# squid/submissions/domain/finalization.py:199
+# squid/submissions/domain/finalization.py:200
 submissions-normalized-media-upload = normalized media upload identifiers must be unique
 
-# squid/submissions/domain/finalization.py:335
+# squid/submissions/domain/finalization.py:337
 submissions-normalized-source-version-blank = normalized source versions cannot be blank
 
-# squid/submissions/domain/finalization.py:329
+# squid/submissions/domain/finalization.py:331
 submissions-normalized-submission-provenance = normalized submission provenance is invalid
 
-# squid/submissions/domain/finalization.py:332
+# squid/submissions/domain/finalization.py:334
 submissions-normalized-submission-schema = normalized submission schema provenance is invalid
 
-# squid/submissions/domain/normalization.py:190
+# squid/submissions/domain/normalization.py:198
 submissions-not-string-list = validated field { $field_id } is not a string list
 
 # squid/submissions/domain/drafts.py:138
@@ -5167,7 +5170,7 @@ submissions-optional-name-shown = Optional. Shown next to the title generated fr
 # squid/submissions/domain/drafts.py:170
 submissions-owner-account-id = owner_account_id must be positive
 
-# squid/submissions/domain/finalization.py:354
+# squid/submissions/domain/finalization.py:356
 submissions-paper-installation-only = Only Paper submissions may retain an installation provenance ID.
 
 # squid/submissions/application/drafts.py:319
@@ -5176,7 +5179,7 @@ submissions-paper-installation-provenance-required = Paper drafts require server
 # squid/submissions/application/drafts.py:99
 submissions-paper-may-retain = Only Paper drafts may retain an installation provenance ID.
 
-# squid/submissions/application/forms.py:653
+# squid/submissions/application/forms.py:660
 submissions-propose-missing-patterns = Other patterns
 
 # squid/submissions/application/forms.py:317
@@ -5185,19 +5188,19 @@ submissions-propose-missing-restrictions = Other restrictions
 # squid/submissions/application/forms.py:374
 submissions-public-schematic-license = Schematic license
 
-# squid/submissions/domain/finalization.py:168
+# squid/submissions/domain/finalization.py:169
 submissions-public-schematic-rights-required = public schematics require a license and rights attestation
 
-# squid/submissions/domain/finalization.py:214
+# squid/submissions/domain/finalization.py:215
 submissions-ready-schematic-assessment = only a ready schematic assessment may expose an artifact ID
 
-# squid/submissions/domain/finalization.py:399
+# squid/submissions/domain/finalization.py:401
 submissions-rejected-build-submission = rejected build submission requires at least one issue
 
 # squid/submissions/application/preparation.py:45
 submissions-rejected-preparation-requirement = rejected submission preparation requires at least one issue
 
-# squid/submissions/domain/forms.py:227
+# squid/submissions/domain/forms.py:228
 submissions-repeatable-field-use = repeatable field { $field_id } must use string_list values
 
 # squid/submissions/application/forms.py:304
@@ -5206,10 +5209,10 @@ submissions-restrictions-tags = Restrictions and tags
 # squid/submissions/application/finalization.py:405
 submissions-retry-retention-limits = finalization retry and retention limits must be positive
 
-# squid/submissions/domain/finalization.py:174
+# squid/submissions/domain/finalization.py:175
 submissions-reviewer-schematics-carry = reviewer-only schematics cannot carry a public distribution grant
 
-# squid/submissions/domain/forms.py:314
+# squid/submissions/domain/forms.py:315
 submissions-schema-id-stable = schema_id must be a stable lowercase identifier
 
 # squid/submissions/domain/drafts.py:173
@@ -5218,7 +5221,7 @@ submissions-schema-revision-positive = schema_revision must be positive and revi
 # squid/submissions/application/forms.py:344
 submissions-schematic-rights-privacy = Schematic sharing
 
-# squid/submissions/domain/forms.py:264
+# squid/submissions/domain/forms.py:265
 submissions-section-blank-title = section { $section_id } has a blank title
 
 # squid/submissions/application/forms.py:180
@@ -5227,7 +5230,7 @@ submissions-show-sponsoring-server = Show the sponsoring server on this build
 # squid/submissions/application/forms.py:262
 submissions-source-version-help = The version the schematic or world capture was exported from.
 
-# squid/submissions/domain/finalization.py:366
+# squid/submissions/domain/finalization.py:368
 submissions-sponsor-installation-match-required = Sponsor attribution requires a matching Paper installation projection.
 
 # squid/submissions/application/attachments.py:102
@@ -5236,28 +5239,28 @@ submissions-staged-attachment-unavailable = The staged attachment is no longer a
 # squid/submissions/domain/drafts.py:195
 submissions-state-edited = drafts in { $current_status } state cannot be edited
 
-# squid/submissions/domain/finalization.py:140
+# squid/submissions/domain/finalization.py:141
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
 # squid/submissions/application/drafts.py:214
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
-# squid/submissions/domain/finalization.py:348
+# squid/submissions/domain/finalization.py:350
 submissions-submission-incompatible-category = { $category } submission has incompatible category details
 
-# squid/submissions/domain/finalization.py:372
+# squid/submissions/domain/finalization.py:374
 submissions-submission-retain-sponsor = A submission cannot retain a sponsor projection when attribution was not requested.
 
-# squid/submissions/domain/finalization.py:419
+# squid/submissions/domain/finalization.py:421
 submissions-submission-timings-negative = submission timings cannot be negative
 
-# squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:655
+# squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:662
 submissions-suggestions-unofficial = Not in the list? Add them here, one per line. Staff review new ones.
 
-# squid/submissions/domain/forms.py:551
+# squid/submissions/domain/forms.py:558
 submissions-unique = { $label } must be unique
 
-# squid/submissions/domain/forms.py:358
+# squid/submissions/domain/forms.py:359
 submissions-unknown-submission-category = unknown submission category: { $category }
 
 # squid/submissions/domain/drafts.py:95
@@ -5266,10 +5269,10 @@ submissions-unset-operations-carry = unset operations cannot carry a value
 # squid/submissions/application/forms.py:154
 submissions-unsupported-checked-submission = unsupported checked-in submission form revision
 
-# squid/submissions/domain/normalization.py:175
+# squid/submissions/domain/normalization.py:183
 submissions-validated-field-not = validated field { $field_id } is not a boolean
 
-# squid/submissions/domain/finalization.py:196
+# squid/submissions/domain/finalization.py:197
 submissions-verified-artifact-identifiers = verified artifact identifiers cannot be nil UUIDs
 
 # squid/submissions/application/forms.py:531

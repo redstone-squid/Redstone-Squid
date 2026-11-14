@@ -13,6 +13,7 @@ from squid.builds.domain import BuildDraft, UnresolvedTaxonomy
 from squid.core.errors import JSONValue
 from squid.submissions.application.forms import SubmissionFormService
 from squid.submissions.domain import ChoiceOption, FormManifest, SubmissionOrigin, match_choice
+from squid.submissions.domain.links import LINK_FIELDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +72,13 @@ def project_submission(
         "version_compatibility": source.version_spec,
         "completion": source.completion_time,
     }
+    if manifest.revision >= 6:
+        values.update(
+            {
+                field_id: list(dict.fromkeys(link.url for link in source.links if link.media_type == media_type))
+                for field_id, media_type in LINK_FIELDS.items()
+            }
+        )
     if category == "door":
         values.update(
             {

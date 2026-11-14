@@ -25,6 +25,7 @@ from squid.submissions.domain.finalization import (
     SubmissionSchematicVisibility,
     SubmissionTaxonomy,
 )
+from squid.submissions.domain.links import LINK_FIELDS, SubmissionLink
 from squid_i18n import md_tr
 
 
@@ -118,6 +119,13 @@ def normalize_submission(
         ),
         artifacts=readiness.artifacts,
         details=details,
+        links=tuple(
+            {
+                url: SubmissionLink(url, media_type)
+                for field_id, media_type in LINK_FIELDS.items()
+                for url in _string_tuple(answers, field_id)
+            }.values()
+        ),
         source_installation_id=source_installation_id,
         sponsor=sponsor,
     )

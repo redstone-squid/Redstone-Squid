@@ -116,7 +116,7 @@ async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None
 
     assert revision_two is not None
     assert revision_three is not None
-    assert current.revision == 5
+    assert current.revision == 6
     old_context = next(section for section in revision_two.common_sections if section.id == "provenance")
     new_context = next(section for section in revision_three.common_sections if section.id == "submission_context")
     assert (
@@ -264,3 +264,24 @@ def test_revision_four_relaxes_sizes_and_hides_the_exported_version_on_discord()
         "other", {"creators": ["Builder"], "schematic_visibility": "reviewer_only"}, origin=SubmissionOrigin.FABRIC
     )
     assert capture == {"source_version": "required"}
+
+
+def test_revision_six_adds_optional_media_links_without_changing_pinned_forms() -> None:
+    old = {field.id for field in build_submission_manifest(revision=5).fields_for("other")}
+    current = build_submission_manifest()
+    assert {"image_urls", "video_urls", "world_download_urls"}.isdisjoint(old)
+    fields = {field.id: field for field in current.fields_for("other")}
+    for field_id in ("image_urls", "video_urls", "world_download_urls"):
+        assert not fields[field_id].required
+    assert (
+        current.validate_answers(
+            "other",
+            {"image_urls": ["https://imgur.com/a/example"]},
+            origin=SubmissionOrigin.DISCORD,
+            require_complete=False,
+        )
+        == {}
+    )
+    assert current.validate_answers(
+        "other", {"image_urls": ["javascript:alert(1)"]}, origin=SubmissionOrigin.DISCORD, require_complete=False
+    ) == {"image_urls": "wrong_type"}

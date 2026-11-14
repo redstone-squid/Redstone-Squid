@@ -10,6 +10,7 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain.forms import SubmissionOrigin
+from squid.submissions.domain.links import SubmissionLink
 from squid_i18n import md_tr
 
 _STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -318,6 +319,7 @@ class NormalizedSubmission:
     sponsor: PublicSponsor | None = None
 
     credits: tuple[Credit, ...] = ()
+    links: tuple[SubmissionLink, ...] = ()
 
     @property
     def creators(self) -> tuple[str, ...]:

@@ -35,6 +35,7 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
+from squid.submissions.domain.links import SubmissionLink
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
@@ -534,3 +535,34 @@ async def test_typed_credits_survive_durable_payload_and_build_preparation() -> 
     assert isinstance(build, Build)
     assert build.credits == list(credits)
     assert build.creators_ign == ["Alex"]
+
+
+async def test_external_links_survive_payload_and_build_preparation_without_becoming_uploads() -> None:
+    links = (
+        SubmissionLink("https://imgur.com/a/example", "image"),
+        SubmissionLink("https://youtu.be/example", "video"),
+        SubmissionLink("https://example.test/world.zip", "world-download"),
+    )
+    submission = replace(
+        _submission(SubmissionCategory.DOOR),
+        links=links,
+        details=DoorSubmissionDetails(
+            SubmissionDimensions(4, 4, 1), DoorOrientation.DOOR, timing=DoorTiming(27, 25, 27, 25)
+        ),
+    )
+    encoded = encode_submission(submission)
+    assert encoded["payload_schema"] == 5
+    restored = decode_submission(encoded)
+    assert restored.links == links
+    assert restored.artifacts == VerifiedSubmissionArtifacts()
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)
+    assert isinstance(build, DoorBuild)
+    assert [(link.url, link.media_type) for link in build.links] == [(link.url, link.media_type) for link in links]
+    assert (build.normal_opening_time, build.visible_opening_time) == (27, 25)
+    assert (build.normal_closing_time, build.visible_closing_time) == (27, 25)
+
+
+@pytest.mark.parametrize("url", ["javascript:alert(1)", "file:///app/world.zip", "/relative.zip", "https://host/a b"])
+def test_external_link_payloads_reject_non_web_references(url: str) -> None:
+    with pytest.raises(ValidationError, match="absolute HTTP"):
+        SubmissionLink(url, "image")

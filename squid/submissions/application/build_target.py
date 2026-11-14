@@ -7,7 +7,7 @@ from uuid import UUID
 from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info, Status, UnresolvedTaxonomy
 from squid.builds.domain.credits import name_credits, read_credits
 from squid.builds.errors import InvalidBuildError
-from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
+from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.submissions.domain.finalization import (
     BuildSubmissionRejected,
@@ -19,6 +19,7 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
     SubmissionCategory,
 )
+from squid.submissions.domain.links import LINK_FIELDS
 from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
 from squid.versions.domain import MinecraftVersion
@@ -212,6 +213,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
         "tags": showcase_assignments,
         "extra_info": cast(Info, extra_info),
         "credits": list(submission.credits),
+        "links": [BuildLink(url=link.url, media_type=link.media_type) for link in submission.links],
         "completion_time": submission.completion,
         "description": submission.description,
         "sponsor": submission.sponsor,
@@ -318,7 +320,7 @@ def preview_build(
 
     Unlike _to_build, this accepts incomplete answers: missing values stay None, and option keys
     without an approved definition are left out. It maps fields the same way so the card matches
-    the build that finalization will create, except for media and schematics, which only attach
+    the build that finalization will create, except for uploaded media and schematics, which only attach
     on finalization.
 
     Args:
@@ -361,6 +363,13 @@ def preview_build(
         ],
         "extra_info": cast(Info, extra_info),
         "credits": read_credits(answers.get("credits", [])) or name_credits(keys("creators"), legacy=True),
+        "links": list(
+            {
+                url: BuildLink(url=url, media_type=media_type)
+                for field_id, media_type in LINK_FIELDS.items()
+                for url in keys(field_id)
+            }.values()
+        ),
         "completion_time": text("completion"),
         "description": text("description"),
     }

@@ -28,6 +28,7 @@ from squid.submissions.domain.finalization import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
+from squid.submissions.domain.links import SubmissionLink, SubmissionLinkType
 
 
 class _StrictPayloadModel(BaseModel):
@@ -164,6 +165,14 @@ class _SponsorPayload(_StrictPayloadModel):
         )
 
 
+class _LinkPayload(_StrictPayloadModel):
+    url: str
+    media_type: SubmissionLinkType
+
+    def to_domain(self) -> SubmissionLink:
+        return SubmissionLink(self.url, self.media_type)
+
+
 class _FinalizationPayloadBase(_StrictPayloadModel):
     source_draft_id: str
     owner_account_id: int
@@ -203,6 +212,9 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
     def _credits(self) -> tuple[Credit, ...]:
         return ()
 
+    def _links(self) -> tuple[SubmissionLink, ...]:
+        return ()
+
     def _to_domain(
         self,
         *,
@@ -220,6 +232,7 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
             display_name=self.display_name,
             description=self.description,
             credits=self._credits() or tuple(name_credits(self.creators, legacy=True)),
+            links=self._links(),
             capture_dimensions=self.capture_dimensions.to_domain(),
             source_version=self.source_version,
             version_compatibility=self.version_compatibility,
@@ -267,10 +280,7 @@ class FinalizationPayloadV3(_FinalizationPayloadBase):
         )
 
 
-class FinalizationPayloadV4(_FinalizationPayloadBase):
-    """Typed credits, independent of sponsor attribution."""
-
-    payload_schema: Literal[4]
+class _TypedFinalizationPayload(_FinalizationPayloadBase):
     credits: list[dict[str, JSONValue]]
     sponsor_attribution: bool
     source_installation_id: str | None = None
@@ -287,18 +297,39 @@ class FinalizationPayloadV4(_FinalizationPayloadBase):
         )
 
 
+class FinalizationPayloadV4(_TypedFinalizationPayload):
+    """Typed credits, independent of sponsor attribution."""
+
+    payload_schema: Literal[4]
+
+
+class FinalizationPayloadV5(_TypedFinalizationPayload):
+    """Typed credits and external media references, independent of uploaded artifacts."""
+
+    payload_schema: Literal[5]
+    links: list[_LinkPayload]
+
+    def _links(self) -> tuple[SubmissionLink, ...]:
+        return tuple(link.to_domain() for link in self.links)
+
+
 type FinalizationPayload = Annotated[
-    FinalizationPayloadV2 | FinalizationPayloadV3 | FinalizationPayloadV4, Field(discriminator="payload_schema")
+    FinalizationPayloadV2 | FinalizationPayloadV3 | FinalizationPayloadV4 | FinalizationPayloadV5,
+    Field(discriminator="payload_schema"),
 ]
 
 _PAYLOAD_ADAPTER = TypeAdapter(FinalizationPayload)
 
 
 def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
-    """Encode schema 3 for sponsor attribution, or schema 2 for other submissions."""
-    typed = any(credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits)
+    """Use a payload version that preserves links and credits; retain older shapes when neither needs one."""
+    typed = bool(submission.links) or any(
+        credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits
+    )
     model_type = (
-        FinalizationPayloadV4
+        FinalizationPayloadV5
+        if submission.links
+        else FinalizationPayloadV4
         if typed
         else (FinalizationPayloadV3 if submission.sponsor_attribution else FinalizationPayloadV2)
     )
@@ -306,6 +337,10 @@ def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
         document = _submission_document(submission)
         if typed:
             document.update(payload_schema=4, creators=[], credits=[credit.to_json() for credit in submission.credits])
+        if submission.links:
+            document.update(
+                payload_schema=5, links=[{"url": link.url, "media_type": link.media_type} for link in submission.links]
+            )
         payload = model_type.model_validate(document)
     except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:
         msg = "normalized submission cannot be encoded as a durable payload"

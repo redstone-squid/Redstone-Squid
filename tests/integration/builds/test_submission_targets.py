@@ -49,7 +49,9 @@ from squid.submissions.application.build_target import SubmissionBuildPreparatio
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.domain import (
     BuildSubmissionRejected,
+    DoorOrientation,
     DoorSubmissionDetails,
+    DoorTiming,
     DraftSnapshot,
     DraftStatus,
     FinalizationJobStatus,
@@ -61,6 +63,7 @@ from squid.submissions.domain import (
     SubmissionDimensions,
     SubmissionOrigin,
 )
+from squid.submissions.domain.links import SubmissionLink
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
@@ -248,7 +251,11 @@ async def _claim_submission(
     current = Instant.now()
     draft = StoredDraft(
         DraftSnapshot(
-            payload.source_draft_id, payload.owner_account_id, "build_submission.v1", 1, payload.category.value
+            payload.source_draft_id,
+            payload.owner_account_id,
+            payload.schema_id,
+            payload.schema_revision,
+            payload.category.value,
         ),
         payload.origin,
         current,
@@ -1125,3 +1132,48 @@ async def test_imported_door_with_unknown_facts_commits_and_reloads(
     assert loaded.orientation is None
     assert loaded.creators_ign == []
     assert loaded.versions == []
+
+
+async def test_external_links_and_separate_timings_survive_durable_finalization(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    owner = await seed_account_and_version(migrated_session_factory)
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    versions = VersionService(uow_factory=factory)
+    builds = BuildService(
+        BuildLockService(uow_factory=factory),
+        RestrictionService(uow_factory=factory),
+        versions,
+        NoopEmbeddings(),
+        BuildTaxonomyService(uow_factory=factory),
+        uow_factory=factory,
+    )
+    payload = replace(
+        normalized_submission(owner, uuid.uuid4(), "Java 1.21.0"),
+        category=SubmissionCategory.DOOR,
+        schema_revision=6,
+        links=(
+            SubmissionLink("https://imgur.com/a/example", "image"),
+            SubmissionLink("https://youtu.be/example", "video"),
+        ),
+        details=DoorSubmissionDetails(
+            SubmissionDimensions(4, 4, 1), DoorOrientation.DOOR, timing=DoorTiming(50400, 25, 27, 25)
+        ),
+    )
+    result = await _execute_submission(
+        SubmissionBuildPreparation(builds, NoApprovedTags(), versions), migrated_session_factory, payload
+    )
+    assert isinstance(result, FinalizedBuild)
+    loaded = await transact(factory, lambda uow: uow.builds.get_by_id(result.build_id))
+    assert isinstance(loaded, DoorBuild)
+    assert set(loaded.image_urls) == {"https://imgur.com/a/example"}
+    assert set(loaded.video_urls) == {"https://youtu.be/example"}
+    assert (loaded.normal_opening_time, loaded.visible_opening_time) == (50400, 25)
+    assert (loaded.normal_closing_time, loaded.visible_closing_time) == (27, 25)
+    async with migrated_session_factory() as session:
+        record = await session.scalar(
+            select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == payload.source_draft_id)
+        )
+        assert record is not None
+        assert record.payload is not None
+        assert record.payload["payload_schema"] == 5
