@@ -48,7 +48,7 @@ from squid.schematics.errors import (
     SchematicTooLargeError,
     SchematicWorkerCrashedError,
 )
-from squid_i18n import Text, inline_code, strong
+from squid_i18n import Text, md
 
 logger = logging.getLogger(__name__)
 
@@ -562,10 +562,7 @@ def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> 
     """Render a fidelity-loss report with one • line per entry, at most `limit` entries long."""
     if not losses:
         return Text("No fidelity loss reported.")
-    lines = [
-        Text(t"• {strong(loss.severity)} {inline_code(loss.path or loss.kind)} — {loss.detail}")
-        for loss in losses[:limit]
-    ]
+    lines = [md(t"• **{loss.severity}** `{loss.path or loss.kind}` — {loss.detail}") for loss in losses[:limit]]
     if len(losses) > limit:
         lines.append(Text(f"• …and {len(losses) - limit} more."))
     return Text.join("\n", lines)

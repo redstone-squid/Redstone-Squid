@@ -328,7 +328,8 @@ async def test_confirm_close_session_runs_after_inspector_action_commits() -> No
     assert subject.finished
     assert inspector.session_id is None
     assert inspector.confirming_session is None
-    assert inspector.notice == f"Session `{opened.session.id}` closed."
+    assert inspector.notice is not None
+    assert sl.text.source_text(inspector.notice) == f"Session `{opened.session.id}` closed."
     assert not root.finished
     await root.finish()
 

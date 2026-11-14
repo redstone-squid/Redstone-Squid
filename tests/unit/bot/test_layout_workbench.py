@@ -9,6 +9,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.layout_workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
+from squid_i18n import source_text
 from squid_reactivity import transaction
 from squid_replication import LoroBackend, Replica
 from squid_ui_discord import MessageRoot, MessageRootScheduler, Owner
@@ -123,13 +124,15 @@ async def test_inspector_captures_committed_report_and_refreshes() -> None:
         assert ui.root.plan is not None
         codes = [event.code for event in ui.root.plan.report.events]
         await ui.press("inspect")
-        assert "oversized" in preview.inspection
-        assert any(code in preview.inspection for code in codes)
+        inspection = source_text(preview.inspection)
+        assert "oversized" in inspection
+        assert any(code in inspection for code in codes)
+        assert "`squid/bot/layout_workbench.py`" in inspection
         assert_within_limits(commit_render(ui.root))
     async with sd.testing.stage(editor, owner=object()) as ui:
         await ui.press("small")
         await ui.press("inspect")
-        assert "undo=True" in editor.inspection
+        assert "undo=True" in source_text(editor.inspection)
         assert_within_limits(commit_render(ui.root))
         await ui.press("hide-inspector")
         assert editor.inspection == ""

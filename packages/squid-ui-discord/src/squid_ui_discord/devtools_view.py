@@ -240,7 +240,7 @@ class OperationalInspector(sl.Component):
     message_root_id: str | None = sl.state(None)
     session_id: str | None = sl.state(None)
     revision: int = sl.state(0)
-    notice: str | None = sl.state(None)
+    notice: sl.TextLike | None = sl.state(None)
     confirming_session: str | None = sl.state(None)
     confirming_action: str | None = sl.state(None)
     selected_records: tuple[str, ...] = sl.state(())
@@ -365,7 +365,7 @@ class OperationalInspector(sl.Component):
                         )
                     )
                 return (*children, self._controls(back=True))
-            notice = f"MessageRoot `{self.message_root_id}` is no longer live."
+            notice = sl.md(t"MessageRoot `{self.message_root_id}` is no longer live.")
         else:
             notice = None
 
@@ -430,7 +430,7 @@ class OperationalInspector(sl.Component):
                     )
                     detail_nodes.append(confirmation)
                 return (*detail_nodes, self._controls(back=True))
-            notice = f"Session `{self.session_id}` is no longer live."
+            notice = sl.md(t"Session `{self.session_id}` is no longer live.")
         else:
             notice = None
 
@@ -708,7 +708,7 @@ class OperationalInspector(sl.Component):
                 raise
             else:
                 with sl.runtime.transaction():
-                    self.notice = f"Session `{session_id}` closed."
+                    self.notice = sl.md(t"Session `{session_id}` closed.")
                     self.session_id = None
 
         self.confirming_session = None

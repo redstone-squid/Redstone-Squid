@@ -240,7 +240,7 @@ class ReviewSummary(InspectablePanel):
             return
         seat = next((seat for seat in self.room.seats if seat.user_id == user_id), None)
         if seat is None:
-            seat = Reviewer(user_id, f"<@{user_id}>")
+            seat = Reviewer(user_id, event.actor.display_name or f"User {user_id}")
         # Reviewers are participants in this room's session, not result-producing child flows.
         result = await event.context.respond(
             ReviewerPanel(self.room, seat, simulated=False),

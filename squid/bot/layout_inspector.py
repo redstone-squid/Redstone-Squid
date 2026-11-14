@@ -9,7 +9,7 @@ from squid.bot.ui import tr
 
 class InspectablePanel(sd.Screen):
     policy = sd.ResponseSpec(audience="public", live_updates=True)
-    inspection: str = sl.state("", persist=False)
+    inspection: sl.TextLike = sl.state("", persist=False)
 
     def inspection_state(self) -> str:
         """Describe this panel's meaningful application state without mutating it."""
@@ -52,11 +52,11 @@ class InspectablePanel(sd.Screen):
         decisions = "\n".join(f"• {item.code}: {item.message}" for item in events) or "No layout adaptations recorded."
         source = type(self).__module__.replace(".", "/") + ".py"
         stamp = datetime.now(UTC).strftime("%H:%M:%S UTC")
-        self.inspection = (
-            f"Captured at {stamp}. Refresh after an interaction to compare.\n"
-            f"{self.inspection_state()}\n\n"
-            f"Latest committed layout before this press:\n{decisions[:900]}\n\n"
-            f"Source: `{source}` · `{type(self).__name__}`"
+        self.inspection = sl.md(
+            t"Captured at {stamp}. Refresh after an interaction to compare.\n"
+            t"{self.inspection_state()}\n\n"
+            t"Latest committed layout before this press:\n{decisions[:900]}\n\n"
+            t"Source: `{source}` · `{type(self).__name__}`"
         )
 
     async def _hide_inspector(self, event: sl.PressEvent[sd.Request]) -> None:

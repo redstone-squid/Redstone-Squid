@@ -19,6 +19,7 @@ from squid.schematics.application import (
     SchematicService,
     SkippedRender,
 )
+from squid.schematics.application.services import summarise_losses
 from squid.schematics.domain.models import (
     SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     AutostackLattice,
@@ -29,6 +30,7 @@ from squid.schematics.domain.models import (
     SchematicLicense,
     SchematicLimits,
     SchematicVisibility,
+    VersionLossEntry,
 )
 from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
 from squid.schematics.errors import (
@@ -41,12 +43,32 @@ from squid.schematics.errors import (
     SchematicTooLargeError,
     SchematicWorkerCrashedError,
 )
+from squid_i18n import NEUTRAL, discord_text, resolve_text, source_text
 from tests.unit.schematics.fakes import (
     FakeSchematicAnalyzer,
     FakeSchematicStore,
     FakeVersionResolver,
     make_analysis,
 )
+
+
+def test_loss_summary_keeps_formatting_and_literal_report_values() -> None:
+    losses = [VersionLossEntry("1.20", "block", "Loss", "a`b", "**literal** @everyone")]
+
+    summary = summarise_losses(losses)
+
+    assert (
+        discord_text(resolve_text(summary, NEUTRAL)) == r"• **Loss** `` a`b `` — \*\*literal\*\* @" + "\u200beveryone"
+    )
+    assert source_text(summary, format="plain") == "• Loss a`b — **literal** @everyone"
+
+
+def test_loss_summary_reports_omitted_entries() -> None:
+    losses = [VersionLossEntry("1.20", "block", "Loss", "", "Unsupported block")] * 3
+
+    summary = source_text(summarise_losses(losses, limit=1), format="plain")
+
+    assert summary == "• Loss block — Unsupported block\n• …and 2 more."
 
 
 def litematic_bytes(payload: bytes = b"") -> bytes:
