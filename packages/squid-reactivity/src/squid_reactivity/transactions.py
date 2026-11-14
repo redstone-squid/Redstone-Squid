@@ -286,7 +286,8 @@ class Transaction:
     then remains available even if it raised. Hooks run after the outcome is fixed.
     """
 
-    def __init__(self, context: ActionContext) -> None:
+    def __init__(self, context: ActionContext, *, readonly: bool = False) -> None:
+        self._readonly = readonly
         self._context = context
         self._result: TransactionResult | None = None
 
@@ -299,22 +300,49 @@ class Transaction:
         return self._result
 
     def after_commit(self, callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
-        self._check_current()
-        on_transaction_commit(callback, key=key)
+        """Run after commit; callback failures cannot change the committed result."""
+        self._add_hook("commit", callback, key=key)
 
     def after_rollback(self, callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
-        self._check_current()
-        on_transaction_rollback(callback, key=key)
+        """Run after rollback; callback failures cannot change the discarded result."""
+        self._add_hook("rollback", callback, key=key)
 
     def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
-        self._check_current()
-        on_transaction_result(callback, key=key)
+        """Run after either outcome. Further writes require a new transaction."""
+        self._add_hook("result", callback, key=key)
 
-    def _check_current(self) -> None:
+    @property
+    def readonly(self) -> bool:
+        """Whether this transaction rejects state writes."""
+        return self._readonly
+
+    def has_hook(self, key: object) -> bool:
+        """Check whether this active transaction has a result callback registered under key."""
+        current = self._check_current()
+        return any(
+            registered is key
+            for hooks in (current.commit_hooks, current.rollback_hooks, current.result_hooks)
+            for registered, _ in hooks
+        )
+
+    def _add_hook(self, kind: str, callback: Callable[..., None], *, key: object | None) -> None:
+        current = self._check_current()
+        if not current.writable():
+            current.reject_stale("a result hook")
+        if key is not None and self.has_hook(key):
+            message = f"{key!r} already registered a result hook for this transaction"
+            raise RuntimeError(message)
+        hooks = {"commit": current.commit_hooks, "rollback": current.rollback_hooks, "result": current.result_hooks}[
+            kind
+        ]
+        hooks.append((key, callback))
+
+    def _check_current(self) -> _Transaction:
         current = _CURRENT.get()
         if current is None or current.handle is not self:
             message = "callbacks must be registered inside their transaction"
             raise StaleReactiveContextError(message)
+        return current
 
 
 class _Phase(Enum):
@@ -369,7 +397,7 @@ class _Transaction:
     handle: Transaction = field(init=False)
 
     def __post_init__(self) -> None:
-        self.handle = Transaction(self.context)
+        self.handle = Transaction(self.context, readonly=self.readonly)
 
     @property
     def closed(self) -> bool:

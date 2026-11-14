@@ -152,3 +152,21 @@ def test_history_relation_survives_snapshot_conversion(kind: Literal["reverses",
     assert isinstance(tx.result, TransactionCommit)
     snapshot = TransactionResultSnapshot.from_result(tx.result)
     assert snapshot.relation == relation
+
+
+def test_result_hooks_reject_a_handle_from_another_transaction() -> None:
+    with transaction("finished") as finished:
+        pass
+    with transaction("current") as current:
+        with pytest.raises(StaleReactiveContextError):
+            finished.after_commit(lambda result: None)
+        assert not current.has_hook("finished")
+
+
+def test_result_hook_keys_are_shared_across_outcomes() -> None:
+    key = object()
+    with transaction() as tx:
+        tx.after_commit(lambda result: None, key=key)
+        assert tx.has_hook(key)
+        with pytest.raises(RuntimeError, match="already registered"):
+            tx.after_rollback(lambda result: None, key=key)
