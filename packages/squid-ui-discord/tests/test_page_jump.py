@@ -66,6 +66,7 @@ async def test_jump_opens_and_updates_any_page(target, controlled: bool) -> None
     for number in (73, 100, 1, 1):
         modal = await open_jump(root)
         field = page_input(modal)
+        assert field.default is not None
         assert (
             int(field.default)
             == (component.page if controlled else root.presentation.cursor("entries").position.page) + 1
