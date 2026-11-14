@@ -818,3 +818,70 @@ async def test_expanded_editor_results_and_help_fit_together(records: bool) -> N
             ui.control(ui.key_for("advanced"))
             ui.control(ui.key_for("reset"))
             ui.assert_within_limits()
+
+
+async def test_editor_expansion_survives_switching_catalogue_tabs() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records)
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("guided-search"))
+        for tab, scope in (("all-records", "records"), ("all-builds", "builds")):
+            await ui.press(ui.key_for(tab))
+            assert screen._guided is not None
+            assert screen._guided.scope == scope
+            ui.control(ui.key_for("advanced"))
+            assert ui.control(ui.key_for("guided-search")).payload["label"] == "Edit"
+            assert ui.control(ui.key_for("guided-search")).payload["style"] == 3
+        await ui.press(ui.key_for("guided-search"))
+        await ui.press(ui.key_for("all-records"))
+        assert screen._guided is None
+        assert not any(key.endswith("advanced") for key in ui.root.snapshot().handler_keys)
+
+
+async def test_expanded_reset_is_disabled_until_query_sort_or_categories_change() -> None:
+    screen = _screen(initial_id=None)
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("guided-search"))
+        assert ui.control(ui.key_for("reset")).payload["disabled"]
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "width:3"})
+        assert not ui.control(ui.key_for("reset")).payload.get("disabled", False)
+        await ui.press(ui.key_for("reset"))
+        assert ui.control(ui.key_for("reset")).payload["disabled"]
+        await submit_search(ui, "", "-width")
+        assert not ui.control(ui.key_for("reset")).payload.get("disabled", False)
+        await ui.press(ui.key_for("reset"))
+        assert ui.control(ui.key_for("reset")).payload["disabled"]
+
+
+async def test_open_id_is_available_beside_record_tools() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.gaps.return_value = ()
+    records.title_gaps.return_value = ()
+    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    screen = _screen(initial_id=None, records=records, record_tools=tools)
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("record-tools"))
+        form = await ui.press_for_form(ui.key_for("open-id"))
+        await form.submit({"id": "7"})
+        assert screen._mode == "builds"
+        assert "Build #7" in ui.texts()
+        ui.control(ui.key_for("open-id"))
+
+
+async def test_examples_keep_help_and_editor_in_sync() -> None:
+    screen = _screen(initial_id=None)
+    async with stage(screen, owner=object()) as ui:
+        await toggle_help(ui)
+        editor = screen._guided
+        await ui.press(ui.key_for("search-reference.examples"))
+        for index in (0, 1):
+            await ui.press(ui.key_for(f"example-{index}"))
+            assert screen._show_search_help
+            assert screen._guided is editor
+            assert editor is not None
+            assert editor.query == screen._query
+            assert "## Search help" in ui.texts()
+            ui.control(ui.key_for("advanced"))
+            assert not ui.control(ui.key_for("reset")).payload.get("disabled", False)

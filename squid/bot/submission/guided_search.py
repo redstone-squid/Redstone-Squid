@@ -422,7 +422,9 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         async def picked(action: sl.ActionEvent, items: tuple[Suggestion, ...]) -> None:
             if items:
                 await on_pick(cast(sd.ActionEvent, action), items[0])
-                if self.panel != "sort":
+                if self.panel == "sort" and self.picker is not None:
+                    self.picker.picked = ()
+                else:
                     self.picker = None
 
         self.picker_title = title

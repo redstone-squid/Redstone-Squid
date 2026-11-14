@@ -680,6 +680,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         build_id = form.id
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
+        elif self._mode == "tools":
+            self._mode = "builds"
 
     async def _guided_search(self, event: sl.PressEvent) -> None:
         if self._guided is not None:
