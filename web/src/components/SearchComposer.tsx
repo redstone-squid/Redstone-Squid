@@ -61,6 +61,7 @@ export default function SearchComposer({
 
       {mode === "guided" ? (
         <form method="get" action={action}>
+          <input type="hidden" name="mode" value="guided" />
           <input type="hidden" name="q" value={query} />
           <div className="form-grid">
             <SuggestField

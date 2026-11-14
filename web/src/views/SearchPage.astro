@@ -7,13 +7,11 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, fetchSearch } from "../lib/api";
 import { localizePath, translate, type Locale } from "../lib/i18n";
 import { PAGE_PARAMS, readOffset } from "../lib/pagination";
-import { composeGuidedQuery, queryFromUrl } from "../lib/search";
+import { searchStateFromUrl } from "../lib/search";
 
 type Props = { locale: Locale };
 const { locale } = Astro.props;
-const guided = queryFromUrl(Astro.url.searchParams);
-const q = Astro.url.searchParams.get("q")?.trim() || composeGuidedQuery(guided);
-const sort = Astro.url.searchParams.get("sort")?.trim() || undefined;
+const { guided, query: q, mode: initialMode, sort } = searchStateFromUrl(Astro.url.searchParams);
 const offset = readOffset(Astro.url.searchParams);
 const canonicalUrl = new URL(Astro.url);
 for (const name of PAGE_PARAMS) canonicalUrl.searchParams.delete(name);
@@ -49,7 +47,7 @@ if (q) {
       initialGuided={guided}
       initialQuery={q}
       initialSort={sort ?? ""}
-      initialMode={q && !Object.values(guided).some(Boolean) ? "advanced" : "guided"}
+      initialMode={initialMode}
     />
     {error ? (
       <ErrorState

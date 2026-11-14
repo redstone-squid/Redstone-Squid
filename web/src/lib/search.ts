@@ -77,3 +77,29 @@ export function queryFromUrl(parameters: URLSearchParams): GuidedSearch {
     tag: value("tag"),
   };
 }
+
+/** Guided form fields remain authoritative even before the island hydrates. */
+export function searchStateFromUrl(parameters: URLSearchParams): {
+  guided: GuidedSearch;
+  query: string;
+  mode: "guided" | "advanced";
+  sort: string;
+} {
+  const guided = queryFromUrl(parameters);
+  const requestedMode = parameters.get("mode");
+  const rawQuery = parameters.get("q")?.trim() ?? "";
+  const hasGuided = Object.values(guided).some(Boolean);
+  const mode =
+    requestedMode === "guided" || requestedMode === "advanced"
+      ? requestedMode
+      : rawQuery && !hasGuided
+        ? "advanced"
+        : "guided";
+  const query =
+    requestedMode === "guided"
+      ? composeGuidedQuery(guided)
+      : requestedMode === "advanced"
+        ? rawQuery
+        : rawQuery || composeGuidedQuery(guided);
+  return { guided, query, mode, sort: parameters.get("sort")?.trim() ?? "" };
+}

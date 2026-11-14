@@ -6,6 +6,7 @@ import {
   queryFromUrl,
   quoteQueryValue,
   readPositiveInteger,
+  searchStateFromUrl,
 } from "../../src/lib/search";
 
 describe("guided query composition", () => {
@@ -42,6 +43,17 @@ describe("guided query composition", () => {
 });
 
 describe("query URL parsing", () => {
+  it("uses edited guided fields instead of stale server-rendered q, including clearing filters", () => {
+    expect(searchStateFromUrl(new URLSearchParams("mode=guided&q=old&creator=New")).query).toBe(
+      'creator:"New"',
+    );
+    expect(searchStateFromUrl(new URLSearchParams("mode=guided&q=old&creator=")).query).toBe("");
+    expect(searchStateFromUrl(new URLSearchParams("mode=advanced&q=&creator=New")).query).toBe("");
+    expect(searchStateFromUrl(new URLSearchParams("q=kind:door"))).toMatchObject({
+      query: "kind:door",
+      mode: "advanced",
+    });
+  });
   it("reads shareable guided state", () => {
     const parameters = new URLSearchParams("keywords=door&creator=Builder&maxWidth=5&tag=");
     expect(queryFromUrl(parameters)).toMatchObject({

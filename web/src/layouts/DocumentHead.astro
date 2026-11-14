@@ -1,0 +1,50 @@
+---
+import { getRuntimeConfig } from "../lib/config";
+import { localeFromPath, localizePath, translate, type Locale } from "../lib/i18n";
+type Props = {
+  title: string;
+  themeColor?: string;
+  description?: string;
+  locale?: Locale;
+  canonicalPath?: string;
+  noindex?: boolean;
+  image?: string;
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
+};
+
+const config = getRuntimeConfig();
+const locale = Astro.props.locale ?? localeFromPath(Astro.url.pathname);
+const title = `${Astro.props.title} · ${translate(locale, "site.name")}`;
+const description = Astro.props.description ?? translate(locale, "meta.defaultDescription");
+const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
+const canonical = new URL(canonicalPath, config.siteUrl).toString();
+const englishUrl = new URL(localizePath(canonicalPath, "en"), config.siteUrl).toString();
+const chineseUrl = new URL(localizePath(canonicalPath, "zh-CN"), config.siteUrl).toString();
+// Escape HTML script delimiters without changing the parsed JSON-LD value.
+const jsonLd = Astro.props.structuredData
+  ? JSON.stringify(Astro.props.structuredData).replaceAll("<", "\\u003c")
+  : undefined;
+---
+
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width" />
+<meta name="description" content={description} />
+<meta name="theme-color" content={Astro.props.themeColor ?? "#090b0c"} />
+<meta name="robots" content={Astro.props.noindex ? "noindex,follow" : "index,follow"} />
+<link rel="canonical" href={canonical} />
+<link rel="alternate" hreflang="en" href={englishUrl} />
+<link rel="alternate" hreflang="zh-CN" href={chineseUrl} />
+<link rel="alternate" hreflang="x-default" href={englishUrl} />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content={translate(locale, "site.name")} />
+<meta property="og:locale" content={locale === "en" ? "en_US" : "zh_CN"} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+{Astro.props.image && <meta property="og:image" content={Astro.props.image} />}
+<meta name="twitter:card" content={Astro.props.image ? "summary_large_image" : "summary"} />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<title>{title}</title>
+{jsonLd && <script is:inline type="application/ld+json" set:html={jsonLd} />}
