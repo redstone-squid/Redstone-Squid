@@ -264,6 +264,7 @@ class ExpressionParser:
             msg = "Expression exceeds 128 tokens."
             raise ExpressionError(msg)
         output: list[str] = []
+        depth = 0
         for index, token in enumerate(tokens):
             if index:
                 previous = tokens[index - 1]
@@ -271,8 +272,18 @@ class ExpressionParser:
                 right = token == "(" or token in self.variables or token in _FUNCTIONS
                 if left and right:
                     output.append("*")
-            output.append({"^": "**", "=": "==", ";": "and"}.get(token, token))
+            depth += (token == "(") - (token == ")")
+            if token == ";":
+                if depth:
+                    msg = "A semicolon cannot appear inside parentheses."
+                    raise ExpressionError(msg)
+                # A semicolon separates whole conditions, so it binds more loosely than
+                # "or": "a or b; c" means "(a or b) and (c)".
+                token = ") and ("
+            output.append({"^": "**", "=": "=="}.get(token, token))
         text = " ".join(output)
+        if ";" in tokens:
+            text = f"( {text} )"
         try:
             tree = ast.parse(text, mode="eval")
         except (SyntaxError, RecursionError) as error:

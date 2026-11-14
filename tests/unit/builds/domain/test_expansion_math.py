@@ -48,6 +48,14 @@ def test_domain_comparisons_and_congruences() -> None:
     assert [n for n in range(1, 20) if predicate.evaluate((n,))] == [6, 8, 16, 18]
 
 
+def test_semicolon_joins_whole_conditions() -> None:
+    # Python's "and" binds tighter than "or"; a semicolon must not.
+    predicate = ExpressionParser(("n",)).predicate("n < 5 or n > 10; n % 2 = 0")
+    assert [n for n in range(1, 15) if predicate.evaluate((n,))] == [2, 4, 12, 14]
+    with pytest.raises(ExpressionError):
+        ExpressionParser(("n",)).predicate("(n < 5; n > 2)")
+
+
 def test_unknown_identifier_is_not_split_into_parameters() -> None:
     with pytest.raises(ExpressionError):
         ExpressionParser(("x", "y")).polynomial("xy")
