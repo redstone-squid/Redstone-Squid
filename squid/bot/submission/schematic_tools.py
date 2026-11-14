@@ -2,17 +2,20 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Literal, override
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import anyio
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.lookup import pick
 from squid.bot.submission.schematics import (
     WRITABLE_EXTENSIONS,
     _describe,
     _parse_position,
 )
+from squid.bot.submission.video_editor import VideoEditor
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
 from squid.permissions.domain import PermissionNode
@@ -24,6 +27,7 @@ from squid.schematics.application import ConvertRequest, SchematicService, Store
 from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import SchematicRenderRefusedError
+from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
@@ -38,6 +42,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     _schematic_result: sl.TextLike | None = sl.state(None, opaque=True)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
     _video_job_id: int | None = sl.state(None)
+    _video_recipe: VideoRenderRequest = sl.state(VideoRenderRequest(), persist=False)
+    _convert_version: Suggestion | None = sl.state(None, persist=False)
 
     def __init__(
         self,
@@ -55,12 +61,15 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         self._show_details = show_details
         self._video_delivery_lock = asyncio.Lock()
         self._delivered_videos: set[int] = set()
+        self._video_recipes: dict[int, VideoRenderRequest] = {}
 
     @override
     def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, SchematicRequest]:
         if self._show_details is not None and not self._show_details():
             return ()
         nodes = list(self._schematic_nodes())
+        if self._convert_version is not None:
+            nodes.append(sl.note(self._convert_version.label))
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
         if self._asset is not None and self._asset.media_type.startswith("image/"):
@@ -98,6 +107,14 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
                 self._schematic_render,
                 key="schematic-render",
             ),
+            sl.action_control(
+                tr(t"schematic-choose-version = Choose conversion version"),
+                self._choose_version,
+                key="convert-version",
+            ),
+            sl.action_control(
+                tr(t"schematic-original-version = Keep source version"), self._clear_version, key="source-version"
+            ),
             sl.form(
                 tr(t"bot-submission-build-browse-convert-schematic = Convert schematic"),
                 self._convert_form(),
@@ -105,8 +122,12 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
                 on_submit=self._convert,
             ),
             videos_enabled
+            and sl.action_control(
+                tr(t"schematic-video-action = Render video"), sd.on_press(self._open_video), key="guided-video"
+            ),
+            videos_enabled
             and sl.form(
-                tr(t"schematic-video-action = Render video"),
+                tr(t"schematic-video-advanced = Advanced video recipe"),
                 _VideoForm().spec(),
                 key="schematic-video",
                 on_submit=self._video,
@@ -115,7 +136,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             and self._video_job_id is not None
             and sl.action_control(
                 tr(t"schematic-video-refresh = Check video"),
-                self._refresh_video,
+                sd.on_press(self._refresh_video),
                 key="video-refresh",
             ),
         )
@@ -123,7 +144,13 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
 
     @staticmethod
     def _convert_form() -> sl.forms.FormSpec:
-        return _ConvertForm().spec()
+        form = _ConvertForm().spec()
+        return replace(
+            form,
+            items=tuple(
+                item for item in form.items if not isinstance(item, sl.forms.FormField) or item.key != "version"
+            ),
+        )
 
     async def _primary(self, event: sl.ActionEvent, private_access: PermissionNode) -> StoredSchematic | None:
         """Return the featured schematic if the actor may use it, otherwise tell them why not.
@@ -165,6 +192,68 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             return
         self._asset = sl.file(rendered.png, filename=f"build-{self._build_id}-render.png")
 
+    async def _choose_version(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
+            self._convert_version = item
+
+        await pick(
+            event,
+            "approved_source_versions",
+            tr(t"schematic-choose-version = Choose conversion version"),
+            selected,
+        )
+
+    async def _clear_version(self, _event: sl.PressEvent) -> None:
+        self._convert_version = None
+
+    async def _open_video(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        request = event.context
+        assert request.root is not None
+        parent = request.root.component
+        assert isinstance(parent, sd.Screen)
+
+        async def selected(result: sd.ScreenResultEvent[VideoRenderRequest]) -> None:
+            await self._submit_recipe(result, result.value)
+
+        await parent.open_child(event, VideoEditor(self._video_recipe), on_result=selected)
+
+    async def _submit_recipe(self, event: sd.ActionEvent, recipe: VideoRenderRequest) -> None:
+        request = cast(SchematicRequest, event.context)
+        actor = await request.client.actors.resolve(request, refresh=True)
+        stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
+        service = self._schematics.videos
+        if stored is None or service is None or actor.account_id is None:
+            return
+        await self._queue_recipe(request, stored, actor.account_id, recipe, event)
+
+    async def _queue_recipe(
+        self,
+        request: SchematicRequest,
+        stored: StoredSchematic,
+        account_id: int,
+        recipe: VideoRenderRequest,
+        event: sl.ActionEvent,
+    ) -> None:
+        service = self._schematics.videos
+        assert service is not None
+        status = await service.submit_video(
+            self._build_id,
+            stored.id,
+            recipe,
+            account_id=account_id,
+            can_view_private=await allows(request, BUILD_SCHEMATIC_VIEW_PRIVATE),
+        )
+        self._video_recipe = recipe
+        self._video_recipes[status.id] = recipe
+        self._video_job_id = status.id
+        job_id = status.id
+        await event.notice(
+            md_tr(t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.")
+        )
+        request.client.background_tasks.start(
+            self._follow_video(request, status.id), name=f"schematic-video-{status.id}"
+        )
+
     async def _video(self, event: sd.SubmitEvent[RedstoneSquid]) -> None:
         request = event.context
         actor = await request.client.actors.resolve(request)
@@ -194,22 +283,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
                 )
             )
             return
-        status = await service.submit_video(
-            self._build_id,
-            stored.id,
-            recipe,
-            account_id=actor.account_id,
-            can_view_private=await allows(request, BUILD_SCHEMATIC_VIEW_PRIVATE),
-        )
-        self._video_job_id = status.id
-        job_id = status.id
-        await event.notice(
-            md_tr(
-                t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.",
-            )
-        )
-        host = request.client
-        host.background_tasks.start(self._follow_video(request, status.id), name=f"schematic-video-{status.id}")
+        await self._queue_recipe(request, stored, actor.account_id, recipe, event)
 
     async def _follow_video(self, request: SchematicRequest, job_id: int) -> None:
         with anyio.move_on_after(600):
@@ -243,12 +317,11 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         if status.status in ("queued", "running"):
             return False
         if status.input_candidates:
-            candidates = "; ".join(" ".join(map(str, position)) for position in status.input_candidates)
             await request.respond(
-                sl.paragraph(
-                    md_tr(
-                        t"schematic-video-input-choice = Choose an input position and request the video again: {candidates}",
-                    )
+                VideoEditor(
+                    self._video_recipes.get(job_id, self._video_recipe),
+                    candidates=status.input_candidates,
+                    submit=self._submit_recipe,
                 ),
                 audience="personal",
             )
@@ -290,7 +363,9 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         form = _ConvertForm.from_submission(event)
         file_format = form.format
         data_version = form.data_version
-        version = form.version or None
+        version = form.version or (
+            self._convert_version.value if self._convert_version is not None and data_version is None else None
+        )
         data, losses = await self._schematics.convert(
             self._build_id,
             ConvertRequest(target_format=file_format, target_data_version=data_version),

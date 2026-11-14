@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, cast, override
 
 import discord
 
@@ -11,6 +11,7 @@ import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.i18n import localization_for
 from squid.bot.ui import CardField, tr
+from squid.bot.vote_emoji_editor import VoteEmojiEditor
 from squid.core.actors import Actor
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.edits.application import EditRunner
@@ -21,7 +22,7 @@ from squid.settings.application.edits import GUILD_EDIT, guild_target
 from squid.settings.domain import ScalarChannelSetting
 from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
-from squid.voting.domain.models import VoteConfiguration
+from squid.voting.domain.models import DEFAULT_VOTE_OPTIONS, VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import NUMBER, Text, emoji_text, md_tr
 
@@ -436,16 +437,36 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
     async def _edit_emojis(self, event: sl.PressEvent) -> None:
-        if await self._settings.may(event, SETTINGS_VOTING_EDIT):
-            kind = self.kind.value
-            await event.present_form(
-                replace(
-                    _VoteEmojisForm(aliases=self.emoji_preset_text()).spec(),
-                    title=md_tr(t"bot-settings-view-vote-emojis = {kind} vote emojis"),
-                ),
-                key="vote-emojis",
-                on_submit=self._emoji_form_submitted,
+        if not await self._settings.may(event, SETTINGS_VOTING_EDIT):
+            return
+        snapshot = self._settings.snapshot
+        assert snapshot is not None
+        revision, kind = self._settings.revision, self.kind
+        before = snapshot.voting[kind]
+        options = (
+            before.preset.options
+            if before.preset is not None
+            else (
+                tuple(replace(option, guild_id=self._guild.id) for option in DEFAULT_VOTE_OPTIONS)
+                if kind is not VoteKind.GENERIC
+                else ()
             )
+        )
+        source = cast(sd.PressEvent, event)
+        assert source.context.root is not None
+        parent = source.context.root.component
+        assert isinstance(parent, sd.Screen)
+
+        async def selected(result: sd.ScreenResultEvent[tuple[VoteOption, ...]]) -> None:
+            if not await self._settings.may(result, SETTINGS_VOTING_EDIT):
+                return
+            after = replace(before, preset=EmojiPreset(self._guild.id, kind, result.value))
+            values = snapshot.model_copy(update={"voting": snapshot.voting | {kind: after}})
+            await self._settings.edits.bind(GUILD_EDIT, guild_target(self._guild.id), revision).save(
+                EditValues.of({"voting": values.model_dump(mode="json")["voting"]}), KIND_LABELS[kind]
+            )
+
+        await parent.open_child(source, VoteEmojiEditor(self._guild, kind, options), on_result=selected)
 
     async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
         if not await self._settings.may(event, SETTINGS_VOTING_EDIT):

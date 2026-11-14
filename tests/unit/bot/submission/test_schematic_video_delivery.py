@@ -9,8 +9,10 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.schematic_tools import SchematicTools, _video_failure_reason
+from squid.bot.submission.video_editor import VideoEditor
 from squid.core.actors import Actor
 from squid.schematics.application.services import SchematicService
+from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
 from squid_ui.text import source_text
 from squid_ui_discord.testing import InteractionHarness
@@ -207,3 +209,25 @@ async def test_schematic_results_preview_images_and_download_schematics(
                 file.close()
     finally:
         await scope.close()
+
+
+async def test_ambiguous_inputs_reopen_the_matching_job_recipe(delivery: tuple[SchematicTools, Mock, Mock]) -> None:
+    component, request, service = delivery
+    original = VideoRenderRequest(duration_ticks=200, orbit_degrees=45)
+    component._video_recipes[41] = original
+    component._video_recipe = VideoRenderRequest(duration_ticks=60)
+    service.get_video.return_value = VideoStatus(
+        id=41,
+        build_id=7,
+        schematic_id=1,
+        status="failed",
+        error="ambiguous_simulation_input",
+        input_candidates=((1, 2, 3), (4, 5, 6)),
+    )
+    assert await component._deliver_video(request, 41)
+    screen = request.respond.call_args.args[0]
+    assert isinstance(screen, VideoEditor)
+    assert screen.recipe == original
+    assert screen.candidates is not None
+    assert request.respond.call_args.kwargs["audience"] == "personal"
+    service.open_video_content.assert_not_awaited()
