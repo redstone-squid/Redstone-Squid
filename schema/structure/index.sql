@@ -31,6 +31,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/FUNCTIONS/get_quantified_version_names.sql
 \ir public/FUNCTIONS/publish_domain_event.sql
 \ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
+\ir public/TRIGGER_FUNCTIONS/reject_door_range_snapshot_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_submission_finalization_input_update.sql
 \ir public/FUNCTIONS/upsert_discord_sync_request.sql
 \ir public/FUNCTIONS/upsert_search_projection_request.sql
@@ -75,6 +76,11 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/domain_event_deliveries.sql
 \ir public/TABLES/domain_events.sql
 \ir public/SEQUENCES/domain_events_id_seq.sql
+\ir public/TABLES/door_range_registrations.sql
+\ir public/SEQUENCES/door_range_registrations_id_seq.sql
+\ir public/TABLES/door_range_runs.sql
+\ir public/SEQUENCES/door_range_runs_id_seq.sql
+\ir public/TABLES/door_range_snapshots.sql
 \ir public/TABLES/door_timing_variants.sql
 \ir public/SEQUENCES/door_timing_variants_id_seq.sql
 \ir public/TABLES/doors.sql
