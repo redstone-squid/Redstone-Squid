@@ -108,7 +108,7 @@ from squid_ui.primitives.constraints import (
     Truncate,
 )
 from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.text import TextLike, resolve_text, timestamp_text
+from squid_ui.text import Text, TextLike, resolve_text, timestamp_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -772,6 +772,12 @@ def semantic_offers[RenderTargetT, ContextT](
             ),
         )
 
+    if isinstance(value, primitive.Lines) and isinstance(value.overflow, Alts):
+        value = primitive.Text(
+            Text.join(value.join, (line.primary if isinstance(line, Alt) else line for line in value.lines)),
+            overflow=value.overflow,
+            priority=value.priority,
+        )
     if isinstance(value, primitive.Lines):
         overflow = Spill() if spill else Truncate(keep) if keep is not None else value.overflow
         if not native_controls or not isinstance(overflow, Never | Truncate | Spill | Drop | Condense | Paginate):
@@ -799,8 +805,6 @@ def semantic_offers[RenderTargetT, ContextT](
         payload = line_payload(items)
         line_priority = value.priority
         pagination = overflow if isinstance(overflow, Paginate) else None
-        if pagination is not None and pagination.key is None:
-            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "unkeyed primitive pagination")
 
         def line_offer(
             lines: tuple[ReferencedText, ...],
@@ -826,14 +830,14 @@ def semantic_offers[RenderTargetT, ContextT](
             sequence = TextSequenceRealization(tuple(fragments_items), separator=line_separator)
             contract = None
             if pagination is not None:
-                assert pagination.key is not None
+                cursor_key = pagination.key or region_cursor_key(occurrence)
                 contract = RegionContract(
-                    pagination.key,
-                    RegionNavigation(occurrence, disabled_controls, pagination.footer, pagination.page, pagination.key),
+                    cursor_key,
+                    RegionNavigation(occurrence, disabled_controls, pagination.footer, pagination.page, cursor_key),
                     min_fill=pagination.min_fill,
                     widows=pagination.widows,
                     owner=pagination.page,
-                    cursor_key=pagination.key,
+                    cursor_key=cursor_key,
                     required_ends=tuple(required),
                 )
             return RealizationOffer(
@@ -987,8 +991,7 @@ def semantic_offers[RenderTargetT, ContextT](
         elif isinstance(value, primitive.Code):
             payload = replace(payload, role="code", language=value.lang)
         if isinstance(overflow, Paginate):
-            if overflow.key is None:
-                return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "unkeyed primitive pagination")
+            cursor_key = overflow.key or region_cursor_key(occurrence)
             nodes = payload.nodes
             if isinstance(value, primitive.Code):
                 nodes = (tree.literal("".join(tree.plain(node) for node in nodes).replace("```", "``\u200b`")),)
@@ -1047,12 +1050,12 @@ def semantic_offers[RenderTargetT, ContextT](
                         continuations=True,
                     ),
                     region=RegionContract(
-                        overflow.key,
-                        RegionNavigation(occurrence, disabled_controls, overflow.footer, overflow.page, overflow.key),
+                        cursor_key,
+                        RegionNavigation(occurrence, disabled_controls, overflow.footer, overflow.page, cursor_key),
                         min_fill=overflow.min_fill,
                         widows=overflow.widows,
                         owner=overflow.page,
-                        cursor_key=overflow.key,
+                        cursor_key=cursor_key,
                         required_ends=tuple(ends),
                     ),
                 ),

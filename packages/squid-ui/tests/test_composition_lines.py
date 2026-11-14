@@ -17,7 +17,7 @@ from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Alt, Condense, Drop, Never, Paginate, Truncate
+from squid_ui.primitives.constraints import Alt, Condense, Drop, Never, Paginate, Truncate, alts
 from squid_ui.target_types import DiscordAdapter
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-lines.discord", "1")
@@ -187,3 +187,39 @@ def test_line_replacement_does_not_outrank_lossless_region_pages() -> None:
         page = result.for_page({identity: index})
         assert expected in scene.Codec.dumps(page.scene)
         assert not page.report.events
+
+
+@pytest.mark.parametrize(
+    "target", [components_v2_target(ADAPTER), classic_target(ADAPTER)], ids=lambda target: target.id
+)
+def test_unkeyed_native_pagers_have_independent_positional_cursors(target: Target[Any, Any, Any, Any]) -> None:
+    result = plan(
+        sl.stack(
+            native.Lines(("one", "two"), overflow=Paginate(per=1)),
+            native.Text("alpha\nbeta", overflow=Paginate(per=1)),
+        ),
+        target=target,
+    )
+    assert result.allocation is not None
+    regions = tuple(result.allocation.regions.items())
+    assert len(regions) == 2
+    assert regions[0][1].cursor_key != regions[1][1].cursor_key
+    assert all(region.cursor_key.startswith("$/") for _, region in regions)
+    page = result.for_page({regions[0][0]: 1, regions[1][0]: 0})
+    wire = scene.Codec.dumps(page.scene)
+    assert "two" in wire and "alpha" in wire
+    assert '"one' not in wire and "beta" not in wire
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+def test_collection_replacement_has_one_source_without_inventing_line_correspondence(
+    target: Target[Any, Any, Any, Any],
+) -> None:
+    node = native.Lines(("long first entry", "long second entry"), overflow=alts("replacement"))
+    result = plan(node, target=target)
+    assert result.allocation is not None
+    assert "replaceme…" in scene.Codec.dumps(result.scene)
+    assert {event.message for event in result.report.events} == {"Replacement", "Shortening"}
+    assert len({event.path for event in result.report.events}) == 1
+    with pytest.raises(JointInfeasibleError):
+        plan(node, target=target, strict=True)

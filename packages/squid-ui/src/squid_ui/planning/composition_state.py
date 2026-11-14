@@ -204,7 +204,9 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                 unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
             ):
                 assert isinstance(unit.value.overflow, Paginate)
-                key = unit.value.overflow.key
+                key = unit.value.overflow.key or region_cursor_key(
+                    SemanticOccurrence(OccurrenceId(reference.keys), graph, reference)
+                )
             else:
                 key = (
                     region_cursor_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))

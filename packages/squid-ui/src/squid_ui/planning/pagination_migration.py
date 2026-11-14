@@ -220,10 +220,14 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     msg = "embed text cannot contain pager controls; paginate the enclosing cards"
                     raise UnsupportedSemanticError(msg)
                 if isinstance(node, primitive.Lines) and isinstance(
-                    overflow, Never | Truncate | Spill | Drop | Condense
+                    overflow, Never | Truncate | Spill | Drop | Condense | Alts
                 ):
                     steps = sum(len(item.fallbacks) if isinstance(item, Alt) else 0 for item in node.lines)
                     combinations = max(combinations, len(node.lines) + steps)
+                    if isinstance(overflow, Alts):
+                        pageable = True
+                        text_choices += min(text_ladder, len(overflow.ladder[-1]))
+                        combinations = max(combinations, text_choices + len(overflow.ladder))
                     return node
                 if isinstance(overflow, Never | Truncate | Alts | Drop | Spill | Condense) and not isinstance(
                     node, primitive.Lines
@@ -240,9 +244,6 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     raise UnsupportedSemanticError(msg)
                 if overflow.min_fill and not isinstance(limits, V2Limits):
                     msg = "primitive min_fill requires one shared character axis"
-                    raise UnsupportedSemanticError(msg)
-                if overflow.key is None:
-                    msg = "unkeyed primitive pagination"
                     raise UnsupportedSemanticError(msg)
                 pageable = True
                 if isinstance(node, primitive.Lines):
