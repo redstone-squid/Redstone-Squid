@@ -237,6 +237,8 @@ class FfmpegMediaNormalizer:
             poster_temporary,
         ):
             audio_arguments = ("-an",) if request.strip_audio else ("-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k")
+            # A frame-rate-based encoder clock can merge closely spaced VFR timestamps.
+            # Keep the demuxer's precision as well as passing each frame through.
             await self._run(
                 self._ffmpeg,
                 (
@@ -262,6 +264,8 @@ class FfmpegMediaNormalizer:
                     "yuv420p",
                     "-fps_mode",
                     "passthrough",
+                    "-enc_time_base:v",
+                    "demux",
                     "-movflags",
                     "+faststart",
                     "-fflags",
@@ -535,12 +539,12 @@ def _validate_video_output(source: MediaProbe, output: MediaProbe, *, strip_audi
     expected_audio = source.has_audio and not strip_audio
     duration_tolerance = max(250, _frame_duration_milliseconds(source) * 2)
     # Average rates depend on the muxer's first/last sample durations. Allow at most
-    # one frame of rate drift over the clip; dimensions, duration and counts still apply.
+    # one frame of rate drift over the common interval; probe durations round up to milliseconds.
     rate_difference = abs(
         Fraction(output.frame_rate_numerator, output.frame_rate_denominator)
         - Fraction(source.frame_rate_numerator, source.frame_rate_denominator)
     )
-    clip_duration = max(source.duration_milliseconds or 0, output.duration_milliseconds or 0)
+    clip_duration = max(1, min(source.duration_milliseconds or 0, output.duration_milliseconds or 0) - 1)
     if (
         output.video_codec != "h264"
         or "mp4" not in output.container_names

@@ -1,5 +1,7 @@
+import json
 import shutil
 import subprocess
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -97,7 +99,51 @@ async def test_video_preserves_dimensions_and_fps_with_optional_audio_removal(
     assert b"private-marker" not in metadata
 
 
-def _generate_video(destination: Path) -> None:
+async def test_variable_rate_video_preserves_closely_spaced_frame_timestamps(tmp_path: Path) -> None:
+    source = tmp_path / "variable.mp4"
+    _generate_video(source, variable_timestamps=True)
+    service = MediaNormalizationService(FfmpegMediaNormalizer())
+    result = await service.normalize(
+        MediaNormalizationRequest(
+            kind=MediaKind.VIDEO,
+            source_path=source,
+            output_path=tmp_path / "normalized.mp4",
+            poster_path=tmp_path / "poster.jpg",
+        )
+    )
+    assert FFPROBE is not None
+    timestamps: list[list[Decimal]] = []
+    for path in (source, result.output_path):
+        frames = subprocess.run(
+            [
+                FFPROBE,
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "frame=best_effort_timestamp_time",
+                "-of",
+                "json",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        timestamps.append(
+            [Decimal(frame["best_effort_timestamp_time"]) for frame in json.loads(frames.stdout)["frames"]]
+        )
+
+    original, normalized = timestamps
+    assert len(original) == len(normalized) == 24
+    assert 0 < original[1] - original[0] < Decimal("0.001")
+    for index in range(1, len(original)):
+        original_interval = original[index] - original[index - 1]
+        normalized_interval = normalized[index] - normalized[index - 1]
+        assert abs(original_interval - normalized_interval) <= Decimal("0.000001")
+
+
+def _generate_video(destination: Path, *, variable_timestamps: bool = False) -> None:
     assert FFMPEG is not None
     encoders = subprocess.run(
         [FFMPEG, "-hide_banner", "-encoders"],
@@ -107,6 +153,18 @@ def _generate_video(destination: Path) -> None:
     )
     if "libx264" not in encoders.stdout:
         pytest.skip("ffmpeg lacks the libx264 encoder")
+    timestamp_arguments = (
+        [
+            "-vf",
+            r"settb=expr=1/60000,setpts=if(eq(N\,1)\,1\,N*2500)",
+            "-fps_mode",
+            "passthrough",
+            "-enc_time_base:v",
+            "1:60000",
+        ]
+        if variable_timestamps
+        else []
+    )
     process = subprocess.run(
         [
             FFMPEG,
@@ -126,6 +184,7 @@ def _generate_video(destination: Path) -> None:
             "-shortest",
             "-metadata",
             "comment=private-marker",
+            *timestamp_arguments,
             "-c:v",
             "libx264",
             "-pix_fmt",
