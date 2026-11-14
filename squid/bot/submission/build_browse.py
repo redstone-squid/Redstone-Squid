@@ -608,14 +608,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                     ),
                 )
             )
-        else:
-            nodes.append(
-                sl.note(
-                    tr(
-                        t"build-filter-hint = Use Search & filters for keywords, filters, sorting, and query expressions."
-                    )
-                )
-            )
         if self._show_search_help:
             nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
         return nodes
