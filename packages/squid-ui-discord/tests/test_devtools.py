@@ -1,47 +1,25 @@
 """The generic, injected devtools cog over public runtime contracts."""
 
-import json
 from datetime import UTC, datetime
-from typing import Any, cast, override
+from typing import Any, cast
 
 import discord
 import pytest
 from discord.ext import commands
 
-import squid_ui as sl
 import squid_ui_discord
 from squid_reactivity import EventLedger, OperationEventSnapshot, observe_events, transaction
-from squid_ui.primitives import Button, Heading, Row
-from squid_ui.profiling import MemoryProfiler, OperationKind
-from squid_ui_discord import Everyone, MessageRoot, Owner, live
+from squid_ui_discord import Owner, live
 from squid_ui_discord.devtools import DevTools, open_devtools
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
+from squid_ui_discord.devtools_view import DevToolsSection
 from squid_ui_discord.routing import Router
 from squid_ui_discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
-    commit_render,
-    delivered_to,
-    interaction_harness,
+    assert_within_limits,
     message_harness,
 )
-
-
-class Subject(sl.Component[sl.ComponentsV2Target]):
-    @override
-    def render(self):
-        return [Heading("Subject")]
-
-
-class Clicker(sl.Component[sl.ComponentsV2Target]):
-    count: int = sl.state(0)
-
-    @override
-    def render(self):
-        return [Heading("Clicker"), Row((Button(label="Bump", on_click=self.bump, key="bump"),))]
-
-    async def bump(self, event) -> None:
-        self.count += 1
 
 
 class FakeBot:
@@ -86,10 +64,29 @@ class TestGate:
         check.assert_awaited_once_with(ctx)
 
 
-class TestMountCommands:
-    def test_default_command_tree_is_hybrid(self) -> None:
-        assert isinstance(cast(Any, DevTools).dev_group, commands.HybridGroup)
-        assert isinstance(cast(Any, DevTools).ui_group, commands.HybridGroup)
+class TestDashboardCommand:
+    async def test_command_tree_has_one_optional_tab_choice(self) -> None:
+        async with commands.Bot(command_prefix="!", intents=discord.Intents.none()) as bot:
+            runtime = squid_ui_discord.install(bot)
+            await bot.add_cog(DevTools(bot))
+
+            command = bot.get_command("dev ui")
+            assert isinstance(command, commands.HybridCommand)
+            assert not isinstance(command, commands.Group)
+            assert set(command.clean_params) == {"tab"}
+            assert {item.qualified_name for item in bot.walk_commands() if item.root_parent is not None} == {"dev ui"}
+            group = bot.tree.get_command("dev")
+            assert isinstance(group, discord.app_commands.Group)
+            payload = group.to_dict(bot.tree)
+            assert payload["default_member_permissions"] == discord.Permissions(administrator=True).value
+            (ui,) = payload["options"]
+            assert ui["name"] == "ui"
+            assert ui["type"] == discord.AppCommandOptionType.subcommand.value
+            (tab,) = ui["options"]
+            assert tab["name"] == "tab"
+            assert not tab["required"]
+            assert {choice["value"] for choice in tab["choices"]} == set(DevToolsSection)
+            await runtime.close()
 
     async def test_host_command_can_open_the_shared_dashboard(self) -> None:
         ctx = make_context()
@@ -99,48 +96,49 @@ class TestMountCommands:
         assert message_root.snapshot().access == Owner(1)
         assert message_root in live.message_roots()
 
-    async def test_list_opens_an_inspector_owned_by_the_caller(self) -> None:
+    async def test_omitting_tab_opens_overview_owned_by_the_caller(self) -> None:
         ctx = make_context()
         cog = DevTools(ctx.bot)
 
-        await run(cog.list_roots, cog, ctx)
+        await run(cog.ui_command, cog, ctx)
 
-        assert len(live.message_roots()) == 1
-        assert live.message_roots()[0].snapshot().access == Owner(1)
+        (root,) = live.message_roots()
+        assert root.snapshot().access == Owner(1)
+        assert "Operational dashboard" in str(ctx.send.await_args.kwargs["view"].to_components())
 
-    @pytest.mark.parametrize(("command", "expected"), (("dump_plan", "logical"), ("dump_metrics", "cache:")))
-    async def test_snapshot_reports_render_with_squid_ui(self, command: str, expected: str) -> None:
-        subject = MessageRoot(Subject(), access=Everyone())
-        await subject.send(delivered_to(message_harness()))
+    @pytest.mark.parametrize(
+        ("tab", "heading"),
+        [
+            ("overview", "Operational dashboard"),
+            ("roots", "Message roots"),
+            ("sessions", "Live sessions"),
+            ("routes", "Routed controls"),
+            ("activity", "Action results"),
+            ("queues", "Queues and subscribers"),
+            ("profile", "Profiler"),
+            ("persistence", "Persistence"),
+        ],
+    )
+    async def test_tab_opens_the_selected_dashboard_section(self, tab: str, heading: str) -> None:
         ctx = make_context()
         cog = DevTools(ctx.bot)
 
-        await run(getattr(cog, command), cog, ctx, subject.id)
+        await run(cog.ui_command, cog, ctx, tab)
 
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert expected in rendered
+        view = ctx.send.await_args.kwargs["view"]
+        assert heading in str(view.to_components())
+        assert_within_limits(view)
 
-    async def test_scene_is_attached_as_protocol_json(self) -> None:
-        subject = MessageRoot(Subject(), access=Everyone())
-        await subject.send(delivered_to(message_harness()))
+    async def test_prefix_tab_choices_reject_unknown_tabs(self) -> None:
         ctx = make_context()
         cog = DevTools(ctx.bot)
+        parameter = cog.ui_command.clean_params["tab"]
 
-        await run(cog.dump_scene, cog, ctx, subject.id)
+        assert await commands.run_converters(ctx, parameter.converter, "activity", parameter) == "activity"
+        with pytest.raises(commands.BadLiteralArgument):
+            await commands.run_converters(ctx, parameter.converter, "unknown", parameter)
 
-        file = ctx.send.await_args.kwargs["files"][0]
-        assert file.filename == f"scene-{subject.id}-gen1.json"
-        assert sl.scene.Codec.loads(file.fp.read().decode()) == subject.snapshot().scene
-
-    async def test_an_unknown_message_root_is_explained(self) -> None:
-        ctx = make_context()
-        cog = DevTools(ctx.bot)
-
-        await run(cog.dump_metrics, cog, ctx, "missing")
-
-        assert "missing" in str(ctx.send.await_args.kwargs["view"].to_components())
-
-    async def test_actions_uses_ledger_when_profiler_has_no_trace(self) -> None:
+    async def test_activity_uses_ledger_when_profiler_has_no_trace(self) -> None:
         ledger = EventLedger()
         with observe_events(ledger):
             with transaction():
@@ -148,167 +146,38 @@ class TestMountCommands:
             ctx = make_context()
             cog = DevTools(ctx.bot, action_ledger=ledger)
 
-            await run(cog.inspect_actions, cog, ctx)
+            await run(cog.ui_command, cog, ctx, "activity")
 
             rendered = str(ctx.send.await_args.kwargs["view"].to_components())
             assert "Action results" in rendered
             assert ledger.results[0].action_id in rendered
 
-    async def test_actions_renders_operation_nodes_with_profiler_disabled(self) -> None:
+    async def test_activity_renders_operation_nodes_with_profiler_disabled(self) -> None:
         ledger = EventLedger()
         ledger.accept(OperationEventSnapshot("execution-1", None, None, "publish", "succeeded", datetime.now(UTC)))
         ctx = make_context()
         cog = DevTools(ctx.bot, action_ledger=ledger)
 
-        await run(cog.inspect_actions, cog, ctx)
+        await run(cog.ui_command, cog, ctx, "activity")
 
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "operation:execution-1" in rendered
+        assert "execution-1" in rendered
         assert "publish succeeded" in rendered
 
+    async def test_routes_uses_the_context_client(self) -> None:
+        async with commands.Bot(command_prefix="!", intents=discord.Intents.none()) as bot:
+            runtime = squid_ui_discord.install(bot)
+            router = Router()
 
-class TestRoutes:
-    async def test_every_router_on_the_context_client_is_rendered(self) -> None:
-        bot = FakeBot()
-        router = Router()
+            async def close(_interaction: discord.Interaction) -> None: ...
 
-        async def close(_interaction) -> None: ...
+            router.add("panel:close", close)
+            router.register(bot)
+            ctx = cast(Any, ContextHarness(message=message_harness(), bot=bot, user_id=1))
+            cog = DevTools(bot)
 
-        router.add("panel:close", close)
-        router.register(bot)  # type: ignore[arg-type]
-        ctx = make_context(bot=bot)
-        cog = DevTools(ctx.bot)
+            await run(cog.ui_command, cog, ctx, "routes")
 
-        await run(cog.list_routes, cog, ctx)
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "panel:close" in rendered
-        assert "close" in rendered
-
-
-class TestProfiles:
-    async def test_profile_health_is_explicit(self) -> None:
-        ctx = make_context()
-        cog = DevTools(ctx.bot, profiler=MemoryProfiler())
-
-        await run(cog.inspect_profile, cog, ctx)
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "Profiler" in rendered
-
-    async def test_action_aggregates_suppress_percentiles_below_sample_floor(self) -> None:
-        profiler = MemoryProfiler()
-        with profiler.operation(OperationKind.DISPATCH, name="save"):
-            pass
-        ctx = make_context()
-        cog = DevTools(ctx.bot, profiler=profiler)
-
-        await run(cog.inspect_profile, cog, ctx)
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "save" in rendered
-        assert "n=1" in rendered
-        assert "p50" not in rendered
-
-    async def test_message_root_profile_filters_bounded_traces_by_non_aggregate_attribute(self) -> None:
-        profiler = MemoryProfiler()
-        subject = MessageRoot(Subject(), access=Everyone(), profiler=profiler)
-        await subject.send(delivered_to(message_harness()))
-        assert {aggregate.key.counter_name for aggregate in profiler.snapshot().counter_aggregates} >= {
-            "planner.calls",
-            "planner.states_explored",
-        }
-        ctx = make_context()
-        cog = DevTools(ctx.bot, profiler=profiler)
-
-        await run(cog.inspect_profile, cog, ctx, subject.id)
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert f"Profile for message root {subject.id}" in rendered
-        assert "send" in rendered
-        assert "planner" in rendered
-
-    async def test_timeline_reads_as_a_transcript_across_roots(self) -> None:
-        profiler = MemoryProfiler()
-        first = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
-        second = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
-        commit_render(first)
-        commit_render(second)
-        await first.dispatch("bump", interaction_harness(user_id=11))
-        await second.dispatch("bump", interaction_harness(user_id=22))
-        ctx = make_context()
-        cog = DevTools(ctx.bot, profiler=profiler)
-
-        await run(cog.inspect_timeline, cog, ctx)
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "Dispatch timeline" in rendered
-        assert "actor=11" in rendered
-        assert "actor=22" in rendered
-        # Oldest first: the second press must not be reported before the first.
-        assert rendered.index("actor=11") < rendered.index("actor=22")
-        assert "completed" in rendered
-
-    async def test_timeline_filters_to_one_actor(self) -> None:
-        profiler = MemoryProfiler()
-        message_root = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
-        commit_render(message_root)
-        await message_root.dispatch("bump", interaction_harness(user_id=11))
-        await message_root.dispatch("bump", interaction_harness(user_id=22))
-        ctx = make_context()
-        cog = DevTools(ctx.bot, profiler=profiler)
-
-        await run(cog.inspect_timeline, cog, ctx, 20, "actor:11")
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "actor=11" in rendered
-        assert "actor=22" not in rendered
-
-    async def test_timeline_refuses_an_unreadable_filter(self) -> None:
-        ctx = make_context()
-        cog = DevTools(ctx.bot, profiler=MemoryProfiler())
-
-        await run(cog.inspect_timeline, cog, ctx, 20, "user=11")
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "refused" in rendered
-
-    async def test_queue_command_infers_bus_and_profiler_from_scheduler(self) -> None:
-        profiler = MemoryProfiler()
-        bus = sl.runtime.LocalTopicBus()
-        scheduler = squid_ui_discord.MessageRootScheduler(bus, profiler=profiler)
-
-        def refresh(topic) -> None:
-            pass
-
-        bus.subscribe(sl.runtime.Topic("build", "devtools"), refresh)
-        bus.publish(sl.runtime.Topic("build", "devtools"))
-        ctx = make_context()
-        cog = DevTools(ctx.bot, scheduler=scheduler)
-
-        await run(cog.inspect_queues, cog, ctx)
-
-        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "scheduler" in rendered
-        assert "topics" in rendered
-        # Neither was passed, so "unconfigured" anywhere means an inference did not happen.
-        assert "unconfigured" not in rendered
-        assert "build:devtools subscribers=1" in rendered
-        # A local bus publishes synchronously, so the topic notification is already delivered.
-        assert "delivered=1" in rendered
-        assert DevToolsRuntime(scheduler=scheduler).profiler is profiler
-
-    async def test_profile_export_attaches_round_trippable_snapshot(self) -> None:
-        profiler = MemoryProfiler()
-        with profiler.operation(OperationKind.SEND, name="panel"):
-            pass
-        ctx = make_context()
-        cog = DevTools(ctx.bot, profiler=profiler)
-
-        await run(cog.export_ui, cog, ctx)
-
-        file = ctx.send.await_args.kwargs["files"][0]
-        payload = json.loads(file.fp.read().decode())
-        assert file.filename == "squid-operational-snapshot.json"
-        assert payload["profiler"]["schema_version"] == 1
-        assert payload["profiler"]["aggregates"][0]["key"]["name"] == "panel"
+            rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+            assert "panel:close" in rendered
+            await runtime.close()

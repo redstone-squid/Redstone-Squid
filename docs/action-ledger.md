@@ -237,7 +237,7 @@ define codecs, redaction, actor privacy, access, encryption, retention, and dele
 `DurableOutcomeSink` with a `DurableOutcomePolicy` to make those host decisions inspectable; values remain
 summary-only in schema 1.
 
-DevTools owns a bounded ledger and exposes it with `dev ui actions [limit]`; it remains available when
+DevTools owns a bounded ledger and exposes it in the Activity tab (`/dev ui tab:activity`); it remains available when
 profiler sampling is disabled or detailed traces have been evicted.
 
 See [the breaking migration](https://github.com/redstone-squid/Redstone-Squid/blob/4b31ebd3d5fbdd0bc5adc8ce35448e1825916a00/docs/plan68-migration.md) for direct old/new call-site examples.

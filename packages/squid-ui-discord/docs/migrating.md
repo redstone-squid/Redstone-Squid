@@ -313,8 +313,12 @@ runtime = sd.devtools_runtime.DevToolsRuntime(
 )
 ```
 
-The bundled Cog now exposes prefix `dev ui` and a hybrid `/dev ui` command tree. A custom command can call
-`sd.open_devtools(ctx, runtime=runtime)` instead of installing that Cog.
+The bundled Cog exposes one hybrid `/dev ui [tab]` command (prefix: `dev ui [tab]`).
+The optional `tab` defaults to `overview`; choose `roots`, `sessions`, `routes`, `activity`,
+`queues`, `profile`, or `persistence` to start elsewhere. Former subcommands are replaced by
+the dashboard controls: select roots and sessions inside their tabs, find action results
+and dispatches under Activity, and download the snapshot from Overview. A custom command
+can call `sd.open_devtools(ctx, runtime=runtime)` instead of installing that Cog.
 
 `Screen[OwnerT]` becomes `Screen[None, OwnerT]`: the first type argument now describes the screen's
 result. Presentation still goes through `Request.respond(ScreenInstance())`. `opening` is that

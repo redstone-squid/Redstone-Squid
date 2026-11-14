@@ -21,7 +21,12 @@ import squid_ui as sl
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_ui_discord
 from squid_reactivity.diagnostics import (
+    ActionResultSnapshot,
+    CausalEventSnapshot,
+    ContinuationFailureSnapshot,
     EventLedger,
+    OperationEventSnapshot,
+    ResourceEventSnapshot,
 )
 from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
 from squid_ui_discord.devtools_presentation import recovery_summary, scheduler_summary, topic_summary
@@ -841,10 +846,32 @@ def _trace_summary(trace: RuntimeTrace) -> str:
     return f"{trace.operation.value}:{trace.name} {trace.result.status.value} {duration_ms:.1f}ms id={trace.trace_id}"
 
 
-def _event_summary(event: object) -> str:
-    action_id = getattr(event, "action_id", getattr(event, "execution_id", "unknown"))
-    status = getattr(event, "status", type(event).__name__)
-    return f"{action_id}: {status}"
+def _action_text(status: ActionResultSnapshot) -> str:
+    cause = "root" if status.cause is None else f"{status.cause.kind}:{status.cause.identity}"
+    detail = status.terminal if status.reason is None else f"{status.terminal}:{status.reason}"
+    relation = "" if status.relation is None else f" {status.relation.kind}={status.relation.action_id}"
+    conflict = "" if status.conflict is None else f" conflict={status.conflict.target_id}"
+    return (
+        f"{status.action_id} {status.kind} {status.name} {detail} cause={cause} "
+        f"cells={status.changes.cells} participants={status.changes.participants}{relation}{conflict}"
+    )
+
+
+def _event_summary(event: CausalEventSnapshot) -> str:
+    match event:
+        case ActionResultSnapshot():
+            return _action_text(event)
+        case OperationEventSnapshot():
+            cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
+            return f"operation:{event.execution_id} {event.name} {event.status} cause={cause}"
+        case ResourceEventSnapshot():
+            cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
+            return f"resource:{event.generation_id} {event.name} {event.status} cause={cause}"
+        case ContinuationFailureSnapshot():
+            return (
+                f"continuation:{event.failure_id} failed {event.stage} {event.callback} "
+                f"cause={event.cause.kind}:{event.cause.identity}"
+            )
 
 
 def plan_text(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:

@@ -149,8 +149,9 @@ Migration: replace preset screen bases and class policy fields with `Screen` and
 `screen.session`, and the declaration through `Screen.policy.session`. Inherited policy is an
 ordinary immutable value; use `Base.policy.overlay(...)` to extend it explicitly.
 
-Install `sd.devtools.DevTools` as a Cog for prefix `dev ui` and the hybrid `/dev ui` command tree,
+Install `sd.devtools.DevTools` as a Cog for the hybrid `/dev ui [tab]` command (prefix: `dev ui [tab]`),
 or call `await sd.open_devtools(ctx, runtime=devtools_runtime)` from an authorized host command.
+The optional `tab` selects the starting section; it defaults to `overview`.
 `sd.devtools_runtime.DevToolsPolicy()` is read-only; mutations require `full_access()` or an
 explicit `allow(...)` list. Persistence records load only when the dashboard visits that section.
 
