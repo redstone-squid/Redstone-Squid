@@ -179,6 +179,11 @@ class FlowRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class FigureRealization(FlowRealization):
+    caption: bool
+
+
+@dataclass(frozen=True, slots=True)
 class FieldsRealization(FlowRealization):
     notice: tuple[tree.Node, ...] = ()
 
@@ -2179,6 +2184,8 @@ def semantic_offers[RenderTargetT, ContextT](
             payload = ActionsRealization()
         elif isinstance(value, sem.Fields):
             payload = FieldsRealization()
+        elif isinstance(value, sem.Figure):
+            payload = FigureRealization(value.caption is not None)
         else:
             payload = FlowRealization()
         region = None

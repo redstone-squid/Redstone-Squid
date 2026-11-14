@@ -28,6 +28,7 @@ from squid_ui.planning.realizations import (
     DownloadRealization,
     EntityRealization,
     FieldsRealization,
+    FigureRealization,
     FlowRealization,
     ImageRealization,
     MetricRealization,
@@ -262,6 +263,15 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             scene.HtmlTag.SELECT,
                             options,
                             attributes=(
+                                scene.HtmlAttribute(
+                                    scene.HtmlAttributeName.NAME,
+                                    control.action if isinstance(control, scene.Select) else control.route_id,
+                                ),
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.MULTIPLE, value=True),)
+                                    if control.max_values > 1
+                                    else ()
+                                ),
                                 *(
                                     (scene.HtmlAttribute(scene.HtmlAttributeName.DISABLED, "disabled"),)
                                     if control.disabled
@@ -269,12 +279,20 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                                 ),
                                 scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MIN, control.min_values),
                                 scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MAX, control.max_values),
+                                scene.HtmlAttribute(
+                                    scene.HtmlAttributeName.ARIA_LABEL,
+                                    control.placeholder
+                                    or (control.action if isinstance(control, scene.Select) else control.route_id),
+                                ),
                             ),
                             action=scene.HtmlActionRef(control.action, control.mode)
                             if isinstance(control, scene.Select)
                             else None,
                             route=scene.HtmlRouteRef(control.route_id)
                             if isinstance(control, scene.RoutedSelect)
+                            else None,
+                            form=scene.HtmlFormRef(control.action, control.action)
+                            if isinstance(control, scene.Select)
                             else None,
                         ),
                     )
@@ -458,6 +476,14 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         *(node for child in part.children for node in visit(child)),
                         *((scene.HtmlElement(scene.HtmlTag.P, (text(notice),)),) if notice else ()),
                     )
+                case FigureRealization(caption=caption):
+                    media = tuple(
+                        node for child in (part.children[:-1] if caption else part.children) for node in visit(child)
+                    )
+                    caption_nodes = (
+                        (scene.HtmlElement(scene.HtmlTag.FIGCAPTION, visit(part.children[-1])),) if caption else ()
+                    )
+                    return (scene.HtmlElement(scene.HtmlTag.FIGURE, (*media, *caption_nodes)),)
                 case FlowRealization() | RowRealization() | ActionsRealization():
                     return tuple(node for child in part.children for node in visit(child))
                 case PanelRealization() as panel:

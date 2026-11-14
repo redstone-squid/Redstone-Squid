@@ -172,6 +172,7 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
         scene.HtmlTag.BLOCKQUOTE,
         scene.HtmlTag.CODE,
         scene.HtmlTag.FIGURE,
+        scene.HtmlTag.FIGCAPTION,
         scene.HtmlTag.DETAILS,
         scene.HtmlTag.PROGRESS,
         scene.HtmlTag.TIME,
@@ -183,6 +184,8 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
         if element.tag is scene.HtmlTag.SELECT and any(attribute.value == "choice" for attribute in element.attributes)
     )
     assert len(choice.children) == 30
+    assert scene.HtmlAttribute(scene.HtmlAttributeName.MULTIPLE, value=True) in choice.attributes
+    assert choice.form == scene.HtmlFormRef("choice", "choice")
     assert result.scene.body.locale == "en-GB"
     assert {"save", "choice", "details.toggle", "grid.a"} <= set(result.bindings)
     assert any(element.route == scene.HtmlRouteRef("build:1:open") for element in elements)
