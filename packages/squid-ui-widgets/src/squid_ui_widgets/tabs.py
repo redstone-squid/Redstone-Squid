@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from typing import override
 
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets.drivers import ComponentDriver, TransitionHandler
 from squid_ui_widgets.machines.tabs import Tab as Tab
 from squid_ui_widgets.machines.tabs import Tabs as TabsMachine
@@ -37,6 +37,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
         initial_state: TabsState | None = None,
         on_change: TransitionHandler[TabsState] | None = None,
     ) -> None:
+        title = None if title is None else Text(title)
         machine = TabsMachine(tabs, key=key, initial=initial, title=title)
         self._definition = machine
         super().__init__(

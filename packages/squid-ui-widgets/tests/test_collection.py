@@ -90,7 +90,7 @@ def test_window_pages_past_twenty_five_and_clamps_after_removal() -> None:
     harness = wt.driving(editor.build_component(initial=second))
     picker = engine.find_all(harness.nodes, Choices)[0]
 
-    assert [choice.label for choice in picker.choices] == ["Entry 25"]
+    assert [choice.label for choice in picker.choices] == [sl.plain("Entry 25")]
 
 
 def test_errors_report_invalid_initial_cardinality() -> None:

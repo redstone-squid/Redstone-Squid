@@ -9,7 +9,7 @@ from squid_ui.factories import action_controls, field, fields, heading, note, pr
 from squid_ui.forms import Form, FormField, FormLike, FormSpec
 from squid_ui.semantic import ActionControl, ControlDisplay, LayoutNode, Link, RoutedActionControl, Tone
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import FormValues, MachineControls, TransitionEvent
 
@@ -42,6 +42,10 @@ class WizardReview[RenderTargetT: RenderTarget = RenderTarget, ContextT = object
     note: TextLike | None = None
     """Shown just above Finish, for example to say that finishing cannot be undone."""
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
+        object.__setattr__(self, "note", None if self.note is None else Text(self.note))
+
 
 @dataclass(frozen=True, slots=True)
 class WizardState:
@@ -67,6 +71,7 @@ class WizardStep[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     content: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike[RenderTargetT, ContextT]) -> None:
+        label = Text(label)
         require_key(key, name="WizardStep.key")
         if isinstance(body, Form):
             form_spec: FormSpec | None = body.spec()
@@ -116,6 +121,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         review: WizardReview[RenderTargetT, ContextT] | bool = False,
         actions: WizardActions[ContextT] | None = None,
     ) -> None:
+        title = Text(title)
         self.key = require_key(key, name="Wizard.key")
         self.actions = actions
         self.title = title

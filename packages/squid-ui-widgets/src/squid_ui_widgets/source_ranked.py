@@ -26,7 +26,7 @@ from squid_ui.sources import (
     window_footer,
 )
 from squid_ui.target_types import DiscordTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets._window import (
@@ -66,6 +66,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
         initial_position: Position = ORIGIN,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
+        title = None if title is None else Text(title)
         self.key = require_key(key, name="SourceRankedList.key")
         if page_size < 1:
             message = "SourceRankedList.page_size must be at least 1"

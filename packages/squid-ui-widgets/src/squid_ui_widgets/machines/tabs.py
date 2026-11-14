@@ -7,7 +7,7 @@ from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
 from squid_ui.semantic import ControlDisplay, Emphasis, LayoutNode
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import FormValues, MachineControls
 
@@ -21,6 +21,7 @@ class Tab[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     content: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     def __init__(self, key: str, label: TextLike, content: ContentLike[RenderTargetT, ContextT]) -> None:
+        label = Text(label)
         require_key(key, name="Tab.key")
         object.__setattr__(self, "key", key)
         object.__setattr__(self, "label", label)
@@ -49,6 +50,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         initial: str | None = None,
         title: TextLike | None = None,
     ) -> None:
+        title = None if title is None else Text(title)
         self.key = require_key(key, name="Tabs.key")
         self.tabs = tuple(tabs)
         if not self.tabs:

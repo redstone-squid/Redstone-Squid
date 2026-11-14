@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from squid_ui.chrome import Chrome
 from squid_ui.planning.navigation import NavigationState
 from squid_ui.sources import Chronology, CountPrecision, LoadedWindow, SourceCapabilities
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +17,13 @@ class LoadingCopy:
     retry: TextLike = "Retry"
     removed: TextLike = "That item is no longer in these results."
     end: TextLike = "No more entries in this direction."
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "loading", Text(self.loading))
+        object.__setattr__(self, "failed", Text(self.failed))
+        object.__setattr__(self, "retry", Text(self.retry))
+        object.__setattr__(self, "removed", Text(self.removed))
+        object.__setattr__(self, "end", Text(self.end))
 
 
 DEFAULT_LOADING_COPY = LoadingCopy()

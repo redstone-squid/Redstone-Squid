@@ -40,7 +40,7 @@ from squid_ui.sources import (
     window_footer,
 )
 from squid_ui.target_types import DiscordTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
@@ -88,6 +88,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
         chronology: Chronology | None = None,
     ) -> None:
+        title = None if title is None else Text(title)
         self.key = require_key(key, name="Browser.key")
         if isinstance(source, BrowseSession):
             self.session = source

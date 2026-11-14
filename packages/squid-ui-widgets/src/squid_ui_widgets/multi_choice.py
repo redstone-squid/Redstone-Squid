@@ -9,7 +9,7 @@ from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_ui.semantic import Choice, ControlDisplay, Tone, fallback
-from squid_ui.text import TextLike, tr
+from squid_ui.text import Text, TextLike, tr
 from squid_ui_widgets._actions import (
     MachineKeySegment,
     PageAction,
@@ -40,6 +40,7 @@ class MultiChoiceGroup:
         *,
         exclusive_with: Iterable[str] = (),
     ) -> None:
+        label = Text(label)
         key = MachineKeySegment(key, name="MultiChoiceGroup.key")
         entries = tuple(choices)
         keys = [entry.key for entry in entries]
@@ -95,6 +96,7 @@ class MultiChoice:
         window_size: int = 25,
         commit: CommitMode = CommitMode.EXPLICIT,
     ) -> None:
+        title = Text(title)
         self.key = require_key(key, name="MultiChoice.key")
         self.title = title
         self.groups = tuple(groups)

@@ -8,7 +8,7 @@ from squid_ui.factories import heading, stack
 from squid_ui.primitives import Lines
 from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import DiscordTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
@@ -55,6 +55,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         initial_page: int = 0,
     ) -> None:
+        title = None if title is None else Text(title)
         self.key = require_key(key, name="RankedList.key")
         if page_size is not None and page_size < 1:
             message = "RankedList.page_size must be at least 1"

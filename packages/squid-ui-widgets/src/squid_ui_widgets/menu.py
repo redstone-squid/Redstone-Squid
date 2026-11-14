@@ -37,7 +37,7 @@ class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
 
     def __init__(
         self,
-        key_or_label: str,
+        key_or_label: TextLike,
         label_or_content: ContentLike[RenderTargetT, ContextT],
         content: ContentLike[RenderTargetT, ContextT] | _Missing = _MISSING,
         *,
@@ -52,6 +52,9 @@ class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             if key is not None:
                 message = "MenuEntry's keyed form takes the key as its first argument"
                 raise TypeError(message)
+            if not isinstance(key_or_label, str):
+                message = "MenuEntry's keyed form requires a string key"
+                raise TypeError(message)
             resolved_key = key_or_label
             label = label_or_content
             raw_content = content
@@ -64,7 +67,7 @@ class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             message = "MenuEntry.entries must contain MenuEntry instances"
             raise TypeError(message)
         object.__setattr__(self, "key", resolved_key)
-        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "label", TextExpression(label))
         object.__setattr__(self, "content", normalize_content(raw_content, name=f"MenuEntry {resolved_key!r}.content"))
         object.__setattr__(self, "entries", child_entries)
 
@@ -93,6 +96,7 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         initial: Iterable[str] = (),
         show_close: bool = False,
     ) -> None:
+        title = TextExpression(title)
         self.key = require_key(key, name="Menu.key")
         self.show_close = show_close
         self.title = title

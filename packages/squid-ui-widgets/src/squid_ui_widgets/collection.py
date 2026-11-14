@@ -10,7 +10,7 @@ from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack, status
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.semantic import ControlDisplay, FormTrigger, Tone
-from squid_ui.text import TextLike, tr
+from squid_ui.text import Text, TextLike, tr
 from squid_ui_widgets._actions import MachineKeySegment, WindowSelection
 from squid_ui_widgets._option_window import OptionWindow
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
@@ -71,6 +71,7 @@ class CollectionEditor:
         reorder: bool = True,
         window_size: int = 25,
     ) -> None:
+        title = Text(title)
         if not key:
             message = "CollectionEditor.key must not be empty"
             raise ValueError(message)

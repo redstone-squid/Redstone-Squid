@@ -22,7 +22,7 @@ from squid_ui.semantic import (
     Tone,
 )
 from squid_ui.target_types import DiscordTarget, RenderTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets._actions import MachineKeySegment, NestedAction, keyed_action, match_keyed_action
 from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
@@ -91,6 +91,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
         form: FormSpec | None = None,
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> None:
+        label = Text(label)
         self.key = MachineKeySegment(key, name="EditorSection.key")
         self.label = label
         self.initial = initial
@@ -232,6 +233,8 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         commit_label: TextLike | None = None,
         validate: Callable[[EditorValues], Iterable[FormIssue]] | None = None,
     ) -> None:
+        title = Text(title)
+        commit_label = None if commit_label is None else Text(commit_label)
         self.title = title
         self.key = require_key(key, name="Editor.key")
         self.sections = tuple(sections)

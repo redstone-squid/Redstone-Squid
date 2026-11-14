@@ -166,7 +166,7 @@ def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
     rendered = sp.Wizard("Build", _review_steps, review=True, initial_state=state).render()
     values = [node.value for node in engine.walk(rendered) if isinstance(node, sl.semantic.Field)]
 
-    assert values == ["Ada", "advanced", sl.chrome.DEFAULT_CHROME.unanswered]
+    assert values == [sl.plain("Ada"), sl.plain("advanced"), sl.chrome.DEFAULT_CHROME.unanswered]
     assert "Finish" in _labels(rendered)
 
 
@@ -180,7 +180,8 @@ def test_a_summarize_callback_replaces_the_default_rows() -> None:
 
     assert not [node for node in engine.walk(rendered) if isinstance(node, sl.semantic.Field)]
     assert any(
-        isinstance(node, sl.semantic.Paragraph) and node.content == "2 answers" for node in engine.walk(rendered)
+        isinstance(node, sl.semantic.Paragraph) and node.content == sl.plain("2 answers")
+        for node in engine.walk(rendered)
     )
 
 

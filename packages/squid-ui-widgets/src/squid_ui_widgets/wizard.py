@@ -3,7 +3,7 @@
 from typing import override
 
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets.drivers import ComponentDriver, TransitionEvent
 from squid_ui_widgets.machines.wizard import REVIEW_STEP as REVIEW_STEP
 from squid_ui_widgets.machines.wizard import StepSource as StepSource
@@ -44,6 +44,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
         initial_state: WizardState | None = None,
         on_finish: WizardFinishHandler | None = None,
     ) -> None:
+        title = Text(title)
         machine = WizardMachine[RenderTargetT, ContextT](title, steps, key=key, review=review, actions=actions)
 
         async def changed(event: TransitionEvent[WizardState]) -> None:

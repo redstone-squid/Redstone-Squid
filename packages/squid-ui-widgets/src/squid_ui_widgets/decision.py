@@ -9,7 +9,7 @@ from squid_ui.factories import action_controls, stack, status
 from squid_ui.palette import Role
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 
@@ -22,6 +22,9 @@ class DecisionOption:
     label: TextLike
     tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "label", Text(self.label))
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +151,8 @@ class _Confirmation[RenderTargetT: RenderTarget = RenderTarget, ContextT = objec
         cancel_label: TextLike | None,
         tone: Tone | Role,
     ) -> None:
+        confirm_label = None if confirm_label is None else Text(confirm_label)
+        cancel_label = None if cancel_label is None else Text(cancel_label)
         super().__init__(
             prompt,
             (
