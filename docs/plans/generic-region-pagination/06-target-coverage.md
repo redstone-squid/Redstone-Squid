@@ -94,7 +94,7 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Primitive spill/condensation ladders, line alternatives,
+Per-line replacement and condensation ladders,
 and rich primitive text fragmentation retain their existing non-region paths.
 They do not declare the source correspondence and permitted fragments required
 for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
@@ -118,6 +118,12 @@ Native Discord text `Alts` and `Drop` policies also compose inside shared layout
 Fallback rungs report replacement, shortening the final rung adds its own effect,
 and whole-text drops report omission. An enclosing truncation wrapper retains its
 policy precedence. Strict planning still requires the primary content to fit.
+
+Static native `Lines` now expose complete-entry fragments and explicit spill,
+truncation and drop offers. Lossless pagination precedes spilling; an omitted-entry
+notice consumes real capacity. Omission and shortening reports identify the affected
+lines, including when the retained text crosses a joiner. Per-line `Alt` ladders
+remain on their compatibility path.
 
 ## Application outcome and validation
 
@@ -309,3 +315,12 @@ unbreakable groups remain intact. Minimum-fill preferences and routed page
 ownership use the same allocation rules as the other document targets. Exact cuts
 may differ from the former HTML balancer. The HTML, shared-search and target
 composition tests pass, and whole-project Pyrefly reports zero errors.
+
+## Continuation: static line collections
+
+Native static lines now compose through complete-entry fragments or declared
+loss effects. Tests cover separator-aware truncation, original source identity
+through checked presentations, spill notices, whole-collection drops, strict
+mode, and reconstruction across pages. Both UI suites pass (3,267 tests), with
+the additional source-mapping regression passing afterward. Whole-project Pyrefly
+reports zero errors. Per-line replacement and condensation ladders remain open.

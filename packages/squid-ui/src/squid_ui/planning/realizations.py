@@ -86,7 +86,7 @@ from squid_ui.presentations import (
     TextPresentation,
 )
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import FIRST_PAGE, Alts, Drop, Never, PageOwnership, Truncate
+from squid_ui.primitives.constraints import FIRST_PAGE, Alts, Drop, Never, PageOwnership, Spill, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.text import TextLike, resolve_text
 
@@ -650,6 +650,100 @@ def semantic_offers[RenderTargetT, ContextT](
             ),
         )
 
+    if isinstance(value, primitive.Lines):
+        overflow = Truncate(keep) if keep is not None else value.overflow
+        if not native_controls or not isinstance(overflow, Never | Truncate | Spill | Drop):
+            return ()
+        items = tuple(
+            ReferencedText(ref, resolve_text(item.content, context.localization).nodes)
+            for ref in occurrence.graph.children.get(occurrence.reference, ())
+            for item in (occurrence.graph.units[ref].value,)
+            if isinstance(item, sem.ListItem)
+        )
+        sequence = TextSequenceRealization(items, separator=value.join)
+        nodes = tuple(
+            node
+            for index, item in enumerate(items)
+            for node in (
+                *((tree.literal(value.join),) if index else ()),
+                *item.nodes,
+            )
+        )
+        payload = TextRealization(nodes)
+        full = RealizationOffer(
+            occurrence,
+            "lines",
+            payload,
+            fragments=FragmentContract(
+                tuple(frozenset({item.reference}) for item in items),
+                tuple(range(1, len(items) + 1)),
+                sequence.fragment,
+            )
+            if items
+            else None,
+            preference_priority=value.priority,
+        )
+        if isinstance(overflow, Truncate):
+            discovered = text_offers(full, payload, overflow.keep, value.priority)
+            if isinstance(discovered, OfferDiscovery):
+                return discovered
+            lengths = tuple(sum(len(tree.plain(node)) for node in item.nodes) for item in items)
+            total = sum(lengths) + max(0, len(items) - 1) * len(value.join)
+            shortened_lines: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
+            for offer in discovered:
+                operation = offer.payload.shortening if isinstance(offer.payload, TextRealization) else None
+                if operation is None:
+                    shortened_lines.append(offer)
+                    continue
+                start, end = (
+                    (0, operation.max_chars) if operation.keep == "head" else (total - operation.max_chars, total)
+                )
+                offset = 0
+                line_effects: list[Shortening] = []
+                context.work.consume(len(items))
+                for item, length in zip(items, lengths, strict=True):
+                    retained = max(0, min(end, offset + length) - max(start, offset))
+                    if retained < length:
+                        line_effects.append(Shortening(item.reference, retained, operation.keep))
+                    offset += length + len(value.join)
+                shortened_lines.append(replace(offer, effects=occurrence.scope_effects(tuple(line_effects))))
+            return tuple(shortened_lines)
+        if isinstance(overflow, Never) or not items:
+            return (full,)
+        offers = [full]
+        for removed in range(1, len(items) + 1) if isinstance(overflow, Spill) else (len(items),):
+            retained = items[:-removed]
+            context.work.consume(len(items))
+            effects = occurrence.scope_effects(tuple(Omission(item.reference) for item in items[-removed:]))
+            content = tuple(
+                node
+                for index, item in enumerate(retained)
+                for node in (
+                    *((tree.literal(value.join),) if index else ()),
+                    *item.nodes,
+                )
+            )
+            if isinstance(overflow, Spill):
+                content = (
+                    *content,
+                    *((tree.literal(value.join),) if content else ()),
+                    *resolve_text(context.chrome.and_n_more(removed), context.localization).nodes,
+                )
+            offers.append(
+                replace(
+                    full,
+                    key=f"spill-{removed}",
+                    payload=TextRealization(content),
+                    effects=effects,
+                    preference=removed,
+                    fragments=None,
+                )
+            )
+        if isinstance(overflow, Spill):
+            offers.append(
+                replace(offers[-1], key="spill-empty", payload=TextRealization(()), preference=len(items) + 1)
+            )
+        return tuple(offers)
     if isinstance(value, primitive.Text | primitive.Heading | primitive.Footer | primitive.Code):
         overflow = Truncate(keep) if keep is not None else value.overflow
         if not native_controls or not isinstance(overflow, Never | Truncate | Alts | Drop):

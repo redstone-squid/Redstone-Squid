@@ -29,6 +29,7 @@ from squid_ui.presentations import (
     TextPresentation,
 )
 from squid_ui.primitives import nodes as primitive
+from squid_ui.primitives.constraints import Alt
 from squid_ui.target_types import Renderable
 from squid_ui.text import TextLike
 
@@ -94,6 +95,7 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | primitive.Heading
     | primitive.Footer
     | primitive.Code
+    | primitive.Lines
     | primitive.Section[ContextT]
     | primitive.Panel[ContextT]
     | primitive.Thumbnail
@@ -294,6 +296,13 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
                     visit(control, root, i)
+            case primitive.Lines():
+                root = add(value, path, parent, atomic=False)
+                for i, line in enumerate(value.lines):
+                    if isinstance(line, Alt):
+                        message = "line degradation alternatives"
+                        raise UnsupportedSemanticError(message)
+                    visit(sem.ListItem(value.keys[i] if value.keys else f"@{i}", line), root, i)
             case primitive.Section():
                 root = add(value, path, parent, atomic=False)
                 for i, child in enumerate(value.texts):

@@ -169,7 +169,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
         case ((primitive.Thumbnail() | primitive.Sep()), _):
             return left == right
         case (
-            primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code(),
+            primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code() | primitive.Lines(),
             _,
         ):
             return left == right

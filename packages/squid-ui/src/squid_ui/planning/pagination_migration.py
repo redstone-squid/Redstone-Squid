@@ -17,7 +17,7 @@ from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import UnsupportedSemanticError
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import Alt, Alts, Drop, Never, Paginate, Truncate
+from squid_ui.primitives.constraints import Alt, Alts, Drop, Never, Paginate, Spill, Truncate
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import Renderable
 from squid_ui.text import resolve_text
@@ -141,6 +141,12 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     msg = "Discord text primitives on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 overflow = node.overflow
+                if isinstance(node, primitive.Lines) and isinstance(overflow, Never | Truncate | Spill | Drop):
+                    if any(isinstance(item, Alt) for item in node.lines):
+                        message = "line degradation alternatives"
+                        raise UnsupportedSemanticError(message)
+                    combinations = max(combinations, len(node.lines))
+                    return node
                 if isinstance(overflow, Never | Truncate | Alts | Drop) and not isinstance(node, primitive.Lines):
                     if isinstance(overflow, Truncate | Alts) or shortening_depth:
                         length = len(resolve_text(node.content, request.localization).plain())
