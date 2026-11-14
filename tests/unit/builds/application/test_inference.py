@@ -42,7 +42,7 @@ def inferred(**overrides: Any) -> InferredBuild:
         "closing_time": {"value": "0.5s", "qualifier": None},
         "creators": ["BuilderOne", "BuilderTwo"],
         "version_spec": "1.20+",
-        "author_note": "first line\nsecond line",
+        "author_notes": [],
         "confidence": "high",
     }
     values.update(overrides)
@@ -139,7 +139,7 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert build.extra_info.get("unknown_patterns") == ["Unknown Pattern"]
     assert build.version_spec == "1.20+"
     assert build.versions == ["Java 1.20.0", "Java 1.21.0"]
-    assert build.description == "first line\nsecond line"
+    assert build.description is None
     assert build.normal_opening_time == 20
     assert build.normal_closing_time == 10
 
@@ -327,3 +327,128 @@ async def test_utility_does_not_acquire_a_door_orientation() -> None:
     (build,) = await service.infer(source(), model="model")
 
     assert build.door_orientation is None
+
+
+async def test_author_notes_reject_comparisons_inferred_from_an_outdated_post() -> None:
+    previous = "[OUTDATED] 6x6 trapdoor by Exorden. Dimensions: 12x19x3. Size: 684 blocks. Completed 16 March 2020."
+    current = "6x6 trapdoor by Exorden. Dimensions: 12x18x3. Size: 648 blocks. Completed 17 March 2020."
+    summary = (
+        "Updated from the outdated version: the build height decreased from 19 to 18 blocks, "
+        "and its size decreased from 684 to 648 blocks."
+    )
+    inputs = BuildInferenceInput(
+        primary=(ContextMessage(10, "Exorden", 20, current, "", "primary"),),
+        context=(ContextMessage(9, "Exorden", 20, previous, "", "preceding"),),
+        images=(),
+        channel_id=30,
+        server_id=40,
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        build_width=12,
+                        build_height=18,
+                        build_depth=3,
+                        volume="648 blocks",
+                        author_notes=[{"source_message_id": 10, "text": summary}],
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+
+    (build,) = await service.infer(inputs, model="model")
+    prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+
+    assert build.dimensions == (12, 18, 3)
+    assert build.description == "Reported volume: 648 blocks"
+    assert prefill.answers["description"] == "Reported volume: 648 blocks"
+
+
+@pytest.mark.parametrize(
+    ("message_id", "text"),
+    [
+        (9, "Layout by OriginalBuilder."),
+        (11, "Fixed input dependency."),
+        (999, "Added a reset button."),
+        (10, "Fixed input dependency."),
+        (10, "The author added a reset button."),
+        (10, " \n "),
+    ],
+)
+async def test_author_notes_require_an_excerpt_from_this_builds_selected_sources(message_id: int, text: str) -> None:
+    inputs = BuildInferenceInput(
+        primary=(
+            ContextMessage(10, "Builder", 20, "Added a reset button.", "", "primary"),
+            ContextMessage(11, "Builder", 20, "Fixed input dependency.", "", "primary"),
+        ),
+        context=(ContextMessage(9, "Other", 21, "Layout by OriginalBuilder.", "", "preceding"),),
+        images=(),
+        channel_id=30,
+        server_id=40,
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        author_notes=[{"source_message_id": message_id, "text": text}],
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+
+    (build,) = await service.infer(inputs, model="model")
+
+    assert build.description is None
+
+
+async def test_author_notes_preserve_explicit_changes_and_requirements_without_rewriting_them() -> None:
+    change = "V2: reduced height from 19 to 18 blocks."
+    requirement = "Requires a 2-gt pulse."
+    fix = "Fixed input dependency."
+    inputs = BuildInferenceInput(
+        primary=(
+            ContextMessage(10, "Builder", 20, f"{change}\n{requirement}", "", "primary"),
+            ContextMessage(11, "Builder", 20, fix, "", "primary"),
+        ),
+        context=(),
+        images=(),
+        channel_id=30,
+        server_id=40,
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        source_message_ids=[10, 11],
+                        author_notes=[
+                            {"source_message_id": 10, "text": change},
+                            {"source_message_id": 10, "text": "Requires a 2-gt\npulse."},
+                            {"source_message_id": 11, "text": fix},
+                            {"source_message_id": 10, "text": change},
+                        ],
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+
+    (build,) = await service.infer(inputs, model="model")
+    prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+
+    assert build.description == f"{change}\n{requirement}\n{fix}"
+    assert prefill.answers["description"] == build.description

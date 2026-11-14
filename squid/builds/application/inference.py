@@ -46,6 +46,15 @@ class InferredLink(BaseModel):
     media_type: Literal["image", "video", "world-download"] | None
 
 
+class InferredAuthorNote(BaseModel):
+    """An additional build fact quoted from one of its source messages."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_message_id: int
+    text: str = Field(description="A verbatim excerpt from that primary message; never a summary or a computed change.")
+
+
 class InferredBuild(BaseModel):
     """One build described by some of the primary messages in a bundle."""
 
@@ -69,11 +78,11 @@ class InferredBuild(BaseModel):
     closing_time: InferredTiming | None
     creators: list[str]
     version_spec: str | None
-    author_note: str | None = Field(
+    author_notes: list[InferredAuthorNote] = Field(
         description=(
-            "Additional concrete build facts: revision changes, operating requirements, limitations, or credits. "
-            "Use concise factual prose. Omit praise, title analysis, wording or punctuation commentary, "
-            "and facts already captured in other fields. Null when there is nothing useful to add."
+            "Verbatim primary-message excerpts containing additional concrete facts, such as operating requirements, "
+            "limitations, explicit revision changes, or credits. Never write your own prose, compare posts, "
+            "or calculate changes. Omit facts captured elsewhere and promotional text. Empty when none."
         )
     )
     confidence: Literal["high", "medium", "low"]
@@ -341,7 +350,15 @@ class BuildInferenceService:
         build.door_orientation = "Door" if orientation == "Normal" else cast(DoorOrientationLiteral | None, orientation)
         build.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
         build.dimensions = (inferred.build_width, inferred.build_height, inferred.build_depth)
-        notes = [inferred.author_note] if inferred.author_note else []
+        sources = {message.id: " ".join((message.content or "").split()) for message in build.source_messages}
+        notes: list[str] = []
+        for note in inferred.author_notes:
+            excerpt = " ".join(note.text.split())
+            if not excerpt or excerpt not in sources.get(note.source_message_id, ""):
+                logger.warning("Discarded unsupported author note for message %s", note.source_message_id)
+                continue
+            if excerpt not in notes:
+                notes.append(excerpt)
         for label, timing, attribute in (
             ("Opening", inferred.opening_time, "normal_opening_time"),
             ("Closing", inferred.closing_time, "normal_closing_time"),
