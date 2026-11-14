@@ -17278,6 +17278,41 @@
         "title": "BuildCategory",
         "description": "The categories of the builds."
       },
+      "BuildCreditSummary": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CreditKind"
+          },
+          "username": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/CreditRole"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/CreditAttribution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attribution",
+          "kind",
+          "name",
+          "role",
+          "username"
+        ],
+        "title": "BuildCreditSummary"
+      },
       "BuildDetail": {
         "properties": {
           "id": {
@@ -17311,6 +17346,12 @@
           "creators": {
             "items": {
               "type": "string"
+            },
+            "type": "array"
+          },
+          "credits": {
+            "items": {
+              "$ref": "#/components/schemas/BuildCreditSummary"
             },
             "type": "array"
           },
@@ -17716,6 +17757,20 @@
             ],
             "maxLength": 10000
           },
+          "credits": {
+            "oneOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Credit"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "maxLength": 100
+          },
           "creators_ign": {
             "oneOf": [
               {
@@ -17998,6 +18053,12 @@
           "creators": {
             "items": {
               "type": "string"
+            },
+            "type": "array"
+          },
+          "credits": {
+            "items": {
+              "$ref": "#/components/schemas/BuildCreditSummary"
             },
             "type": "array"
           },
@@ -18560,7 +18621,8 @@
           "choice",
           "multi_choice",
           "duration",
-          "boolean"
+          "boolean",
+          "credits"
         ],
         "title": "ControlKind",
         "description": "Control types a submission client may render."
@@ -18692,6 +18754,93 @@
           "id"
         ],
         "title": "CreatorProfileDetail"
+      },
+      "Credit": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CreditKind"
+          },
+          "username": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subject": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/CreditRole"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/CreditAttribution"
+          },
+          "source_message_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Credit"
+      },
+      "CreditAttribution": {
+        "type": "string",
+        "enum": [
+          "explicit",
+          "assumed_sender",
+          "confirmed",
+          "legacy"
+        ],
+        "title": "CreditAttribution",
+        "description": "How the attribution was obtained.",
+        "default": "explicit"
+      },
+      "CreditKind": {
+        "type": "string",
+        "enum": [
+          "name",
+          "discord",
+          "minecraft_java",
+          "minecraft_bedrock"
+        ],
+        "title": "CreditKind",
+        "description": "The namespace of an observed creator reference.",
+        "default": "name"
+      },
+      "CreditRole": {
+        "type": "string",
+        "enum": [
+          "creator",
+          "designer",
+          "layout",
+          "contributor"
+        ],
+        "title": "CreditRole",
+        "description": "How the credited party contributed to the build.",
+        "default": "creator"
       },
       "CreditedAlias": {
         "properties": {
@@ -21802,6 +21951,13 @@
             "type": "array",
             "default": []
           },
+          "credits": {
+            "items": {
+              "$ref": "#/components/schemas/Credit"
+            },
+            "type": "array",
+            "default": []
+          },
           "creators_ign": {
             "items": {
               "type": "string"
@@ -22194,7 +22350,8 @@
                 "choice",
                 "multi_choice",
                 "duration",
-                "boolean"
+                "boolean",
+                "credits"
               ]
             },
             "type": "array"
@@ -22810,7 +22967,9 @@
             ]
           },
           "preparation_issues": {
-            "items": {},
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAttentionIssueResponse"
+            },
             "type": "array"
           },
           "waiting_for_artifacts": {
@@ -23400,7 +23559,8 @@
           "number",
           "boolean",
           "string_list",
-          "game_ticks"
+          "game_ticks",
+          "credit_list"
         ],
         "title": "ValueKind",
         "description": "Canonical JSON value expected from a field."

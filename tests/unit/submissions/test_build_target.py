@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from squid.builds.domain import BuildCategory, Status
+from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
 from squid.builds.domain.titles import format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
@@ -137,7 +138,7 @@ def _submission(category: SubmissionCategory) -> NormalizedSubmission:
         category=category,
         display_name="Workshop prototype",
         description="A synchronized submission",
-        creators=("Builder",),
+        credits=tuple(name_credits(["Builder"], legacy=True)),
         capture_dimensions=SubmissionDimensions(8, 9, 10),
         source_version="Java 26.1.2",
         version_compatibility=">=26.1",
@@ -494,7 +495,7 @@ async def test_unknown_metadata_survives_payload_build_and_title(category: Submi
     )
     submission = replace(
         _submission(category),
-        creators=(),
+        credits=(),
         source_version=None,
         capture_dimensions=SubmissionDimensions(None, None, None),
         details=details,
@@ -508,3 +509,28 @@ async def test_unknown_metadata_survives_payload_build_and_title(category: Submi
     title = format_build_display_title(build, markdown=False)
     assert "None" not in title
     assert "?" in title
+
+
+async def test_typed_credits_survive_durable_payload_and_build_preparation() -> None:
+    credits = (
+        Credit(
+            name="Alex",
+            kind=CreditKind.DISCORD,
+            subject="123",
+            username="alex_d",
+            attribution=CreditAttribution.ASSUMED_SENDER,
+            source_message_id=456,
+        ),
+        Credit(name="Alex", kind=CreditKind.MINECRAFT_JAVA, username="Alex", role=CreditRole.LAYOUT),
+        Credit(name="Alex", role=CreditRole.CONTRIBUTOR),
+    )
+    submission = replace(_submission(SubmissionCategory.OTHER), credits=credits)
+    encoded = encode_submission(submission)
+    assert encoded["payload_schema"] == 4
+    assert encoded["creators"] == []
+    decoded = decode_submission(encoded)
+    assert decoded.credits == credits
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(decoded)
+    assert isinstance(build, Build)
+    assert build.credits == list(credits)
+    assert build.creators_ign == ["Alex"]

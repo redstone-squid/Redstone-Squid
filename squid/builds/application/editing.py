@@ -7,6 +7,7 @@ from typing import Literal, Self, cast
 from squid.builds.application.commands import Dimensions
 from squid.builds.application.input import normalize_extender_orientation, validate_extension_length
 from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo, UnresolvedTaxonomy
+from squid.builds.domain.credits import Credit
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
@@ -56,6 +57,7 @@ class BuildEditPatch:
     normal_closing_time: PatchValue[int | None] = UNSET
     normal_opening_time: PatchValue[int | None] = UNSET
     extra_user_info: PatchValue[str | None] = UNSET
+    credits: PatchValue[list[Credit]] = UNSET
     creators_ign: PatchValue[list[str]] = UNSET
     image_urls: PatchValue[list[str]] = UNSET
     video_urls: PatchValue[list[str]] = UNSET
@@ -104,6 +106,7 @@ class BuildEditPatch:
                 normal_closing_time=_latest(combined.normal_closing_time, patch.normal_closing_time),
                 normal_opening_time=_latest(combined.normal_opening_time, patch.normal_opening_time),
                 extra_user_info=_latest(combined.extra_user_info, patch.extra_user_info),
+                credits=_latest(combined.credits, patch.credits),
                 creators_ign=_latest(combined.creators_ign, patch.creators_ign),
                 image_urls=_latest(combined.image_urls, patch.image_urls),
                 video_urls=_latest(combined.video_urls, patch.video_urls),
@@ -137,6 +140,8 @@ class BuildEditPatch:
             )
         patch = cls()
         for name, value in changes.items():
+            if name == "credits" and isinstance(value, list):
+                value = [Credit.from_json(item) if isinstance(item, dict) else item for item in value]
             object.__setattr__(patch, name, value)
         return patch
 
@@ -162,6 +167,7 @@ class BuildEditPatch:
             "component_restrictions",
             "miscellaneous_restrictions",
             "creators_ign",
+            "credits",
             "completion_time",
             "extra_info",
             "ai_generated",

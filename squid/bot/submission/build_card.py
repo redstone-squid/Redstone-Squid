@@ -300,8 +300,11 @@ def build_metadata_fields(build: Build) -> dict[str, str]:
         if build.retraction_time:
             fields["Retraction Time"] = f"{build.retraction_time / 20}s"
 
-    if build.creators_ign:
-        fields["Creators"] = ", ".join(sorted(build.creators_ign))
+    if build.credits:
+        fields["Creators"] = ", ".join(
+            credit.name if credit.role.value == "creator" else f"{credit.name} ({credit.role.value})"
+            for credit in build.credits
+        )
 
     if build.completion_time:
         fields["Date Of Completion"] = build.completion_time

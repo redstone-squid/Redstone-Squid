@@ -18,6 +18,7 @@ from squid.bot.submission.ui.opening import prepare_build_editor
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildService
 from squid.builds.domain import Status
+from squid.builds.domain.credits import name_credits
 from squid.builds.models import DoorBuild, OtherBuild
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
@@ -185,7 +186,7 @@ async def test_typed_options_arrive_staged_in_the_workspace() -> None:
     assert _staged(component) == {
         "opening_width": 2,
         "opening_height": 2,
-        "creators": ["Alice", "Bob"],
+        "credits": [credit.to_json() for credit in name_credits(["Alice", "Bob"])],
         "version_compatibility": "1.21",
     }
 

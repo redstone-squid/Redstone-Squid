@@ -6,7 +6,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
-from squid.core.errors import DataIntegrityError
+from squid.builds.domain.credits import Credit, CreditAttribution, name_credits
+from squid.core.errors import DataIntegrityError, JSONValue
+from squid.core.errors import ValidationError as DomainValidationError
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.domain.finalization import (
@@ -198,6 +200,9 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
             raise ValueError(msg)
         return self
 
+    def _credits(self) -> tuple[Credit, ...]:
+        return ()
+
     def _to_domain(
         self,
         *,
@@ -214,7 +219,7 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
             category=SubmissionCategory(self.category),
             display_name=self.display_name,
             description=self.description,
-            creators=tuple(self.creators),
+            credits=self._credits() or tuple(name_credits(self.creators, legacy=True)),
             capture_dimensions=self.capture_dimensions.to_domain(),
             source_version=self.source_version,
             version_compatibility=self.version_compatibility,
@@ -262,8 +267,28 @@ class FinalizationPayloadV3(_FinalizationPayloadBase):
         )
 
 
+class FinalizationPayloadV4(_FinalizationPayloadBase):
+    """Typed credits, independent of sponsor attribution."""
+
+    payload_schema: Literal[4]
+    credits: list[dict[str, JSONValue]]
+    sponsor_attribution: bool
+    source_installation_id: str | None = None
+    sponsor: _SponsorPayload | None = None
+
+    def _credits(self) -> tuple[Credit, ...]:
+        return tuple(Credit.from_json(value) for value in self.credits)
+
+    def to_domain(self) -> NormalizedSubmission:
+        return self._to_domain(
+            sponsor_attribution=self.sponsor_attribution,
+            source_installation_id=self.source_installation_id,
+            sponsor=self.sponsor.to_domain() if self.sponsor is not None else None,
+        )
+
+
 type FinalizationPayload = Annotated[
-    FinalizationPayloadV2 | FinalizationPayloadV3, Field(discriminator="payload_schema")
+    FinalizationPayloadV2 | FinalizationPayloadV3 | FinalizationPayloadV4, Field(discriminator="payload_schema")
 ]
 
 _PAYLOAD_ADAPTER = TypeAdapter(FinalizationPayload)
@@ -271,10 +296,18 @@ _PAYLOAD_ADAPTER = TypeAdapter(FinalizationPayload)
 
 def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
     """Encode schema 3 for sponsor attribution, or schema 2 for other submissions."""
-    model_type = FinalizationPayloadV3 if submission.sponsor_attribution else FinalizationPayloadV2
+    typed = any(credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits)
+    model_type = (
+        FinalizationPayloadV4
+        if typed
+        else (FinalizationPayloadV3 if submission.sponsor_attribution else FinalizationPayloadV2)
+    )
     try:
-        payload = model_type.model_validate(_submission_document(submission))
-    except (PydanticValidationError, TypeError, ValueError) as error:
+        document = _submission_document(submission)
+        if typed:
+            document.update(payload_schema=4, creators=[], credits=[credit.to_json() for credit in submission.credits])
+        payload = model_type.model_validate(document)
+    except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:
         msg = "normalized submission cannot be encoded as a durable payload"
         raise DataIntegrityError(msg) from error
     return cast(dict[str, object], payload.model_dump(mode="json"))
@@ -285,7 +318,7 @@ def decode_submission(value: object) -> NormalizedSubmission:
     try:
         payload = _PAYLOAD_ADAPTER.validate_python(value, strict=True)
         return payload.to_domain()
-    except (PydanticValidationError, TypeError, ValueError) as error:
+    except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:
         msg = "persisted normalized submission payload is invalid"
         raise DataIntegrityError(msg) from error
 

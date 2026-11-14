@@ -238,14 +238,14 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.FABRIC,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
     )
 
     assert draft.snapshot.schema_id == "build_submission.v1"
-    assert draft.snapshot.schema_revision == 4
+    assert draft.snapshot.schema_revision == 5
     assert draft.expires_at == NOW.add(days=7, days_assumed_24h_ok=True)
 
 
@@ -270,7 +270,7 @@ async def test_create_requires_server_derived_installation_provenance_only_for_p
             owner_account_id=7,
             category="other",
             origin=origin,
-            client_capabilities=frozenset({"repeatable_text"}),
+            client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
             locale="en",
             source_installation_id=source_installation_id,
             now=NOW,
@@ -291,7 +291,7 @@ async def test_capacity_and_single_owner_are_enforced() -> None:
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
@@ -302,7 +302,7 @@ async def test_capacity_and_single_owner_are_enforced() -> None:
             owner_account_id=7,
             category="other",
             origin=SubmissionOrigin.WEB,
-            client_capabilities=frozenset({"repeatable_text"}),
+            client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
             locale="en",
             now=NOW,
         )
@@ -376,7 +376,7 @@ async def test_delete_rejects_every_noneditable_lifecycle_state(status: DraftSta
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
@@ -401,7 +401,7 @@ async def test_change_is_idempotent_even_after_revision_advances() -> None:
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
@@ -488,7 +488,7 @@ async def test_finalization_validation_uses_complete_pinned_answers() -> None:
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.PAPER,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         source_installation_id=INSTALLATION_ID,
         now=NOW,
@@ -526,7 +526,7 @@ async def test_processing_reports_field_errors_for_incomplete_web_draft() -> Non
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
@@ -551,7 +551,7 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.PAPER,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         source_installation_id=INSTALLATION_ID,
         now=NOW,
@@ -607,7 +607,7 @@ async def test_manifest_upgrade_failure_does_not_touch_the_draft() -> None:
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
@@ -640,7 +640,7 @@ async def test_manifest_upgrade_rejects_stale_edit_without_touching_the_draft() 
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
@@ -670,7 +670,7 @@ async def test_manifest_upgrade_rejects_an_unretained_source_without_touching_th
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         now=NOW,
         draft_id=DRAFT_ID,
@@ -720,7 +720,7 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.DISCORD,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         draft_id=DRAFT_ID,
     )
@@ -749,13 +749,13 @@ async def test_draft_access_requires_actor_even_when_account_owns_the_draft() ->
         owner_account_id=7,
         category="other",
         origin=SubmissionOrigin.WEB,
-        client_capabilities=frozenset({"repeatable_text"}),
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
         locale="en",
         draft_id=DRAFT_ID,
     )
     assert await service.get_accessible(DRAFT_ID, Actor(account_id=7)) == draft
     # A dynamically typed caller must not restore the old implicit account-to-actor conversion.
-    with pytest.raises(TypeError, match="requires an Actor"):
+    with pytest.raises(InvalidStateError, match="requires an Actor"):
         await service.get_accessible(DRAFT_ID, cast(Actor, 7))
     with pytest.raises(DraftAccessDeniedError) as missing_account:
         await service.get_accessible(DRAFT_ID, Actor())

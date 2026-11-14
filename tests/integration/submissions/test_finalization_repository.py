@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.models import Account
+from squid.builds.domain.credits import name_credits
 from squid.core.errors import DataIntegrityError
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
@@ -130,7 +131,7 @@ def _payload(draft: StoredDraft, *media_upload_ids: UUID) -> NormalizedSubmissio
         category=SubmissionCategory.OTHER,
         display_name="Test build",
         description=None,
-        creators=("Builder",),
+        credits=tuple(name_credits(["Builder"], legacy=True)),
         capture_dimensions=SubmissionDimensions(3, 4, 5),
         source_version="26.1.2",
         version_compatibility=None,

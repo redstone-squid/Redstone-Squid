@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.builds.domain.credits import name_credits
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
@@ -40,6 +41,7 @@ DEFAULT_INFERRED_DRAFT_CAPACITY = 1_000
 INGESTION_OPTIONAL_FIELDS = frozenset(
     {
         "creators",
+        "credits",
         "capture_width",
         "capture_height",
         "capture_depth",
@@ -58,7 +60,7 @@ def draft_actor_id(actor: Actor) -> int:
     """Require an identified permission subject without converting bare account IDs."""
     if not isinstance(actor, Actor):
         message = "Draft authorization requires an Actor."
-        raise TypeError(message)
+        raise InvalidStateError(message)
     identifier = actor.account_id
     if identifier is None or identifier < 1:
         raise DraftAccessDeniedError(reason="missing_account")
@@ -216,19 +218,27 @@ class CheckedInFormRevisionMigration:
             raise ValidationError(msg)
         source_fields = {field.id for field in source.fields_for(draft.snapshot.category)}
         target_fields = {field.id for field in target.fields_for(draft.snapshot.category)}
-        removed_answers = draft.snapshot.answers.keys() & (source_fields - target_fields)
+        answers = dict(draft.snapshot.answers)
+        if source.revision == 4 and target.revision == 5 and "creators" in answers:
+            names = answers.pop("creators")
+            if isinstance(names, list):
+                answers["credits"] = [
+                    credit.to_json()
+                    for credit in name_credits((item for item in names if isinstance(item, str)), legacy=True)
+                ]
+        removed_answers = answers.keys() & (source_fields - target_fields)
         if removed_answers:
             errors = {field_id: "removed_field" for field_id in sorted(removed_answers)}
             raise DraftValidationError(errors)
         errors = target.validate_answers(
             draft.snapshot.category,
-            draft.snapshot.answers,
+            answers,
             origin=draft.origin,
             require_complete=False,
         )
         if errors:
             raise DraftValidationError(errors)
-        return dict(draft.snapshot.answers)
+        return answers
 
 
 class FixedAccountDraftCapacity:

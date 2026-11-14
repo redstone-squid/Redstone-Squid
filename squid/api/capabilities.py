@@ -6,7 +6,7 @@ a CLI, the web SDK, and a Minecraft plugin negotiate against the same list.
 
 from typing import Final, Literal
 
-type RendererControl = Literal["text", "number", "choice", "multi_choice", "duration", "boolean"]
+type RendererControl = Literal["text", "number", "choice", "multi_choice", "duration", "boolean", "credits"]
 
 API_VERSION: Final = "1.0.0"
 
@@ -20,7 +20,7 @@ API_FEATURES: Final = frozenset(
     }
 )
 
-RENDERER_CAPABILITIES: Final = ("repeatable_text",)
+RENDERER_CAPABILITIES: Final = ("repeatable_text", "typed_credits")
 RENDERER_CONTROLS: Final[tuple[RendererControl, ...]] = (
     "text",
     "number",
@@ -28,4 +28,5 @@ RENDERER_CONTROLS: Final[tuple[RendererControl, ...]] = (
     "multi_choice",
     "duration",
     "boolean",
+    "credits",
 )

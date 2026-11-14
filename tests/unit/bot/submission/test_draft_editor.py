@@ -355,7 +355,7 @@ async def test_required_fields_are_counted_until_the_draft_is_ready() -> None:
     with transaction():
         await editor.workspace.save_values(
             {
-                "creators": ["Alice"],
+                "credits": [{"name": "Alice"}],
                 "schematic_visibility": "reviewer_only",
                 "opening_width": 2,
                 "opening_height": 2,
@@ -499,7 +499,7 @@ async def test_picker_opens_on_the_page_of_the_current_choice() -> None:
     assert "Page 2 of 2." in text
     assert "Choices on other pages are kept" not in text
     (select,) = find_all(child.render(), SelectMenu)
-    assert [option.label for option in select.options if option.default] == ["Java 1.2"]
+    assert [source_text(option.label) for option in select.options if option.default] == ["Java 1.2"]
     with transaction():
         await child._select_value("source_version", Mock(spec=sd.SelectionEvent, values=("Java 1.1",)))
     assert editor.workspace.draft.snapshot.answers["source_version"] == "Java 1.1"
@@ -597,14 +597,14 @@ async def test_needs_changes_lists_issues_the_submitter_can_act_on() -> None:
         drafts.current,
         snapshot=replace(drafts.current.snapshot, status=DraftStatus.NEEDS_ATTENTION),
         preparation_issues=(
-            SubmissionAttentionIssue("creators", SubmissionAttentionReason.TOO_SHORT),
+            SubmissionAttentionIssue("credits", SubmissionAttentionReason.TOO_SHORT),
             SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PRIMARY_REQUIRED),
         ),
     )
     editor = await open_editor(services, drafts)
     assert editor.workspace.phase is Phase.NEEDS_CHANGES
     text = rendered_text(editor)
-    assert "- Creators: Too short" in text
+    assert "- Credits: Too short" in text
     assert "Choose the main one under **Files**" in text
     assert "Submit" in labels(editor.render())
 
@@ -640,7 +640,7 @@ async def test_pressing_edit_on_a_catalogue_section_opens_a_second_message() -> 
         assert harness.response.send_message.await_args is not None
         assert harness.response.send_message.await_args.kwargs["ephemeral"] is True
         harness.response.edit_message.assert_not_awaited()
-        assert any("**Name and creators**" in text for text in ui.texts())
+        assert any("**Name and credits**" in text for text in ui.texts())
         assert any("**Patterns**" in text for text in ui.texts())
 
 

@@ -25,6 +25,7 @@ from typing import cast
 
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import UnresolvedTaxonomy
+from squid.builds.domain.credits import read_credits
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS, RestrictionField
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import JSONValue
@@ -58,7 +59,7 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
     answers: dict[str, JSONValue] = {
         "display_name": build.display_name,
         "description": build.description,
-        "creators": list(build.creators_ign),
+        "credits": [credit.to_json() for credit in build.credits],
         "capture_width": build.width,
         "capture_height": build.height,
         "capture_depth": build.depth,
@@ -146,6 +147,8 @@ def patch_from_answers(
     for field_id, attribute in simple.items():
         if changed(field_id):
             changes[attribute] = _blank_as_none(after.get(field_id))
+    if changed("credits"):
+        changes["credits"] = read_credits(after.get("credits", []))
     lists = {
         "creators": "creators_ign",
         "versions": "versions",

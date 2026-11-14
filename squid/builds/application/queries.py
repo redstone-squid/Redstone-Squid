@@ -8,6 +8,7 @@ from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
 from squid.builds.domain import Status
+from squid.builds.domain.credits import Credit
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
@@ -68,6 +69,7 @@ class PublicBuildSummary:
     closing_time: int | None
     created_at: datetime | None
     updated_at: datetime | None
+    credits: tuple[Credit, ...] = ()
 
     @classmethod
     def from_build(cls, build: Build) -> PublicBuildSummary:
@@ -88,6 +90,7 @@ class PublicBuildSummary:
             category=build.category.value,
             dimensions=build.dimensions,
             creators=tuple(build.creators_ign),
+            credits=tuple(build.credits),
             tags=tuple(
                 PublicBuildTag(
                     key=assignment.definition.stable_key,

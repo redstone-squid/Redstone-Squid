@@ -69,6 +69,17 @@ export type BaseTitle = 'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 
 export type BuildCategory = 'Door' | 'Extender' | 'Utility' | 'Entrance' | 'Other';
 
 /**
+ * BuildCreditSummary
+ */
+export type BuildCreditSummary = {
+    name: string;
+    kind: CreditKind;
+    username: string | null;
+    role: CreditRole;
+    attribution: CreditAttribution;
+};
+
+/**
  * BuildDetail
  */
 export type BuildDetail = {
@@ -80,6 +91,7 @@ export type BuildDetail = {
     category: string;
     dimensions: Dimensions;
     creators: Array<string>;
+    credits?: Array<BuildCreditSummary>;
     tags: Array<BuildTag>;
     preview: BuildPreview | null;
     version_spec: string | null;
@@ -137,6 +149,7 @@ export type BuildPatch = {
     locationality?: string | null;
     directionality?: string | null;
     extra_user_info?: string | null;
+    credits?: Array<Credit> | null;
     creators_ign?: Array<string> | null;
     image_urls?: Array<string> | null;
     video_urls?: Array<string> | null;
@@ -196,6 +209,7 @@ export type BuildSummary = {
     category: string;
     dimensions: Dimensions;
     creators: Array<string>;
+    credits?: Array<BuildCreditSummary>;
     tags: Array<BuildTag>;
     preview: BuildPreview | null;
     version_spec: string | null;
@@ -372,7 +386,7 @@ export type ConsentGrantRequest = {
  *
  * Control types a submission client may render.
  */
-export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
+export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean' | 'credits';
 
 /**
  * CreatorAliasDetail
@@ -399,6 +413,40 @@ export type CreatorProfileDetail = {
     joined_at?: string | null;
     identities?: Array<IdentityDetails>;
 };
+
+/**
+ * Credit
+ */
+export type Credit = {
+    name: string;
+    kind?: CreditKind;
+    username?: string | null;
+    subject?: string | null;
+    role?: CreditRole;
+    attribution?: CreditAttribution;
+    source_message_id?: number | null;
+};
+
+/**
+ * CreditAttribution
+ *
+ * How the attribution was obtained.
+ */
+export type CreditAttribution = 'explicit' | 'assumed_sender' | 'confirmed' | 'legacy';
+
+/**
+ * CreditKind
+ *
+ * The namespace of an observed creator reference.
+ */
+export type CreditKind = 'name' | 'discord' | 'minecraft_java' | 'minecraft_bedrock';
+
+/**
+ * CreditRole
+ *
+ * How the credited party contributed to the build.
+ */
+export type CreditRole = 'creator' | 'designer' | 'layout' | 'contributor';
 
 /**
  * CreditedAlias
@@ -1293,6 +1341,7 @@ export type RecalculationFacts = {
     normal_opening_time?: number | null;
     normal_closing_time?: number | null;
     patterns?: Array<string>;
+    credits?: Array<Credit>;
     creators_ign?: Array<string>;
     wiring_placement_restrictions?: Array<string>;
     animated_restrictions?: Array<string>;
@@ -1394,7 +1443,7 @@ export type RecordSearchResult = {
  * RendererCapabilities
  */
 export type RendererCapabilities = {
-    controls: Array<'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean'>;
+    controls: Array<'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean' | 'credits'>;
     capability_identifiers: Array<string>;
 };
 
@@ -1555,7 +1604,7 @@ export type StoredDraftResponse = {
     updated_at: string;
     expires_at: string;
     source_installation_id?: string | null;
-    preparation_issues?: Array<unknown>;
+    preparation_issues?: Array<SubmissionAttentionIssueResponse>;
     waiting_for_artifacts?: boolean;
 };
 
@@ -1739,7 +1788,7 @@ export type UserMe = {
  *
  * Canonical JSON value expected from a field.
  */
-export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'game_ticks';
+export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'game_ticks' | 'credit_list';
 
 /**
  * ValueType

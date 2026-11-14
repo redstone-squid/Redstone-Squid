@@ -23,6 +23,7 @@ from squid.builds.application.locks import BuildLockService
 from squid.builds.application.restrictions import RestrictionService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import Status, UnresolvedTaxonomy
+from squid.builds.domain.credits import Credit, CreditKind, CreditRole
 from squid.builds.history_models import BuildHistoryEntry
 from squid.builds.models import Build, OtherBuild
 from squid.core.actors import Actor
@@ -248,3 +249,34 @@ async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
             (await session.scalars(select(BuildHistoryEntry).where(BuildHistoryEntry.build_id == build.id))).all()
         )
         assert len(entries) == 4
+
+
+async def test_typed_credit_edit_undo_and_redo_preserve_identity_and_role(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    service, executor, actor, build = await setup(migrated_session_factory)
+    assert build.id is not None
+    credits = [
+        Credit(name="Alex", kind=CreditKind.DISCORD, subject="123", username="alex_d"),
+        Credit(name="Alex", role=CreditRole.LAYOUT),
+    ]
+    result = await executor.execute(
+        EditCommand(
+            BUILD_EDIT,
+            (Revision(build_target(build.id), build.revision),),
+            patch_values(BuildEditPatch(credits=credits)),
+        ),
+        actor,
+    )
+    assert result.receipt is not None
+    edited = await service.get(build.id)
+    assert edited is not None
+    assert edited.credits == credits
+    undone = await executor.execute(result.receipt.undo(result.outcome.revisions), actor)
+    restored = await service.get(build.id)
+    assert restored is not None
+    assert restored.credits == []
+    await executor.execute(result.receipt.redo(undone.outcome.revisions), actor)
+    redone = await service.get(build.id)
+    assert redone is not None
+    assert redone.credits == credits

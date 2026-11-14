@@ -16,6 +16,7 @@ from squid.builds.domain import DoorOrientationLiteral
 from squid.core.errors import JSONValue
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
+from squid.submissions.application.credit_text import parse_credit_lines
 from squid.submissions.domain import match_choice
 from squid_i18n import md_tr
 from squid_ui.text import TextLike
@@ -133,7 +134,10 @@ def _prefill(
     if versions is not None:
         put("versions", {"version_compatibility": versions.strip() or None})
     if creators is not None:
-        put("creators", {"creators": split_values(creators)})
+        put(
+            "creators",
+            {"credits": [credit.to_json() for credit in parse_credit_lines("\n".join(split_values(creators)))]},
+        )
     if notes is not None:
         put("notes", {"description": notes.strip() or None})
     unknown: list[str] = []

@@ -4075,7 +4075,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/edit.py:82"
+      "squid/bot/submission/edit.py:83"
     ]
   },
   "bot-submission-edit-error": {
@@ -4084,7 +4084,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/edit.py:61"
+      "squid/bot/submission/edit.py:62"
     ]
   },
   "bot-submission-edit-no-build-with-that-id": {
@@ -4093,7 +4093,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/edit.py:62"
+      "squid/bot/submission/edit.py:63"
     ]
   },
   "bot-submission-edit-size-format": {
@@ -4102,7 +4102,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/edit.py:127"
+      "squid/bot/submission/edit.py:128"
     ]
   },
   "bot-submission-edit-unknown-names": {
@@ -4117,7 +4117,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/edit.py:160"
+      "squid/bot/submission/edit.py:164"
     ]
   },
   "bot-submission-records-build-kind": {
@@ -4622,7 +4622,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:429"
+      "squid/bot/submission/submit.py:432"
     ]
   },
   "bot-submission-submit-check-build-size": {
@@ -4631,7 +4631,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:236"
+      "squid/bot/submission/submit.py:239"
     ]
   },
   "bot-submission-submit-check-door-size": {
@@ -4640,7 +4640,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:226"
+      "squid/bot/submission/submit.py:229"
     ]
   },
   "bot-submission-submit-door-skydoor-or-trapdoor": {
@@ -4649,7 +4649,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:119"
+      "squid/bot/submission/submit.py:120"
     ]
   },
   "bot-submission-submit-nothing-to-recalculate": {
@@ -4658,7 +4658,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:414"
+      "squid/bot/submission/submit.py:417"
     ]
   },
   "bot-submission-submit-the-whole-build-e-g-x-x": {
@@ -4667,7 +4667,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:128"
+      "squid/bot/submission/submit.py:129"
     ]
   },
   "bot-submission-ui-opening-cannot-edit-this-build": {
@@ -6097,7 +6097,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:346"
+      "squid/bot/submission/submit.py:349"
     ]
   },
   "build-drafts-edited": {
@@ -6112,7 +6112,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/submit.py:503"
+      "squid/bot/submission/submit.py:506"
     ]
   },
   "build-drafts-empty": {
@@ -6121,7 +6121,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:358"
+      "squid/bot/submission/submit.py:361"
     ]
   },
   "build-drafts-inbox-empty": {
@@ -6130,7 +6130,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:356"
+      "squid/bot/submission/submit.py:359"
     ]
   },
   "build-drafts-open": {
@@ -6139,7 +6139,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:339"
+      "squid/bot/submission/submit.py:342"
     ]
   },
   "build-drafts-review": {
@@ -6148,7 +6148,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:348"
+      "squid/bot/submission/submit.py:351"
     ]
   },
   "build-drafts-state-creating": {
@@ -6157,7 +6157,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:495"
+      "squid/bot/submission/submit.py:498"
     ]
   },
   "build-drafts-state-editing": {
@@ -6166,7 +6166,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:501"
+      "squid/bot/submission/submit.py:504"
     ]
   },
   "build-drafts-state-needs-changes": {
@@ -6175,7 +6175,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:499"
+      "squid/bot/submission/submit.py:502"
     ]
   },
   "build-drafts-state-waiting": {
@@ -6184,7 +6184,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:497"
+      "squid/bot/submission/submit.py:500"
     ]
   },
   "build-edit-form-about": {
@@ -6193,7 +6193,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:399"
+      "squid/submissions/application/forms.py:403"
     ]
   },
   "build-edit-form-command": {
@@ -6202,7 +6202,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:628"
+      "squid/submissions/application/forms.py:632"
     ]
   },
   "build-edit-form-coordinates": {
@@ -6211,7 +6211,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:627"
+      "squid/submissions/application/forms.py:631"
     ]
   },
   "build-edit-form-images": {
@@ -6220,7 +6220,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:623"
+      "squid/submissions/application/forms.py:627"
     ]
   },
   "build-edit-form-links-location": {
@@ -6229,7 +6229,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:621"
+      "squid/submissions/application/forms.py:625"
     ]
   },
   "build-edit-form-one-per-line": {
@@ -6238,7 +6238,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:600"
+      "squid/submissions/application/forms.py:604"
     ]
   },
   "build-edit-form-server": {
@@ -6247,7 +6247,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:626"
+      "squid/submissions/application/forms.py:630"
     ]
   },
   "build-edit-form-versions": {
@@ -6256,7 +6256,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:282"
+      "squid/submissions/application/forms.py:286"
     ]
   },
   "build-edit-form-videos": {
@@ -6265,7 +6265,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:624"
+      "squid/submissions/application/forms.py:628"
     ]
   },
   "build-edit-form-world-downloads": {
@@ -6274,7 +6274,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:625"
+      "squid/submissions/application/forms.py:629"
     ]
   },
   "build-edit-history-fields": {
@@ -6362,7 +6362,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/edit.py:155"
+      "squid/bot/submission/edit.py:159"
     ]
   },
   "build-editor-open-new-editor": {
@@ -7366,7 +7366,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:313"
+      "squid/bot/submission/submit.py:316"
     ]
   },
   "command-build-drafts-inbox-help": {
@@ -7375,7 +7375,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:317"
+      "squid/bot/submission/submit.py:320"
     ]
   },
   "command-build-drafts-inbox-name": {
@@ -7384,7 +7384,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:316"
+      "squid/bot/submission/submit.py:319"
     ]
   },
   "command-build-drafts-name": {
@@ -7393,7 +7393,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:311"
+      "squid/bot/submission/submit.py:314"
     ]
   },
   "command-build-help": {
@@ -7420,7 +7420,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:127"
+      "squid/bot/submission/submit.py:128"
     ]
   },
   "command-build-submit-category-name": {
@@ -7429,7 +7429,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:97"
+      "squid/bot/submission/submit.py:98"
     ]
   },
   "command-build-submit-choice-category-door": {
@@ -7438,7 +7438,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:100"
+      "squid/bot/submission/submit.py:101"
     ]
   },
   "command-build-submit-choice-category-entrance": {
@@ -7447,7 +7447,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:103"
+      "squid/bot/submission/submit.py:104"
     ]
   },
   "command-build-submit-choice-category-extender": {
@@ -7456,7 +7456,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:101"
+      "squid/bot/submission/submit.py:102"
     ]
   },
   "command-build-submit-choice-category-other": {
@@ -7465,7 +7465,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:104"
+      "squid/bot/submission/submit.py:105"
     ]
   },
   "command-build-submit-choice-category-utility": {
@@ -7474,7 +7474,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:102"
+      "squid/bot/submission/submit.py:103"
     ]
   },
   "command-build-submit-choice-door-type-door": {
@@ -7483,7 +7483,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:121"
+      "squid/bot/submission/submit.py:122"
     ]
   },
   "command-build-submit-choice-door-type-skydoor": {
@@ -7492,7 +7492,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:122"
+      "squid/bot/submission/submit.py:123"
     ]
   },
   "command-build-submit-choice-door-type-trapdoor": {
@@ -7501,7 +7501,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:123"
+      "squid/bot/submission/submit.py:124"
     ]
   },
   "command-build-submit-creators-name": {
@@ -7510,7 +7510,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:133"
+      "squid/bot/submission/submit.py:134"
     ]
   },
   "command-build-submit-description-name": {
@@ -7519,7 +7519,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:159"
+      "squid/bot/submission/submit.py:162"
     ]
   },
   "command-build-submit-door-size-name": {
@@ -7528,7 +7528,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:112"
+      "squid/bot/submission/submit.py:113"
     ]
   },
   "command-build-submit-door-type-name": {
@@ -7537,7 +7537,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:118"
+      "squid/bot/submission/submit.py:119"
     ]
   },
   "command-build-submit-file-2-name": {
@@ -7546,7 +7546,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:167"
+      "squid/bot/submission/submit.py:170"
     ]
   },
   "command-build-submit-file-3-name": {
@@ -7555,7 +7555,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:171"
+      "squid/bot/submission/submit.py:174"
     ]
   },
   "command-build-submit-file-4-name": {
@@ -7564,7 +7564,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:175"
+      "squid/bot/submission/submit.py:178"
     ]
   },
   "command-build-submit-file-name": {
@@ -7573,7 +7573,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:163"
+      "squid/bot/submission/submit.py:166"
     ]
   },
   "command-build-submit-help": {
@@ -7582,7 +7582,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:92"
+      "squid/bot/submission/submit.py:93"
     ]
   },
   "command-build-submit-name": {
@@ -7591,7 +7591,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:90"
+      "squid/bot/submission/submit.py:91"
     ]
   },
   "command-build-submit-name-name": {
@@ -7600,7 +7600,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:108"
+      "squid/bot/submission/submit.py:109"
     ]
   },
   "command-build-submit-patterns-name": {
@@ -7609,7 +7609,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:145"
+      "squid/bot/submission/submit.py:148"
     ]
   },
   "command-build-submit-restrictions-name": {
@@ -7618,7 +7618,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:152"
+      "squid/bot/submission/submit.py:155"
     ]
   },
   "command-build-submit-versions-name": {
@@ -7627,7 +7627,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:138"
+      "squid/bot/submission/submit.py:141"
     ]
   },
   "command-errors-help": {
@@ -7834,7 +7834,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:408"
+      "squid/bot/submission/submit.py:411"
     ]
   },
   "command-records-browse-help": {
@@ -9059,7 +9059,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:75"
+      "squid/bot/submission/ui/sections.py:77"
     ]
   },
   "draft-editor-choose": {
@@ -9068,7 +9068,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:239"
+      "squid/bot/submission/ui/sections.py:241"
     ]
   },
   "draft-editor-choose-file": {
@@ -9087,7 +9087,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/ui/build_edit.py:531",
-      "squid/bot/submission/ui/sections.py:314"
+      "squid/bot/submission/ui/sections.py:316"
     ]
   },
   "draft-editor-door-size": {
@@ -9096,7 +9096,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:80"
+      "squid/bot/submission/ui/sections.py:82"
     ]
   },
   "draft-editor-edit": {
@@ -9107,7 +9107,7 @@
     "locations": [
       "squid/bot/submission/ui/drafts.py:469",
       "squid/bot/submission/ui/editor.py:37",
-      "squid/bot/submission/ui/sections.py:194"
+      "squid/bot/submission/ui/sections.py:196"
     ]
   },
   "draft-editor-edit-build": {
@@ -9410,7 +9410,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:254"
+      "squid/bot/submission/ui/sections.py:256"
     ]
   },
   "draft-editor-no": {
@@ -9419,8 +9419,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:397",
-      "squid/bot/submission/ui/sections.py:471"
+      "squid/bot/submission/ui/sections.py:399",
+      "squid/bot/submission/ui/sections.py:489"
     ]
   },
   "draft-editor-no-options": {
@@ -9429,7 +9429,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:217"
+      "squid/bot/submission/ui/sections.py:219"
     ]
   },
   "draft-editor-not-set": {
@@ -9438,8 +9438,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:365",
-      "squid/bot/submission/ui/sections.py:388"
+      "squid/bot/submission/ui/sections.py:367",
+      "squid/bot/submission/ui/sections.py:390"
     ]
   },
   "draft-editor-nothing-chosen": {
@@ -9448,7 +9448,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:214"
+      "squid/bot/submission/ui/sections.py:216"
     ]
   },
   "draft-editor-one-per-line": {
@@ -9457,7 +9457,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:515"
+      "squid/bot/submission/ui/sections.py:533"
     ]
   },
   "draft-editor-picker-pages": {
@@ -9477,7 +9477,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/sections.py:231"
+      "squid/bot/submission/ui/sections.py:233"
     ]
   },
   "draft-editor-picker-pages-multiple": {
@@ -9497,7 +9497,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/sections.py:226"
+      "squid/bot/submission/ui/sections.py:228"
     ]
   },
   "draft-editor-picker-required": {
@@ -9512,7 +9512,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/sections.py:208"
+      "squid/bot/submission/ui/sections.py:210"
     ]
   },
   "draft-editor-preview": {
@@ -9559,7 +9559,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:248"
+      "squid/bot/submission/ui/sections.py:250"
     ]
   },
   "draft-editor-problem-above-maximum": {
@@ -9568,7 +9568,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:596"
+      "squid/bot/submission/ui/sections.py:626"
     ]
   },
   "draft-editor-problem-below-minimum": {
@@ -9577,7 +9577,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:594"
+      "squid/bot/submission/ui/sections.py:624"
     ]
   },
   "draft-editor-problem-required": {
@@ -9586,7 +9586,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:590"
+      "squid/bot/submission/ui/sections.py:620"
     ]
   },
   "draft-editor-problem-required-value": {
@@ -9595,7 +9595,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:592"
+      "squid/bot/submission/ui/sections.py:622"
     ]
   },
   "draft-editor-problem-too-few-items": {
@@ -9604,7 +9604,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:602"
+      "squid/bot/submission/ui/sections.py:632"
     ]
   },
   "draft-editor-problem-too-long": {
@@ -9613,7 +9613,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:600"
+      "squid/bot/submission/ui/sections.py:630"
     ]
   },
   "draft-editor-problem-too-many-items": {
@@ -9622,7 +9622,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:604"
+      "squid/bot/submission/ui/sections.py:634"
     ]
   },
   "draft-editor-problem-too-short": {
@@ -9631,7 +9631,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:598"
+      "squid/bot/submission/ui/sections.py:628"
     ]
   },
   "draft-editor-problem-unknown-field": {
@@ -9640,7 +9640,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:608"
+      "squid/bot/submission/ui/sections.py:638"
     ]
   },
   "draft-editor-problem-unknown-option": {
@@ -9649,7 +9649,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:606"
+      "squid/bot/submission/ui/sections.py:636"
     ]
   },
   "draft-editor-problem-wrong-type": {
@@ -9658,7 +9658,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:610"
+      "squid/bot/submission/ui/sections.py:640"
     ]
   },
   "draft-editor-ready": {
@@ -9740,8 +9740,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:363",
-      "squid/bot/submission/ui/sections.py:387"
+      "squid/bot/submission/ui/sections.py:365",
+      "squid/bot/submission/ui/sections.py:389"
     ]
   },
   "draft-editor-required-left": {
@@ -9765,7 +9765,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:335"
+      "squid/bot/submission/ui/sections.py:337"
     ]
   },
   "draft-editor-section-gone": {
@@ -9774,7 +9774,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:179"
+      "squid/bot/submission/ui/sections.py:181"
     ]
   },
   "draft-editor-size-format": {
@@ -9783,7 +9783,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:542"
+      "squid/bot/submission/ui/sections.py:572"
     ]
   },
   "draft-editor-size-help": {
@@ -9792,7 +9792,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:564"
+      "squid/bot/submission/ui/sections.py:594"
     ]
   },
   "draft-editor-status-creating": {
@@ -9951,7 +9951,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/submit.py:516"
+      "squid/bot/submission/submit.py:519"
     ]
   },
   "draft-editor-use-file": {
@@ -9978,8 +9978,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:397",
-      "squid/bot/submission/ui/sections.py:470"
+      "squid/bot/submission/ui/sections.py:399",
+      "squid/bot/submission/ui/sections.py:488"
     ]
   },
   "draft-history-add-files": {
@@ -10097,7 +10097,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:305"
+      "squid/bot/submission/ui/sections.py:307"
     ]
   },
   "editor-detail-locked": {
@@ -10106,7 +10106,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/sections.py:307"
+      "squid/bot/submission/ui/sections.py:309"
     ]
   },
   "edits-commit-uncertain": {
@@ -15693,7 +15693,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:179"
+      "squid/submissions/application/forms.py:177"
     ]
   },
   "submissions-ai-generated-ai": {
@@ -15702,7 +15702,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:411"
+      "squid/submissions/application/forms.py:415"
     ]
   },
   "submissions-application-forms-build-depth": {
@@ -15711,7 +15711,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:248"
+      "squid/submissions/application/forms.py:252"
     ]
   },
   "submissions-application-forms-build-height": {
@@ -15720,7 +15720,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:241"
+      "squid/submissions/application/forms.py:245"
     ]
   },
   "submissions-application-forms-build-identity": {
@@ -15729,7 +15729,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:189"
+      "squid/submissions/application/forms.py:190"
     ]
   },
   "submissions-application-forms-build-width": {
@@ -15738,7 +15738,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:234"
+      "squid/submissions/application/forms.py:238"
     ]
   },
   "submissions-application-forms-cc": {
@@ -15747,7 +15747,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:699"
+      "squid/submissions/application/forms.py:703"
     ]
   },
   "submissions-application-forms-cc-by": {
@@ -15756,7 +15756,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:700"
+      "squid/submissions/application/forms.py:704"
     ]
   },
   "submissions-application-forms-closing-time": {
@@ -15765,7 +15765,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:523"
+      "squid/submissions/application/forms.py:527"
     ]
   },
   "submissions-application-forms-creators": {
@@ -15774,7 +15774,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:214"
+      "squid/submissions/application/forms.py:218"
     ]
   },
   "submissions-application-forms-description": {
@@ -15783,7 +15783,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:206"
+      "squid/submissions/application/forms.py:208"
     ]
   },
   "submissions-application-forms-display-name": {
@@ -15792,7 +15792,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:193"
+      "squid/submissions/application/forms.py:195"
     ]
   },
   "submissions-application-forms-door": {
@@ -15801,8 +15801,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:466",
-      "squid/submissions/application/forms.py:500"
+      "squid/submissions/application/forms.py:470",
+      "squid/submissions/application/forms.py:504"
     ]
   },
   "submissions-application-forms-door-geometry": {
@@ -15811,7 +15811,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:470"
+      "squid/submissions/application/forms.py:474"
     ]
   },
   "submissions-application-forms-door-orientation": {
@@ -15820,7 +15820,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:495"
+      "squid/submissions/application/forms.py:499"
     ]
   },
   "submissions-application-forms-entrance": {
@@ -15829,7 +15829,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:442"
+      "squid/submissions/application/forms.py:446"
     ]
   },
   "submissions-application-forms-extender": {
@@ -15838,7 +15838,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:539"
+      "squid/submissions/application/forms.py:543"
     ]
   },
   "submissions-application-forms-extender-movement": {
@@ -15847,7 +15847,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:543"
+      "squid/submissions/application/forms.py:547"
     ]
   },
   "submissions-application-forms-extension-length": {
@@ -15856,7 +15856,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:567"
+      "squid/submissions/application/forms.py:571"
     ]
   },
   "submissions-application-forms-extension-time": {
@@ -15865,7 +15865,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:580"
+      "squid/submissions/application/forms.py:584"
     ]
   },
   "submissions-application-forms-horizontal": {
@@ -15874,7 +15874,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:553"
+      "squid/submissions/application/forms.py:557"
     ]
   },
   "submissions-application-forms-known-patterns": {
@@ -15883,7 +15883,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:640"
+      "squid/submissions/application/forms.py:644"
     ]
   },
   "submissions-application-forms-known-restrictions": {
@@ -15892,7 +15892,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:304"
+      "squid/submissions/application/forms.py:308"
     ]
   },
   "submissions-application-forms-mechanism-patterns": {
@@ -15901,7 +15901,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:636"
+      "squid/submissions/application/forms.py:640"
     ]
   },
   "submissions-application-forms-movement-orientation": {
@@ -15910,7 +15910,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:547"
+      "squid/submissions/application/forms.py:551"
     ]
   },
   "submissions-application-forms-opening-depth": {
@@ -15919,7 +15919,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:460"
+      "squid/submissions/application/forms.py:464"
     ]
   },
   "submissions-application-forms-opening-height": {
@@ -15928,7 +15928,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:455"
+      "squid/submissions/application/forms.py:459"
     ]
   },
   "submissions-application-forms-opening-time": {
@@ -15937,7 +15937,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:515"
+      "squid/submissions/application/forms.py:519"
     ]
   },
   "submissions-application-forms-opening-width": {
@@ -15946,7 +15946,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:450"
+      "squid/submissions/application/forms.py:454"
     ]
   },
   "submissions-application-forms-other": {
@@ -15955,7 +15955,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:443"
+      "squid/submissions/application/forms.py:447"
     ]
   },
   "submissions-application-forms-provenance": {
@@ -15964,7 +15964,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:177"
+      "squid/submissions/application/forms.py:175"
     ]
   },
   "submissions-application-forms-public-download": {
@@ -15973,7 +15973,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:364"
+      "squid/submissions/application/forms.py:368"
     ]
   },
   "submissions-application-forms-retraction-time": {
@@ -15982,7 +15982,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:584"
+      "squid/submissions/application/forms.py:588"
     ]
   },
   "submissions-application-forms-reviewer-only": {
@@ -15991,7 +15991,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:360"
+      "squid/submissions/application/forms.py:364"
     ]
   },
   "submissions-application-forms-schematic-visibility": {
@@ -16000,7 +16000,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:345"
+      "squid/submissions/application/forms.py:349"
     ]
   },
   "submissions-application-forms-showcase-tags": {
@@ -16009,7 +16009,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:330"
+      "squid/submissions/application/forms.py:334"
     ]
   },
   "submissions-application-forms-skydoor": {
@@ -16018,7 +16018,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:501"
+      "squid/submissions/application/forms.py:505"
     ]
   },
   "submissions-application-forms-trapdoor": {
@@ -16027,7 +16027,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:503"
+      "squid/submissions/application/forms.py:507"
     ]
   },
   "submissions-application-forms-utility": {
@@ -16036,7 +16036,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:441"
+      "squid/submissions/application/forms.py:445"
     ]
   },
   "submissions-application-forms-vertical-downward": {
@@ -16045,7 +16045,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:561"
+      "squid/submissions/application/forms.py:565"
     ]
   },
   "submissions-application-forms-vertical-upward": {
@@ -16054,7 +16054,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:557"
+      "squid/submissions/application/forms.py:561"
     ]
   },
   "submissions-attachment-upload-authority": {
@@ -16096,7 +16096,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:280"
+      "squid/submissions/domain/forms.py:283"
     ]
   },
   "submissions-category-duplicates-common": {
@@ -16116,7 +16116,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:328"
+      "squid/submissions/domain/forms.py:331"
     ]
   },
   "submissions-cc-by-nc": {
@@ -16125,7 +16125,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:703"
+      "squid/submissions/application/forms.py:707"
     ]
   },
   "submissions-cc-by-nc-nd": {
@@ -16134,7 +16134,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:705"
+      "squid/submissions/application/forms.py:709"
     ]
   },
   "submissions-cc-by-nc-sa": {
@@ -16143,7 +16143,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:704"
+      "squid/submissions/application/forms.py:708"
     ]
   },
   "submissions-cc-by-nd": {
@@ -16152,7 +16152,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:702"
+      "squid/submissions/application/forms.py:706"
     ]
   },
   "submissions-cc-by-sa": {
@@ -16161,7 +16161,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:701"
+      "squid/submissions/application/forms.py:705"
     ]
   },
   "submissions-choice-characters-without": {
@@ -16170,7 +16170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/forms.py:84"
+      "squid/submissions/domain/forms.py:87"
     ]
   },
   "submissions-choice-labels-blank": {
@@ -16179,7 +16179,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/forms.py:90"
+      "squid/submissions/domain/forms.py:93"
     ]
   },
   "submissions-choice-options-required": {
@@ -16194,7 +16194,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:218"
+      "squid/submissions/domain/forms.py:221"
     ]
   },
   "submissions-choose-explicitly-publication": {
@@ -16203,7 +16203,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:348"
+      "squid/submissions/application/forms.py:352"
     ]
   },
   "submissions-claim-limit": {
@@ -16236,7 +16236,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:462"
+      "squid/submissions/application/forms.py:466"
     ]
   },
   "submissions-clear-opening-height": {
@@ -16245,7 +16245,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:457"
+      "squid/submissions/application/forms.py:461"
     ]
   },
   "submissions-clear-opening-width": {
@@ -16254,7 +16254,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:452"
+      "squid/submissions/application/forms.py:456"
     ]
   },
   "submissions-client-instance-id": {
@@ -16272,7 +16272,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:403"
+      "squid/submissions/application/forms.py:407"
     ]
   },
   "submissions-credit-minecraft-server": {
@@ -16281,7 +16281,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:184"
+      "squid/submissions/application/forms.py:182"
+    ]
+  },
+  "submissions-credits": {
+    "fingerprint": "3e7a58cc41005b79c07cc588e4929e14bfa80c2c520ec0c7fd67eab2e7304383",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/forms.py:216"
     ]
   },
   "submissions-declared-version-compatibility": {
@@ -16290,7 +16299,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:291"
+      "squid/submissions/application/forms.py:295"
     ]
   },
   "submissions-dimensions-versions": {
@@ -16299,7 +16308,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:230"
+      "squid/submissions/application/forms.py:234"
     ]
   },
   "submissions-draft-account-required": {
@@ -16335,7 +16344,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/drafts.py:239"
+      "squid/submissions/application/drafts.py:249"
     ]
   },
   "submissions-draft-change-duplicate-field": {
@@ -16383,7 +16392,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/application/drafts.py:354"
+      "squid/submissions/application/drafts.py:364"
     ]
   },
   "submissions-draft-expiry-limit": {
@@ -16392,7 +16401,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/drafts.py:422"
+      "squid/submissions/application/drafts.py:432"
     ]
   },
   "submissions-draft-json-compatible": {
@@ -16484,7 +16493,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/drafts.py:279"
+      "squid/submissions/application/drafts.py:289"
     ]
   },
   "submissions-draft-staff-unconfigured": {
@@ -16522,7 +16531,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:688"
+      "squid/submissions/application/forms.py:692"
     ]
   },
   "submissions-exact-source-minecraft": {
@@ -16531,7 +16540,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:255"
+      "squid/submissions/application/forms.py:259"
     ]
   },
   "submissions-extender-length-positive": {
@@ -16540,7 +16549,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:275"
+      "squid/submissions/domain/finalization.py:276"
     ]
   },
   "submissions-field-apply": {
@@ -16555,7 +16564,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:236"
+      "squid/submissions/domain/forms.py:239"
     ]
   },
   "submissions-field-blank-label": {
@@ -16570,7 +16579,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:204"
+      "squid/submissions/domain/forms.py:207"
     ]
   },
   "submissions-field-inline-dynamic": {
@@ -16585,7 +16594,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:212"
+      "squid/submissions/domain/forms.py:215"
     ]
   },
   "submissions-field-name-format": {
@@ -16600,7 +16609,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:532"
+      "squid/submissions/domain/forms.py:541"
     ]
   },
   "submissions-field-not-integer": {
@@ -16615,7 +16624,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/normalization.py:161"
+      "squid/submissions/domain/normalization.py:164"
     ]
   },
   "submissions-field-not-string": {
@@ -16630,8 +16639,8 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/normalization.py:127",
-      "squid/submissions/domain/normalization.py:140"
+      "squid/submissions/domain/normalization.py:130",
+      "squid/submissions/domain/normalization.py:143"
     ]
   },
   "submissions-field-purpose": {
@@ -16646,7 +16655,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:230"
+      "squid/submissions/domain/forms.py:233"
     ]
   },
   "submissions-finalization-job-missing": {
@@ -16673,7 +16682,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:380"
+      "squid/submissions/domain/finalization.py:387"
     ]
   },
   "submissions-form-revision-protocol": {
@@ -16682,7 +16691,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/forms.py:314"
+      "squid/submissions/domain/forms.py:317"
     ]
   },
   "submissions-i-permission-distribute": {
@@ -16691,7 +16700,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:381"
+      "squid/submissions/application/forms.py:385"
     ]
   },
   "submissions-invalid-draft-field-id": {
@@ -16721,7 +16730,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/finalization.py:119"
+      "squid/submissions/domain/finalization.py:120"
     ]
   },
   "submissions-json-contain-too": {
@@ -16745,7 +16754,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/finalization.py:404"
+      "squid/submissions/domain/finalization.py:411"
     ]
   },
   "submissions-keys-unique": {
@@ -16760,7 +16769,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/finalization.py:401"
+      "squid/submissions/domain/finalization.py:408"
     ]
   },
   "submissions-min-items-exceed": {
@@ -16769,7 +16778,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/forms.py:158"
+      "squid/submissions/domain/forms.py:161"
     ]
   },
   "submissions-min-length-exceed": {
@@ -16778,7 +16787,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/forms.py:155"
+      "squid/submissions/domain/forms.py:158"
     ]
   },
   "submissions-minimum-exceed-maximum": {
@@ -16787,7 +16796,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/forms.py:148"
+      "squid/submissions/domain/forms.py:151"
+    ]
+  },
+  "submissions-name-and-credits": {
+    "fingerprint": "e70cfde2107df158a9bf511722bd46691b3a7af34c501c6cbcd9353d977cf929",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/submissions/application/forms.py:188"
     ]
   },
   "submissions-negative": {
@@ -16802,7 +16820,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:153"
+      "squid/submissions/domain/forms.py:156"
     ]
   },
   "submissions-normalized-media-upload": {
@@ -16811,7 +16829,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:198"
+      "squid/submissions/domain/finalization.py:199"
     ]
   },
   "submissions-normalized-source-version-blank": {
@@ -16820,7 +16838,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:328"
+      "squid/submissions/domain/finalization.py:335"
     ]
   },
   "submissions-normalized-submission-provenance": {
@@ -16829,7 +16847,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:322"
+      "squid/submissions/domain/finalization.py:329"
     ]
   },
   "submissions-normalized-submission-schema": {
@@ -16838,7 +16856,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:325"
+      "squid/submissions/domain/finalization.py:332"
     ]
   },
   "submissions-not-string-list": {
@@ -16853,7 +16871,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/normalization.py:187"
+      "squid/submissions/domain/normalization.py:190"
     ]
   },
   "submissions-operation-ids-unique": {
@@ -16871,7 +16889,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:79"
+      "squid/submissions/application/forms.py:77"
     ]
   },
   "submissions-optional-default-timing": {
@@ -16880,8 +16898,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:512",
-      "squid/submissions/application/forms.py:577"
+      "squid/submissions/application/forms.py:516",
+      "squid/submissions/application/forms.py:581"
     ]
   },
   "submissions-optional-name-shown": {
@@ -16890,7 +16908,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:195"
+      "squid/submissions/application/forms.py:197"
     ]
   },
   "submissions-owner-account-id": {
@@ -16908,7 +16926,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:347"
+      "squid/submissions/domain/finalization.py:354"
     ]
   },
   "submissions-paper-installation-provenance-required": {
@@ -16917,7 +16935,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/drafts.py:309"
+      "squid/submissions/application/drafts.py:319"
     ]
   },
   "submissions-paper-may-retain": {
@@ -16926,7 +16944,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/drafts.py:97"
+      "squid/submissions/application/drafts.py:99"
     ]
   },
   "submissions-propose-missing-patterns": {
@@ -16935,7 +16953,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:649"
+      "squid/submissions/application/forms.py:653"
     ]
   },
   "submissions-propose-missing-restrictions": {
@@ -16944,7 +16962,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:313"
+      "squid/submissions/application/forms.py:317"
     ]
   },
   "submissions-public-schematic-license": {
@@ -16953,7 +16971,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:370"
+      "squid/submissions/application/forms.py:374"
     ]
   },
   "submissions-public-schematic-rights-required": {
@@ -16962,7 +16980,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:167"
+      "squid/submissions/domain/finalization.py:168"
     ]
   },
   "submissions-ready-schematic-assessment": {
@@ -16971,7 +16989,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:213"
+      "squid/submissions/domain/finalization.py:214"
     ]
   },
   "submissions-rejected-build-submission": {
@@ -16980,7 +16998,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:392"
+      "squid/submissions/domain/finalization.py:399"
     ]
   },
   "submissions-rejected-preparation-requirement": {
@@ -17004,7 +17022,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:224"
+      "squid/submissions/domain/forms.py:227"
     ]
   },
   "submissions-restrictions-tags": {
@@ -17013,7 +17031,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:300"
+      "squid/submissions/application/forms.py:304"
     ]
   },
   "submissions-retry-retention-limits": {
@@ -17031,7 +17049,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:173"
+      "squid/submissions/domain/finalization.py:174"
     ]
   },
   "submissions-schema-id-stable": {
@@ -17040,7 +17058,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/forms.py:311"
+      "squid/submissions/domain/forms.py:314"
     ]
   },
   "submissions-schema-revision-positive": {
@@ -17058,7 +17076,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:340"
+      "squid/submissions/application/forms.py:344"
     ]
   },
   "submissions-section-blank-title": {
@@ -17073,7 +17091,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:261"
+      "squid/submissions/domain/forms.py:264"
     ]
   },
   "submissions-show-sponsoring-server": {
@@ -17082,7 +17100,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:182"
+      "squid/submissions/application/forms.py:180"
     ]
   },
   "submissions-source-version-help": {
@@ -17091,7 +17109,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:258"
+      "squid/submissions/application/forms.py:262"
     ]
   },
   "submissions-sponsor-installation-match-required": {
@@ -17100,7 +17118,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:359"
+      "squid/submissions/domain/finalization.py:366"
     ]
   },
   "submissions-staged-attachment-unavailable": {
@@ -17133,7 +17151,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:139"
+      "squid/submissions/domain/finalization.py:140"
     ]
   },
   "submissions-submission-form-revisions": {
@@ -17142,7 +17160,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/drafts.py:212"
+      "squid/submissions/application/drafts.py:214"
     ]
   },
   "submissions-submission-incompatible-category": {
@@ -17157,7 +17175,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/finalization.py:341"
+      "squid/submissions/domain/finalization.py:348"
     ]
   },
   "submissions-submission-retain-sponsor": {
@@ -17166,7 +17184,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:365"
+      "squid/submissions/domain/finalization.py:372"
     ]
   },
   "submissions-submission-timings-negative": {
@@ -17175,7 +17193,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:412"
+      "squid/submissions/domain/finalization.py:419"
     ]
   },
   "submissions-suggestions-unofficial": {
@@ -17184,8 +17202,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:315",
-      "squid/submissions/application/forms.py:651"
+      "squid/submissions/application/forms.py:319",
+      "squid/submissions/application/forms.py:655"
     ]
   },
   "submissions-unique": {
@@ -17200,7 +17218,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:542"
+      "squid/submissions/domain/forms.py:551"
     ]
   },
   "submissions-unknown-submission-category": {
@@ -17215,7 +17233,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/forms.py:355"
+      "squid/submissions/domain/forms.py:358"
     ]
   },
   "submissions-unset-operations-carry": {
@@ -17233,7 +17251,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:156"
+      "squid/submissions/application/forms.py:154"
     ]
   },
   "submissions-validated-field-not": {
@@ -17248,7 +17266,7 @@
       }
     ],
     "locations": [
-      "squid/submissions/domain/normalization.py:172"
+      "squid/submissions/domain/normalization.py:175"
     ]
   },
   "submissions-verified-artifact-identifiers": {
@@ -17257,7 +17275,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/domain/finalization.py:195"
+      "squid/submissions/domain/finalization.py:196"
     ]
   },
   "submissions-visible-closing-time": {
@@ -17266,7 +17284,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:527"
+      "squid/submissions/application/forms.py:531"
     ]
   },
   "submissions-visible-opening-time": {
@@ -17275,7 +17293,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/submissions/application/forms.py:519"
+      "squid/submissions/application/forms.py:523"
     ]
   },
   "submit-another-attachment-help": {
@@ -17284,9 +17302,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:168",
-      "squid/bot/submission/submit.py:172",
-      "squid/bot/submission/submit.py:176"
+      "squid/bot/submission/submit.py:171",
+      "squid/bot/submission/submit.py:175",
+      "squid/bot/submission/submit.py:179"
     ]
   },
   "submit-attachment-types-help": {
@@ -17295,7 +17313,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:164"
+      "squid/bot/submission/submit.py:167"
     ]
   },
   "submit-author-consent-required": {
@@ -17310,7 +17328,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/submit.py:430"
+      "squid/bot/submission/submit.py:433"
     ]
   },
   "submit-build-log-channel-required": {
@@ -17319,7 +17337,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:415"
+      "squid/bot/submission/submit.py:418"
     ]
   },
   "submit-build-size-format": {
@@ -17328,7 +17346,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:237"
+      "squid/bot/submission/submit.py:240"
     ]
   },
   "submit-category-help": {
@@ -17337,7 +17355,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:98"
+      "squid/bot/submission/submit.py:99"
     ]
   },
   "submit-comma-separated-examples-help": {
@@ -17346,16 +17364,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:153"
+      "squid/bot/submission/submit.py:156"
     ]
   },
-  "submit-creator-ign-prompt": {
-    "fingerprint": "1758e3a52cce061a82f65a7868aafa9b50090f2878c422c49e8e4600ed496525",
+  "submit-credit-reference-prompt": {
+    "fingerprint": "5e9279bc0dac27ab137b5b4de16668e4cf96c44162d39fc70334be0793930099",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:134"
+      "squid/bot/submission/submit.py:135"
     ]
   },
   "submit-door-dimensions-help": {
@@ -17364,7 +17382,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:113"
+      "squid/bot/submission/submit.py:114"
     ]
   },
   "submit-door-options-only": {
@@ -17373,7 +17391,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:208"
+      "squid/bot/submission/submit.py:211"
     ]
   },
   "submit-door-size-format": {
@@ -17382,7 +17400,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:227"
+      "squid/bot/submission/submit.py:230"
     ]
   },
   "submit-inapplicable-options": {
@@ -17391,8 +17409,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:207",
-      "squid/bot/submission/submit.py:212"
+      "squid/bot/submission/submit.py:210",
+      "squid/bot/submission/submit.py:215"
     ]
   },
   "submit-name-help": {
@@ -17401,7 +17419,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:109"
+      "squid/bot/submission/submit.py:110"
     ]
   },
   "submit-pattern-options-only": {
@@ -17410,7 +17428,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:213"
+      "squid/bot/submission/submit.py:216"
     ]
   },
   "submit-pattern-type-examples-help": {
@@ -17419,7 +17437,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:146"
+      "squid/bot/submission/submit.py:149"
     ]
   },
   "submit-staff-notes-prompt": {
@@ -17428,7 +17446,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:160"
+      "squid/bot/submission/submit.py:163"
     ]
   },
   "submit-supported-versions-prompt": {
@@ -17437,7 +17455,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/submit.py:139"
+      "squid/bot/submission/submit.py:142"
     ]
   },
   "suggestions-duplicate-suggestion-source": {

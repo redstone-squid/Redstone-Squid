@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from squid.builds.application.editing import BuildEditPatch
+from squid.builds.domain.credits import Credit
 
 _INVALID_VALUE = "value_error"
 
@@ -43,6 +44,8 @@ class DoorPatch(BaseModel):
 
     @model_validator(mode="after")
     def _reject_invalid_clears(self) -> Self:
+        if {"credits", "creators_ign"} <= self.model_fields_set:
+            raise PydanticCustomError(_INVALID_VALUE, "Supply either credits or creators_ign.")
         non_nullable = {"door_dimensions", "patterns"}
         invalid = sorted(name for name in self.model_fields_set & non_nullable if getattr(self, name) is None)
         if invalid:
@@ -104,7 +107,8 @@ class BuildPatch(BaseModel):
     locationality: str | None = Field(default=None, max_length=100)
     directionality: str | None = Field(default=None, max_length=100)
     extra_user_info: str | None = Field(default=None, max_length=10_000)
-    creators_ign: list[str] | None = Field(default=None, max_length=100)
+    credits: list[Credit] | None = Field(default=None, max_length=100)
+    creators_ign: list[str] | None = Field(default=None, max_length=100, deprecated=True)
     image_urls: list[str] | None = Field(default=None, max_length=100)
     video_urls: list[str] | None = Field(default=None, max_length=100)
     world_download_urls: list[str] | None = Field(default=None, max_length=100)
@@ -130,6 +134,7 @@ class BuildPatch(BaseModel):
             "locationality",
             "directionality",
             "creators_ign",
+            "credits",
             "image_urls",
             "video_urls",
             "world_download_urls",
@@ -152,6 +157,8 @@ class BuildPatch(BaseModel):
         object whose own set fields are the ones to apply.
         """
         attributes: dict[str, object] = self.model_dump(exclude_unset=True)
+        if self.credits is not None:
+            attributes["credits"] = list(self.credits)
         attributes.pop("door", None)
         attributes.pop("extender", None)
         if self.door is not None:

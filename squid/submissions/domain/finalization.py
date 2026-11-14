@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
+from squid.builds.domain.credits import Credit, creator_names
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
@@ -302,7 +303,6 @@ class NormalizedSubmission:
     category: SubmissionCategory
     display_name: str | None
     description: str | None
-    creators: tuple[str, ...]
     capture_dimensions: SubmissionDimensions
     source_version: str | None
     """The capture's Minecraft export version, when known."""
@@ -316,6 +316,13 @@ class NormalizedSubmission:
     details: SubmissionCategoryDetails
     source_installation_id: UUID | None = None
     sponsor: PublicSponsor | None = None
+
+    credits: tuple[Credit, ...] = ()
+
+    @property
+    def creators(self) -> tuple[str, ...]:
+        """The legacy name-only view of primary contribution credits."""
+        return tuple(creator_names(self.credits))
 
     def __post_init__(self) -> None:
         if self.source_draft_id.int == 0 or self.owner_account_id < 1:

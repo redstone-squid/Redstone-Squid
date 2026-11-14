@@ -26,6 +26,7 @@ from squid.core.errors import (
     InvalidStateError,
     ValidationError,
 )
+from squid.core.sentinel import UNSET
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import (
     EditCommand,
@@ -51,8 +52,15 @@ def build_target(build_id: int) -> EditTarget:
     return EditTarget("build", str(build_id))
 
 
+def _patch_document(patch: BuildEditPatch) -> dict[str, object]:
+    values = patch.attributes()
+    if patch.credits is not UNSET:
+        values["credits"] = [credit.to_json() for credit in patch.credits]
+    return values
+
+
 def patch_values(patch: BuildEditPatch) -> EditValues:
-    return EditValues(json.dumps(patch.attributes()))
+    return EditValues(json.dumps(_patch_document(patch)))
 
 
 def build_values(build: Build) -> EditValues:
@@ -74,7 +82,7 @@ def build_values(build: Build) -> EditValues:
         component_restrictions=list(build.component_restrictions),
         miscellaneous_restrictions=list(build.miscellaneous_restrictions),
         extra_user_info=build.description,
-        creators_ign=list(build.creators_ign),
+        credits=list(build.credits),
         image_urls=list(build.image_urls),
         video_urls=list(build.video_urls),
         world_download_urls=list(build.world_download_urls),
@@ -113,7 +121,7 @@ def build_values(build: Build) -> EditValues:
         )
     unresolved: Info = {}
     UnresolvedTaxonomy.read(build.extra_info).write(unresolved)
-    return EditValues(json.dumps(patch.attributes() | {"unresolved_taxonomy": unresolved}))
+    return EditValues(json.dumps(_patch_document(patch) | {"unresolved_taxonomy": unresolved}))
 
 
 class BuildEditUnitOfWork(BuildUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):

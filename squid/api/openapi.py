@@ -19,6 +19,7 @@ from whenever import Instant
 
 from squid.api.contract import iter_contract_routes, validate_contract
 from squid.api.errors import ProblemDetail, responses
+from squid.api.v1.schemas.submissions import StoredDraftResponse
 from squid.core.errors import JSONValue
 from squid.submissions.domain import (
     DRAFT_CHANGE_KEY_MAX_LENGTH,
@@ -40,6 +41,9 @@ def install_openapi_contract(app: Litestar) -> None:
 
 def openapi_document(app: Litestar) -> dict[str, Any]:
     """Render Litestar's schema with the application-owned security and CLI contract."""
+    # Resolve deferred nested types before Litestar builds its registry; otherwise a
+    # cold export differs from a process that has already serialized a draft.
+    StoredDraftResponse.model_json_schema()
     return _contract_document(app, app.openapi_schema.to_schema())
 
 

@@ -139,7 +139,7 @@ describe("submission API transport", () => {
     await expect(request.clone().json()).resolves.toEqual({
       category: "door",
       origin: "web",
-      client_capabilities: ["repeatable_text"],
+      client_capabilities: ["repeatable_text", "typed_credits"],
     });
     expect(capturedRequest(0).headers.get("Idempotency-Key")).toBe(
       capturedRequest(1).headers.get("Idempotency-Key"),

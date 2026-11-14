@@ -1216,19 +1216,19 @@ bot-submission-consent-banner-discord-account = Discord account
 # squid/bot/submission/consent_banner.py:68
 bot-submission-consent-banner-value = { $user_mention } ({ $user_id })
 
-# squid/bot/submission/edit.py:82
+# squid/bot/submission/edit.py:83
 bot-submission-edit-cannot-use-options = Cannot use these options
 
-# squid/bot/submission/edit.py:61
+# squid/bot/submission/edit.py:62
 bot-submission-edit-error = Error
 
-# squid/bot/submission/edit.py:62
+# squid/bot/submission/edit.py:63
 bot-submission-edit-no-build-with-that-id = No build with that ID.
 
-# squid/bot/submission/edit.py:127
+# squid/bot/submission/edit.py:128
 bot-submission-edit-size-format = Enter sizes as width x height x depth, such as 5x7x4. Use ? for a value you don't know.
 
-# squid/bot/submission/edit.py:160
+# squid/bot/submission/edit.py:164
 bot-submission-edit-unknown-names = Not in the catalogue: { $names }. Choose from the catalogue, or propose a new tag.
 
 # squid/bot/submission/records.py:182
@@ -1376,22 +1376,22 @@ bot-submission-search-view-version = Version
 # squid/bot/submission/search_view.py:114
 bot-submission-search-view-view-build = View build
 
-# squid/bot/submission/submit.py:429
+# squid/bot/submission/submit.py:432
 bot-submission-submit-author-has-not-consented = Author has not consented
 
-# squid/bot/submission/submit.py:236
+# squid/bot/submission/submit.py:239
 bot-submission-submit-check-build-size = Check the build size
 
-# squid/bot/submission/submit.py:226
+# squid/bot/submission/submit.py:229
 bot-submission-submit-check-door-size = Check the door size
 
-# squid/bot/submission/submit.py:119
+# squid/bot/submission/submit.py:120
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 
-# squid/bot/submission/submit.py:414
+# squid/bot/submission/submit.py:417
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
-# squid/bot/submission/submit.py:128
+# squid/bot/submission/submit.py:129
 bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.
 
 # squid/bot/submission/ui/opening.py:93
@@ -1838,64 +1838,64 @@ build-browser-search-sort = Sort (optional)
 # squid/bot/submission/build_browse.py:750
 build-browser-sort-help = Examples: width, -width, -created_at. Leave blank for relevance.
 
-# squid/bot/submission/submit.py:346
+# squid/bot/submission/submit.py:349
 build-drafts-detected = **Builds found in your build-log posts**
 
-# squid/bot/submission/submit.py:503
+# squid/bot/submission/submit.py:506
 build-drafts-edited = Edited { $updated }
 
-# squid/bot/submission/submit.py:358
+# squid/bot/submission/submit.py:361
 build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.
 
-# squid/bot/submission/submit.py:356
+# squid/bot/submission/submit.py:359
 build-drafts-inbox-empty = No drafts are waiting for staff correction.
 
-# squid/bot/submission/submit.py:339
+# squid/bot/submission/submit.py:342
 build-drafts-open = Open
 
-# squid/bot/submission/submit.py:348
+# squid/bot/submission/submit.py:351
 build-drafts-review = Review
 
-# squid/bot/submission/submit.py:495
+# squid/bot/submission/submit.py:498
 build-drafts-state-creating = Creating the build
 
-# squid/bot/submission/submit.py:501
+# squid/bot/submission/submit.py:504
 build-drafts-state-editing = In progress
 
-# squid/bot/submission/submit.py:499
+# squid/bot/submission/submit.py:502
 build-drafts-state-needs-changes = Needs changes
 
-# squid/bot/submission/submit.py:497
+# squid/bot/submission/submit.py:500
 build-drafts-state-waiting = Waiting for files
 
-# squid/submissions/application/forms.py:399
+# squid/submissions/application/forms.py:403
 build-edit-form-about = About this build
 
-# squid/submissions/application/forms.py:628
+# squid/submissions/application/forms.py:632
 build-edit-form-command = Command to get there
 
-# squid/submissions/application/forms.py:627
+# squid/submissions/application/forms.py:631
 build-edit-form-coordinates = Coordinates
 
-# squid/submissions/application/forms.py:623
+# squid/submissions/application/forms.py:627
 build-edit-form-images = Image links
 
-# squid/submissions/application/forms.py:621
+# squid/submissions/application/forms.py:625
 build-edit-form-links-location = Links and location
 
-# squid/submissions/application/forms.py:600
+# squid/submissions/application/forms.py:604
 build-edit-form-one-per-line = One link per line.
 
-# squid/submissions/application/forms.py:626
+# squid/submissions/application/forms.py:630
 build-edit-form-server = Server address
 
-# squid/submissions/application/forms.py:282
+# squid/submissions/application/forms.py:286
 build-edit-form-versions = Minecraft versions
 
-# squid/submissions/application/forms.py:624
+# squid/submissions/application/forms.py:628
 build-edit-form-videos = Video links
 
-# squid/submissions/application/forms.py:625
+# squid/submissions/application/forms.py:629
 build-edit-form-world-downloads = World download links
 
 # squid/bot/submission/ui/build_edit.py:151
@@ -1922,7 +1922,7 @@ build-editor-edit-access-required-views = Only the pending build's submitter or 
 # squid/bot/submission/ui/build_edit.py:349
 build-editor-expired = This editor expired. Unsaved changes were discarded.
 
-# squid/bot/submission/edit.py:155
+# squid/bot/submission/edit.py:159
 build-editor-fields-unavailable = This build has no { $names }. Open the workspace to see what it does have.
 
 # squid/bot/submission/ui/build_edit.py:354
@@ -2225,16 +2225,16 @@ command-build-browse-help = Browse builds and record holders.
 # squid/bot/submission/commands.py:174
 command-build-browse-name = browse
 
-# squid/bot/submission/submit.py:313
+# squid/bot/submission/submit.py:316
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
 
-# squid/bot/submission/submit.py:317
+# squid/bot/submission/submit.py:320
 command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.
 
-# squid/bot/submission/submit.py:316
+# squid/bot/submission/submit.py:319
 command-build-drafts-inbox-name = inbox
 
-# squid/bot/submission/submit.py:311
+# squid/bot/submission/submit.py:314
 command-build-drafts-name = drafts
 
 # squid/bot/submission/groups.py:18
@@ -2243,76 +2243,76 @@ command-build-help = Browse and submit redstone builds
 # squid/bot/submission/groups.py:17
 command-build-name = build
 
-# squid/bot/submission/submit.py:127
+# squid/bot/submission/submit.py:128
 command-build-submit-build-size-name = build_size
 
-# squid/bot/submission/submit.py:97
+# squid/bot/submission/submit.py:98
 command-build-submit-category-name = category
 
-# squid/bot/submission/submit.py:100
+# squid/bot/submission/submit.py:101
 command-build-submit-choice-category-door = Door
 
-# squid/bot/submission/submit.py:103
+# squid/bot/submission/submit.py:104
 command-build-submit-choice-category-entrance = Entrance
 
-# squid/bot/submission/submit.py:101
+# squid/bot/submission/submit.py:102
 command-build-submit-choice-category-extender = Extender
 
-# squid/bot/submission/submit.py:104
+# squid/bot/submission/submit.py:105
 command-build-submit-choice-category-other = Other
 
-# squid/bot/submission/submit.py:102
+# squid/bot/submission/submit.py:103
 command-build-submit-choice-category-utility = Utility
 
-# squid/bot/submission/submit.py:121
+# squid/bot/submission/submit.py:122
 command-build-submit-choice-door-type-door = Door
 
-# squid/bot/submission/submit.py:122
+# squid/bot/submission/submit.py:123
 command-build-submit-choice-door-type-skydoor = Skydoor
 
-# squid/bot/submission/submit.py:123
+# squid/bot/submission/submit.py:124
 command-build-submit-choice-door-type-trapdoor = Trapdoor
 
-# squid/bot/submission/submit.py:133
+# squid/bot/submission/submit.py:134
 command-build-submit-creators-name = creators
 
-# squid/bot/submission/submit.py:159
+# squid/bot/submission/submit.py:162
 command-build-submit-description-name = description
 
-# squid/bot/submission/submit.py:112
+# squid/bot/submission/submit.py:113
 command-build-submit-door-size-name = door_size
 
-# squid/bot/submission/submit.py:118
+# squid/bot/submission/submit.py:119
 command-build-submit-door-type-name = door_type
 
-# squid/bot/submission/submit.py:167
+# squid/bot/submission/submit.py:170
 command-build-submit-file-2-name = file_2
 
-# squid/bot/submission/submit.py:171
+# squid/bot/submission/submit.py:174
 command-build-submit-file-3-name = file_3
 
-# squid/bot/submission/submit.py:175
+# squid/bot/submission/submit.py:178
 command-build-submit-file-4-name = file_4
 
-# squid/bot/submission/submit.py:163
+# squid/bot/submission/submit.py:166
 command-build-submit-file-name = file
 
-# squid/bot/submission/submit.py:92
+# squid/bot/submission/submit.py:93
 command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens.
 
-# squid/bot/submission/submit.py:90
+# squid/bot/submission/submit.py:91
 command-build-submit-name = submit
 
-# squid/bot/submission/submit.py:108
+# squid/bot/submission/submit.py:109
 command-build-submit-name-name = name
 
-# squid/bot/submission/submit.py:145
+# squid/bot/submission/submit.py:148
 command-build-submit-patterns-name = patterns
 
-# squid/bot/submission/submit.py:152
+# squid/bot/submission/submit.py:155
 command-build-submit-restrictions-name = restrictions
 
-# squid/bot/submission/submit.py:138
+# squid/bot/submission/submit.py:141
 command-build-submit-versions-name = versions
 
 # squid/bot/diagnostics.py:24
@@ -2381,7 +2381,7 @@ command-poll-help = Create a multi-option poll through an ephemeral preview wiza
 # squid/bot/voting/vote.py:49
 command-poll-name = poll
 
-# squid/bot/submission/submit.py:408
+# squid/bot/submission/submit.py:411
 command-recalculate-build-name = Scan Build Message
 
 # squid/bot/submission/commands.py:190
@@ -2759,22 +2759,22 @@ diagnostics-view-work-lost-only = Work lost only
 # squid/bot/submission/ui/drafts.py:471, squid/bot/submission/ui/drafts.py:628, squid/bot/submission/ui/drafts.py:873
 draft-editor-add-files = Add files
 
-# squid/bot/submission/ui/sections.py:75
+# squid/bot/submission/ui/sections.py:77
 draft-editor-build-size = Build size
 
-# squid/bot/submission/ui/sections.py:239
+# squid/bot/submission/ui/sections.py:241
 draft-editor-choose = Choose…
 
 # squid/bot/submission/ui/drafts.py:597
 draft-editor-choose-file = Choose a file to manage…
 
-# squid/bot/submission/ui/build_edit.py:531, squid/bot/submission/ui/sections.py:314
+# squid/bot/submission/ui/build_edit.py:531, squid/bot/submission/ui/sections.py:316
 draft-editor-done = Done
 
-# squid/bot/submission/ui/sections.py:80
+# squid/bot/submission/ui/sections.py:82
 draft-editor-door-size = Door size
 
-# squid/bot/submission/ui/drafts.py:469, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:194
+# squid/bot/submission/ui/drafts.py:469, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:196
 draft-editor-edit = Edit
 
 # squid/bot/submission/ui/drafts.py:537
@@ -2873,31 +2873,31 @@ draft-editor-main-schematic = Use as main schematic
 # squid/bot/submission/ui/drafts.py:586
 draft-editor-main-schematic-help = Choose which schematic to use for this build's preview and schematic tools. Select that file below, then choose Use as main schematic.
 
-# squid/bot/submission/ui/sections.py:254
+# squid/bot/submission/ui/sections.py:256
 draft-editor-next-page = Next page
 
-# squid/bot/submission/ui/sections.py:397, squid/bot/submission/ui/sections.py:471
+# squid/bot/submission/ui/sections.py:399, squid/bot/submission/ui/sections.py:489
 draft-editor-no = No
 
-# squid/bot/submission/ui/sections.py:217
+# squid/bot/submission/ui/sections.py:219
 draft-editor-no-options = No options are available right now.
 
-# squid/bot/submission/ui/sections.py:365, squid/bot/submission/ui/sections.py:388
+# squid/bot/submission/ui/sections.py:367, squid/bot/submission/ui/sections.py:390
 draft-editor-not-set = *Not set*
 
-# squid/bot/submission/ui/sections.py:214
+# squid/bot/submission/ui/sections.py:216
 draft-editor-nothing-chosen = *Nothing chosen yet.*
 
-# squid/bot/submission/ui/sections.py:515
+# squid/bot/submission/ui/sections.py:533
 draft-editor-one-per-line = One per line
 
-# squid/bot/submission/ui/sections.py:231
+# squid/bot/submission/ui/sections.py:233
 draft-editor-picker-pages = -# Page { $page_number } of { $pages }.
 
-# squid/bot/submission/ui/sections.py:226
+# squid/bot/submission/ui/sections.py:228
 draft-editor-picker-pages-multiple = -# Page { $page_number } of { $pages }. Choices on other pages are kept.
 
-# squid/bot/submission/ui/sections.py:208
+# squid/bot/submission/ui/sections.py:210
 draft-editor-picker-required = **{ $label }** · Required
 
 # squid/bot/submission/ui/build_edit.py:425, squid/bot/submission/ui/drafts.py:477
@@ -2912,40 +2912,40 @@ draft-editor-preview-intro = **Preview** · This is the card others will see onc
 # squid/bot/submission/ui/drafts.py:729
 draft-editor-preview-loading = Drawing the preview…
 
-# squid/bot/submission/ui/sections.py:248
+# squid/bot/submission/ui/sections.py:250
 draft-editor-previous-page = Previous page
 
-# squid/bot/submission/ui/sections.py:596
+# squid/bot/submission/ui/sections.py:626
 draft-editor-problem-above-maximum = Too large
 
-# squid/bot/submission/ui/sections.py:594
+# squid/bot/submission/ui/sections.py:624
 draft-editor-problem-below-minimum = Too small
 
-# squid/bot/submission/ui/sections.py:590
+# squid/bot/submission/ui/sections.py:620
 draft-editor-problem-required = Required
 
-# squid/bot/submission/ui/sections.py:592
+# squid/bot/submission/ui/sections.py:622
 draft-editor-problem-required-value = Must be confirmed
 
-# squid/bot/submission/ui/sections.py:602
+# squid/bot/submission/ui/sections.py:632
 draft-editor-problem-too-few-items = Needs more entries
 
-# squid/bot/submission/ui/sections.py:600
+# squid/bot/submission/ui/sections.py:630
 draft-editor-problem-too-long = Too long
 
-# squid/bot/submission/ui/sections.py:604
+# squid/bot/submission/ui/sections.py:634
 draft-editor-problem-too-many-items = Too many entries
 
-# squid/bot/submission/ui/sections.py:598
+# squid/bot/submission/ui/sections.py:628
 draft-editor-problem-too-short = Too short
 
-# squid/bot/submission/ui/sections.py:608
+# squid/bot/submission/ui/sections.py:638
 draft-editor-problem-unknown-field = No longer part of the form
 
-# squid/bot/submission/ui/sections.py:606
+# squid/bot/submission/ui/sections.py:636
 draft-editor-problem-unknown-option = No longer available, choose again
 
-# squid/bot/submission/ui/sections.py:610
+# squid/bot/submission/ui/sections.py:640
 draft-editor-problem-wrong-type = Not a valid value, enter it again
 
 # squid/bot/submission/ui/drafts.py:500
@@ -2972,7 +2972,7 @@ draft-editor-replacement-failed = The replacement could not be added. Try again 
 # squid/bot/submission/ui/drafts.py:677
 draft-editor-replacement-label = New file
 
-# squid/bot/submission/ui/sections.py:363, squid/bot/submission/ui/sections.py:387
+# squid/bot/submission/ui/sections.py:365, squid/bot/submission/ui/sections.py:389
 draft-editor-required = ⚠️ *Required*
 
 # squid/bot/submission/ui/drafts.py:491
@@ -2982,16 +2982,16 @@ draft-editor-required-left =
        *[other] ⚠️ **{ NUMBER($missing) } required fields are empty.** Fill them in to submit.
     }
 
-# squid/bot/submission/ui/sections.py:335
+# squid/bot/submission/ui/sections.py:337
 draft-editor-section-empty = *Optional. Nothing added yet.*
 
-# squid/bot/submission/ui/sections.py:179
+# squid/bot/submission/ui/sections.py:181
 draft-editor-section-gone = This section is no longer part of the form.
 
-# squid/bot/submission/ui/sections.py:542
+# squid/bot/submission/ui/sections.py:572
 draft-editor-size-format = Enter the size as width x height x depth, such as 5x7x4. Use ? for a value you don't know.
 
-# squid/bot/submission/ui/sections.py:564
+# squid/bot/submission/ui/sections.py:594
 draft-editor-size-help = Width x height x depth in blocks. Use ? for a value you don't know.
 
 # squid/bot/submission/ui/drafts.py:773
@@ -3032,7 +3032,7 @@ draft-editor-title-editing = ## Submit a build · { $category }
 # squid/bot/submission/ui/drafts.py:749
 draft-editor-title-expired = ## Draft expired · { $category }
 
-# squid/bot/submission/submit.py:516
+# squid/bot/submission/submit.py:519
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
 # squid/bot/submission/ui/drafts.py:605
@@ -3041,7 +3041,7 @@ draft-editor-use-file = Use this file
 # squid/bot/submission/ui/drafts.py:482
 draft-editor-waiting-hint = This message updates when your files are ready.
 
-# squid/bot/submission/ui/sections.py:397, squid/bot/submission/ui/sections.py:470
+# squid/bot/submission/ui/sections.py:399, squid/bot/submission/ui/sections.py:488
 draft-editor-yes = Yes
 
 # squid/bot/submission/ui/drafts.py:344
@@ -3077,10 +3077,10 @@ edit-history-uncertain = The saved result needs checking. Refresh before editing
 # squid/bot/edit_controller.py:226, squid/bot/edit_history.py:79
 edit-history-undo = Undo
 
-# squid/bot/submission/ui/sections.py:305
+# squid/bot/submission/ui/sections.py:307
 editor-detail-closed = Done. You can dismiss this message.
 
-# squid/bot/submission/ui/sections.py:307
+# squid/bot/submission/ui/sections.py:309
 editor-detail-locked = These answers can no longer be edited here.
 
 # squid/edits/domain.py:219
@@ -4771,127 +4771,127 @@ starboard-starboard-name-empty = Starboard name cannot be empty.
 # squid/starboard/models.py:121
 starboard-starboard-thresholds-finite = Starboard thresholds must be finite.
 
-# squid/submissions/application/forms.py:179
+# squid/submissions/application/forms.py:177
 submissions-about-submission = About this submission
 
-# squid/submissions/application/forms.py:411
+# squid/submissions/application/forms.py:415
 submissions-ai-generated-ai = AI-generated or AI-assisted
 
-# squid/submissions/application/forms.py:248
+# squid/submissions/application/forms.py:252
 submissions-application-forms-build-depth = Build depth
 
-# squid/submissions/application/forms.py:241
+# squid/submissions/application/forms.py:245
 submissions-application-forms-build-height = Build height
 
-# squid/submissions/application/forms.py:189
+# squid/submissions/application/forms.py:190
 submissions-application-forms-build-identity = Name and creators
 
-# squid/submissions/application/forms.py:234
+# squid/submissions/application/forms.py:238
 submissions-application-forms-build-width = Build width
 
-# squid/submissions/application/forms.py:699
+# squid/submissions/application/forms.py:703
 submissions-application-forms-cc = CC0 1.0
 
-# squid/submissions/application/forms.py:700
+# squid/submissions/application/forms.py:704
 submissions-application-forms-cc-by = CC BY 4.0
 
-# squid/submissions/application/forms.py:523
+# squid/submissions/application/forms.py:527
 submissions-application-forms-closing-time = Closing time
 
-# squid/submissions/application/forms.py:214
+# squid/submissions/application/forms.py:218
 submissions-application-forms-creators = Creators
 
-# squid/submissions/application/forms.py:206
+# squid/submissions/application/forms.py:208
 submissions-application-forms-description = Description
 
-# squid/submissions/application/forms.py:193
+# squid/submissions/application/forms.py:195
 submissions-application-forms-display-name = Build name
 
-# squid/submissions/application/forms.py:466, squid/submissions/application/forms.py:500
+# squid/submissions/application/forms.py:470, squid/submissions/application/forms.py:504
 submissions-application-forms-door = Door
 
-# squid/submissions/application/forms.py:470
+# squid/submissions/application/forms.py:474
 submissions-application-forms-door-geometry = Door size and type
 
-# squid/submissions/application/forms.py:495
+# squid/submissions/application/forms.py:499
 submissions-application-forms-door-orientation = Door type
 
-# squid/submissions/application/forms.py:442
+# squid/submissions/application/forms.py:446
 submissions-application-forms-entrance = Entrance
 
-# squid/submissions/application/forms.py:539
+# squid/submissions/application/forms.py:543
 submissions-application-forms-extender = Extender
 
-# squid/submissions/application/forms.py:543
+# squid/submissions/application/forms.py:547
 submissions-application-forms-extender-movement = Extender size and direction
 
-# squid/submissions/application/forms.py:567
+# squid/submissions/application/forms.py:571
 submissions-application-forms-extension-length = Extension length
 
-# squid/submissions/application/forms.py:580
+# squid/submissions/application/forms.py:584
 submissions-application-forms-extension-time = Extension time
 
-# squid/submissions/application/forms.py:553
+# squid/submissions/application/forms.py:557
 submissions-application-forms-horizontal = Horizontal
 
-# squid/submissions/application/forms.py:640
+# squid/submissions/application/forms.py:644
 submissions-application-forms-known-patterns = Patterns
 
-# squid/submissions/application/forms.py:304
+# squid/submissions/application/forms.py:308
 submissions-application-forms-known-restrictions = Restrictions
 
-# squid/submissions/application/forms.py:636
+# squid/submissions/application/forms.py:640
 submissions-application-forms-mechanism-patterns = Patterns
 
-# squid/submissions/application/forms.py:547
+# squid/submissions/application/forms.py:551
 submissions-application-forms-movement-orientation = Direction
 
-# squid/submissions/application/forms.py:460
+# squid/submissions/application/forms.py:464
 submissions-application-forms-opening-depth = Opening depth
 
-# squid/submissions/application/forms.py:455
+# squid/submissions/application/forms.py:459
 submissions-application-forms-opening-height = Opening height
 
-# squid/submissions/application/forms.py:515
+# squid/submissions/application/forms.py:519
 submissions-application-forms-opening-time = Opening time
 
-# squid/submissions/application/forms.py:450
+# squid/submissions/application/forms.py:454
 submissions-application-forms-opening-width = Opening width
 
-# squid/submissions/application/forms.py:443
+# squid/submissions/application/forms.py:447
 submissions-application-forms-other = Other
 
-# squid/submissions/application/forms.py:177
+# squid/submissions/application/forms.py:175
 submissions-application-forms-provenance = About this submission
 
-# squid/submissions/application/forms.py:364
+# squid/submissions/application/forms.py:368
 submissions-application-forms-public-download = Anyone
 
-# squid/submissions/application/forms.py:584
+# squid/submissions/application/forms.py:588
 submissions-application-forms-retraction-time = Retraction time
 
-# squid/submissions/application/forms.py:360
+# squid/submissions/application/forms.py:364
 submissions-application-forms-reviewer-only = Staff reviewers only
 
-# squid/submissions/application/forms.py:345
+# squid/submissions/application/forms.py:349
 submissions-application-forms-schematic-visibility = Who can download the schematic
 
-# squid/submissions/application/forms.py:330
+# squid/submissions/application/forms.py:334
 submissions-application-forms-showcase-tags = Tags
 
-# squid/submissions/application/forms.py:501
+# squid/submissions/application/forms.py:505
 submissions-application-forms-skydoor = Skydoor
 
-# squid/submissions/application/forms.py:503
+# squid/submissions/application/forms.py:507
 submissions-application-forms-trapdoor = Trapdoor
 
-# squid/submissions/application/forms.py:441
+# squid/submissions/application/forms.py:445
 submissions-application-forms-utility = Utility
 
-# squid/submissions/application/forms.py:561
+# squid/submissions/application/forms.py:565
 submissions-application-forms-vertical-downward = Vertical downward
 
-# squid/submissions/application/forms.py:557
+# squid/submissions/application/forms.py:561
 submissions-application-forms-vertical-upward = Vertical upward
 
 # squid/submissions/application/attachments.py:79
@@ -4903,37 +4903,37 @@ submissions-attention-retention-positive = finalization attention retention must
 # squid/submissions/domain/drafts.py:121
 submissions-base-revision-negative = base_revision cannot be negative
 
-# squid/submissions/domain/forms.py:280
+# squid/submissions/domain/forms.py:283
 submissions-category-blank-label = category { $category } has a blank label
 
-# squid/submissions/domain/forms.py:328
+# squid/submissions/domain/forms.py:331
 submissions-category-duplicates-common = category { $category_code } duplicates common fields: { $fields }
 
-# squid/submissions/application/forms.py:703
+# squid/submissions/application/forms.py:707
 submissions-cc-by-nc = CC BY-NC 4.0
 
-# squid/submissions/application/forms.py:705
+# squid/submissions/application/forms.py:709
 submissions-cc-by-nc-nd = CC BY-NC-ND 4.0
 
-# squid/submissions/application/forms.py:704
+# squid/submissions/application/forms.py:708
 submissions-cc-by-nc-sa = CC BY-NC-SA 4.0
 
-# squid/submissions/application/forms.py:702
+# squid/submissions/application/forms.py:706
 submissions-cc-by-nd = CC BY-ND 4.0
 
-# squid/submissions/application/forms.py:701
+# squid/submissions/application/forms.py:705
 submissions-cc-by-sa = CC BY-SA 4.0
 
-# squid/submissions/domain/forms.py:84
+# squid/submissions/domain/forms.py:87
 submissions-choice-characters-without = choice values must be 1-120 characters without surrounding whitespace
 
-# squid/submissions/domain/forms.py:90
+# squid/submissions/domain/forms.py:93
 submissions-choice-labels-blank = choice labels cannot be blank
 
-# squid/submissions/domain/forms.py:218
+# squid/submissions/domain/forms.py:221
 submissions-choice-options-required = choice field { $field_id } requires options
 
-# squid/submissions/application/forms.py:348
+# squid/submissions/application/forms.py:352
 submissions-choose-explicitly-publication = Nothing is published unless you choose Anyone.
 
 # squid/submissions/application/finalization.py:423
@@ -4942,28 +4942,31 @@ submissions-claim-limit = finalization claim limit must be between 1 and { $maxi
 # squid/submissions/application/finalization.py:69
 submissions-claimed-finalization-metadata-invalid = claimed submission finalization metadata is invalid
 
-# squid/submissions/application/forms.py:462
+# squid/submissions/application/forms.py:466
 submissions-clear-opening-depth = Clear opening depth
 
-# squid/submissions/application/forms.py:457
+# squid/submissions/application/forms.py:461
 submissions-clear-opening-height = Clear opening height
 
-# squid/submissions/application/forms.py:452
+# squid/submissions/application/forms.py:456
 submissions-clear-opening-width = Clear opening width
 
 # squid/submissions/domain/drafts.py:124
 submissions-client-instance-id = client_instance_id has an invalid format
 
-# squid/submissions/application/forms.py:403
+# squid/submissions/application/forms.py:407
 submissions-completion-date-context = When it was finished
 
-# squid/submissions/application/forms.py:184
+# squid/submissions/application/forms.py:182
 submissions-credit-minecraft-server = Credit the Minecraft server this submission came from
 
-# squid/submissions/application/forms.py:291
+# squid/submissions/application/forms.py:216
+submissions-credits = Credits
+
+# squid/submissions/application/forms.py:295
 submissions-declared-version-compatibility = Works in versions
 
-# squid/submissions/application/forms.py:230
+# squid/submissions/application/forms.py:234
 submissions-dimensions-versions = Size and version
 
 # squid/submissions/errors.py:33
@@ -4975,7 +4978,7 @@ submissions-draft-answers-exceed = The draft answers exceed the retained data li
 # squid/submissions/application/attachments.py:73
 submissions-draft-attachment-upload = Draft attachment upload authority is invalid.
 
-# squid/submissions/application/drafts.py:239
+# squid/submissions/application/drafts.py:249
 submissions-draft-capacity-positive = draft capacity must be positive
 
 # squid/submissions/domain/drafts.py:142
@@ -4987,10 +4990,10 @@ submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII ch
 # squid/submissions/domain/drafts.py:132
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
-# squid/submissions/application/drafts.py:354
+# squid/submissions/application/drafts.py:364
 submissions-draft-discovery-limit = draft discovery limit must be between 1 and { $maximum }
 
-# squid/submissions/application/drafts.py:422
+# squid/submissions/application/drafts.py:432
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
 # squid/submissions/domain/drafts.py:292, squid/submissions/domain/drafts.py:300
@@ -5020,7 +5023,7 @@ submissions-draft-operation-required = draft changes require at least one operat
 # squid/submissions/errors.py:39
 submissions-draft-owner-required = Only the account that owns this draft can perform this action.
 
-# squid/submissions/application/drafts.py:279
+# squid/submissions/application/drafts.py:289
 submissions-draft-retention-positive = draft retention must be positive
 
 # squid/submissions/errors.py:35
@@ -5029,34 +5032,34 @@ submissions-draft-staff-unconfigured = Staff access to submission drafts is not 
 # squid/submissions/domain/drafts.py:237
 submissions-draft-transition = draft cannot transition from { $current } to { $next_status }
 
-# squid/submissions/application/forms.py:688
+# squid/submissions/application/forms.py:692
 submissions-enter-game-ticks = Include a unit: 30gt, 15rt, or 1.5s.
 
-# squid/submissions/application/forms.py:255
+# squid/submissions/application/forms.py:259
 submissions-exact-source-minecraft = Minecraft version
 
-# squid/submissions/domain/finalization.py:275
+# squid/submissions/domain/finalization.py:276
 submissions-extender-length-positive = extender length must be positive
 
-# squid/submissions/domain/forms.py:236
+# squid/submissions/domain/forms.py:239
 submissions-field-apply = field { $field_id } must apply to at least one origin
 
-# squid/submissions/domain/forms.py:204
+# squid/submissions/domain/forms.py:207
 submissions-field-blank-label = field { $field_id } has a blank label
 
-# squid/submissions/domain/forms.py:212
+# squid/submissions/domain/forms.py:215
 submissions-field-inline-dynamic = field { $field_id } cannot have inline and dynamic options
 
-# squid/submissions/domain/forms.py:532
+# squid/submissions/domain/forms.py:541
 submissions-field-name-format = { $label } must start with a letter and contain only lowercase letters, digits, or underscores
 
-# squid/submissions/domain/normalization.py:161
+# squid/submissions/domain/normalization.py:164
 submissions-field-not-integer = validated field { $field_id } is not an integer
 
-# squid/submissions/domain/normalization.py:127, squid/submissions/domain/normalization.py:140
+# squid/submissions/domain/normalization.py:130, squid/submissions/domain/normalization.py:143
 submissions-field-not-string = validated field { $field_id } is not a string
 
-# squid/submissions/domain/forms.py:230
+# squid/submissions/domain/forms.py:233
 submissions-field-purpose = field { $field_id } must apply to at least one purpose
 
 # squid/submissions/application/finalization.py:260
@@ -5065,133 +5068,136 @@ submissions-finalization-job-missing = processing draft has no active finalizati
 # squid/submissions/application/finalization.py:266
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
-# squid/submissions/domain/finalization.py:380
+# squid/submissions/domain/finalization.py:387
 submissions-finalized-build-identity = finalized build identity is invalid
 
-# squid/submissions/domain/forms.py:314
+# squid/submissions/domain/forms.py:317
 submissions-form-revision-protocol = form revision and protocol bounds must be positive and ordered
 
-# squid/submissions/application/forms.py:381
+# squid/submissions/application/forms.py:385
 submissions-i-permission-distribute = I have permission to distribute this schematic under the selected license.
 
 # squid/submissions/domain/drafts.py:90
 submissions-invalid-draft-field-id = invalid draft field ID: { $field_id }
 
-# squid/submissions/domain/finalization.py:119
+# squid/submissions/domain/finalization.py:120
 submissions-invalid-submission-attention = invalid submission attention field ID: { $field_id }
 
 # squid/submissions/domain/drafts.py:259
 submissions-json-contain-too = draft JSON values contain too many nodes
 
-# squid/submissions/domain/finalization.py:404
+# squid/submissions/domain/finalization.py:411
 submissions-keys-stable-lowercase = { $label } keys must be stable lowercase identifiers
 
-# squid/submissions/domain/finalization.py:401
+# squid/submissions/domain/finalization.py:408
 submissions-keys-unique = { $label } keys must be unique
 
-# squid/submissions/domain/forms.py:158
+# squid/submissions/domain/forms.py:161
 submissions-min-items-exceed = min_items cannot exceed max_items
 
-# squid/submissions/domain/forms.py:155
+# squid/submissions/domain/forms.py:158
 submissions-min-length-exceed = min_length cannot exceed max_length
 
-# squid/submissions/domain/forms.py:148
+# squid/submissions/domain/forms.py:151
 submissions-minimum-exceed-maximum = minimum cannot exceed maximum
 
-# squid/submissions/domain/forms.py:153
+# squid/submissions/application/forms.py:188
+submissions-name-and-credits = Name and credits
+
+# squid/submissions/domain/forms.py:156
 submissions-negative = { $name } cannot be negative
 
-# squid/submissions/domain/finalization.py:198
+# squid/submissions/domain/finalization.py:199
 submissions-normalized-media-upload = normalized media upload identifiers must be unique
 
-# squid/submissions/domain/finalization.py:328
+# squid/submissions/domain/finalization.py:335
 submissions-normalized-source-version-blank = normalized source versions cannot be blank
 
-# squid/submissions/domain/finalization.py:322
+# squid/submissions/domain/finalization.py:329
 submissions-normalized-submission-provenance = normalized submission provenance is invalid
 
-# squid/submissions/domain/finalization.py:325
+# squid/submissions/domain/finalization.py:332
 submissions-normalized-submission-schema = normalized submission schema provenance is invalid
 
-# squid/submissions/domain/normalization.py:187
+# squid/submissions/domain/normalization.py:190
 submissions-not-string-list = validated field { $field_id } is not a string list
 
 # squid/submissions/domain/drafts.py:138
 submissions-operation-ids-unique = operation IDs must be unique within a draft change
 
-# squid/submissions/application/forms.py:79
+# squid/submissions/application/forms.py:77
 submissions-option-revisions-positive = option revisions must be positive
 
-# squid/submissions/application/forms.py:512, squid/submissions/application/forms.py:577
+# squid/submissions/application/forms.py:516, squid/submissions/application/forms.py:581
 submissions-optional-default-timing = Timings
 
-# squid/submissions/application/forms.py:195
+# squid/submissions/application/forms.py:197
 submissions-optional-name-shown = Optional. Shown next to the title generated from the build's details.
 
 # squid/submissions/domain/drafts.py:170
 submissions-owner-account-id = owner_account_id must be positive
 
-# squid/submissions/domain/finalization.py:347
+# squid/submissions/domain/finalization.py:354
 submissions-paper-installation-only = Only Paper submissions may retain an installation provenance ID.
 
-# squid/submissions/application/drafts.py:309
+# squid/submissions/application/drafts.py:319
 submissions-paper-installation-provenance-required = Paper drafts require server-derived installation provenance.
 
-# squid/submissions/application/drafts.py:97
+# squid/submissions/application/drafts.py:99
 submissions-paper-may-retain = Only Paper drafts may retain an installation provenance ID.
 
-# squid/submissions/application/forms.py:649
+# squid/submissions/application/forms.py:653
 submissions-propose-missing-patterns = Other patterns
 
-# squid/submissions/application/forms.py:313
+# squid/submissions/application/forms.py:317
 submissions-propose-missing-restrictions = Other restrictions
 
-# squid/submissions/application/forms.py:370
+# squid/submissions/application/forms.py:374
 submissions-public-schematic-license = Schematic license
 
-# squid/submissions/domain/finalization.py:167
+# squid/submissions/domain/finalization.py:168
 submissions-public-schematic-rights-required = public schematics require a license and rights attestation
 
-# squid/submissions/domain/finalization.py:213
+# squid/submissions/domain/finalization.py:214
 submissions-ready-schematic-assessment = only a ready schematic assessment may expose an artifact ID
 
-# squid/submissions/domain/finalization.py:392
+# squid/submissions/domain/finalization.py:399
 submissions-rejected-build-submission = rejected build submission requires at least one issue
 
 # squid/submissions/application/preparation.py:45
 submissions-rejected-preparation-requirement = rejected submission preparation requires at least one issue
 
-# squid/submissions/domain/forms.py:224
+# squid/submissions/domain/forms.py:227
 submissions-repeatable-field-use = repeatable field { $field_id } must use string_list values
 
-# squid/submissions/application/forms.py:300
+# squid/submissions/application/forms.py:304
 submissions-restrictions-tags = Restrictions and tags
 
 # squid/submissions/application/finalization.py:405
 submissions-retry-retention-limits = finalization retry and retention limits must be positive
 
-# squid/submissions/domain/finalization.py:173
+# squid/submissions/domain/finalization.py:174
 submissions-reviewer-schematics-carry = reviewer-only schematics cannot carry a public distribution grant
 
-# squid/submissions/domain/forms.py:311
+# squid/submissions/domain/forms.py:314
 submissions-schema-id-stable = schema_id must be a stable lowercase identifier
 
 # squid/submissions/domain/drafts.py:173
 submissions-schema-revision-positive = schema_revision must be positive and revision cannot be negative
 
-# squid/submissions/application/forms.py:340
+# squid/submissions/application/forms.py:344
 submissions-schematic-rights-privacy = Schematic sharing
 
-# squid/submissions/domain/forms.py:261
+# squid/submissions/domain/forms.py:264
 submissions-section-blank-title = section { $section_id } has a blank title
 
-# squid/submissions/application/forms.py:182
+# squid/submissions/application/forms.py:180
 submissions-show-sponsoring-server = Show the sponsoring server on this build
 
-# squid/submissions/application/forms.py:258
+# squid/submissions/application/forms.py:262
 submissions-source-version-help = The version the schematic or world capture was exported from.
 
-# squid/submissions/domain/finalization.py:359
+# squid/submissions/domain/finalization.py:366
 submissions-sponsor-installation-match-required = Sponsor attribution requires a matching Paper installation projection.
 
 # squid/submissions/application/attachments.py:102
@@ -5200,97 +5206,97 @@ submissions-staged-attachment-unavailable = The staged attachment is no longer a
 # squid/submissions/domain/drafts.py:195
 submissions-state-edited = drafts in { $current_status } state cannot be edited
 
-# squid/submissions/domain/finalization.py:139
+# squid/submissions/domain/finalization.py:140
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
-# squid/submissions/application/drafts.py:212
+# squid/submissions/application/drafts.py:214
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
-# squid/submissions/domain/finalization.py:341
+# squid/submissions/domain/finalization.py:348
 submissions-submission-incompatible-category = { $category } submission has incompatible category details
 
-# squid/submissions/domain/finalization.py:365
+# squid/submissions/domain/finalization.py:372
 submissions-submission-retain-sponsor = A submission cannot retain a sponsor projection when attribution was not requested.
 
-# squid/submissions/domain/finalization.py:412
+# squid/submissions/domain/finalization.py:419
 submissions-submission-timings-negative = submission timings cannot be negative
 
-# squid/submissions/application/forms.py:315, squid/submissions/application/forms.py:651
+# squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:655
 submissions-suggestions-unofficial = Not in the list? Add them here, one per line. Staff review new ones.
 
-# squid/submissions/domain/forms.py:542
+# squid/submissions/domain/forms.py:551
 submissions-unique = { $label } must be unique
 
-# squid/submissions/domain/forms.py:355
+# squid/submissions/domain/forms.py:358
 submissions-unknown-submission-category = unknown submission category: { $category }
 
 # squid/submissions/domain/drafts.py:95
 submissions-unset-operations-carry = unset operations cannot carry a value
 
-# squid/submissions/application/forms.py:156
+# squid/submissions/application/forms.py:154
 submissions-unsupported-checked-submission = unsupported checked-in submission form revision
 
-# squid/submissions/domain/normalization.py:172
+# squid/submissions/domain/normalization.py:175
 submissions-validated-field-not = validated field { $field_id } is not a boolean
 
-# squid/submissions/domain/finalization.py:195
+# squid/submissions/domain/finalization.py:196
 submissions-verified-artifact-identifiers = verified artifact identifiers cannot be nil UUIDs
 
-# squid/submissions/application/forms.py:527
+# squid/submissions/application/forms.py:531
 submissions-visible-closing-time = Visible closing time
 
-# squid/submissions/application/forms.py:519
+# squid/submissions/application/forms.py:523
 submissions-visible-opening-time = Visible opening time
 
-# squid/bot/submission/submit.py:168, squid/bot/submission/submit.py:172, squid/bot/submission/submit.py:176
+# squid/bot/submission/submit.py:171, squid/bot/submission/submit.py:175, squid/bot/submission/submit.py:179
 submit-another-attachment-help = Another schematic, image, or video.
 
-# squid/bot/submission/submit.py:164
+# squid/bot/submission/submit.py:167
 submit-attachment-types-help = Your schematic, an image, or a video.
 
-# squid/bot/submission/submit.py:430
+# squid/bot/submission/submit.py:433
 submit-author-consent-required = The author of this message ({ $user_mention }) has not consented to data storage. They must grant consent before this build can be ingested.
 
-# squid/bot/submission/submit.py:415
+# squid/bot/submission/submit.py:418
 submit-build-log-channel-required = Builds are only read out of messages posted in a build log channel.
 
-# squid/bot/submission/submit.py:237
+# squid/bot/submission/submit.py:240
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
-# squid/bot/submission/submit.py:98
+# squid/bot/submission/submit.py:99
 submit-category-help = The kind of build to submit.
 
-# squid/bot/submission/submit.py:153
+# squid/bot/submission/submit.py:156
 submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.
 
-# squid/bot/submission/submit.py:134
-submit-creator-ign-prompt = In-game names of the creators, comma separated.
+# squid/bot/submission/submit.py:135
+submit-credit-reference-prompt = Credits, comma separated: Name, discord:@user, java:IGN, bedrock:Name.
 
-# squid/bot/submission/submit.py:113
+# squid/bot/submission/submit.py:114
 submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
-# squid/bot/submission/submit.py:208
+# squid/bot/submission/submit.py:211
 submit-door-options-only = Door size and orientation can only be supplied for doors.
 
-# squid/bot/submission/submit.py:227
+# squid/bot/submission/submit.py:230
 submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.
 
-# squid/bot/submission/submit.py:207, squid/bot/submission/submit.py:212
+# squid/bot/submission/submit.py:210, squid/bot/submission/submit.py:215
 submit-inapplicable-options = Options do not apply
 
-# squid/bot/submission/submit.py:109
+# squid/bot/submission/submit.py:110
 submit-name-help = An optional name for the build.
 
-# squid/bot/submission/submit.py:213
+# squid/bot/submission/submit.py:216
 submit-pattern-options-only = Patterns can only be supplied for doors and extenders.
 
-# squid/bot/submission/submit.py:146
+# squid/bot/submission/submit.py:149
 submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.
 
-# squid/bot/submission/submit.py:160
+# squid/bot/submission/submit.py:163
 submit-staff-notes-prompt = A short description of the build.
 
-# squid/bot/submission/submit.py:139
+# squid/bot/submission/submit.py:142
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
 # squid/suggestions/application/registry.py:82

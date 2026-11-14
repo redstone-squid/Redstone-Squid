@@ -1108,7 +1108,7 @@ async def test_imported_door_with_unknown_facts_commits_and_reloads(
         normalized_submission(owner, uuid.UUID(int=555), "Java 1.21.0"),
         category=SubmissionCategory.DOOR,
         origin=SubmissionOrigin.DISCORD,
-        creators=(),
+        credits=(),
         capture_dimensions=SubmissionDimensions(None, None, None),
         source_version=None,
         details=DoorSubmissionDetails(SubmissionDimensions(None, 3, None), None),

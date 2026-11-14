@@ -24,8 +24,10 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.builds.application.input import parse_build_ticks
-from squid.core.errors import JSONValue
+from squid.builds.domain.credits import read_credits
+from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.submissions.application.credit_text import format_credit, parse_credit_lines
 from squid.submissions.domain import (
     ChoiceOption,
     FormField,
@@ -398,6 +400,8 @@ def _value_text(ws: AnswerWorkspace, field: FormField, value: JSONValue) -> Text
     labels = {option.value: option.label for option in field.options}
     if field.option_source is not None:
         labels = {option.value: option.label for option in ws.option_sets.get(field.option_source, ())}
+    if field.value_kind is ValueKind.CREDIT_LIST:
+        return md(t"{', '.join(format_credit(credit) for credit in read_credits(value))}")
     if isinstance(value, list):
         joined = ", ".join(labels.get(str(item), str(item)) for item in value)
         return md(t"{joined}")
@@ -427,7 +431,12 @@ async def present_chunk_form(ws: AnswerWorkspace, chunk: FormSection, event: sd.
             if field.id in grouped:
                 continue
             raw = event.values.get(field.id)
-            if field.value_kind is ValueKind.STRING_LIST:
+            if field.value_kind is ValueKind.CREDIT_LIST:
+                values[field.id] = [
+                    credit.to_json()
+                    for credit in parse_credit_lines(str(raw or ""), read_credits(answers.get(field.id, [])))
+                ]
+            elif field.value_kind is ValueKind.STRING_LIST:
                 values[field.id] = [line.strip() for line in str(raw or "").splitlines() if line.strip()]
             else:
                 values[field.id] = cast(JSONValue, raw)
@@ -462,6 +471,15 @@ def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any]:
     label = field.label[:45]
     help_text = field.help_text or (field.label if len(field.label) > 45 else None)
     description = help_text[:100] if help_text else None
+    if field.value_kind is ValueKind.CREDIT_LIST:
+        return _CreditsField(
+            key=field.id,
+            label=label,
+            required=field.required,
+            maximum=4000,
+            default="\n".join(format_credit(credit) for credit in read_credits(value or [])),
+            description="One per line: Name, discord:@user, java:IGN, bedrock:Name. Optional: | layout or | contributor",
+        )
     if field.options or field.value_kind is ValueKind.BOOLEAN:
         options = (
             tuple(sl.forms.ChoiceOption(option.value, option.label[:100], option.value) for option in field.options)
@@ -525,6 +543,18 @@ def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any]:
         maximum=maximum,
         default=value if isinstance(value, str) else None,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _CreditsField(sl.forms.TextAreaField[Any]):
+    @override
+    def parse(self, raw: object) -> str | None:
+        text = super().parse(raw)
+        try:
+            parse_credit_lines(text or "")
+        except ValidationError as error:
+            raise sl.forms.FormValueError(str(error)) from error
+        return text
 
 
 @dataclass(frozen=True, slots=True)

@@ -14,6 +14,7 @@ from squid.builds.application.edit_schema import DoorPatch as DoorPatch
 from squid.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
 from squid.builds.application.queries import PublicBuildSummary
 from squid.builds.domain import Status
+from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 
 _HTTP_URL = TypeAdapter(AnyHttpUrl)
@@ -60,6 +61,26 @@ class BuildPreview(BaseModel):
     url: str
 
 
+class BuildCreditSummary(BaseModel):
+    """Public attribution without private account links or provider identifiers."""
+
+    name: str
+    kind: CreditKind
+    username: str | None
+    role: CreditRole
+    attribution: CreditAttribution
+
+    @classmethod
+    def from_credit(cls, credit: Credit) -> BuildCreditSummary:
+        return cls(
+            name=credit.name,
+            kind=credit.kind,
+            username=credit.username,
+            role=credit.role,
+            attribution=credit.attribution,
+        )
+
+
 class BuildSummary(FromDomain[Build]):
     """Stable collection representation of a build."""
 
@@ -73,6 +94,7 @@ class BuildSummary(FromDomain[Build]):
     category: str
     dimensions: Dimensions
     creators: list[str]
+    credits: list[BuildCreditSummary] = Field(default_factory=list)
     tags: list[BuildTag]
     preview: BuildPreview | None
     version_spec: str | None
@@ -98,6 +120,7 @@ class BuildSummary(FromDomain[Build]):
             category=build.category.value,
             dimensions=Dimensions(width=build.width, height=build.height, depth=build.depth),
             creators=list(build.creators_ign),
+            credits=[BuildCreditSummary.from_credit(credit) for credit in build.credits],
             tags=[
                 BuildTag(
                     key=assignment.definition.stable_key,
@@ -128,6 +151,7 @@ class BuildSummary(FromDomain[Build]):
             category=build.category,
             dimensions=Dimensions(width=build.dimensions[0], height=build.dimensions[1], depth=build.dimensions[2]),
             creators=list(build.creators),
+            credits=[BuildCreditSummary.from_credit(credit) for credit in build.credits],
             tags=[BuildTag(key=tag.key, name=tag.name, value=tag.value, unit=tag.unit) for tag in build.tags],
             preview=(
                 BuildPreview(kind=build.preview.kind, url=build.preview.url) if build.preview is not None else None

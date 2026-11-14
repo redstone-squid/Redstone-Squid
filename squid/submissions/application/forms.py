@@ -36,11 +36,9 @@ from squid_i18n import Text, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
-# New drafts use revision 4. Revisions 2 and 3 stay readable for existing drafts, which can be
-# upgraded one revision at a time. Revision 4 relaxes sizes (build size optional, door depth
-# optional) and stops asking Discord submitters for the exported Minecraft version.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 4
-_CHECKED_IN_REVISIONS = frozenset({2, 3, 4})
+# Older revisions remain immutable for pinned drafts and queued submissions.
+CURRENT_SUBMISSION_SCHEMA_REVISION = 5
+_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5})
 
 
 class FormManifestRegistry(Protocol):
@@ -186,7 +184,11 @@ def _build_form_manifest(revision: int) -> FormManifest:
     common = (
         FormSection(
             id="identity",
-            title=localize(tr(t"submissions-application-forms-build-identity = Name and creators")),
+            title=(
+                localize(tr(t"submissions-name-and-credits = Name and credits"))
+                if revision >= 5
+                else localize(tr(t"submissions-application-forms-build-identity = Name and creators"))
+            ),
             fields=(
                 FormField(
                     id="display_name",
@@ -210,14 +212,16 @@ def _build_form_manifest(revision: int) -> FormManifest:
                     edit_rules=EditRules(constraints=FieldConstraints(max_length=10_000)),
                 ),
                 FormField(
-                    id="creators",
-                    label=localize(tr(t"submissions-application-forms-creators = Creators")),
-                    control=ControlKind.TEXT,
-                    value_kind=ValueKind.STRING_LIST,
+                    id="credits" if revision >= 5 else "creators",
+                    label=localize(tr(t"submissions-credits = Credits"))
+                    if revision >= 5
+                    else localize(tr(t"submissions-application-forms-creators = Creators")),
+                    control=ControlKind.CREDITS if revision >= 5 else ControlKind.TEXT,
+                    value_kind=ValueKind.CREDIT_LIST if revision >= 5 else ValueKind.STRING_LIST,
                     required=True,
-                    repeatable=True,
+                    repeatable=revision < 5,
                     constraints=FieldConstraints(min_length=1, max_length=120, min_items=1, max_items=20),
-                    required_capability="repeatable_text",
+                    required_capability="typed_credits" if revision >= 5 else "repeatable_text",
                     # Older saved builds can have no creators; requiring one would block every other edit.
                     edit_rules=EditRules(
                         required=False, constraints=FieldConstraints(min_length=1, max_length=120, max_items=100)

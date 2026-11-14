@@ -50,6 +50,6 @@ def test_editing_uses_the_limits_a_saved_build_may_hold() -> None:
 
     assert submitted["description"].constraints.max_length == 4_000
     assert edited["description"].constraints.max_length == 10_000
-    assert submitted["creators"].required
-    assert not edited["creators"].required
+    assert submitted["credits"].required
+    assert not edited["credits"].required
     assert edited["completion"].constraints.max_length == 100

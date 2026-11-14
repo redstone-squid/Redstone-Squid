@@ -8,7 +8,7 @@ import type {
 import type { Locale } from "./i18n";
 
 export const SUBMISSION_PROTOCOL = 1;
-export const WEB_SUBMISSION_CAPABILITIES = ["repeatable_text"] as const;
+export const WEB_SUBMISSION_CAPABILITIES = ["repeatable_text", "typed_credits"] as const;
 
 const REQUIRED_CATEGORIES = new Set(["door", "extender", "utility", "entrance", "other"]);
 const SUPPORTED_CONTROLS = new Set([
@@ -18,6 +18,7 @@ const SUPPORTED_CONTROLS = new Set([
   "multi_choice",
   "duration",
   "boolean",
+  "credits",
 ]);
 const SUPPORTED_VALUE_KINDS = new Set([
   "string",
@@ -26,9 +27,19 @@ const SUPPORTED_VALUE_KINDS = new Set([
   "boolean",
   "string_list",
   "game_ticks",
+  "credit_list",
 ]);
 
-export type DraftValue = string | number | boolean | string[];
+export type CreditAnswer = {
+  name: string;
+  kind: string;
+  role: string;
+  username?: string | null;
+  subject?: string | null;
+  attribution?: string;
+  source_message_id?: number | null;
+};
+export type DraftValue = string | number | boolean | string[] | CreditAnswer[];
 
 export class SubmissionSchemaError extends Error {
   constructor(message: string) {
@@ -139,10 +150,27 @@ export function isFieldVisible(
   return Array.isArray(rule.value) && rule.value.some((value) => Object.is(value, actual));
 }
 
+export function isCreditAnswer(value: unknown): value is CreditAnswer {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "name" in value &&
+    typeof value.name === "string" &&
+    "kind" in value &&
+    typeof value.kind === "string" &&
+    "role" in value &&
+    typeof value.role === "string"
+  );
+}
+
 export function draftValue(value: unknown): DraftValue | undefined {
   if (typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
+  if (Array.isArray(value)) {
+    const entries: unknown[] = value;
+    if (entries.every(isCreditAnswer)) return entries;
+  }
   return undefined;
 }
 
@@ -161,7 +189,8 @@ export function parseDuration(value: string): number | undefined {
 
 export function fieldInputValue(field: FormFieldResponse, value: unknown): string {
   const parsed = draftValue(value);
-  if (Array.isArray(parsed)) return parsed.join("\n");
+  if (Array.isArray(parsed))
+    return parsed.map((item) => (typeof item === "string" ? item : item.name)).join("\n");
   if (typeof parsed === "number" && field.control === "duration") return `${parsed}gt`;
   if (typeof parsed === "string" || typeof parsed === "number") return String(parsed);
   return "";

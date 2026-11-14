@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Self
 
+from squid.builds.domain.credits import read_credits
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid_i18n import md_tr
@@ -51,6 +52,7 @@ class ControlKind(StrEnum):
     MULTI_CHOICE = "multi_choice"
     DURATION = "duration"
     BOOLEAN = "boolean"
+    CREDITS = "credits"
 
 
 class ValueKind(StrEnum):
@@ -62,6 +64,7 @@ class ValueKind(StrEnum):
     BOOLEAN = "boolean"
     STRING_LIST = "string_list"
     GAME_TICKS = "game_ticks"
+    CREDIT_LIST = "credit_list"
 
 
 class VisibilityOperator(StrEnum):
@@ -484,7 +487,7 @@ def _validate_value(field: FormField, value: JSONValue) -> str | None:
             return "too_short"
         if constraints.max_length is not None and len(value) > constraints.max_length:
             return "too_long"
-    if field.value_kind is ValueKind.STRING_LIST:
+    if field.value_kind in {ValueKind.STRING_LIST, ValueKind.CREDIT_LIST}:
         assert isinstance(value, Sequence) and not isinstance(value, str | bytes)
         if constraints.min_items is not None and len(value) < constraints.min_items:
             return "too_few_items"
@@ -516,6 +519,12 @@ def _matches_kind(value: JSONValue, kind: ValueKind) -> bool:
             return isinstance(value, int | float) and not isinstance(value, bool)
         case ValueKind.BOOLEAN:
             return isinstance(value, bool)
+        case ValueKind.CREDIT_LIST:
+            try:
+                read_credits(value)
+            except ValidationError:
+                return False
+            return True
         case ValueKind.STRING_LIST:
             return (
                 isinstance(value, Sequence)

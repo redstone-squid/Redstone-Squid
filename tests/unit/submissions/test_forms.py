@@ -41,7 +41,7 @@ def _valid_common_answers() -> dict[str, JSONValue]:
         "capture_height": 6,
         "capture_depth": 7,
         "source_version": "26.1.2",
-        "creators": ["Builder"],
+        "credits": [{"name": "Builder"}],
         "schematic_visibility": "reviewer_only",
     }
 
@@ -116,7 +116,7 @@ async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None
 
     assert revision_two is not None
     assert revision_three is not None
-    assert current.revision == 4
+    assert current.revision == 5
     old_context = next(section for section in revision_two.common_sections if section.id == "provenance")
     new_context = next(section for section in revision_three.common_sections if section.id == "submission_context")
     assert (
@@ -145,9 +145,7 @@ async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None
 async def test_manifest_localization_is_isolated_between_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
     def prefixed_localization(locale: str | None) -> Localization:
         prefix = locale or "default"
-        return Localization(
-            locale="fr", resources=(f"submissions-application-forms-build-identity = {prefix}:Build identity",)
-        )
+        return Localization(locale="fr", resources=(f"submissions-name-and-credits = {prefix}:Build identity",))
 
     monkeypatch.setattr("squid.submissions.application.forms.localization_for", prefixed_localization)
     titles: dict[str, str] = {}

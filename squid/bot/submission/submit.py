@@ -42,6 +42,7 @@ from squid.core.i18n import tr
 from squid.messages.application import MessageService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
 from squid.submissions.application import StoredDraft
+from squid.submissions.application.credit_text import parse_credit_lines
 from squid.submissions.application.prefill import prefill_submission
 from squid.submissions.domain import (
     DraftChange,
@@ -131,7 +132,9 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             ),
             "creators": sd.Option(
                 name=tr(t"command-build-submit-creators-name = creators"),
-                description=tr(t"submit-creator-ign-prompt = In-game names of the creators, comma separated."),
+                description=tr(
+                    t"submit-credit-reference-prompt = Credits, comma separated: Name, discord:@user, java:IGN, bedrock:Name."
+                ),
                 autocomplete=suggests("creators", multi=True),
             ),
             "versions": sd.Option(
@@ -245,7 +248,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         if versions is not None:
             draft.version_spec = optional_text(versions)
         if creators is not None:
-            draft.creators_ign = split_values(creators)
+            draft.credits = parse_credit_lines("\n".join(split_values(creators)))
         if restrictions is not None:
             await self.builds.classify_restrictions(draft, split_values(restrictions))
         if description is not None and (parsed_description := optional_text(description)) is not None:

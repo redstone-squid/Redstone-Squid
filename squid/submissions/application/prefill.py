@@ -60,7 +60,11 @@ def project_submission(
     values: dict[str, JSONValue] = {
         "display_name": source.display_name,
         "description": source.description,
-        "creators": list(source.creators_ign),
+        **(
+            {"credits": [credit.to_json() for credit in source.credits]}
+            if manifest.revision >= 5
+            else {"creators": list(source.creators_ign)}
+        ),
         "capture_width": source.width,
         "capture_height": source.height,
         "capture_depth": source.depth,

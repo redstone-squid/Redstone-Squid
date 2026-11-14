@@ -159,3 +159,11 @@ class StagedCredits:
     @creators_ign.setter
     def creators_ign(self, names: Iterable[str]) -> None:
         self.credits = name_credits(names, legacy=True)
+
+
+def read_credits(value: JSONValue) -> list[Credit]:
+    """Validate a structured credit list at form and persistence boundaries."""
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        message = "Credits must be a list of identity references."
+        raise ValidationError(message)
+    return [Credit.from_json(item) for item in value if isinstance(item, dict)]

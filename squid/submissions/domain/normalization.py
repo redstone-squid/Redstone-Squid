@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 from uuid import UUID
 
+from squid.builds.domain.credits import name_credits, read_credits
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
@@ -93,7 +94,9 @@ def normalize_submission(
         category=category,
         display_name=_optional_nonblank_str(answers, "display_name"),
         description=_optional_str(answers, "description"),
-        creators=_string_tuple(answers, "creators"),
+        credits=tuple(read_credits(answers["credits"]))
+        if "credits" in answers
+        else tuple(name_credits(_string_tuple(answers, "creators"), legacy=True)),
         capture_dimensions=SubmissionDimensions(
             _optional_int(answers, "capture_width"),
             _optional_int(answers, "capture_height"),

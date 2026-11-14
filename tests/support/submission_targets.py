@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
 from squid.builds.domain import BuildCategory, Status
+from squid.builds.domain.credits import name_credits
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import (
@@ -80,7 +81,7 @@ def normalized_submission(account_id: int, draft_id: UUID, source_version: str) 
         category=SubmissionCategory.OTHER,
         display_name="Version integrity test",
         description=None,
-        creators=("Builder",),
+        credits=tuple(name_credits(["Builder"], legacy=True)),
         capture_dimensions=SubmissionDimensions(3, 4, 5),
         source_version=source_version,
         version_compatibility=None,

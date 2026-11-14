@@ -1,3 +1,5 @@
+import { CreditEditor } from "./CreditEditor";
+import type { CreditAnswer } from "../lib/submission-form";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type {
@@ -840,6 +842,26 @@ function FieldEditor({
   const message =
     parseError ?? error ?? (issue ? issueMessage(issue, field.label, locale) : undefined);
   const invalid = message ? true : undefined;
+
+  if (field.control === "credits") {
+    return (
+      <div className="field submission-field submission-field--wide">
+        <label>
+          {field.label} <small>({state})</small>
+        </label>
+        <CreditEditor
+          value={Array.isArray(value) ? (value as CreditAnswer[]) : []}
+          disabled={disabled}
+          onCommit={onCommit}
+        />
+        {message && (
+          <small className="field-error" role="alert">
+            {message}
+          </small>
+        )}
+      </div>
+    );
+  }
 
   if (field.control === "boolean") {
     return (

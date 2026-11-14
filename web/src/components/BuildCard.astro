@@ -12,11 +12,13 @@ const href = localizePath(`/builds/${build.id}`, locale);
 
 <article class="build-card">
   <div class="build-card__media">
-    {preview ? (
-      <RemoteImage src={preview} alt="" locale={locale} />
-    ) : (
-      <div class="remote-image__fallback">{translate(locale, "common.noImage")}</div>
-    )}
+    {
+      preview ? (
+        <RemoteImage src={preview} alt="" locale={locale} />
+      ) : (
+        <div class="remote-image__fallback">{translate(locale, "common.noImage")}</div>
+      )
+    }
   </div>
   <div class="build-card__body">
     <span class="kicker">
@@ -32,12 +34,25 @@ const href = localizePath(`/builds/${build.id}`, locale);
       <li>{formatTiming(locale, build.opening_time)}</li>
       {build.versions[0] && <li>{build.versions[0]}</li>}
     </ul>
-    {build.creators.length > 0 && (
-      <div class="card-creators">
-        {build.creators.map((creator) => (
-          <a href={localizePath(`/creators/${encodeURIComponent(creator)}`, locale)}>{creator}</a>
-        ))}
-      </div>
-    )}
+    {
+      (build.credits?.length ?? 0) > 0 ? (
+        <div class="card-creators">
+          {build.credits?.map((credit) => (
+            <span>
+              {credit.name}
+              {credit.role !== "creator" ? ` (${credit.role})` : ""}
+            </span>
+          ))}
+        </div>
+      ) : (
+        build.creators.length > 0 && (
+          <div class="card-creators">
+            {build.creators.map((creator) => (
+              <span>{creator}</span>
+            ))}
+          </div>
+        )
+      )
+    }
   </div>
 </article>

@@ -58,9 +58,9 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     with sl.runtime.transaction():
         await workspace.save_values({"version_compatibility": "1.21"})
     with sl.runtime.transaction():
-        await workspace.save_values({"creators": ["Alice", "Bob"]})
+        await workspace.save_values({"credits": [credit.to_json() for credit in name_credits(["Alice", "Bob"])]})
 
-    assert workspace.patch().attributes() == {"version_spec": "1.21", "creators_ign": ["Alice", "Bob"]}
+    assert workspace.patch().attributes() == {"version_spec": "1.21", "credits": name_credits(["Alice", "Bob"])}
     assert build.version_spec == "1.20"
     assert build.creators_ign == []
     await workspace.history.undo()

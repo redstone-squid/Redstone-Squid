@@ -8,6 +8,7 @@ from whenever import Instant
 
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import BuildCategory, BuildDraft
+from squid.builds.domain.credits import Credit
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import JSONValue, ValidationError
 
@@ -28,6 +29,7 @@ class RecalculationFacts:
     normal_opening_time: int | None = None
     normal_closing_time: int | None = None
     patterns: tuple[str, ...] = ()
+    credits: tuple[Credit, ...] = ()
     creators_ign: tuple[str, ...] = ()
     wiring_placement_restrictions: tuple[str, ...] = ()
     animated_restrictions: tuple[str, ...] = ()
@@ -51,7 +53,7 @@ class RecalculationFacts:
             normal_opening_time=draft.normal_opening_time,
             normal_closing_time=draft.normal_closing_time,
             patterns=tuple(draft.patterns),
-            creators_ign=tuple(draft.creators_ign),
+            credits=tuple(draft.credits),
             wiring_placement_restrictions=tuple(draft.wiring_placement_restrictions),
             animated_restrictions=tuple(draft.animated_restrictions),
             component_restrictions=tuple(draft.component_restrictions),
@@ -81,6 +83,7 @@ class RecalculationFacts:
         for name in (
             "version_spec",
             "creators_ign",
+            "credits",
             "wiring_placement_restrictions",
             "animated_restrictions",
             "component_restrictions",
@@ -136,7 +139,7 @@ def recalculation_values(build: Build) -> dict[str, JSONValue]:
     values: dict[str, JSONValue] = {
         "dimensions": list(build.dimensions),
         "version_spec": build.version_spec,
-        "creators": list(build.creators_ign),
+        "credits": [credit.to_json() for credit in build.credits],
         "description": build.description,
         "wiring_placement_restrictions": list(build.wiring_placement_restrictions),
         "animated_restrictions": list(build.animated_restrictions),
