@@ -4326,7 +4326,7 @@ records-active-version = Using the active version
 # squid/bot/submission/records.py:204
 records-advanced-category = Advanced exact category
 
-# squid/records/application/services.py:582, squid/records/application/services.py:613
+# squid/records/application/services.py:606, squid/records/application/services.py:637
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/records/errors.py:29, squid/records/errors.py:45
@@ -4350,14 +4350,11 @@ records-errors-record-not-found = Record not found.
 # squid/bot/submission/records.py:396
 records-exact-category-key = Exact category key (advanced)
 
-# squid/records/application/services.py:626
+# squid/records/application/services.py:650
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/records/domain/models.py:115
 records-fixed-volume-positive = Fixed volume must be positive.
-
-# squid/records/application/services.py:557
-records-invalid-boolean-category = Invalid boolean category value { $value }.
 
 # squid/records/domain/categories.py:50
 records-maximum-category-size = Maximum category size cannot be negative.
@@ -4377,7 +4374,7 @@ records-no-unresolved-categories = No unresolved active record categories.
 # squid/bot/submission/records.py:387
 records-operation-permission-denied = You are no longer allowed to perform this records operation.
 
-# squid/records/application/services.py:545
+# squid/records/application/services.py:567
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/submission/records.py:377
@@ -4389,7 +4386,7 @@ records-recompute-definition = Recompute definition
 # squid/bot/submission/records.py:306, squid/bot/submission/records.py:355
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/records/application/services.py:368
+# squid/records/application/services.py:390
 records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
 # squid/records/errors.py:28
@@ -4401,7 +4398,7 @@ records-record-definition-stores = Record definition { $definition_id } stores a
 # squid/records/errors.py:16
 records-record-not-found-title = Record not found
 
-# squid/records/application/services.py:644
+# squid/records/application/services.py:668
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/submission/records.py:176

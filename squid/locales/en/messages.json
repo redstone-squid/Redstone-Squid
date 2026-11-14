@@ -14065,8 +14065,8 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:582",
-      "squid/records/application/services.py:613"
+      "squid/records/application/services.py:606",
+      "squid/records/application/services.py:637"
     ]
   },
   "records-category-not-found-title": {
@@ -14148,7 +14148,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:626"
+      "squid/records/application/services.py:650"
     ]
   },
   "records-fixed-volume-positive": {
@@ -14158,21 +14158,6 @@
     "arguments": [],
     "locations": [
       "squid/records/domain/models.py:115"
-    ]
-  },
-  "records-invalid-boolean-category": {
-    "fingerprint": "1207bbb4e4db74e3e0c4c512db552d8f554614dfe93167d2870fa5bd1bb509b9",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [
-      {
-        "name": "value",
-        "function": null,
-        "options": []
-      }
-    ],
-    "locations": [
-      "squid/records/application/services.py:557"
     ]
   },
   "records-maximum-category-size": {
@@ -14235,7 +14220,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/records/application/services.py:545"
+      "squid/records/application/services.py:567"
     ]
   },
   "records-rebuild-summary": {
@@ -14315,7 +14300,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:368"
+      "squid/records/application/services.py:390"
     ]
   },
   "records-record-category-not-found": {
@@ -14363,7 +14348,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:644"
+      "squid/records/application/services.py:668"
     ]
   },
   "records-reset-version": {

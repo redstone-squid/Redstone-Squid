@@ -7,7 +7,9 @@ from decimal import Decimal
 import pytest
 
 from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
+from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
 from squid.core.errors import DataIntegrityError, ValidationError
+from squid.records.application.live import DoorRecordLookup
 from squid.records.application.models import (
     CandidateBuild,
     CandidateFacet,
@@ -650,3 +652,75 @@ async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> No
         await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3)
 
     assert runs.batches == []
+
+
+async def test_live_door_lookup_applies_taxonomy_version_and_thresholds_without_writes() -> None:
+
+    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    width = CandidateFacet(
+        id=7,
+        kind=FacetKind.RESTRICTION,
+        name="Width",
+        value_type="numeric",
+        assigned_value=Decimal(3),
+        record_operator="at_most",
+    )
+    source = _door(1, volume=100, opening=10, restrictions=(flush, width))
+    family = replace(
+        source,
+        candidate=replace(source.candidate, build_id=2),
+        expansion=DoorExpansion(
+            parameters=(
+                ExpansionParameter(
+                    name="n", minimum=1, maximum_kind="unbounded", initial_steps=(), repeating_steps=(1,)
+                ),
+            ),
+            branches=(ExpansionBranch(opening_width="n", opening_height="2", opening_depth="1", volume="10n"),),
+        ),
+    )
+    wrong_version = replace(family, candidate=replace(family.candidate, build_id=3), version_ids=frozenset({4}))
+    wrong_types = replace(family, candidate=replace(family.candidate, build_id=4), types=())
+    wrong_restrictions = replace(family, candidate=replace(family.candidate, build_id=5), restrictions=())
+    candidates = FakeCandidates((source, family, wrong_version, wrong_types, wrong_restrictions))
+    runs = FakeRuns()
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
+    result = await service.lookup_door(
+        DoorRecordLookup(
+            opening=(2, 2, 1),
+            type_ids=frozenset({20}),
+            restriction_ids=frozenset({1, 7}),
+            restriction_values=((7, "at_most", "4"),),
+            version_id=3,
+        )
+    )
+    assert result.resolution.holder_ids == (2,)
+    assert {configuration.build_id for configuration in result.configurations} == {1, 2}
+    assert runs.batches == []
+    assert runs.requested == {}
+
+
+@pytest.mark.parametrize("threshold", ["not a number", "NaN", "Infinity", "1e999999", "1e-999999", "2"])
+async def test_live_lookup_rejects_incompatible_threshold_without_crashing(threshold: str) -> None:
+
+    width = CandidateFacet(
+        id=7,
+        kind=FacetKind.RESTRICTION,
+        name="Width",
+        value_type="numeric",
+        assigned_value=Decimal(3),
+        record_operator="at_most",
+    )
+    candidates = FakeCandidates((_door(1, volume=100, opening=10, restrictions=(width,)),))
+    runs = FakeRuns()
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
+    result = await service.lookup_door(
+        DoorRecordLookup(
+            opening=(2, 2, 1),
+            type_ids=frozenset({20}),
+            restriction_ids=frozenset({7}),
+            restriction_values=((7, "at_most", threshold),),
+        )
+    )
+    assert result.resolution.status is ResolutionStatus.NO_CANDIDATE

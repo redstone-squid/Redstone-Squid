@@ -3,13 +3,14 @@
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
-from datetime import datetime
-from decimal import Decimal
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from itertools import combinations, groupby, product
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
 from squid.records.application.models import (
     CandidateBuild,
     CandidateFacet,
@@ -250,7 +251,7 @@ class RecordComputationService:
                         continue
                     operator, raw_value = requested
                     threshold = _coerce_category_value(facet, raw_value)
-                    if facet.record_operator != operator or not _satisfies(facet, threshold):
+                    if threshold is None or facet.record_operator != operator or not _satisfies(facet, threshold):
                         break
                     selected.append(replace(facet, category_value=threshold))
                 else:
@@ -348,6 +349,27 @@ class RecordService:
                 keyset=True,
                 id_of=lambda record: record.id,
             )
+
+    async def lookup_door(self, request: DoorRecordLookup) -> LiveDoorRecord:
+        """Evaluate one size against current confirmed facts without persisting it.
+
+        The repository pins a read-only database snapshot before loading related
+        facts. Evaluation continues on immutable values after releasing that
+        transaction. This result does not replace published record runs.
+        """
+        async with self._uow_factory() as uow:
+            sources = tuple(
+                await uow.record_candidates.list_for_door_lookup(
+                    request.opening, request.orientation, request.version_id
+                )
+            )
+        category = self._computation.requested_category(request.identity, sources)
+        matched_ids = {candidate.build_id for candidate in category.candidates} if category is not None else set()
+        return evaluate_door_record(
+            request,
+            tuple(source for source in sources if source.candidate.build_id in matched_ids),
+            evaluated_at=datetime.now(UTC),
+        )
 
     async def materialize_definition(
         self,
@@ -548,17 +570,19 @@ def _serialize_category_value(value: Decimal | str | bool | None) -> str:
     raise DataIntegrityError(msg)
 
 
-def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str | bool:
+def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str | bool | None:
+    # An incompatible threshold type cannot match this facet. In particular,
+    # nonfinite decimals must never reach ordered comparisons.
     if facet.value_type == "numeric":
-        return Decimal(value)
+        try:
+            number = Decimal(value)
+        except InvalidOperation:
+            return None
+        # Bound rendered thresholds as well as input length: a short exponent
+        # such as 1e999999 must not produce an enormous category title.
+        return number if number.is_finite() and -128 <= number.adjusted() <= 128 else None
     if facet.value_type == "boolean":
-        if value not in {"true", "false"}:
-            raise InvalidStateError(
-                md_tr(
-                    t"records-invalid-boolean-category = Invalid boolean category value {value!r}.",
-                )
-            )
-        return value == "true"
+        return value == "true" if value in {"true", "false"} else None
     return value
 
 
