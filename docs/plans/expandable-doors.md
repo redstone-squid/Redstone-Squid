@@ -76,8 +76,13 @@ remain readable. The build API exposes `door.expansion` for reads and patches;
 omitting it preserves the value, and null clears it. Dedicated UI is deferred.
 
 Malformed inferred bounds remain unknown instead of rejecting other builds.
-Evidence and raw descriptions are checked against the candidate's primary
-messages; generated summaries are replaced with source excerpts.
+Parameter names, expressions, completion times, evidence and raw descriptions
+are checked against the candidate's primary messages; generated summaries are
+replaced with source excerpts. Labels, parameter meanings, bounds, steps and
+timing units are the model's reading and are not checked. A document with no
+grounded fact is not stored, because any stored document marks the door as a
+family. Recalculating an existing build from its source applies the inferred
+document; versioned edits record it so undo can restore it.
 
 For example, a partial source claim can be ingested as:
 
@@ -127,7 +132,9 @@ for configuration in result.configurations:
 
 For the source example above, the 6×3 configuration has volume 160. A 7×3 request
 is outside the declared two-layer progression. Each branch returns `supported`,
-`outside_domain`, or `unresolved`. Supported membership does not guarantee known
+`outside_domain`, `unresolved`, or `unmapped`. Unresolved means the source makes
+a claim that does not settle this size; unmapped means it gives no opening width
+or height, so the branch makes no claim at any size. Supported membership does not guarantee known
 metrics: volume and individual timing slots can remain unknown with diagnostics.
 Top-level diagnostics cover absent branches or an unsupported parameter namespace.
 Normalization also retains branch diagnostics independently of point membership.
@@ -145,7 +152,8 @@ comparisons and modulo tests. Limits are 512 source characters, 128 tokens, 192 
 64 terms per polynomial part, and 256-bit polynomial coefficients. Point dimensions
 are positive integers of at most 256 bits. Unsupported syntax remains in the source document.
 
-All three opening expressions must be known, and enough independent affine
+Opening width and height expressions must be known; an omitted depth is read as
+one block, as for fixed doors. Enough independent affine
 opening equations must determine the declared parameters. Gaussian elimination
 recovers module counts without enumerating sizes; the remaining dimensions are
 then checked exactly, including rounded expressions. For example, width=ceil(n/2)
@@ -157,7 +165,8 @@ Consistency checks handle coupled openings such as n×n and reject noninteger
 parameter values.
 
 Domains accept chained comparisons, `and`/`or`/`not`, semicolon conjunctions, and
-positive integer modulo tests, for example `n % 2 = 0`. Raw prose such as `odd n`
+positive integer modulo tests, for example `n % 2 = 0`. A semicolon joins whole
+conditions: `a or b; c` means `(a or b) and c`. Raw prose such as `odd n`
 is diagnosed rather than interpreted. Structured bounds and layer progressions
 remain authoritative: absent steps or an unknown upper bound are not filled in
 from assumptions. Known exclusions still reject sizes, and a declared minimum
@@ -179,7 +188,9 @@ use the same concrete evaluator and ranking rules.
 ## Ordinary concrete records
 
 Ordinary rebuilds evaluate families at openings observed among fixed builds or
-explicitly requested through category lookup. A family alone does not enumerate
+explicitly requested through category lookup. A family joins a category only
+where some branch is supported or unresolved at that opening; elsewhere the
+category is computed as if the family did not exist. A family alone does not enumerate
 its domain or create a category from its sample opening. A request for 9999×3
 creates that single category; live point lookup still creates none. Categories
 keep their existing orientation, exact pattern set, restriction and version rules.
@@ -196,7 +207,8 @@ The ordinary web record page displays a family holder's saved opening, parameter
 volume, timing variants, formulas and source excerpts. It hides that holder's
 sample measurements and shows alternative configurations separately.
 
-Unknown membership prevents an official result. Alternative configurations stay
+Unresolved membership prevents an official result; unmapped documents and
+branches are reported but do not compete. Alternative configurations stay
 separate, and a holder metric is scalar only when all selected alternatives agree.
 Family completion dates remain unverified; categories involving families report
 incomplete history rather than reconstructing it from sample dates. Fixed-only
@@ -226,8 +238,8 @@ this includes 9999×3 without enumerating intermediate sizes.
 
 Results expose build-level holders, local configuration IDs, evaluated metrics,
 branch indices, parameter assignments, and diagnostics. Alternatives retain their
-own volume and timing variants. Unproven membership conservatively blocks an
-official result; proven exclusions do not compete. Missing primary measurements
+own volume and timing variants. Unresolved membership conservatively blocks an
+official result; proven exclusions and unmapped configurations do not compete. Missing primary measurements
 follow the existing exclusion rule, while missing decisive tie-breakers produce
 unresolved results. If tied alternatives all belong to one build, the build can
 hold the record even when its exact winning branch remains provisional.
@@ -419,7 +431,9 @@ unresolved regions. Older attempts cannot overwrite newer work, including when
 the newer attempt failed.
 
 Unsupported inputs, limits, timeouts, cancellation, and worker failures leave the
-last exact publication active. The latest attempt records its outcome separately;
+last exact publication active. A query matching more sources than the analyzer
+accepts fails before its snapshot is saved. A refresh attempts every registered
+query and then reports the first failure, so the queue retries. The latest attempt records its outcome separately;
 a process kill may leave it unfinished until the queue retries with a new
 generation. Queue acknowledgement still matches the claim token, so source edits
 during computation keep their newly queued work. One publication worker runs at
