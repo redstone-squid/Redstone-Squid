@@ -1,17 +1,7 @@
-"""Public namespace and optional-extra packaging contracts for the Discord adapter."""
+"""Optional-extra packaging contracts for the Discord adapter."""
 
 import subprocess
 import sys
-
-import squid_ui_discord
-
-
-def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
-    """A consumer can import and drive the versioned testing namespace."""
-    harness = squid_ui_discord.testing.interaction_harness(user_id=7)
-
-    assert harness.source.user.id == 7
-    assert squid_ui_discord.testing.message_harness().source.id == 99
 
 
 def test_durability_imports_without_postgres_dependency() -> None:

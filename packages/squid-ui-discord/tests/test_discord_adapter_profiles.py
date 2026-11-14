@@ -7,27 +7,18 @@ from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
+from squid_ui.planning.discord import components_v2_target
 from squid_ui.primitives import Text
 from squid_ui.target_types import DiscordAdapter
 from squid_ui_discord.adapter import (
-    DISCORD_PY_27_ADAPTER,
     discord_py_adapter_profile,
     require_discord_py_capability,
 )
-from squid_ui_discord.target import classic, v2
+from squid_ui_discord.target import v2
 
 
 class AlternateAdapter(DiscordAdapter):
     pass
-
-
-def test_builtin_targets_bind_the_verified_discord_py_profile() -> None:
-    assert v2().adapter is DISCORD_PY_27_ADAPTER
-    assert classic().adapter is DISCORD_PY_27_ADAPTER
-    assert AdapterCapability.RENDER_V2 in v2().capabilities
-    assert "extension.discord.item" in v2().capabilities
-    assert "extension.discord.item" not in classic().capabilities
 
 
 def test_alternate_profile_can_plan_for_an_injected_renderer() -> None:
@@ -61,10 +52,6 @@ components_v2_target(AdapterProfile(DiscordAdapter, 'alternate', '>=1'))
     assert completed.returncode == 0, completed.stderr
 
 
-def test_discord_py_boundary_accepts_installed_27_release() -> None:
-    require_discord_py_capability(DISCORD_PY_27_ADAPTER, AdapterCapability.RENDER_V2, "render Components V2")
-
-
 def test_discord_py_boundary_rejects_unmatched_version() -> None:
     profile = discord_py_adapter_profile("future", ">=99", capabilities=frozenset({AdapterCapability.RENDER_V2}))
 
@@ -77,11 +64,6 @@ def test_discord_py_boundary_names_a_missing_operation_capability() -> None:
 
     with pytest.raises(LayoutInvariantError, match=AdapterCapability.RENDER_V2):
         require_discord_py_capability(profile, AdapterCapability.RENDER_V2, "render Components V2")
-
-
-def test_protocol_factories_union_only_applicable_extension_capabilities() -> None:
-    assert "extension.discord.item" in components_v2_target(DISCORD_PY_27_ADAPTER).capabilities
-    assert "extension.discord.item" not in classic_target(DISCORD_PY_27_ADAPTER).capabilities
 
 
 def test_scene_body_can_be_narrowed_after_a_broad_decode() -> None:

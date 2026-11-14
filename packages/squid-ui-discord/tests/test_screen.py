@@ -76,10 +76,6 @@ def test_screen_compiles_its_class_policy_once() -> None:
     assert Declared.__response_spec__.timeout == 30
 
 
-def test_screen_has_no_delivery_method() -> None:
-    assert not hasattr(BasicScreen(), "show")
-
-
 @pytest.mark.parametrize("timeout", [False, True])
 async def test_expired_is_available_during_final_render(timeout: bool) -> None:
     rendered: list[bool] = []

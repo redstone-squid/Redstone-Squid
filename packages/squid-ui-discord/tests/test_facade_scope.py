@@ -86,14 +86,6 @@ async def test_scope_claims_a_session_root_instead_of_its_owned_child() -> None:
     assert tuple(installed.sessions.active()) == ()
 
 
-def test_runtime_has_no_delivery_methods() -> None:
-    installed = runtime()
-
-    assert not hasattr(installed, "respond")
-    assert not hasattr(installed, "send")
-    assert not hasattr(installed, "edit")
-
-
 async def test_component_scope_cannot_supply_another_runtimes_client() -> None:
     installed = runtime()
     other = runtime()

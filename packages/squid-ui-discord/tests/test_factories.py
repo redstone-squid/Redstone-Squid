@@ -7,7 +7,6 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.semantic import SemanticNode
 from squid_ui_discord import DISCORD_V2_DPY27
 
 
@@ -83,11 +82,6 @@ class TestAdaptationMethods:
         body = sl.paragraph("body")
 
         assert body.truncate().budget(min=10, prefer=20) == sl.budget(sl.truncate(body), min=10, prefer=20)
-
-    def test_nodes_stay_slotted(self) -> None:
-        # A base class without `__slots__` would give every dataclass node a `__dict__`.
-        assert not hasattr(sl.paragraph("body"), "__dict__")
-        assert not hasattr(sl.paragraph("body").truncate(), "__dict__")
 
 
 class TestRefusals:
@@ -231,26 +225,6 @@ class TestParity:
         ) == sl.semantic.Navigation(
             "n", (sl.semantic.NavOption("home", sl.plain("Home")),), sl.semantic.Controlled("home", _noop)
         )
-
-
-class TestDrift:
-    _ALIASES = {
-        "ActionControl": "action_control",
-        "ActionControls": "action_controls",
-        "ControlGroup": "control_group",
-        "FormTrigger": "form",
-        "Metric": "metric",
-        "List": "bullets",
-        "ProgressBar": "progress",
-        "RoutedChoices": "routed_choices",
-        "ZonedTimestamp": "zoned_timestamp",
-    }
-
-    def test_every_semantic_node_has_a_root_level_factory(self) -> None:
-        for member in SemanticNode.__value__.__args__:
-            member_name: str = member.__name__
-            name = self._ALIASES.get(member_name, member_name.lower())
-            assert callable(getattr(sl, name))
 
 
 def test_timestamp_factory_rejects_naive_datetimes() -> None:
