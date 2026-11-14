@@ -124,3 +124,33 @@ async def test_selected_rank_change_rechecks_permission() -> None:
     )
     await screen._rank_selected(15, 7, cast(sd.SubmitEvent, Submission()))
     runner.execute.assert_not_called()
+
+
+@pytest.mark.parametrize("authorized", [True, False])
+async def test_custom_role_pattern_uses_selected_identity_and_rechecks_permission(authorized: bool) -> None:
+    admin = AsyncMock(spec=PermissionAdministrationService)
+    screen = AccessScreen(
+        admin,
+        AsyncMock(spec=EditRunner),
+        guild_id=42,
+        account_id=2,
+        discord_role_id=None,
+        subject_label="Member",
+        capabilities=frozenset(),
+        actor=AsyncMock(return_value=Actor(account_id=1)),
+        authorize=AsyncMock(return_value=authorized),
+    )
+    saved = AsyncMock()
+    screen._save = saved
+    event = Submission()
+    event.values = {"operation": "exclude", "pattern": "build.*.view"}
+    await screen._custom_role_pattern(15, 7, cast(sd.SubmitEvent, event))
+    admin.role.assert_not_called()
+    if authorized:
+        saved.assert_awaited_once()
+        assert saved.call_args.args[1].role_id == 15
+        assert saved.call_args.args[1].pattern == "build.*.view"
+        assert saved.call_args.args[2] == 7
+    else:
+        saved.assert_not_awaited()
+        event.notice.assert_awaited_once()

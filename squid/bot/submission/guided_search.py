@@ -190,9 +190,9 @@ class GuidedSearch(sd.Screen[SearchSelection, Any, RedstoneSquid]):
         nodes.append(
             sl.action_controls(
                 sl.form(
-                    tr(t"guided-search-advanced = Advanced query"),
+                    tr(t"guided-search-query-editor = Query expression"),
                     sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](
-                        tr(t"guided-search-advanced = Advanced query"),
+                        tr(t"guided-search-query-editor = Query expression"),
                         (
                             sl.forms.TextField(
                                 key="query",

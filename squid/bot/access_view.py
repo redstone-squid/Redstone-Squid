@@ -138,32 +138,6 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         if PERM_AUDIT_VIEW in self._capabilities:
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
             tabs.append(sp.Tab("audit", tr(t"access-view-audit = Audit"), self._audit(audit)))
-        if self._may_grant or self._may_manage_roles:
-            tabs.append(
-                sp.Tab(
-                    "advanced",
-                    tr(t"access-advanced = Advanced entry"),
-                    (
-                        sl.action_controls(
-                            self._may_grant
-                            and sl.form(
-                                tr(t"access-advanced-rule = Enter a permission pattern"),
-                                self._rule_form(),
-                                key="advanced-rule",
-                                on_submit=partial(self._change_rule, base_revision=self._revision),
-                            ),
-                            self._may_manage_roles
-                            and sl.form(
-                                tr(t"access-advanced-role = Enter role slugs"),
-                                self._edit_role_form(),
-                                key="advanced-role",
-                                on_submit=partial(self._edit_role, base_revision=self._revision),
-                            ),
-                            key="advanced-actions",
-                        ),
-                    ),
-                )
-            )
         subject_label = self._subject_label
         self._tabs = sp.Tabs(
             tabs,
@@ -228,6 +202,13 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 self._may_manage_roles
                 and sl.action_control(
                     tr(t"access-choose-role = Choose internal role"), self._choose_role, key="choose-role"
+                ),
+                self._may_grant
+                and sl.form(
+                    tr(t"access-custom-pattern = Custom permission pattern"),
+                    self._rule_form(),
+                    key="custom-pattern",
+                    on_submit=partial(self._change_rule, base_revision=self._revision),
                 ),
                 key="subject-forms",
             )
@@ -358,6 +339,27 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 ),
                 key="role-actions",
             ),
+            sl.form(
+                tr(t"access-custom-pattern = Custom permission pattern"),
+                _RolePatternForm().spec(),
+                key="custom-pattern",
+                on_submit=partial(self._custom_role_pattern, role.id, revision),
+            ),
+        )
+
+    async def _custom_role_pattern(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
+        if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
+            return
+        form = _RolePatternForm.from_submission(event)
+        await self._save(
+            PATTERN_EDIT,
+            PatternValues(
+                role_id=role_id,
+                pattern=form.pattern,
+                mode={"include": INCLUDE_MODE, "exclude": EXCLUDE_MODE}.get(form.operation),
+            ),
+            revision,
+            tr(t"access-view-internal-role-updated = Internal role updated."),
         )
 
     async def _rank_selected(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
@@ -430,10 +432,6 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     @staticmethod
     def _create_role_form() -> sl.forms.FormSpec:
         return _CreateRoleForm().spec()
-
-    @staticmethod
-    def _edit_role_form() -> sl.forms.FormSpec:
-        return _EditRoleForm().spec()
 
     @staticmethod
     def _catalogue() -> sp.Browser[Any, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
@@ -542,42 +540,6 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             base_revision,
             label,
         )
-        await event.notice(label)
-
-    async def _edit_role(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
-        if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
-            return
-        form = _EditRoleForm.from_submission(event)
-        operation, slug, value = form.operation, form.slug, form.value or ""
-        role = await self._admin.role(slug, guild_id=self._guild_id)
-        if operation == "delete":
-            self._request_delete(role, self._revision if base_revision is None else base_revision)
-            return
-        if not value:
-            await event.notice(tr(t"access-value-required = This operation needs a value."))
-            return
-        label = tr(t"access-view-internal-role-updated = Internal role updated.")
-        if operation in {"include", "exclude", "remove-pattern"}:
-            await self._save(
-                PATTERN_EDIT,
-                PatternValues(
-                    role_id=role.id,
-                    pattern=value,
-                    mode={"include": INCLUDE_MODE, "exclude": EXCLUDE_MODE}.get(operation),
-                ),
-                base_revision,
-                label,
-            )
-        elif operation in {"compose", "decompose"}:
-            included = await self._admin.role(value, guild_id=self._guild_id)
-            await self._save(
-                INCLUDE_EDIT,
-                IncludeValues(role_id=role.id, included_id=included.id, present=operation == "compose"),
-                base_revision,
-                label,
-            )
-        elif operation == "rank":
-            await self._save(RANK_EDIT, RankValues(role_id=role.id, rank=int(value)), base_revision, label)
         await event.notice(label)
 
     async def _decide_delete(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
@@ -732,16 +694,17 @@ class _CreateRoleForm(sl.forms.Form):
     scope = _scope_field()
 
 
-class _EditRoleForm(sl.forms.Form):
-    title = tr(t"access-view-edit-internal-role = Edit internal role")
+class _RolePatternForm(sl.forms.Form):
+    title = tr(t"access-custom-pattern = Custom permission pattern")
 
+    pattern = sl.forms.TextField(
+        label=tr(t"access-view-permission-pattern = Permission pattern"),
+        description=tr(
+            t"access-custom-pattern-help = For example, build.*.view matches view permissions across build resources."
+        ),
+        maximum=200,
+    )
     operation = sl.forms.ChoiceField(
         label=tr(t"access-view-operation = Operation"),
-        options=tuple((sl.forms.ChoiceOption(key, label, key) for key, label in _ROLE_ACTIONS)),
-    )
-    slug = sl.forms.TextField(label=tr(t"access-view-role-slug = Role slug"), maximum=100)
-    value = sl.forms.TextField(
-        label=tr(t"access-view-pattern-included-role-or-rank = Pattern, included role, or rank"),
-        required=False,
-        maximum=200,
+        options=tuple(sl.forms.ChoiceOption(key, label, key) for key, label in _ROLE_ACTIONS[:3]),
     )

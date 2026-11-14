@@ -555,12 +555,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 sl.action_control(
                     tr(t"build-browser-search-filters = Search & filters"), self._guided_search, key="guided-search"
                 ),
-                sl.form(
-                    tr(t"build-browser-advanced-search = Advanced search"),
-                    _SearchForm(query=self._query, sort=self._sort).spec(),
-                    key="catalogue-search",
-                    on_submit=self._search,
-                ),
                 sl.action_control(
                     tr(t"catalogue-hide-search-help = Hide search help")
                     if self._show_search_help
@@ -610,7 +604,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             nodes.append(
                 sl.note(
                     tr(
-                        t"build-filter-hint = Search by keywords, choose filters, or use Advanced search for query expressions."
+                        t"build-filter-hint = Use Search & filters for keywords, filters, sorting, and query expressions."
                     )
                 )
             )
@@ -622,6 +616,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._show_search_help = not self._show_search_help
 
     async def _apply_search_example(self, query: str, _event: sl.PressEvent) -> None:
+        self._guided = None
         self._record_categories = frozenset()
         await self._run_search(query, "")
         self._show_search_help = False
@@ -697,11 +692,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
         await self.open_child(cast(sd.PressEvent[RedstoneSquid], event), child, on_result=selected)
 
-    async def _search(self, event: sl.SubmitEvent) -> None:
-        self._guided = None
-        form = _SearchForm.from_submission(event)
-        await self._run_search(form.query or "", form.sort or "")
-
     async def _toggle_record_category(self, category: str, event: sl.ToggleEvent) -> None:
         if event.value:
             self._record_categories = self._record_categories | {category}
@@ -763,22 +753,3 @@ class _OpenBuildForm(sl.forms.Form):
     title = tr(t"bot-submission-build-browse-open-build = Open build")
 
     id = sl.forms.IntField(label=tr(t"bot-submission-build-browse-build-id = Build ID"), minimum=1)
-
-
-class _SearchForm(sl.forms.Form):
-    title = tr(t"build-browser-search-filters = Search & filters")
-
-    query = sl.forms.TextField(
-        label=tr(t"build-browser-search-query = Name, keywords, or filters"),
-        maximum=500,
-        required=False,
-        description=tr(
-            t"build-browser-filter-help = Examples: title:door, creator:Steve, width:5, kind:door, base_title:smallest"
-        ),
-    )
-    sort = sl.forms.TextField(
-        label=tr(t"build-browser-search-sort = Sort (optional)"),
-        required=False,
-        maximum=80,
-        description=tr(t"build-browser-sort-help = Examples: width, -width, -created_at. Leave blank for relevance."),
-    )

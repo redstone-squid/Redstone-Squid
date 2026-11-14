@@ -13,7 +13,6 @@ from squid.bot.lookup import pick
 from squid.bot.submission.schematics import (
     WRITABLE_EXTENSIONS,
     _describe,
-    _parse_position,
 )
 from squid.bot.submission.video_editor import VideoEditor
 from squid.bot.ui import tr
@@ -24,7 +23,7 @@ from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_VIEW_PRIVATE,
 )
 from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
-from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
+from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import SchematicRenderRefusedError
 from squid.suggestions.domain import Suggestion
@@ -124,13 +123,6 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             videos_enabled
             and sl.action_control(
                 tr(t"schematic-video-action = Render video"), sd.on_press(self._open_video), key="guided-video"
-            ),
-            videos_enabled
-            and sl.form(
-                tr(t"schematic-video-advanced = Advanced video recipe"),
-                _VideoForm().spec(),
-                key="schematic-video",
-                on_submit=self._video,
             ),
             videos_enabled
             and self._video_job_id is not None
@@ -258,37 +250,6 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             self._follow_video(request, status.id), name=f"schematic-video-{status.id}"
         )
 
-    async def _video(self, event: sd.SubmitEvent[RedstoneSquid]) -> None:
-        request = event.context
-        actor = await request.client.actors.resolve(request)
-        stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
-        service = self._schematics.videos
-        if stored is None or service is None or actor.account_id is None:
-            return
-        form = _VideoForm.from_submission(event)
-        try:
-            interactions: list[VideoInteraction] = []
-            for line in (form.interactions or "").splitlines():
-                if not line.strip():
-                    continue
-                fields = line.split(maxsplit=1)
-                position = _parse_position(fields[1]) if len(fields) == 2 else None
-                interactions.append(VideoInteraction(tick=int(fields[0]), position=position))
-            recipe = VideoRenderRequest(
-                duration_ticks=form.seconds * 20,
-                orbit_degrees=form.orbit,
-                simulation_enabled=form.simulate,
-                interactions=tuple(interactions) if form.simulate else (),
-            )
-        except ValueError:
-            await event.notice(
-                tr(
-                    t"schematic-video-invalid = Use a tick followed by x y z on each line, with activations inside the clip."
-                )
-            )
-            return
-        await self._queue_recipe(request, stored, actor.account_id, recipe, event)
-
     async def _follow_video(self, request: SchematicRequest, job_id: int) -> None:
         with anyio.move_on_after(600):
             while request.interaction is not None and not request.interaction.is_expired():
@@ -413,46 +374,6 @@ class _ConvertForm(sl.forms.Form):
         ),
         required=False,
         maximum=100,
-    )
-
-
-class _VideoForm(sl.forms.Form):
-    title = tr(t"schematic-video-action = Render video")
-    simulate = sl.forms.ChoiceField(
-        label=tr(t"schematic-video-motion = Build motion"),
-        description=tr(
-            t"schematic-video-motion-help = Simulate lever or button activations, or show the build without activating it."
-        ),
-        default=True,
-        options=(
-            sl.forms.ChoiceOption("simulate", tr(t"schematic-video-simulate = Simulate inputs"), value=True),
-            sl.forms.ChoiceOption("static", tr(t"schematic-video-static = Keep build static"), value=False),
-        ),
-    )
-    seconds = sl.forms.IntField(
-        label=tr(t"schematic-video-duration = Duration (seconds)"),
-        description=tr(t"schematic-video-duration-help = 1 to 10 seconds. There are 20 game ticks per second."),
-        default=6,
-        minimum=1,
-        maximum=10,
-    )
-    orbit = sl.forms.IntField(
-        label=tr(t"schematic-video-orbit = Camera orbit (degrees; 0 for fixed)"),
-        description=tr(
-            t"schematic-video-orbit-help = 180 is a half turn; 360 is a full turn. Negative values reverse direction."
-        ),
-        default=180,
-        minimum=-360,
-        maximum=360,
-    )
-    interactions = sl.forms.TextField(
-        label=tr(t"schematic-video-inputs = Activations: tick x y z, one per line"),
-        description=tr(
-            t"schematic-video-inputs-help = 20 activates the detected input after 1s; 20 1 2 3 selects a position. Ignored for static builds."
-        ),
-        default="20",
-        required=False,
-        maximum=1000,
     )
 
 

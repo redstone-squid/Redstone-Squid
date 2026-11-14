@@ -1,7 +1,7 @@
 """Build browser actions participate in the UI's state transactions."""
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -26,7 +26,7 @@ from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchMode, SearchPage, SearchScope
 from squid_reactivity import LocalTopicBus
 from squid_ui.testing import press_event, submit_event
-from squid_ui_discord.testing import stage
+from squid_ui_discord.testing import StagedUI, stage
 
 
 def _screen(
@@ -85,6 +85,29 @@ def _screen(
     )
 
 
+async def submit_search(ui: StagedUI[BuildBrowseScreen], query: str, sort: str = "") -> None:
+    original = ui.component.open_child
+    children: list[sd.Presented] = []
+
+    async def open_child(*args: Any, **kwargs: Any) -> Any:
+        # Supply the selected sort; the real child still submits through the parent result callback.
+        args[1].sort = sort
+        result = await original(*args, **kwargs)
+        assert isinstance(result, sd.Presented)
+        children.append(result)
+        return result
+
+    ui.component.open_child = open_child
+    try:
+        await ui.press(ui.key_for("guided-search"))
+    finally:
+        ui.component.open_child = original
+    child = StagedUI(children[0], client=ui._client, user_id=1, interaction=ui.interaction)
+    form = await child.press_for_form(child.key_for("advanced"))
+    await form.submit({"query": query})
+    await child.press(child.key_for("apply"))
+
+
 async def test_back_to_builds_replaces_the_detail_with_the_catalogue() -> None:
     async with stage(_screen(), owner=object()) as ui:
         assert "Build #7" in ui.texts()
@@ -117,7 +140,7 @@ async def test_find_build_actions_can_select_inside_a_transaction(search: bool) 
 
     with sl.runtime.transaction():
         if search:
-            await screen._search(submit_event({"query": "door", "sort": None}))
+            await screen._run_search("door", "")
         else:
             await screen._open_id(submit_event({"id": 7}))
 
@@ -350,17 +373,16 @@ async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
 
 
 @pytest.mark.parametrize("records", [False, True])
-async def test_keyword_search_and_filters_from_the_catalogue_modal(records: bool) -> None:
+async def test_query_expression_is_submitted_from_the_guided_search(records: bool) -> None:
     screen = _screen(initial_id=None)
     if records:
         screen._mode = "records"
     async with stage(screen, owner=object()) as ui:
-        form = await ui.press_for_form(ui.key_for("catalogue-search"))
-        await form.submit({"query": "door kind:door", "sort": "-created_at"})
+        await submit_search(ui, "door kind:door", "-created_at")
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
         assert request.mode is SearchMode.LEXICAL
         assert request.scope is (SearchScope.RECORDS if records else SearchScope.BUILDS)
-        assert request.query == ("status:resolved AND (door kind:door)" if records else "door kind:door")
+        assert request.query == ("status:resolved AND ((door kind:door))" if records else "(door kind:door)")
         assert "## Search results" in ui.texts()
         assert not any("Search by meaning" in text for text in ui.texts())
         ui.assert_within_limits()
@@ -382,27 +404,25 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
     screen._mode = "records"
     service = cast(AsyncMock, screen._search_service)
     async with stage(screen, owner=object()) as ui:
-        form = await ui.press_for_form(ui.key_for("catalogue-search"))
-        await form.submit({"query": 'title:"vault door"', "sort": "-created_at"})
+        await submit_search(ui, 'title:"vault door"', "-created_at")
         await ui.press(ui.key_for("smallest"))
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
         await ui.press(ui.key_for("fastest"))
         request = service.search.call_args.args[0]
         assert request.query == (
-            'status:resolved AND (title:"vault door") AND (base_title:fastest OR base_title:smallest)'
+            'status:resolved AND ((title:"vault door")) AND (base_title:fastest OR base_title:smallest)'
         )
         assert request.sort is not None
         assert request.sort.field == "created_at"
-        assert screen._query == 'title:"vault door"'
+        assert screen._query == '(title:"vault door")'
         assert screen._sort == "-created_at"
-        form = await ui.press_for_form(ui.key_for("catalogue-search"))
-        await form.submit({"query": 'title:"vault door"', "sort": "-created_at"})
+        await submit_search(ui, 'title:"vault door"', "-created_at")
         assert service.search.call_args.args[0].query == request.query
         await ui.press(ui.key_for("smallest"))
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
         assert service.search.call_args.args[0].query.endswith("AND (base_title:fastest)")
         await ui.press(ui.key_for("fastest"))
-        assert service.search.call_args.args[0].query == 'status:resolved AND (title:"vault door")'
+        assert service.search.call_args.args[0].query == 'status:resolved AND ((title:"vault door"))'
         ui.assert_within_limits()
 
 
@@ -431,8 +451,7 @@ async def test_search_help_preserves_results_without_refetching(records: bool) -
         assert "## Search help" in ui.texts()
         assert any((r"all\_time" if records else "creator:Steve") in text for text in ui.texts())
         service.search.assert_not_awaited()
-        form = await ui.press_for_form(ui.key_for("catalogue-search"))
-        await form.submit({"query": "door", "sort": ""})
+        await submit_search(ui, "door", "")
         assert "## Search help" in ui.texts()
         assert "## Search results" not in ui.texts()
         ui.assert_within_limits()
@@ -509,14 +528,14 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         )
 
 
-async def test_video_form_is_inside_schematic_tools() -> None:
+async def test_video_editor_is_inside_schematic_tools() -> None:
     async with stage(_screen(schematics_available=True, video_enabled=True), owner=object()) as ui:
         assert "Schematic info" not in ui.texts()
         assert "Render video" not in ui.texts()
         await ui.press(ui.key_for("schematic-tools"))
         ui.control(ui.key_for("schematic-info"))
-        ui.control(ui.key_for("schematic-video"))
-        await ui.press_for_form(ui.key_for("schematic-video"))
+        ui.control(ui.key_for("guided-video"))
+        assert "Advanced video recipe" not in ui.texts()
         await ui.press(ui.key_for("schematic-tools"))
         assert "Schematic info" not in ui.texts()
         assert "Render video" not in ui.texts()
@@ -588,8 +607,7 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("search-help"))
         await ui.press(ui.key_for("search-help"))
-        form = await ui.press_for_form(ui.key_for("catalogue-search"))
-        await form.submit({"query": "door", "sort": ""})
+        await submit_search(ui, "door", "")
         await ui.press(ui.key_for("search-help"))
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
