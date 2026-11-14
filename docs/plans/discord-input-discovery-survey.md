@@ -13,8 +13,9 @@ some entry points; opening the corresponding form loses that assistance.
 
 The target should be: ordinary workflows can be completed by recognizing names,
 choosing objects, and entering actual content. IDs remain useful in links,
-diagnostics, and optional shortcuts. Query expressions and bulk text formats
-remain available for people who want them.
+diagnostics, and optional shortcuts. Query expressions remain available inside
+search. Technical identifiers belong in specifically named reference or
+maintenance tools.
 
 ## Implementation status
 
@@ -26,14 +27,19 @@ what was present at the survey revision; it is not a description of the current 
 | Starboards | Select a board once, then edit its settings, emoji aliases, and role weights. Channel and role inputs use native selectors; deletion requires confirmation. |
 | Notifications | Search creators and records by name, or follow from their detail. Subscription labels resolve public names and all subscriptions are paged. Record-filter enums and tag values use typed choices. |
 | Shared lookup | Enumerable catalogues support paging. Queried sources explicitly offer up to 25 matches and ask users to refine the search. Provider failures expose retry instead of appearing as empty results. |
-| Tags and access | Choose a build/tag or a restriction before editing. Permission and internal-role pickers retain identities and expose operation-specific forms. Raw permission patterns remain under Advanced entry. |
+| Tags and access | Choose a build/tag or a restriction before editing. Permission and internal-role pickers retain identities and expose operation-specific forms. Custom permission patterns act on the selected subject or role. |
 | Search and records | Keyword input, removable filter rows, named values, and sort selection build queries while preserving advanced expressions. Maintenance tools select definitions, versions, and restrictions by name. |
-| Submission and specialist tools | Credits use rows and a native Discord user picker while retaining identity evidence. Catalogue fields support name search without losing offscreen selections. Vote emojis and video activations use rows; ambiguous video inputs can be selected for retry. Conversion versions and runtime-setting names have discovery. |
+| Submission and specialist tools | Credits use rows and a native Discord user picker while retaining identity evidence. Catalogue fields support name search without losing offscreen selections. Vote emojis and video activations use rows; ambiguous video inputs can be selected for retry. Conversion versions and runtime-setting names have discovery; numeric world-format versions are in Conversion maintenance. |
 
-Advanced entry remains available for query syntax, credit lines, video recipes,
-permission patterns, exact record category keys, and owner-only runtime JSON
-values. New object names and slugs are still entered when creating objects.
-Queried lookups are bounded search, not exhaustive browsing of the entire domain.
+Each ordinary workflow has one editor. Query expressions live inside Search &
+filters; custom wildcard patterns use a dedicated permission form. Credits have
+an identity-reference form for Discord IDs or usernames, Java UUIDs, and Bedrock
+XUIDs. The credit mini-language, compact video recipe, role-slug editor, and
+standalone advanced-search form are removed from these Discord workspaces.
+Exact record keys and numeric conversion versions are in maintenance tools.
+Owner-only runtime JSON values remain available. New object names and slugs are
+still entered when creating objects. Queried lookups are bounded search, not
+exhaustive browsing of the entire domain.
 
 Focused unit tests, rendered-control tests, and notification projection
 integration tests cover the changed flows. The regression tests include
@@ -104,7 +110,7 @@ Sources: [permissions.py](../../squid/bot/permissions.py) and
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
 | `/access user/role` | Native Discord member/role arguments; defaults to the caller. | Keep. These are Discord roles, distinct from the internal roles below. | — |
-| Direct rule | Permission pattern is plain text. Operation and scope are choices. A separate catalogue lists nodes and descriptions. | Search/select a permission with its description; explicit advanced pattern entry; preview the affected permissions. Revoke from an existing rule. | 1 |
+| Direct rule | Permission pattern is plain text. Operation and scope are choices. A separate catalogue lists nodes and descriptions. | Search/select a permission with its description; a custom-pattern form for expressions outside the catalogue; preview the affected permissions. Revoke from an existing rule. | 1 |
 | Assign/unassign internal role | Requires an internal role slug. | Search roles by display name, show slug/scope/rank as secondary detail. Unassign from existing assignments. | 1 |
 | Edit internal role | Requires target slug plus **Pattern, included role, or rank**, whose meaning changes with operation. | Role-detail actions with separate permission, composed-role, and numeric-rank controls. Delete retains its confirmation. | 1 |
 | Create internal role | Requires both display name and slug, plus rank/scope. | Derive a collision-checked slug from the name, with an advanced override. Explain rank before entry. | 2 |
@@ -163,9 +169,9 @@ Sources: [submit.py](../../squid/bot/submission/submit.py),
 | --- | --- | --- | --- |
 | Submission slash options | Category/orientation choices; creators, versions, patterns, restrictions have autocomplete. Size and version-range syntax have examples. All options are optional. | Preserve this convenient entry and keep the guided draft as the complete path. | — |
 | Draft/saved-build catalogue fields | Source/working versions, restrictions, patterns, and showcase tags use named selects paged in groups of 25. Selections survive page changes. | Reuse this implementation; add search to large option sets. These fields already avoid manual IDs. | 2 |
-| Credits | Multiline mini-language: names or `discord:`, `java:`, `bedrock:` references with optional ` | role`. Existing typed credits can display subjects/IDs; unchanged entries preserve evidence. | A credit collection editor: identity kind, member/name lookup, role choice, add/remove. Preserve unresolved name-only credits and existing evidence. Keep bulk text as an advanced option. | 2 |
+| Credits | Multiline mini-language: names or `discord:`, `java:`, `bedrock:` references with optional ` | role`. Existing typed credits can display subjects/IDs; unchanged entries preserve evidence. | A credit collection editor: identity kind, member/name lookup, role choice, add/remove. Preserve unresolved name-only credits and existing evidence. Use a structured identity-reference form for provider IDs outside the native picker. | 2 |
 | Dimensions, timing, dates, links, location, proposals | Actual content entry, with helpers such as `5x7x4`, `30gt`, `15rt`, `1.5s`, and one entry per line. | Keep concise examples and units. These do not all need selectors; new restriction/pattern proposals must still allow new text. | — |
-| Convert schematic | Format choices; optional numeric Minecraft data version and free-text release name, with explanatory help. | Named compatible release picker as the ordinary path; numeric data version stays advanced. Distinguish this world-format number from the database version ID. | 2 |
+| Convert schematic | Format choices; optional numeric Minecraft data version and free-text release name, with explanatory help. | Named compatible release picker as the ordinary path; numeric data version belongs in Conversion maintenance. Distinguish this world-format number from the database version ID. | 2 |
 | Render video | Motion choices and numeric duration/orbit; activations require `tick x y z` lines. Ambiguous inputs are returned as coordinates to re-enter. | Select detected inputs and edit activation timing as rows; allow explicit coordinates as advanced input. | 2 |
 
 Draft selection, file controls, approval/rejection, build editing, and featured
@@ -213,7 +219,7 @@ Use the smallest control that expresses the task:
 | Several existing objects | Searchable selection with a visible list of retained picks and individual removal. |
 | New content or a new name | Text entry with a relevant example and validation. |
 | A structured collection | Add/edit/remove rows with typed fields. |
-| Query syntax, raw IDs, or bulk input | Explicit advanced mode or optional shortcut. |
+| Query syntax, raw IDs, or bulk input | Purpose-specific query, reference, or maintenance controls. |
 
 For example, Follow creator should work as follows. Searching and choosing are
 separate interactions, but users never transcribe the UUID:
@@ -325,8 +331,8 @@ Implement this as independent changes with an observable completion condition:
    use named versions/restrictions in maintenance tools.
 5. **Structured credits and specialist polish.** Add a credit collection editor
    without losing typed identity evidence. Improve video activations, voting
-   emoji rows, large submission catalogues, and runtime-setting entry. Preserve
-   useful compact formats as optional advanced paths.
+   emoji rows, large submission catalogues, and runtime-setting entry. Keep
+   identity references and technical maintenance separate from ordinary entry.
 
 Steps 1–3 address the sharpest identifier barriers. Step 4 is the larger search
 design project and should not delay native selector fixes. There is no need to
@@ -337,7 +343,8 @@ move ordinary users to the website or rebuild the whole UI framework first.
 The core acceptance test is behavioral: a person starting from an empty command
 can follow a creator/record, apply a tag, configure a starboard, and assign a
 role without obtaining an ID/slug elsewhere. Existing-object actions preserve
-their context; only creation and advanced entry ask for new identifiers.
+their context; creation, identity references, and maintenance identify why a raw
+identifier is needed.
 
 Test each changed flow with empty results, duplicate names, more than 25 items,
 selection across pages/searches, a removed object, revoked permission, a stale
