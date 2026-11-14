@@ -172,3 +172,61 @@ def test_images_and_choices_remain_bound_to_their_visible_page(target: Target[An
     assert not first.bindings
     assert "image.png" not in scene.Codec.dumps(second.scene)
     assert "choose" in second.bindings
+
+
+def test_slack_list_continuations_do_not_insert_extra_separators() -> None:
+    target = sl.slack.message_target(adapter=SLACK)
+    target = replace(
+        target, limits=replace(target.limits, components=replace(target.limits.components, section_text=120))
+    )
+    node = sl.semantic.List((sl.semantic.ListItem("item", "x" * 200),), key="items")
+    identity = OccurrenceId(("root", "items"))
+    result = plan(node, target=target, composition=CompositionOptions(automatic=True, partitions={identity: (7, 14)}))
+    assert result.allocation is not None
+    content: list[str] = []
+    for index in range(2):
+        body = result.allocation.select({identity: index}).scene.body
+        assert isinstance(body, scene.SlackMessage)
+        block = body.blocks[0]
+        assert isinstance(block, scene.SlackSection)
+        assert block.text is not None
+        content.append(block.text.content)
+    assert "".join(content) == "• " + "x" * 200
+
+
+@pytest.mark.parametrize("target", TARGETS[:3], ids=lambda target: target.id)
+def test_repeated_media_deduplicates_its_attachment(target: Target[Any, Any, Any, Any]) -> None:
+    asset = sl.document.Asset("image", "image.png", "image/png", sl.document.InlineAsset(b"image"))
+    node = sl.region(
+        sl.semantic.Media((sl.semantic.MediaItem("one", asset), sl.semantic.MediaItem("two", asset)), key="gallery"),
+        key="r",
+        title="R",
+    )
+    result = plan(node, target=target)
+    assert result.allocation is not None
+    assert tuple(result.resources) == ("image",)
+    assert len(result.scene.assets) == 1
+
+
+def test_classic_count_based_primitive_pages_use_its_own_text_pool() -> None:
+    node = sl.primitives.Lines(("first", "second"), overflow=sl.primitives.Paginate(key="lines", per=1))
+    result = plan(node, target=classic_target(DISCORD), nav=default_nav)
+    assert result.allocation is not None
+    assert result.report.legacy_pagination is None
+    assert result.scene.pagers[0].pages == 2
+    assert isinstance(result.scene.body, scene.ClassicMessage)
+    assert "first" in (result.scene.body.content or "")
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+def test_nested_control_groups_preserve_action_order(target: Target[Any, Any, Any, Any]) -> None:
+    actions = tuple(sl.action_control(f"action-{index}", untouched, key=f"key-{index}") for index in range(3))
+    node = sl.region(
+        sl.action_controls(actions[0], sl.semantic.ControlGroup("nested", (actions[1],)), actions[2], key="actions"),
+        key="r",
+        title="R",
+    )
+    result = plan(node, target=target)
+    assert result.allocation is not None
+    wire = scene.Codec.dumps(result.scene)
+    assert wire.index("action-0") < wire.index("action-1") < wire.index("action-2")

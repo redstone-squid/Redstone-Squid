@@ -138,6 +138,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     limit("embed.description", len(value), self.limits.embeds.description)
                     embeds.append(scene.Embed(description=value or None, colour=accent))
                 case ControlRealization() as control:
+                    limit("row.buttons", 1, self.limits.components.row_buttons)
                     limit("button.label", len(control.label), self.limits.components.button_label)
                     limit("button.url", len(control.url or ""), self.limits.components.link_url)
                     limit("button.id", len(control.action or control.route or ""), self.limits.components.custom_id)
@@ -171,19 +172,31 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         for detail in select_violations(node, self.limits.components)
                     )
                     rows.append(scene.ClassicRow((node,)))
-                case RowRealization() | ActionsRealization():
+                case ActionsRealization():
                     controls: list[scene.Control] = []
-                    for child in part.children:
-                        visit(child, output, embedded=embedded, row=controls)
-                    if isinstance(part.offer.payload, ActionsRealization):
-                        size = max(1, self.limits.components.row_buttons)
-                        rows.extend(
-                            scene.ClassicRow(tuple(controls[i : i + size])) for i in range(0, len(controls), size)
-                        )
-                    else:
-                        limit("row.buttons", len(controls), self.limits.components.row_buttons)
+                    size = max(1, self.limits.components.row_buttons)
+
+                    def flush() -> None:
                         if controls:
                             rows.append(scene.ClassicRow(tuple(controls)))
+                            controls.clear()
+
+                    for child in part.children:
+                        if isinstance(child.offer.payload, ControlRealization):
+                            visit(child, output, embedded=embedded, row=controls)
+                            if len(controls) == size:
+                                flush()
+                        else:
+                            flush()
+                            visit(child, output, embedded=embedded)
+                    flush()
+                case RowRealization():
+                    controls = []
+                    for child in part.children:
+                        visit(child, output, embedded=embedded, row=controls)
+                    limit("row.buttons", len(controls), self.limits.components.row_buttons)
+                    if controls:
+                        rows.append(scene.ClassicRow(tuple(controls)))
                 case ImageRealization() as media:
                     if media.spoiler:
                         violations.append(UnsupportedCapability(identity, "classic embed spoiler image"))

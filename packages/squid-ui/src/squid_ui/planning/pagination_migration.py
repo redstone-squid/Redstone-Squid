@@ -49,7 +49,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 pageable = True
                 if isinstance(node, sem.Paged):
                     if not isinstance(limits, V2Limits):
-                        msg = "character-specific Paged on a target without a character axis"
+                        msg = "Paged requires one shared character axis; use regions with this target's resource limits"
                         raise UnsupportedSemanticError(msg)
                     return replace(node, node=visit(node.node))
                 if isinstance(node, sem.Region):
@@ -67,12 +67,15 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | Budget():
                 return replace(node, node=visit(node.node))
             case primitive.Text() | primitive.Code() | primitive.Lines() | primitive.Heading() | primitive.Footer():
-                if not isinstance(limits, V2Limits):
-                    msg = "Discord text primitives on another target"
+                if not isinstance(limits, V2Limits | ClassicLimits):
+                    msg = "Discord text primitives on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 overflow = node.overflow
                 if not isinstance(overflow, Paginate):
                     msg = "primitive text overflow alternatives"
+                    raise UnsupportedSemanticError(msg)
+                if overflow.min_fill and not isinstance(limits, V2Limits):
+                    msg = "primitive min_fill requires one shared character axis"
                     raise UnsupportedSemanticError(msg)
                 if overflow.key is None:
                     msg = "unkeyed primitive pagination"
@@ -147,6 +150,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 return node
             case sem.ActionControls():
                 return node
+            case sem.FallbackContent():
+                msg = "FallbackContent has no declared source correspondence; use alternatives"
+                raise UnsupportedSemanticError(msg)
             case Alternatives():
                 return replace(
                     node,

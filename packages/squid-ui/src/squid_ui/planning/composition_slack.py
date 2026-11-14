@@ -235,20 +235,40 @@ class SlackCompositionRules[
                             node
                             for index, item in enumerate(sequence.items)
                             for node in (
-                                tree.literal((sequence.separator if index else sequence.prefix) + item.prefix),
+                                tree.literal(
+                                    (
+                                        sequence.separator
+                                        if index and not item.continuation
+                                        else sequence.prefix
+                                        if not index
+                                        else ""
+                                    )
+                                    + item.prefix
+                                ),
                                 *item.nodes,
                             )
                         ),
                         tree.literal(sequence.suffix),
                     )
-                    rendered = text(nodes, capacity=self.limits.components.section_text, name="section.text")
-                    if rendered:
+                    plain = _plain(nodes)
+                    rendered = plain if plain is not None else _mrkdwn(nodes)
+                    if rendered is None:
+                        violations.append(
+                            UnsupportedCapability(identity, "Slack text has no lossless mrkdwn representation")
+                        )
+                    elif rendered:
+                        limit("section.text", len(rendered), self.limits.components.section_text)
+                        texts.append(rendered)
                         blocks += 1
                         prepared_blocks.append(
-                            scene.SlackSection(scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False))
+                            scene.SlackSection(
+                                scene.SlackText(
+                                    rendered,
+                                    scene.SlackTextKind.PLAIN if plain is not None else scene.SlackTextKind.MARKDOWN,
+                                    emoji=False if plain is not None else None,
+                                )
+                            )
                         )
-                    elif rendered == "":
-                        texts.pop()
                     for child in part.children:
                         visit(child)
                 case TextRealization() as payload:
@@ -266,8 +286,11 @@ class SlackCompositionRules[
                             violations.append(UnsupportedCapability(identity, "embedded Slack code fence"))
                         rendered = "```\n" + code + "\n```"
                         kind = scene.SlackTextKind.MARKDOWN
-                    elif payload.role == "quote" and rendered is not None:
-                        rendered = "\n".join("> " + line for line in rendered.splitlines())
+                    elif payload.role == "quote":
+                        quoted = _mrkdwn(payload.nodes)
+                        rendered = (
+                            "\n".join("> " + line for line in quoted.splitlines()) if quoted is not None else None
+                        )
                         kind = scene.SlackTextKind.MARKDOWN
                     if rendered is None:
                         violations.append(
