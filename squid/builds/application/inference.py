@@ -161,11 +161,11 @@ class InferredBuild(BaseModel):
         description="Opening height (second opening dimension for a trapdoor), never the enclosing circuit height."
     )
     door_depth: int | None
-    build_width: int | None = Field(description="Enclosing width, including an explicit WxHxD on a Volume line.")
+    build_width: int | None = Field(description="Current enclosing width, excluding proposed target measurements.")
     build_height: int | None = Field(
-        description="Enclosing circuit height, including a trapdoor stated to be 3 blocks high despite a 2x2 opening."
+        description="Current enclosing circuit height, including a trapdoor stated to be 3 high despite a 2x2 opening."
     )
-    build_depth: int | None = Field(description="Enclosing depth, including an explicit WxHxD on a Volume line.")
+    build_depth: int | None = Field(description="Current enclosing depth, excluding proposed target measurements.")
     opening_time: InferredTiming | None = Field(
         description=(
             "Full/true opening movement duration; never a reset, input delay, or visible duration. "
@@ -206,8 +206,8 @@ class InferredBuild(BaseModel):
     author_notes: list[InferredAuthorNote] = Field(
         description=(
             "Verbatim primary-message excerpts containing additional concrete facts, such as required mods/plugins, "
-            "other operating requirements, modifications needed for other Minecraft versions, "
-            "limitations, measurement qualifications (including/excluding floor), record-width ranges, "
+            "other operating requirements, proposed measurements or version modifications, "
+            "limitations with their conditions, measurement qualifications (including/excluding floor), record-width ranges, "
             "explicit revision changes, or credits. Never write your own prose, compare posts, "
             "or calculate changes. Omit facts captured elsewhere and promotional text. Empty when none."
         )
@@ -219,7 +219,10 @@ class InferredBuild(BaseModel):
         description="Source-stated expandable door parameters, domains and formula branches. Preserve raw syntax, "
         "unknown bounds and evidence; never infer a minimum, constant timing or computed record region.",
     )
-    volume: str | None = Field(default=None, description="Reported volume or size formula; never a restriction.")
+    volume: str | None = Field(
+        default=None,
+        description="Reported current volume or size formula, excluding proposed targets; never a restriction.",
+    )
     completion_time: str | None = Field(default=None, description="Explicit completion/design date, not a record date.")
     links: list[InferredLink] = Field(default_factory=list)
     review_notes: list[str] = Field(
