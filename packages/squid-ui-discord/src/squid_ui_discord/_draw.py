@@ -14,7 +14,7 @@ from squid_ui.document import DocumentLike
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
-from squid_ui.planning.result import PlanResult
+from squid_ui.planning.result import PlanResult, PlanSeverity
 from squid_ui.profiling import OperationRecorder, SpanRecorder
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.message_payload import MessagePayload
@@ -61,8 +61,9 @@ def plan_and_draw[BodyT: scene.Body, RenderTargetT](
             profile.increment("planner.states_explored", result.metrics.states_explored)
     with span(profile, "renderer"):
         payload = drawer.draw(result.scene, plan=result, wire=wire)
-    if result.report.events:
-        logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
+    warnings = tuple(event for event in result.report.events if event.severity != PlanSeverity.ADAPTATION)
+    if warnings:
+        logger.warning("layout degraded: %s", "; ".join(event.message for event in warnings))
     return payload, result
 
 

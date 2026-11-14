@@ -164,6 +164,7 @@ def render_payload(
     *,
     localization: ui.text.Localization = ui.text.NEUTRAL,
     strict: bool = False,
+    composition: ui.planning.CompositionOptions | None = None,
     reservation: sd.ResourceCost = sd.EMPTY_COST,
 ) -> sd.message_payload.MessagePayload:
     """Render a complete Discord payload through the bot's chrome and catalogue."""
@@ -173,6 +174,7 @@ def render_payload(
         localization=localization,
         palette=PALETTES.resolve(),
         strict=strict,
+        composition=composition,
         reservation=reservation,
     )
 

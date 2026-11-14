@@ -13,6 +13,7 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, Ident
 from squid.accounts.models import Account, AccountIdentity
 from squid.bot.consent import ConsentPrompt
 from squid.bot.submission.consent_banner import (
+    CONSENT_BUTTON_CUSTOM_ID,
     BuildLogConsentStickyMessage,
     open_consent_prompt,
 )
@@ -263,3 +264,23 @@ async def test_routed_consent_button_cancelling_stores_no_account(
     assert accounts.creations == []
     interaction.response.send_message.assert_awaited_once()
     interaction.followup.send.assert_not_awaited()
+
+
+async def test_sticky_banner_uses_shared_composition_and_preserves_its_route(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def legacy_plan(*args: object, **kwargs: object) -> None:
+        pytest.fail("the migrated banner must not invoke the legacy Discord planner")
+
+    monkeypatch.setattr("squid_ui.planning.discord_planner.DiscordPlanner.plan", legacy_plan)
+    channel = MagicMock(spec=discord.TextChannel)
+    payload = await StickyRecorder().render(channel)
+    items = tuple(payload.layout.walk_children())
+    descriptions = [item.content for item in items if isinstance(item, discord.ui.TextDisplay)]
+    buttons = [item for item in items if isinstance(item, discord.ui.Button)]
+    assert descriptions[0].startswith("## 📋 Build Log Ingestion Consent")
+    assert "Messages from unconsented users are not ingested." in descriptions[0]
+    assert len(buttons) == 1
+    assert buttons[0].custom_id == CONSENT_BUTTON_CUSTOM_ID
+    assert buttons[0].style == discord.ButtonStyle.primary
+    assert not any("layout degraded" in record.message for record in caplog.records)
