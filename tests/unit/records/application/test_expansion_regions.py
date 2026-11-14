@@ -10,7 +10,7 @@ from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
-from squid.records.application.expansion_regions import DoorWidthAnalysis, DoorWidthLookup, analyze_door_widths
+from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup, evaluate_door_record
 from squid.records.application.models import CandidateBuild
 from squid.records.domain import BuildKind, Candidate, ResolutionStatus
@@ -61,7 +61,7 @@ def fixed(width: int, *, height: int = 3, depth: int = 1, volume: int = 1) -> Ca
 
 def assert_points(
     sources: Sequence[CandidateBuild],
-    result: DoorWidthAnalysis,
+    result: DoorRangeAnalysis,
     *,
     height: int = 3,
     depth: int = 1,
@@ -221,11 +221,13 @@ def test_nonintegral_modulo_operand_remains_unknown_without_a_short_circuit() ->
     "data",
     [
         {"height": 0},
+        {"height": 3, "axis": "height"},
+        {"height": 3, "base_title": "fastest"},
         {"height": True},
-        {"height": 3, "minimum_width": 7, "maximum_width": 6},
+        {"height": 3, "minimum": 7, "maximum": 6},
         {"height": 3, "restriction_values": [[7, "exact", "3"]]},
     ],
 )
 def test_width_request_validates_dimensions_bounds_and_taxonomy(data: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
-        DoorWidthLookup.model_validate(data)
+        DoorRangeQuery.model_validate(data)

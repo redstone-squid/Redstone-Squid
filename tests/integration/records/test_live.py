@@ -11,7 +11,7 @@ from squid.builds.domain import Status
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.builds.models import BuildVersion, DoorBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.expansion_regions import DoorWidthLookup
+from squid.records.application.expansion_regions import DoorRangeQuery
 from squid.records.application.live import DoorRecordLookup
 from squid.records.application.services import RecordComputationService, RecordService
 from squid.records.domain import BaseTitle, ResolutionStatus, TimingVariant
@@ -207,24 +207,24 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     service = RecordService(RecordComputationService(uow_factory=factory), uow_factory=factory)
     with record_queries(sessions) as statements:
-        result = await service.lookup_door_widths(DoorWidthLookup(height=3, version_id=version_id))
+        result = await service.lookup_door_ranges(DoorRangeQuery(height=3, version_id=version_id))
         assert result.analysis.status is RegionAnalysisStatus.EXACT
         assert {c.build_id for c in result.configurations} == {family_id, fixed_id}
         for width in (1, 2, 5, 6, 7, 9, 9999):
             region = next(r for r in result.analysis.regions if r.domain.contains(width))
             expected = await service.lookup_door(DoorRecordLookup(opening=(width, 3, 1), version_id=version_id))
             assert region.resolution == expected.resolution
-        clipped = await service.lookup_door_widths(
-            DoorWidthLookup(
+        clipped = await service.lookup_door_ranges(
+            DoorRangeQuery(
                 height=3,
-                minimum_width=7,
-                maximum_width=9999,
+                minimum=7,
+                maximum=9999,
                 version_id=version_id,
             )
         )
         assert {c.build_id for c in clipped.configurations} == {family_id}
         assert all(r.resolution.holder_ids == (family_id,) for r in clipped.analysis.regions)
-        empty = await service.lookup_door_widths(DoorWidthLookup(height=3, orientation="Skydoor"))
+        empty = await service.lookup_door_ranges(DoorRangeQuery(height=3, orientation="Skydoor"))
         assert empty.analysis.status is RegionAnalysisStatus.EXACT
         assert empty.analysis.regions[0].resolution.status is ResolutionStatus.NO_CANDIDATE
     assert not any(statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")) for statement in statements)

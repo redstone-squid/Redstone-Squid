@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from itertools import pairwise
 from math import lcm
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import model_validator
 
@@ -36,6 +36,7 @@ from squid.builds.domain.expansion_math import (
 )
 from squid.records.application.live import DoorRecordCategory, LookupDimension
 from squid.records.application.models import CandidateBuild
+from squid.records.domain.models import BaseTitle
 from squid.records.domain.region_math import (
     ArithmeticBudget,
     RegionArithmeticError,
@@ -58,17 +59,19 @@ _VARIABLES = ("width",)
 _WIDTH = Polynomial.create(_VARIABLES, {(1,): Fraction(1)})
 
 
-class DoorWidthLookup(DoorRecordCategory):
+class DoorRangeQuery(DoorRecordCategory):
     """A smallest-record query varying width at fixed opening height and depth."""
 
+    axis: Literal["width"] = "width"
+    base_title: Literal[BaseTitle.SMALLEST] = BaseTitle.SMALLEST
     height: LookupDimension
     depth: LookupDimension = 1
-    minimum_width: LookupDimension = 1
-    maximum_width: LookupDimension | None = None
+    minimum: LookupDimension = 1
+    maximum: LookupDimension | None = None
 
     @model_validator(mode="after")
     def validate_width_bounds(self) -> Self:
-        if self.maximum_width is not None and self.maximum_width < self.minimum_width:
+        if self.maximum is not None and self.maximum < self.minimum:
             msg = "The maximum width cannot be smaller than the minimum width."
             raise ValueError(msg)
         return self
@@ -85,7 +88,7 @@ class DoorRegionConfiguration:
 
 
 @dataclass(frozen=True, slots=True)
-class DoorWidthAnalysis:
+class DoorRangeAnalysis:
     analysis: SmallestRegionAnalysis
     configurations: tuple[DoorRegionConfiguration, ...]
 
@@ -98,7 +101,7 @@ def analyze_door_widths(
     minimum: int = 1,
     maximum: int | None = None,
     limits: RegionLimits = DEFAULT_REGION_LIMITS,
-) -> DoorWidthAnalysis:
+) -> DoorRangeAnalysis:
     """Analyze candidates already filtered by orientation, taxonomy and version.
 
     Families may vary along multiple axes; this query varies opening width only.
@@ -120,7 +123,7 @@ def analyze_door_widths(
         analysis = SmallestRegionAnalysis(RegionAnalysisStatus.LIMIT_EXCEEDED, diagnostic=str(error))
     except RegionArithmeticError as error:
         analysis = SmallestRegionAnalysis(RegionAnalysisStatus.UNSUPPORTED, diagnostic=str(error))
-    return DoorWidthAnalysis(analysis, tuple(configurations))
+    return DoorRangeAnalysis(analysis, tuple(configurations))
 
 
 def _translate_sources(

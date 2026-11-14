@@ -9,7 +9,7 @@ import pytest
 from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
 from squid.core.errors import DataIntegrityError, ValidationError
-from squid.records.application.expansion_regions import DoorWidthLookup
+from squid.records.application.expansion_regions import DoorRangeQuery
 from squid.records.application.live import DoorRecordLookup
 from squid.records.application.models import (
     CandidateBuild,
@@ -778,7 +778,7 @@ async def test_width_lookup_filters_taxonomy_and_versions_without_writes() -> No
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
         uow_factory=lambda: RecordScope(candidates, runs),
     )
-    result = await service.lookup_door_widths(DoorWidthLookup(height=2, type_ids=frozenset({20}), version_id=3))
+    result = await service.lookup_door_ranges(DoorRangeQuery(height=2, type_ids=frozenset({20}), version_id=3))
     assert result.analysis.status is RegionAnalysisStatus.EXACT
     assert [(r.domain.minimum, r.domain.maximum, r.resolution.holder_ids) for r in result.analysis.regions] == [
         (1, 1, (2,)),

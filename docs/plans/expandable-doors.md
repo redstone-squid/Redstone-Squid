@@ -314,10 +314,10 @@ unknown domain blocks the query with `unsupported`; a provable exclusion does
 not. A narrow query can therefore succeed when a broader query reaches unknown
 sizes. Source-claimed record domains and completion text remain unverified.
 
-`RecordService.lookup_door_widths(DoorWidthLookup(height=3))` reads current
+`RecordService.lookup_door_ranges(DoorRangeQuery(height=3))` reads current
 confirmed families and fixed doors, filters orientation, taxonomy and version,
-and returns smallest-record regions. Optional `minimum_width` and
-`maximum_width` bound the query. The repository retains typed opening dimensions
+and returns smallest-record regions. Optional `minimum` and
+`maximum` bound the query. The repository retains typed opening dimensions
 for fixed-size exceptions and reads related facts in a read-only repeatable-read
 transaction. The adapter and compiler share one arithmetic work allowance.
 No query creates categories, runs, queue entries or stored region results.
