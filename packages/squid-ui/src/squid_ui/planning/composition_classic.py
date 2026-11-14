@@ -22,12 +22,14 @@ from squid_ui.planning.composition import (
     SharedUse,
     UnsupportedCapability,
 )
-from squid_ui.planning.composition_v2 import _select_violations
-from squid_ui.planning.limits import ClassicLimits, V2Limits
+from squid_ui.planning.composition_discord import discord_text, select_violations
+from squid_ui.planning.limits import ClassicLimits
 from squid_ui.planning.realizations import (
+    ActionsRealization,
     ControlRealization,
     DownloadRealization,
     FlowRealization,
+    ImageRealization,
     PanelRealization,
     Realization,
     RowRealization,
@@ -50,7 +52,14 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
     ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
-        return semantic_offers(occurrence, context, table_forms=(TableForm.RECORDS,), panels=True)
+        return semantic_offers(
+            occurrence,
+            context,
+            table_forms=(TableForm.RECORDS,),
+            panels=True,
+            nested_panels=False,
+            text_limit=min(self.limits.content, self.limits.embeds.description),
+        )
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
@@ -97,8 +106,8 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     violations.append(LocalCapacityExceeded(identity, name, used, capacity))
 
             match part.offer.payload:
-                case TextRealization(nodes=nodes):
-                    text(markdown(nodes))
+                case TextRealization() as payload:
+                    text(discord_text(payload, context.escape_text))
                 case TextSequenceRealization() as sequence:
                     text(
                         sequence.prefix
@@ -159,16 +168,44 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                 case SelectRealization(node=node):
                     violations.extend(
                         ConstraintViolation(identity, detail)
-                        for detail in _select_violations(node, V2Limits(components=self.limits.components))
+                        for detail in select_violations(node, self.limits.components)
                     )
                     rows.append(scene.ClassicRow((node,)))
-                case RowRealization():
+                case RowRealization() | ActionsRealization():
                     controls: list[scene.Control] = []
                     for child in part.children:
                         visit(child, output, embedded=embedded, row=controls)
-                    limit("row.buttons", len(controls), self.limits.components.row_buttons)
-                    if controls:
-                        rows.append(scene.ClassicRow(tuple(controls)))
+                    if isinstance(part.offer.payload, ActionsRealization):
+                        size = max(1, self.limits.components.row_buttons)
+                        rows.extend(
+                            scene.ClassicRow(tuple(controls[i : i + size])) for i in range(0, len(controls), size)
+                        )
+                    else:
+                        limit("row.buttons", len(controls), self.limits.components.row_buttons)
+                        if controls:
+                            rows.append(scene.ClassicRow(tuple(controls)))
+                case ImageRealization() as media:
+                    if media.spoiler:
+                        violations.append(UnsupportedCapability(identity, "classic embed spoiler image"))
+                    asset = media.source if isinstance(media.source, Asset) else None
+                    if asset is not None:
+                        uses.append(
+                            SharedUse(
+                                ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1})
+                            )
+                        )
+                    url = f"attachment://{asset.name}" if asset is not None else str(media.source)
+                    limit("embed.description", len(media.description), self.limits.embeds.description)
+                    if media.description:
+                        texts.append(media.description)
+                    embeds.append(
+                        scene.Embed(
+                            description=media.description or None,
+                            image=scene.EmbedMedia(
+                                url, media.description or None, asset.name if asset is not None else None
+                            ),
+                        )
+                    )
                 case DownloadRealization():
                     # Classic attachments have no inline file widget or spoiler metadata.
                     violations.append(UnsupportedCapability(identity, "inline classic download; use document assets"))

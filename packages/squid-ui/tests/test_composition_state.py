@@ -181,7 +181,7 @@ def test_exhaustion_does_not_fall_back_to_legacy(monkeypatch: pytest.MonkeyPatch
     def fail(*args: object, **kwargs: object) -> None:
         pytest.fail("shared search failure used the legacy region solver")
 
-    monkeypatch.setattr("squid_ui.planning.planner.plan_regions", fail)
+    monkeypatch.setattr("squid_ui.planning.discord_planner.DiscordPlanner.plan", fail)
     with pytest.raises(sl.planning.JointExhaustedError):
         plan(content(), target=V2, nav=default_nav, search_budget=1)
 

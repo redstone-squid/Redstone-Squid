@@ -21,10 +21,13 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.realizations import (
+    ActionsRealization,
     ControlRealization,
     FlowRealization,
+    ImageRealization,
     Realization,
     RowRealization,
+    SelectRealization,
     TableForm,
     TableRealization,
     TextRealization,
@@ -56,6 +59,39 @@ def _plain(nodes: tuple[tree.Node, ...]) -> str | None:
     return "".join(parts)
 
 
+def _mrkdwn(nodes: tuple[tree.Node, ...]) -> str | None:
+    """Encode supported inline structure without treating literal punctuation as markup."""
+    parts: list[str] = []
+    for node in nodes:
+        if node.kind == "text":
+            if any(marker in node.content for marker in ("*", "_", "~", "`")):
+                return None
+            parts.append(node.content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+        elif node.kind in ("softbreak", "hardbreak"):
+            parts.append("\n")
+        elif node.kind == "code_inline":
+            if "`" in node.content:
+                return None
+            parts.append("`" + node.content + "`")
+        else:
+            children = _mrkdwn(node.children)
+            if children is None:
+                return None
+            if node.kind in ("inline", "sequence"):
+                parts.append(children)
+            elif node.kind in ("strong", "em", "s"):
+                marker = {"strong": "*", "em": "_", "s": "~"}[node.kind]
+                parts.append(marker + children + marker)
+            elif node.kind == "link":
+                url = dict(node.attrs).get("href", "")
+                if not tree.valid_link(url) or any(char in url for char in ("|", ">", "<")):
+                    return None
+                parts.append(f"<{url}|{children}>")
+            else:
+                return None
+    return "".join(parts)
+
+
 @dataclass(frozen=True, slots=True)
 class SlackCompositionRules[
     RenderTargetT,
@@ -73,6 +109,7 @@ class SlackCompositionRules[
             table_forms=(TableForm.NATIVE, TableForm.RECORDS),
             panels=False,
             disabled_controls=False,
+            text_limit=self.limits.components.section_text,
         )
 
     def evaluate(
@@ -145,6 +182,53 @@ class SlackCompositionRules[
                     )
                     texts.append(control.label)
                     blocks += 1
+                case SelectRealization(node=control):
+                    if control.disabled:
+                        violations.append(UnsupportedCapability(identity, "disabled Slack select"))
+                    if not 0 <= control.min_values <= control.max_values <= len(control.options):
+                        violations.append(ConstraintViolation(identity, "select cardinality"))
+                    limit("select.options", len(control.options), self.limits.components.select_options)
+                    limit("select.placeholder", len(control.placeholder or ""), self.limits.components.placeholder)
+                    identifier = control.action if isinstance(control, scene.Select) else control.route_id
+                    limit("select.id", len(identifier), self.limits.components.action_id)
+                    for option in control.options:
+                        limit("option.label", len(option.label), self.limits.components.option_label)
+                        limit("option.value", len(option.value), self.limits.components.option_value)
+                        limit(
+                            "option.description",
+                            len(option.description or ""),
+                            self.limits.components.option_description,
+                        )
+                        if not option.label or not option.value:
+                            violations.append(ConstraintViolation(identity, "select option needs label and value"))
+                    options = tuple(
+                        scene.SlackOption(
+                            scene.SlackText(option.label, scene.SlackTextKind.PLAIN, emoji=False),
+                            option.value,
+                            scene.SlackText(option.description, scene.SlackTextKind.PLAIN, emoji=False)
+                            if option.description is not None
+                            else None,
+                        )
+                        for option in control.options
+                    )
+                    selector = scene.SlackSelect(
+                        action=scene.SlackActionRef(control.action, control.mode)
+                        if isinstance(control, scene.Select)
+                        else None,
+                        route=scene.SlackRouteRef(control.route_id)
+                        if isinstance(control, scene.RoutedSelect)
+                        else None,
+                        placeholder=scene.SlackText(control.placeholder, scene.SlackTextKind.PLAIN, emoji=False)
+                        if control.placeholder
+                        else None,
+                        options=options,
+                        initial_values=tuple(option.value for option in control.options if option.default),
+                        minimum=control.min_values,
+                        maximum=control.max_values,
+                    )
+                    texts.extend(option.label for option in control.options)
+                    prepared_blocks.append(scene.SlackActions((selector,)))
+                    blocks += 1
                 case TextSequenceRealization() as sequence:
                     nodes = (
                         *tuple(
@@ -167,15 +251,42 @@ class SlackCompositionRules[
                         texts.pop()
                     for child in part.children:
                         visit(child)
-                case TextRealization(nodes=nodes):
-                    rendered = text(nodes, capacity=self.limits.components.section_text, name="section.text")
-                    blocks += int(bool(rendered))
-                    if rendered == "":
-                        texts.pop()
-                    elif rendered is not None:
-                        prepared_blocks.append(
-                            scene.SlackSection(scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False))
+                case TextRealization() as payload:
+                    plain = _plain(payload.nodes)
+                    rendered = plain if plain is not None else _mrkdwn(payload.nodes)
+                    kind = scene.SlackTextKind.PLAIN if plain is not None else scene.SlackTextKind.MARKDOWN
+                    capacity = self.limits.components.section_text
+                    if payload.role == "heading":
+                        capacity = self.limits.components.header_text
+                        if plain is None:
+                            violations.append(UnsupportedCapability(identity, "Slack headers require plain text"))
+                    elif payload.role == "code":
+                        code = "".join(tree.plain(node) for node in payload.nodes)
+                        if "```" in code:
+                            violations.append(UnsupportedCapability(identity, "embedded Slack code fence"))
+                        rendered = "```\n" + code + "\n```"
+                        kind = scene.SlackTextKind.MARKDOWN
+                    elif payload.role == "quote" and rendered is not None:
+                        rendered = "\n".join("> " + line for line in rendered.splitlines())
+                        kind = scene.SlackTextKind.MARKDOWN
+                    if rendered is None:
+                        violations.append(
+                            UnsupportedCapability(identity, "Slack text has no lossless mrkdwn representation")
                         )
+                    elif rendered:
+                        limit("text", len(rendered), capacity)
+                        texts.append(rendered)
+                        value = scene.SlackText(
+                            rendered, kind, emoji=False if kind == scene.SlackTextKind.PLAIN else None
+                        )
+                        prepared_blocks.append(
+                            scene.SlackHeader(value)
+                            if payload.role == "heading"
+                            else scene.SlackContext((value,))
+                            if payload.role == "note"
+                            else scene.SlackSection(value)
+                        )
+                        blocks += 1
                 case TableRealization() as table:
                     context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
                     if table.form == TableForm.NATIVE:
@@ -207,7 +318,63 @@ class SlackCompositionRules[
                                         scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False)
                                     )
                                 )
-                case FlowRealization() | RowRealization():
+                case ActionsRealization():
+                    start = len(prepared_blocks)
+                    packed: list[scene.SlackBlock] = []
+                    pending: list[scene.SlackButton | scene.SlackSelect] = []
+                    size = max(1, self.limits.components.actions_elements)
+
+                    def flush() -> None:
+                        if pending:
+                            packed.append(scene.SlackActions(tuple(pending)))
+                            pending.clear()
+
+                    for child in part.children:
+                        before = len(prepared_blocks)
+                        visit(child)
+                        if isinstance(child.offer.payload, ControlRealization):
+                            for block in prepared_blocks[before:]:
+                                if isinstance(block, scene.SlackActions):
+                                    pending.extend(block.elements)
+                            if len(pending) == size:
+                                flush()
+                        else:
+                            flush()
+                            packed.extend(prepared_blocks[before:])
+                    flush()
+                    blocks += len(packed) - (len(prepared_blocks) - start)
+                    prepared_blocks[start:] = packed
+                case RowRealization():
+                    start = len(prepared_blocks)
+                    for child in part.children:
+                        visit(child)
+                    group = prepared_blocks[start:]
+                    if any(not isinstance(block, scene.SlackActions) for block in group):
+                        violations.append(UnsupportedCapability(identity, "non-button Slack action group"))
+                    else:
+                        elements = tuple(
+                            element
+                            for block in group
+                            if isinstance(block, scene.SlackActions)
+                            for element in block.elements
+                        )
+                        if isinstance(part.offer.payload, RowRealization):
+                            limit("actions.elements", len(elements), self.limits.components.actions_elements)
+                        size = max(1, self.limits.components.actions_elements)
+                        packed = [scene.SlackActions(elements[i : i + size]) for i in range(0, len(elements), size)]
+                        prepared_blocks[start:] = packed
+                        blocks += len(packed) - len(group)
+                case ImageRealization() as media:
+                    if isinstance(media.source, Asset) or media.spoiler:
+                        violations.append(
+                            UnsupportedCapability(identity, "Slack images require public URLs and cannot hide spoilers")
+                        )
+                    else:
+                        limit("image.url", len(media.source), self.limits.components.url)
+                        texts.append(media.description)
+                        prepared_blocks.append(scene.SlackImage(media.source, media.description))
+                        blocks += 1
+                case FlowRealization():
                     for child in part.children:
                         visit(child)
                 case _:
@@ -255,7 +422,7 @@ class SlackCompositionRules[
         texts: list[str] = []
 
         def text(value: scene.SlackText, capacity: int) -> None:
-            if value.kind != scene.SlackTextKind.PLAIN or len(value.content) > capacity:
+            if len(value.content) > capacity:
                 message = "built Slack text violates its selected realization"
                 raise DrawInvariantError(message)
             texts.append(value.content)
@@ -268,6 +435,13 @@ class SlackCompositionRules[
                         msg = "built Slack actions exceed their limit"
                         raise DrawInvariantError(msg)
                     for element in elements:
+                        if isinstance(element, scene.SlackSelect):
+                            if len(element.options) > self.limits.components.select_options:
+                                message = "built Slack select exceeds its option limit"
+                                raise DrawInvariantError(message)
+                            for option in element.options:
+                                text(option.label, self.limits.components.option_label)
+                            continue
                         if not isinstance(element, scene.SlackButton) or not element.label.content:
                             msg = "unexpected Slack action element"
                             raise DrawInvariantError(msg)
@@ -290,6 +464,19 @@ class SlackCompositionRules[
                     if block.fields or block.accessory is not None:
                         message = "unexpected content in built Slack section"
                         raise DrawInvariantError(message)
+                case scene.SlackHeader(text=value):
+                    if value.kind != scene.SlackTextKind.PLAIN:
+                        message = "Slack headers require plain text"
+                        raise DrawInvariantError(message)
+                    text(value, self.limits.components.header_text)
+                case scene.SlackContext(elements=elements):
+                    if len(elements) > self.limits.components.context_elements:
+                        message = "Slack context exceeds its element capacity"
+                        raise DrawInvariantError(message)
+                    for value in elements:
+                        text(value, self.limits.components.section_text)
+                case scene.SlackImage(alt_text=description):
+                    texts.append(description)
                 case scene.SlackTable(rows=rows):
                     if len(rows) > self.limits.components.table_rows or any(
                         len(row) > self.limits.components.table_columns for row in rows

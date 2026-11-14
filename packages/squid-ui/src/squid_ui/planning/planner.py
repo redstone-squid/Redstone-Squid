@@ -9,14 +9,17 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike, PortableDocumentLike, as_document
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
 from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.composition import OccurrenceId, UnsupportedCapability
 from squid_ui.planning.composition_planner import plan_composition
 from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 from squid_ui.planning.identity import has_routed_page
+from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.pagination_migration import prepare_pagination
-from squid_ui.planning.regions import contains_regions, plan_regions
+from squid_ui.planning.region_detection import contains_regions
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult
@@ -119,11 +122,19 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
                 migration.document, replace(request, shared_pagination=True), options, cache=cache
             )
         else:
-            result = (
-                plan_regions(document, request)
-                if contains_regions(document.children)
-                else backend.plan(rendered, request, cache=cache, memo=memo)
-            )
+            if contains_regions(document.children):
+                identity = OccurrenceId(("root",))
+                raise JointUnsupportedError(
+                    SearchDiagnostics(
+                        SearchCompletion.UNSUPPORTED,
+                        optimal=False,
+                        work_used=0,
+                        work_limit=request.search_budget,
+                        violations=(UnsupportedCapability(identity, migration.limitation or "region vocabulary"),),
+                        unsupported=(identity,),
+                    )
+                )
+            result = backend.plan(rendered, request, cache=cache, memo=memo)
             result = replace(result, session_updates=(*result.session_updates, RetainedCompositionUpdate(None)))
             if migration.limitation is not None:
                 result = replace(

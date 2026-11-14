@@ -9,6 +9,7 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
+    ConstraintViolation,
     Evaluation,
     PlanningContext,
     RealizationOffer,
@@ -19,9 +20,11 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.realizations import (
+    ActionsRealization,
     ControlRealization,
     DownloadRealization,
     FlowRealization,
+    ImageRealization,
     PanelRealization,
     Realization,
     RowRealization,
@@ -38,7 +41,22 @@ from squid_ui.planning.text_nodes import html_text
 from squid_ui.presentations import FidelityEffect, SemanticRef
 
 _INLINE = frozenset(
-    {"text", "inline", "sequence", "strong", "em", "s", "code_inline", "link", "softbreak", "hardbreak"}
+    {
+        "text",
+        "inline",
+        "sequence",
+        "strong",
+        "em",
+        "s",
+        "code_inline",
+        "link",
+        "softbreak",
+        "hardbreak",
+        "heading",
+        "small",
+        "blockquote",
+        "fence",
+    }
 )
 
 
@@ -111,6 +129,8 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         ),
                     )
                 case SelectRealization(node=control):
+                    if not 0 <= control.min_values <= control.max_values <= len(control.options):
+                        violations.append(ConstraintViolation(part.offer.occurrence.identity, "select cardinality"))
                     texts.extend(option.label for option in control.options)
                     options = tuple(
                         scene.HtmlElement(
@@ -118,6 +138,11 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             (scene.HtmlText(option.label),),
                             attributes=(
                                 scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, option.value),
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.TITLE, option.description),)
+                                    if option.description is not None
+                                    else ()
+                                ),
                                 *(
                                     (scene.HtmlAttribute(scene.HtmlAttributeName.SELECTED, value=True),)
                                     if option.default
@@ -132,6 +157,11 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             scene.HtmlTag.SELECT,
                             options,
                             attributes=(
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.DISABLED, "disabled"),)
+                                    if control.disabled
+                                    else ()
+                                ),
                                 scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MIN, control.min_values),
                                 scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MAX, control.max_values),
                             ),
@@ -174,8 +204,25 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         scene.HtmlElement(scene.HtmlTag.P, (text(rendered),)),
                         *(node for child in part.children for node in visit(child)),
                     )
-                case TextRealization(nodes=nodes):
-                    return (scene.HtmlElement(scene.HtmlTag.P, (text(nodes),)),)
+                case TextRealization() as payload:
+                    if payload.role == "code":
+                        value = "".join(tree.plain(node) for node in payload.nodes)
+                        texts.append(value)
+                        return (
+                            scene.HtmlElement(
+                                scene.HtmlTag.PRE, (scene.HtmlElement(scene.HtmlTag.CODE, (scene.HtmlText(value),)),)
+                            ),
+                        )
+                    tag = (
+                        scene.HtmlTag(f"h{payload.level}")
+                        if payload.role == "heading"
+                        else scene.HtmlTag.SMALL
+                        if payload.role == "note"
+                        else scene.HtmlTag.BLOCKQUOTE
+                        if payload.role == "quote"
+                        else scene.HtmlTag.P
+                    )
+                    return (scene.HtmlElement(tag, (text(payload.nodes),)),)
                 case TableRealization() as table:
                     context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
                     if table.form == TableForm.RECORDS:
@@ -200,12 +247,34 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             ),
                         ),
                     )
-                case FlowRealization() | RowRealization():
+                case FlowRealization() | RowRealization() | ActionsRealization():
                     return tuple(node for child in part.children for node in visit(child))
                 case PanelRealization(accent=accent):
                     children = tuple(node for child in part.children for node in visit(child))
                     colour = scene.HtmlColourRef(accent) if accent is not None else None
                     return (scene.HtmlElement(scene.HtmlTag.DIV, children, colour=colour),)
+                case ImageRealization() as media:
+                    asset = media.source if isinstance(media.source, Asset) else None
+                    if asset is not None:
+                        uses.append(SharedUse(ResourceIdentity("attachment", asset.key), asset, EMPTY_COST))
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.IMG,
+                            (),
+                            attributes=(
+                                scene.HtmlAttribute(scene.HtmlAttributeName.ALT, media.description),
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.CLASS, "squid-spoiler"),)
+                                    if media.spoiler
+                                    else ()
+                                ),
+                            ),
+                            url=scene.HtmlUrlRef(media.source) if isinstance(media.source, str) else None,
+                            asset=scene.HtmlAssetRef(asset.key, asset.name, asset.media_type)
+                            if asset is not None
+                            else None,
+                        ),
+                    )
                 case DownloadRealization() as download:
                     asset = download.asset
                     uses.append(SharedUse(ResourceIdentity("attachment", asset.key), asset, EMPTY_COST))

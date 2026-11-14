@@ -62,7 +62,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 if node.page_size is not None:
                     combinations *= max(1, (len(node.items) + node.page_size - 1) // node.page_size)
                 return node
-            case sem.Group() | sem.Stack() | sem.Block():
+            case sem.Group() | sem.Stack() | sem.Block() | sem.Cluster() | sem.Section() | sem.Article():
                 return replace(node, children=tuple(map(visit, node.children)))
             case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | Budget():
                 return replace(node, node=visit(node.node))
@@ -124,20 +124,29 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     literal=isinstance(node, primitive.Code),
                 )
             case (
-                sem.Paragraph()
+                sem.Heading()
+                | sem.Note()
+                | sem.Code()
+                | sem.Quote()
+                | sem.Fields()
+                | sem.Media()
+                | sem.Figure()
+                | sem.Paragraph()
                 | sem.Table()
                 | sem.Download()
                 | sem.ActionControl()
                 | sem.RoutedActionControl()
                 | sem.Link()
                 | sem.FormTrigger()
+                | sem.Toggle()
+                | sem.Choices()
+                | sem.RoutedChoices()
                 | sem.ControlGroup()
                 | TextPresentation()
             ):
                 return node
             case sem.ActionControls():
-                msg = "adaptive action grouping"
-                raise UnsupportedSemanticError(msg)
+                return node
             case Alternatives():
                 return replace(
                     node,

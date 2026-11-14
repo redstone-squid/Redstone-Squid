@@ -23,11 +23,14 @@ from squid_ui.planning.composition import (
     SharedUse,
     UnsupportedCapability,
 )
+from squid_ui.planning.composition_discord import discord_text, select_violations
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.realizations import (
+    ActionsRealization,
     ControlRealization,
     DownloadRealization,
     FlowRealization,
+    ImageRealization,
     PanelRealization,
     Realization,
     RowRealization,
@@ -44,28 +47,6 @@ from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.text import Markup
 
 
-def _select_violations(node: scene.Select | scene.RoutedSelect, limits: V2Limits) -> tuple[str, ...]:
-    errors: list[str] = []
-    component = limits.components
-    if not 1 <= len(node.options) <= component.select_options:
-        errors.append("select option count")
-    if not 0 <= node.min_values <= node.max_values <= len(node.options):
-        errors.append("select cardinality")
-    if len(node.placeholder or "") > component.select_placeholder:
-        errors.append("select placeholder")
-    identifier = node.action if isinstance(node, scene.Select) else node.route_id
-    if len(identifier) > component.custom_id:
-        errors.append("select identifier")
-    for option in node.options:
-        if not option.label or len(option.label) > component.option_label:
-            errors.append("select option label")
-        if not option.value or len(option.value) > component.option_value:
-            errors.append("select option value")
-        if len(option.description or "") > component.option_description:
-            errors.append("select option description")
-    return tuple(errors)
-
-
 @dataclass(frozen=True, slots=True)
 class V2CompositionRules[RenderTargetT, ContextT]:
     limits: V2Limits = V2Limits()
@@ -74,7 +55,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
     ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
         return semantic_offers(
-            occurrence, context, table_forms=(TableForm.RECORDS,), panels=True, character_budgets=True
+            occurrence,
+            context,
+            table_forms=(TableForm.RECORDS,),
+            panels=True,
+            nested_panels=False,
+            character_budgets=True,
         )
 
     def evaluate(
@@ -146,6 +132,31 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                             control.label, control.url or "", emoji=control.emoji, disabled=control.disabled
                         )
                     return (button,) if in_row else (scene.Row((button,)),)
+                case ActionsRealization():
+                    output: list[scene.Node] = []
+                    pending: list[scene.Button | scene.RoutedButton | scene.Link] = []
+                    size = max(1, self.limits.components.row_buttons)
+
+                    def flush() -> None:
+                        nonlocal components
+                        if pending:
+                            output.append(scene.Row(tuple(pending)))
+                            pending.clear()
+                            components += 1
+
+                    for child in part.children:
+                        if isinstance(child.offer.payload, ActionsRealization):
+                            flush()
+                        for item in visit(child, in_panel=in_panel, in_row=True):
+                            if isinstance(item, scene.Button | scene.RoutedButton | scene.Link):
+                                pending.append(item)
+                                if len(pending) == size:
+                                    flush()
+                            else:
+                                flush()
+                                output.append(item)
+                    flush()
+                    return tuple(output)
                 case RowRealization():
                     components += 1
                     if len(part.children) > self.limits.components.row_buttons:
@@ -169,7 +180,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     components += 2
                     violations.extend(
                         ConstraintViolation(part.offer.occurrence.identity, detail)
-                        for detail in _select_violations(node, self.limits)
+                        for detail in select_violations(node, self.limits.components)
                     )
                     return (node,)
                 case TextSequenceRealization() as sequence:
@@ -191,13 +202,50 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         *rendered_text(rendered),
                         *(node for child in part.children for node in visit(child, in_panel=in_panel)),
                     )
-                case TextRealization(nodes=nodes):
-                    return text(nodes)
+                case TextRealization() as payload:
+                    return rendered_text(discord_text(payload, context.escape_text))
                 case TableRealization() as table:
                     context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
                     if table.form != TableForm.RECORDS:
                         violations.append(UnsupportedCapability(part.offer.occurrence.identity, "native table"))
                     return tuple(node for row in record_text(table) for node in text(row))
+                case ImageRealization() as media:
+                    components += 1
+                    if len(media.description) > self.limits.gallery_item_description:
+                        violations.append(
+                            LocalCapacityExceeded(
+                                part.offer.occurrence.identity,
+                                "image.description",
+                                len(media.description),
+                                self.limits.gallery_item_description,
+                            )
+                        )
+                    if self.limits.gallery_items < 1:
+                        violations.append(
+                            LocalCapacityExceeded(
+                                part.offer.occurrence.identity, "gallery.items", 1, self.limits.gallery_items
+                            )
+                        )
+                    asset = media.source if isinstance(media.source, Asset) else None
+                    if asset is not None:
+                        uses.append(
+                            SharedUse(
+                                ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1})
+                            )
+                        )
+                    url = f"attachment://{asset.name}" if asset is not None else str(media.source)
+                    return (
+                        scene.Gallery(
+                            (
+                                scene.GalleryItem(
+                                    url,
+                                    media.description or None,
+                                    media.spoiler,
+                                    asset.name if asset is not None else None,
+                                ),
+                            )
+                        ),
+                    )
                 case DownloadRealization() as download:
                     components += 1
                     uses.append(
@@ -301,11 +349,28 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         raise DrawInvariantError(msg)
                 case scene.Select() | scene.RoutedSelect():
                     components += 1  # Selects occupy an implicit action row.
-                    if _select_violations(node, self.limits):
+                    if select_violations(node, self.limits.components):
                         msg_0 = "built V2 select violates its limits"
                         raise DrawInvariantError(msg_0)
                 case scene.Text(content=content):
                     texts.append(content)
+                case scene.Gallery(items=items):
+                    if len(items) > self.limits.gallery_items or any(
+                        len(item.description or "") > self.limits.gallery_item_description for item in items
+                    ):
+                        message = "built gallery exceeds its limits"
+                        raise DrawInvariantError(message)
+                    for item in items:
+                        if item.asset_name is not None:
+                            matches = [
+                                use.value.key
+                                for use in expected.resources.uses.values()
+                                if use.value.name == item.asset_name
+                            ]
+                            if not matches:
+                                message = "built gallery has an undeclared asset"
+                                raise DrawInvariantError(message)
+                            assets.update(matches)
                 case scene.File():
                     assets.add(node.asset_key)
                     use = expected.resources.uses.get(ResourceIdentity("attachment", node.asset_key))

@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid_reactivity import state
 from squid_ui import scene
-from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
+from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.navigation import default_nav
@@ -99,14 +99,20 @@ def test_persistent_controls_are_reserved_on_every_page() -> None:
 
 
 def test_authored_alternatives_participate_in_allocation() -> None:
-    content = sl.fallback(sl.stack(*(sl.paragraph(str(i)) for i in range(8))), sl.paragraph("compact"))
+    source = sl.stack(*(sl.paragraph(str(i), key=str(i)) for i in range(8)), key="body")
+    content = sl.alternatives(
+        sl.alternative(source, key="full", fidelity=sl.equivalent()),
+        sl.alternative(sl.present_text("compact", key="compact"), key="summary", fidelity=sl.losses(sl.omit("body"))),
+        content=source,
+        key="presentation",
+    )
     document = sl.region(sl.unbreakable(content), key="reference", title="Reference")
     result = plan(document, target=target(5), nav=default_nav)
     first = result.scene.components_v2.children[0]
     assert isinstance(first, scene.Text)
     assert first.content == "compact"
-    assert any(event.code == "layout.semantic_fallback" for event in result.report.events)
-    with pytest.raises(LayoutDegradedError):
+    assert any(event.code == "composition.effect" for event in result.report.events)
+    with pytest.raises(UnsolvableLayoutError):
         plan(document, target=target(5), nav=default_nav, strict=True)
     preferred = plan(document, target=target(10), nav=default_nav, strict=True)
     assert preferred.degradation.lossless

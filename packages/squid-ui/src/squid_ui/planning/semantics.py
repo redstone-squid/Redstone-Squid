@@ -51,7 +51,13 @@ class StructuralGroup:
 
 
 type EmbeddedValue[ContextT] = (
-    sem.Column | sem.TableRow | sem.Field | sem.ListItem | sem.ControlGroup[ContextT] | Interaction[ContextT]
+    sem.Column
+    | sem.TableRow
+    | sem.Field
+    | sem.ListItem
+    | sem.MediaItem
+    | sem.ControlGroup[ContextT]
+    | Interaction[ContextT]
 )
 type SemanticValue[RenderTargetT, ContextT] = (
     sem.SemanticNode[RenderTargetT, ContextT]
@@ -129,6 +135,8 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Region()
             | sem.Paged()
             | sem.Download()
+            | sem.Media()
+            | sem.MediaItem()
             | TextPresentation()
             | Alternatives()
             | AtomicNode()
@@ -195,6 +203,15 @@ def semantic_graph[RenderTargetT, ContextT](
                     for j, (column, cell) in enumerate(zip(value.columns.columns, row.cells, strict=True)):
                         column_key = column.key or f"@{j}"
                         add(TableCell(row_key, column_key, cell), (*row_ref.keys, column_key), row_ref, atomic=True)
+            case sem.Media():
+                root = add(value, path, parent, atomic=False)
+                for i, item in enumerate(value.items):
+                    visit(item, root, i)
+            case sem.Figure():
+                root = add(value, path, parent, atomic=False)
+                visit(value.media, root, 0)
+                if value.caption is not None:
+                    add(sem.Paragraph(value.caption), (*path, "@caption"), root, atomic=True)
             case sem.Fields():
                 root = add(value, path, parent, atomic=False)
                 for i, entry in enumerate(value.fields):
@@ -242,7 +259,8 @@ def semantic_graph[RenderTargetT, ContextT](
                         for i, child in enumerate(children):
                             visit(child, slot, i)
             case (
-                sem.Paragraph()
+                sem.MediaItem()
+                | sem.Paragraph()
                 | sem.Heading()
                 | sem.Note()
                 | sem.Code()

@@ -76,6 +76,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         PagerNav(nav, request.presentation, staged=True) if nav is not None else None,
         request.shared_pagination or request.session is not None or nav is not None or request.positions is not None,
         escape_text=request.target.adapter.escape_text,
+        presentation=request.presentation,
     )
 
 

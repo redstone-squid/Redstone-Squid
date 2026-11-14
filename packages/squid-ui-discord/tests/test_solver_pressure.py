@@ -144,7 +144,7 @@ class TestRegionPagination:
 
         assert first.scene.pagers[0].pages == 3
         assert self._texts(first)[:3] == ["## Report", "0: " + "x" * 30, "1: " + "x" * 30]
-        assert self._texts(second)[:2] == ["2: " + "x" * 30, "3: " + "x" * 30]
+        assert self._texts(second)[:3] == ["## Report", "2: " + "x" * 30, "3: " + "x" * 30]
         assert first.scene.pagers[0].content_fingerprint == second.scene.pagers[0].content_fingerprint
 
     def test_keep_with_next_moves_a_heading_to_its_content(self) -> None:

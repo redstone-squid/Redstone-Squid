@@ -125,8 +125,9 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
 
     result = plan(document, target=DISCORD_V2_DPY27)
 
-    assert result.report.events[0].code == "actions.grouped"
-    assert result.metrics.states_explored == 2
+    assert result.allocation is not None
+    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert result.metrics.target_evaluations > 0
     assert [(pager.key, pager.pages) for pager in result.scene.pagers] == [("local", 2)]
     assert not result.metrics.search_fallback
 

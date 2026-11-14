@@ -6,6 +6,7 @@ ignored. Unknown extensions prevent reuse until they supply an explicit contract
 """
 
 from dataclasses import replace
+from typing import Any
 
 from squid_ui import semantic as sem
 from squid_ui.document import Document
@@ -14,6 +15,16 @@ from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives.constraints import PageOwnership
 from squid_ui.target_types import Renderable
+
+type AllocationNode = (
+    Renderable[Any, Any]
+    | sem.ControlGroup[Any]
+    | sem.ActionControl[Any]
+    | sem.RoutedActionControl
+    | sem.Link
+    | sem.Toggle[Any]
+    | sem.FormTrigger[Any]
+)
 
 
 def _page_configuration(owner: PageOwnership) -> PageOwnership:
@@ -26,15 +37,14 @@ def same_allocation_document[RenderTargetT, ContextT](
     return left.key == right.key and left.assets == right.assets and _same_children(left.children, right.children)
 
 
-def _same_children[RenderTargetT, ContextT](
-    left: tuple[Renderable[RenderTargetT, ContextT], ...], right: tuple[Renderable[RenderTargetT, ContextT], ...]
+def _same_children(
+    left: tuple[AllocationNode, ...],
+    right: tuple[AllocationNode, ...],
 ) -> bool:
     return len(left) == len(right) and all(_same_node(a, b) for a, b in zip(left, right, strict=True))
 
 
-def _same_node[RenderTargetT, ContextT](
-    left: Renderable[RenderTargetT, ContextT], right: Renderable[RenderTargetT, ContextT]
-) -> bool:
+def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
     if type(left) is not type(right):
         return False
     match left, right:
@@ -54,7 +64,10 @@ def _same_node[RenderTargetT, ContextT](
             return replace(left, page=_page_configuration(left.page)) == replace(
                 right, page=_page_configuration(right.page)
             )
-        case ((sem.Group() | sem.Stack() | sem.Block()), (sem.Group() | sem.Stack() | sem.Block())):
+        case (
+            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster()),
+            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster()),
+        ):
             return replace(left, children=()) == replace(right, children=()) and _same_children(
                 left.children, right.children
             )
@@ -65,6 +78,17 @@ def _same_node[RenderTargetT, ContextT](
             return replace(left, node=sem.Group(())) == replace(right, node=sem.Group(())) and _same_node(
                 left.node, right.node
             )
+        case sem.ActionControls(), sem.ActionControls():
+            return replace(left, items=()) == replace(right, items=()) and _same_children(left.items, right.items)
+        case sem.ControlGroup(), sem.ControlGroup():
+            return replace(left, controls=()) == replace(right, controls=()) and _same_children(
+                left.controls, right.controls
+            )
+        case sem.Choices(), sem.Choices():
+            return isinstance(left.selection, Controlled) and left == right
+        case sem.Toggle(), sem.Toggle():
+            # Session-owned values can change without changing the authored node.
+            return isinstance(left.on, Controlled) and left == right
         case Alternatives(), Alternatives():
             return (
                 left.key == right.key
@@ -76,15 +100,21 @@ def _same_node[RenderTargetT, ContextT](
                 )
             )
         case (
-            sem.Paragraph()
+            sem.Heading()
+            | sem.Note()
+            | sem.Code()
+            | sem.Quote()
+            | sem.Fields()
+            | sem.Media()
+            | sem.Figure()
+            | sem.Paragraph()
             | sem.Table()
             | sem.Download()
             | sem.ActionControl()
             | sem.RoutedActionControl()
             | sem.Link()
+            | sem.RoutedChoices()
             | sem.FormTrigger()
-            | sem.ActionControls()
-            | sem.ControlGroup()
             | TextPresentation(),
             _,
         ):

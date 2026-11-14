@@ -36,7 +36,7 @@ def reject_legacy(*args: object, **kwargs: object) -> None:
 def test_public_automatic_planning_and_page_selection(
     target: Literal["v2", "slack", "html"], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("squid_ui.planning.planner.plan_regions", reject_legacy)
+    monkeypatch.setattr("squid_ui.planning.discord_planner.DiscordPlanner.plan", reject_legacy)
     monkeypatch.setattr("squid_ui.planning.html_planner.HtmlPlanner.plan", reject_legacy)
     monkeypatch.setattr("squid_ui.planning.slack_planner.SlackPlanner.plan", reject_legacy)
     node = sl.region(

@@ -20,6 +20,7 @@ from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantics import SemanticGraph, SourceScope
+from squid_ui.presentation import PresentationState
 from squid_ui.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.semantic import Budgeted
@@ -288,6 +289,7 @@ class PlanningContext:
     mounted: bool = False
     assets: tuple[Asset, ...] = ()
     escape_text: Callable[[str], str] | None = None
+    presentation: PresentationState = field(default_factory=PresentationState)
 
 
 @dataclass(frozen=True, slots=True)

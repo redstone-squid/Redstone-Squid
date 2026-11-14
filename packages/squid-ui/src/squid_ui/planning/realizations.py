@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from hashlib import sha256
+from typing import Literal
 from urllib.parse import quote
 
 from squid_i18n import tree
@@ -20,6 +21,7 @@ from squid_ui.emoji import Emoji, normalize_emoji
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
+from squid_ui.ownership import Controlled
 from squid_ui.planning.composition import (
     CandidateComposition,
     FragmentContract,
@@ -38,9 +40,15 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.pagination_content import RootRegion, TextPages
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_adaptation.common import _button_style
-from squid_ui.planning.semantic_adaptation.handlers import PresentForm
+from squid_ui.planning.semantic_adaptation.handlers import (
+    ChoiceCommit,
+    FlipToggle,
+    PresentForm,
+    RouteSelection,
+    SelectChoices,
+)
 from squid_ui.planning.semantics import SourceScope, StructuralGroup, UnsupportedSemanticError, check_alternative
-from squid_ui.planning.structure import resolve_accent
+from squid_ui.planning.structure import resolve_accent, toggle_state
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
@@ -53,6 +61,9 @@ from squid_ui.text import TextLike, resolve_text
 class TextRealization:
     nodes: tuple[tree.Node, ...]
     provenance: ResolvedText | None = None
+    role: Literal["paragraph", "heading", "note", "code", "quote"] = "paragraph"
+    level: int = 2
+    language: str = ""
 
     def fragment(self, start: int, end: int) -> Realization:
         return replace(self, nodes=_slice(self.nodes, start, end))
@@ -112,6 +123,13 @@ class TableRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageRealization:
+    source: str | Asset
+    description: str
+    spoiler: bool
+
+
+@dataclass(frozen=True, slots=True)
 class DownloadRealization:
     asset: Asset
     label: tuple[tree.Node, ...]
@@ -137,18 +155,25 @@ class RowRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class ActionsRealization:
+    """Ordered buttons that may occupy multiple target action rows."""
+
+
+@dataclass(frozen=True, slots=True)
 class SelectRealization:
     node: scene.Select | scene.RoutedSelect
 
 
 type Realization = (
     TextSequenceRealization
+    | ActionsRealization
     | RowRealization
     | SelectRealization
     | TextRealization
     | FlowRealization
     | PanelRealization
     | TableRealization
+    | ImageRealization
     | DownloadRealization
     | ControlRealization
 )
@@ -357,21 +382,42 @@ def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[Re
     return "$/" + "/".join(reversed(parts))
 
 
+def _control_key[RenderTargetT, ContextT](
+    occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
+) -> str:
+    sources = occurrence.sources
+    if len(sources) == 1 and occurrence.origin is None:
+        key = next(iter(sources)).keys[-1]
+        context.work.consume(len(occurrence.graph.units))
+        if (
+            not key.startswith("@")
+            and len(key) <= 64
+            and sum(ref.keys[-1] == key for ref in occurrence.graph.units) == 1
+        ):
+            return key
+    encoded = json.dumps(sorted(ref.keys for ref in sources), ensure_ascii=True)
+    return "composition." + sha256(encoded.encode()).hexdigest()[:32]
+
+
 def semantic_offers[RenderTargetT, ContextT](
     occurrence: SemanticOccurrence[RenderTargetT, ContextT],
     context: PlanningContext,
     *,
     table_forms: tuple[TableForm, ...],
     panels: bool,
+    nested_panels: bool = True,
     disabled_controls: bool = True,
     character_budgets: bool = False,
+    text_limit: int | None = None,
 ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
     context.work.consume()
     value = occurrence.graph.units[occurrence.reference].value
-    text_capacity = context.capacities.get(Axis.DISPLAY_TEXT)
+    text_capacity = context.capacities.get(Axis.DISPLAY_TEXT, text_limit)
     parent = occurrence.graph.units[occurrence.reference].parent
+    inside_panel = False
     while parent is not None:
         ancestor = occurrence.graph.units[parent]
+        inside_panel |= isinstance(ancestor.value, sem.Block | sem.Section | sem.Article)
         if isinstance(ancestor.value, sem.Paged):
             text_capacity = min(text_capacity, ancestor.value.chars) if text_capacity else ancestor.value.chars
         parent = ancestor.parent
@@ -480,14 +526,71 @@ def semantic_offers[RenderTargetT, ContextT](
         if isinstance(resolved, UnsupportedText):
             return ()
         return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
-    if isinstance(value, sem.ActionControl | sem.RoutedActionControl | sem.Link | sem.FormTrigger):
+    if isinstance(value, sem.Choices | sem.RoutedChoices):
+        previous = (
+            value.selected
+            if isinstance(value, sem.RoutedChoices)
+            else value.selection.value
+            if isinstance(value.selection, Controlled)
+            else context.presentation.selection(value.key, initial=value.selection.initial).selected
+        )
+        options = tuple(
+            scene.Option(
+                "".join(tree.plain(node) for node in resolve_text(choice.label, context.localization).nodes),
+                choice.key,
+                "".join(tree.plain(node) for node in resolve_text(choice.description, context.localization).nodes)
+                if choice.description is not None
+                else None,
+                choice.key in previous,
+            )
+            for choice in value.choices
+            if choice.available
+        )
+        key = _control_key(occurrence, context)
+        if isinstance(value, sem.RoutedChoices):
+            placeholder = (
+                "".join(tree.plain(node) for node in resolve_text(value.placeholder, context.localization).nodes)
+                if value.placeholder is not None
+                else None
+            )
+            payload = SelectRealization(
+                scene.RoutedSelect(
+                    options, value.route_id, placeholder, value.minimum, value.maximum, not value.available
+                )
+            )
+            binding = None
+        else:
+            payload = SelectRealization(scene.Select(options, key, min_values=value.minimum, max_values=value.maximum))
+            binding = ActionBinding(
+                key,
+                SelectChoices(ChoiceCommit(value.selection, value.key, previous, context.presentation)),
+                ActionMode.EXCLUSIVE,
+            )
+        return (RealizationOffer(occurrence, "select", payload, interaction=True, binding=binding),)
+    if isinstance(value, sem.ActionControl | sem.RoutedActionControl | sem.Link | sem.FormTrigger | sem.Toggle):
         # Wire IDs follow semantic ownership, independently of presentation keys.
-        encoded = json.dumps(sorted(ref.keys for ref in occurrence.sources), ensure_ascii=True)
-        key = "composition." + sha256(encoded.encode()).hexdigest()[:32]
+        key = _control_key(occurrence, context)
         label = "".join(tree.plain(node) for node in resolve_text(value.label, context.localization).nodes)
         binding = None
         form = None
         match value:
+            case sem.Toggle():
+                on = toggle_state(value, context.presentation)
+                state_label = value.on_label if on else value.off_label
+                if state_label is None:
+                    state_label = context.chrome.on if on else context.chrome.off
+                label += ": " + "".join(
+                    tree.plain(node) for node in resolve_text(state_label, context.localization).nodes
+                )
+                payload = ControlRealization(
+                    label,
+                    action=key,
+                    style=_button_style(value.tone, sem.Emphasis.NORMAL),
+                    disabled=not value.available,
+                )
+                binding = ActionBinding(
+                    key, FlipToggle(value, on, context.presentation), ActionMode.EXCLUSIVE, label=label
+                )
             case sem.ActionControl():
                 payload = ControlRealization(
                     label,
@@ -529,11 +632,38 @@ def semantic_offers[RenderTargetT, ContextT](
             case sem.Link():
                 payload = ControlRealization(label, url=value.url)
         return (RealizationOffer(occurrence, "button", payload, interaction=True, binding=binding, form=form),)
+    if isinstance(value, sem.Heading | sem.Note | sem.Code | sem.Quote):
+        payload = TextRealization(resolve_text(value.content, context.localization).nodes)
+        if isinstance(value, sem.Heading):
+            payload = replace(payload, role="heading", level=value.level)
+        elif isinstance(value, sem.Note):
+            payload = replace(payload, role="note")
+        elif isinstance(value, sem.Code):
+            payload = replace(payload, role="code", language=value.language)
+        else:
+            if value.attribution is not None:
+                payload = replace(
+                    payload,
+                    nodes=(
+                        *payload.nodes,
+                        tree.literal(" — "),
+                        *resolve_text(value.attribution, context.localization).nodes,
+                    ),
+                )
+            payload = replace(payload, role="quote")
+        return (RealizationOffer(occurrence, "text", payload),)
+    if isinstance(value, sem.Field):
+        nodes = (
+            *resolve_text(value.label, context.localization).nodes,
+            tree.literal(": "),
+            *resolve_text(value.value, context.localization).nodes,
+        )
+        return (RealizationOffer(occurrence, "field", TextRealization(nodes)),)
     if isinstance(value, sem.Paragraph):
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)
         length = sum(len(tree.plain(node)) for node in payload.nodes)
         fragments = None
-        if text_capacity is not None and length > text_capacity:
+        if text_capacity is not None and (length > text_capacity or length > max(128, text_capacity // 2)):
             context.work.consume(length)
             fragments = FragmentContract(
                 (frozenset({occurrence.reference}),) * length,
@@ -542,12 +672,18 @@ def semantic_offers[RenderTargetT, ContextT](
                 continuations=True,
             )
         return (RealizationOffer(occurrence, "text", payload, fragments=fragments),)
-    if isinstance(value, sem.Block) and not panels:
+    if isinstance(value, sem.Block | sem.Section | sem.Article) and not panels:
         return ()
     if isinstance(
         value,
         sem.Group
         | sem.Stack
+        | sem.Section
+        | sem.Article
+        | sem.Fields
+        | sem.Media
+        | sem.Figure
+        | sem.Cluster
         | sem.ActionControls
         | sem.ControlGroup
         | sem.Region
@@ -559,6 +695,8 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.Unbreakable
         | sem.KeepWithNext,
     ):
+        if isinstance(value, sem.Section | sem.Article) and value.thumbnail is not None:
+            return ()
         refs = list(occurrence.graph.children.get(occurrence.reference, ()))
         context.work.consume(len(refs))
         if isinstance(value, sem.Region):
@@ -575,7 +713,8 @@ def semantic_offers[RenderTargetT, ContextT](
                 occurrence.graph,
                 ref,
                 Placement.HEADER
-                if isinstance(value, sem.Region) and ref.keys[-1] == "@header"
+                if (isinstance(value, sem.Region) and ref.keys[-1] == "@header")
+                or (isinstance(value, sem.Section | sem.Article) and ref.keys[-1] == "@heading")
                 else Placement.FOOTER
                 if isinstance(value, sem.Region) and ref.keys[-1] == "@footer"
                 else placement,
@@ -585,7 +724,11 @@ def semantic_offers[RenderTargetT, ContextT](
         )
         payload = (
             PanelRealization(resolve_accent(value.accent, context.palette))
-            if isinstance(value, sem.Block) and panels
+            if isinstance(value, sem.Block | sem.Section | sem.Article)
+            and panels
+            and (nested_panels or not inside_panel or isinstance(value, sem.Block))
+            else ActionsRealization()
+            if isinstance(value, sem.ActionControls | sem.ControlGroup)
             else FlowRealization()
         )
         region = None
@@ -616,17 +759,63 @@ def semantic_offers[RenderTargetT, ContextT](
                 value.page,
                 cursor_key,
             )
-        return (
-            RealizationOffer(
-                occurrence,
-                "container",
-                payload,
-                children,
-                flow=not isinstance(value, sem.Unbreakable),
-                keep_with_next=isinstance(value, sem.KeepWithNext),
-                region=region,
-            ),
+        container = RealizationOffer(
+            occurrence,
+            "container",
+            payload,
+            children,
+            flow=not isinstance(value, sem.Unbreakable | sem.Figure),
+            keep_with_next=isinstance(value, sem.KeepWithNext),
+            region=region,
         )
+        if isinstance(value, sem.ActionControls) and value.display != sem.ControlDisplay.INDIVIDUAL:
+            eligible = tuple(
+                item
+                for item in value.items
+                if isinstance(item, sem.ActionControl)
+                and item.available
+                and (
+                    item.allow_grouping
+                    if item.allow_grouping is not None
+                    else item.emphasis != sem.Emphasis.STRONG and item.tone.base in (sem.Tone.NEUTRAL, sem.Tone.INFO)
+                )
+            )
+            if len(eligible) == len(value.items) and len(eligible) > 1:
+                encoded = json.dumps(sorted(ref.keys for ref in occurrence.sources), ensure_ascii=True)
+                key = "composition." + sha256(encoded.encode()).hexdigest()[:32]
+                routes = {
+                    item.key: ActionBinding(
+                        item.key,
+                        item.on_trigger,
+                        item.mode,
+                        guard=item.guard,
+                        busy=item.busy,
+                        label=item.label,
+                        record=item.record,
+                    )
+                    for item in eligible
+                }
+                options = tuple(
+                    scene.Option(
+                        "".join(tree.plain(node) for node in resolve_text(item.label, context.localization).nodes),
+                        item.key,
+                    )
+                    for item in eligible
+                )
+                grouped = RealizationOffer(
+                    occurrence,
+                    "actions.grouped",
+                    SelectRealization(scene.Select(options, key)),
+                    interaction=True,
+                    binding=ActionBinding(key, RouteSelection(routes), ActionMode.EXCLUSIVE, routes=routes),
+                    preference=0 if value.display == sem.ControlDisplay.GROUPED else 1,
+                )
+                return (
+                    (replace(container, preference=1), grouped)
+                    if value.display == sem.ControlDisplay.GROUPED
+                    else (container, grouped)
+                )
+        return (container,)
     if isinstance(value, sem.Table):
         context.work.consume(len(value.columns.columns))
         prefix = occurrence.reference.keys
@@ -674,6 +863,13 @@ def semantic_offers[RenderTargetT, ContextT](
                 )
             )
         return tuple(offers)
+    if isinstance(value, sem.MediaItem):
+        description = (
+            "".join(tree.plain(node) for node in resolve_text(value.description, context.localization).nodes)
+            if value.description is not None
+            else ""
+        )
+        return (RealizationOffer(occurrence, "image", ImageRealization(value.source, description, value.spoiler)),)
     if isinstance(value, sem.Download):
         payload = DownloadRealization(
             value.asset,
