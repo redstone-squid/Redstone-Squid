@@ -8,7 +8,7 @@ from squid.bot.i18n import localization_for
 from squid.bot.ui import render_payload
 from squid.core.i18n import tr
 from squid.starboard.application import EntryState
-from squid_i18n import Text, md_tr
+from squid_i18n import Text, md_tr, mention, strong
 
 
 def starboard_layout(
@@ -19,9 +19,9 @@ def starboard_layout(
     entry = state.entry
     author_name = getattr(message.author, "display_name", message.author.name)
     avatar_url = message.author.display_avatar.url
-    heading = f"**{author_name}**"
+    heading = strong(author_name)
     if config.ping_author:
-        heading = f"{message.author.mention} · {heading}"
+        heading = Text(t"{mention(message.author.id)} · {heading}")
     content = message.content or tr(t"bot-starboard-render-no-text-content = -# (no text content)")
     children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
         sd.v2.section(
@@ -52,7 +52,7 @@ def starboard_layout(
     if entry.raw_count != entry.score:
         count = entry.raw_count
         footer.append(md_tr(t'bot-starboard-render-reactions = {{ " " }}({count} reactions)'))
-    footer.append(f" · <#{message.channel.id}>")
+    footer.append(Text(t" · {mention(message.channel.id, kind='channel')}"))
     children.append(sd.v2.footer(Text.join("", footer)))
     return render_payload(
         [sd.v2.panel(*(children), accent=config.colour)],
