@@ -113,7 +113,7 @@ class SearchQueryParser:
         trailing = self._peek()
         if trailing.kind is not _TokenKind.END:
             _fail(f"unexpected {trailing.value!r}", trailing.position)
-        return SearchQuery(expression=expression, normalized=_render(expression))
+        return SearchQuery(expression=expression, normalized=render_expression(expression))
 
     def _tokenize(self, source: str) -> tuple[_Token, ...]:
         tokens: list[_Token] = []
@@ -309,7 +309,8 @@ def _combine(operator: BooleanOperator, operands: list[QueryExpression]) -> Quer
     return BooleanExpression(operator, tuple(flattened))
 
 
-def _render(expression: QueryExpression) -> str:
+def render_expression(expression: QueryExpression) -> str:
+    """Render a parsed expression with its Boolean grouping preserved."""
     if isinstance(expression, TextExpression):
         return _quote(expression.value) if expression.phrase else expression.value
     if isinstance(expression, FieldExpression):
@@ -326,7 +327,7 @@ def _render(expression: QueryExpression) -> str:
         }[expression.operator]
         return f"{expression.field.name}{operator}{value}"
     if isinstance(expression, NotExpression):
-        operand = _render(expression.operand)
+        operand = render_expression(expression.operand)
         if isinstance(expression.operand, BooleanExpression):
             operand = f"({operand})"
         return f"NOT {operand}"
@@ -335,7 +336,7 @@ def _render(expression: QueryExpression) -> str:
 
 
 def _render_with_parentheses(expression: QueryExpression, parent: BooleanOperator) -> str:
-    rendered = _render(expression)
+    rendered = render_expression(expression)
     if isinstance(expression, BooleanExpression) and expression.operator is not parent:
         return f"({rendered})"
     return rendered

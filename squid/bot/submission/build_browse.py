@@ -399,7 +399,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     _show_standings: bool = sl.state(False)
     _query: str = sl.state("")
     _sort: str = sl.state("")
-    _guided: SearchSelection | None = sl.state(None, persist=False)
+    _guided: GuidedSearch | None = sl.state(None, opaque=True)
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")
     _selected: sp.Browser[Build, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
@@ -470,6 +470,10 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        if self._guided is not None:
+            if self._guided.picker is not None or self._results is None:
+                return (self._guided,)
+            return (self._guided, self._results)
         if self._show_search_help:
             return (self._workspace_controls(), *self._find_nodes())
         if self._selected is not None:
@@ -672,25 +676,21 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _guided_search(self, event: sl.PressEvent) -> None:
         assert self._search_service is not None
-        mode = self._mode
-        child = GuidedSearch(
+
+        async def selected(selection: SearchSelection) -> None:
+            await self._run_search(selection.query, selection.sort)
+
+        async def cancelled() -> None:
+            self._guided = None
+
+        self._guided = GuidedSearch(
             self._search_service,
-            scope="records" if mode == "records" else "builds",
+            scope="records" if self._mode == "records" else "builds",
             query=self._query,
             sort=self._sort,
-            previous=self._guided,
+            on_apply=selected,
+            on_cancel=cancelled,
         )
-
-        async def selected(result: sd.ScreenResultEvent[SearchSelection]) -> None:
-            if self._mode != mode:
-                await result.notice(
-                    tr(t"guided-search-mode-changed = The catalogue changed. Open search again for this view.")
-                )
-                return
-            await self._run_search(result.value.query, result.value.sort)
-            self._guided = result.value
-
-        await self.open_child(cast(sd.PressEvent[RedstoneSquid], event), child, on_result=selected)
 
     async def _toggle_record_category(self, category: str, event: sl.ToggleEvent) -> None:
         if event.value:

@@ -1,20 +1,24 @@
-"""Build search clauses through named fields while preserving existing advanced expressions."""
+"""Edit one search query through text, clause rows, and inline value pickers."""
 
 import json
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Any, override
+from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
+import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
-from squid.bot.lookup import pick
+from squid.bot.lookup import PickHandler, RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
 from squid.records.domain import BuildKind
 from squid.search.application import SearchService
 from squid.search.application.fields import FieldRegistry
+from squid.search.application.parser import SearchQueryParser, render_expression
 from squid.search.domain.fields import FieldDefinition, FieldType
-from squid.suggestions.domain import Suggestion
+from squid.search.domain.query import BooleanExpression, BooleanOperator, QueryExpression
+from squid.suggestions.domain import Suggestion, SuggestionRequest
 
 VALUE_SOURCES = {
     "creator": "creators",
@@ -40,81 +44,118 @@ class Filter:
 class SearchSelection:
     query: str
     sort: str
-    advanced: str
-    keywords: str
-    filters: tuple[Filter, ...]
 
 
-def combine_query(advanced: str, keywords: str, filters: tuple[Filter, ...]) -> str:
-    parts = [f"({advanced})"] if advanced.strip() else []
-    parts.extend(json.dumps(word, ensure_ascii=False) for word in keywords.split())
-    parts.extend(item.query for item in filters)
-    return " AND ".join(parts)
-
-
-class GuidedSearch(sd.Screen[SearchSelection, Any, RedstoneSquid]):
-    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("guided-search"))
-    advanced: str = sl.state("")
-    keywords: str = sl.state("")
+class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
+    query: str = sl.state("")
     sort: str = sl.state("")
-    filters: tuple[Filter, ...] = sl.state(())
     selected: FieldDefinition | None = sl.state(None, persist=False)
+    picker: sp.SearchPicker[Suggestion] | None = sl.state(None, opaque=True)
+    picking_sort: bool = sl.state(False)
+    picker_title: sl.TextLike = sl.state("")
+    clause_page: int = sl.state(0)
 
     def __init__(
-        self, service: SearchService, *, scope: str, query: str, sort: str, previous: SearchSelection | None = None
+        self,
+        service: SearchService,
+        *,
+        scope: str,
+        query: str,
+        sort: str,
+        on_apply: Callable[[SearchSelection], Awaitable[None]],
+        on_cancel: Callable[[], Awaitable[None]],
     ) -> None:
         self.service = service
         self.scope = scope
-        self.advanced = query
+        self.query = query
         self.sort = sort
-        if previous is not None:
-            self.advanced, self.keywords, self.filters = previous.advanced, previous.keywords, previous.filters
+        self.on_apply = on_apply
+        self.on_cancel = on_cancel
+        self.parser = SearchQueryParser()
+
+    @override
+    async def on_load(self) -> None:
+        self.parser = SearchQueryParser(await self.service.fields())
+
+    @property
+    def clauses(self) -> tuple[QueryExpression, ...]:
+        expression = self.parser.parse(self.query).expression
+        if expression is None:
+            return ()
+        if isinstance(expression, BooleanExpression) and expression.operator is BooleanOperator.AND:
+            return expression.operands
+        return (expression,)
+
+    def _set_clauses(self, clauses: tuple[QueryExpression, ...]) -> None:
+        self.query = " AND ".join(f"({render_expression(item)})" for item in clauses)
+        self.query = self.parser.parse(self.query).normalized
+        self.clause_page = min(self.clause_page, max(0, (len(clauses) - 1) // 5))
+
+    def _append(self, item: Filter) -> None:
+        expression = self.parser.parse(item.query).expression
+        assert expression is not None
+        self._set_clauses((*self.clauses, expression))
+        self.selected = None
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        if self.picker is not None:
+            return (
+                sl.heading(self.picker_title),
+                self.picker,
+                sl.action_control("Use relevance", self._relevance, key="relevance", available=self.picking_sort),
+                sl.action_control("Back to query", self._back_to_query, key="picker-back"),
+            )
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.heading(tr(t"guided-search-title = Search and filters")),
-            sl.note(
-                tr(
-                    t"guided-search-help = Every filter below must match. Existing advanced queries keep their grouping."
-                )
-            ),
+            sl.paragraph(self.query or ("All builds" if self.scope == "builds" else "All records")),
+            sl.note("Edit the query or build it with filters. Both edit the same search."),
             sl.action_controls(
                 sl.form(
-                    tr(t"guided-search-keywords = Keywords"),
-                    sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](
-                        tr(t"guided-search-keywords = Keywords"),
-                        (
-                            sl.forms.TextField(
-                                key="keywords",
-                                label=tr(t"guided-search-keywords = Keywords"),
-                                default=self.keywords,
-                                required=False,
-                                maximum=500,
-                            ),
-                        ),
-                    ),
-                    key="keywords",
-                    on_submit=self._keywords,
+                    "Edit query",
+                    self._query_form(self.query),
+                    key="advanced",
+                    on_submit=self._advanced,
                 ),
-                sl.action_control(tr(t"guided-search-add-filter = Choose filter"), self._choose_field, key="field"),
-                sl.action_control(tr(t"guided-search-sort = Choose sorting"), self._choose_sort, key="sort"),
-                sl.action_control(tr(t"guided-search-relevance = Use relevance"), self._relevance, key="relevance"),
+                sl.action_control("Add filter", self._choose_field, key="field"),
+                sl.action_control("Sorting", self._choose_sort, key="sort"),
+                sl.action_control("Reset", self._reset, key="reset"),
                 key="search-controls",
             ),
+            sl.note(f"Sort: {self.sort or 'Relevance'}"),
         ]
-        for index, item in enumerate(self.filters):
+        clauses = self.clauses
+        start = self.clause_page * 5
+        for index, item in enumerate(clauses[start : start + 5], start):
+            clause = render_expression(item)
             nodes.append(
                 sl.stack(
-                    sl.paragraph(f"{item.field.replace('_', ' ').title()} {item.operator or '='} {item.value}"),
+                    sl.paragraph(clause),
                     sl.action_controls(
-                        sl.action_control(
-                            tr(t"guided-search-remove = Remove filter"),
-                            partial(self._remove, index),
-                            key=f"remove-{index}",
+                        sl.form(
+                            "Edit",
+                            self._query_form(clause),
+                            key=f"edit-{index}",
+                            on_submit=partial(self._edit_clause, index),
                         ),
-                        key=f"filter-{index}",
+                        sl.action_control("Remove", partial(self._remove, index), key=f"remove-{index}"),
+                        key=f"clause-{index}",
                     ),
+                )
+            )
+        if len(clauses) > 5:
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(
+                        "Previous filters",
+                        partial(self._page, -1),
+                        key="previous-clauses",
+                        available=self.clause_page > 0,
+                    ),
+                    sl.action_control(
+                        "Next filters", partial(self._page, 1), key="next-clauses", available=start + 5 < len(clauses)
+                    ),
+                    key="clause-pages",
                 )
             )
         if self.selected is not None:
@@ -179,48 +220,86 @@ class GuidedSearch(sd.Screen[SearchSelection, Any, RedstoneSquid]):
                     on_submit=partial(self._add, field),
                 )
             )
-        if self.advanced:
-            nodes.append(sl.note(self.advanced))
-        if self.keywords:
-            nodes.append(sl.note(self.keywords))
-        if self.sort:
-            nodes.append(
-                sl.note(self.sort.removeprefix("-").replace("_", " ") + (" ↓" if self.sort.startswith("-") else " ↑"))
-            )
         nodes.append(
             sl.action_controls(
-                sl.form(
-                    tr(t"guided-search-query-editor = Query expression"),
-                    sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](
-                        tr(t"guided-search-query-editor = Query expression"),
-                        (
-                            sl.forms.TextField(
-                                key="query",
-                                label=tr(t"guided-search-expression = Query expression"),
-                                default=self.advanced,
-                                required=False,
-                                maximum=1000,
-                            ),
-                        ),
-                    ),
-                    key="advanced",
-                    on_submit=self._advanced,
-                ),
-                sl.action_control(tr(t"guided-search-run = Search"), self._apply, key="apply"),
-                sl.action_control(tr(t"guided-search-cancel = Cancel"), self._cancel, key="cancel"),
+                sl.action_control("Back to catalogue", self._cancel, key="cancel"),
                 key="search-actions",
             )
         )
         return tuple(nodes)
 
-    async def _keywords(self, event: sd.SubmitEvent) -> None:
-        self.keywords = str(event.values.get("keywords") or "")
+    def _query_form(self, query: str) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
+        return sl.forms.FormSpec(
+            "Edit query", (sl.forms.TextField(key="query", label="Query", default=query, required=False, maximum=1000),)
+        )
 
     async def _advanced(self, event: sd.SubmitEvent) -> None:
-        self.advanced = str(event.values.get("query") or "")
+        self.query = self.parser.parse(str(event.values.get("query") or "")).normalized
+        self.clause_page = 0
+        self.selected = None
+        await self._refresh()
+
+    async def _edit_clause(self, index: int, event: sd.SubmitEvent) -> None:
+        expression = self.parser.parse(str(event.values.get("query") or "")).expression
+        clauses = self.clauses
+        self._set_clauses(clauses[:index] + (() if expression is None else (expression,)) + clauses[index + 1 :])
+        await self._refresh()
+
+    async def _page(self, direction: int, _event: sd.PressEvent) -> None:
+        self.clause_page += direction
+
+    async def _reset(self, _event: sd.PressEvent) -> None:
+        self.query = ""
+        self.sort = ""
+        self.selected = None
+        self.clause_page = 0
+        await self._refresh()
+
+    async def _back_to_query(self, _event: sd.PressEvent[RedstoneSquid]) -> None:
+        self.picker = None
+
+    async def _pick(
+        self,
+        event: sd.ActionEvent[RedstoneSquid],
+        source: str,
+        title: sl.TextLike,
+        on_pick: PickHandler,
+        *,
+        context: Mapping[str, str] | None = None,
+    ) -> None:
+        request = event.context
+        viewer = await request.client.actors.resolve(request)
+        source_context = dict(context or {})
+        if request.guild is not None:
+            source_context["guild_id"] = str(request.guild.id)
+        suggestion = SuggestionRequest(source, context=source_context, viewer=viewer, locale=str(event.locale))
+
+        def search(query: str) -> SuggestionSource:
+            return SuggestionSource(
+                request.client.services.suggestions, replace(suggestion, query=query), RequestAuthorizer(request)
+            )
+
+        async def picked(action: sl.ActionEvent, items: tuple[Suggestion, ...]) -> None:
+            if items:
+                await on_pick(cast(sd.ActionEvent, action), items[0])
+                self.picker = None
+
+        self.picking_sort = source == "search_sorts"
+        self.picker_title = title
+        picker = sp.SearchPicker(
+            search,
+            key="search-lookup",
+            identity=lambda item: item.value,
+            label=lambda item: item.label,
+            description=lambda item: item.description or "",
+            on_pick=picked,
+            page_size=10,
+        )
+        picker.session = sp.BrowseSession(search(""), identity=lambda item: item.value, page_size=10)
+        self.picker = picker
 
     async def _choose_field(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        await pick(
+        await self._pick(
             event,
             "search_fields",
             tr(t"guided-search-add-filter = Choose filter"),
@@ -241,13 +320,14 @@ class GuidedSearch(sd.Screen[SearchSelection, Any, RedstoneSquid]):
 
     async def _choose_value(self, field: FieldDefinition, event: sd.PressEvent[RedstoneSquid]) -> None:
         async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
-            self.filters = (*self.filters, Filter(field.name, "", item.value))
+            self._append(Filter(field.name, "", item.value))
+            await self._refresh()
             self.selected = None
 
-        await pick(event, VALUE_SOURCES[field.name], field.name.replace("_", " ").title(), selected)
+        await self._pick(event, VALUE_SOURCES[field.name], field.name.replace("_", " ").title(), selected)
 
     async def _choose_sort(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        await pick(
+        await self._pick(
             event,
             "search_sorts",
             tr(t"guided-search-sort = Choose sorting"),
@@ -257,35 +337,32 @@ class GuidedSearch(sd.Screen[SearchSelection, Any, RedstoneSquid]):
 
     async def _sort_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
         self.sort = item.value
+        await self._refresh()
 
     async def _relevance(self, _event: sd.PressEvent) -> None:
         self.sort = ""
+        self.picker = None
+        await self._refresh()
 
     async def _add(self, field: FieldDefinition, event: sd.SubmitEvent) -> None:
         raw = str(event.values["value"])
         value = FieldRegistry.coerce(field, raw)
-        self.filters = (
-            *self.filters,
+        self._append(
             Filter(
-                field.name, str(event.values["operator"]), str(value).lower() if isinstance(value, bool) else str(value)
-            ),
+                field.name,
+                str(event.values["operator"]),
+                str(value).lower() if isinstance(value, bool) else str(value),
+            )
         )
         self.selected = None
+        await self._refresh()
 
     async def _remove(self, index: int, _event: sd.PressEvent) -> None:
-        self.filters = tuple(item for position, item in enumerate(self.filters) if position != index)
+        self._set_clauses(tuple(item for position, item in enumerate(self.clauses) if position != index))
+        await self._refresh()
 
-    async def _apply(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        self.complete(
-            event,
-            SearchSelection(
-                combine_query(self.advanced, self.keywords, self.filters),
-                self.sort,
-                self.advanced,
-                self.keywords,
-                self.filters,
-            ),
-        )
+    async def _refresh(self) -> None:
+        await self.on_apply(SearchSelection(self.query, self.sort))
 
-    async def _cancel(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        self.cancel(event)
+    async def _cancel(self, _event: sd.PressEvent[RedstoneSquid]) -> None:
+        await self.on_cancel()

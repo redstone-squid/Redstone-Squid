@@ -1,16 +1,32 @@
-"""Guided filters preserve advanced Boolean grouping and treat values as literals."""
+"""Query text and builder controls edit the same expression."""
 
+from typing import cast
 from unittest.mock import AsyncMock
 
-from squid.bot.submission.guided_search import Filter, GuidedSearch, SearchSelection, combine_query
+from squid.bot.submission.guided_search import Filter, GuidedSearch, SearchSelection
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import BooleanExpression, BooleanOperator, FieldExpression
 from squid_ui_discord.testing import stage
 
 
-def test_added_filters_do_not_change_existing_or_grouping() -> None:
-    query = combine_query("title:door OR title:extender", "", (Filter("width", ">=", "3"),))
-    parsed = SearchQueryParser().parse(query).expression
+def editor(query: str = "") -> GuidedSearch:
+    service = AsyncMock()
+    service.fields.return_value = DEFAULT_FIELD_REGISTRY
+    return GuidedSearch(
+        service,
+        scope="builds",
+        query=query,
+        sort="",
+        on_apply=AsyncMock(),
+        on_cancel=AsyncMock(),
+    )
+
+
+def test_added_filters_preserve_or_grouping() -> None:
+    screen = editor("title:door OR title:extender")
+    screen._append(Filter("width", ">=", "3"))
+    parsed = SearchQueryParser().parse(screen.query).expression
     assert isinstance(parsed, BooleanExpression)
     assert parsed.operator is BooleanOperator.AND
     assert isinstance(parsed.operands[0], BooleanExpression)
@@ -21,17 +37,44 @@ def test_added_filters_do_not_change_existing_or_grouping() -> None:
 
 def test_named_values_cannot_inject_query_syntax() -> None:
     value = 'a" OR width:99 OR "b'
-    parsed = SearchQueryParser().parse(combine_query("", "", (Filter("creator", "", value),))).expression
+    screen = editor()
+    screen._append(Filter("creator", "", value))
+    parsed = SearchQueryParser().parse(screen.query).expression
     assert isinstance(parsed, FieldExpression)
     assert parsed.value == value
 
 
-async def test_reopening_keeps_removable_filter_rows_and_advanced_text() -> None:
-    filters = (Filter("width", "", "3"),)
-    previous = SearchSelection("title:door AND width:3", "-width", "title:door", "", filters)
-    screen = GuidedSearch(AsyncMock(), scope="builds", query=previous.query, sort=previous.sort, previous=previous)
+async def test_text_edits_replace_builder_filters_and_apply_exact_query() -> None:
+    screen = editor("title:door AND width:3")
     async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("remove-1"))
+        assert screen.query == "title:door"
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "width>=5 AND NOT tag:slime"})
+        assert len(screen.clauses) == 2
         await ui.press(ui.key_for("remove-0"))
-        assert screen.filters == ()
-        assert screen.advanced == "title:door"
-        assert screen.sort == "-width"
+        assert screen.query == "NOT tag:slime"
+        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection("NOT tag:slime", ""))
+
+
+async def test_edit_boolean_group_preserves_other_clauses() -> None:
+    screen = editor("(width:3 OR width:4) AND height:5")
+    async with stage(screen, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("edit-0"))
+        await form.submit({"query": "width:6 OR width:7"})
+        assert screen.query == "(width:6 OR width:7) AND height:5"
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": ""})
+        assert screen.query == ""
+        assert screen.clauses == ()
+
+
+async def test_long_queries_paginate_removable_clauses() -> None:
+    screen = editor(" AND ".join(f"width:{index}" for index in range(8)))
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("next-clauses"))
+        await ui.press(ui.key_for("remove-7"))
+        assert len(screen.clauses) == 7
+        await ui.press(ui.key_for("reset"))
+        assert screen.query == ""
+        assert screen.clause_page == 0
