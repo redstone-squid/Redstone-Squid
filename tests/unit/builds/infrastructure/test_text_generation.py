@@ -68,16 +68,21 @@ async def test_generate_passes_schema_reasoning_and_inline_images() -> None:
     completions = FakeCompletions()
     generator = OpenAITextGenerator(fake_client(completions))
     image = InlineImage(b"png", "image/png", 1, "attachment")
+    context_frame = InlineImage(b"frame", "image/png", 99, "video_frame")
 
     result = await generator.generate(
-        "system", "user", InferenceResult, model="model", images=[image], reasoning_effort="low"
+        "system", "user", InferenceResult, model="model", images=[image, context_frame], reasoning_effort="low"
     )
 
     assert result == InferenceResult(builds=[])
     assert completions.parse_kwargs["response_format"] is InferenceResult
     assert completions.parse_kwargs["reasoning_effort"] == "low"
     messages = completions.parse_kwargs["messages"]
-    assert messages[1]["content"][1]["image_url"]["url"] == "data:image/png;base64,cG5n"
+    content = messages[1]["content"]
+    assert content[1]["text"] == "Image from message 1 (attachment)."
+    assert content[2]["image_url"]["url"] == "data:image/png;base64,cG5n"
+    assert content[3]["text"] == "Image from message 99 (video_frame)."
+    assert content[4]["image_url"]["url"] == "data:image/png;base64,ZnJhbWU="
 
 
 async def test_generate_falls_back_to_lenient_json() -> None:

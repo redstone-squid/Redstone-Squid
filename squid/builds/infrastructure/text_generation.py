@@ -71,6 +71,12 @@ class OpenAITextGenerator:
             encoded = base64.b64encode(inline_image.data).decode("ascii")
             content.append(
                 {
+                    "type": "text",
+                    "text": f"Image from message {inline_image.source_message_id} ({inline_image.origin}).",
+                }
+            )
+            content.append(
+                {
                     "type": "image_url",
                     "image_url": {"url": f"data:{inline_image.content_type};base64,{encoded}"},
                 }
