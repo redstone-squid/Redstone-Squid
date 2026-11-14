@@ -100,10 +100,8 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Per-line alternatives combined with native `Paginate` and rich primitive text
-fragmentation retain their existing non-region paths.
-They do not declare the source correspondence and permitted fragments required
-for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
+Rich primitive text fragmentation retains its existing non-region path.
+It does not yet declare the permitted rich fragments required for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
 or typed atomic target rules inside regions. No equivalence is inferred from
 arbitrary replacement text. Native extensions are usable through explicit custom
 composition rules, rather than an opaque production backend probe.
@@ -131,7 +129,10 @@ notice consumes real capacity. Omission and shortening reports identify the affe
 lines, including when the retained text crosses a joiner. Per-line `Alt` ladders
 step the largest eligible entry first. Spill removes lower-priority entries only
 after those ladders are exhausted; condensation then shortens the joined text.
-Combining per-line alternatives with native `Paginate` remains on its compatibility path.
+Native `Paginate` uses the same explicit line ladders, preserving keyed anchors,
+count cuts, footers and page ownership. Lossless pages precede replacements. Checked
+alternatives cannot remove the pager, and independent cursor fingerprints keep
+changes to one line collection from resetting another.
 
 Portable `spill` and `best_effort` wrappers now use shared offers. Fields and lists
 omit lower-priority entries with measured notices; best effort also permits prose

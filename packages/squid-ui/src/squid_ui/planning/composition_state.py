@@ -32,7 +32,8 @@ from squid_ui.presentation import (
     RetainedCompositionUpdate,
 )
 from squid_ui.presentations import SemanticRef
-from squid_ui.primitives.constraints import FIRST_PAGE, RoutedPage
+from squid_ui.primitives import nodes as primitive
+from squid_ui.primitives.constraints import FIRST_PAGE, Paginate, RoutedPage
 from squid_ui.semantic import Details, Group, Items, List, Navigation, Paged, Region
 
 
@@ -126,6 +127,13 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
             if authored is not None and isinstance(authored.value, Region | Paged | List | TextPages)
             else None
         )
+        if (
+            authored is not None
+            and isinstance(authored.value, primitive.Lines)
+            and isinstance(authored.value.overflow, Paginate)
+        ):
+            owner = authored.value.overflow.page
+            content = replace(authored.value, overflow=replace(authored.value.overflow, page=FIRST_PAGE))
         cursor_fingerprint = stable_fingerprint((content, region.cuts)) if content is not None else fingerprint
         if not isinstance(owner, Controlled | RoutedPage):
             stored = request.presentation.cursor(key)
@@ -172,7 +180,9 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
         if isinstance(unit.value, Items):
             keys = (f"{unit.value.key}.items", *(f"{unit.value.key}.{item.key}.detail" for item in unit.value.items))
             retained.update(key for key in keys if key in request.presentation.cursors)
-        if not isinstance(unit.value, Region | Paged | List | Navigation | TextPages):
+        if not isinstance(unit.value, Region | Paged | List | Navigation | TextPages) and not (
+            isinstance(unit.value, primitive.Lines) and isinstance(unit.value.overflow, Paginate)
+        ):
             continue
         parent = unit.parent
         hidden = nested_region = False
@@ -184,13 +194,17 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
             nested_region |= isinstance(ancestor.value, Region)
             parent = ancestor.parent
         if hidden:
-            key = (
-                region_cursor_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))
-                if isinstance(unit.value, Region) or (isinstance(unit.value, Paged) and nested_region)
-                else f"{unit.value.key}.destinations"
-                if isinstance(unit.value, Navigation)
-                else unit.value.key
-            )
+            if isinstance(unit.value, primitive.Lines):
+                assert isinstance(unit.value.overflow, Paginate)
+                key = unit.value.overflow.key
+            else:
+                key = (
+                    region_cursor_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))
+                    if isinstance(unit.value, Region) or (isinstance(unit.value, Paged) and nested_region)
+                    else f"{unit.value.key}.destinations"
+                    if isinstance(unit.value, Navigation)
+                    else unit.value.key
+                )
             if key in request.presentation.cursors:
                 retained.add(key)
     updates.append(ActivePagers(active.keys | retained))

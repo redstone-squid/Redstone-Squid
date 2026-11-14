@@ -14,7 +14,7 @@ from squid_ui.ownership import Controlled
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import PageOwnership
+from squid_ui.primitives.constraints import PageOwnership, Paginate
 from squid_ui.target_types import Renderable
 
 type AllocationNode = (
@@ -193,6 +193,10 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             return _same_children(left.texts, right.texts) and _same_node(left.accessory, right.accessory)
         case ((primitive.Thumbnail() | primitive.Sep() | primitive.Time() | primitive.ZonedTime()), _):
             return left == right
+        case primitive.Lines(overflow=Paginate() as a), primitive.Lines(overflow=Paginate() as b):
+            return replace(left, overflow=replace(a, page=_page_configuration(a.page))) == replace(
+                right, overflow=replace(b, page=_page_configuration(b.page))
+            )
         case (
             primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code() | primitive.Lines(),
             _,

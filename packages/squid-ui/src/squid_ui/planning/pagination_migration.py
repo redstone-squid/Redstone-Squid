@@ -181,25 +181,18 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     raise UnsupportedSemanticError(msg)
                 pageable = True
                 if isinstance(node, primitive.Lines):
-                    if any(isinstance(item, Alt) for item in node.lines):
-                        msg = "line degradation alternatives"
-                        raise UnsupportedSemanticError(msg)
-                    items = tuple(
-                        sem.ListItem(node.keys[index] if node.keys else f"@{index}", item)
-                        for index, item in enumerate(node.lines)
-                        if not isinstance(item, Alt)
-                    )
-                    separator = node.join
-                else:
-                    if not isinstance(node.content, str):
-                        msg = "rich text fragmentation"
-                        raise UnsupportedSemanticError(msg)
-                    content = (
-                        node.content.replace("```", "``\u200b`") if isinstance(node, primitive.Code) else node.content
-                    )
-                    separator = overflow.boundary
-                    parts = content.split(separator) if separator else [content]
-                    items = tuple(sem.ListItem(f"@{index}", part) for index, part in enumerate(parts))
+                    steps = sum(len(item.fallbacks) if isinstance(item, Alt) else 0 for item in node.lines)
+                    combinations = max(combinations, len(node.lines) + steps)
+                    if overflow.per is not None:
+                        combinations *= max(1, (len(node.lines) + overflow.per - 1) // overflow.per)
+                    return node
+                if not isinstance(node.content, str):
+                    msg = "rich text fragmentation"
+                    raise UnsupportedSemanticError(msg)
+                content = node.content.replace("```", "``\u200b`") if isinstance(node, primitive.Code) else node.content
+                separator = overflow.boundary
+                parts = content.split(separator) if separator else [content]
+                items = tuple(sem.ListItem(f"@{index}", part) for index, part in enumerate(parts))
                 if overflow.per is not None:
                     combinations *= max(1, (len(items) + overflow.per - 1) // overflow.per)
                 prefix = (

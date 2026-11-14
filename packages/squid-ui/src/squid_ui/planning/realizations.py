@@ -79,6 +79,7 @@ from squid_ui.planning.text_presentations import (
 from squid_ui.presentations import (
     Alternatives,
     Budget,
+    FidelityEffect,
     Omission,
     Replacement,
     SemanticRef,
@@ -86,7 +87,18 @@ from squid_ui.presentations import (
     TextPresentation,
 )
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import FIRST_PAGE, Alt, Alts, Condense, Drop, Never, PageOwnership, Spill, Truncate
+from squid_ui.primitives.constraints import (
+    FIRST_PAGE,
+    Alt,
+    Alts,
+    Condense,
+    Drop,
+    Never,
+    PageOwnership,
+    Paginate,
+    Spill,
+    Truncate,
+)
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.text import TextLike, resolve_text, timestamp_text
 
@@ -679,7 +691,7 @@ def semantic_offers[RenderTargetT, ContextT](
 
     if isinstance(value, primitive.Lines):
         overflow = Spill() if spill else Truncate(keep) if keep is not None else value.overflow
-        if not native_controls or not isinstance(overflow, Never | Truncate | Spill | Drop | Condense):
+        if not native_controls or not isinstance(overflow, Never | Truncate | Spill | Drop | Condense | Paginate):
             return ()
         items = tuple(
             ReferencedText(ref, resolve_text(item.content, context.localization).nodes)
@@ -687,7 +699,6 @@ def semantic_offers[RenderTargetT, ContextT](
             for item in (occurrence.graph.units[ref].value,)
             if isinstance(item, sem.ListItem)
         )
-        sequence = TextSequenceRealization(items, separator=value.join)
         line_separator = value.join
 
         def line_payload(lines: tuple[ReferencedText, ...]) -> TextRealization:
@@ -703,22 +714,67 @@ def semantic_offers[RenderTargetT, ContextT](
             )
 
         payload = line_payload(items)
-        full = RealizationOffer(
-            occurrence,
-            "lines",
-            payload,
-            fragments=FragmentContract(
-                tuple(frozenset({item.reference}) for item in items),
-                tuple(range(1, len(items) + 1)),
-                sequence.fragment,
+        line_priority = value.priority
+        pagination = overflow if isinstance(overflow, Paginate) else None
+        if pagination is not None and pagination.key is None:
+            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "unkeyed primitive pagination")
+
+        def line_offer(
+            lines: tuple[ReferencedText, ...],
+            key: str,
+            preference: int = 0,
+            effects: tuple[FidelityEffect, ...] = (),
+        ) -> RealizationOffer[RenderTargetT, ContextT, Realization]:
+            fragments_items: list[ReferencedText] = []
+            required: list[int] = []
+            for index, item in enumerate(lines):
+                length = sum(len(tree.plain(node)) for node in item.nodes)
+                if pagination is not None and text_capacity is not None and length > text_capacity // 2:
+                    size = max(1, min(256, text_capacity // 8))
+                    context.work.consume(1 + length // size)
+                    fragments_items.extend(
+                        replace(item, nodes=_slice(item.nodes, start, start + size), continuation=start > 0)
+                        for start in range(0, length, size)
+                    )
+                else:
+                    fragments_items.append(item)
+                if pagination is not None and pagination.per and (index + 1) % pagination.per == 0:
+                    required.append(len(fragments_items))
+            sequence = TextSequenceRealization(tuple(fragments_items), separator=line_separator)
+            contract = None
+            if pagination is not None:
+                assert pagination.key is not None
+                contract = RegionContract(
+                    pagination.key,
+                    RegionNavigation(occurrence, disabled_controls, pagination.footer, pagination.page, pagination.key),
+                    min_fill=pagination.min_fill,
+                    widows=pagination.widows,
+                    owner=pagination.page,
+                    cursor_key=pagination.key,
+                    required_ends=tuple(required),
+                )
+            return RealizationOffer(
+                occurrence,
+                key,
+                sequence if pagination is not None else line_payload(lines),
+                fragments=FragmentContract(
+                    tuple(frozenset({item.reference}) for item in fragments_items),
+                    tuple(range(1, len(fragments_items) + 1)),
+                    sequence.fragment,
+                    continuations=pagination is not None,
+                )
+                if fragments_items
+                else None,
+                region=contract,
+                preference_priority=line_priority,
+                preference=preference,
+                effects=effects,
             )
-            if items
-            else None,
-            preference_priority=value.priority,
-        )
+
+        full = line_offer(items, "lines")
         line_offers = [full]
         levels = [0] * len(items)
-        if isinstance(overflow, Spill | Condense):
+        if isinstance(overflow, Spill | Condense | Paginate):
             while eligible := [
                 index
                 for index, line in enumerate(value.lines)
@@ -733,24 +789,16 @@ def semantic_offers[RenderTargetT, ContextT](
                 nodes = resolve_text(line.fallbacks[levels[largest]], context.localization).nodes
                 levels[largest] += 1
                 items = (*items[:largest], replace(items[largest], nodes=nodes), *items[largest + 1 :])
-                sequence = replace(sequence, items=items)
                 replacement_effects = occurrence.scope_effects(
                     tuple(Replacement(item.reference) for index, item in enumerate(items) if levels[index])
                 )
                 line_offers.append(
-                    replace(
-                        full,
-                        key=f"lines-alternate-{len(line_offers)}",
-                        payload=line_payload(items),
-                        effects=replacement_effects,
-                        preference=len(line_offers),
-                        fragments=replace(full.fragments, payload=sequence.fragment)
-                        if full.fragments is not None
-                        else None,
-                    )
+                    line_offer(items, f"lines-alternate-{len(line_offers)}", len(line_offers), replacement_effects)
                 )
             full = line_offers[-1]
             payload = line_payload(items)
+        if isinstance(overflow, Paginate):
+            return tuple(line_offers)
         if isinstance(overflow, Truncate | Condense):
             discovered = text_offers(
                 full, payload, overflow.keep if isinstance(overflow, Truncate) else "head", value.priority

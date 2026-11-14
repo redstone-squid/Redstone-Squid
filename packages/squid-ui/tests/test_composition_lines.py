@@ -8,11 +8,13 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.chrome import Chrome
-from squid_ui.planning import CompositionOptions, plan
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import classic_target, components_v2_target
-from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.limits import ClassicLimits, V2Limits
+from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Alt, Condense, Drop, Never, Paginate, Truncate
@@ -82,15 +84,45 @@ def test_region_pagination_precedes_static_spill_and_preserves_entry_order() -> 
     assert tuple(reconstructed) == entries
 
 
-def test_paginated_line_alternates_still_identify_the_missing_contract() -> None:
-    with pytest.raises(JointUnsupportedError) as error:
-        plan(
-            sl.region(
-                native.Lines((Alt("Long entry", ("Short",)),), overflow=Paginate(key="lines")), key="r", title="R"
-            ),
-            target=TARGETS[0],
-        )
-    assert "line degradation alternatives" in str(error.value.diagnostics)
+@pytest.mark.parametrize(
+    "target", [components_v2_target(ADAPTER), classic_target(ADAPTER)], ids=lambda target: target.id
+)
+def test_paginated_line_alternates_keep_primary_content_when_pages_fit(target: Target[Any, Any, Any, Any]) -> None:
+    node = native.Lines(
+        (Alt("Long entry", ("Short",)), "Second entry"), overflow=Paginate(key="lines", per=1), keys=("one", "two")
+    )
+    result = plan(node, target=target, strict=True)
+    assert result.allocation is not None
+    identity = next(iter(result.allocation.regions))
+    assert identity == OccurrenceId(("root", "lines"))
+    for index, content in enumerate(("Long entry", "Second entry")):
+        page = result.for_page({identity: index})
+        assert content in scene.Codec.dumps(page.scene)
+        assert not page.report.events
+
+
+def test_paginated_line_ladder_reports_original_identity() -> None:
+    # One component leaves no room for pager controls, so only the short rung fits.
+    node = native.Lines((Alt("abcdef", ("short",)),), overflow=Paginate(key="lines"), keys=("entry",))
+    result = plan(
+        node,
+        target=components_v2_target(ADAPTER, limits=V2Limits(total_text=5, total_components=1)),
+    )
+    assert result.allocation is not None
+    assert "short" in scene.Codec.dumps(result.scene)
+    assert [(event.message, event.path.split("/")[-1]) for event in result.report.events] == [("Replacement", "entry")]
+
+
+def test_equivalent_alternative_cannot_remove_a_native_line_pager() -> None:
+    source = native.Lines(("one", "two"), overflow=Paginate(key="lines", per=1), keys=("one", "two"))
+    choice = sl.alternative(
+        replace(source, overflow=Never()),
+        key="changed",
+        fidelity=sl.equivalent(),
+        correspondence=(sl.corresponds("one", "one"), sl.corresponds("two", "two")),
+    )
+    with pytest.raises(LayoutInvariantError, match="boundary"):
+        check_alternative(sl.alternatives(choice, content=source, key="choice"), choice)
 
 
 def test_shortened_lines_in_checked_presentations_report_original_sources() -> None:

@@ -29,7 +29,7 @@ from squid_ui.presentations import (
     TextPresentation,
 )
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import Alt
+from squid_ui.primitives.constraints import Alt, Paginate
 from squid_ui.target_types import Renderable
 from squid_ui.text import TextLike
 
@@ -179,6 +179,8 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | primitive.EntitySelect()
         ):
             return value.key
+        case primitive.Lines(overflow=Paginate(key=key)):
+            return key
         case _:
             return None
 
@@ -607,7 +609,9 @@ class SourceScope[RenderTargetT, ContextT]:
     def page_boundary(self, presentation: SemanticRef) -> SemanticRef:
         """Locate a preserved pager in the authored graph, across nested alternatives."""
         value = self.checked.presentation.units[presentation].value
-        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | TextPages):
+        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | TextPages) and not (
+            isinstance(value, primitive.Lines) and isinstance(value.overflow, Paginate)
+        ):
             message = "page boundary resolution needs a pagination scope"
             raise LayoutInvariantError(message)
         covered = frozenset(
@@ -619,9 +623,8 @@ class SourceScope[RenderTargetT, ContextT]:
         matches = [
             reference
             for reference, unit in self.checked.source.units.items()
-            if isinstance(unit.value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | TextPages)
-            and type(unit.value) is type(value)
-            and unit.value.key == value.key
+            if type(unit.value) is type(value)
+            and _key(unit.value) == _key(value)
             and covered <= self.checked.source.atoms(reference)
         ]
         if len(matches) != 1:
@@ -670,7 +673,7 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | primitive.Section
             | primitive.Panel
             | TextPages,
-        ):
+        ) and not (isinstance(constraint, primitive.Lines) and isinstance(constraint.overflow, Paginate)):
             continue
         inside = checked.source.atoms(reference)
         targets = frozenset(target for target, covered in checked.coverage.items() if covered & inside)
@@ -723,6 +726,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.page,
                         other.page_size,
                     )
+                case primitive.Lines(), primitive.Lines():
+                    preserved = constraint.overflow == other.overflow
                 case TextPages(), TextPages():
                     preserved = (
                         constraint.key,
