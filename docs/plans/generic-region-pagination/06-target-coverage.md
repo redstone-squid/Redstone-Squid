@@ -117,7 +117,10 @@ active machinery, not dead code.
 Explicit prose truncation and native `Truncate` text now offer shared shortening
 effects. Head/tail retention and importance survive migration, while strict mode
 requires lossless output. Styling remains balanced and controls are never shortened.
-Rich inline links and entities still report a concrete shortening limitation.
+Shortened links retain their destinations; entity leaves are retained or removed
+whole. Checked text fragments report their actual retained range when a requested
+cut falls inside an entity. Block-markup shortening still reports its unsupported
+structure; use the corresponding semantic code or grouping node.
 
 Native Discord text `Alts` and `Drop` policies also compose inside shared layouts.
 Fallback rungs report replacement, shortening the final rung adds its own effect,
@@ -298,8 +301,8 @@ search across the five document targets. Shortening preserves the requested end,
 balanced styling and authored importance; it reports source-specific effects.
 Lossless page families remain preferable, strict mode rejects shortening, and
 zero-character grants remove prose without leaving formatting behind. Control
-labels and behavior remain unchanged. Rich inline shortening still identifies
-the unsupported feature rather than flattening it.
+labels and behavior remain unchanged. Rich inline shortening now preserves links and atomic entities. Unsupported block
+markup still identifies the missing transformation rather than being flattened.
 
 Both UI suites pass (3,226 tests with `--no-cov`), with three additional zero-grant
 regressions passing afterward. Whole-project Pyrefly reports zero errors.

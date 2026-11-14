@@ -1,6 +1,7 @@
 """Combined presentations retain source ranges and explicit loss declarations."""
 
 from dataclasses import replace
+from typing import Literal
 
 import pytest
 
@@ -8,7 +9,7 @@ import squid_ui as sl
 from squid_i18n import tree
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.semantics import check_alternative
-from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, resolve_presentation_text
+from squid_ui.planning.text_presentations import ResolvedText, resolve_presentation_text
 from squid_ui.presentations import alternative, alternatives, equivalent, losses, present_text, ref, shorten
 from squid_ui.text import NEUTRAL, Localization
 
@@ -77,7 +78,7 @@ def test_zero_length_shortening_has_an_empty_source_range() -> None:
     assert result.fragments[0].removed_chars == 3
 
 
-def test_full_fragments_keep_links_and_shortening_reports_unsupported_behavior() -> None:
+def test_full_and_shortened_fragments_keep_link_destinations() -> None:
     content = sl.paragraph(sl.text_link("Documentation", "https://example.com"), key="docs")
     full = alternative(present_text(ref("docs"), key="text"), key="full", fidelity=equivalent())
     operation = shorten("docs", max_chars=3)
@@ -88,8 +89,11 @@ def test_full_fragments_keep_links_and_shortening_reports_unsupported_behavior()
     assert isinstance(result, ResolvedText)
     assert result.nodes[0].kind == "link"
     assert dict(result.nodes[0].attrs)["href"] == "https://example.com"
-    rejected = resolve_presentation_text(check_alternative(group, compact), ref("text"), localization=NEUTRAL)
-    assert rejected == UnsupportedText(ref("docs"), "link")
+    shortened = resolve_presentation_text(check_alternative(group, compact), ref("text"), localization=NEUTRAL)
+    assert isinstance(shortened, ResolvedText)
+    assert tree.plain(shortened.nodes[0]) == "Doc"
+    assert shortened.nodes[0].kind == "link"
+    assert dict(shortened.nodes[0].attrs)["href"] == "https://example.com"
 
 
 def test_field_fragments_must_preserve_labels_as_well_as_values() -> None:
@@ -103,3 +107,18 @@ def test_field_fragments_must_preserve_labels_as_well_as_values() -> None:
     result = resolve_presentation_text(checked, ref("text"), localization=NEUTRAL)
     assert isinstance(result, ResolvedText)
     assert "".join(tree.plain(node) for node in result.nodes) == "Width: 3 blocks"
+
+
+@pytest.mark.parametrize("keep", ["head", "tail"])
+def test_checked_shortening_does_not_claim_a_partial_entity_range(keep: Literal["head", "tail"]) -> None:
+    operation = shorten("mention", max_chars=3, keep=keep)
+    choice = alternative(present_text(operation, key="text"), key="short", fidelity=losses(operation))
+    checked = check_alternative(
+        alternatives(choice, content=sl.paragraph(sl.mention(123456789), key="mention"), key="choice"), choice
+    )
+    result = resolve_presentation_text(checked, ref("text"), localization=NEUTRAL)
+    assert isinstance(result, ResolvedText)
+    assert result.nodes == ()
+    fragment = result.fragments[0]
+    assert fragment.source_start == fragment.source_end
+    assert fragment.removed_chars == fragment.source_length

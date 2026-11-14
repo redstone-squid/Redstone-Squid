@@ -144,11 +144,11 @@ def test_alternative_order_does_not_change_selected_source_identity() -> None:
         assert candidate.children[0].offer.occurrence.sources == {ref("group", "body")}
 
 
-def test_unsupported_rich_shortening_rejects_a_candidate_without_flattening() -> None:
+def test_unsupported_block_shortening_rejects_a_candidate_without_flattening() -> None:
     operation = shorten("body", max_chars=1)
     group = alternatives(
         alternative(present_text(operation, key="summary"), key="short", fidelity=losses(operation)),
-        content=sl.paragraph(sl.text_link("Docs", "https://example.com"), key="body"),
+        content=sl.paragraph(sl.md("```py\nprint(1)\n```"), key="body"),
         key="group",
     )
     context = PlanningContext(WorkBudget(100))

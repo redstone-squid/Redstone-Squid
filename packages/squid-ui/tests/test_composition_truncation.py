@@ -132,10 +132,10 @@ def test_heading_importance_precedes_body_and_note() -> None:
     assert "AAAAAA" in wire and "BBBBBB" not in wire
 
 
-def test_unsupported_rich_shortening_reports_its_capability() -> None:
+def test_unsupported_block_shortening_reports_its_capability() -> None:
     with pytest.raises(JointUnsupportedError) as error:
-        plan(sl.truncate(sl.paragraph(sl.text_link("Long label", "https://example.com"))), target=TARGETS[0])
-    assert "shortening inline link" in str(error.value.diagnostics.violations)
+        plan(sl.truncate(sl.paragraph(sl.md("```py\nprint(123456789)\n```"))), target=TARGETS[0])
+    assert "shortening inline fence" in str(error.value.diagnostics.violations)
 
 
 @pytest.mark.parametrize("node", [sl.paragraph("Remove"), sl.heading("Remove"), sl.note("Remove"), sl.code("Remove")])
@@ -143,3 +143,38 @@ def test_zero_text_grant_can_remove_all_prose_with_an_explicit_effect(node: sl.R
     result = plan(sl.truncate(node), target=components_v2_target(DISCORD, limits=V2Limits(total_text=0)))
     assert not result.scene.body.children
     assert any(event.message == "Shortening" for event in result.report.events)
+
+
+@pytest.mark.parametrize("keep, expected", [("head", "A…"), ("tail", "…B")])
+def test_shortening_never_changes_a_mention_identifier(keep: Literal["head", "tail"], expected: str) -> None:
+    content = sl.mention(123456789)
+    result = plan(sl.truncate(sl.paragraph(t"A{content}B"), keep=keep), target=TARGETS[0])
+    assert result.scene.body.children == (scene.Text(expected, sl.text.Markup.DISCORD_MARKDOWN),)
+    assert [event.message for event in result.report.events] == ["Shortening"]
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        components_v2_target(DISCORD, limits=V2Limits(total_text=22)),
+        classic_target(DISCORD, limits=ClassicLimits(content=22)),
+        sl.html.target(),
+        *(
+            replace(
+                target, limits=replace(target.limits, components=replace(target.limits.components, section_text=22))
+            )
+            for target in SLACK_TARGETS
+        ),
+    ],
+    ids=lambda target: target.id,
+)
+def test_shortened_links_retain_destinations_on_every_target(target: Target[Any, Any, Any, Any]) -> None:
+    label = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    content = sl.truncate(sl.paragraph(sl.text_link(label, "https://x.co")))
+    if target.id == "html.semantic":
+        content = budget(content, limits={Axis.DISPLAY_TEXT: 6})
+    result = plan(content, target=target)
+    wire = scene.Codec.dumps(result.scene)
+    assert "https://x.co" in wire
+    assert label not in wire
+    assert [event.message for event in result.report.events] == ["Shortening"]

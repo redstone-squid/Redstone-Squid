@@ -48,7 +48,7 @@ _SHORTENABLE = frozenset({"text", "sequence", "inline", "strong", "em", "s", "co
 
 def _unsupported(nodes: tuple[tree.Node, ...]) -> str | None:
     for node in nodes:
-        if node.kind not in _SHORTENABLE:
+        if node.kind not in _SHORTENABLE | {"link", "mention", "emoji", "timestamp", "discord_markup"}:
             return node.kind
         if found := _unsupported(node.children):
             return found
@@ -130,9 +130,8 @@ def resolve_presentation_text[RenderTargetT, ContextT](
     """Resolve one checked presentation's fragments against its shared content.
 
     Shortening counts localized Unicode code points, excluding formatting syntax.
-    Full references retain links and other structured text. Shortening that would
-    require understanding rich inline behavior returns an unsupported candidate;
-    it never flattens that behavior to plain text or declares the layout impossible.
+    Shortening preserves link destinations and stops at entity boundaries. Unsupported
+    block structures return an unsupported candidate instead of being flattened.
     """
     presentation = checked.presentation.resolve(presentation)
     value = checked.presentation.units[presentation].value
@@ -152,7 +151,11 @@ def resolve_presentation_text[RenderTargetT, ContextT](
         if isinstance(part, Shortening) and length > part.max_chars:
             if feature := _unsupported(nodes):
                 return UnsupportedText(checked.source.resolve(part.source), feature)
-            start, end = (0, part.max_chars) if part.keep == "head" else (length - part.max_chars, length)
+            ends = (0, *text_ends(nodes))
+            if part.keep == "head":
+                end = max(end for end in ends if end <= part.max_chars)
+            else:
+                start = min(end for end in ends if end >= length - part.max_chars)
             nodes = _slice(nodes, start, end)
         fragments.append(ResolvedFragment(reference, nodes, start, end, length))
     return ResolvedText(presentation, tuple(fragments))

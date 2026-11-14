@@ -15,8 +15,8 @@ unit in their parent's allocation.
 A keyed document with navigation becomes a root region. Phase 6 extends this to documents
 with local pagers, which retain their public keys and independent coordinates. Components V2
 also translates character-based `Paged` and keyed
-primitive `Paginate` on text, code, lines, headings, and footers. Primitive text/code content
-must be a string; lines may contain rich text. List numbering, authored `per` boundaries,
+primitive `Paginate` on text, code, lines, headings, and footers. These now preserve
+rich inline content through native fragment contracts. List numbering, authored `per` boundaries,
 `min_fill`, `widows`, persistent chrome, grouping, and hard budgets participate in allocation.
 Long text may have continuation fragments carrying the same source identity.
 

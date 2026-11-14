@@ -676,6 +676,11 @@ def semantic_offers[RenderTargetT, ContextT](
         )
         upper = min(length - 1, max(0, cap - 1))
         context.work.consume(length + max(0, upper + 1))
+        cuts = (0, *text_ends(payload.nodes))
+        retained_lengths = sorted(
+            {retained for end in cuts if (retained := end if permission == "head" else length - end) <= upper},
+            reverse=True,
+        )
         return (
             replace(full, preference_priority=priority),
             *(
@@ -688,7 +693,7 @@ def semantic_offers[RenderTargetT, ContextT](
                     fragments=None,
                     preference_priority=priority,
                 )
-                for retained in range(upper, -1, -1)
+                for retained in retained_lengths
                 for operation in (Shortening(occurrence.reference, retained, permission),)
             ),
             replace(
