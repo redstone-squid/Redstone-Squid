@@ -732,7 +732,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             expression if scope is SearchScope.RECORDS else query,
             scope=scope,
             sort=SearchSort.parse(sort or None),
-            page_size=4 if self._guided is not None else 8,
+            page_size=8,
             visible_statuses=frozenset(status.name.lower() for status in self._statuses),
         )
         page = await self._search_service.search(request)

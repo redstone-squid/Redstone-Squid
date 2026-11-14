@@ -663,7 +663,7 @@ async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> N
         assert not interaction.sends
         editor = screen._guided
         assert editor is not None
-        assert service.search.call_args.args[0].page_size == 4
+        assert service.search.call_args.args[0].page_size == 8
         for query in ("width:3 AND height:5", "width:7"):
             form = await ui.press_for_form(ui.key_for("advanced"))
             await form.submit({"query": query})
@@ -700,6 +700,13 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
             (RegisteredSource("search_fields", RecordingProvider((Candidate.create("width", "Width"),))),)
         )
     )
+    cast(AsyncMock, screen._search_service).search.return_value = SearchPage(
+        hits=tuple(BuildSearchHit(str(index), f"Door {index}", "confirmed", "A door") for index in range(8)),
+        total=8,
+        next=None,
+        prev=None,
+    )
+    screen._query = "width:3 AND height:5"
     async with stage(screen, owner=object()) as ui:
         monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
         monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
