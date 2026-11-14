@@ -78,6 +78,7 @@ from squid.tags.models import TagDefinition
 from squid.versions.application import VersionService
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
+from tests.support.expansion import expansion_document
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
 
 
@@ -1214,7 +1215,7 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
             ),
         ),
         details=(
-            DoorSubmissionDetails(SubmissionDimensions(3, 3, None), None)
+            DoorSubmissionDetails(SubmissionDimensions(None, 3, None), None, expansion=expansion_document())
             if category is SubmissionCategory.DOOR
             else ExtenderSubmissionDetails(
                 ExtenderOrientation.VERTICAL_UP, 2, timing=ExtenderTiming(extension=0, retraction=5)
@@ -1238,10 +1239,14 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
         assert isinstance(loaded, ExtenderBuild)
         assert loaded.orientation == "Upward"
         assert (loaded.extension_length, loaded.extension_time, loaded.retraction_time) == (2, 0, 5)
+    else:
+        assert isinstance(loaded, DoorBuild)
+        assert loaded.expansion == expansion_document()
+        assert loaded.door_width is None
     async with migrated_session_factory() as session:
         record = await session.scalar(
             select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == payload.source_draft_id)
         )
         assert record is not None
         assert record.payload is not None
-        assert record.payload["payload_schema"] == 6
+        assert record.payload["payload_schema"] == 7

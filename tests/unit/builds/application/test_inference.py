@@ -1,6 +1,7 @@
 """Build inference application tests."""
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -577,6 +578,25 @@ async def test_measurement_qualifications_and_variant_ranges_remain_source_excer
 
 async def test_expandable_source_facts_survive_inference_without_sample_dimensions() -> None:
     document = expansion_document()
+    text = "\n".join(
+        ["A redstone door", document.raw_description or ""]
+        + [
+            value
+            for branch in document.branches
+            for value in (
+                branch.opening_width,
+                branch.opening_height,
+                branch.opening_depth,
+                branch.volume,
+                branch.domain,
+                branch.claimed_record_domain,
+            )
+            if value is not None
+        ]
+        + [timing.expression for branch in document.branches for timing in branch.timings]
+    )
+    inputs = source()
+    inputs = replace(inputs, primary=(replace(inputs.primary[0], content=text),))
     generator = FakeTextGenerator(
         InferenceResult(
             builds=[
@@ -590,8 +610,14 @@ async def test_expandable_source_facts_survive_inference_without_sample_dimensio
         )
     )
     service = BuildInferenceService(generator, FakeTaxonomy(), FakeVersions(), "system prompt")
-    builds = await service.infer(source(), model="test-model")
-    assert builds[0].door_expansion == document
+    builds = await service.infer(inputs, model="test-model")
+    actual = builds[0].door_expansion
+    assert actual is not None
+    assert actual.parameters == document.parameters
+    assert actual.raw_description == document.raw_description
+    assert [branch.model_dump(exclude={"evidence"}) for branch in actual.branches] == [
+        branch.model_dump(exclude={"evidence"}) for branch in document.branches
+    ]
     assert builds[0].door_dimensions == (None, None, None)
 
 
@@ -864,3 +890,24 @@ async def test_equal_pair_values_are_not_both_covered_by_one_assigned_measuremen
     assert build.normal_opening_time == 5
     assert build.normal_closing_time is None
     assert build.description == "0.25/0.25s"
+
+
+async def test_incomplete_expansion_bounds_do_not_discard_a_message_group() -> None:
+    value = inferred(
+        door_expansion={
+            "parameters": [{"name": "x", "maximum_kind": "finite", "maximum": None}],
+            "branches": [{"volume": "40+20x blocks", "domain": "x=1-14 wide"}],
+        }
+    )
+    message = ContextMessage(10, "Builder", 20, "40+20x blocks, x=1-14 wide", "", "primary")
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value, inferred()])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+    builds = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert len(builds) == 2
+    assert builds[0].door_expansion is not None
+    assert builds[0].door_expansion.parameters[0].maximum_kind == "unknown"
+    assert builds[0].door_expansion.branches[0].domain == "x=1-14 wide"

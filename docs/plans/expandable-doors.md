@@ -67,10 +67,15 @@ schema; SQLAlchemy converts immutable typed values to JSON and back.
 Inference carries the document through `BuildDraftPayload`. Materializing an
 inference candidate retains it beside submission form answers, so old pinned
 form manifests cannot discard it. Preparation includes it in door details;
-finalization payload version 6 preserves it for the worker. Build history captures
+finalization payload version 6 preserves it for the worker. Version 7 also retains
+categorized restriction proposals alongside the document. Build history captures
 the document on creation and edits. Existing documents and finalization payloads
 remain readable. The build API exposes `door.expansion` for reads and patches;
 omitting it preserves the value, and null clears it. Dedicated UI is deferred.
+
+Malformed inferred bounds remain unknown instead of rejecting other builds.
+Evidence and raw descriptions are checked against the candidate's primary
+messages; generated summaries are replaced with source excerpts.
 
 For example, a partial source claim can be ingested as:
 

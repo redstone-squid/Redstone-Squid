@@ -8,6 +8,9 @@ alternative constructions or phases; their overlap is not resolved at ingestion.
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
+
+_INVALID_VALUE = "value_error"
 
 SourceText = Annotated[str, Field(min_length=1, max_length=10_000)]
 PositiveInteger = Annotated[int, Field(strict=True, ge=1)]
@@ -44,10 +47,10 @@ class ExpansionParameter(ExpansionFact):
     def validate_bounds(self) -> Self:
         if (self.maximum_kind == "finite") != (self.maximum is not None):
             msg = "A finite maximum requires a value; unknown and unbounded maxima must omit it."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
             msg = "The minimum cannot exceed the maximum."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
 
@@ -95,5 +98,5 @@ class DoorExpansion(ExpansionFact):
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             msg = "Expansion parameter names must be unique."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
