@@ -26,7 +26,6 @@ def editor(query: str = "") -> GuidedSearch:
         query=query,
         sort="",
         on_apply=AsyncMock(),
-        on_cancel=AsyncMock(),
     )
 
 
@@ -68,8 +67,8 @@ async def test_edit_boolean_group_preserves_other_clauses() -> None:
     screen = editor("(width:3 OR width:4) AND height:5")
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form(ui.key_for("edit-0"))
-        await form.submit({"query": "width:6 OR width:7"})
-        assert screen.query == "(width:6 OR width:7) AND height:5"
+        await form.submit({"value": "6", "operator": "0"})
+        assert screen.query == "(width:6 OR width:4) AND height:5"
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": ""})
         assert screen.query == ""
@@ -83,9 +82,6 @@ async def test_long_queries_paginate_removable_clauses() -> None:
             await ui.press(ui.key_for("next-clauses"))
         await ui.press(ui.key_for("remove-7"))
         assert len(screen.clauses) == 7
-        await ui.press(ui.key_for("reset"))
-        assert screen.query == ""
-        assert screen.clause_page == 0
 
 
 async def test_field_and_sort_pickers_stay_in_the_message(monkeypatch: pytest.MonkeyPatch) -> None:

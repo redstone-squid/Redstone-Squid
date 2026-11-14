@@ -101,7 +101,7 @@ async def submit_search(ui: StagedUI[BuildBrowseScreen], query: str, sort: str =
     await form.submit({"query": query})
     assert ui.component._guided.query == SearchQueryParser().parse(query).normalized
     assert ui.component._guided is not None
-    await ui.press(ui.key_for("cancel"))
+    await ui.press(ui.key_for("guided-search"))
 
 
 async def test_back_to_builds_replaces_the_detail_with_the_catalogue() -> None:
@@ -185,10 +185,12 @@ async def test_schematic_controls_survive_opening_and_cancelling_review() -> Non
 
 async def test_open_id_through_the_discord_modal() -> None:
     async with stage(_screen(initial_id=None), owner=object()) as ui:
+        await ui.press(ui.key_for("guided-search"))
         form = await ui.press_for_form(ui.key_for("open-id"))
         await form.submit({"id": "7"})
         assert "Build #7" in ui.texts()
         ui.control(ui.key_for("linked-build.item-next"))
+        await ui.press(ui.key_for("guided-search"))
         ui.control(ui.key_for("open-id"))
 
 
@@ -252,7 +254,7 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
     )
     async with stage(_screen(initial_id=None, records=records, initial_records=True), owner=object()) as ui:
         ui.assert_within_limits()
-        assert "## Find a record" in ui.texts()
+        assert "## Records" in ui.texts()
         await ui.press(ui.key_for("all-standings"))
         await ui.select(ui.key_for("records.open"), ["10"])
         await ui.press(ui.key_for("holder-7"))
@@ -270,6 +272,7 @@ async def test_missing_id_keeps_the_current_build() -> None:
     screen = _screen()
     async with stage(screen, owner=object()) as ui:
         cast(AsyncMock, screen._queries).get.return_value = None
+        await ui.press(ui.key_for("guided-search"))
         form = await ui.press_for_form(ui.key_for("open-id"))
         await form.submit({"id": "999"})
         assert "Build #7" in ui.texts()
@@ -349,7 +352,7 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
         await ui.press(ui.key_for("search-help"))
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
-            assert not any("Submission ID: 7" in text for text in ui.texts())
+            assert any("Submission ID: 7" in text for text in ui.texts())
             ui.assert_within_limits()
         await ui.press(ui.key_for("search-help"))
         assert any("Submission ID: 7" in text for text in ui.texts())
@@ -449,12 +452,12 @@ async def test_search_help_preserves_results_without_refetching(records: bool) -
         service.search.assert_not_awaited()
         await submit_search(ui, "door", "")
         assert "## Search help" in ui.texts()
-        assert "## Search results" not in ui.texts()
+        assert "## Search results" in ui.texts()
         ui.assert_within_limits()
         await ui.press(ui.key_for("search-help"))
         assert "## Search results" in ui.texts()
         assert "## Search help" not in ui.texts()
-        assert service.search.await_count == 2
+        assert service.search.await_count == 1
         ui.assert_within_limits()
 
 
@@ -564,11 +567,11 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
         )
 
 
-async def test_search_help_hides_and_restores_selected_build() -> None:
+async def test_search_help_appends_to_selected_build() -> None:
     screen = _screen()
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("search-help"))
-        assert "Build #7" not in ui.texts()
+        assert "Build #7" in ui.texts()
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             ui.assert_within_limits()
@@ -610,7 +613,7 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
             ui.assert_within_limits()
         await ui.press(ui.key_for("search-help"))
         assert "## Search results" in ui.texts()
-        assert service.search.await_count == 2
+        assert service.search.await_count == 1
 
 
 async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
@@ -663,13 +666,14 @@ async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> N
         assert not interaction.sends
         editor = screen._guided
         assert editor is not None
-        assert service.search.call_args.args[0].page_size == 8
+        service.search.assert_not_awaited()
         for query in ("width:3 AND height:5", "width:7"):
             form = await ui.press_for_form(ui.key_for("advanced"))
             await form.submit({"query": query})
             assert screen._guided is editor
             assert screen._query == query
             assert service.search.call_args.args[0].query == query
+            assert service.search.call_args.args[0].page_size == 8
             assert not ui.root.finished
             assert "## Search results" in ui.texts()
         await ui.press(ui.key_for("remove-0"))
@@ -711,13 +715,15 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
         monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
         await ui.press(ui.key_for("guided-search"))
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": screen._query})
         editor = screen._guided
         results = screen._results
         assert editor is not None
-        assert screen._find_nodes()[1] is editor
+        assert editor in screen._find_nodes()
         ui.control(ui.key_for("open-id"))
         ui.control(ui.key_for("guided-search"))
-        assert ui.texts().index("## Search and filters") < ui.texts().index("## Search results")
+        ui.control(ui.key_for("advanced"))
 
         await ui.press(ui.key_for("field"))
         with anyio.fail_after(2):

@@ -396,7 +396,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     _results: SearchScreen | None = sl.state(None, opaque=True)
     _record_categories: frozenset[str] = sl.state(frozenset())
     _show_search_help: bool = sl.state(False)
-    _show_standings: bool = sl.state(False)
     _query: str = sl.state("")
     _sort: str = sl.state("")
     _guided: GuidedSearch | None = sl.state(None, opaque=True)
@@ -470,38 +469,27 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        if self._guided is not None:
-            return (
-                self._workspace_controls(),
-                *self._find_nodes(),
-                *((self._results,) if self._results is not None else ()),
-            )
-        if self._show_search_help:
-            return (self._workspace_controls(), *self._find_nodes())
-        if self._selected is not None:
-            return (
-                self._workspace_controls(),
-                *self._find_nodes(),
-                sl.action_controls(
-                    sl.action_control(tr(t"build-browse-list = List view"), self._back, key="back"),
-                    key="selected-actions",
-                    display=sl.semantic.ControlDisplay.INDIVIDUAL,
-                ),
-                self._selected,
-            )
         if self._mode == "tools" and self._record_tools is not None:
             return (self._workspace_controls(), self._record_tools)
-        if self._results is not None:
-            return (self._workspace_controls(), *self._find_nodes(), sl.note(self._query), self._results)
-        if self._mode == "records" and not self._show_standings:
-            return (
-                self._workspace_controls(),
-                sl.heading(tr(t"record-browser-home = Find a record")),
-                sl.paragraph(tr(t"record-browser-guide = Choose a record type, or search by name and filters.")),
-                *self._find_nodes(),
+        nodes = [self._workspace_controls(), *self._find_nodes()]
+        if self._selected is not None:
+            nodes.extend(
+                (
+                    sl.action_controls(
+                        sl.action_control(tr(t"build-browse-list = List view"), self._back, key="back"),
+                        key="selected-actions",
+                        display=sl.semantic.ControlDisplay.INDIVIDUAL,
+                    ),
+                    self._selected,
+                )
             )
-        listing = self._records if self._mode == "records" and self._records is not None else self._browser
-        return (self._workspace_controls(), *self._find_nodes(), listing)
+        elif self._results is not None:
+            nodes.append(self._results)
+        else:
+            nodes.append(self._records if self._mode == "records" and self._records is not None else self._browser)
+        if self._show_search_help:
+            nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
+        return tuple(nodes)
 
     def _workspace_controls(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         return sl.action_controls(
@@ -538,7 +526,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._results = None
         self._query = ""
         self._sort = ""
-        self._show_standings = False
         self._record_categories = frozenset()
         self._guided = None
         self._mode = mode
@@ -552,26 +539,43 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     def _find_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.action_controls(
-                sl.form(
-                    tr(t"bot-submission-build-browse-open-by-id = Open by ID"),
-                    _OpenBuildForm().spec(),
-                    key="open-id",
-                    on_submit=self._open_id,
+                sl.action_control(
+                    tr(t"build-browser-search-filters = Search & filters"),
+                    self._guided_search,
+                    key="guided-search",
+                    tone=sl.Tone.SUCCESS if self._guided is not None else sl.Tone.NEUTRAL,
                 ),
                 sl.action_control(
-                    tr(t"build-browser-search-filters = Search & filters"), self._guided_search, key="guided-search"
-                ),
-                sl.action_control(
-                    tr(t"catalogue-hide-search-help = Hide search help")
-                    if self._show_search_help
-                    else tr(t"catalogue-search-help = Search help"),
+                    tr(t"catalogue-search-help = Search help"),
                     self._toggle_search_help,
                     key="search-help",
+                    tone=sl.Tone.SUCCESS if self._show_search_help else sl.Tone.NEUTRAL,
                 ),
                 key="find-forms",
             ),
         ]
+        query = self._query or ("All standings" if self._mode == "records" else "All builds")
+        sort = self._sort.removeprefix("-").replace("_", " ").title() if self._sort else "Default"
+        if self._sort:
+            sort += " ↓" if self._sort.startswith("-") else " ↑"
+        nodes.append(
+            sd.v2.section(
+                tr(t"browse-query-summary = Query: {query} · Sort: {sort}"),
+                accessory=sd.v2.button(tr(t"guided-search-reset = Reset"), self._reset_search, key="reset"),
+            )
+        )
         if self._guided is not None:
+            nodes.append(
+                sl.action_controls(
+                    sl.form(
+                        tr(t"bot-submission-build-browse-open-by-id = Open by ID"),
+                        _OpenBuildForm().spec(),
+                        key="open-id",
+                        on_submit=self._open_id,
+                    ),
+                    key="open-build-controls",
+                )
+            )
             nodes.append(self._guided)
         if self._mode == "records":
             nodes.extend(
@@ -596,6 +600,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                             tr(t"record-browser-all = All standings"),
                             self._all_standings,
                             key="all-standings",
+                            tone=sl.Tone.SUCCESS
+                            if not self._query and not self._sort and not self._record_categories
+                            else sl.Tone.NEUTRAL,
                         ),
                         key="record-categories",
                         display=sl.semantic.ControlDisplay.INDIVIDUAL,
@@ -608,8 +615,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                     ),
                 )
             )
-        if self._show_search_help:
-            nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
         return nodes
 
     async def _toggle_search_help(self, _event: sl.PressEvent) -> None:
@@ -681,18 +686,13 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         async def selected(selection: SearchSelection) -> None:
             await self._run_search(selection.query, selection.sort)
 
-        async def cancelled() -> None:
-            self._guided = None
-
         self._guided = GuidedSearch(
             self._search_service,
             scope="records" if self._mode == "records" else "builds",
             query=self._query,
             sort=self._sort,
             on_apply=selected,
-            on_cancel=cancelled,
         )
-        await self._run_search(self._query, self._sort)
 
     async def _toggle_record_category(self, category: str, event: sl.ToggleEvent) -> None:
         if event.value:
@@ -701,14 +701,17 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._record_categories = self._record_categories - {category}
         await self._run_search(self._query, self._sort)
 
-    async def _all_standings(self, _event: sl.PressEvent) -> None:
-        self._guided = None
+    async def _all_standings(self, event: sl.PressEvent) -> None:
+        await self._reset_search(event)
+
+    async def _reset_search(self, _event: sl.PressEvent) -> None:
         self._record_categories = frozenset()
         self._query = ""
         self._sort = ""
         self._results = None
         self._selected = None
-        self._show_standings = True
+        if self._guided is not None:
+            self._guided.clear()
 
     async def _run_search(self, query: str, sort: str) -> None:
         if self._search_service is None:

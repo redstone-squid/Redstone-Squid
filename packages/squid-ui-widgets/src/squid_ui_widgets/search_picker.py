@@ -66,6 +66,9 @@ class SearchPicker[ItemT](Component):
         on_pick: SearchPickHandler[ItemT],
         page_size: int = 10,
         copy: LoadingCopy = SEARCH_LOADING_COPY,
+        show_heading: bool = True,
+        search_label: TextLike | None = None,
+        show_query: bool = False,
     ) -> None:
         self.key = require_key(key, name="SearchPicker.key")
         if minimum < 0 or maximum < 1 or minimum > maximum:
@@ -92,6 +95,9 @@ class SearchPicker[ItemT](Component):
         self.on_pick = on_pick
         self.page_size = page_size
         self.copy = copy
+        self.show_heading = show_heading
+        self.search_label = search_label
+        self.show_query = show_query
 
     async def _searched(self, event: SubmitEvent) -> None:
         query = str(event.values["query"]).strip()
@@ -178,15 +184,18 @@ class SearchPicker[ItemT](Component):
     def render(self) -> DocumentLike:
         """Render query input, retained picks, and result status."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
-        search_form = FormSpec(chrome.search, (TextField(key="query", label=chrome.search),))
+        label = self.search_label or chrome.search
+        search_form = FormSpec(label, (TextField(key="query", label=label, default=self.query or ""),))
         search_control = form(
-            chrome.search,
+            label,
             search_form,
             key=f"{self.key}.search",
             on_submit=self._searched,
         )
+        header = heading(chrome.search) if self.show_heading else None
+        query = paragraph(self.query) if self.show_query and self.query else None
         if self.session is None:
-            return stack(heading(chrome.search), *self._picked_nodes(), search_control)
+            return stack(header, query, *self._picked_nodes(), search_control)
 
         current = self.session.snapshot
         operation = self.session.operation
@@ -197,7 +206,7 @@ class SearchPicker[ItemT](Component):
             body = self._failure() if failed else (note(self.copy.loading),)
         else:
             body = self._loaded_nodes(current, status_text=message, retry=failed)
-        return stack(heading(chrome.search), *self._picked_nodes(), search_control, *body)
+        return stack(header, query, *self._picked_nodes(), search_control, *body)
 
     def _failure(self) -> tuple[LayoutNode, ...]:
         """Render a failed search with no stale results."""
