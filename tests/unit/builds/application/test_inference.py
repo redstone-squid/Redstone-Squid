@@ -388,6 +388,7 @@ async def test_author_notes_reject_comparisons_inferred_from_an_outdated_post() 
         (999, "Added a reset button."),
         (10, "Fixed input dependency."),
         (10, "The author added a reset button."),
+        (10, "Added a &#x27;new&#x27; reset button."),
         (10, " \n "),
     ],
 )
@@ -420,6 +421,41 @@ async def test_author_notes_require_an_excerpt_from_this_builds_selected_sources
     (build,) = await service.infer(inputs, model="model")
 
     assert build.description is None
+
+
+@pytest.mark.parametrize(
+    ("content", "excerpt", "expected"),
+    [
+        ("it's easy to modify for 1.11+", "it&#x27;s easy to modify for 1.11+", "it's easy to modify for 1.11+"),
+        ("it's easy to modify for 1.11+", "it\u2019s easy to modify for 1.11+", "it's easy to modify for 1.11+"),
+        ("it\u2019s easy to modify for 1.11+", "it's easy to modify for 1.11+", "it\u2019s easy to modify for 1.11+"),
+        ("it's easy to modify for 1.11+", "it&#x2019;s easy to modify for 1.11+", "it's easy to modify for 1.11+"),
+        ("Requires A & B.", "Requires A &amp; B.", "Requires A & B."),
+        ("Keep 'A' & \"B\".", "Keep &#x2018;A&#x2019; &amp; &#x201c;B&#x201d;.", "Keep 'A' & \"B\"."),
+        ("Keep &#x27; literal.", "Keep &#x27; literal.", "Keep &#x27; literal."),
+        ("Keep &#x27; literal.", "Keep &amp;#x27; literal.", "Keep &#x27; literal."),
+        ("Keep &#x27; literal.", "Keep ' literal.", None),
+        ("Keep ' literal.", "Keep &amp;#x27; literal.", None),
+    ],
+)
+async def test_author_notes_recover_transport_escaping_without_rewriting_source(
+    content: str, excerpt: str, expected: str | None
+) -> None:
+    inputs = BuildInferenceInput.from_single_message(
+        author_name="Builder", content=content, message_id=10, author_id=20, channel_id=30, server_id=40
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(builds=[inferred(author_notes=[{"source_message_id": 10, "text": excerpt}])])
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "prompt",
+    )
+
+    (build,) = await service.infer(inputs, model="model")
+
+    assert build.description == expected
 
 
 async def test_author_notes_preserve_explicit_changes_and_requirements_without_rewriting_them() -> None:

@@ -5,7 +5,7 @@ import re
 from collections import Counter
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass, replace
-from html import escape
+from html import escape, unescape
 from typing import Literal, Protocol, cast
 from urllib.parse import urlsplit
 
@@ -39,6 +39,22 @@ _TIMING_PAIR = re.compile(
 _TIMING_CONTEXT = re.compile(
     r"\b(?:open(?:ing)?|clos(?:e|es|ing)|extension|retraction|seamless|reset|clockable|speed|instant)\b", re.IGNORECASE
 )
+_SOURCE_QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
+
+
+def _source_excerpt(text: str, source: str) -> str | None:
+    """Recover an original source span after transport escaping or quote-style changes."""
+    excerpt = " ".join(text.split())
+    for candidate in (excerpt, " ".join(unescape(text).split())):
+        if not candidate:
+            continue
+        if candidate in source:
+            return candidate
+        start = source.translate(_SOURCE_QUOTES).find(candidate.translate(_SOURCE_QUOTES))
+        if start >= 0:
+            # Quote folding preserves character positions; publish the source's original punctuation.
+            return source[start : start + len(candidate)]
+    return None
 
 
 def _inferred_ticks(value: str | None) -> int | None:
@@ -552,8 +568,8 @@ class BuildInferenceService:
             build.door_expansion = inferred.door_expansion.to_domain(sources)
         notes: list[str] = []
         for note in inferred.author_notes:
-            excerpt = " ".join(note.text.split())
-            if not excerpt or excerpt not in sources.get(note.source_message_id, ""):
+            excerpt = _source_excerpt(note.text, sources.get(note.source_message_id, ""))
+            if excerpt is None:
                 logger.warning("Discarded unsupported author note for message %s", note.source_message_id)
                 continue
             if excerpt not in notes:
