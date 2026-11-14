@@ -139,7 +139,7 @@ def test_missing_branches_and_unsupported_names_have_diagnostics() -> None:
     assert result.diagnostics[0].path == "parameters"
 
 
-@pytest.mark.parametrize(("field", "value"), [("domain", "odd n"), ("volume", "ceil(n/2)"), ("volume", None)])
+@pytest.mark.parametrize(("field", "value"), [("domain", "odd n"), ("volume", "sqrt(n)"), ("volume", None)])
 def test_unsupported_claim_does_not_disappear(field: str, value: str | None) -> None:
     source = family(**{field: value})
     result = evaluate_expansion(normalize_expansion(source), (6, 3, 1)).configurations[0]
@@ -227,3 +227,45 @@ def test_periodic_membership_matches_explicit_small_sequence(initial: list[int],
     for n in range(1, 80):
         result = evaluate_expansion(normalized, (n, 3, 1)).configurations[0]
         assert (result.status is PointStatus.SUPPORTED) == (n in supported)
+
+
+def test_rounded_volume_timings_and_domain_share_exact_semantics() -> None:
+    source = family(
+        volume="ceil(3n/2)+floor(n/3)",
+        domain="ceil(n/2) >= 3",
+        timings=(
+            ExpansionTiming(method="opening", expression="ceil(n/2)/20", unit="second"),
+            ExpansionTiming(method="opening_reset", expression="floor(-n/2)", unit="game_tick"),
+        ),
+    )
+    normalized = normalize_expansion(source)
+    result = evaluate_expansion(normalized, (5, 3, 1)).configurations[0]
+    assert result.status is PointStatus.SUPPORTED
+    assert result.volume == 9
+    assert result.timing_variants == ((3, None, None, None, -3, None),)
+    assert not result.diagnostics
+    assert evaluate_expansion(normalized, (4, 3, 1)).configurations[0].status is PointStatus.OUTSIDE_DOMAIN
+
+
+def test_rounded_opening_is_checked_after_other_axes_determine_parameters() -> None:
+    source = family(opening_width="ceil(n/2)", opening_height="n", volume="floor(n/2)+10")
+    normalized = normalize_expansion(source)
+    result = evaluate_expansion(normalized, (3, 5, 1)).configurations[0]
+    assert result.status is PointStatus.SUPPORTED
+    assert result.parameters == (("n", 5),)
+    assert result.volume == 12
+    assert evaluate_expansion(normalized, (2, 5, 1)).configurations[0].status is PointStatus.OUTSIDE_DOMAIN
+    ambiguous = normalize_expansion(family(opening_width="floor(n/2)"))
+    assert evaluate_expansion(ambiguous, (3, 3, 1)).configurations[0].status is PointStatus.UNRESOLVED
+
+
+def test_rounded_multidirectional_volume() -> None:
+    source = family(
+        tuple(parameter(name) for name in ("x", "y", "z")),
+        opening_width="x",
+        opening_height="y",
+        opening_depth="z",
+        volume="(ceil(x/2)+3)(floor(y/2)+3)(z+1)",
+    )
+    result = evaluate_expansion(normalize_expansion(source), (5, 7, 2)).configurations[0]
+    assert result.volume == 108

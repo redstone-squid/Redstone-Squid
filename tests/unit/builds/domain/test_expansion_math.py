@@ -26,7 +26,6 @@ def test_canonical_terms_and_exact_decimals() -> None:
         "__import__('os')",
         "n.__class__",
         "n[0]",
-        "ceil(n/2)",
         "1/0",
         "n/n",
         "n**100",
@@ -41,7 +40,7 @@ def test_canonical_terms_and_exact_decimals() -> None:
 )
 def test_reject_unsupported_or_unbounded_expressions(source: str) -> None:
     with pytest.raises(ExpressionError):
-        ExpressionParser(("n",)).polynomial(source)
+        ExpressionParser(("n",)).formula(source)
 
 
 def test_domain_comparisons_and_congruences() -> None:
@@ -52,3 +51,43 @@ def test_domain_comparisons_and_congruences() -> None:
 def test_unknown_identifier_is_not_split_into_parameters() -> None:
     with pytest.raises(ExpressionError):
         ExpressionParser(("x", "y")).polynomial("xy")
+
+
+@given(st.integers(-(10**40), 10**40), st.integers(1, 100))
+def test_rounding_is_exact_for_signed_large_rationals(n: int, denominator: int) -> None:
+    parser = ExpressionParser(("n",))
+    assert parser.formula(f"floor(n/{denominator})").evaluate((n,)) == n // denominator
+    assert parser.formula(f"ceil(n/{denominator})").evaluate((n,)) == -(-n // denominator)
+    assert parser.formula(f"ceiling(n/{denominator})").evaluate((n,)) == -(-n // denominator)
+
+
+def test_nested_rounding_and_implicit_products() -> None:
+    parser = ExpressionParser(("n",))
+    assert parser.formula("2ceil(floor(n/2)/3)+floor(-1.5)").evaluate((15,)) == 4
+    assert parser.formula("ceil(n/2)floor(n/2)").evaluate((5,)) == 6
+    assert parser.polynomial("floor(n+1)").evaluate((4,)) == 5
+    predicate = parser.predicate("floor(n/2) % 2 = 0 and ceil(n/3) <= 3")
+    assert [n for n in range(1, 11) if predicate.evaluate((n,))] == [1, 4, 5, 8, 9]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "round(n/2)",
+        "floor()",
+        "ceil(n,n)",
+        "floor(n, mode=1)",
+        "floor(n/0)",
+        "ceil(n)/floor(n/2)",
+        "ceil(n/2)**3*floor(n/3)",
+    ],
+)
+def test_rounding_does_not_allow_arbitrary_calls_or_unbounded_arithmetic(source: str) -> None:
+    with pytest.raises(ExpressionError):
+        ExpressionParser(("n",)).formula(source)
+
+
+@pytest.mark.parametrize("name", ["floor", "ceil", "ceiling"])
+def test_rounding_function_names_are_reserved(name: str) -> None:
+    with pytest.raises(ExpressionError):
+        ExpressionParser((name,))

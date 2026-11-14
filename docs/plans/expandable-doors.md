@@ -126,18 +126,27 @@ Normalization also retains branch diagnostics independently of point membership.
 
 Supported arithmetic consists of up to three declared ASCII parameters, exact
 integer/decimal constants, addition, subtraction, multiplication, division by a
-nonzero constant, and powers zero through three. Common implicit products such as
-`20n` and `(x+3)(y+3)` are accepted. An undeclared `xy` is not guessed to mean `x*y`.
-The canonical representation is a sparse rational polynomial. Limits are 512
-source characters, 128 tokens, 192 AST nodes, degree three at intermediate steps,
-64 terms, and 256-bit coefficients. Point dimensions are positive integers of at
-most 256 bits. Unsupported syntax remains in the source document.
+nonzero constant, powers zero through three, and `floor(...)`, `ceil(...)`, or `ceiling(...)`.
+Rounding uses exact rational values, including nested calls and negative inputs;
+for example, `floor(-3/2) = -2` and `ceil(-3/2) = -1`.
+Common implicit products such as `20n` and `(x+3)(y+3)` are accepted. An undeclared `xy` is not guessed to mean `x*y`.
+Polynomial parts use canonical sparse rational coefficients. Explicit rounding
+and arithmetic around it remain typed expression nodes; unit conversion scales
+the result without moving rounding inside it. These formulas also work in domain
+comparisons and modulo tests. Limits are 512 source characters, 128 tokens, 192 AST nodes, degree three at intermediate steps,
+64 terms per polynomial part, and 256-bit polynomial coefficients. Point dimensions
+are positive integers of at most 256 bits. Unsupported syntax remains in the source document.
 
-All three opening expressions must be known affine polynomials with a unique
-inverse for the declared parameters. Gaussian elimination recovers module counts
-without enumerating possible sizes; consistency checks handle coupled openings
-such as n×n and reject noninteger parameter values. Nonlinear or underdetermined
-opening mappings need future normalization support.
+All three opening expressions must be known, and enough independent affine
+opening equations must determine the declared parameters. Gaussian elimination
+recovers module counts without enumerating sizes; the remaining dimensions are
+then checked exactly, including rounded expressions. For example, width=ceil(n/2)
+and height=n can be evaluated; width=floor(n/2) with fixed height/depth cannot
+uniquely recover n this way. Mappings lacking sufficient affine equations remain
+unresolved, even when another inversion method could determine their parameters.
+Integer-coefficient polynomials inside floor/ceiling simplify without rounding.
+Consistency checks handle coupled openings such as n×n and reject noninteger
+parameter values.
 
 Domains accept chained comparisons, `and`/`or`/`not`, semicolon conjunctions, and
 positive integer modulo tests, for example `n % 2 = 0`. Raw prose such as `odd n`
@@ -167,14 +176,16 @@ Module-count parameters are translated into opening coordinates before ranking.
 Each branch must map an opening size unambiguously back to its parameters;
 multiple construction variants must be explicit branches.
 
-A computational branch contains a domain predicate, volume polynomial, timing
+A computational branch contains a domain predicate, volume formula, timing
 variants, and completion evidence. Ordinary expansion has one branch. Periodic
 phases become congruence guards, with initial exceptional sizes represented
 separately. Timing at one example must not silently become constant family timing.
 
 Start the arithmetic spike with degree-three polynomials over exact rational
 coefficients. Bound expression size, coefficient size, and branch count; decide
-limits using the spike. Validate integral positive volume on supported integer
+limits using the spike. Rational floor/ceiling nodes must be lowered into
+guarded polynomial phases before symbolic interval solving; retain the exact
+formula when a bounded phase expansion cannot finish. Validate integral positive volume on supported integer
 sizes. Allow unknown measurements and preserve the existing timing-slot rules,
 including negative reset timings where permitted.
 

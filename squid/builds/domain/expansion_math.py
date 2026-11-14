@@ -1,8 +1,8 @@
-"""Bounded polynomial parsing and exact arithmetic for door expansion facts.
+"""Bounded formula parsing and exact arithmetic for door expansion facts.
 
 The parser accepts decimal and integer constants, declared parameter names,
 + - * /, powers from zero through three, and implicit multiplication such as
-20n or (x+3)(y+3). Division requires a nonzero constant. No source code is run.
+20n or (x+3)(y+3), and floor/ceil/ceiling calls. Division requires a nonzero constant. No source code is run.
 Domains additionally accept comparisons, and/or/not, semicolons as conjunctions,
 and integer congruences. Unsupported source syntax stays in the source document.
 """
@@ -21,7 +21,8 @@ MAX_TERMS = 64
 MAX_BITS = 256
 _TOKEN = re.compile(r"\d+(?:\.\d+)?|[A-Za-z_][A-Za-z_0-9]*|\*\*|<=|>=|==|!=|[()+*/^%<>=;-]")
 _NAME = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
-_KEYWORDS = frozenset({"and", "or", "not"})
+_FUNCTIONS = frozenset({"floor", "ceil", "ceiling"})
+_KEYWORDS = frozenset({"and", "or", "not"}) | _FUNCTIONS
 
 
 class ExpressionError(ValueError):
@@ -87,12 +88,80 @@ class Polynomial:
 
 
 @dataclass(frozen=True, slots=True)
+class RoundedFormula:
+    """An exact rounding node retained for later piecewise normalization."""
+
+    operand: Formula
+    direction: Literal["floor", "ceil"]
+
+    @property
+    def variables(self) -> tuple[str, ...]:
+        return self.operand.variables
+
+    @property
+    def degree(self) -> int:
+        return self.operand.degree
+
+    def evaluate(self, values: tuple[int, ...]) -> Fraction:
+        value = self.operand.evaluate(values)
+        result = (
+            value.numerator // value.denominator
+            if self.direction == "floor"
+            else -(-value.numerator // value.denominator)
+        )
+        return Fraction(result)
+
+
+@dataclass(frozen=True, slots=True)
+class ArithmeticFormula:
+    operator: Literal["add", "multiply"]
+    left: Formula
+    right: Formula
+
+    @property
+    def variables(self) -> tuple[str, ...]:
+        return self.left.variables
+
+    @property
+    def degree(self) -> int:
+        if self.operator == "add":
+            return max(self.left.degree, self.right.degree)
+        return self.left.degree + self.right.degree
+
+    def evaluate(self, values: tuple[int, ...]) -> Fraction:
+        left, right = self.left.evaluate(values), self.right.evaluate(values)
+        return left + right if self.operator == "add" else left * right
+
+
+type Formula = Polynomial | RoundedFormula | ArithmeticFormula
+
+
+def _combine(left: Formula, right: Formula, operator: Literal["add", "multiply"]) -> Formula:
+    if isinstance(left, Polynomial) and isinstance(right, Polynomial):
+        return left.add(right) if operator == "add" else left.multiply(right)
+    result = ArithmeticFormula(operator, left, right)
+    if result.degree > MAX_DEGREE:
+        msg = "Formula exceeds the degree limit."
+        raise ExpressionError(msg)
+    return result
+
+
+def scale_formula(formula: Formula, scalar: Fraction) -> Formula:
+    """Scale the result, preserving the location of explicit rounding."""
+    if scalar == 0:
+        return Polynomial.constant(formula.variables, Fraction(0))
+    if scalar == 1:
+        return formula
+    return _combine(formula, Polynomial.constant(formula.variables, scalar), "multiply")
+
+
+@dataclass(frozen=True, slots=True)
 class DomainValue:
-    polynomial: Polynomial
+    expression: Formula
     modulus: int | None = None
 
     def evaluate(self, values: tuple[int, ...]) -> Fraction:
-        value = self.polynomial.evaluate(values)
+        value = self.expression.evaluate(values)
         if self.modulus is not None:
             if value.denominator != 1:
                 msg = "Congruences require integer values."
@@ -154,13 +223,21 @@ class ExpressionParser:
             or len(set(variables)) != len(variables)
             or any(not _NAME.fullmatch(name) or name in _KEYWORDS for name in variables)
         ):
-            msg = "Use up to three distinct ASCII parameter names, excluding boolean operators."
+            msg = "Use up to three distinct ASCII parameter names, excluding boolean operators and rounding functions."
             raise ExpressionError(msg)
         self.variables = variables
 
     def polynomial(self, source: str) -> Polynomial:
         tree, text = self._parse(source)
-        return self._polynomial(tree.body, text)
+        formula = self._formula(tree.body, text)
+        if not isinstance(formula, Polynomial):
+            msg = "Expression contains rounding; use formula() to retain it."
+            raise ExpressionError(msg)
+        return formula
+
+    def formula(self, source: str) -> Formula:
+        tree, text = self._parse(source)
+        return self._formula(tree.body, text)
 
     def predicate(self, source: str) -> Predicate:
         tree, text = self._parse(source)
@@ -191,7 +268,7 @@ class ExpressionParser:
             if index:
                 previous = tokens[index - 1]
                 left = previous == ")" or previous in self.variables or previous[0].isdigit()
-                right = token == "(" or token in self.variables
+                right = token == "(" or token in self.variables or token in _FUNCTIONS
                 if left and right:
                     output.append("*")
             output.append({"^": "**", "=": "==", ";": "and"}.get(token, token))
@@ -206,8 +283,17 @@ class ExpressionParser:
             raise ExpressionError(msg)
         return tree, text
 
-    def _polynomial(self, node: ast.AST, text: str) -> Polynomial:
+    def _formula(self, node: ast.AST, text: str) -> Formula:
         match node:
+            case ast.Call(func=ast.Name(id=name), args=[operand], keywords=[]) if name in _FUNCTIONS:
+                formula = self._formula(operand, text)
+                # Integer-valued polynomials need no rounding on integer parameters.
+                if isinstance(formula, Polynomial) and all(value.denominator == 1 for _, value in formula.terms):
+                    return formula
+                rounded = RoundedFormula(formula, "floor" if name == "floor" else "ceil")
+                if formula.degree == 0:
+                    return Polynomial.constant(self.variables, rounded.evaluate((0,) * len(self.variables)))
+                return rounded
             case ast.Constant(value=value) if type(value) in (int, float):
                 literal = ast.get_source_segment(text, node)
                 assert literal is not None
@@ -216,43 +302,43 @@ class ExpressionParser:
                 powers = tuple(int(variable == name) for variable in self.variables)
                 return Polynomial.create(self.variables, {powers: Fraction(1)})
             case ast.UnaryOp(op=ast.USub(), operand=operand):
-                return self._polynomial(operand, text).scale(Fraction(-1))
+                return scale_formula(self._formula(operand, text), Fraction(-1))
             case ast.UnaryOp(op=ast.UAdd(), operand=operand):
-                return self._polynomial(operand, text)
+                return self._formula(operand, text)
             case ast.BinOp(left=left, op=ast.Pow(), right=ast.Constant(value=power)) if type(power) is int:
                 if not 0 <= power <= MAX_DEGREE:
                     msg = "Powers must be integers between zero and three."
                     raise ExpressionError(msg)
-                base = self._polynomial(left, text)
-                result = Polynomial.constant(self.variables, Fraction(1))
+                base = self._formula(left, text)
+                result: Formula = Polynomial.constant(self.variables, Fraction(1))
                 for _ in range(power):
-                    result = result.multiply(base)
+                    result = _combine(result, base, "multiply")
                 return result
             case ast.BinOp(left=left, op=op, right=right):
-                a, b = self._polynomial(left, text), self._polynomial(right, text)
+                a, b = self._formula(left, text), self._formula(right, text)
                 match op:
                     case ast.Add():
-                        return a.add(b)
+                        return _combine(a, b, "add")
                     case ast.Sub():
-                        return a.add(b.scale(Fraction(-1)))
+                        return _combine(a, scale_formula(b, Fraction(-1)), "add")
                     case ast.Mult():
-                        return a.multiply(b)
+                        return _combine(a, b, "multiply")
                     case ast.Div() if b.degree == 0:
                         divisor = b.evaluate((0,) * len(self.variables))
                         if divisor:
-                            return a.scale(1 / divisor)
-        msg = "Expected a degree-three polynomial; division requires a nonzero constant."
+                            return scale_formula(a, 1 / divisor)
+        msg = "Expected bounded polynomial arithmetic and floor/ceil calls; division requires a nonzero constant."
         raise ExpressionError(msg)
 
     def _domain_value(self, node: ast.AST, text: str) -> DomainValue:
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
-            modulus = self._polynomial(node.right, text)
+            modulus = self._formula(node.right, text)
             value = modulus.evaluate((0,) * len(self.variables))
             if modulus.degree != 0 or value.denominator != 1 or value <= 0:
                 msg = "A modulus must be a positive integer constant."
                 raise ExpressionError(msg)
-            return DomainValue(self._polynomial(node.left, text), value.numerator)
-        return DomainValue(self._polynomial(node, text))
+            return DomainValue(self._formula(node.left, text), value.numerator)
+        return DomainValue(self._formula(node, text))
 
     def _predicate(self, node: ast.AST, text: str) -> Predicate:
         match node:

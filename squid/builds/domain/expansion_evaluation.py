@@ -11,7 +11,15 @@ from enum import StrEnum
 from fractions import Fraction
 
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
-from squid.builds.domain.expansion_math import MAX_BITS, ExpressionError, ExpressionParser, Polynomial, Predicate
+from squid.builds.domain.expansion_math import (
+    MAX_BITS,
+    ExpressionError,
+    ExpressionParser,
+    Formula,
+    Polynomial,
+    Predicate,
+    scale_formula,
+)
 
 _TIMING_METHODS = ("opening", "opening_visible", "closing", "closing_visible", "opening_reset", "closing_reset")
 _UNIT_SCALES = {"game_tick": 1, "redstone_tick": 2, "second": 20}
@@ -34,7 +42,7 @@ class ExpansionDiagnostic:
 
 @dataclass(frozen=True, slots=True)
 class TimingFormula:
-    polynomial: Polynomial
+    expression: Formula
     source_path: str
 
 
@@ -42,11 +50,11 @@ class TimingFormula:
 class NormalizedBranch:
     index: int
     source: ExpansionBranch
-    opening: tuple[Polynomial, ...]
+    opening: tuple[Formula, ...]
     inverse: tuple[tuple[Fraction, ...], ...] | None
     domain: Predicate | None
     domain_valid: bool
-    volume: Polynomial | None
+    volume: Formula | None
     timings: tuple[tuple[TimingFormula | None, ...], ...]
     diagnostics: tuple[ExpansionDiagnostic, ...]
 
@@ -85,17 +93,20 @@ class PointEvaluation:
     diagnostics: tuple[ExpansionDiagnostic, ...] = ()
 
 
-def _inverse(opening: tuple[Polynomial, ...], count: int) -> tuple[tuple[Fraction, ...], ...]:
+def _inverse(opening: tuple[Formula, ...], count: int) -> tuple[tuple[Fraction, ...], ...]:
     """Find a rational left inverse of the affine map using Gaussian elimination.
 
-    Extra opening equations (such as width=height) are checked at evaluation.
+    Only affine equations recover parameters. Remaining opening equations,
+    including rounded expressions, are checked at evaluation.
     Requiring full column rank avoids hidden configuration searches.
     """
-    if len(opening) != 3 or any(formula.degree > 1 for formula in opening):
-        msg = "All three opening dimensions must be known affine expressions."
+    if len(opening) != 3:
+        msg = "All three opening dimensions must be known expressions."
         raise ExpressionError(msg)
     matrix: list[list[Fraction]] = []
     for axis, formula in enumerate(opening):
+        if not isinstance(formula, Polynomial) or formula.degree > 1:
+            continue
         coefficients = [Fraction(0)] * count
         constant = Fraction(0)
         for powers, value in formula.terms:
@@ -105,14 +116,14 @@ def _inverse(opening: tuple[Polynomial, ...], count: int) -> tuple[tuple[Fractio
                 coefficients[powers.index(1)] = value
         matrix.append(coefficients + [Fraction(int(axis == i)) for i in range(3)] + [-constant])
     for column in range(count):
-        pivot = next((row for row in range(column, 3) if matrix[row][column]), None)
+        pivot = next((row for row in range(column, len(matrix)) if matrix[row][column]), None)
         if pivot is None:
-            msg = "Opening size does not uniquely determine every declared parameter."
+            msg = "The affine opening dimensions do not uniquely determine every declared parameter."
             raise ExpressionError(msg)
         matrix[column], matrix[pivot] = matrix[pivot], matrix[column]
         divisor = matrix[column][column]
         matrix[column] = [value / divisor for value in matrix[column]]
-        for row in range(3):
+        for row in range(len(matrix)):
             if row != column:
                 scalar = matrix[row][column]
                 matrix[row] = [a - scalar * b for a, b in zip(matrix[row], matrix[column], strict=True)]
@@ -143,20 +154,20 @@ def _normalize_branch(parser: ExpressionParser, source: ExpansionBranch, index: 
     diagnostics: list[ExpansionDiagnostic] = []
     prefix = f"branches[{index}]"
 
-    def polynomial(value: str | None, field: str) -> Polynomial | None:
+    def formula(value: str | None, field: str) -> Formula | None:
         if value is None:
             diagnostics.append(ExpansionDiagnostic(f"{prefix}.{field}", "missing", "No expression supplied."))
             return None
         try:
-            return parser.polynomial(value)
+            return parser.formula(value)
         except ExpressionError as error:
             diagnostics.append(ExpansionDiagnostic(f"{prefix}.{field}", "unsupported", str(error)))
             return None
 
     opening = tuple(
-        formula
+        parsed
         for field in ("opening_width", "opening_height", "opening_depth")
-        if (formula := polynomial(getattr(source, field), field)) is not None
+        if (parsed := formula(getattr(source, field), field)) is not None
     )
     inverse = None
     try:
@@ -171,7 +182,7 @@ def _normalize_branch(parser: ExpressionParser, source: ExpansionBranch, index: 
         except ExpressionError as error:
             domain_valid = False
             diagnostics.append(ExpansionDiagnostic(f"{prefix}.domain", "unsupported", str(error)))
-    volume = polynomial(source.volume, "volume")
+    volume = formula(source.volume, "volume")
     variants: dict[str | None, list[TimingFormula | None]] = {}
     seen: set[tuple[str | None, int]] = set()
     for i, timing in enumerate(source.timings):
@@ -187,13 +198,13 @@ def _normalize_branch(parser: ExpressionParser, source: ExpansionBranch, index: 
             )
             continue
         seen.add(key)
-        formula = polynomial(timing.expression, field)
+        timing_formula = formula(timing.expression, field)
         if timing.unit not in _UNIT_SCALES:
             diagnostics.append(ExpansionDiagnostic(f"{prefix}.{field}.unit", "missing", "Timing unit is unknown."))
-        elif formula is not None:
+        elif timing_formula is not None:
             try:
                 slots[slot] = TimingFormula(
-                    formula.scale(Fraction(_UNIT_SCALES[timing.unit])), f"{prefix}.{field}.expression"
+                    scale_formula(timing_formula, Fraction(_UNIT_SCALES[timing.unit])), f"{prefix}.{field}.expression"
                 )
             except ExpressionError as error:
                 diagnostics.append(ExpansionDiagnostic(f"{prefix}.{field}", "unsupported", str(error)))
@@ -304,7 +315,7 @@ def _evaluate_branch(
     if None in membership or not domain_valid:
         return PointConfiguration(branch.index, PointStatus.UNRESOLVED, assignments, diagnostics=tuple(diagnostics))
 
-    def measurement(formula: Polynomial | None, path: str, minimum: int | None) -> int | None:
+    def measurement(formula: Formula | None, path: str, minimum: int | None) -> int | None:
         if formula is None:
             return None
         value = formula.evaluate(values)
@@ -319,7 +330,7 @@ def _evaluate_branch(
     volume = measurement(branch.volume, f"{prefix}.volume", 1)
     timings = tuple(
         tuple(
-            measurement(timing.polynomial, timing.source_path, 0 if slot < 4 else None) if timing is not None else None
+            measurement(timing.expression, timing.source_path, 0 if slot < 4 else None) if timing is not None else None
             for slot, timing in enumerate(variants)
         )
         for variants in branch.timings
