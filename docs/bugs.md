@@ -11,7 +11,7 @@ architecture rule now rejects new bare builtin raises.
 timing tuple, and no extender fastest record can be computed. Doors avoid this because
 `_door_candidate` falls back to the `doors` timing columns; extenders have no such fallback.
 The longer-term cleanup of the two timing representations is Phase 5 of
-`docs/plans/completed/schema-audit.md`, deferred until the extender submission work in TODO.md.
+`docs/plans/completed/schema-audit.md`, deferred until the extender submission work in `docs/todo.md`.
 
 ## `mention_fallback_search`'s own guard clause is unreachable
 

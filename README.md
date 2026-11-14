@@ -256,8 +256,8 @@ This list of commands is subject to change due to improvements and new features.
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and the process for
-submitting pull requests, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our code of conduct.
+Please read [CONTRIBUTING.md](.github/CONTRIBUTING.md) for development setup and the process for
+submitting pull requests, and [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) for our code of conduct.
 
 ## License
 

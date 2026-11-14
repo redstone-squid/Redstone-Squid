@@ -47,7 +47,7 @@ The dedicated worker build includes the pinned FFmpeg/ffprobe toolchain but leav
 docker build --build-arg WITH_MEDIA=1 --build-arg WITH_SCHEMATICS=1 -t redstone-squid-worker .
 ```
 
-See [Media normalization deployment](docs/media-normalization.md) before setting `SQUID_MEDIA_ENABLED=true`; it
+See [Media normalization deployment](media-normalization.md) before setting `SQUID_MEDIA_ENABLED=true`; it
 documents the required paths, shared object storage, scratch-space arithmetic, and subprocess/container limits.
 
 ## Shared gateway hosts
