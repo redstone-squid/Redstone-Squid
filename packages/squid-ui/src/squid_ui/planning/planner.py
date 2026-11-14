@@ -66,7 +66,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
 
     `cache` reuses callback-free structure; `memo` retains an owner's live result.
     Shared pagination retains one mounted owner's committed allocation for page
-    turns. Structural caching remains specific to the legacy backends. An explicit
+    turns. Shared structural caches retain partition hints, recertifying current output. An explicit
     search_budget bounds shared operations, or legacy Discord layout evaluations.
     """
     request = PlanRequest(
@@ -94,7 +94,7 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""
     if isinstance(request.composition, CompositionOptions):
-        result = plan_composition(rendered, request, request.composition)
+        result = plan_composition(rendered, request, request.composition, cache=cache)
     elif request.composition is not None:
         result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)
     else:
@@ -115,7 +115,9 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
                     else request.search_budget
                 ),
             )
-            result = plan_composition(migration.document, replace(request, shared_pagination=True), options)
+            result = plan_composition(
+                migration.document, replace(request, shared_pagination=True), options, cache=cache
+            )
         else:
             result = (
                 plan_regions(document, request)

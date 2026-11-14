@@ -19,7 +19,7 @@ from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.planning.pagination_reuse import same_allocation_document
 from squid_ui.planning.request import PlanRequest
-from squid_ui.planning.result import PlanResult, RegionReport
+from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
 from squid_ui.planning.semantics import semantic_graph
 from squid_ui.presentation import (
     ActivePagers,
@@ -176,7 +176,8 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
     )
 
     def select_page(pages: Mapping[OccurrenceId, int]) -> PlanResult[BodyT]:
-        return present_composition(result, rendered, request, replace(options, pages=pages))
+        reused = replace(result, metrics=PlanMetrics(cache_hit=True, reuse=PlanReuse.ALLOCATION))
+        return present_composition(reused, rendered, request, replace(options, pages=pages))
 
     return replace(
         selected,

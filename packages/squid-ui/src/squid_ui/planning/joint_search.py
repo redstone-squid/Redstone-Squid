@@ -249,6 +249,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     selections: Mapping[OccurrenceId, str] | None = None,
     policies: Mapping[OccurrenceId, RegionPolicy] | None = None,
     partitions: Mapping[OccurrenceId, tuple[int, ...]] | None = None,
+    partition_hint: Mapping[OccurrenceId, tuple[int, ...]] | None = None,
 ) -> JointResult[RenderTargetT, ContextT, PayloadT, OutputT]:
     """Certify a nondominated allocation without publishing bindings or state.
 
@@ -373,6 +374,24 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     )
                 cuts = tuple(initial)
                 assignment = next(serials)
+                if partition_hint:
+                    hinted: list[tuple[int, ...]] = []
+                    for node, required in zip(regions, cuts, strict=True):
+                        identity = node.candidate.offer.occurrence.identity
+                        ends = partition_hint.get(identity, required)
+                        context.work.consume(1 + len(ends) + len(node.legal_ends) + len(required))
+                        legal = set(node.legal_ends) | {len(node.units)}
+                        if (
+                            ends != tuple(sorted(set(ends)))
+                            or not ends
+                            or ends[-1] != len(node.units)
+                            or not set(ends) <= legal
+                            or not set(required) <= set(ends)
+                            or (identity in fixed_cuts and ends != required)
+                        ):
+                            ends = required
+                        hinted.append(ends)
+                    push(_Partitions(assignment, candidate, task.choices, regions, tuple(hinted), probe=True))
                 push(_Partitions(assignment, candidate, task.choices, regions, cuts, probe=True))
                 # Try preserving every sibling while splitting just one region. Balanced
                 # probes alone can miss a small feasible family when both pagers' chrome
@@ -502,6 +521,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                             }
                         ),
                     )
+                    context.work.consume(sum(1 + len(page.coordinates) for page in pages))
                     allocation = CertifiedAllocation(
                         family,
                         tuple(pages),

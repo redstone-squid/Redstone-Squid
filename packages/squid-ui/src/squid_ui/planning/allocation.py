@@ -184,7 +184,7 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
 
     Reuse this object for cursor movement. Content, target, localization, policy,
     or resource changes require a new search. This is not a cross-request cache
-    key: phase 4 owns mounted revisions and phase 5 owns reusable fingerprints.
+    key; shared caches store only partition hints and recertify current output.
     """
 
     family: PageFamily[RenderTargetT, ContextT, PayloadT]
@@ -193,7 +193,17 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
     identity: str = field(init=False)
     regions: Mapping[OccurrenceId, RegionPages] = field(init=False)
 
+    _page_index: Mapping[tuple[OccurrenceId, ...], Mapping[tuple[int, ...], CertifiedPage[OutputT]]] = field(
+        init=False, repr=False, compare=False
+    )
+
     def __post_init__(self) -> None:
+        index: dict[tuple[OccurrenceId, ...], dict[tuple[int, ...], CertifiedPage[OutputT]]] = {}
+        for page in self.pages:
+            identities = tuple(identity for identity, _ in page.coordinates)
+            positions = tuple(position for _, position in page.coordinates)
+            index.setdefault(identities, {})[positions] = page
+        object.__setattr__(self, "_page_index", MappingProxyType({k: MappingProxyType(v) for k, v in index.items()}))
         object.__setattr__(self, "identity", uuid4().hex)
         object.__setattr__(
             self,
@@ -243,11 +253,14 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
         if positions.keys() - self.family.regions.keys():
             message = "page coordinates contain an unknown region occurrence"
             raise LayoutInvariantError(message)
-        for page in self.pages:
-            if all(
-                index == max(0, min(positions.get(identity, 0), len(self.family.regions[identity].pages) - 1))
-                for identity, index in page.coordinates
-            ):
+        # Nested pages have different visible-region sets. Index each set separately
+        # so sibling Cartesian products do not make every cursor turn a linear scan.
+        for identities, pages in self._page_index.items():
+            key = tuple(
+                max(0, min(positions.get(identity, 0), len(self.family.regions[identity].pages) - 1))
+                for identity in identities
+            )
+            if page := pages.get(key):
                 return page
         message = "certified allocation lost a reachable page combination"
         raise LayoutInvariantError(message)

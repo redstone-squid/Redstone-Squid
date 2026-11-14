@@ -14,6 +14,7 @@ from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhau
 from squid_ui.html.target import HtmlLimits
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
+from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateViolation,
@@ -31,12 +32,13 @@ from squid_ui.planning.composition_slack import SlackCompositionRules
 from squid_ui.planning.composition_state import present_composition
 from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
+from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
 from squid_ui.planning.realizations import select_composition
 from squid_ui.planning.request import PlanRequest
-from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
+from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 from squid_ui.semantic import Group
 from squid_ui.slack.target import SlackMessageLimits
@@ -82,6 +84,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     rules: TargetRules[RenderTargetT, object, PayloadT, ResourceT, BodyT, PreparationT],
     selections: Mapping[OccurrenceId, str],
     options: CompositionOptions | None = None,
+    cache: PlanCache[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     automatic = options is not None and options.automatic
     context = _context(request, options.work_limit if options is not None and automatic else None)
@@ -93,7 +96,13 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
             "composition does not support document assets or mounted pagination inputs; use composition.pages",
         )
         raise CompositionRejectedError((violation,))
+    cache_key = ""
+    partition_hint = None
     try:
+        if cache is not None and automatic:
+            assert options is not None
+            cache_key = stable_fingerprint((document, replace(options, pages={})), consume=context.work.consume)
+            partition_hint = cache.partition_hint(cache_key)
         graph = semantic_graph(Group(document.children, key=document.key or "@document"), consume=context.work.consume)
     except LayoutSearchExhaustedError as error:
         if not automatic:
@@ -146,6 +155,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 selections=selections,
                 policies=options.policies,
                 partitions=options.partitions,
+                partition_hint=partition_hint,
             )
         except JointExhaustedError as error:
             _logger.debug("Joint allocation exhausted without a certified layout: %s", error.diagnostics)
@@ -160,12 +170,17 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
             allocation=result.allocation,
             report=replace(page.report, search=result.diagnostics),
             metrics=PlanMetrics(
+                partition_hint=partition_hint is not None,
                 work_used=result.diagnostics.work_used,
                 generated_states=result.diagnostics.generated_states,
                 target_evaluations=result.diagnostics.target_evaluations,
                 certified_combinations=result.diagnostics.certified_combinations,
             ),
         )
+        if cache is not None:
+            cache.remember_partitions(
+                cache_key, {key: region.cuts for key, region in result.allocation.regions.items()}
+            )
         return present_composition(planned, rendered, request, options)
     candidate = select_composition(
         SemanticOccurrence(OccurrenceId(("root",)), graph, root), rules, context, selections=selections
@@ -272,11 +287,16 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT],
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     options: CompositionOptions,
+    *,
+    cache: PlanCache[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Select the built-in rules without routing through a legacy target planner."""
     retained = request.presentation.retained_composition
     if options.automatic and retained is not None and retained.matches(as_document(rendered), request, options):
-        return present_composition(retained.result, rendered, request, options)
+        reused = replace(retained.result, metrics=PlanMetrics(cache_hit=True, reuse=PlanReuse.ALLOCATION))
+        return present_composition(reused, rendered, request, options)
+    if not options.automatic or has_routed_page(rendered):
+        cache = None
     effective = request.target.reserve(request.reservation)
     # The public target couples limits and body types; narrow both before bridging
     # its generic parameter to one concrete built-in rules implementation.
@@ -288,6 +308,7 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
             V2CompositionRules[RenderTargetT, object](effective.limits),
             options.selections,
             options,
+            cache,
         )
     elif isinstance(effective.limits, SlackMessageLimits) and effective.body_type is scene.SlackMessage:
         slack_request = cast(PlanRequest[scene.SlackMessage, RenderTargetT, AdapterT], request)
@@ -297,11 +318,12 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
             SlackCompositionRules[RenderTargetT, object](effective.limits),
             options.selections,
             options,
+            cache,
         )
     elif isinstance(effective.limits, HtmlLimits) and effective.body_type is scene.HtmlBody:
         html_request = cast(PlanRequest[scene.HtmlBody, RenderTargetT, AdapterT], request)
         result = _plan(
-            rendered, html_request, HtmlCompositionRules[RenderTargetT, object](), options.selections, options
+            rendered, html_request, HtmlCompositionRules[RenderTargetT, object](), options.selections, options, cache
         )
     else:
         if options.automatic:

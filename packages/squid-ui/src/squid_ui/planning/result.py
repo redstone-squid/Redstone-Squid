@@ -32,6 +32,7 @@ class PlanReuse(StrEnum):
     EXACT = "exact"
     STRUCTURAL = "structural"
     INCREMENTAL = "incremental"
+    ALLOCATION = "allocation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +80,8 @@ class PlanMetrics:
     generated_states: int = 0
     target_evaluations: int = 0
     certified_combinations: int = 0
+    partition_hint: bool = False
+    """A cached partition was offered to search; it still required current certification."""
 
 
 @dataclass(frozen=True, slots=True)

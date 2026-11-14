@@ -8,10 +8,13 @@ component's handler when a control is pressed.
 """
 
 from collections import OrderedDict
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 from typing import Any
 
 from squid_ui import scene
+from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.degradation import DegradationProfile
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanReport, PlanResult, PlanReuse
@@ -55,6 +58,7 @@ class PlanCache[BodyT: scene.Body = Any]:
         self.capacity = capacity
         self._entries: OrderedDict[str, CachedPlan[BodyT]] = OrderedDict()
         self._incremental: OrderedDict[str, None] = OrderedDict()
+        self._partitions: OrderedDict[str, Mapping[OccurrenceId, tuple[int, ...]]] = OrderedDict()
 
     def get(self, key: str) -> CachedPlan[BodyT] | None:
         value = self._entries.get(key)
@@ -67,6 +71,19 @@ class PlanCache[BodyT: scene.Body = Any]:
         self._entries.move_to_end(key)
         while len(self._entries) > self.capacity:
             self._entries.popitem(last=False)
+
+    def partition_hint(self, key: str) -> Mapping[OccurrenceId, tuple[int, ...]] | None:
+        """Return prior cuts as a search hint, never as a certificate of feasibility."""
+        value = self._partitions.get(key)
+        if value is not None:
+            self._partitions.move_to_end(key)
+        return value
+
+    def remember_partitions(self, key: str, cuts: Mapping[OccurrenceId, tuple[int, ...]]) -> None:
+        self._partitions[key] = MappingProxyType(dict(cuts))
+        self._partitions.move_to_end(key)
+        while len(self._partitions) > self.capacity:
+            self._partitions.popitem(last=False)
 
     def admits_incremental(self, key: str) -> bool:
         """Whether a prior lossless plan certified this configuration and region shape."""

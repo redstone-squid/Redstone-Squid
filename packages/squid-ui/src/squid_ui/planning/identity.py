@@ -8,7 +8,7 @@ They identify content, not which live handler should receive an event.
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from string.templatelib import Template
@@ -17,14 +17,18 @@ from squid_ui.primitives.constraints import RoutedPage
 from squid_ui.text import Text
 
 
-def stable_fingerprint(values: Sequence[object]) -> str:
+def stable_fingerprint(values: Sequence[object], *, consume: Callable[[], None] | None = None) -> str:
     """Hash logical structure without callback identity or process addresses."""
-    payload = json.dumps(stable_value(values), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(
+        stable_value(values, consume=consume), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return hashlib.blake2s(payload.encode(), digest_size=16).hexdigest()
 
 
-def stable_value(value: object) -> object:
+def stable_value(value: object, *, consume: Callable[[], None] | None = None) -> object:
     """Reduce a logical value to deterministic JSON-compatible data."""
+    if consume is not None:
+        consume()
     if callable(value):
         return "<callback>"
     if isinstance(value, Enum):
@@ -32,20 +36,26 @@ def stable_value(value: object) -> object:
     if isinstance(value, Template):
         value = Text(value)
     if isinstance(value, Text):
-        return {"type": type(value).__qualname__, "fields": {"_parts": stable_value(value.structural_key())}}
+        return {
+            "type": type(value).__qualname__,
+            "fields": {"_parts": stable_value(value.structural_key(), consume=consume)},
+        }
     if is_dataclass(value) and not isinstance(value, type):
         return {
             "type": type(value).__qualname__,
             "fields": {
-                item.name: stable_value(getattr(value, item.name))
+                item.name: stable_value(getattr(value, item.name), consume=consume)
                 for item in fields(value)
                 if item.metadata.get("stable_identity", True)
             },
         }
     if isinstance(value, Mapping):
-        return {str(key): stable_value(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
+        return {
+            str(key): stable_value(item, consume=consume)
+            for key, item in sorted(value.items(), key=lambda item: str(item[0]))
+        }
     if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        return [stable_value(item) for item in value]
+        return [stable_value(item, consume=consume) for item in value]
     if isinstance(value, bytes):
         return hashlib.blake2s(value, digest_size=16).hexdigest()
     if isinstance(value, str | int | float | bool) or value is None:
