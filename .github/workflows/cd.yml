@@ -135,7 +135,8 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          tar -czf - compose.yml deploy/compose.production.yml deploy/otel-collector.yaml scripts/deploy.sh \
+          tar -czf - compose.yml deploy/compose.production.yml deploy/compose.edge.yml \
+            deploy/otel-collector.yaml scripts/deploy.sh \
             | ssh "$SSH_USER@$SSH_HOST" 'mkdir -p Redstone-Squid && tar -xzf - -C Redstone-Squid'
 
       - name: Deploy immutable release

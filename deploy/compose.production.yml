@@ -2,14 +2,25 @@ services:
   api:
     image: ${SQUID_APP_IMAGE:?SQUID_APP_IMAGE must be an immutable image digest}
     pull_policy: always
+    # Release migrations run explicitly before cutover, including on hosts that
+    # also select compose.override.yml for ordinary development commands.
+    depends_on: !override
+      db:
+        condition: service_healthy
 
   bot:
     image: ${SQUID_APP_IMAGE:?SQUID_APP_IMAGE must be an immutable image digest}
     pull_policy: always
+    depends_on: !override
+      db:
+        condition: service_healthy
 
   worker:
     image: ${SQUID_WORKER_IMAGE:?SQUID_WORKER_IMAGE must be an immutable image digest}
     pull_policy: always
+    depends_on: !override
+      db:
+        condition: service_healthy
 
   migrate:
     image: ${SQUID_APP_IMAGE:?SQUID_APP_IMAGE must be an immutable image digest}

@@ -8,7 +8,6 @@ readonly CURRENT_RELEASE_FILE="$STATE_DIRECTORY/current-release"
 readonly PREVIOUS_RELEASE_FILE="$STATE_DIRECTORY/previous-release"
 readonly COMPOSE_OVERRIDE="${SQUID_PRODUCTION_COMPOSE_FILE:-deploy/compose.production.yml}"
 readonly LEGACY_PID_FILE=".app.pid"
-readonly -a COMPOSE=(docker compose -f compose.yml -f "$COMPOSE_OVERRIDE")
 
 usage() {
     printf 'Usage: %s APP_IMAGE@sha256:DIGEST WORKER_IMAGE@sha256:DIGEST\n' "$0" >&2
@@ -87,7 +86,8 @@ rollback() {
         export SQUID_APP_IMAGE="$previous_app_image"
         export SQUID_WORKER_IMAGE="$previous_worker_image"
         # Older strict-config images do not know settings first introduced by the failed release.
-        if ! SQUID_STRICT_UNKNOWN_KEYS=false "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180; then
+        if ! SQUID_STRICT_UNKNOWN_KEYS=false "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180 \
+            redis api bot worker; then
             printf 'Automatic service rollback also failed; inspect Compose health and database compatibility.\n' >&2
         fi
     fi
@@ -109,6 +109,15 @@ trap rollback ERR
 
 export SQUID_APP_IMAGE="$app_image"
 export SQUID_WORKER_IMAGE="$worker_image"
+
+# Let Compose read host selection from .env without sourcing credentials as shell
+# code. Explicit -f flags would silently discard the host's gateway and mounts.
+compose_environment=$(docker compose config --environment)
+compose_files=$(sed -n 's/^COMPOSE_FILE=//p' <<< "$compose_environment")
+compose_separator=$(sed -n 's/^COMPOSE_PATH_SEPARATOR=//p' <<< "$compose_environment")
+unset compose_environment
+export COMPOSE_FILE="${compose_files:-compose.yml}${compose_separator:-:}$COMPOSE_OVERRIDE"
+readonly -a COMPOSE=(docker compose)
 
 printf 'Pulling immutable release images.\n'
 "${COMPOSE[@]}" pull api bot worker migrate redis

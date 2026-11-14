@@ -1,9 +1,9 @@
 # Local development conveniences.
 #
-# Compose auto-loads this file for a bare `docker compose up`, but skips it when
-# files are named explicitly with -f -- which is how deploy/compose.production.yml
-# is applied. Production therefore keeps running migrations as a deliberate
-# one-shot step before the long-running containers are replaced.
+# Compose auto-loads this file unless COMPOSE_FILE or -f selects an explicit list.
+# Hosts may include it in their persisted selection too. The production override
+# removes these migration dependencies: release deployments run migrations as a
+# deliberate one-shot step before replacing the long-running containers.
 services:
   # Locally there is no separate deploy step, so bring the schema to head on the
   # way up and let the app services wait for it to exit cleanly.
