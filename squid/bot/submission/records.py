@@ -59,7 +59,11 @@ class RecordsScreen(sd.Screen):
     action calls authorize again before invoking the record service.
     """
 
-    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD))
+    policy = sd.ResponseSpec(
+        nav=sd.navigation_controls.page_jump_nav,
+        timeout=300,
+        session=sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD),
+    )
 
     _gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
     _titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)

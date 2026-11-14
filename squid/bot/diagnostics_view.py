@@ -149,6 +149,7 @@ class ErrorReportScreen(sd.Screen[int]):
     """Browse reports and complete with the number removed when clearing them."""
 
     policy = sd.ResponseSpec(
+        nav=sd.navigation_controls.page_jump_nav,
         timeout=SESSION_SECONDS,
         audience=sd.Private(
             tr(

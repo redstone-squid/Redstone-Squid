@@ -138,7 +138,9 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
 class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A resource-backed search workspace that ends when replaced or timed out."""
 
-    policy = sd.ResponseSpec(timeout=180, audience="public", session=sd.SessionSpec("search"))
+    policy = sd.ResponseSpec(
+        nav=sd.navigation_controls.page_jump_nav, timeout=180, audience="public", session=sd.SessionSpec("search")
+    )
 
     def __init__(
         self,

@@ -112,7 +112,7 @@ class TagsScreen(sd.Screen):
     )
     _pending_action: tuple[TagDefinition, str] | None = sl.state(default=None, persist=False)
 
-    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("tags"))
+    policy = sd.ResponseSpec(nav=sd.navigation_controls.page_jump_nav, timeout=300, session=sd.SessionSpec("tags"))
 
     def __init__(
         self,

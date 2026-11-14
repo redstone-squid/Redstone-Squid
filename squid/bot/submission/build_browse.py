@@ -384,7 +384,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
 class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A live build workspace that ends when replaced or timed out."""
 
-    policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
+    policy = sd.ResponseSpec(
+        nav=sd.navigation_controls.page_jump_nav, timeout=300, live_updates=True, session=sd.SessionSpec("build-browse")
+    )
 
     _results: SearchScreen | None = sl.state(None, opaque=True)
     _record_categories: frozenset[str] = sl.state(frozenset())

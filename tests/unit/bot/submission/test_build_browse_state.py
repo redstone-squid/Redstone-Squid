@@ -550,3 +550,28 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
         await ui.press(ui.key_for("search-help"))
         assert "## Search results" in ui.texts()
         service.search.assert_awaited_once()
+
+
+async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
+    screen = _screen(initial_id=None)
+    queries = cast(AsyncMock, screen._queries)
+
+    async def page(*, statuses: frozenset[Status], selector: PageSelector, page_size: int) -> Page[Build]:
+        assert Status.CONFIRMED in statuses
+        return Page(
+            items=tuple(
+                DoorBuild(id=index + 1, submission_status=Status.CONFIRMED)
+                for index in range(selector.offset, selector.offset + page_size)
+            ),
+            total=400,
+            next=PageAnchor(offset=selector.offset + page_size) if selector.offset + page_size < 400 else None,
+            prev=PageAnchor(offset=max(0, selector.offset - page_size)) if selector.offset else None,
+        )
+
+    queries.list_page.side_effect = page
+    async with stage(screen, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("builds.seek.jump"))
+        await form.submit({"page": "37"})
+        assert queries.list_page.await_args.kwargs["selector"] == PageSelector(offset=288)
+        assert any("Page 37 of 50" in text for text in ui.texts())
+        ui.assert_within_limits()

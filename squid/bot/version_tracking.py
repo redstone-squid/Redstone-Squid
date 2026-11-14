@@ -46,7 +46,7 @@ type VersionAuthorizer = Callable[[], Awaitable[bool]]
 class VersionScreen(sd.Screen):
     """A version catalogue that ends when replaced or timed out."""
 
-    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("versions"))
+    policy = sd.ResponseSpec(nav=sd.navigation_controls.page_jump_nav, timeout=300, session=sd.SessionSpec("versions"))
 
     def __init__(
         self,

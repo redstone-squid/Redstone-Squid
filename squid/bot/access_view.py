@@ -61,7 +61,7 @@ class AccessScreen(sd.Screen):
     service then enforces role rank, scope, and delegation limits.
     """
 
-    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("access"))
+    policy = sd.ResponseSpec(nav=sd.navigation_controls.page_jump_nav, timeout=300, session=sd.SessionSpec("access"))
     _revision: int = sl.state(default=0, persist=False)
     _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False

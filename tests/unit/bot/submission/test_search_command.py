@@ -6,13 +6,16 @@ from typing import Any, cast, override
 import pytest
 
 from squid.bot.submission.commands import BuildCommands, SearchTarget
+from squid.bot.submission.search_view import SearchScreen
 from squid.builds.application import BuildQueryService
 from squid.builds.models import Build
 from squid.core.errors import ValidationError
+from squid.core.pagination import PageAnchor
 from squid.runtime import BotServices
 from squid.search.application import SearchService
-from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
+from squid.search.domain import BuildSearchHit, SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
 from squid.settings.application import SettingsService
+from squid_ui_discord.testing import stage
 from tests.support.services import bot_services
 
 
@@ -133,3 +136,31 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
 
     assert search.requests[0].scope is SearchScope.ALL
     assert search.requests[0].query == "a OR b"
+
+
+async def test_search_jump_form_preserves_the_query_and_fetches_the_requested_page() -> None:
+    class PagedSearch(RecordingSearch):
+        @override
+        async def search(self, request: SearchRequest) -> SearchPage:
+            self.requests.append(request)
+            return SearchPage(
+                hits=tuple(
+                    BuildSearchHit(str(index), f"Door {index}", "confirmed")
+                    for index in range(request.offset, request.offset + request.page_size)
+                ),
+                total=200,
+                next=PageAnchor(offset=request.offset + request.page_size),
+                prev=PageAnchor(offset=request.offset - request.page_size) if request.offset else None,
+            )
+
+    service = PagedSearch()
+    request = SearchRequest("door width:2", page_size=5)
+    screen = SearchScreen(service, request, await service.search(request))
+    async with stage(screen, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("search.seek.jump"))
+        await form.submit({"page": "37"})
+        assert service.requests[-1].offset == 180
+        assert service.requests[-1].query == request.query
+        assert screen.request.offset == 180
+        assert any("Door 180" in text for text in ui.texts())
+        ui.assert_within_limits()
