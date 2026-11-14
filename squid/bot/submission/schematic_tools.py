@@ -140,7 +140,11 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
                 key="video-refresh",
             ),
         )
-        return (sl.action_controls(*entries, key="schematic-actions"),)
+        return (
+            sl.action_controls(*entries[:3], key="schematic-actions"),
+            sl.action_controls(*entries[3:6], key="conversion-actions"),
+            sl.action_controls(*entries[6:], key="video-actions"),
+        )
 
     @staticmethod
     def _convert_form() -> sl.forms.FormSpec:

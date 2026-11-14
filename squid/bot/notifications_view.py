@@ -1,6 +1,7 @@
 """Manage notification channels, follows, and the newest visible inbox items."""
 
 from collections.abc import Awaitable, Callable, Mapping
+from functools import partial
 from typing import TYPE_CHECKING, Any, cast, override
 from uuid import UUID
 
@@ -33,6 +34,7 @@ from squid.notifications.edits import (
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.records.domain import BaseTitle, BuildKind, VersionScope
 from squid.suggestions.domain import Suggestion
+from squid.tags.domain import TagValueType
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
@@ -202,6 +204,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
     selected_ids: tuple[str, ...] = sl.state(())
     page: int = sl.state(0)
     filter_tag: Suggestion | None = sl.state(None, persist=False)
+    filter_tag_type: TagValueType = sl.state(TagValueType.TEXT)
 
     def __init__(self, settings: NotificationSettings, edits: EditController) -> None:
         self._settings = settings
@@ -259,7 +262,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
                 tr(t"bot-notifications-view-follow-matching-records = Follow matching records"),
                 self._filter_form(),
                 key="follow-filter",
-                on_submit=self._follow_filter,
+                on_submit=partial(self._follow_filter, tag=self.filter_tag),
             ),
             bool(self.subscriptions)
             and sl.action_control(
@@ -382,19 +385,30 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
     async def _choose_filter_tag(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(event, "showcase_tag_ids", tr(t"notification-choose-tag = Choose filter tag"), self._tag_picked)
 
-    async def _tag_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
+    async def _tag_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
+        request = cast(sd.Request[Any, RedstoneSquid], event.context)
+        definitions = await request.client.services.tags.public_definitions()
+        tag = next((tag for tag in definitions if str(tag.id) == item.value), None)
+        if tag is None:
+            await event.notice(
+                tr(t"notification-tag-unavailable = That tag is no longer available. Choose another tag.")
+            )
+            return
         self.filter_tag = item
+        self.filter_tag_type = tag.value_type
 
     async def _clear_filter_tag(self, _event: sd.PressEvent) -> None:
         self.filter_tag = None
 
-    async def _follow_filter(self, event: sd.SubmitEvent) -> None:
+    async def _follow_filter(self, event: sd.SubmitEvent, *, tag: Suggestion | None = None) -> None:
         build_kind = self._optional_text(event.values.get("build_kind"))
         base_title = self._optional_text(event.values.get("base_title"))
         version_scope = self._optional_text(event.values.get("version_scope"))
-        tag = None if self.filter_tag is None else int(self.filter_tag.value)
-        tag_value = self._optional_text(event.values.get("tag_value"))
-        if not any((build_kind, base_title, version_scope, tag is not None)):
+        tag_id = None if tag is None else int(tag.value)
+        tag_value = cast(str | float | bool | None, event.values.get("tag_value"))
+        if isinstance(tag_value, str):
+            tag_value = tag_value.strip() or None
+        if not any((build_kind, base_title, version_scope, tag_id is not None)):
             await event.notice(tr(t"notifications-record-filter-required = Choose at least one record filter."))
             return
         record_filter = RecordSubscriptionFilter(
@@ -402,8 +416,8 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
             base_titles=frozenset({base_title}) if base_title else frozenset(),
             version_scopes=frozenset({version_scope}) if version_scope else frozenset(),
             tags=()
-            if tag is None
-            else (TagPredicate(cast(int, tag), "present" if tag_value is None else "exact", tag_value),),
+            if tag_id is None
+            else (TagPredicate(tag_id, "present" if tag_value is None else "exact", tag_value),),
         )
         await self._save_follow(
             kind=SubscriptionKind.RECORD_FILTER,
@@ -422,8 +436,26 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
         text = str(value).strip() if value is not None else ""
         return text or None
 
-    @staticmethod
-    def _filter_form() -> sl.forms.FormSpec:
+    def _filter_form(self) -> sl.forms.FormSpec:
+        value_fields: tuple[sl.forms.FormField, ...] = ()
+        label = tr(t"bot-notifications-view-exact-tag-value = Exact tag value")
+        if self.filter_tag is not None and self.filter_tag_type is not TagValueType.NONE:
+            field: sl.forms.FormField
+            if self.filter_tag_type is TagValueType.BOOLEAN:
+                field = sl.forms.ChoiceField(
+                    key="tag_value",
+                    label=label,
+                    required=False,
+                    options=(
+                        sl.forms.ChoiceOption("true", tr(t"notification-tag-true = True"), value=True),
+                        sl.forms.ChoiceOption("false", tr(t"notification-tag-false = False"), value=False),
+                    ),
+                )
+            elif self.filter_tag_type is TagValueType.NUMERIC:
+                field = sl.forms.FloatField(key="tag_value", label=label, required=False)
+            else:
+                field = sl.forms.TextField(key="tag_value", label=label, required=False, maximum=100)
+            value_fields = (field,)
         return sl.forms.FormSpec(
             tr(t"bot-notifications-view-follow-matching-records = Follow matching records"),
             (
@@ -454,12 +486,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
                         for item in VersionScope
                     ),
                 ),
-                sl.forms.TextField(
-                    key="tag_value",
-                    label=tr(t"bot-notifications-view-exact-tag-value = Exact tag value"),
-                    required=False,
-                    maximum=100,
-                ),
+                *value_fields,
             ),
         )
 

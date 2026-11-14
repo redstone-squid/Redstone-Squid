@@ -11,7 +11,8 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
 )
 from squid.records.domain import BaseTitle, BuildKind, VersionScope
-from squid.suggestions.application import SuggestionRegistry, SuggestionSource
+from squid.settings.domain.runtime import RuntimeSettings
+from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionSource
 from squid.suggestions.application.ports import SearchFields
 from squid.suggestions.application.queries import SuggestionRepository
 from squid.suggestions.domain import SourceKind, ValueType, Visibility
@@ -316,6 +317,27 @@ def _document_sources(repository: SuggestionRepository) -> tuple[SuggestionSourc
 
 def _static_sources() -> tuple[SuggestionSource, ...]:
     return (
+        SuggestionSource(
+            id="runtime_setting_names",
+            kind=SourceKind.ENUMERABLE,
+            kind_label="setting",
+            provider=StaticProvider(
+                Candidate.create(
+                    name,
+                    name.replace("_", " ").title(),
+                    description=(
+                        "Boolean: true or false"
+                        if field.annotation is bool
+                        else "Whole number"
+                        if field.annotation is int
+                        else "Decimal number"
+                        if field.annotation is float
+                        else "JSON array of channel IDs"
+                    ),
+                )
+                for name, field in RuntimeSettings.model_fields.items()
+            ),
+        ),
         SuggestionSource(
             id="build_kinds",
             provider=StaticProvider.of([kind.value for kind in BuildKind], kind="build_kind"),

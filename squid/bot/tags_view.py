@@ -144,6 +144,9 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         await self._refresh()
 
     async def _refresh(self) -> None:
+        if self._restriction is not None:
+            item, _ = self._restriction
+            self._restriction = (item, await self._restrictions.alias_revision(item.value))
         if self._build_id is not None:
             self._build_revision = await self._tags.build_revision(self._build_id)
         definitions = tuple(await self._tags.public_definitions())

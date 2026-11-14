@@ -204,8 +204,9 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             "setting": sd.Option(
                 name=tr(t"command-runtime-settings-setting-name = setting"),
                 description=tr(
-                    t"command-runtime-settings-setting-help = Setting name. Omit to list available settings and their current values."
+                    t"command-runtime-settings-setting-help = Choose a setting by name. Omit to list settings and current values."
                 ),
+                autocomplete=suggests("runtime_setting_names"),
             ),
             "value": sd.Option(
                 name=tr(t"command-runtime-settings-value-name = value"),

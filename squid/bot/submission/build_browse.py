@@ -710,6 +710,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         await self._run_search(self._query, self._sort)
 
     async def _all_standings(self, _event: sl.PressEvent) -> None:
+        self._guided = None
         self._record_categories = frozenset()
         self._query = ""
         self._sort = ""

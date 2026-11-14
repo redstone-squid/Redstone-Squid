@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import cast, override
 from uuid import UUID
 
+import pytest
 from whenever import Instant
 
 import squid_ui as sl
@@ -24,6 +25,7 @@ from squid.notifications.application import NotificationEditorSnapshot
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.suggestions.domain import Suggestion
+from squid.tags.domain import TagValueType
 from squid_ui.testing import RecordingResponder, choose, find_all, keys, labels, press, render_tree, submit
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import stage
@@ -328,3 +330,24 @@ async def test_follows_after_the_first_page_can_be_selected_and_named() -> None:
     screen.subscriptions.reconcile_selection()
     assert screen.subscriptions.page == 0
     assert screen.subscriptions.selected_ids == ("1",)
+
+
+@pytest.mark.parametrize(
+    ("value_type", "value"),
+    [(TagValueType.BOOLEAN, False), (TagValueType.NUMERIC, 0.0), (TagValueType.TEXT, "compact")],
+)
+async def test_tag_filter_keeps_false_and_zero_as_exact_values(
+    value_type: TagValueType, value: bool | float | str
+) -> None:
+    harness = make_screen()
+    await harness.screen.on_load()
+    controls = harness.screen.subscriptions
+    controls.filter_tag = Suggestion("4", "Selected tag")
+    controls.filter_tag_type = value_type
+    with sl.runtime.transaction():
+        await submit(controls, "follow-filter", {"tag_value": value}, responder=RecordingResponder())
+    saved = harness.notifications.subscribe_calls[-1].record_filter
+    assert saved is not None
+    assert saved.tags[0].operator == "exact"
+    assert saved.tags[0].value == value
+    assert type(saved.tags[0].value) is type(value)
