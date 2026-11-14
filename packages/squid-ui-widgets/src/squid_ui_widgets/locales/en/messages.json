@@ -31,7 +31,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/collection.py:148"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/collection.py:149"
     ]
   },
   "widgets-collection-too-many": {
@@ -46,7 +46,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/collection.py:157"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/collection.py:158"
     ]
   },
   "widgets-multi-choice-exclusive": {
@@ -61,7 +61,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:219"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:221"
     ]
   },
   "widgets-multi-choice-options": {
@@ -70,7 +70,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:301"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:303"
     ]
   },
   "widgets-multi-choice-select-options": {
@@ -79,8 +79,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:297",
-      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:369"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:299",
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:371"
     ]
   },
   "widgets-multi-choice-too-few": {
@@ -95,7 +95,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:193"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:195"
     ]
   },
   "widgets-multi-choice-too-many": {
@@ -110,7 +110,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:202"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:204"
     ]
   },
   "widgets-multi-choice-unavailable": {
@@ -119,7 +119,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:212"
+      "packages/squid-ui-widgets/src/squid_ui_widgets/multi_choice.py:214"
     ]
   }
 }
