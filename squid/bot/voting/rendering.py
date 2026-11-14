@@ -2,7 +2,6 @@
 
 import dataclasses
 from collections.abc import Mapping
-from textwrap import dedent
 from typing import cast
 
 import squid_ui as sl
@@ -37,7 +36,7 @@ def render_build_review(
             "cancelled": "Closed without a decision",
             "pending": "Closed without a decision",
         }[snapshot.result]
-        vote_text = f"### Vote closed — {result_label}\n**Final score:** {snapshot.net_votes:g}"
+        vote_text = sl.md(t"### Vote closed — {result_label}\n**Final score:** {snapshot.net_votes:g}")
     else:
         approve = primary_emoji(snapshot, VoteChoice.APPROVE, guild_id)
         deny = primary_emoji(snapshot, VoteChoice.DENY, guild_id)
@@ -45,11 +44,12 @@ def render_build_review(
         # nullable ones belong to generic polls, which never reach this renderer.
         assert snapshot.pass_threshold is not None
         assert snapshot.fail_threshold is not None
-        vote_text = (
-            "### Vote in progress\n"
-            f"React with {approve} to **accept** or {deny} to **deny**. Votes are anonymous.\n"
-            f"**Accept:** {snapshot.upvotes:g}/{snapshot.pass_threshold}  •  "
-            f"**Deny:** {snapshot.downvotes:g}/{-snapshot.fail_threshold}"
+        fail_limit = -snapshot.fail_threshold
+        vote_text = sl.md(
+            t"### Vote in progress\n"
+            t"React with {approve} to **accept** or {deny} to **deny**. Votes are anonymous.\n"
+            t"**Accept:** {snapshot.upvotes:g}/{snapshot.pass_threshold}  •  "
+            t"**Deny:** {snapshot.downvotes:g}/{fail_limit}"
         )
     # The vote state is Never: a review whose tallies were trimmed away is worse than a
     # review whose build description was.
@@ -77,30 +77,27 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
     match snapshot.result if snapshot.status is VoteStatus.CLOSED else VoteSessionResult.PENDING:
         case VoteSessionResult.PENDING:
             title = "Vote to Delete Log"
-            action = (
-                f"React with {primary_emoji(snapshot, VoteChoice.APPROVE)} to upvote or "
-                f"{primary_emoji(snapshot, VoteChoice.DENY)} to downvote."
-            )
+            approve = primary_emoji(snapshot, VoteChoice.APPROVE)
+            deny = primary_emoji(snapshot, VoteChoice.DENY)
+            action = sl.md(t"React with {approve} to upvote or {deny} to downvote.")
             accent_colour = sl.Tone.WARNING
         case VoteSessionResult.APPROVED:
             title = "Vote to Delete Log: Passed"
-            action = ""
+            action = sl.text.Text("")
             accent_colour = sl.Tone.SUCCESS
         case VoteSessionResult.DENIED:
             title = "Vote to Delete Log: Failed"
-            action = ""
+            action = sl.text.Text("")
             accent_colour = sl.Tone.DANGER
         case _:
             title = "Vote to Delete Log: Closed"
-            action = ""
+            action = sl.text.Text("")
             accent_colour = sl.Tone.WARNING
 
-    description = dedent(f"""
-        {action}
-
-        **Log content**
-        {target_content}
-        """).strip()
+    # target_content is a logged user message, so it stays literal rather than being read as Markdown.
+    description = sl.text.Text.join(
+        "\n\n", [part for part in (action, sl.md(t"**Log content**\n{target_content}")) if part]
+    )
     return render_payload(
         [
             card_node(
