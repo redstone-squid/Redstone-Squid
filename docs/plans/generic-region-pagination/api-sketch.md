@@ -56,8 +56,9 @@ Defaults and interpretation:
 
 - Every candidate has the same fidelity, preference, and identity rules. `full` is simply a
   descriptive name; position in the list does not make it the semantic reference. Lower preference
-  values are favored among otherwise comparable admissible choices. The global tradeoff between
-  fidelity, stability, preference, and page turns belongs to phase 3.
+  values are favored among otherwise comparable admissible choices. Automatic comparison is specified
+  by the [phase 3 plan](03-joint-search.md#preference-and-fidelity), including ordinal preference ranks
+  and fair compromise between regions; the fixed-composition implementation does not rank choices.
 - An alternative must explicitly declare its fidelity. Omitting a declaration does not silently
   assert equivalence. Supplying `losses(...)` authorizes those specific effects in non-strict mode,
   subject to inherited hard requirements. It does not authorize unrelated loss elsewhere. Strict
