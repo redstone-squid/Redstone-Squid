@@ -21,9 +21,13 @@ def test_reference_entry_compacts_without_losing_its_label_or_description() -> N
     entry = _reference((_entry("width", "Physical width in blocks."), _entry("height", "Height in blocks.")))
     normal = plan(entry, target=DISCORD_V2_DPY27)
     compact_target = DISCORD_V2_DPY27.reserve(ResourceCost({Axis.COMPONENTS: 39}))
-    compact = plan(entry, target=compact_target)
+    compact = plan(entry, target=compact_target, strict=True)
 
     assert normal.scene != compact.scene
+    assert normal.allocation is not None
+    assert compact.allocation is not None
+    assert normal.report.legacy_pagination is None
+    assert compact.report.legacy_pagination is None
     view = render_static(entry, target=compact_target).view
     assert view is not None
     assert payload_texts(view) == ["width: Physical width in blocks.\n\nheight: Height in blocks."]

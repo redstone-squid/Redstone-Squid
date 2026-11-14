@@ -578,6 +578,10 @@ async def test_search_help_appends_to_selected_build() -> None:
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             ui.assert_within_limits()
+            if tab != "examples":
+                assert ui.root.plan is not None
+                assert ui.root.plan.allocation is not None
+                assert ui.root.plan.report.legacy_pagination is None
         await toggle_help(ui)
         assert "Build #7" in ui.texts()
         ui.assert_within_limits()
@@ -614,6 +618,10 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             ui.assert_within_limits()
+            if tab != "examples":
+                assert ui.root.plan is not None
+                assert ui.root.plan.allocation is not None
+                assert ui.root.plan.report.legacy_pagination is None
         await toggle_help(ui)
         assert "## Search results" in ui.texts()
         assert service.search.await_count == 1

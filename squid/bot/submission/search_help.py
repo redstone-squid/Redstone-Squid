@@ -193,4 +193,16 @@ def _reference(entries: tuple[Fields | Paragraph, ...]) -> sl.LayoutNode[sl.Comp
             lines.append(entry.content)
         else:
             lines.extend(Text(t"{field.label}: {field.value}") for field in entry.fields)
-    return sl.fallback(sl.stack(*entries), sl.paragraph(Text.join("\n\n", lines)))
+    source = sl.stack(*entries, key="entries")
+    return sl.alternatives(
+        sl.alternative(source, key="fields", fidelity=sl.equivalent()),
+        sl.alternative(
+            sl.paragraph(Text.join("\n\n", lines), key="compact"),
+            key="compact",
+            fidelity=sl.equivalent(),
+            preference=1,
+            correspondence=(sl.corresponds("compact", "entries"),),
+        ),
+        content=source,
+        key="reference",
+    )

@@ -284,3 +284,14 @@ nested containers and pagination inside a section's text slots.
 Both UI suites were exercised; the section-pagination regression found there was
 fixed and its focused suite passes. Build-browser and search-help application
 tests pass, and whole-project Pyrefly reports zero errors.
+
+## Continuation: search reference migration
+
+Search help now declares its structured fields and compact prose as equivalent
+presentations of the same entries. The compact form works in strict mode under
+component pressure. Production checked alternatives enter shared planning
+directly, including inside the search screen's native section header. Application
+tests assert shared allocation for help beside a selected build and crowded
+catalogue/search results, without refetching application-owned pages.
+
+Both UI suites pass (3,245 tests), as do the build-browser and search-help tests.

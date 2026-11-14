@@ -234,6 +234,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 pageable = True
                 return replace(node, primary=visit(node.primary), alternates=tuple(map(visit, node.alternates)))
             case Alternatives():
+                pageable = True
                 return replace(
                     node,
                     content=visit(node.content),
