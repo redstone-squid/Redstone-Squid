@@ -41,7 +41,7 @@ async def ingest_message_bundle(
     *,
     model: str,
     reasoning_effort: str | None = None,
-    include_images: bool = True,
+    include_images: bool = False,
     retry_failed: bool = False,
 ) -> UUID:
     """Resume or infer candidates for a nonempty, ordered bundle of primary messages.

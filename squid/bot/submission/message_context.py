@@ -224,13 +224,14 @@ async def assemble_bundle(
     *,
     preceding: Sequence[discord.Message] = (),
     reply_cache: dict[int, discord.Message | None] | None = None,
-    include_images: bool = True,
+    include_images: bool = False,
 ) -> BuildInferenceInput:
     """Build inference input from primary messages, reply ancestors, and preceding context.
 
     Primary messages must be nonempty and ordered. Reply ancestors take precedence
     over duplicate preceding context. Images are considered in primary, reply, then
-    preceding order, so primary attachments get the first chance at the image budget.
+    preceding order when explicitly enabled. Text-only assembly retains attachment
+    summaries without downloading image or video contents.
     """
     if not primary:
         msg = "A bundle requires at least one primary message"

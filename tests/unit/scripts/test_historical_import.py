@@ -104,12 +104,14 @@ async def test_unconsented_author_is_skipped_before_inference(monkeypatch: pytes
     ingest.assert_not_awaited()
 
 
-async def test_real_import_reuses_shared_resumable_intake(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("images", [False, True])
+async def test_real_import_reuses_shared_resumable_intake(monkeypatch: pytest.MonkeyPatch, images: bool) -> None:
     ingest = AsyncMock(return_value=uuid4())
     monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
     bundle = importer.MessageBundle((message(1),), ())
     runtime = services()
-    result = await importer.process_group(bundle, runtime, importer.ImportOptions("x", include_images=False))
+    options = importer.ImportOptions("x", include_images=True) if images else importer.ImportOptions("x")
+    result = await importer.process_group(bundle, runtime, options)
     assert result.processed == 1
     ingest.assert_awaited_once_with(
         bundle.primary,
@@ -117,10 +119,18 @@ async def test_real_import_reuses_shared_resumable_intake(monkeypatch: pytest.Mo
         runtime,
         model="x",
         reasoning_effort=None,
-        include_images=False,
+        include_images=images,
         retry_failed=False,
     )
     assert result.inferred_candidates == 2
+
+
+@pytest.mark.parametrize(
+    ("arguments", "images"),
+    [([], False), (["--images"], True), (["--no-images"], False)],
+)
+def test_visual_inference_is_an_explicit_import_option(arguments: list[str], images: bool) -> None:
+    assert importer.parse_args(arguments).images is images
 
 
 @pytest.mark.parametrize(("existing", "skipped", "failed"), [([True, True], 1, 0), ([True, False], 0, 1)])

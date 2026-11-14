@@ -165,6 +165,7 @@ async def test_ambiguous_files_wait_for_explicit_assignment(monkeypatch: pytest.
     await ingestion.ingest_message_bundle([message(files=True)], [], h.services, model="test")
     assert h.materialize.await_count == 2
     h.download.assert_not_awaited()
+    assert cast(Any, ingestion.assemble_bundle).await_args.kwargs["include_images"] is False
     assert len(h.inference.infer_calls.await_args.kwargs["source_files"]) == 1
 
 
