@@ -52,7 +52,7 @@ jobs:
       - name: Install the project
         run: uv sync --locked --dev
 
-      - name: Generate schema_dump.sql and schema/structure
+      - name: Generate schema/schema_dump.sql and schema/structure
         run: scripts/export_schema.sh
 
       - name: Commit refreshed schema files
@@ -61,13 +61,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "$(git status --porcelain -- schema_dump.sql schema/structure)" ]; then
+          if [ -z "$(git status --porcelain -- schema/schema_dump.sql schema/structure)" ]; then
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add schema_dump.sql schema/structure
+          git add schema/schema_dump.sql schema/structure
           git commit -m "chore(schema): refresh generated schema files [skip ci]"
           gh auth setup-git
           git push
@@ -76,11 +76,11 @@ jobs:
         if: github.event_name != 'push'
         shell: bash
         run: |
-          if [ -z "$(git status --porcelain -- schema_dump.sql schema/structure)" ]; then
+          if [ -z "$(git status --porcelain -- schema/schema_dump.sql schema/structure)" ]; then
             exit 0
           fi
 
-          echo "schema_dump.sql or schema/structure does not match the migrations. Run 'just schema-docs' and commit the result."
-          git status --short -- schema_dump.sql schema/structure
-          git diff --stat -- schema_dump.sql schema/structure
+          echo "schema/schema_dump.sql or schema/structure does not match the migrations. Run 'just schema-docs' and commit the result."
+          git status --short -- schema/schema_dump.sql schema/structure
+          git diff --stat -- schema/schema_dump.sql schema/structure
           exit 1

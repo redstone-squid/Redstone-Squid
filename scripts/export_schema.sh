@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Rebuild the two generated views of the database schema from the Alembic migrations:
 #
-#   schema_dump.sql    one file, for grep and for pasting into a review
-#   schema/structure/  one file per table and function, for browsing and readable diffs
+#   schema/schema_dump.sql  one file, for grep and for pasting into a review
+#   schema/structure/       one file per table and function, for browsing and readable diffs
 #
 # Both come from the same throwaway PostgreSQL container, so they always agree with the migrations.
 # CI runs this script too (.github/workflows/schema-artifacts.yml). Needs docker, curl and uv.
@@ -90,4 +90,4 @@ chmod +x "$work/pg_dump"
 # Replace the outputs only after everything has succeeded.
 rm -rf schema/structure
 mv "$work/structure" schema/structure
-mv "$work/schema_dump.sql" schema_dump.sql
+mv "$work/schema_dump.sql" schema/schema_dump.sql

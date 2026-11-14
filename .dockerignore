@@ -43,7 +43,6 @@ site/
 .coverage
 .agents/
 .cache/
-schema_dump.sql
 schema/
 
 # The backend image does not execute any independently built client workspace.

@@ -8,8 +8,8 @@ hooks = [
     { id = "check-toml" },
     # Compose validates its own merge tags in the deployment tests.
     { id = "check-yaml", exclude = "^deploy/compose\\.(edge|production)\\.yml$" },
-    { id = "end-of-file-fixer", exclude = "^(alembic/sql/|schema/|schema_dump\\.sql$|tests/fuzz/corpus/)" },
-    { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"], exclude = "^(alembic/sql/|schema/|schema_dump\\.sql$|tests/fuzz/corpus/)" },
+    { id = "end-of-file-fixer", exclude = "^(alembic/sql/|schema/structure/|schema/schema_dump\\.sql$|tests/fuzz/corpus/)" },
+    { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"], exclude = "^(alembic/sql/|schema/structure/|schema/schema_dump\\.sql$|tests/fuzz/corpus/)" },
 ]
 
 [[repos]]

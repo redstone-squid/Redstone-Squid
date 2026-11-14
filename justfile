@@ -59,7 +59,7 @@ build:
 docker-run: build
     docker run --env-file .env --rm -p 8000:8000 rssquid
 
-# Rebuild schema_dump.sql and schema/structure/ from the migrations, the same way CI does. Needs docker.
+# Rebuild schema/schema_dump.sql and schema/structure/ from the migrations, the same way CI does. Needs docker.
 [unix]
 schema-docs:
     scripts/export_schema.sh

@@ -24,7 +24,7 @@
 *.tsv      text
 *.txt      text
 *.sql      text
-schema_dump.sql linguist-generated=true
+schema/schema_dump.sql linguist-generated=true
 schema/structure/** linguist-generated=true
 alembic/sql/20260728_portable_schema.sql linguist-generated=true
 contracts/fuzz/*.json linguist-generated=true
