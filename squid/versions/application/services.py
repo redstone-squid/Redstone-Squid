@@ -67,6 +67,9 @@ class VersionService:
         both endpoints and every known patch of 1.20. Tildes and typographic dashes
         between numeric bounds are also accepted. `1.21+` selects 1.21.0 and
         later releases. A full version such as `1.21.4` selects only that entry.
+        Prefix a selection with `!` to exclude it: `1.8+, !1.16+` stops before 1.16.
+        Exclusions apply to every positive selection, regardless of their order.
+        Exclusions alone do not claim compatibility with any release.
 
         Prefix the selection with `Java` or `Bedrock`; Java is the default.
         Unlike parse_version_string, these edition names are case-sensitive.
@@ -83,26 +86,34 @@ class VersionService:
         versions = await self.list_versions(edition)
         available = [(version.major, version.minor, version.patch) for version in versions]
         resolved: list[tuple[int, int, int]] = []
+        excluded: list[tuple[int, int, int]] = []
 
         for part in (part.strip() for part in normalized_spec.split(",")):
+            destination = excluded if part.startswith("!") else resolved
+            part = part.removeprefix("!").strip()
             if "-" in part:
                 start_text, end_text = self._range_bounds(part)
                 start = self._parse_version_numbers(start_text)
                 end = self._parse_range_end(end_text, available)
-                resolved.extend(version for version in available if start <= version <= end)
+                destination.extend(version for version in available if start <= version <= end)
             elif part.endswith("+"):
                 start = self._parse_version_numbers(part[:-1].strip())
-                resolved.extend(version for version in available if version >= start)
+                destination.extend(version for version in available if version >= start)
             else:
                 numbers = tuple(map(int, part.split(".")))
                 if len(numbers) == 2:
-                    resolved.extend(
+                    destination.extend(
                         version for version in available if version[0] == numbers[0] and version[1] == numbers[1]
                     )
                 elif len(numbers) == 3 and numbers in available:
-                    resolved.append(numbers)
+                    destination.append(numbers)
 
-        return [f"{edition} {major}.{minor}.{patch}" for major, minor, patch in resolved]
+        exclusions = set(excluded)
+        return [
+            f"{edition} {major}.{minor}.{patch}"
+            for major, minor, patch in resolved
+            if (major, minor, patch) not in exclusions
+        ]
 
     @staticmethod
     def _edition_from_spec(version_spec: str) -> Edition:

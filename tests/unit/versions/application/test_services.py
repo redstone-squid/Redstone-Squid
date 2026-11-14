@@ -108,3 +108,31 @@ async def test_edition_without_a_version_does_not_claim_compatibility_with_every
     committed.value.versions = [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
     assert await service.resolve_spec(edition) == []
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        ("1.8+, !1.16+", ["Java 1.8.0", "Java 1.15.2"]),
+        ("!1.16+, 1.8+", ["Java 1.8.0", "Java 1.15.2"]),
+        ("1.8+, !1.16 - 1.21", ["Java 1.8.0", "Java 1.15.2", "Java 26.1.0"]),
+        ("1.16+, !1.16.5", ["Java 1.16.0", "Java 1.21.0", "Java 26.1.0"]),
+        ("!1.16+", []),
+        ("Bedrock 1.8+, !1.16+", ["Bedrock 1.8.0"]),
+    ],
+)
+async def test_version_exclusions_do_not_claim_broken_releases(spec: str, expected: list[str]) -> None:
+    committed = CommittedState(FakeVersionRepository())
+    committed.value.versions = [
+        MinecraftVersion("Java", 1, 8, 0),
+        MinecraftVersion("Java", 1, 15, 2),
+        MinecraftVersion("Java", 1, 16, 0),
+        MinecraftVersion("Java", 1, 16, 5),
+        MinecraftVersion("Java", 1, 21, 0),
+        MinecraftVersion("Java", 26, 1, 0),
+        MinecraftVersion("Bedrock", 1, 8, 0),
+        MinecraftVersion("Bedrock", 1, 16, 0),
+    ]
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
+
+    assert await service.resolve_spec(spec) == expected
