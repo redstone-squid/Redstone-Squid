@@ -8,7 +8,8 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid_ui_discord.testing import InteractionHarness
+from squid_ui_discord.response import UNSET
+from squid_ui_discord.testing import InteractionHarness, stage
 
 
 class FakeClient:
@@ -99,6 +100,35 @@ def test_response_policy_overlays_in_documented_order() -> None:
 
     assert ui._policy(Timed(), {}).timeout == 30
     assert ui._policy(Timed(), {"timeout": 40}).timeout == 40
+
+
+@pytest.mark.parametrize(
+    "screen_nav,call_nav,expected",
+    [
+        (UNSET, UNSET, sd.navigation_controls.page_select_nav),
+        (sd.navigation_controls.page_jump_nav, UNSET, sd.navigation_controls.page_jump_nav),
+        (sd.navigation_controls.page_jump_nav, sd.navigation_controls.default_nav, sd.navigation_controls.default_nav),
+    ],
+)
+async def test_navigation_policy_reaches_the_presented_pager(screen_nav, call_nav, expected) -> None:
+    class Pages(sd.Screen):
+        policy = sd.ResponseSpec(nav=screen_nav)
+
+        @override
+        def render(self):
+            return sl.primitives.Lines(
+                tuple(str(index) for index in range(40)),
+                overflow=sl.primitives.Paginate(key="rows", per=1),
+            )
+
+    config = sd.Config(responses=sd.ResponseSpec(nav=sd.navigation_controls.page_select_nav))
+    overrides = {} if call_nav is UNSET else {"nav": call_nav}
+    async with stage(Pages(), owner=object(), config=config, **overrides) as ui:
+        assert ui.root.nav is expected
+        assert ui.root.plan is not None
+        assert ("__cursor_seek.rows.jump" in ui.root.plan.form_bindings) == (
+            expected is sd.navigation_controls.page_jump_nav
+        )
 
 
 async def test_private_interaction_is_ephemeral() -> None:

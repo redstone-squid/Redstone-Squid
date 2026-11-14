@@ -16,6 +16,7 @@ from typing import Any, TypedDict, Unpack, cast, override
 import discord
 
 from squid_ui.chrome import Chrome
+from squid_ui.planning.navigation import NavFactory
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy, Owner
@@ -63,6 +64,7 @@ class ResponseOverrides(TypedDict, total=False):
     session: SessionSpec | None
     allowed_mentions: discord.AllowedMentions | None
     chrome: Chrome | None
+    nav: NavFactory | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +86,8 @@ class ResponseSpec:
     session: Setting[SessionSpec | None] = UNSET
     allowed_mentions: Setting[discord.AllowedMentions | None] = UNSET
     chrome: Setting[Chrome | None] = UNSET
+    nav: Setting[NavFactory | None] = UNSET
+    """Pagination controls for this presentation; None uses the installed mount default."""
 
     def overlay(self, other: ResponseSpec | None = None, /, **overrides: Unpack[ResponseOverrides]) -> ResponseSpec:
         """Return this policy with specified values from the more-specific layer."""
@@ -114,6 +118,7 @@ class ResponseSpec:
             session=value(self.session, fallback=None),
             allowed_mentions=value(self.allowed_mentions, fallback=None),
             chrome=value(self.chrome, fallback=None),
+            nav=value(self.nav, fallback=None),
         )
 
 
@@ -130,6 +135,7 @@ class ResolvedResponse:
     session: SessionSpec | None
     allowed_mentions: discord.AllowedMentions | None
     chrome: Chrome | None
+    nav: NavFactory | None
 
 
 class Response[ContentT: FacadeContent = FacadeContent]:

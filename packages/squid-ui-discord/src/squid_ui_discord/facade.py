@@ -362,6 +362,8 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         chrome = policy.chrome
         if chrome is not None:
             options["chrome"] = chrome
+        if policy.nav is not None:
+            options["nav"] = policy.nav
         options["retain_routed_on_timeout"] = policy.retain_routed_on_timeout
         options["timeout"] = policy.timeout
         options["localization"] = localization
