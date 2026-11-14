@@ -1,0 +1,142 @@
+<div id="squid-search-proposal" class="viz-dotted-background">
+  <style>
+    #squid-search-proposal { color-scheme: light dark; padding: 16px; }
+    #squid-search-proposal .discord-message {
+      background: light-dark(#ffffff, #313338); color: light-dark(#232428, #f2f3f5);
+      font: 14px/1.5 system-ui, sans-serif; border-radius: 8px; padding: 18px; overflow-wrap: anywhere;
+    }
+    #squid-search-proposal .bot { font-weight: 600; margin-bottom: 12px; }
+    #squid-search-proposal .bot-label {
+      background: light-dark(#e8eaff, #414675); padding: 2px 5px; border-radius: 4px;
+      font-size: 12px; margin-left: 6px;
+    }
+    #squid-search-proposal h3 { font-size: 17px; margin: 0 0 6px; }
+    #squid-search-proposal p { margin: 4px 0; }
+    #squid-search-proposal .secondary { color: light-dark(#555963, #b5bac1); }
+    #squid-search-proposal .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    #squid-search-proposal .toolbar { margin: 12px 0; }
+    #squid-search-proposal button, #squid-search-proposal select {
+      font: inherit; color: inherit; background: light-dark(#ebedef, #43464e);
+      border: 1px solid light-dark(#c4c7ce, #666b76); border-radius: 5px;
+      padding: 8px 12px; max-width: 100%; min-height: 44px; white-space: normal;
+    }
+    #squid-search-proposal button:disabled { opacity: .5; }
+    #squid-search-proposal .primary { background: light-dark(#4752c4, #5865f2); color: #fff; }
+    #squid-search-proposal .entry { border-top: 1px solid light-dark(#dedfe3, #4b4e56); padding: 14px 0; }
+    #squid-search-proposal .entry button { margin-top: 8px; }
+    #squid-search-proposal .footer { margin-top: 12px; }
+    #squid-search-proposal .metric { font-variant-numeric: tabular-nums; }
+    @media (max-width: 400px) {
+      #squid-search-proposal { padding: 8px; }
+      #squid-search-proposal .discord-message { padding: 12px; }
+    }
+  </style>
+  <section class="discord-message" aria-label="Proposed Discord search interaction">
+    <div class="bot">Redstone Squid <span class="bot-label">APP</span></div>
+    <p><strong>/search</strong> query: 2x2</p>
+    <div class="controls toolbar">
+      <label for="squid-proposal-scope">Scope</label>
+      <select id="squid-proposal-scope">
+        <option value="records">Records</option>
+        <option value="builds">Builds</option>
+        <option value="everything">Everything</option>
+      </select>
+    </div>
+    <div id="squid-proposal-content" aria-live="polite"></div>
+  </section>
+  <script>
+    (() => {
+      const root = document.getElementById('squid-search-proposal');
+      const content = root.querySelector('#squid-proposal-content');
+      const scopeInput = root.querySelector('#squid-proposal-scope');
+      const builds = {
+        42: { title: '2×2 Seamless Door', size: '4 × 3 × 4 blocks', records: ['smallest', 'fastest'] },
+        57: { title: 'Compact 2×2 Door', size: '3 × 4 × 4 blocks', records: ['smallest'] },
+        83: { title: '2×2 Flush Door', size: '5 × 4 × 4 blocks', records: [] }
+      };
+      const records = {
+        smallest: { title: 'Smallest 2×2 piston door', metric: 'Volume: 48 blocks', holders: [42, 57] },
+        fastest: { title: 'Fastest-opening 2×2 piston door', metric: 'Opening time: 4 game ticks', holders: [42] }
+      };
+      let state = { scope: 'records', page: 0, selected: null, detail: 'build', origin: null };
+      const action = (label, attributes, primary = false) =>
+        `<button type="button" class="cursor-interaction${primary ? ' primary' : ''}" ${attributes}>${label}</button>`;
+      function entries() {
+        return state.scope === 'records' ? [42, 57] : state.scope === 'builds' ? [42, 57, 83] : [42, 57, 83, 'pattern'];
+      }
+      function summary(id) {
+        if (state.scope === 'builds') return 'Matches build text';
+        if (id === 42) return 'Matches: Smallest (tied) · Fastest opening';
+        if (id === 57) return 'Matches: Smallest (tied)';
+        return 'Matches build text';
+      }
+      function render() {
+        scopeInput.value = state.scope;
+        if (state.selected === null) {
+          const items = entries();
+          const count = state.scope === 'everything' ? '4 results · 3 builds, 1 pattern' : `${items.length} builds`;
+          content.innerHTML = `<h3>Search results</h3><p class="secondary">${count}</p>` +
+            items.slice(state.page * 2, state.page * 2 + 2).map(id => id === 'pattern'
+              ? `<div class="entry"><strong>2×2 piston layout</strong><p class="secondary">Pattern</p>${action('View pattern', 'data-open="pattern"')}</div>`
+              : `<div class="entry"><strong>${builds[id].title}</strong><p class="secondary">Build #${id}</p><p>${summary(id)}</p>${action('View build', `data-open="${id}"`)}</div>`).join('') +
+            `<div class="controls footer">${action('Previous', `data-page="-1" ${state.page === 0 ? 'disabled' : ''}`)}<span>Page ${state.page + 1} of ${Math.ceil(items.length / 2)}</span>${action('Next', `data-page="1" ${state.page === Math.ceil(items.length / 2) - 1 ? 'disabled' : ''}`)}</div>`;
+          return;
+        }
+        let body = action('← Results', 'data-back="results"');
+        if (state.selected === 'pattern') {
+          content.innerHTML = body + '<div class="entry"><h3>2×2 piston layout</h3><p class="secondary">Pattern</p><p>A piston arrangement for a 2×2 door opening.</p></div>';
+          return;
+        }
+        const id = state.selected;
+        const build = builds[id];
+        if (state.origin !== null) body += ' ' + action(`← Build #${state.origin}`, 'data-back="holder"');
+        body += `<div class="entry"><h3>${build.title}</h3><p class="secondary">Build #${id} · Confirmed</p>`;
+        if (state.detail === 'build') {
+          body += `<p class="metric">${build.size}</p><p>Java Edition · Piston door</p>`;
+          if (state.scope !== 'builds' && build.records.length) body += action(`Matching records (${build.records.length})`, 'data-detail="records"', true);
+        } else {
+          body += '<p><strong>Matching records</strong></p>';
+          body += build.records.map(key => {
+            const record = records[key];
+            const other = record.holders.filter(holder => holder !== id);
+            return `<div class="entry"><strong>${record.title}</strong><p class="secondary">Java Edition · All-time</p><p class="metric">${record.metric}</p>` +
+              (other.length ? `<p>Tied with ${other.map(holder => `Build #${holder}`).join(', ')}</p>${other.map(holder => action(`View build #${holder}`, `data-holder="${holder}"`)).join('')}` : '<p>Sole holder</p>') + '</div>';
+          }).join('');
+          body += action('Build details', 'data-detail="build"');
+        }
+        content.innerHTML = body + '</div>';
+      }
+      function save() {
+        window.openai?.setWidgetState?.({ modelContent: { scope: state.scope, selectedBuild: state.selected, detail: state.detail }, privateContent: state })?.catch(() => {});
+      }
+      function restore(saved) {
+        const candidate = saved?.privateContent;
+        if (!candidate || !['records', 'builds', 'everything'].includes(candidate.scope)) return;
+        if (![null, 42, 57, 83, 'pattern'].includes(candidate.selected)) return;
+        if (!['build', 'records'].includes(candidate.detail) || ![null, 42, 57].includes(candidate.origin)) return;
+        state = { ...candidate, page: candidate.page === 1 && candidate.scope !== 'records' ? 1 : 0 };
+      }
+      scopeInput.addEventListener('change', () => {
+        state = { scope: scopeInput.value, page: 0, selected: null, detail: 'build', origin: null };
+        render(); save();
+      });
+      content.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button || button.disabled) return;
+        const data = button.dataset;
+        if (data.open) { state.selected = data.open === 'pattern' ? 'pattern' : Number(data.open); state.detail = 'build'; }
+        if (data.page) state.page += Number(data.page);
+        if (data.detail) state.detail = data.detail;
+        if (data.holder) { state.origin = state.selected; state.selected = Number(data.holder); state.detail = 'build'; }
+        if (data.back === 'results') { state.selected = null; state.origin = null; }
+        if (data.back === 'holder') { state.selected = state.origin; state.origin = null; state.detail = 'records'; }
+        render(); save();
+      });
+      restore(window.openai?.widgetState);
+      window.addEventListener('openai:set_globals', event => {
+        if (event.detail?.globals?.widgetState) { restore(event.detail.globals.widgetState); render(); }
+      });
+      render();
+    })();
+  </script>
+</div>
