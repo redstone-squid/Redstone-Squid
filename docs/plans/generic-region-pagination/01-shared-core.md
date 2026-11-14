@@ -234,7 +234,7 @@ This establishes ownership. Decision 3 below chooses the working direction for t
 model; concrete interfaces still require evidence from composition and state experiments.
 
 No production behavior has changed. The experiments below advance the investigation; the full
-matrix, fidelity policy, and final architectural recommendation remain unfinished.
+matrix and final architectural recommendation remain unfinished.
 
 
 ## Decision 3 Preserve decision-relevant semantics in the core
@@ -255,7 +255,7 @@ resource sharing, and interactions. The composition experiments establish initia
 for tables, shared resources, and nested regions. Exact types and extension APIs remain open.
 
 
-## Composition findings and the next decision
+## Composition findings and fidelity policy
 
 The [composition experiments](composition-experiments.md) probe tables, shared attachments,
 and the existing nested-region behavior. They establish requirements for semantic identity,
@@ -265,7 +265,9 @@ handoff remain incomplete.
 
 ### Decision 4 Separate fidelity from representation preference
 
-Status: open for discussion. Pause before deciding how representations declare their effects.
+Status: agreed. Strict planning preserves content, relationships, and interaction behavior,
+and enforces authored hard requirements. It permits equivalent representations and lossless
+pagination; moving away from a preferred representation is not itself a strict failure.
 
 The core needs to distinguish a different presentation of the same content from a representation
 that omits or changes content or behavior. Existing Discord strategies already make some exact
@@ -274,7 +276,7 @@ a semantic-loss penalty, and strict mode rejects them even when an author intend
 compact form. Slack's table slicing demonstrates the opposite problem: actual visible content
 loss can go unreported.
 
-Recommendation for discussion:
+The agreed policy is:
 
 - Treat content and behavior preservation separately from representation preference and navigation
   effort. Exact representation changes and lossless pagination can satisfy strict planning.
@@ -284,11 +286,10 @@ Recommendation for discussion:
   semantic identities and relationships available for validation.
 - For arbitrary authored alternatives, do not infer equivalence from text or similar tree shapes.
   Let authors explicitly declare equivalent alternatives; conservatively classify undeclared
-  replacements. The classification, default, and API remain to be agreed.
-- Keep opted-in content loss available to non-strict planning. Under this proposal, strict mode
+  replacements. The detailed classification and declaration API remain for the implementation plan.
+- Keep opted-in content loss available to non-strict planning. Strict mode
   still refuses actual loss, even when an author supplied a permissive adaptation.
 
-The choice is whether strict planning promises preservation of content and behavior while allowing
-permitted changes of form, or also treats moving away from a preferred representation as a strict
-failure. That decision affects the candidate model and ranking before any method signatures are
-chosen. No production behavior has changed.
+Representation preference belongs in candidate ranking, while fidelity and hard requirements
+determine admissibility. The precise ranking and representation metadata remain to be designed.
+No production behavior has changed.
