@@ -5,7 +5,7 @@ This module offers representations; it does not fit or paginate them.
 """
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from hashlib import sha256
@@ -19,10 +19,13 @@ from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.planning.composition import (
     CandidateComposition,
+    FragmentContract,
+    FragmentCoverage,
     OccurrenceId,
     Placement,
     PlanningContext,
     RealizationOffer,
+    RegionContract,
     SemanticOccurrence,
     TargetRules,
     UnsupportedCapability,
@@ -34,7 +37,7 @@ from squid_ui.planning.structure import resolve_accent
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
 from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.text import resolve_text
+from squid_ui.text import TextLike, resolve_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +79,9 @@ class TableRealization:
     rows: tuple[TableRecord, ...]
     form: TableForm
 
+    def fragment(self, start: int, end: int) -> Realization:
+        return replace(self, rows=self.rows[start:end])
+
 
 @dataclass(frozen=True, slots=True)
 class DownloadRealization:
@@ -101,15 +107,55 @@ type Realization = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class RegionNavigation[RenderTargetT, ContextT]:
+    occurrence: SemanticOccurrence[RenderTargetT, ContextT]
+    disabled_controls: bool
+    footer: Callable[[int, int], TextLike] | None = None
+
+    def __call__(
+        self, page: int, pages: int, context: PlanningContext
+    ) -> tuple[CandidateComposition[RenderTargetT, ContextT, Realization], ...]:
+        if pages == 1:
+            return ()
+        occurrence = self.occurrence
+        route = "composition.page." + sha256("/".join(occurrence.identity.path).encode()).hexdigest()[:24]
+        payloads: list[Realization] = []
+        if page > 0 or self.disabled_controls:
+            payloads.append(ControlRealization("Previous", route=f"{route}.{max(0, page - 1)}", disabled=page == 0))
+        label = self.footer(page + 1, pages) if self.footer is not None else f"{page + 1} / {pages}"
+        payloads.append(TextRealization(resolve_text(label, context.localization).nodes))
+        if page + 1 < pages or self.disabled_controls:
+            payloads.append(
+                ControlRealization("Next", route=f"{route}.{min(pages - 1, page + 1)}", disabled=page + 1 == pages)
+            )
+        result: list[CandidateComposition[RenderTargetT, ContextT, Realization]] = []
+        for index, payload in enumerate(payloads):
+            context.work.consume()
+            identity = OccurrenceId((*occurrence.identity.path, "@navigation", str(page), str(index)))
+            placed = replace(
+                occurrence,
+                identity=identity,
+                placement=Placement.NAVIGATION,
+                fragment=FragmentCoverage(occurrence.identity, 0, 0, frozenset()),
+            )
+            result.append(CandidateComposition(RealizationOffer(placed, "navigation", payload)))
+        return tuple(result)
+
+
 def semantic_offers[RenderTargetT, ContextT](
     occurrence: SemanticOccurrence[RenderTargetT, ContextT],
     context: PlanningContext,
     *,
     table_forms: tuple[TableForm, ...],
     panels: bool,
+    disabled_controls: bool = True,
+    character_budgets: bool = False,
 ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
     context.work.consume()
     value = occurrence.graph.units[occurrence.reference].value
+    if isinstance(value, sem.Budgeted | sem.Paged) and not character_budgets:
+        return ()
     if isinstance(value, Alternatives):
         choices: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
         for choice in value.choices:
@@ -132,7 +178,9 @@ def semantic_offers[RenderTargetT, ContextT](
                 )
             )
             choices.append(
-                RealizationOffer(occurrence, choice.key, FlowRealization(), (child,), effects, choice.preference)
+                RealizationOffer(
+                    occurrence, choice.key, FlowRealization(), (child,), effects, choice.preference, flow=True
+                )
             )
         return tuple(choices)
     if isinstance(value, TextPresentation):
@@ -209,6 +257,8 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.ActionControls
         | sem.ControlGroup
         | sem.Region
+        | sem.Paged
+        | sem.Budgeted
         | StructuralGroup
         | sem.Block
         | Budget
@@ -229,7 +279,11 @@ def semantic_offers[RenderTargetT, ContextT](
                 OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
                 occurrence.graph,
                 ref,
-                placement,
+                Placement.HEADER
+                if isinstance(value, sem.Region) and ref.keys[-1] == "@header"
+                else Placement.FOOTER
+                if isinstance(value, sem.Region) and ref.keys[-1] == "@footer"
+                else placement,
                 occurrence.origin,
             )
             for ref in refs
@@ -239,7 +293,26 @@ def semantic_offers[RenderTargetT, ContextT](
             if isinstance(value, sem.Block) and panels
             else FlowRealization()
         )
-        return (RealizationOffer(occurrence, "container", payload, children),)
+        region = None
+        if isinstance(value, sem.Region | sem.Paged):
+            region = RegionContract(
+                value.key,
+                RegionNavigation(occurrence, disabled_controls, value.footer if isinstance(value, sem.Paged) else None),
+                value.chars if isinstance(value, sem.Paged) else None,
+                value.min_fill if isinstance(value, sem.Paged) else 0,
+                value.widows if isinstance(value, sem.Paged) else 1,
+            )
+        return (
+            RealizationOffer(
+                occurrence,
+                "container",
+                payload,
+                children,
+                flow=not isinstance(value, sem.Unbreakable),
+                keep_with_next=isinstance(value, sem.KeepWithNext),
+                region=region,
+            ),
+        )
     if isinstance(value, sem.Table):
         prefix = occurrence.reference.keys
         columns = tuple(
@@ -268,15 +341,30 @@ def semantic_offers[RenderTargetT, ContextT](
             preferred = TableForm.RECORDS
         elif value.display == sem.TableDisplay.MATRIX:
             preferred = None
-        return tuple(
-            RealizationOffer(
-                occurrence,
-                form.value,
-                TableRealization(columns, tuple(rows), form),
-                preference=0 if form == preferred else index + 1,
+        offers: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
+        for index, form in enumerate(table_forms):
+            payload = TableRealization(columns, tuple(rows), form)
+            units = tuple(frozenset(cell.reference for cell in row.cells) for row in rows)
+            if occurrence.origin is not None:
+                units = tuple(
+                    frozenset(source for ref in unit for source in occurrence.origin.references(ref)) for unit in units
+                )
+            repeated = frozenset(column.reference for column in columns)
+            if occurrence.origin is not None:
+                repeated = frozenset(source for ref in repeated for source in occurrence.origin.references(ref))
+            fragments = (
+                FragmentContract(units, tuple(range(1, len(rows) + 1)), payload.fragment, repeated) if rows else None
             )
-            for index, form in enumerate(table_forms)
-        )
+            offers.append(
+                RealizationOffer(
+                    occurrence,
+                    form.value,
+                    payload,
+                    preference=0 if form == preferred else index + 1,
+                    fragments=fragments,
+                )
+            )
+        return tuple(offers)
     if isinstance(value, sem.Download):
         payload = DownloadRealization(
             value.asset,

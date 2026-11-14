@@ -4,7 +4,7 @@ This boundary evaluates an explicitly selected composition. Choosing offers and
 certifying all reachable page combinations belongs to the joint solver.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from types import MappingProxyType
@@ -18,6 +18,7 @@ from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantics import SemanticGraph, SourceScope
 from squid_ui.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
+from squid_ui.semantic import Budgeted
 from squid_ui.text import NEUTRAL, Localization
 
 
@@ -36,12 +37,64 @@ class Placement(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class FragmentCoverage:
+    logical: OccurrenceId
+    start: int
+    end: int
+    sources: frozenset[SemanticRef]
+    repeated: frozenset[SemanticRef] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
+class FragmentContract[PayloadT]:
+    """Ordered source units and a pure constructor for an exact contiguous fragment.
+
+    The target declares legal ends, including the final end. Repeated sources are
+    continuation chrome (for example table headings), never ordinary content.
+    """
+
+    units: tuple[frozenset[SemanticRef], ...]
+    legal_ends: tuple[int, ...]
+    payload: Callable[[int, int], PayloadT]
+    repeated: frozenset[SemanticRef] = frozenset()
+
+    def __post_init__(self) -> None:
+        if (
+            not self.units
+            or self.legal_ends != tuple(sorted(set(self.legal_ends)))
+            or (not self.legal_ends or self.legal_ends[0] < 1 or self.legal_ends[-1] != len(self.units))
+        ):
+            message = "fragment contract needs ordered legal ends covering every unit"
+            raise LayoutInvariantError(message)
+        seen: set[SemanticRef] = set()
+        for unit in self.units:
+            if not unit or seen.intersection(unit) or self.repeated.intersection(unit):
+                message = "ordinary fragment sources must be nonempty, disjoint, and separate from continuation sources"
+                raise LayoutInvariantError(message)
+            seen.update(unit)
+
+
+@dataclass(frozen=True, slots=True)
+class RegionContract[RenderTargetT, ContextT, PayloadT]:
+    """Target-declared pagination chrome, composed and charged on every visible page."""
+
+    key: str
+    navigation: Callable[
+        [int, int, PlanningContext], tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...]
+    ]
+    chars: int | None = None
+    min_fill: int = 0
+    widows: int = 1
+
+
+@dataclass(frozen=True, slots=True)
 class SemanticOccurrence[RenderTargetT, ContextT]:
     identity: OccurrenceId
     graph: SemanticGraph[RenderTargetT, ContextT]
     reference: SemanticRef
     placement: Placement = Placement.CONTENT
     origin: SourceScope[RenderTargetT, ContextT] | None = None
+    fragment: FragmentCoverage | None = None
 
     def __post_init__(self) -> None:
         if self.reference not in self.graph.units:
@@ -50,6 +103,8 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
 
     @property
     def sources(self) -> frozenset[SemanticRef]:
+        if self.fragment is not None:
+            return self.fragment.sources | self.fragment.repeated
         return self.origin.references(self.reference) if self.origin is not None else self.graph.atoms(self.reference)
 
     def scope_effects(self, effects: tuple[FidelityEffect, ...]) -> tuple[FidelityEffect, ...]:
@@ -107,6 +162,11 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     binding: ActionBinding[PressEvent[ContextT]] | None = None
     form: FormBinding[ContextT] | None = None
     atomic: AtomicContract | None = None
+    flow: bool = False
+    """Allow contiguous fragments of the declared children, preserving this shell."""
+    keep_with_next: bool = False
+    fragments: FragmentContract[PayloadT] | None = None
+    region: RegionContract[RenderTargetT, ContextT, PayloadT] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +185,7 @@ class CandidateComposition[RenderTargetT, ContextT, PayloadT]:
             or child.offer.occurrence.reference != expected_child.reference
             or child.offer.occurrence.placement != expected_child.placement
             or child.offer.occurrence.origin is not expected_child.origin
+            or child.offer.occurrence.fragment != expected_child.fragment
             for child, expected_child in zip(self.children, self.offer.children, strict=True)
         ):
             message = "candidate children must retain their declared semantic source and placement"
@@ -149,6 +210,10 @@ class WorkBudget:
     @property
     def spent(self) -> int:
         return self._spent
+
+    @property
+    def limit(self) -> int:
+        return self._limit
 
     @property
     def remaining(self) -> int:
@@ -300,16 +365,17 @@ class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]
     forms: Mapping[str, FormBinding[ContextT]] = field(default_factory=dict)
 
 
-def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
+def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
     candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT],
     rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT],
     context: PlanningContext,
-) -> BuiltComposition[ResourceT, BodyT, PreparationT, ContextT] | Evaluation[ResourceT, PreparationT]:
-    """Evaluate and validate a fixed selection without publishing state or retrying it."""
+) -> AdmittedComposition[ResourceT, PreparationT, ContextT] | Evaluation[ResourceT, PreparationT]:
+    """Admit and prepare a selection, retaining all shared policy checks."""
     allowed: set[FidelityEffect] = set()
     pending = [candidate]
     seen: set[OccurrenceId] = set()
     budgets: dict[OccurrenceId, Mapping[Axis, int]] = {}
+    floors: dict[OccurrenceId, int] = {}
     bindings: dict[str, ActionBinding[PressEvent[ContextT]]] = {}
     forms: dict[str, FormBinding[ContextT]] = {}
     interactions: set[SemanticRef] = set()
@@ -357,6 +423,10 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
                 preflight.append(ConstraintViolation(identity, "atomic placement"))
         if isinstance(semantic, Budget) and semantic.limits:
             budgets[identity] = semantic.limits
+        if isinstance(semantic, Budgeted):
+            floors[identity] = semantic.minimum
+            if not semantic.stretch:
+                budgets[identity] = {Axis.DISPLAY_TEXT: semantic.preferred}
         pending.extend(part.children)
     if preflight:
         return Evaluation(violations=tuple(preflight))
@@ -372,10 +442,32 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
         return replace(evaluation, violations=(*evaluation.violations, violation))
     if not evaluation.feasible:
         return evaluation
+    reserved: dict[OccurrenceId, ResourceCost] = {}
+
+    def reserve(part: CandidateComposition[RenderTargetT, ContextT, PayloadT]) -> ResourceCost:
+        extra = EMPTY_COST
+        for child in part.children:
+            extra += reserve(child)
+        identity = part.offer.occurrence.identity
+        if identity in floors:
+            context.work.consume()
+            if Axis.DISPLAY_TEXT not in evaluation.resource_axes:
+                return extra
+            actual = evaluation.scoped_costs.get(identity, EMPTY_COST).get(Axis.DISPLAY_TEXT)
+            extra += ResourceCost({Axis.DISPLAY_TEXT: max(0, floors[identity] - actual - extra.get(Axis.DISPLAY_TEXT))})
+        reserved[identity] = extra
+        return extra
+
+    extra = reserve(candidate) if floors else EMPTY_COST
     violations: list[CandidateViolation] = [
         CapacityExceeded(candidate.offer.occurrence.identity, axis, used, capacity)
-        for axis, used, capacity in evaluation.cost.over(context.capacities)
+        for axis, used, capacity in (evaluation.cost + extra).over(context.capacities)
     ]
+    violations.extend(
+        UnsupportedCapability(identity, "character allocation floor")
+        for identity in floors
+        if Axis.DISPLAY_TEXT not in evaluation.resource_axes
+    )
     for identity, contract in atoms.items():
         if evaluation.scoped_costs.get(identity) != contract.total:
             message = "atomic evaluation disagrees with its declared resource cost"
@@ -401,15 +493,46 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
             message = f"target evaluation did not measure resources for {identity.path!r}"
             raise DrawInvariantError(message)
         violations.extend(
-            CapacityExceeded(identity, axis, used, capacity) for axis, used, capacity in cost.over(supported)
+            CapacityExceeded(identity, axis, used, capacity)
+            for axis, used, capacity in (cost + reserved.get(identity, EMPTY_COST)).over(supported)
         )
     if violations:
         return replace(evaluation, violations=tuple(violations))
     if evaluation.preparation is None:
         message = "feasible target evaluation did not prepare construction"
         raise DrawInvariantError(message)
+    return AdmittedComposition(evaluation, MappingProxyType(bindings), MappingProxyType(forms))
+
+
+@dataclass(frozen=True, slots=True)
+class AdmittedComposition[ResourceT, PreparationT, ContextT]:
+    evaluation: Evaluation[ResourceT, PreparationT]
+    bindings: Mapping[str, ActionBinding[PressEvent[ContextT]]]
+    forms: Mapping[str, FormBinding[ContextT]]
+
+
+def construct_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
+    admitted: AdmittedComposition[ResourceT, PreparationT, ContextT],
+    rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT],
+    context: PlanningContext,
+) -> BuiltComposition[ResourceT, BodyT, PreparationT, ContextT]:
+    """Build admitted immutable preparation and independently validate it."""
+    evaluation = admitted.evaluation
+    assert evaluation.preparation is not None
     context.work.consume()
     body = rules.build(evaluation.preparation, context)
     context.work.consume()
     rules.validate(body, evaluation, context)
-    return BuiltComposition(body, evaluation, MappingProxyType(bindings), MappingProxyType(forms))
+    return BuiltComposition(body, evaluation, admitted.bindings, admitted.forms)
+
+
+def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
+    candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT],
+    rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT],
+    context: PlanningContext,
+) -> BuiltComposition[ResourceT, BodyT, PreparationT, ContextT] | Evaluation[ResourceT, PreparationT]:
+    """Evaluate and validate a fixed selection without publishing state or retrying it."""
+    admitted = evaluate_composition(candidate, rules, context)
+    if isinstance(admitted, Evaluation):
+        return admitted
+    return construct_composition(admitted, rules, context)

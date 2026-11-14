@@ -60,7 +60,13 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
     ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
-        return semantic_offers(occurrence, context, table_forms=(TableForm.NATIVE, TableForm.RECORDS), panels=False)
+        return semantic_offers(
+            occurrence,
+            context,
+            table_forms=(TableForm.NATIVE, TableForm.RECORDS),
+            panels=False,
+            disabled_controls=False,
+        )
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext

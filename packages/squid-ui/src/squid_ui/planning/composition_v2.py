@@ -52,7 +52,9 @@ class V2CompositionRules[RenderTargetT, ContextT]:
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
     ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
-        return semantic_offers(occurrence, context, table_forms=(TableForm.RECORDS,), panels=True)
+        return semantic_offers(
+            occurrence, context, table_forms=(TableForm.RECORDS,), panels=True, character_budgets=True
+        )
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
