@@ -1,8 +1,9 @@
 # Shared composition and target participation
 
-Status: ready to begin implementation. The policy and architectural direction are settled;
-concrete types and helper names will be validated through the first working examples. The
-[API sketch](api-sketch.md) records the proposed author syntax and target contract.
+Status: implementation in progress. The first slice adds peer alternative declarations,
+scoped semantic references, and structural correspondence checks. These remain below the
+public planning entry point while the composition contract is built. The [API sketch](api-sketch.md)
+records the proposed author syntax and target contract.
 
 Establish the first usable boundary between the rich semantic planning core and target-specific
 realizations. The [Phase 1 handoff](01-shared-core.md#phase-2-handoff) supplies the requirements,
@@ -86,6 +87,13 @@ than forcing callers to repeat a separate identity tree.
 Validate reordered candidates, unresolved references, duplicate identities, known omissions under
 an equivalence claim, and strict acceptance of declared equivalent alternatives. Record the limits
 of structural validation for author-written text.
+
+The semantic walker uses explicit typed node handling. Unsupported vocabulary raises an
+error until its semantics are implemented; a node with `children` or `key` attributes is not
+implicitly supported. Current checks cover unit correspondence, known omissions, and action,
+route, link, picker, toggle, and form behavior. Source constraints remain in the graph.
+Shortening bounds and inherited layout requirements still need contextual evaluation; these
+checks alone do not certify a candidate as a valid plan.
 
 ### 2 Establish composition and target contracts
 
