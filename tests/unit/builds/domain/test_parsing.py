@@ -20,6 +20,7 @@ from squid.builds.domain import parse_time_string
         ("9-gt", 9),
         ("9 - gt", 9),
         ("9--gt", None),
+        ("9-", None),
         ("8s 40ms", None),
         ("1.16+", None),
     ],

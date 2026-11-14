@@ -447,7 +447,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
                 return OtherBuild(**common)
 
 
-_TIME_PATTERN = re.compile(r"[~≈]?\s*(?P<value>[+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*-?\s*(?P<unit>[a-z][a-z\s_-]*)?")
+_TIME_PATTERN = re.compile(r"[~≈]?\s*(?P<value>[+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*-?\s*(?P<unit>[a-z][a-z\s_-]*))?")
 """A number with an optional approximation marker and an optional unit."""
 
 _TICKS_PER_UNIT: Mapping[str, float] = {
