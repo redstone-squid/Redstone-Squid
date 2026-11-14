@@ -109,3 +109,35 @@ def test_hint_search_remains_bounded() -> None:
     with pytest.raises(sl.planning.JointExhaustedError) as error:
         plan(document, target=V2, cache=cache, composition=options)
     assert error.value.diagnostics.work_used <= 1
+
+
+def test_route_factory_external_state_is_fresh() -> None:
+    prefix = "old"
+
+    def route(page: int) -> str:
+        return f"{prefix}:{page}"
+
+    cache = PlanCache()
+    session = PresentationState()
+    document = replace(content(), page=sl.RoutedPage(0, route))
+    first = plan(document, target=V2, cache=cache, session=session, composition=OPTIONS, nav=default_nav)
+    session.apply_updates(first.session_updates)
+    prefix = "new"
+    second = plan(document, target=V2, cache=cache, session=session, composition=OPTIONS, nav=default_nav)
+    assert second.allocation is not first.allocation
+    assert not second.metrics.partition_hint
+    assert "new:" in sl.scene.Codec.dumps(second.scene)
+    assert "old:" not in sl.scene.Codec.dumps(second.scene)
+
+
+def test_hint_preserves_complete_search_winner() -> None:
+    cache = PlanCache()
+    document = sl.Document((content(),))
+    options = CompositionOptions(automatic=True)
+    expected = plan(document, target=V2, composition=options)
+    cache.remember_partitions(stable_fingerprint((document, options)), {REGION: (1, 2, 3, 4)})
+    hinted = plan(document, target=V2, cache=cache, composition=options)
+    assert hinted.report.search is not None and hinted.report.search.optimal
+    assert expected.allocation is not None and hinted.allocation is not None
+    assert hinted.allocation.regions[REGION].cuts == expected.allocation.regions[REGION].cuts
+    assert hinted.scene == expected.scene

@@ -1,8 +1,9 @@
 # Generic region pagination roadmap
 
-Status: phases 1–4 complete. [Shared allocation search](03-joint-search.md) documents the solver.
+Status: phases 1–5 complete. [Shared allocation search](03-joint-search.md) documents the solver.
 [Pagination and presentation state](04-pagination-state.md) records production integration, anchor
-recovery, remaining capability routes, and the handoff to phase 5 reuse and performance work.
+recovery, remaining capability routes, and the production integration boundaries. [Reuse and performance](05-reuse-performance.md)
+records partition hints, current-call metrics, and measured workloads.
 
 Make joint region pagination part of the generic planning architecture. Sibling and nested
 regions should share target limits while preserving content, navigation, and reading position.
@@ -132,6 +133,8 @@ are documented, and interaction tests cover page turns, content changes, retries
 Depends on phase 3; compatibility findings may require revisiting earlier contracts.
 
 ## Phase 5 Integrate reuse diagnostics and performance
+
+Implemented outcome: [Reuse, diagnostics, and performance](05-reuse-performance.md).
 
 Make caching, invalidation, budget accounting, and diagnostics agree with the new planning model.
 Distinguish changes to content or layout constraints from cursor-only movement without reusing

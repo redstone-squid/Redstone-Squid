@@ -70,7 +70,9 @@ def test_public_automatic_planning_and_page_selection(
     assert "Row 1" not in scene.Codec.dumps(first.scene)
     assert first.allocation is result.allocation
     assert first.report.search is result.report.search
-    assert first.metrics == result.metrics
+    assert first.metrics.cache_hit
+    assert first.metrics.work_used == first.metrics.target_evaluations == 0
+    assert result.metrics.work_used > 0
     assert result.session_updates == first.session_updates == ()
 
 

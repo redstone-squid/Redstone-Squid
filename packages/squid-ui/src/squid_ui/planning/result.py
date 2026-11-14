@@ -77,6 +77,7 @@ class PlanMetrics:
     reuse: PlanReuse = PlanReuse.MISS
     search_fallback: bool = False
     work_used: int = 0
+    """Shared search operations in this call, including cache fingerprinting; zero on retained turns."""
     generated_states: int = 0
     target_evaluations: int = 0
     certified_combinations: int = 0

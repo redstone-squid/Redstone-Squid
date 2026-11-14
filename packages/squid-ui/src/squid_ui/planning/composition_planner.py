@@ -110,7 +110,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
         diagnostics = SearchDiagnostics(
             SearchCompletion.EXHAUSTED, optimal=False, work_used=context.work.spent, work_limit=context.work.limit
         )
-        _logger.debug("Joint allocation exhausted during semantic traversal: %s", diagnostics)
+        _logger.debug("Joint allocation exhausted during preprocessing: %s", diagnostics)
         raise JointExhaustedError(diagnostics) from error
     except UnsupportedSemanticError as error:
         if automatic:
@@ -308,7 +308,7 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
             V2CompositionRules[RenderTargetT, object](effective.limits),
             options.selections,
             options,
-            cache,
+            cast(PlanCache[scene.ComponentsV2] | None, cache),
         )
     elif isinstance(effective.limits, SlackMessageLimits) and effective.body_type is scene.SlackMessage:
         slack_request = cast(PlanRequest[scene.SlackMessage, RenderTargetT, AdapterT], request)
@@ -318,12 +318,17 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
             SlackCompositionRules[RenderTargetT, object](effective.limits),
             options.selections,
             options,
-            cache,
+            cast(PlanCache[scene.SlackMessage] | None, cache),
         )
     elif isinstance(effective.limits, HtmlLimits) and effective.body_type is scene.HtmlBody:
         html_request = cast(PlanRequest[scene.HtmlBody, RenderTargetT, AdapterT], request)
         result = _plan(
-            rendered, html_request, HtmlCompositionRules[RenderTargetT, object](), options.selections, options, cache
+            rendered,
+            html_request,
+            HtmlCompositionRules[RenderTargetT, object](),
+            options.selections,
+            options,
+            cast(PlanCache[scene.HtmlBody] | None, cache),
         )
     else:
         if options.automatic:

@@ -47,6 +47,9 @@ class PlanCache[BodyT: scene.Body = Any]:
     without loss. These certifications let the Discord planner try a single candidate
     before a full search when only that region's text changes.
 
+    Shared pagination stores partition hints separately. They contain only occurrence
+    paths and cuts; current content, navigation, and resources are certified again.
+
     Each store holds at most `capacity` entries. Specialize `BodyT` when the owner
     knows its scene type; the default also supports runtime-selected targets.
     """
