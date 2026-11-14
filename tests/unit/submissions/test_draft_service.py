@@ -11,6 +11,7 @@ from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain import Decision, Reason
+from squid.permissions.errors import PermissionDeniedError, require_decisions
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
@@ -695,8 +696,13 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
     class Permissions:
         allowed = True
 
-        async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision:
-            return Decision(node.name, allowed=subject.account_id == 8 and self.allowed, reason=Reason.DEFAULT)
+        async def require_in(self, uow: PermissionUnitOfWork, subject: Actor, *nodes: PermissionNode | str) -> None:
+            require_decisions(
+                tuple(
+                    Decision(str(node), allowed=subject.account_id == 8 and self.allowed, reason=Reason.DEFAULT)
+                    for node in nodes
+                )
+            )
 
     permissions = Permissions()
     repository = FakeDraftRepository()
@@ -722,11 +728,11 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
     assert denied.value.public_context == {"reason": "owner_required"}
     assert denied.value.public_detail() == "Only the account that owns this draft can perform this action."
     permissions.allowed = False
-    with pytest.raises(DraftAccessDeniedError):
+    with pytest.raises(PermissionDeniedError):
         await service.get_accessible(DRAFT_ID, Actor(account_id=8))
-    with pytest.raises(DraftAccessDeniedError):
+    with pytest.raises(PermissionDeniedError):
         await service.apply_change(DRAFT_ID, Actor(account_id=8), _change(base_revision=1), locale="en")
-    with pytest.raises(DraftAccessDeniedError):
+    with pytest.raises(PermissionDeniedError):
         await service.attention_inbox(Actor(account_id=8))
     assert repository.actors == [8]
 

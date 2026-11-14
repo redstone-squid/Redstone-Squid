@@ -17,6 +17,7 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue
 from squid.core.i18n import tr
+from squid.permissions.errors import PermissionDeniedError
 from squid.submissions.application.drafts import (
     DEFAULT_DRAFT_RETENTION_DAYS,
     DraftUnitOfWork,
@@ -346,7 +347,7 @@ class SubmissionFinalizationService:
                     now=now,
                     refresh_retention=False,
                 )
-            except DraftAccessDeniedError:
+            except DraftAccessDeniedError, PermissionDeniedError:
                 async with self._uow_factory() as uow:
                     await uow.finalization_jobs.record_preparation_attention(
                         draft,

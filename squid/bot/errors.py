@@ -19,7 +19,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
-from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError
 from squid.core.i18n import localization_for, tr
 from squid.diagnostics.application import ErrorReportService
@@ -33,7 +32,6 @@ from squid.observability import (
     record_current_exception,
     trace_span,
 )
-from squid.permissions.domain import CATALOGUE
 from squid_i18n import NUMBER, Text, md_tr
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.text import NEUTRAL, TextLike, localization_scope
@@ -151,34 +149,6 @@ def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | 
     return str(locale) if locale is not None else None
 
 
-def _present_missing_nodes(error: PermissionNodeRequired) -> _NoticeDraft:
-    """Name the nodes a caller is missing, with what each one is for.
-
-    Node names are identifiers and stay untranslated; their catalogue
-    descriptions are translated, so a refusal reads as "you need this capability"
-    rather than as a tier the user has no way to look up.
-    """
-    described = Text.join(
-        "\n", (f"`{name}` — " + CATALOGUE[name].description for name in error.nodes if name in CATALOGUE)
-    )
-    if error.forbidden:
-        return _NoticeDraft(
-            tr(t"errors-permission-withheld = Permission withheld"),
-            tr(
-                t"errors-permission-withheld-warning = An administrator has "
-                t"explicitly withheld this from you. Ask them if you think that is a mistake."
-            )
-            + "\n\n"
-            + described,
-        )
-    lead = (
-        tr(t"errors-any-permission-required = You need any one of these permissions to use this command:")
-        if error.mode == "any"
-        else tr(t"errors-all-permissions-required = You need these permissions to use this command:")
-    )
-    return _NoticeDraft(tr(t"errors-missing-permission = Missing permission"), lead + "\n" + described)
-
-
 def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
     """Classify an exception into safe Discord-facing text, translated into `locale`.
 
@@ -217,8 +187,6 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
             tr(t"errors-owner-only = Owner only"),
             tr(t"errors-owner-only-hint = Only the bot owner can use this command."),
         )
-    if isinstance(error, PermissionNodeRequired):
-        return _present_missing_nodes(error)
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
         seconds = error.retry_after
         return _NoticeDraft(

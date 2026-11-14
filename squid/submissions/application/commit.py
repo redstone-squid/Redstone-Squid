@@ -9,6 +9,7 @@ from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
+from squid.permissions.errors import PermissionDeniedError
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.application.finalization import ClaimedFinalizationJob
 from squid.submissions.domain import (
@@ -135,7 +136,7 @@ class BuildSubmissionExecutor:
                 await self._drafts.get_accessible(job.draft_id, actor)
             else:
                 await self._drafts.get_accessible_in(uow, job.draft_id, actor)
-        except DraftAccessDeniedError:
+        except DraftAccessDeniedError, PermissionDeniedError:
             return False
         return True
 

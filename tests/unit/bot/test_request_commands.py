@@ -10,6 +10,7 @@ from squid.bot import diagnostics, notifications
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.models import ErrorReport
+from squid.permissions.domain import Decision, Reason
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
 from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
 from tests.support.discord import make_layout_bot
@@ -34,7 +35,11 @@ async def test_error_command_checks_access_before_presenting_in_its_cog_scope(
     cog = diagnostics.Diagnostics(bot)
     interaction = interaction_harness(user_id=7)
     interaction.client = bot
-    check = AsyncCallRecorder(error=None if allowed else PermissionNodeRequired((DIAGNOSTICS_ERROR_READ.name,)))
+    check = AsyncCallRecorder(
+        error=None
+        if allowed
+        else PermissionNodeRequired(Decision(DIAGNOSTICS_ERROR_READ.name, allowed=False, reason=Reason.DEFAULT))
+    )
     monkeypatch.setattr(diagnostics, "enforce", check)
     monkeypatch.setattr(diagnostics, "allows", AsyncCallRecorder(result=False))
 

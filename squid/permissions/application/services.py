@@ -12,6 +12,8 @@ scope, and precedence for each requested capability.
 
 from collections.abc import Iterable
 
+from whenever import Instant
+
 from squid.core.actors import Actor
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
 from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
@@ -35,6 +37,7 @@ from squid.permissions.domain import (
     resolve_many,
     rules_from_role,
 )
+from squid.permissions.errors import CheckMode, require_decisions
 from squid.permissions.models import PermissionGrant, PermissionRole
 from squid.unit_of_work import UnitOfWorkFactory
 
@@ -124,10 +127,16 @@ class PermissionService:
 
     async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool:
         """Check one permission using the caller's transaction and current stored rules."""
-        return node.name in await self.capabilities_in(uow, subject, (node,))
+        return (await self.check_in(uow, subject, node)).allowed
 
     async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision:
         """Retain the explanation from a permission check using current transactional rules."""
+        return (await self.decisions_in(uow, subject, (node,)))[0]
+
+    async def decisions_in(
+        self, uow: PermissionUnitOfWork, subject: Actor, nodes: Iterable[PermissionNode | str]
+    ) -> tuple[Decision, ...]:
+        """Resolve current transactional rules once, without using the rule cache."""
         if subject.is_bot_owner:
             rules: tuple[Rule, ...] = ()
         else:
@@ -137,22 +146,24 @@ class PermissionService:
                 guild_id=subject.guild_id,
             )
             rules = self.assemble(records, subject)
-        return resolve(node, subject, rules, catalogue=self._catalogue)
+        now = Instant.now()
+        return tuple(resolve(node, subject, rules, catalogue=self._catalogue, now=now) for node in nodes)
 
     async def capabilities_in(
         self, uow: PermissionUnitOfWork, subject: Actor, nodes: Iterable[PermissionNode | str]
     ) -> frozenset[str]:
-        """Resolve authority from the caller's transaction without using or populating the cache."""
-        if subject.is_bot_owner:
-            rules: tuple[Rule, ...] = ()
-        else:
-            records = await uow.permissions.load_for_subject(
-                account_id=subject.account_id,
-                discord_role_ids=subject.discord_role_ids,
-                guild_id=subject.guild_id,
-            )
-            rules = self.assemble(records, subject)
-        return resolve_many(nodes, subject, rules, catalogue=self._catalogue)
+        """Return the allowed nodes from current transactional decisions."""
+        return frozenset(item.node for item in await self.decisions_in(uow, subject, nodes) if item.allowed)
+
+    async def require_in(
+        self, uow: PermissionUnitOfWork, subject: Actor, *nodes: PermissionNode | str, mode: CheckMode = "all"
+    ) -> None:
+        """Enforce current transactional permissions with a shared ACL explanation."""
+        require_decisions(await self.decisions_in(uow, subject, nodes), mode=mode)
+
+    async def require(self, subject: Actor, *nodes: PermissionNode | str, mode: CheckMode = "all") -> None:
+        """Enforce permissions with a shared ACL explanation."""
+        require_decisions(await self.decisions(subject, nodes), mode=mode)
 
     def assemble(self, records: SubjectRecords, subject: Actor) -> tuple[Rule, ...]:
         """Convert stored grants and role assignments into rules, including the guild-admin bridge."""

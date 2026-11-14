@@ -1,8 +1,10 @@
 """Submission draft application errors."""
 
+from typing import Literal
 from uuid import UUID
 
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
+from squid.core.i18n import tr
 
 
 class DraftNotFoundError(NotFoundError):
@@ -22,6 +24,24 @@ class DraftAccessDeniedError(AuthorizationError):
     default_message = "You cannot edit this submission draft."
     default_title = "Draft access denied"
     default_resource = "submission_draft"
+
+    def __init__(
+        self, *, reason: Literal["missing_account", "permissions_unconfigured", "owner_required"] | None = None
+    ) -> None:
+        match reason:
+            case "missing_account":
+                message = tr(t"submissions-draft-account-required = No linked account was found for this request.")
+            case "permissions_unconfigured":
+                message = tr(
+                    t"submissions-draft-staff-unconfigured = Staff access to submission drafts is not configured for this service. Contact the service operator."
+                )
+            case "owner_required":
+                message = tr(
+                    t"submissions-draft-owner-required = Only the account that owns this draft can perform this action."
+                )
+            case None:
+                message = self.default_message
+        super().__init__(message, public_context={} if reason is None else {"reason": reason})
 
 
 class DraftCapacityExceededError(ConflictError):

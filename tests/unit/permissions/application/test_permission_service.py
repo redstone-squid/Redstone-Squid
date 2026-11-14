@@ -1,15 +1,17 @@
 """PermissionService: assembling stored rows into resolver rules."""
 
 from collections.abc import Iterable
+from dataclasses import replace
 
 import pytest
 
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
+from squid.permissions.application.cache import SubjectRuleCache
 from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Origin, Reason
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.permissions.errors import PermissionDeniedError
+from squid.permissions.errors import CheckMode, PermissionDeniedError
 from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 from tests.support.permissions import permission_uow_factory
 
@@ -254,4 +256,69 @@ async def test_transactional_explanations_preserve_acl_decisions(effect: Effect 
     }
     assert error.public_detail() == f"This action requires build.submission.edit, but {expected[1]}."
     assert "account:7" not in error.public_detail()
-    assert error.decision is decision
+    assert error.decisions == (decision,)
+
+
+@pytest.mark.parametrize("mode", ["all", "any"])
+@pytest.mark.parametrize("grant_first", [False, True])
+@pytest.mark.parametrize("transactional", [False, True])
+async def test_enforcement_reports_denied_nodes_without_rejecting_allowed_alternatives(
+    mode: CheckMode, grant_first: bool, transactional: bool
+) -> None:
+    first = "build.submission.edit"
+    second = "build.submission.approve"
+    permissions, store = service(
+        grants=(
+            PermissionGrant(
+                pattern=first, effect=int(Effect.ALLOW if grant_first else Effect.DENY), subject_account_id=7
+            ),
+            PermissionGrant(pattern=second, effect=int(Effect.FORBID), subject_account_id=7),
+        )
+    )
+    actor = Actor(account_id=7)
+    async with permission_uow_factory(store)() as uow:
+
+        async def enforce() -> None:
+            if transactional:
+                await permissions.require_in(uow, actor, first, second, mode=mode)
+            else:
+                await permissions.require(actor, first, second, mode=mode)
+
+        if mode == "any" and grant_first:
+            await enforce()
+        else:
+            with pytest.raises(PermissionDeniedError) as denied:
+                await enforce()
+            assert denied.value.nodes == ((second,) if grant_first else (first, second))
+            assert denied.value.mode == mode
+            assert "explicit forbid" in denied.value.public_detail()
+            assert "account:7" not in denied.value.public_detail()
+            if not grant_first:
+                assert "explicit deny" in denied.value.public_detail()
+                assert ("at least one" if mode == "any" else "all of") in denied.value.public_detail()
+    assert store.loads == 1
+
+
+async def test_transactional_enforcement_rechecks_a_revoked_cached_grant() -> None:
+    _, store = service(
+        grants=(PermissionGrant(pattern="build.submission.edit", effect=int(Effect.ALLOW), subject_account_id=7),)
+    )
+    factory = permission_uow_factory(store)
+    permissions = PermissionService(uow_factory=factory, cache=SubjectRuleCache())
+    actor = Actor(account_id=7)
+    await permissions.require(actor, "build.submission.edit")
+    store.records = replace(store.records, epoch=2, grants=())
+    async with factory() as uow:
+        with pytest.raises(PermissionDeniedError) as denied:
+            await permissions.require_in(uow, actor, "build.submission.edit")
+    assert denied.value.public_context["permission_reason"] == "missing_grant"
+    assert store.loads == 2
+
+
+async def test_empty_enforcement_is_a_programming_error() -> None:
+    permissions, store = service()
+    with pytest.raises(ValueError, match="at least one node"):
+        await permissions.require(Actor(is_bot_owner=True))
+    async with permission_uow_factory(store)() as uow:
+        with pytest.raises(ValueError, match="at least one node"):
+            await permissions.require_in(uow, Actor(is_bot_owner=True), mode="any")

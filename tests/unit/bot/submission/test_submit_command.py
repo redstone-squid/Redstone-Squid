@@ -23,6 +23,7 @@ from squid.core.actors import Actor
 from squid.messages.domain import MessageSnapshot
 from squid.permissions.application import PermissionService, SubjectRecords
 from squid.permissions.domain import Effect
+from squid.permissions.errors import PermissionDeniedError
 from squid.permissions.models import PermissionGrant
 from squid.schematics.application.services import SchematicService
 from squid.settings.application import SettingsService
@@ -41,7 +42,6 @@ from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRE
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.domain import DraftChange, DraftSnapshot, DraftStatus, FormManifest, SubmissionOrigin
 from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid.submissions.errors import DraftAccessDeniedError
 from squid_ui.text import source_text
 from squid_ui_discord.testing import InteractionHarness, iter_component_payloads, stage
 from tests.support.discord import make_layout_bot
@@ -412,10 +412,9 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     cog.bot.is_owner.return_value = False
     member.roles = []
     assert not await editor.workspace.may_edit()
-    with pytest.raises(DraftAccessDeniedError) as denied:
+    with pytest.raises(PermissionDeniedError) as denied:
         await build_controls.reopen_draft(opened.source, str(draft.snapshot.id))
     assert denied.value.public_context == {
-        "reason": "staff_permission_required",
         "required_permission": "build.submission.edit",
         "permission_reason": "missing_grant",
     }

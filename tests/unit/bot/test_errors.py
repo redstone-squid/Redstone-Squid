@@ -26,6 +26,7 @@ from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError, JSONValue
 from squid.diagnostics.application import ErrorReportService
 from squid.observability import TraceSpan, bind_correlation_id, correlation_id, unbind_correlation_id
+from squid.permissions.domain import Decision, Reason
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.text import Localization, current_localization
 from tests.support.discord import make_command_interaction, make_interaction, make_layout_bot, make_message
@@ -113,8 +114,14 @@ def test_unexpected_error_presentation_redacts_diagnostic_detail(error_correlati
 @pytest.mark.parametrize(
     ("error", "title"),
     [
-        (PermissionNodeRequired(("build.submission.approve",)), "Missing permission"),
-        (PermissionNodeRequired(("bot.tree.sync",), forbidden=True), "Permission withheld"),
+        (
+            PermissionNodeRequired(Decision("build.submission.approve", allowed=False, reason=Reason.DEFAULT)),
+            "Missing permission",
+        ),
+        (
+            PermissionNodeRequired(Decision("bot.tree.sync", allowed=False, reason=Reason.FORBIDDEN)),
+            "Permission withheld",
+        ),
     ],
 )
 def test_permission_errors_name_the_missing_nodes(error: Exception, title: str) -> None:

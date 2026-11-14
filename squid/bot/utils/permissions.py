@@ -7,7 +7,7 @@ home-server check separately limits where community features are available.
 
 from collections.abc import Callable
 from functools import cache
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import discord
 from discord import app_commands
@@ -20,14 +20,13 @@ from squid.accounts.domain import IdentityProvider
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import CATALOGUE, Decision, PermissionNode, Reason
+from squid.permissions.domain import CATALOGUE, PermissionNode
+from squid.permissions.errors import CheckMode, PermissionDeniedError, require_decisions
 
 if TYPE_CHECKING:
     from discord.ext.commands._types import Check
 
     import squid.bot.app
-
-type CheckMode = Literal["all", "any"]
 
 ACTOR_ATTRIBUTE = "_squid_actor"
 """Where a resolved subject is memoized for the rest of one invocation.
@@ -37,18 +36,8 @@ checks too, so the memo lives on the context object rather than in a hook.
 """
 
 
-class PermissionNodeRequired(CheckFailure):
-    """Raised when the caller does not hold the nodes a command declares.
-
-    Carries the nodes rather than a rendered message so the error presenter can
-    translate the description and say something specific about a `forbid`.
-    """
-
-    def __init__(self, nodes: tuple[str, ...], *, mode: CheckMode = "all", forbidden: bool = False) -> None:
-        self.nodes = nodes
-        self.mode = mode
-        self.forbidden = forbidden
-        super().__init__(f"Missing permission node: {', '.join(nodes)}")
+class PermissionNodeRequired(PermissionDeniedError, CheckFailure):
+    """Discord command-check form of the shared ACL denial."""
 
 
 class AccountIdCache:
@@ -182,13 +171,7 @@ async def enforce(
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
     subject = await actor_for_interaction(caller)
     decisions = await _permissions_of(caller).decisions(subject, resolved)
-    if _satisfied(decisions, mode):
-        return
-    raise PermissionNodeRequired(
-        tuple(node.name for node in resolved),
-        mode=mode,
-        forbidden=any(decision.reason is Reason.FORBIDDEN for decision in decisions),
-    )
+    require_decisions(decisions, mode=mode, error_type=PermissionNodeRequired)
 
 
 def requires(
@@ -213,13 +196,8 @@ def requires(
             raise NoPrivateMessage()
         subject = await actor_for(ctx)
         decisions = await ctx.bot.services.permissions.decisions(subject, resolved)
-        if _satisfied(decisions, mode):
-            return True
-        raise PermissionNodeRequired(
-            tuple(node.name for node in resolved),
-            mode=mode,
-            forbidden=any(decision.reason is Reason.FORBIDDEN for decision in decisions),
-        )
+        require_decisions(decisions, mode=mode, error_type=PermissionNodeRequired)
+        return True
 
     # Stamped on the predicate so the taxonomy test can read a command's real
     # contract instead of guessing it from a check's name. Both checkers type a function object
@@ -237,10 +215,6 @@ def hide_unless[CommandT](**permissions: bool) -> Callable[[CommandT], CommandT]
     it on subcommands.
     """
     return app_commands.default_permissions(**permissions)
-
-
-def _satisfied(decisions: tuple[Decision, ...], mode: CheckMode) -> bool:
-    return any(d.allowed for d in decisions) if mode == "any" else all(d.allowed for d in decisions)
 
 
 @cache

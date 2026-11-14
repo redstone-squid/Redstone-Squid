@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Protocol
 from uuid import UUID, uuid4
 
 from whenever import Instant
@@ -12,9 +12,8 @@ from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.messages.domain import MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import Decision, PermissionNode
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.permissions.errors import PermissionDeniedError
 from squid.submissions.application.forms import FormManifestRegistry
 from squid.submissions.domain import (
     DraftChange,
@@ -62,40 +61,14 @@ def draft_actor_id(actor: Actor) -> int:
         raise TypeError(message)
     identifier = actor.account_id
     if identifier is None or identifier < 1:
-        raise _access_denied(reason="missing_account")
+        raise DraftAccessDeniedError(reason="missing_account")
     return identifier
-
-
-def _access_denied(
-    *,
-    reason: Literal["missing_account", "permissions_unconfigured", "staff_permission_required", "owner_required"],
-) -> DraftAccessDeniedError:
-    """Explain the failed rule without exposing the identities used to evaluate it."""
-    match reason:
-        case "missing_account":
-            message = tr(t"submissions-draft-account-required = No linked account was found for this request.")
-        case "permissions_unconfigured":
-            message = tr(
-                t"submissions-draft-staff-unconfigured = Staff access to submission drafts is not configured for this service. Contact the service operator."
-            )
-        case "staff_permission_required":
-            message = tr(
-                t"submissions-draft-staff-required = Your current permissions do not allow staff access to submission drafts (build.submission.edit)."
-            )
-        case "owner_required":
-            message = tr(
-                t"submissions-draft-owner-required = Only the account that owns this draft can perform this action."
-            )
-    return DraftAccessDeniedError(
-        message,
-        public_context={"reason": reason},
-    )
 
 
 class DraftPermissions(Protocol):
     """Live permission checks used for staff correction of account-owned drafts."""
 
-    async def check_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> Decision: ...
+    async def require_in(self, uow: PermissionUnitOfWork, subject: Actor, *nodes: PermissionNode | str) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,13 +399,8 @@ class SubmissionDraftService:
 
     async def _require_staff(self, uow: DraftUnitOfWork, actor: Actor) -> None:
         if self._permissions is None:
-            raise _access_denied(reason="permissions_unconfigured")
-        decision = await self._permissions.check_in(uow, actor, BUILD_SUBMISSION_EDIT)
-        if not decision.allowed:
-            explanation = PermissionDeniedError(decision)
-            raise _access_denied(
-                reason="staff_permission_required",
-            ).with_context(message=explanation.message, public_context=explanation.public_context)
+            raise DraftAccessDeniedError(reason="permissions_unconfigured")
+        await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_EDIT)
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         """Delete an owned draft only while it remains user-editable."""
@@ -619,9 +587,7 @@ class SubmissionDraftService:
     @staticmethod
     def _require_owner(draft: StoredDraft, account_id: int) -> None:
         if draft.snapshot.owner_account_id != account_id:
-            raise _access_denied(
-                reason="owner_required",
-            )
+            raise DraftAccessDeniedError(reason="owner_required")
 
 
 class DraftUnitOfWork(PermissionUnitOfWork, Protocol):
