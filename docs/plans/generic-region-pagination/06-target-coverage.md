@@ -75,6 +75,14 @@ markup. Timestamps retain typed time metadata in HTML and V2, native date tokens
 in classic Discord and Slack, and visible named zones for exact zoned times.
 Native Discord `Time` and `ZonedTime` also compose directly.
 
+Selectable grids now offer complete button rows and coordinate selectors through
+shared allocation. Every cell retains its position, label, availability and callback;
+selector pages include their neighbouring unavailable cells as context. HTML keeps
+grid rows in table markup. Local grid pages retain the existing `.cells` cursor,
+and only visible controls publish bindings. Checked alternatives preserve the cell
+order and column count. Unchanged grids reuse their certified allocation; changing
+their shape recomputes the presentation instead of retaining a legacy strategy ID.
+
 Actions keep ordered button rows and may offer a select when every action permits
 grouping. A select must fit the target's option and cardinality limits; cross-page
 multi-selection is deliberately not invented. Mixed groups retain their buttons.

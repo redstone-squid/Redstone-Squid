@@ -69,6 +69,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             text_limit=min(self.limits.content, self.limits.embeds.description),
             native_controls=True,
             panel_text_limit=self.limits.embeds.description,
+            grid_columns=self.limits.components.row_buttons,
         )
 
     def evaluate(
@@ -259,9 +260,11 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     rows.append(scene.ClassicRow((node,)))
                     for child in part.children:
                         visit(child, output, embedded=embedded)
-                case ActionsRealization():
+                case ActionsRealization(columns=columns):
                     controls: list[scene.Control] = []
-                    size = max(1, self.limits.components.row_buttons)
+                    size = max(1, columns if columns is not None else self.limits.components.row_buttons)
+                    if columns is not None:
+                        limit("grid.columns", columns, self.limits.components.row_buttons)
 
                     def flush() -> None:
                         if controls:

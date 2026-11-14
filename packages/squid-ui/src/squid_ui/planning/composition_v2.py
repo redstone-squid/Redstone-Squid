@@ -81,6 +81,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             character_budgets=True,
             native_controls=True,
             native_v2=True,
+            grid_columns=self.limits.components.row_buttons,
         )
 
     def evaluate(
@@ -190,10 +191,19 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                             control.label, control.url or "", emoji=control.emoji, disabled=control.disabled
                         )
                     return (button,) if in_row else (scene.Row((button,)),)
-                case ActionsRealization():
+                case ActionsRealization(columns=columns):
                     output: list[scene.Node] = []
                     pending: list[scene.Button | scene.RoutedButton | scene.Link] = []
-                    size = max(1, self.limits.components.row_buttons)
+                    size = max(1, columns if columns is not None else self.limits.components.row_buttons)
+                    if columns is not None and columns > self.limits.components.row_buttons:
+                        violations.append(
+                            LocalCapacityExceeded(
+                                part.offer.occurrence.identity,
+                                "grid.columns",
+                                columns,
+                                self.limits.components.row_buttons,
+                            )
+                        )
 
                     def flush() -> None:
                         nonlocal components

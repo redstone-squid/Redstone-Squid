@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from hashlib import sha256
+from itertools import pairwise
 from typing import Literal
 from urllib.parse import quote
 
@@ -21,6 +22,7 @@ from squid_ui.emoji import Emoji, normalize_emoji
 from squid_ui.entity import EntityRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
+from squid_ui.grids import _coordinate
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.ownership import Controlled
 from squid_ui.planning.composition import (
@@ -301,6 +303,8 @@ class ActionsRealization:
     """Ordered buttons that may occupy multiple target action rows."""
 
     navigation: bool = False
+    columns: int | None = None
+    grid_key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -583,6 +587,9 @@ def _control_key[RenderTargetT, ContextT](
         key = source.keys[-1]
         source_key = key
         value = occurrence.graph.units[source].value
+        parent = occurrence.graph.units[source].parent
+        if parent is not None and isinstance(grid := occurrence.graph.units[parent].value, sem.Grid):
+            key = f"{grid.key}.{key}"
         if isinstance(value, DisclosureToggle):
             source_key = value.details.key
             key = f"{source_key}.toggle"
@@ -619,6 +626,7 @@ def semantic_offers[RenderTargetT, ContextT](
     panel_text_limit: int | None = None,
     heading_limit: int | None = None,
     native_v2: bool = False,
+    grid_columns: int | None = None,
 ) -> (
     tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
     | OfferDiscovery[RenderTargetT, ContextT, Realization]
@@ -1525,6 +1533,94 @@ def semantic_offers[RenderTargetT, ContextT](
             if prefer_grouped
             else (individual, replace(grouped, preference=1))
         )
+    if isinstance(value, sem.Grid):
+        refs = occurrence.graph.children[occurrence.reference]
+        children = tuple(
+            SemanticOccurrence(
+                OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                occurrence.graph,
+                ref,
+                occurrence.placement,
+                occurrence.origin,
+                palette=context.palette,
+                enclosing=occurrence.enclosing,
+            )
+            for ref in refs
+        )
+        contract = RegionContract(
+            value.key + ".cells",
+            RegionNavigation(occurrence, disabled_controls, owner=FIRST_PAGE, cursor_key=value.key + ".cells"),
+            cursor_key=value.key + ".cells",
+        )
+        buttons = RealizationOffer(
+            occurrence,
+            "grid.buttons",
+            ActionsRealization(columns=value.columns, grid_key=value.key),
+            children,
+            flow=True,
+            region=contract,
+            preference_priority=int(value.flexibility),
+        )
+        button_offers = (
+            (buttons,)
+            if (grid_columns is None or value.columns <= grid_columns)
+            and (disabled_controls or all(cell.available for cell in value.cells))
+            else ()
+        )
+        available = tuple(index for index, cell in enumerate(value.cells) if cell.available)
+        labels = tuple(resolve_text(cell.label, context.localization).plain() for cell in value.cells)
+        grid_summaries = tuple(
+            ReferencedText(
+                ref, (tree.literal(f"{_coordinate(index, value.columns)} [{' ' if cell.available else 'x'}] {label}"),)
+            )
+            for index, (ref, cell, label) in enumerate(zip(refs, value.cells, labels, strict=True))
+        )
+        if not available:
+            payload = TextSequenceRealization(grid_summaries)
+            return (
+                *button_offers,
+                RealizationOffer(
+                    occurrence,
+                    "grid.readonly",
+                    payload,
+                    preference=1,
+                    fragments=FragmentContract(
+                        tuple(frozenset({ref}) for ref in refs), tuple(range(1, len(refs) + 1)), payload.fragment
+                    ),
+                    region=contract,
+                    preference_priority=int(value.flexibility),
+                ),
+            )
+        options = tuple(
+            scene.Option(f"{_coordinate(index, value.columns)} — {labels[index]}", value.cells[index].key)
+            for index in available
+        )
+        action = _control_key(occurrence, context)
+        # Attach unavailable cells to a neighbouring available cell. Every selector
+        # fragment then retains its contextual labels and at least one valid option.
+        boundaries = (0, *available[1:], len(refs))
+
+        def grid_fragment(start: int, end: int) -> Realization:
+            return SelectRealization(
+                scene.Select(options[start:end], action), summaries=grid_summaries[boundaries[start] : boundaries[end]]
+            )
+
+        select = RealizationOffer(
+            occurrence,
+            "grid.coordinates",
+            grid_fragment(0, len(available)),
+            preference=1,
+            fragments=FragmentContract(
+                tuple(frozenset(refs[start:end]) for start, end in pairwise(boundaries)),
+                tuple(range(1, len(available) + 1)),
+                grid_fragment,
+            ),
+            region=contract,
+            preference_priority=int(value.flexibility),
+            interaction=True,
+            binding=ActionBinding(action, value.on_pick),
+        )
+        return (*button_offers, select)
     if isinstance(value, sem.Entities):
         previous = (
             value.selection.value
@@ -1702,7 +1798,16 @@ def semantic_offers[RenderTargetT, ContextT](
                 )
             case sem.Link():
                 payload = ControlRealization(label, url=value.url)
-        return (RealizationOffer(occurrence, "button", payload, interaction=True, binding=binding, form=form),)
+        parent = occurrence.graph.units[occurrence.reference].parent
+        keep_next = False
+        if parent is not None and isinstance(grid := occurrence.graph.units[parent].value, sem.Grid):
+            index = occurrence.graph.children[parent].index(occurrence.reference)
+            keep_next = (index + 1) % grid.columns != 0 and index + 1 < len(grid.cells)
+        return (
+            RealizationOffer(
+                occurrence, "button", payload, interaction=True, binding=binding, form=form, keep_with_next=keep_next
+            ),
+        )
     if isinstance(value, sem.Metric):
         label = resolve_text(value.label, context.localization).nodes
         rendered = f"{value.value}{' ' + value.unit if value.unit is not None else ''}"

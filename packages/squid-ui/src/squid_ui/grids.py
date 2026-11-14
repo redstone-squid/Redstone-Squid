@@ -39,4 +39,18 @@ def validate_grid(cells: tuple[GridCell, ...], columns: int) -> None:
         raise ValueError(message)
 
 
+def _column_name(index: int) -> str:
+    """Return a zero-based spreadsheet column name."""
+    name = ""
+    cursor = index + 1
+    while cursor:
+        cursor, remainder = divmod(cursor - 1, 26)
+        name = chr(ord("A") + remainder) + name
+    return name
+
+
+def _coordinate(index: int, columns: int) -> str:
+    return f"{_column_name(index % columns)}{index // columns + 1}"
+
+
 __all__ = ["GridCell"]

@@ -122,6 +122,7 @@ class SlackCompositionRules[
             disabled_controls=False,
             text_limit=self.limits.components.section_text,
             heading_limit=self.limits.components.header_text,
+            grid_columns=self.limits.components.actions_elements,
         )
 
     def evaluate(
@@ -443,11 +444,13 @@ class SlackCompositionRules[
                                         scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False)
                                     )
                                 )
-                case ActionsRealization():
+                case ActionsRealization(columns=columns):
                     start = len(prepared_blocks)
                     packed: list[scene.SlackBlock] = []
                     pending: list[scene.SlackButton | scene.SlackSelect] = []
-                    size = max(1, self.limits.components.actions_elements)
+                    size = max(1, columns if columns is not None else self.limits.components.actions_elements)
+                    if columns is not None:
+                        limit("grid.columns", columns, self.limits.components.actions_elements)
 
                     def flush() -> None:
                         if pending:

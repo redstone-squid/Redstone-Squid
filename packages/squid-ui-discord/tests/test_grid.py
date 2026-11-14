@@ -91,17 +91,15 @@ def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_
     )
 
     assert any(isinstance(item, scene_type) for item in testing.walk(result.scene.body))
-    update = next(
-        update for update in result.session_updates if isinstance(update, StrategyUpdate) and update.key == "board"
-    )
-    assert update.state.strategy_id == strategy
+    assert result.allocation is not None
+    assert result.report.legacy_pagination is None
     if strategy == "paged_select":
         select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
-        assert len(select.options) == 25
+        assert 1 <= len(select.options) <= 25
         assert result.scene.pagers[0].pages == 2
 
 
-def test_semantic_grid_strategy_remains_sticky_while_available() -> None:
+def test_changed_grid_shape_recomputes_its_shared_representation() -> None:
     session = PresentationState()
     first = sl.planning.plan(
         sl.grid(*_cells(6), key="board", columns=6, on_pick=_pick),
@@ -116,11 +114,8 @@ def test_semantic_grid_strategy_remains_sticky_while_available() -> None:
         session=session,
     )
 
-    assert any(isinstance(item, scene.Select) for item in testing.walk(second.scene.body))
-    update = next(
-        update for update in second.session_updates if isinstance(update, StrategyUpdate) and update.key == "board"
-    )
-    assert update.state.strategy_id == "coordinate"
+    assert any(isinstance(item, scene.Button) for item in testing.walk(second.scene.body))
+    assert second.allocation is not first.allocation
 
 
 async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_keys() -> None:
@@ -141,7 +136,7 @@ async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_key
     )
     select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
 
-    assert [(option.label, option.value) for option in select.options] == [("A1 ??Open", "open")]
+    assert [(option.label, option.value) for option in select.options] == [("A1 — Open", "open")]
     await result.bindings[select.action].handler(
         sl.SelectionEvent(
             sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), values=("open",), context=None

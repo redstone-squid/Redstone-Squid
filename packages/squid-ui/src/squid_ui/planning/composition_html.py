@@ -425,6 +425,28 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             action=toggle.action,
                         ),
                     )
+                case ActionsRealization(columns=int() as columns, grid_key=key):
+                    cells = tuple(node for child in part.children for node in visit(child))
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.TABLE,
+                            tuple(
+                                scene.HtmlElement(
+                                    scene.HtmlTag.TR,
+                                    tuple(
+                                        scene.HtmlElement(scene.HtmlTag.TD, (cell,))
+                                        for cell in cells[start : start + columns]
+                                    ),
+                                )
+                                for start in range(0, len(cells), columns)
+                            ),
+                            attributes=(
+                                scene.HtmlAttribute(scene.HtmlAttributeName.CLASS, "squid-grid-table"),
+                                scene.HtmlAttribute(scene.HtmlAttributeName.ROLE, "grid"),
+                                scene.HtmlAttribute(scene.HtmlAttributeName.ARIA_LABEL, key or ""),
+                            ),
+                        ),
+                    )
                 case ActionsRealization(navigation=True):
                     return (
                         scene.HtmlElement(

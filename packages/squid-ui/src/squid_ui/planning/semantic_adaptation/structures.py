@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from squid_ui.assets import Asset
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.grids import GridCell
+from squid_ui.grids import GridCell, _column_name, _coordinate
 from squid_ui.interactions import ActionBinding
 from squid_ui.pages import PagePosition
 from squid_ui.planning.limits import V2Limits
@@ -110,20 +110,6 @@ def _table(node: Table, path: str, context: LoweringContext) -> list[Node]:
         for row in node.rows
     )
     return [Lines(records, join="\n\n", overflow=Paginate(key=node.key))]
-
-
-def _column_name(index: int) -> str:
-    """Return a zero-based spreadsheet column name."""
-    name = ""
-    cursor = index + 1
-    while cursor:
-        cursor, remainder = divmod(cursor - 1, 26)
-        name = chr(ord("A") + remainder) + name
-    return name
-
-
-def _coordinate(index: int, columns: int) -> str:
-    return f"{_column_name(index % columns)}{index // columns + 1}"
 
 
 def _grid_matrix(node: Grid, context: LoweringContext) -> PrimitiveCode:

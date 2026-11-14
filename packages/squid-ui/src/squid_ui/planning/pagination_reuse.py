@@ -162,6 +162,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             | sem.Figure()
             | sem.Paragraph()
             | sem.Table()
+            | sem.Grid()
             | sem.Download()
             | sem.ActionControl()
             | sem.RoutedActionControl()

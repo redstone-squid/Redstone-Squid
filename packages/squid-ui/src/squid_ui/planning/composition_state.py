@@ -33,7 +33,7 @@ from squid_ui.presentation import (
 from squid_ui.presentations import SemanticRef
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import FIRST_PAGE, Paginate, RoutedPage
-from squid_ui.semantic import Details, Group, Items, List, Navigation, Paged, Region
+from squid_ui.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 
 
 def _navigation_version(nav: PlannedNav | None) -> int | None:
@@ -135,6 +135,8 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
         ):
             owner = authored.value.overflow.page
             content = replace(authored.value, overflow=replace(authored.value.overflow, page=FIRST_PAGE))
+        if authored is not None and isinstance(authored.value, Grid):
+            content = authored.value
         cursor_fingerprint = stable_fingerprint((content, region.cuts)) if content is not None else fingerprint
         if not isinstance(owner, Controlled | RoutedPage):
             stored = request.presentation.cursor(key)
@@ -181,7 +183,7 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
         if isinstance(unit.value, Items):
             keys = (f"{unit.value.key}.items", *(f"{unit.value.key}.{item.key}.detail" for item in unit.value.items))
             retained.update(key for key in keys if key in request.presentation.cursors)
-        if not isinstance(unit.value, Region | Paged | List | Navigation) and not (
+        if not isinstance(unit.value, Region | Paged | List | Navigation | Grid) and not (
             isinstance(
                 unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
             )
@@ -209,6 +211,8 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                     if isinstance(unit.value, Region) or (isinstance(unit.value, Paged) and nested_region)
                     else f"{unit.value.key}.destinations"
                     if isinstance(unit.value, Navigation)
+                    else f"{unit.value.key}.cells"
+                    if isinstance(unit.value, Grid)
                     else unit.value.key
                 )
             if key in request.presentation.cursors:

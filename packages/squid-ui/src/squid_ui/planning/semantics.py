@@ -15,6 +15,7 @@ from squid_ui.planning.interaction_semantics import (
     NavigationChoice,
     interaction_changes,
 )
+from squid_ui.planning.semantic_adaptation.handlers import ForwardSelection
 from squid_ui.presentations import (
     Alternative,
     Alternatives,
@@ -145,6 +146,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Section()
             | sem.Paragraph()
             | sem.Table()
+            | sem.Grid()
             | sem.List()
             | sem.ListItem()
             | sem.Column()
@@ -247,6 +249,20 @@ def semantic_graph[RenderTargetT, ContextT](
             ):
                 root = add(value, path, parent, atomic=False)
                 visit(value.node, root, 0)
+            case sem.Grid():
+                root = add(value, path, parent, atomic=False)
+                for i, cell in enumerate(value.cells):
+                    visit(
+                        sem.ActionControl(
+                            cell.key,
+                            cell.label,
+                            ForwardSelection(value.on_pick, cell.key),
+                            available=cell.available,
+                            tone=cell.tone,
+                        ),
+                        root,
+                        i,
+                    )
             case sem.Table():
                 root = add(value, path, parent, atomic=False)
                 columns = add(StructuralGroup("columns"), (*path, "columns"), root, atomic=False)
@@ -612,7 +628,7 @@ class SourceScope[RenderTargetT, ContextT]:
     def page_boundary(self, presentation: SemanticRef) -> SemanticRef:
         """Locate a preserved pager in the authored graph, across nested alternatives."""
         value = self.checked.presentation.units[presentation].value
-        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items) and not (
+        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | sem.Grid) and not (
             isinstance(value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code)
             and isinstance(value.overflow, Paginate)
         ):
@@ -673,6 +689,7 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | sem.List
             | sem.Navigation
             | sem.Items
+            | sem.Grid
             | primitive.Row
             | primitive.Section
             | primitive.Panel,
@@ -728,6 +745,12 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     preserved = (constraint.key, constraint.opened) == (other.key, other.opened)
                 case sem.Navigation(), sem.Navigation():
                     preserved = (constraint.key, constraint.current) == (other.key, other.current)
+                case sem.Grid(), sem.Grid():
+                    preserved = (constraint.key, constraint.columns, tuple(cell.key for cell in constraint.cells)) == (
+                        other.key,
+                        other.columns,
+                        tuple(cell.key for cell in other.cells),
+                    )
                 case sem.List(), sem.List():
                     preserved = (constraint.key, constraint.page, constraint.page_size) == (
                         other.key,
