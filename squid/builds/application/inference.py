@@ -3,7 +3,7 @@
 import logging
 import re
 from collections.abc import Awaitable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html import escape
 from typing import Literal, Protocol, cast
 
@@ -23,6 +23,7 @@ from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, C
 from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.models import BuildLink
 from squid.core.concurrency import run_all_awaitables
+from squid.core.errors import ValidationError
 from squid.messages.domain import MessageSnapshot
 from squid.versions.errors import InvalidVersionError
 
@@ -102,7 +103,9 @@ class InferredBuild(BaseModel):
     visible_closing_time: InferredTiming | None = Field(
         description="Explicitly stated visible closing duration, separately from full/true duration."
     )
-    credits: list[InferredCredit]
+    credits: list[InferredCredit] = Field(
+        description="Every explicit attribution, including MC Username or IGN labels."
+    )
     version_spec: str | None
     author_notes: list[InferredAuthorNote] = Field(
         description=(
@@ -331,7 +334,11 @@ class BuildInferenceService:
                 continue
             subject = value.subject
             name, username = value.name, value.username
-            if value.kind is CreditKind.DISCORD:
+            if value.kind is CreditKind.NAME:
+                # A model can mix a generic name with provider fields. Keep the
+                # name without turning that inconsistency into an identity claim.
+                subject = username = None
+            elif value.kind is CreditKind.DISCORD:
                 known = (
                     ContextIdentity(message.author_id, message.author_name, message.author_username),
                     *message.mentions,
@@ -343,14 +350,26 @@ class BuildInferenceService:
                     name, username = identity.name, identity.username
             elif subject is not None and subject not in message.content:
                 subject = None
-            credit = Credit(
-                name=name,
-                kind=value.kind,
-                role=value.role,
-                username=username,
-                subject=subject,
-                source_message_id=message.message_id,
-            )
+            if username is not None:
+                username = username.strip() or None
+                if username is not None and len(username) > 255:
+                    username = None
+            try:
+                credit = Credit(
+                    name=name,
+                    kind=value.kind,
+                    role=value.role,
+                    username=username,
+                    source_message_id=message.message_id,
+                )
+            except ValidationError:
+                logger.warning("Discarded invalid credit name for message %s", message.message_id)
+                continue
+            if subject is not None:
+                try:
+                    credit = replace(credit, subject=subject)
+                except ValidationError:
+                    logger.warning("Discarded invalid credit subject for message %s", message.message_id)
             if credit not in credits:
                 credits.append(credit)
         if not any(credit.role in {CreditRole.CREATOR, CreditRole.DESIGNER} for credit in credits):

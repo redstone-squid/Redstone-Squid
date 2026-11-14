@@ -592,3 +592,51 @@ async def test_expandable_source_facts_survive_inference_without_sample_dimensio
     builds = await service.infer(source(), model="test-model")
     assert builds[0].door_expansion == document
     assert builds[0].door_dimensions == (None, None, None)
+
+
+@pytest.mark.parametrize(
+    ("kind", "subject", "username"),
+    [
+        ("name", "20", "builder"),
+        ("minecraft_java", "not-a-uuid", "builder"),
+        ("minecraft_bedrock", "not-an-xuid", "builder"),
+    ],
+)
+async def test_malformed_provider_fields_do_not_discard_a_build_or_its_other_credits(
+    kind: str, subject: str, username: str
+) -> None:
+    message = ContextMessage(10, "Poster", 20, f"By Builder and Alice; reference {subject}", "", "primary")
+    value = inferred(
+        credits=[
+            {
+                "name": "Builder",
+                "kind": kind,
+                "role": "creator",
+                "source_message_id": 10,
+                "subject": subject,
+                "username": username,
+            },
+            {"name": "Alice", "kind": "name", "role": "contributor", "source_message_id": 10},
+        ]
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value, inferred(source_message_ids=[11])])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+    inputs = BuildInferenceInput((message, source().primary[1]), (), (), 30, 40)
+    builds = await service.infer(inputs, model="test")
+
+    assert len(builds) == 2
+    assert [credit.name for credit in builds[0].credits] == ["Builder", "Alice"]
+    assert builds[0].credits[0].subject is None
+    assert builds[0].credits[0].username == (None if kind == "name" else username)
+
+
+@pytest.mark.parametrize("name", ["", " ", "x" * 256])
+def test_invalid_credit_names_are_isolated_and_keep_the_sender_fallback(name: str) -> None:
+    value = inferred(credits=[{"name": name, "kind": "name", "role": "creator", "source_message_id": 10}])
+    credits = BuildInferenceService._credits(value, source().primary)
+    assert len(credits) == 1
+    assert credits[0].attribution is CreditAttribution.ASSUMED_SENDER
