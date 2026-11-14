@@ -199,7 +199,12 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
                 category=replace(
                     template.category,
                     identity=CategoryIdentity(BuildKind.DOOR, f"door|{size}x3|t[20]|Door", (1,)),
-                    facets=(CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush"),),
+                    facets=(
+                        CandidateFacet(id=2, kind=FacetKind.PATTERN, name="Spiral"),
+                        CandidateFacet(id=2, kind=FacetKind.TYPE, name="Door"),
+                        CandidateFacet(id=2, kind=FacetKind.CATEGORY, name="Utility"),
+                        CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush"),
+                    ),
                 ),
                 history=(),
             )
@@ -248,6 +253,8 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
         facets = (await session.scalars(select(DefinitionFacet))).all()
     assert len(definitions) == 1105
     assert len(facets) == 1110
+    assert all(facet.facet_kind is FacetKind.RESTRICTION for facet in facets)
+    assert all(facet.display_order == 0 for facet in facets if facet.facet_id == 1)
     for definition in definitions:
         key = (definition.base_title, definition.category_key)
         if key in original:

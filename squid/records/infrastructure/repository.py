@@ -668,7 +668,7 @@ class PostgresRecordRepository:
                     computed.category.identity.key,
                     computed.title,
                     MaterializationSource(computed.category.source),
-                    tuple((FacetKind(facet.kind), facet.id) for facet in computed.category.facets),
+                    tuple((FacetKind.RESTRICTION, facet_id) for facet_id in computed.category.identity.restriction_ids),
                 )
                 for computed in batch.records
             ),
