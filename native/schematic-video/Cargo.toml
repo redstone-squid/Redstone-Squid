@@ -10,3 +10,4 @@ publish = false
 nucleation = { git = "https://github.com/Schem-at/Nucleation.git", rev = "836690d121740ef270aa8547a824fd9110f7f58f", default-features = false, features = ["rendering"] }
 mc-tick = { git = "https://github.com/Schem-at/Nucleation.git", rev = "836690d121740ef270aa8547a824fd9110f7f58f" }
 mc-tick-trace = { git = "https://github.com/Schem-at/Nucleation.git", rev = "836690d121740ef270aa8547a824fd9110f7f58f" }
+ureq = { version = "3", default-features = false, features = ["rustls"] }

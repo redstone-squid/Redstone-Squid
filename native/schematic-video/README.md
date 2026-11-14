@@ -5,6 +5,12 @@ v0.12.0 and uses the v0.12.2 engine. The engine and mesher revisions are pinned 
 Cargo.lock. It reconstructs moving blocks from the simulation trace and renders their intermediate positions,
 including retracting piston heads. FFmpeg must be on PATH.
 
+Player-head profiles with texture URLs download their skins from
+`https://textures.minecraft.net` before meshing. Workers need outbound HTTPS
+access to that host. Downloads are limited to 1 MiB and ten seconds each;
+failed downloads use the default skin. Name-only profiles do not resolve
+through Mojang account services.
+
 Build and test:
 
 ```sh

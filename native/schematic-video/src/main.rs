@@ -241,9 +241,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cast: {} members", members.len());
 
     // ── 3. Mesh each member once ────────────────────────────────────────────
-    let pack = ResourcePackSource::from_file(pack_path)?;
+    let mut pack = ResourcePackSource::from_file(pack_path)?;
     let source =
         nucleation::formats::structure_snbt::from_structure_snbt(&std::fs::read(snbt_path)?)?;
+    let client: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(10)))
+        .max_redirects(0)
+        .build()
+        .into();
+    for url in source.player_skin_urls() {
+        // Rebuild the URL so schematic data cannot direct requests to arbitrary hosts.
+        let Some(hash) = nucleation::meshing::player_heads::skin_hash(&url) else {
+            continue;
+        };
+        let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+            let png = client
+                .get(format!("https://textures.minecraft.net/texture/{hash}"))
+                .call()?
+                .body_mut()
+                .with_config()
+                .limit(1024 * 1024)
+                .read_to_vec()?;
+            pack.add_player_skin(&hash, &png)?;
+            Ok(())
+        })();
+        if let Err(error) = result {
+            eprintln!("could not load player skin {hash}; using fallback: {error}");
+        }
+    }
     let mesh_config = MeshConfig::default();
     let mut mesh_cache: HashMap<(Pos, String), usize> = HashMap::new();
     let mut meshes: Vec<MeshOutput> = Vec::new();
