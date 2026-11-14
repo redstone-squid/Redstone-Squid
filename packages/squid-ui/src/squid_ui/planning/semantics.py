@@ -11,6 +11,7 @@ from squid_ui.planning.interaction_semantics import Interaction, interaction_cha
 from squid_ui.presentations import (
     Alternative,
     Alternatives,
+    Budget,
     InteractionChange,
     Omission,
     SemanticRef,
@@ -46,6 +47,7 @@ type SemanticValue[RenderTargetT, ContextT] = (
     sem.SemanticNode[RenderTargetT, ContextT]
     | sem.Adaptation[RenderTargetT, ContextT]
     | EmbeddedValue[ContextT]
+    | Budget[RenderTargetT, ContextT]
     | TableCell
     | FieldPart
     | TextPresentation
@@ -157,7 +159,7 @@ def semantic_graph[RenderTargetT, ContextT](
         key = name or _key(value) or f"@{index}"
         path = (*(() if parent is None else parent.keys), key)
         match value:
-            case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.Paged():
+            case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.Paged() | Budget():
                 root = add(value, path, parent, atomic=False)
                 visit(value.node, root, 0)
             case sem.Table():

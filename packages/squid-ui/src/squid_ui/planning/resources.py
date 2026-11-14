@@ -16,7 +16,12 @@ from squid_ui.errors import LayoutInvariantError
 
 
 class Axis(StrEnum):
-    """One target-wide resource budget measured during planning."""
+    """One protocol resource measured using the target's counting rules.
+
+    DISPLAY_TEXT counts serialized component text in V2, including Markdown and
+    link destinations. It does not measure visual width or client-expanded text.
+    Only axes explicitly supported by a target can constrain a composition.
+    """
 
     DISPLAY_TEXT = "display_text"
     CONTENT_TEXT = "content_text"

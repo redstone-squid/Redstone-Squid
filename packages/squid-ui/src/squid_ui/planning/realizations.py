@@ -24,7 +24,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.semantics import StructuralGroup
 from squid_ui.planning.structure import resolve_accent
-from squid_ui.presentations import SemanticRef
+from squid_ui.presentations import Budget, SemanticRef
 from squid_ui.primitives.styles import Color
 from squid_ui.text import resolve_text
 
@@ -96,7 +96,7 @@ def semantic_offers[RenderTargetT, ContextT](
         )
     if isinstance(value, sem.Block) and not panels:
         return ()
-    if isinstance(value, sem.Group | sem.Stack | sem.Region | StructuralGroup | sem.Block):
+    if isinstance(value, sem.Group | sem.Stack | sem.Region | StructuralGroup | sem.Block | Budget):
         refs = [ref for ref, unit in occurrence.graph.units.items() if unit.parent == occurrence.reference]
         if isinstance(value, sem.Region):
             refs.sort(key=lambda ref: -1 if ref.keys[-1] == "@header" else 1 if ref.keys[-1] == "@footer" else 0)

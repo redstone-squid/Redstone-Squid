@@ -14,7 +14,7 @@ from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSear
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.semantics import SemanticGraph
-from squid_ui.presentations import FidelityEffect, SemanticRef
+from squid_ui.presentations import Budget, FidelityEffect, SemanticRef
 from squid_ui.text import NEUTRAL, Localization
 
 
@@ -212,6 +212,14 @@ class Evaluation[ResourceT, PreparationT = None]:
     text: tuple[str, ...] = ()
     """Expected visible text in target traversal order, for independent construction checks."""
 
+    resource_axes: frozenset[Axis] = frozenset()
+    """Axes the target measures, including supported axes whose usage is zero."""
+    scoped_costs: Mapping[OccurrenceId, ResourceCost] = field(default_factory=dict)
+    """Subtree usage with shared resources deduplicated independently within each scope."""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scoped_costs", MappingProxyType(dict(self.scoped_costs)))
+
     @property
     def cost(self) -> ResourceCost:
         return self.additive_cost + self.resources.cost
@@ -252,6 +260,7 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
     allowed: set[FidelityEffect] = set()
     pending = [candidate]
     seen: set[OccurrenceId] = set()
+    budgets: dict[OccurrenceId, Mapping[Axis, int]] = {}
     while pending:
         context.work.consume()
         part = pending.pop()
@@ -261,6 +270,9 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
             raise LayoutInvariantError(message)
         seen.add(identity)
         allowed.update(part.offer.effects)
+        semantic = part.offer.occurrence.graph.units[part.offer.occurrence.reference].value
+        if isinstance(semantic, Budget) and semantic.limits:
+            budgets[identity] = semantic.limits
         pending.extend(part.children)
     evaluation = rules.evaluate(candidate, context)
     if set(evaluation.effects) - allowed:
@@ -271,6 +283,24 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
         return replace(evaluation, violations=(*evaluation.violations, violation))
     if not evaluation.feasible:
         return evaluation
+    violations: list[CandidateViolation] = []
+    for identity, limits in budgets.items():
+        unsupported = limits.keys() - evaluation.resource_axes
+        violations.extend(
+            UnsupportedCapability(identity, f"resource budget: {axis.value}") for axis in sorted(unsupported)
+        )
+        supported = {axis: capacity for axis, capacity in limits.items() if axis not in unsupported}
+        if not supported:
+            continue
+        cost = evaluation.scoped_costs.get(identity)
+        if cost is None:
+            message = f"target evaluation did not measure resources for {identity.path!r}"
+            raise DrawInvariantError(message)
+        violations.extend(
+            CapacityExceeded(identity, axis, used, capacity) for axis, used, capacity in cost.over(supported)
+        )
+    if violations:
+        return replace(evaluation, violations=tuple(violations))
     if evaluation.preparation is None:
         message = "feasible target evaluation did not prepare construction"
         raise DrawInvariantError(message)

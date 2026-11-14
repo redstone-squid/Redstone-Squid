@@ -4,10 +4,13 @@ Fidelity is an explicit author declaration. Structural validation can check that
 referenced units and interactions survive, but cannot prove prose equivalent.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal
 
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.resources import Axis
 from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.text import Text, TextLike
 
@@ -193,3 +196,27 @@ def present_text(*parts: TextLike | SemanticRef | Shortening, key: str) -> TextP
     return TextPresentation(
         tuple(part if isinstance(part, SemanticRef | Shortening) else Text(part) for part in parts), key
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Budget[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+    """Additional resource limits for the selected presentation of this subtree.
+
+    Each axis uses the target's protocol counting rules. Limits never relax platform
+    capacities or authorize content loss. Unsupported axes reject the candidate.
+    """
+
+    node: Renderable[RenderTargetT, ContextT]
+    limits: Mapping[Axis, int]
+
+    def __post_init__(self) -> None:
+        if any(value < 0 for value in self.limits.values()):
+            message = "resource limits cannot be negative"
+            raise LayoutInvariantError(message)
+        object.__setattr__(self, "limits", MappingProxyType(dict(self.limits)))
+
+
+def budget[RenderTargetT, ContextT](
+    node: Renderable[RenderTargetT, ContextT], *, limits: Mapping[Axis, int]
+) -> Budget[RenderTargetT, ContextT]:
+    return Budget(node, limits)

@@ -13,6 +13,7 @@ from squid_ui.planning.composition import (
     CapacityExceeded,
     ConstraintViolation,
     Evaluation,
+    OccurrenceId,
     PlanningContext,
     RealizationOffer,
     ResourceIdentity,
@@ -55,21 +56,24 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
     ) -> Evaluation[Asset, scene.ComponentsV2]:
         texts: list[str] = []
+        text_chars = 0
+        scopes: dict[OccurrenceId, ResourceCost] = {}
         uses: list[SharedUse[Asset]] = []
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
         components = 0
 
         def text(nodes: tuple[tree.Node, ...]) -> tuple[scene.Node, ...]:
-            nonlocal components
+            nonlocal components, text_chars
             rendered = _text(nodes)
+            text_chars += len(rendered)
             if rendered:
                 components += 1
                 texts.append(rendered)
                 return (scene.Text(rendered, Markup.DISCORD_MARKDOWN),)
             return ()
 
-        def visit(
+        def realize(
             part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool
         ) -> tuple[scene.Node, ...]:
             nonlocal components
@@ -109,6 +113,21 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                 case unknown:
                     assert_never(unknown)
 
+        def visit(
+            part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool
+        ) -> tuple[scene.Node, ...]:
+            components_before, text_before, uses_before = components, text_chars, len(uses)
+            nodes = realize(part, in_panel=in_panel)
+            # An asset used by a sibling still counts within this subtree's budget.
+            shared = SharedResources.combine(uses[uses_before:])
+            scopes[part.offer.occurrence.identity] = (
+                ResourceCost(
+                    {Axis.COMPONENTS: components - components_before, Axis.DISPLAY_TEXT: text_chars - text_before}
+                )
+                + shared.cost
+            )
+            return nodes
+
         preparation = scene.ComponentsV2(visit(candidate, in_panel=False))
         resources = SharedResources.combine(uses)
         additive = ResourceCost({Axis.COMPONENTS: components, Axis.DISPLAY_TEXT: sum(map(len, texts))})
@@ -117,7 +136,14 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             for axis, used, capacity in (additive + resources.cost).over(self.limits.capacities)
         )
         return Evaluation(
-            additive, resources, tuple(violations), tuple(effects), preparation=preparation, text=tuple(texts)
+            additive,
+            resources,
+            tuple(violations),
+            tuple(effects),
+            preparation=preparation,
+            text=tuple(texts),
+            resource_axes=frozenset({Axis.COMPONENTS, Axis.DISPLAY_TEXT, Axis.ATTACHMENTS}),
+            scoped_costs=scopes,
         )
 
     def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:

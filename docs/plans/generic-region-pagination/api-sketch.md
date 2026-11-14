@@ -136,8 +136,29 @@ sl.region(
 Root and local pagination will use the same planning machinery. Author APIs for budgets, break
 preferences, and ownership can evolve during migration; they must not create separate solvers.
 Current key arguments remain the authoring mechanism for identity, without an extra identity wrapper.
-Author budgets separate an explicit hard `max` from allocation preferences; `prefer` and `stretch`
-do not implicitly cap content or authorize loss.
+Author budgets name the resources they limit. The prototype is available separately from
+production `sl.budget`:
+
+```python
+from squid_ui.planning.resources import Axis
+from squid_ui.presentations import budget
+
+budget(content, limits={Axis.DISPLAY_TEXT: 100, Axis.COMPONENTS: 20})
+```
+
+Each axis follows the target's protocol counting rules. In V2, `DISPLAY_TEXT` counts serialized
+text, including Markdown and link destinations; `COMPONENTS` counts physical components including
+containers; `ATTACHMENTS` counts distinct attached assets. Slack currently exposes `BLOCKS`.
+HTML currently exposes no protocol resource axes. Requesting an unsupported axis rejects the
+candidate rather than treating its cost as zero. Field-specific limits, such as Slack section
+text, remain target constraints and are not interchangeable with a message-wide text budget.
+
+Limits apply to the chosen representation of the wrapped subtree. Every enclosing budget is
+checked, and shared resources count once within each scope even when siblings also use them.
+Platform limits always apply: a larger author limit cannot relax them. A budget does not authorize
+shortening or omission. Allocation preferences and visual-length preferences are separate future
+API work; this prototype has no bare `max`, `min`, `prefer`, or `stretch` parameters.
+Production `sl.budget` will migrate with the planner entry point.
 
 Separate semantic identity, occurrence identity, representation choice, and page position in the
 planning model. Occurrences carry inherited policies and placement context. Representation changes

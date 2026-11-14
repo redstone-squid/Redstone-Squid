@@ -12,6 +12,7 @@ from squid_ui.planning.composition import (
     CapacityExceeded,
     Evaluation,
     LocalCapacityExceeded,
+    OccurrenceId,
     PlanningContext,
     RealizationOffer,
     SemanticOccurrence,
@@ -62,12 +63,13 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
     ) -> Evaluation[Asset, scene.SlackMessage]:
         texts: list[str] = []
+        scopes: dict[OccurrenceId, ResourceCost] = {}
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
         blocks = 0
         prepared_blocks: list[scene.SlackBlock] = []
 
-        def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> None:
+        def realize(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> None:
             nonlocal blocks
             context.work.consume()
             identity = part.offer.occurrence.identity
@@ -132,6 +134,11 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                 case _:
                     violations.append(UnsupportedCapability(identity, type(part.offer.payload).__name__))
 
+        def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> None:
+            before = blocks
+            realize(part)
+            scopes[part.offer.occurrence.identity] = ResourceCost({Axis.BLOCKS: blocks - before})
+
         visit(candidate)
         cost = ResourceCost({Axis.BLOCKS: blocks})
         violations.extend(
@@ -151,6 +158,8 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
             effects=tuple(effects),
             preparation=scene.SlackMessage("\n".join(texts), tuple(prepared_blocks)),
             text=tuple(texts),
+            resource_axes=frozenset({Axis.BLOCKS}),
+            scoped_costs=scopes,
         )
 
     def build(self, preparation: scene.SlackMessage, context: PlanningContext) -> scene.SlackMessage:

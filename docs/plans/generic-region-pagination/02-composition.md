@@ -171,9 +171,19 @@ resource counts, text, and structure. A feasible selection without a preparation
 contract error. Semantic selection remains in the core, and rejected candidates never construct
 or publish a body.
 
-Author budgets will distinguish an explicit hard `max` from `prefer` and `stretch` allocation
-guidance. A preference alone does not cap an unbounded target or authorize text loss. Existing
-callers that relied on a cap need an explicit maximum during migration.
+`squid_ui.presentations.budget(node, limits={Axis.COMPONENTS: 20})` adds explicit resource
+limits to a subtree. Targets report supported axes and scoped protocol costs; the core checks
+every enclosing budget. Shared assets count once per scope, including a scope whose siblings
+already use the asset. Unsupported axes reject candidates, and missing measurements for supported
+axes are target contract errors. Platform limits remain automatic and cannot be relaxed by author
+budgets. Resource limits do not grant permission for content loss. The [API sketch](api-sketch.md)
+describes the implemented axes and counting rules.
+
+Visual-length and allocation preferences remain separate design work. Production `sl.budget()`
+still follows the legacy implementation until planner cutover. That migration must review the
+layout workbench's description budget, the paged helper's page limits, and tests that rely on
+`prefer + stretch` acting as a cap. Callers should choose explicit resource limits or presentation
+preferences according to their intent, rather than mechanically renaming the old parameters.
 
 ## Validation and acceptance
 
