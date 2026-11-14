@@ -1105,10 +1105,10 @@ bot-submission-build-browse-approve = Approve
 # squid/bot/submission/build_browse.py:311
 bot-submission-build-browse-build = { $action } build #{ $build_id }?
 
-# squid/bot/submission/build_browse.py:460
+# squid/bot/submission/build_browse.py:459
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:757
+# squid/bot/submission/build_browse.py:760
 bot-submission-build-browse-build-id = Build ID
 
 # squid/bot/submission/build_browse.py:330
@@ -1138,10 +1138,10 @@ bot-submission-build-browse-edit = Edit
 # squid/bot/submission/build_browse.py:227
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:755
+# squid/bot/submission/build_browse.py:758
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:556
+# squid/bot/submission/build_browse.py:571
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/submission/schematic_tools.py:384
@@ -1742,28 +1742,31 @@ bot-voting-vote-working = Working
 # squid/bot/voting/vote.py:90
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
+# squid/bot/submission/build_browse.py:563
+browse-query-summary = Query: { $query } · Sort: { $sort }
+
 # squid/bot/submission/attachments.py:59
 build-attachment-type-rejected = `{ $filename }` is not a file type this command accepts.
 
 # squid/bot/submission/attachments.py:65
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/submission/build_browse.py:509
+# squid/bot/submission/build_browse.py:497
 build-browse-all-builds = Builds
 
-# squid/bot/submission/build_browse.py:486
+# squid/bot/submission/build_browse.py:479
 build-browse-list = List view
 
-# squid/bot/submission/build_browse.py:525
+# squid/bot/submission/build_browse.py:513
 build-browse-record-tools = Record tools
 
-# squid/bot/submission/build_browse.py:517
+# squid/bot/submission/build_browse.py:505
 build-browse-records = Records
 
 # squid/bot/submission/build_browse.py:255
 build-browse-tags = Build tags
 
-# squid/bot/submission/build_browse.py:562
+# squid/bot/submission/build_browse.py:543
 build-browser-search-filters = Search & filters
 
 # squid/bot/submission/submit.py:349
@@ -1877,7 +1880,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:374
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/submission/build_browse.py:550, squid/bot/submission/build_browse.py:671
+# squid/bot/submission/build_browse.py:537, squid/bot/submission/build_browse.py:676
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -1892,7 +1895,7 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/submission/build_browse.py:461
+# squid/bot/submission/build_browse.py:460
 build-list-empty = No builds are available.
 
 # squid/bot/submission/schematic_tools.py:400
@@ -2012,13 +2015,10 @@ builds-revision-conflict = The build changed after it was read.
 # squid/builds/errors.py:77
 builds-revision-conflict-action = Fetch the latest build, merge the changes, and try again.
 
-# squid/bot/submission/build_browse.py:565
-catalogue-hide-search-help = Hide search help
-
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/submission/build_browse.py:567, squid/bot/submission/search_help.py:177
+# squid/bot/submission/build_browse.py:549, squid/bot/submission/search_help.py:181
 catalogue-search-help = Search help
 
 # squid/catalogue/domain/titles.py:67
@@ -2249,13 +2249,13 @@ command-errors-reference-help = The error reference to open immediately
 # squid/bot/diagnostics.py:27
 command-errors-reference-name = reference
 
-# squid/bot/help.py:190
+# squid/bot/help.py:194
 command-help-command-name = command
 
-# squid/bot/help.py:186
+# squid/bot/help.py:190
 command-help-help = Show a grouped command directory or focused command details.
 
-# squid/bot/help.py:187
+# squid/bot/help.py:191
 command-help-name = help
 
 # squid/bot/layout_showcase.py:26
@@ -3212,71 +3212,68 @@ give-redstoner-value = { $role_mention }
 # squid/bot/give_redstoner.py:139
 give-redstoner-value-2 = { $source_channel_mention }
 
-# squid/bot/submission/guided_search.py:141, squid/bot/submission/guided_search.py:341
+# squid/bot/submission/guided_search.py:186, squid/bot/submission/guided_search.py:438
 guided-search-add-filter = Add filter
 
-# squid/bot/submission/guided_search.py:230
+# squid/bot/submission/guided_search.py:251
 guided-search-add-filter-value = Add filter value
 
-# squid/bot/submission/guided_search.py:124
-guided-search-all-builds = All builds
-
-# squid/bot/submission/guided_search.py:126
-guided-search-all-records = All records
-
-# squid/bot/submission/guided_search.py:114
+# squid/bot/submission/guided_search.py:169
 guided-search-back-query = Back to query
 
-# squid/bot/submission/guided_search.py:216
+# squid/bot/submission/guided_search.py:242
 guided-search-choose-value = Choose named value
 
-# squid/bot/submission/guided_search.py:252
-guided-search-close-panel = Close filters
-
-# squid/bot/submission/guided_search.py:236
+# squid/bot/submission/guided_search.py:311
 guided-search-comparison = Comparison
 
-# squid/bot/submission/guided_search.py:156
+# squid/bot/submission/guided_search.py:202
 guided-search-edit-filter = Edit { $label }
 
-# squid/bot/submission/guided_search.py:136, squid/bot/submission/guided_search.py:260
+# squid/bot/submission/guided_search.py:178, squid/bot/submission/guided_search.py:261
 guided-search-edit-query = Edit query
 
-# squid/bot/submission/guided_search.py:180
+# squid/bot/submission/guided_search.py:349
+guided-search-edit-text = Edit keywords
+
+# squid/bot/submission/guided_search.py:352
+guided-search-keywords = Keywords
+
+# squid/bot/submission/guided_search.py:228
 guided-search-next-filters = Next filters
 
-# squid/bot/submission/guided_search.py:174
+# squid/bot/submission/guided_search.py:222
 guided-search-previous-filters = Previous filters
 
-# squid/bot/submission/guided_search.py:264
+# squid/bot/submission/guided_search.py:265
 guided-search-query-label = Query
 
-# squid/bot/submission/guided_search.py:108
+# squid/bot/submission/guided_search.py:163
 guided-search-relevance = Use relevance
 
-# squid/bot/submission/guided_search.py:162
+# squid/bot/submission/guided_search.py:210
 guided-search-remove-clause = Remove
 
-# squid/bot/submission/guided_search.py:143
+# squid/bot/submission/build_browse.py:564
 guided-search-reset = Reset
 
-# squid/bot/submission/guided_search.py:130
-guided-search-shared-query-help = Edit the query or build it with filters. Both edit the same search.
+# squid/bot/submission/guided_search.py:427
+guided-search-search-filter = Search filter
 
-# squid/bot/submission/guided_search.py:369
+# squid/bot/submission/guided_search.py:429
+guided-search-search-options = Search options
+
+# squid/bot/submission/guided_search.py:184
+guided-search-selected-field = Filter: { $field_label }
+
+# squid/bot/submission/guided_search.py:459
 guided-search-sort = Choose sorting
 
-# squid/bot/submission/guided_search.py:146
-guided-search-sort-relevance = Sort: Relevance
-
-# squid/bot/submission/guided_search.py:142
+# squid/bot/submission/guided_search.py:190
 guided-search-sorting = Sorting
 
-# squid/bot/submission/guided_search.py:120
-guided-search-title = Search and filters
-
-# squid/bot/submission/guided_search.py:208
-guided-search-value-help = Enter a value, including units for numeric fields or an ISO date.
+# squid/bot/submission/guided_search.py:338
+guided-search-upper = Upper value (Between only)
 
 # squid/bot/help.py:26
 help-account = Account
@@ -3287,10 +3284,10 @@ help-administration-setup = Administration & setup
 # squid/bot/help.py:24
 help-build = Build
 
-# squid/bot/help.py:140
+# squid/bot/help.py:144
 help-command-not-found = Command not found
 
-# squid/bot/help.py:141
+# squid/bot/help.py:145
 help-command-unavailable = No command named `{ $needle }` is available.
 
 # squid/bot/help.py:27
@@ -3299,34 +3296,34 @@ help-community = Community
 # squid/bot/help.py:25
 help-discover = Discover
 
-# squid/bot/help.py:151
+# squid/bot/help.py:155
 help-documentation = Documentation
 
 # squid/bot/help.py:34
 help-information = Information
 
-# squid/bot/help.py:158
+# squid/bot/help.py:162
 help-invite = Invite
 
 # squid/bot/help.py:100
 help-no-commands-are-available = No commands are available.
 
-# squid/bot/help.py:116, squid/bot/help.py:172
+# squid/bot/help.py:116, squid/bot/help.py:176
 help-no-details-provided = No details provided
 
 # squid/bot/help.py:99
 help-redstone-squid-help = Redstone Squid help
 
-# squid/bot/help.py:152
+# squid/bot/help.py:156
 help-regulations = Regulations
 
-# squid/bot/help.py:149
+# squid/bot/help.py:153
 help-source = Source
 
-# squid/bot/help.py:150
+# squid/bot/help.py:154
 help-submission-form = Submission form
 
-# squid/bot/help.py:191
+# squid/bot/help.py:195
 help-the-command-to-get-help-for = The command to get help for.
 
 # squid/idempotency/infrastructure/crypto.py:61
@@ -4296,25 +4293,19 @@ record-browse-open-holder = Open build #{ $build_id }
 # squid/bot/submission/record_browser.py:84
 record-browse-title = Records
 
-# squid/bot/submission/build_browse.py:596
+# squid/bot/submission/build_browse.py:600
 record-browser-all = All standings
 
-# squid/bot/submission/build_browse.py:591
+# squid/bot/submission/build_browse.py:595
 record-browser-fastest = Fastest
 
-# squid/bot/submission/build_browse.py:592
+# squid/bot/submission/build_browse.py:596
 record-browser-first = First
 
-# squid/bot/submission/build_browse.py:500
-record-browser-guide = Choose a record type, or search by name and filters.
-
-# squid/bot/submission/build_browse.py:499
-record-browser-home = Find a record
-
-# squid/bot/submission/build_browse.py:590
+# squid/bot/submission/build_browse.py:594
 record-browser-smallest = Smallest
 
-# squid/bot/submission/build_browse.py:604
+# squid/bot/submission/build_browse.py:611
 record-filter-hint = Toggle any record types; none selected means all types. Search keeps your selection.
 
 # squid/bot/submission/commands.py:195
@@ -4747,7 +4738,7 @@ search-grouped-tied-holders = Tied holders
 # squid/search/application/ranking.py:67
 search-k-positive = k must be positive
 
-# squid/bot/submission/search_help.py:138
+# squid/bot/submission/search_help.py:140
 search-reference-and = Spaces mean AND: door width<=5 requires both. OR accepts either: (door OR extender) width<=5 applies the width limit to both alternatives.
 
 # squid/bot/submission/search_help.py:90
@@ -4759,8 +4750,11 @@ search-reference-credit = Creator name or Minecraft version; creator:Steve, vers
 # squid/bot/submission/search_help.py:84
 search-reference-dates = Completion, submission and update dates. Use YYYY-MM-DD, for example completion_at>=2025-01-01.
 
-# squid/bot/submission/search_help.py:167
+# squid/bot/submission/search_help.py:169
 search-reference-empty = No matches? Turn off type toggles, remove one filter at a time, and check Fields & values. Records only includes populated standings; hidden builds are never made visible by a filter.
+
+# squid/bot/submission/search_help.py:101
+search-reference-example-description = **{ $title }** — `{ $query }`
 
 # squid/bot/submission/search_help.py:124
 search-reference-example-reset = Try a search to replace your current query, type toggles and sort order.
@@ -4771,10 +4765,10 @@ search-reference-examples = Worked examples
 # squid/bot/submission/search_help.py:116, squid/bot/submission/search_help.py:117
 search-reference-fields = Fields & values
 
-# squid/bot/submission/search_help.py:145
+# squid/bot/submission/search_help.py:147
 search-reference-not = NOT excludes a match: door NOT restriction:observerless. AND binds more tightly than OR; use parentheses to group alternatives.
 
-# squid/bot/submission/search_help.py:152
+# squid/bot/submission/search_help.py:154
 search-reference-operators = Quote phrases: title:"vault door". Numbers and dates support <, <=, >, >= and inclusive ranges such as width:[3 TO 5]. Wildcards (* and ?) are not supported.
 
 # squid/bot/submission/search_help.py:44
@@ -4789,7 +4783,7 @@ search-reference-record-types = The type toggles match any selected type, then c
 # squid/bot/submission/search_help.py:77
 search-reference-size = Physical build dimensions in blocks and volume in blocks cubed, not the door opening size. Use width<=5 or width:[3 TO 5].
 
-# squid/bot/submission/search_help.py:159
+# squid/bot/submission/search_help.py:161
 search-reference-sort = Put one field in Sort, not in the query. Available fields: width, height, depth, created_at, updated_at. Prefix with - to reverse order. Dimensions apply to Builds. Blank uses relevance for keywords; filter-only searches use the default result order.
 
 # squid/bot/submission/search_help.py:134, squid/bot/submission/search_help.py:136
@@ -4800,9 +4794,6 @@ search-reference-tags = A known tag, restriction or pattern name. Quote names co
 
 # squid/bot/submission/search_help.py:65
 search-reference-text = Words or quoted phrases in the title or description.
-
-# squid/bot/submission/search_help.py:103
-search-reference-try = Try this search
 
 # squid/search/application/fields.py:148
 search-search-numbers-finite = Search numbers must be finite
