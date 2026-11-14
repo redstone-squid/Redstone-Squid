@@ -471,9 +471,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._guided is not None:
-            if self._guided.picker is not None or self._results is None:
-                return (self._guided,)
-            return (self._guided, self._results)
+            return (
+                self._workspace_controls(),
+                *self._find_nodes(),
+                *((self._results,) if self._results is not None else ()),
+            )
         if self._show_search_help:
             return (self._workspace_controls(), *self._find_nodes())
         if self._selected is not None:
@@ -569,6 +571,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 key="find-forms",
             ),
         ]
+        if self._guided is not None:
+            nodes.append(self._guided)
         if self._mode == "records":
             nodes.extend(
                 (
@@ -673,8 +677,13 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         build_id = form.id
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
+        else:
+            self._guided = None
 
     async def _guided_search(self, event: sl.PressEvent) -> None:
+        if self._guided is not None:
+            self._guided = None
+            return
         assert self._search_service is not None
 
         async def selected(selection: SearchSelection) -> None:

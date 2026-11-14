@@ -11,7 +11,7 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import PickHandler, RequestAuthorizer, SuggestionSource
-from squid.bot.ui import tr
+from squid.bot.ui import tr, truncate_display_text
 from squid.records.domain import BuildKind
 from squid.search.application import SearchService
 from squid.search.application.fields import FieldRegistry
@@ -149,23 +149,22 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         start = self.clause_page * 2
         for index, item in enumerate(clauses[start : start + 2], start):
             clause = render_expression(item)
+            label = truncate_display_text(clause, 65)
             nodes.append(
-                sl.stack(
-                    sl.paragraph(clause),
-                    sl.action_controls(
-                        sl.form(
-                            tr(t"guided-search-edit-clause = Edit"),
-                            self._query_form(clause),
-                            key=f"edit-{index}",
-                            on_submit=partial(self._edit_clause, index),
-                        ),
-                        sl.action_control(
-                            tr(t"guided-search-remove-clause = Remove"),
-                            partial(self._remove, index),
-                            key=f"remove-{index}",
-                        ),
-                        key=f"clause-{index}",
+                sl.action_controls(
+                    sl.form(
+                        tr(t"guided-search-edit-filter = Edit {label}"),
+                        self._query_form(clause),
+                        key=f"edit-{index}",
+                        on_submit=partial(self._edit_clause, index),
                     ),
+                    sl.action_control(
+                        tr(t"guided-search-remove-clause = Remove"),
+                        partial(self._remove, index),
+                        key=f"remove-{index}",
+                    ),
+                    key=f"clause-{index}",
+                    display=sl.semantic.ControlDisplay.INDIVIDUAL,
                 )
             )
         if len(clauses) > 2:
@@ -250,7 +249,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
             )
         nodes.append(
             sl.action_controls(
-                sl.action_control(tr(t"guided-search-back-catalogue = Back to catalogue"), self._cancel, key="cancel"),
+                sl.action_control(tr(t"guided-search-close-panel = Close filters"), self._cancel, key="cancel"),
                 key="search-actions",
             )
         )

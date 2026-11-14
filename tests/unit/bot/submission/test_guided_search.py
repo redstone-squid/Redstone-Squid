@@ -13,7 +13,7 @@ from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import BooleanExpression, BooleanOperator, FieldExpression
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
-from squid_ui_discord.testing import stage
+from squid_ui_discord.testing import iter_component_payloads, stage
 from tests.unit.suggestions.test_services import RecordingProvider
 
 
@@ -114,3 +114,16 @@ async def test_field_and_sort_pickers_stay_in_the_message(monkeypatch: pytest.Mo
         assert screen.selected.name == "width"
         assert screen.sort == "-width"
         cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection("", "-width"))
+
+
+async def test_filter_edit_and_remove_share_one_action_row() -> None:
+    screen = editor("width:3")
+    async with stage(screen, owner=object()) as ui:
+        edit = ui.control(ui.key_for("edit-0"))
+        remove = ui.control(ui.key_for("remove-0"))
+        rows = [item for item in iter_component_payloads(ui._view().to_components()) if item.get("type") == 1]
+        assert any(
+            {edit.custom_id, remove.custom_id} <= {child.get("custom_id") for child in row.get("components", [])}
+            for row in rows
+        )
+        assert "width:3" in edit.payload["label"]

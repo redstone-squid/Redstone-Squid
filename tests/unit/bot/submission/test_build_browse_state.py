@@ -1,10 +1,12 @@
 """Build browser actions participate in the UI's state transactions."""
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
+import anyio
 import pytest
 
 import squid_ui as sl
@@ -26,9 +28,12 @@ from squid.search.application import SearchService
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchMode, SearchPage, SearchScope
+from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
+from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid_reactivity import LocalTopicBus
 from squid_ui.testing import press_event, submit_event
 from squid_ui_discord.testing import StagedUI, stage
+from tests.unit.suggestions.test_services import RecordingProvider
 
 
 def _screen(
@@ -686,3 +691,39 @@ async def test_failed_live_search_preserves_query_and_results() -> None:
         assert screen._guided.query == screen._query == ""
         assert screen._results is results
         assert not ui.root.finished
+
+
+async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    screen = _screen(initial_id=None)
+    suggestions = SuggestionService(
+        SuggestionRegistry.of(
+            (RegisteredSource("search_fields", RecordingProvider((Candidate.create("width", "Width"),))),)
+        )
+    )
+    async with stage(screen, owner=object()) as ui:
+        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
+        monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
+        await ui.press(ui.key_for("guided-search"))
+        editor = screen._guided
+        results = screen._results
+        assert editor is not None
+        assert screen._find_nodes()[1] is editor
+        ui.control(ui.key_for("open-id"))
+        ui.control(ui.key_for("guided-search"))
+        assert ui.texts().index("## Search and filters") < ui.texts().index("## Search results")
+
+        await ui.press(ui.key_for("field"))
+        with anyio.fail_after(2):
+            while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
+                await anyio.sleep(0.01)
+        ui.control(ui.key_for("open-id"))
+        ui.control(ui.key_for("guided-search"))
+        assert "## Search results" in ui.texts()
+        assert screen._results is results
+        await ui.press(ui.key_for("picker-back"))
+        assert screen._guided is editor
+        assert screen._results is results
+        await ui.press(ui.key_for("guided-search"))
+        assert screen._guided is None
+        assert screen._results is results
+        ui.assert_within_limits()
