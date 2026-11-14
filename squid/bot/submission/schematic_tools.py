@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import replace
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import anyio
@@ -43,6 +43,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     _video_job_id: int | None = sl.state(None)
     _video_recipe: VideoRenderRequest = sl.state(VideoRenderRequest(), persist=False)
     _convert_version: Suggestion | None = sl.state(None, persist=False)
+    _show_maintenance: bool = sl.state(False)
 
     def __init__(
         self,
@@ -66,8 +67,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, SchematicRequest]:
         if self._show_details is not None and not self._show_details():
             return ()
-        nodes = list(self._schematic_nodes())
-        if self._convert_version is not None:
+        nodes = list(self._maintenance_nodes() if self._show_maintenance else self._schematic_nodes())
+        if self._convert_version is not None and not self._show_maintenance:
             nodes.append(sl.note(self._convert_version.label))
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
@@ -116,9 +117,9 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             ),
             sl.form(
                 tr(t"bot-submission-build-browse-convert-schematic = Convert schematic"),
-                self._convert_form(),
+                _ConvertForm().spec(),
                 key="convert",
-                on_submit=self._convert,
+                on_submit=partial(self._convert, version=self._convert_version),
             ),
             videos_enabled
             and sl.action_control(
@@ -136,17 +137,42 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             sl.action_controls(*entries[:3], key="schematic-actions"),
             sl.action_controls(*entries[3:6], key="conversion-actions"),
             sl.action_controls(*entries[6:], key="video-actions"),
-        )
-
-    @staticmethod
-    def _convert_form() -> sl.forms.FormSpec:
-        form = _ConvertForm().spec()
-        return replace(
-            form,
-            items=tuple(
-                item for item in form.items if not isinstance(item, sl.forms.FormField) or item.key != "version"
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"schematic-conversion-maintenance = Conversion maintenance"),
+                    self._toggle_maintenance,
+                    key="conversion-maintenance",
+                ),
+                key="maintenance-entry",
             ),
         )
+
+    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, SchematicRequest], ...]:
+        return (
+            sl.heading(tr(t"schematic-conversion-maintenance = Conversion maintenance")),
+            sl.note(
+                tr(
+                    t"schematic-data-version-purpose = Convert to a numeric Minecraft world-format version when a named release is unavailable."
+                )
+            ),
+            sl.action_controls(
+                sl.form(
+                    tr(t"schematic-convert-by-data-version = Convert by data version"),
+                    _DataVersionForm().spec(),
+                    key="convert-data-version",
+                    on_submit=self._convert_by_data_version,
+                ),
+                sl.action_control(
+                    tr(t"schematic-back-to-tools = Back to schematic tools"),
+                    self._toggle_maintenance,
+                    key="back-to-tools",
+                ),
+                key="maintenance-actions",
+            ),
+        )
+
+    async def _toggle_maintenance(self, _event: sl.PressEvent) -> None:
+        self._show_maintenance = not self._show_maintenance
 
     async def _primary(self, event: sl.ActionEvent, private_access: PermissionNode) -> StoredSchematic | None:
         """Return the featured schematic if the actor may use it, otherwise tell them why not.
@@ -322,20 +348,25 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         )
         return True
 
-    async def _convert(self, event: sl.SubmitEvent) -> None:
+    async def _convert(self, event: sl.SubmitEvent, *, version: Suggestion | None = None) -> None:
+        form = _ConvertForm.from_submission(event)
+        await self._convert_output(
+            event, ConvertRequest(target_format=form.format), version_label=version.value if version else None
+        )
+
+    async def _convert_by_data_version(self, event: sl.SubmitEvent) -> None:
+        form = _DataVersionForm.from_submission(event)
+        await self._convert_output(
+            event, ConvertRequest(target_format=form.format, target_data_version=form.data_version)
+        )
+
+    async def _convert_output(
+        self, event: sl.SubmitEvent, request: ConvertRequest, *, version_label: str | None = None
+    ) -> None:
         if await self._primary(event, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE) is None:
             return
-        form = _ConvertForm.from_submission(event)
-        file_format = form.format
-        data_version = form.data_version
-        version = form.version or (
-            self._convert_version.value if self._convert_version is not None and data_version is None else None
-        )
-        data, losses = await self._schematics.convert(
-            self._build_id,
-            ConvertRequest(target_format=file_format, target_data_version=data_version),
-            version_label=version,
-        )
+        data, losses = await self._schematics.convert(self._build_id, request, version_label=version_label)
+        file_format = request.target_format
         self._asset = self._schematic_asset(data, WRITABLE_EXTENSIONS[file_format])
         loss_summary = summarise_losses(losses)
         self._schematic_result = md_tr(
@@ -360,20 +391,17 @@ class _ConvertForm(sl.forms.Form):
             for file_format in WRITABLE_EXTENSIONS
         ),
     )
+
+
+class _DataVersionForm(_ConvertForm):
+    title = tr(t"schematic-convert-by-data-version = Convert by data version")
+
     data_version = sl.forms.IntField(
         label=tr(t"build-minecraft-data-version-label = Minecraft data version"),
         description=tr(
-            t"schematic-convert-data-help = Advanced: numeric world-format ID. Leave blank when using a version name."
+            t"schematic-data-version-help = Numeric Minecraft world-format ID, not a Squid database version ID."
         ),
-        required=False,
-    )
-    version = sl.forms.TextField(
-        label=tr(t"build-minecraft-version-label = Minecraft version name"),
-        description=tr(
-            t"schematic-convert-version-help = For example, 1.21. Leave both version fields blank to keep the current version."
-        ),
-        required=False,
-        maximum=100,
+        minimum=1,
     )
 
 

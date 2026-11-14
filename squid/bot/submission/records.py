@@ -151,7 +151,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         tabs.append(
             sp.Tab(
                 "maintenance",
-                tr(t"bot-submission-records-lookup-and-rebuild = Lookup and rebuild"),
+                tr(t"records-maintenance-tools = Maintenance tools"),
                 self._maintenance_nodes(),
             )
         )
@@ -201,7 +201,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 ),
                 self._can_inspect
                 and sl.form(
-                    tr(t"records-advanced-category = Advanced exact category"),
+                    tr(t"records-exact-category = Lookup exact category"),
                     self._lookup_form(),
                     key="lookup",
                     on_submit=self._lookup,
@@ -393,7 +393,7 @@ class _LookupForm(sl.forms.Form):
     title = tr(t"bot-submission-records-lookup-record-category = Lookup record category")
 
     kind = RecordsScreen._kind_field()
-    base_key = sl.forms.TextField(label=tr(t"records-exact-category-key = Exact category key (advanced)"), maximum=300)
+    base_key = sl.forms.TextField(label=tr(t"records-exact-category-key = Exact category key"), maximum=300)
     restrictions = sl.forms.TextField(
         label=tr(t"records-restriction-ids-help = Restriction IDs, comma separated"),
         required=False,

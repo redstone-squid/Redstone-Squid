@@ -640,3 +640,20 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
         assert queries.list_page.await_args.kwargs["selector"] == PageSelector(offset=288)
         assert any("Page 37 of 50" in text for text in ui.texts())
         ui.assert_within_limits()
+
+
+async def test_numeric_conversion_versions_are_only_in_maintenance() -> None:
+    async with stage(_screen(schematics_available=True), owner=object()) as ui:
+        await ui.press(ui.key_for("schematic-tools"))
+        normal = await ui.press_for_form(ui.key_for("convert"))
+        assert {item.custom_id for item in normal.modal.walk_children() if hasattr(item, "custom_id")} == {"format"}
+        await ui.press(ui.key_for("conversion-maintenance"))
+        assert "## Conversion maintenance" in ui.texts()
+        form = await ui.press_for_form(ui.key_for("convert-data-version"))
+        assert {item.custom_id for item in form.modal.walk_children() if hasattr(item, "custom_id")} == {
+            "format",
+            "data_version",
+        }
+        await ui.press(ui.key_for("back-to-tools"))
+        ui.control(ui.key_for("convert"))
+        assert "Convert by data version" not in ui.texts()

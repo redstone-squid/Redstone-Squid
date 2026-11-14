@@ -13,7 +13,9 @@ from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
-from squid_ui.testing import press_event
+from squid.schematics.domain.models import SchematicFormat
+from squid.suggestions.domain import Suggestion
+from squid_ui.testing import press_event, submit_event
 from tests.unit.schematics.fakes import make_analysis
 
 UPLOADER_ID = 11
@@ -157,3 +159,27 @@ async def test_a_failed_schematic_action_discards_its_results(monkeypatch: pytes
 
     assert detail._schematic_result is None
     assert detail._asset is None
+
+
+@pytest.mark.parametrize("numeric", [True, False])
+@pytest.mark.parametrize("public", [True, False])
+async def test_conversion_paths_keep_access_checks_and_separate_version_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+    numeric: bool,
+    public: bool,
+) -> None:
+    detail = _detail(PUBLIC if public else PRIVATE, actor=OTHER_ID, held=set())
+    convert = AsyncMock(return_value=(b"schematic", ()))
+    monkeypatch.setattr(detail._schematics, "convert", convert)
+    event = submit_event({"format": SchematicFormat.LITEMATIC, "data_version": 3953})
+    with sl.runtime.transaction():
+        if numeric:
+            await detail._convert_by_data_version(event)
+        else:
+            await detail._convert(event, version=Suggestion("Java 1.21", "Java 1.21"))
+    if not public:
+        convert.assert_not_awaited()
+        return
+    convert.assert_awaited_once()
+    assert convert.call_args.args[1].target_data_version == (3953 if numeric else None)
+    assert convert.call_args.kwargs["version_label"] == (None if numeric else "Java 1.21")
