@@ -1,10 +1,12 @@
 # squid-reactivity
 
-State that knows who is reading it. You declare fields on a model, the package records which
-fields a piece of code read, and it tells that code when one of them changes. A transaction
-groups related writes so that all of them publish or none do.
+Reactive models with signals, cached computed values, asynchronous values, and transactions.
 
-There are no required dependencies. The API is alpha and may change before 1.0.
+You declare fields on a model. The package records which fields were read and notifies the
+reader when one of them changes. A transaction groups related writes so that all of them
+publish or none do.
+
+There are no dependencies. The API is alpha and may change before 1.0.
 
 ## Models
 
@@ -28,12 +30,13 @@ with observe_reads() as dependencies:
     assert counter.doubled == 2
 ```
 
-`state()` declares a field you can assign. `@computed` declares a derived value, which is
-cached until something it read changes.
+`state()` declares a field, and each field is a signal. `@computed` declares a derived value,
+which is cached until a reactive value it depends on changes. A `@computed` can depend on
+another `@computed`. Reactivity is fine-grained: changing a field affects only what read
+that field. Otherwise, a `Reactive` model is a plain object.
 
-Otherwise a model is a plain object: write any `__init__` you like, and share an instance by
-passing it around. `squid_ui.Component` is a `Reactive` too, and its renderer tracks what
-each render reads.
+`squid_ui.Component` is built on this library. A component is a `Reactive`, and its renderer
+tracks what each render reads.
 
 ## Transactions
 
@@ -41,25 +44,42 @@ A bare assignment takes effect immediately. Inside `with transaction(...)`, the 
 its own writes but nothing is published until it exits. If it raises, the writes are
 discarded. A nested block is part of the outer transaction, not a savepoint.
 
-A commit fails with `ReactiveConflictError`, publishing nothing, if a field it depended on
-changed in the meantime. A transaction depends on the fields it both read and wrote, so
-`counter.count += 1` is protected and a field you only looked at is not. To adjust that:
+A transaction can stay open across an `await`, and another task may write while it waits.
+The transaction could then publish a value it calculated from outdated data:
 
-- Read inside `strong_read()` to depend on a field you do not write.
-- Read inside `relaxed_read()` to not depend on a field you do write.
+```python
+with transaction("Increment counter"):
+    seen = counter.count
+    await save(seen)          # Meanwhile, another task sets counter.count = 5.
+    counter.count = seen + 1  # Would replace that 5 with 1.
+```
 
-A write with no read overwrites: the last commit wins.
+This block raises `ReactiveConflictError` when it exits and publishes nothing. It read
+`count` and wrote `count`, and `count` changed in between. That is the check: every field
+the transaction both read and wrote must be unchanged at commit.
+
+A field the transaction only read is not checked. If the block had read `counter.limit` to
+decide what to write to `count`, a change to `limit` would go unnoticed. Two blocks change
+which reads are checked:
+
+- `with strong_read():` also checks a field you read but do not write, such as `limit`.
+- `with relaxed_read():` skips the check for a field you read and write.
+
+A field you write without reading is never checked: the last commit wins.
 
 ## Reacting to changes
 
-`observe_reads()`, used above, records every field its block reads, directly or through
-computed values. The result answers two questions:
+`observe_reads()`, used above, yields a `Dependencies` object and adds to it every field the
+block reads, directly or through computed values. Use it after the block has finished. It
+answers two questions:
 
-- `dependencies.addresses()`: which fields should I listen to?
-- `dependencies.current()`: is what I computed still right?
+- `dependencies.addresses() -> tuple[Any, ...]`: which fields should I listen to?
+- `dependencies.current() -> bool`: is what I computed still correct?
 
-These differ. If the block read a computed `parity` of `count`, changing `count` from 1 to 3
-notifies you, but `current()` is still true and there is nothing to redo.
+A notification says that a field you read was written, not that your result is wrong. If
+the block read a computed `parity := count % 2`, changing `count` from 1 to 3 notifies you,
+but `parity` is the same and `current()` is still true. Check `current()` when you are
+notified, and skip the recomputation if nothing you read has a new value.
 
 To listen, give the addresses to a `SubscriptionReconciler`:
 
