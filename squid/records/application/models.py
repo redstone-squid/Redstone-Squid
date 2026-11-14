@@ -70,6 +70,7 @@ class CandidateBuild:
     door: DoorCategory | None = None
     extender: ExtenderCategory | None = None
     expansion: DoorExpansion | None = None
+    door_opening: tuple[int, int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)

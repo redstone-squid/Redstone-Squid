@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid.builds.domain.expansion_math import ExpressionError, ExpressionParser
+from squid.builds.domain.expansion_math import ExpressionError, ExpressionParser, substitute_formula
 
 
 @given(st.integers(1, 10000), st.integers(1, 10000), st.integers(1, 10000))
@@ -91,3 +91,14 @@ def test_rounding_does_not_allow_arbitrary_calls_or_unbounded_arithmetic(source:
 def test_rounding_function_names_are_reserved(name: str) -> None:
     with pytest.raises(ExpressionError):
         ExpressionParser((name,))
+
+
+@pytest.mark.parametrize("source", ["(x+3)(y+3)", "ceil(x/2)+floor(y/3)", "floor(ceil(x/2)/3)*y"])
+def test_substitution_preserves_polynomials_and_rounding(source: str) -> None:
+    original = ExpressionParser(("x", "y")).formula(source)
+    target = ExpressionParser(("width",))
+    translated = substitute_formula(
+        original, (target.polynomial("2width+1"), target.polynomial("3")), variables=("width",)
+    )
+    for width in range(-10, 11):
+        assert translated.evaluate((width,)) == original.evaluate((2 * width + 1, 3))

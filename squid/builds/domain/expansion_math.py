@@ -368,3 +368,32 @@ class ExpressionParser:
                     return Junction("and", tuple(comparisons))
         msg = "Expected comparisons joined with and, or, or not."
         raise ExpressionError(msg)
+
+
+def substitute_formula(
+    formula: Formula, replacements: tuple[Polynomial, ...], *, variables: tuple[str, ...]
+) -> Formula:
+    """Replace declared variables with polynomials, preserving rounding locations.
+
+    Replacements follow formula.variables order and all use the target namespace.
+    The usual coefficient and degree limits apply to the resulting expression.
+    """
+    if len(replacements) != len(formula.variables) or any(p.variables != variables for p in replacements):
+        msg = "Substitution requires one polynomial per variable in the target namespace."
+        raise ExpressionError(msg)
+    if isinstance(formula, Polynomial):
+        result = Polynomial.constant(variables, Fraction(0))
+        for powers, coefficient in formula.terms:
+            term = Polynomial.constant(variables, coefficient)
+            for replacement, power in zip(replacements, powers, strict=True):
+                for _ in range(power):
+                    term = term.multiply(replacement)
+            result = result.add(term)
+        return result
+    if isinstance(formula, RoundedFormula):
+        return RoundedFormula(substitute_formula(formula.operand, replacements, variables=variables), formula.direction)
+    return _combine(
+        substitute_formula(formula.left, replacements, variables=variables),
+        substitute_formula(formula.right, replacements, variables=variables),
+        formula.operator,
+    )

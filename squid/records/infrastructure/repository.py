@@ -824,6 +824,9 @@ def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...], *, size:
             timing_variants=(timing or (fallback_timing,)) if door.expansion is None else (),
         ),
         expansion=door.expansion,
+        door_opening=(door.door_width, door.door_height, door.door_depth or 1)
+        if door.expansion is None and door.door_width is not None and door.door_height is not None
+        else None,
         version_ids=frozenset(version.version_id for version in door.build_versions),
         restrictions=restrictions,
         types=patterns,
