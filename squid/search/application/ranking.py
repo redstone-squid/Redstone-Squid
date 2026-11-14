@@ -35,10 +35,9 @@ DEFAULT_RRF_WEIGHTS: Mapping[RankingBranch, float] = {
 
 @dataclass(frozen=True, slots=True)
 class RankedCandidate:
-    """A search document's ID, title for breaking ties, and optional ranking score."""
+    """A search document's ID with its ranking score and the branches that found it."""
 
     document_id: int
-    normalized_title: str
     score: float = 0
     branches: tuple[RankingBranch, ...] = ()
 
@@ -57,8 +56,8 @@ def reciprocal_rank_fusion(
     at one. Input scores are ignored because the branches use different scales.
 
     Only the first `branch_limit` entries of each branch are considered. Repeated
-    documents within that window count once and do not consume a rank. Ties in
-    the final score are ordered by case-folded title, then document ID.
+    documents within that window count once and do not consume a rank. The
+    result is ordered best first, with ties in document ID order.
 
     Raises:
         ValidationError: If k or branch_limit is not positive, or a used weight
@@ -69,7 +68,6 @@ def reciprocal_rank_fusion(
     if branch_limit <= 0:
         raise ValidationError(tr(t"search-branch-limit-positive = branch_limit must be positive"))
     scores: defaultdict[int, float] = defaultdict(float)
-    documents: dict[int, RankedCandidate] = {}
     contributions: defaultdict[int, list[RankingBranch]] = defaultdict(list)
     for branch, candidates in branches.items():
         weight = weights.get(branch, 0)
@@ -77,27 +75,16 @@ def reciprocal_rank_fusion(
             branch_name = branch.value
             raise ValidationError(md_tr(t"search-weight-negative = weight for {branch_name} cannot be negative"))
         seen: set[int] = set()
-        rank = 0
         for candidate in candidates[:branch_limit]:
             key = candidate.document_id
             if key in seen:
                 continue
             seen.add(key)
-            rank += 1
-            documents[key] = candidate
             contributions[key].append(branch)
-            scores[key] += weight / (k + rank)
-    fused = (
-        RankedCandidate(
-            document_id=key,
-            normalized_title=document.normalized_title,
-            score=scores[key],
-            branches=tuple(contributions[key]),
-        )
-        for key, document in documents.items()
-    )
+            scores[key] += weight / (k + len(seen))
+    fused = (RankedCandidate(key, scores[key], tuple(found_by)) for key, found_by in contributions.items())
     return tuple(sorted(fused, key=_ranked_sort_key))
 
 
-def _ranked_sort_key(candidate: RankedCandidate) -> tuple[float, str, int]:
-    return (-candidate.score, candidate.normalized_title.casefold(), candidate.document_id)
+def _ranked_sort_key(candidate: RankedCandidate) -> tuple[float, int]:
+    return (-candidate.score, candidate.document_id)

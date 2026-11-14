@@ -3,7 +3,7 @@
 from unittest.mock import Mock
 
 from squid.search.domain import RecordSearchHit
-from squid.search.infrastructure.repository import _to_hit
+from squid.search.infrastructure.hits import document_hit
 from squid.search.models import SearchDocument
 
 
@@ -23,7 +23,7 @@ def test_record_hit_opens_the_first_ranked_holder_from_the_projection() -> None:
         },
     )
 
-    hit = _to_hit(document, None)
+    hit = document_hit(document, None)
 
     assert isinstance(hit, RecordSearchHit)
     assert hit.build_id == 7

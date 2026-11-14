@@ -9,13 +9,9 @@ from squid.search.application import (
 )
 
 
-def _candidate(document_id: int, title: str) -> RankedCandidate:
-    return RankedCandidate(document_id, title)
-
-
 def test_rrf_combines_branches_and_deduplicates_within_each_branch() -> None:
-    door = _candidate(1, "Door")
-    extender = _candidate(2, "Extender")
+    door = RankedCandidate(1)
+    extender = RankedCandidate(2)
 
     ranked = reciprocal_rank_fusion(
         {
@@ -33,23 +29,23 @@ def test_rrf_combines_branches_and_deduplicates_within_each_branch() -> None:
 
 def test_rrf_applies_branch_limit_before_fusion() -> None:
     ranked = reciprocal_rank_fusion(
-        {RankingBranch.EXACT: (_candidate(1, "One"), _candidate(2, "Two"))},
+        {RankingBranch.EXACT: (RankedCandidate(1), RankedCandidate(2))},
         branch_limit=1,
     )
 
     assert [candidate.document_id for candidate in ranked] == [1]
 
 
-def test_rrf_uses_deterministic_tie_order() -> None:
+def test_rrf_orders_by_fused_score_across_branches() -> None:
     ranked = reciprocal_rank_fusion(
         {
             RankingBranch.TRIGRAM: (
-                _candidate(2, "Beta"),
-                _candidate(1, "Alpha"),
+                RankedCandidate(2),
+                RankedCandidate(1),
             ),
             RankingBranch.FULL_TEXT: (
-                _candidate(1, "Alpha"),
-                _candidate(2, "Beta"),
+                RankedCandidate(1),
+                RankedCandidate(2),
             ),
         }
     )
@@ -62,6 +58,6 @@ def test_rrf_rejects_invalid_configuration() -> None:
         reciprocal_rank_fusion({}, k=0)
     with pytest.raises(ValueError, match="cannot be negative"):
         reciprocal_rank_fusion(
-            {RankingBranch.EXACT: (_candidate(1, "One"),)},
+            {RankingBranch.EXACT: (RankedCandidate(1),)},
             weights={RankingBranch.EXACT: -1},
         )

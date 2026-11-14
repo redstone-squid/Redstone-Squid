@@ -34,10 +34,12 @@ of builds even when its title overlaps a build or record title.
 optional parameter, defaulting to false for existing record-oriented clients. The generated API client
 includes the new fields. Existing web searches and the record standings browser retain their current mode.
 
-`GroupedSearch` joins indexed record-holder facets to build documents and applies visibility to every
-holder. It groups before counts, offsets, and limits. Relevance uses each group's strongest document
+`ResultPager` pages every search, grouped or not. When grouping, it joins indexed record-holder facets to
+build documents and applies visibility to every holder; otherwise each matching document is its own
+result. It groups before counts, offsets, and limits. Relevance uses each group's strongest document
 score, so more record titles do not by themselves boost a build. Explicit sorts use the minimum matched
-field value ascending and the maximum descending, putting missing values last.
+field value ascending and the maximum descending, putting missing values last. Ties are ordered by title
+and then by the result's document ID.
 
 Ranked totals describe groups represented in the bounded candidate pool. Sorted and filter-only totals
 cover all matching groups. Record details are loaded separately for the selected builds, so the ranking
