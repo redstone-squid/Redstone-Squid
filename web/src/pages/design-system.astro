@@ -5,6 +5,7 @@ import "../features/workbench/workbench.css";
 import WorkbenchLayout from "../layouts/WorkbenchLayout.astro";
 import Panel from "../ui/astro/Panel.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
+import SvelteControls from "../features/workbench/Controls.svelte";
 import { Controls } from "../features/workbench/Controls";
 import { buildFixtures } from "../features/workbench/fixtures";
 const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
@@ -53,7 +54,11 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
     description={t("workbench.components-description")}
   >
     {" "}
-    <Controls client:load locale={locale} />
+    {Astro.url.searchParams.get("framework") === "svelte" ? (
+      <SvelteControls client:load locale={locale} />
+    ) : (
+      <Controls client:load locale={locale} />
+    )}
   </Panel>
   <section id="patterns" class="sq-stack" aria-labelledby="patterns-title">
     <div class="sq-section-heading">

@@ -316,6 +316,28 @@ export const messageKeys = [
   "taxonomy.smallest_fastest",
   "taxonomy.up_to_date",
   "taxonomy.utility",
+  "trial.attachment",
+  "trial.cancel",
+  "trial.category",
+  "trial.choose-version",
+  "trial.details",
+  "trial.disclaimer",
+  "trial.door",
+  "trial.failed",
+  "trial.find-version",
+  "trial.fix-errors",
+  "trial.positive",
+  "trial.ready",
+  "trial.required",
+  "trial.reserved",
+  "trial.retry",
+  "trial.saved",
+  "trial.saving",
+  "trial.title",
+  "trial.upload",
+  "trial.uploading",
+  "trial.utility",
+  "trial.width",
   "validation.duration-unit",
   "validation.number",
   "workbench.01-foundations",
@@ -428,6 +450,7 @@ export type MessageVariables = {
     size: string | number;
     videos: string | number;
   };
+  "trial.attachment": { filename: string | number };
   "workbench.build-count": { count: string | number };
   "workbench.fixture-alt": { title: string | number };
 };

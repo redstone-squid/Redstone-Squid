@@ -8,14 +8,17 @@ export const importBoundaries: Rule.RuleModule = {
     schema: [],
     messages: {
       ui: "Shared UI cannot import application code. Pass data and labels through component props.",
-      radix: "Import the shared UI wrapper instead. Radix primitives belong inside src/ui.",
+      radix: "Import the shared UI wrapper instead. Interaction primitives belong inside src/ui.",
       server: "Browser components cannot import server modules. Use a browser API adapter.",
     },
   },
   create(context) {
     const filename = context.filename.replaceAll("\\", "/");
     const isUi = filename.includes("/src/ui/");
-    const isBrowser = filename.endsWith(".tsx") || /\.astro\/[^/]+\.[jt]s$/.test(filename);
+    const isBrowser =
+      filename.endsWith(".tsx") ||
+      filename.endsWith(".svelte") ||
+      /\.astro\/[^/]+\.[jt]s$/.test(filename);
     function check(node: Rule.Node, source: unknown): void {
       if (
         typeof source !== "object" ||
@@ -34,7 +37,7 @@ export const importBoundaries: Rule.RuleModule = {
       ) {
         context.report({ node, messageId: "ui" });
       }
-      if (!isUi && /^(?:radix-ui(?:\/|$)|@radix-ui\/)/.test(imported)) {
+      if (!isUi && /^(?:radix-ui(?:\/|$)|bits-ui(?:\/|$)|@radix-ui\/)/.test(imported)) {
         context.report({ node, messageId: "radix" });
       }
       if (

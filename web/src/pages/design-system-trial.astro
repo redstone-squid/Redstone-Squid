@@ -1,0 +1,25 @@
+---
+import WorkbenchLayout from "../layouts/WorkbenchLayout.astro";
+import Panel from "../ui/astro/Panel.astro";
+import { translate } from "../lib/i18n";
+import { DraftTrial } from "../features/workbench/DraftTrial";
+import SvelteDraftTrial from "../features/workbench/DraftTrial.svelte";
+import "../features/workbench/workbench.css";
+const locale = Astro.url.searchParams.get("lang") === "zh-CN" ? "zh-CN" : "en";
+const framework = Astro.url.searchParams.get("framework") === "svelte" ? "svelte" : "react";
+const retryFirstSave = Astro.url.searchParams.get("scenario") === "retry";
+---
+
+<WorkbenchLayout title={translate(locale, "trial.title")} locale={locale} theme="light">
+  <header class="sq-page-heading">
+    <h1>{translate(locale, "trial.title")}</h1>
+    <p>{framework === "svelte" ? "Svelte 5" : "React"}</p>
+  </header>
+  <Panel id="trial" title={translate(locale, "trial.details")}>
+    {framework === "svelte" ? (
+      <SvelteDraftTrial client:load {locale} {retryFirstSave} />
+    ) : (
+      <DraftTrial client:load {locale} {retryFirstSave} />
+    )}
+  </Panel>
+</WorkbenchLayout>

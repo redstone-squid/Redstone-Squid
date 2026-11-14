@@ -48,6 +48,26 @@ const budgets: EntryBudget[] = [
     initialKiB: 110,
     completeKiB: 140,
   },
+  {
+    entries: ["src/features/workbench/Controls.svelte"],
+    renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
+    label: "Svelte workbench comparison",
+    initialKiB: 110,
+    completeKiB: 140,
+  },
+  {
+    entries: ["src/features/workbench/DraftTrial.tsx"],
+    label: "React draft trial",
+    initialKiB: 110,
+    completeKiB: 140,
+  },
+  {
+    entries: ["src/features/workbench/DraftTrial.svelte"],
+    renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
+    label: "Svelte draft trial",
+    initialKiB: 110,
+    completeKiB: 140,
+  },
 ];
 const clientDirectory = path.resolve("dist/client");
 const manifest = JSON.parse(

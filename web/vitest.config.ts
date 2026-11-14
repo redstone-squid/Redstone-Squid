@@ -1,6 +1,9 @@
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [svelte({ configFile: false })],
+  resolve: { conditions: ["browser"] },
   test: {
     environment: "jsdom",
     include: ["tests/unit/**/*.test.{ts,tsx}"],
@@ -10,8 +13,8 @@ export default defineConfig({
       include: [
         "src/lib/**/*.ts",
         "src/components/**/*.tsx",
-        "src/ui/**/*.{ts,tsx}",
-        "src/features/**/*.{ts,tsx}",
+        "src/ui/**/*.{ts,tsx,svelte}",
+        "src/features/**/*.{ts,tsx,svelte}",
       ],
       exclude: ["src/generated/**"],
       reporter: ["text", "json-summary"],

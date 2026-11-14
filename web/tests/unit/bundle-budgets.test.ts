@@ -3,6 +3,7 @@ import {
   dependencyFiles,
   evaluateBudgets,
   type BundleManifest,
+  type EntryBudget,
 } from "../../scripts/bundle-budgets";
 
 const manifest: BundleManifest = {
@@ -17,7 +18,9 @@ const sizes = new Map([
   ["shared.js", 30],
   ["lazy.js", 40],
 ]);
-const budgets = [{ entries: ["island"], label: "Example workflow", initialKiB: 1, completeKiB: 2 }];
+const budgets: [EntryBudget] = [
+  { entries: ["island"], label: "Example workflow", initialKiB: 1, completeKiB: 2 },
+];
 
 describe("workflow bundle budgets", () => {
   it("includes the separately loaded renderer, deduplicates shared imports, and budgets lazy code", () => {
@@ -25,6 +28,15 @@ describe("workflow bundle budgets", () => {
       { ...budgets[0], initialBytes: 60, completeBytes: 100 },
     ]);
     expect([...dependencyFiles(manifest, ["island"], false)]).toEqual(["island.js", "shared.js"]);
+  });
+  it("counts only the renderer selected by each framework's island", () => {
+    const result = evaluateBudgets(
+      manifest,
+      sizes,
+      [{ ...budgets[0], renderers: ["renderer"] }],
+      "unused-default",
+    );
+    expect(result[0]?.initialBytes).toBe(60);
   });
   it("requires explicit coverage for new entry points", () => {
     expect(() =>

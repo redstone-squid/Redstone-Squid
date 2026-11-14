@@ -1,4 +1,5 @@
 import eslint from "@eslint/js";
+import svelte from "eslint-plugin-svelte";
 import astro from "eslint-plugin-astro";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -53,6 +54,11 @@ export default tseslint.config(
     },
   },
   ...tseslint.configs.recommended.map((config) => ({ ...config, files: ["**/*.astro"] })),
+  ...svelte.configs.recommended,
+  {
+    files: ["**/*.svelte"],
+    languageOptions: { globals: globals.browser, parserOptions: { parser: tseslint.parser } },
+  },
   ...astro.configs.recommended,
   ...astro.configs["jsx-a11y-recommended"],
   {
@@ -73,7 +79,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*.{ts,tsx,astro}", "src/**/*.astro/*.{js,ts}"],
+    files: ["src/**/*.{ts,tsx,astro,svelte}", "src/**/*.astro/*.{js,ts}"],
     plugins: { boundaries: { rules: { imports: importBoundaries } } },
     rules: { "boundaries/imports": "error" },
   },
