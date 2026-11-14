@@ -16,6 +16,32 @@ choosing objects, and entering actual content. IDs remain useful in links,
 diagnostics, and optional shortcuts. Query expressions and bulk text formats
 remain available for people who want them.
 
+## Implementation status
+
+The five delivery stages below now have implementations. The inventory records
+what was present at the survey revision; it is not a description of the current UI.
+
+| Area | Implemented behavior |
+| --- | --- |
+| Starboards | Select a board once, then edit its settings, emoji aliases, and role weights. Channel and role inputs use native selectors; deletion requires confirmation. |
+| Notifications | Search creators and records by name, or follow from their detail. Subscription labels resolve public names and all subscriptions are paged. Record-filter enums and tag values use typed choices. |
+| Shared lookup | Enumerable catalogues support paging. Queried sources explicitly offer up to 25 matches and ask users to refine the search. Provider failures expose retry instead of appearing as empty results. |
+| Tags and access | Choose a build/tag or a restriction before editing. Permission and internal-role pickers retain identities and expose operation-specific forms. Raw permission patterns remain under Advanced entry. |
+| Search and records | Keyword input, removable filter rows, named values, and sort selection build queries while preserving advanced expressions. Maintenance tools select definitions, versions, and restrictions by name. |
+| Submission and specialist tools | Credits use rows and a native Discord user picker while retaining identity evidence. Catalogue fields support name search without losing offscreen selections. Vote emojis and video activations use rows; ambiguous video inputs can be selected for retry. Conversion versions and runtime-setting names have discovery. |
+
+Advanced entry remains available for query syntax, credit lines, video recipes,
+permission patterns, exact record category keys, and owner-only runtime JSON
+values. New object names and slugs are still entered when creating objects.
+Queried lookups are bounded search, not exhaustive browsing of the entire domain.
+
+Focused unit tests, rendered-control tests, and notification projection
+integration tests cover the changed flows. The regression tests include
+cross-page selections, duplicate labels, stale edits, authorization, query
+grouping, credit evidence, vote identities, and video recipe retention. Live
+Discord desktop/mobile usability and long-label locale checks remain rollout
+work; automated payload checks do not substitute for them.
+
 ## Inventory
 
 Priority 1 removes opaque identifiers from routine tasks. Priority 2 improves
@@ -325,8 +351,7 @@ test that changing a role or adding another credit preserves the evidence of
 unchanged entries. Native entity selection must still pass existing guild and
 destination checks.
 
-This survey changes documentation only. Repository checks and focused existing
-tests support the source inventory; they do not establish live-client usability.
 Before rollout, exercise representative flows in an actual Discord server on
 desktop and mobile. No usage telemetry or live database catalogue sizes were
-available for this assessment.
+available for the source survey. The implementation status above records the
+follow-up work and its remaining validation boundary.
