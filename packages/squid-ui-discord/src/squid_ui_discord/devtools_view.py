@@ -106,7 +106,7 @@ class MessageRootInspector(sl.Component):
 
         nodes: list[sl.LayoutNode] = [sl.section(sl.heading(f"Message roots — {len(snapshots)}"), body)]
         if missing:
-            nodes.insert(0, sl.status(f"MessageRoot `{self.focus}` is no longer live.", tone=sl.Tone.WARNING))
+            nodes.insert(0, sl.status(sl.md(t"MessageRoot `{self.focus}` is no longer live."), tone=sl.Tone.WARNING))
         if snapshots:
             nodes.append(
                 sl.choices(
@@ -325,10 +325,10 @@ class OperationalInspector(sl.Component):
                         sl.heading(f"MessageRoot {self.message_root_id}"),
                         sl.bullets(
                             *_summary(detail.snapshot),
-                            f"**Middleware**\n{_dump(detail.middleware)}",
-                            f"**Observed**\n{_dump(detail.observed)}",
-                            f"**Followed**\n{_dump(detail.followed)}",
-                            f"**History**\n{histories}",
+                            sl.md(t"**Middleware**\n{_dump(detail.middleware)}"),
+                            sl.md(t"**Observed**\n{_dump(detail.observed)}"),
+                            sl.md(t"**Followed**\n{_dump(detail.followed)}"),
+                            sl.md(t"**History**\n{histories}"),
                             key="root_detail",
                         ),
                     ),
@@ -406,11 +406,11 @@ class OperationalInspector(sl.Component):
                     sl.section(
                         sl.heading(f"Session {session.id}"),
                         sl.bullets(
-                            f"**Id**\n`{session.id}`",
-                            f"**Key**\n`{session.key}`",
-                            f"**Actor**\n{session.actor_id if session.actor_id is not None else 'none'}",
-                            f"**Members**\n{_members(session)}",
-                            f"**Mounts**\n{_dump(session.message_roots)}",
+                            sl.md(t"**Id**\n`{session.id}`"),
+                            sl.md(t"**Key**\n`{session.key}`"),
+                            sl.md(t"**Actor**\n{session.actor_id if session.actor_id is not None else 'none'}"),
+                            sl.md(t"**Members**\n{_members(session)}"),
+                            sl.md(t"**Mounts**\n{_dump(session.message_roots)}"),
                             key="session_detail",
                         ),
                     ),
