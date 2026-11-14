@@ -18,6 +18,7 @@ from squid_ui_discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
     assert_within_limits,
+    interaction_harness,
     message_harness,
 )
 
@@ -105,6 +106,18 @@ class TestDashboardCommand:
         (root,) = live.message_roots()
         assert root.snapshot().access == Owner(1)
         assert "Operational dashboard" in str(ctx.send.await_args.kwargs["view"].to_components())
+
+    async def test_slash_dashboard_is_ephemeral(self) -> None:
+        ctx = make_context()
+        ctx.interaction = interaction_harness()
+        ctx.interaction.client = ctx.bot
+        cog = DevTools(ctx.bot)
+
+        await run(cog.ui_command, cog, ctx, "activity")
+
+        (root,) = live.message_roots()
+        assert root.snapshot().access == Owner(1)
+        assert ctx.send.await_args.kwargs["ephemeral"]
 
     @pytest.mark.parametrize(
         ("tab", "heading"),

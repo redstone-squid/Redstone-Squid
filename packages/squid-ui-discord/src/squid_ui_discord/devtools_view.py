@@ -278,9 +278,10 @@ class OperationalInspector(sl.Component):
             nodes = self._persistence(snapshot)
         else:
             nodes = self._overview(snapshot)
+        content = (self._section_choices(), *nodes)
         if self.notice is None:
-            return nodes
-        return (sl.status(self.notice, tone=sl.Tone.INFO), *nodes)
+            return content
+        return (sl.status(self.notice, tone=sl.Tone.INFO), *content)
 
     def _overview(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         counts = [
@@ -302,7 +303,6 @@ class OperationalInspector(sl.Component):
                     description="Bounded JSON diagnostics from this refresh",
                 ),
             ),
-            self._section_choices(),
             self._controls(),
         ]
 
@@ -644,6 +644,7 @@ class OperationalInspector(sl.Component):
 
     def _section_choices(self) -> sl.LayoutNode:
         return sl.choices(
+            sl.choice("Overview", key="overview"),
             sl.choice("Roots", key="roots"),
             sl.choice("Sessions", key="sessions"),
             sl.choice("Routes", key="routes"),
@@ -652,7 +653,7 @@ class OperationalInspector(sl.Component):
             sl.choice("Profiler", key="profile"),
             sl.choice("Persistence", key="persistence"),
             key="section",
-            selection=sl.controlled((), self._select_section),
+            selection=sl.controlled((self.section,), self._select_section),
         )
 
     def _controls(self, *, back: bool = False) -> sl.semantic.ActionControls:
@@ -671,6 +672,7 @@ class OperationalInspector(sl.Component):
         self.section = event.selected[0]
         self.message_root_id = None
         self.session_id = None
+        self.confirming_session = None
         self.selected_records = ()
         self.confirming_action = None
 

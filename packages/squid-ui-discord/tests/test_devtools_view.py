@@ -16,6 +16,7 @@ from squid_ui_discord import Everyone, MessageRoot, Owner
 from squid_ui_discord import testing as sd
 from squid_ui_discord.devtools_runtime import DevToolsPolicy, DevToolsRuntime
 from squid_ui_discord.devtools_view import (
+    DevToolsSection,
     MessageRootInspector,
     OperationalInspector,
     metrics_text,
@@ -255,6 +256,46 @@ class TestOperationalInspectorSections:
         inspector.section = section
 
         assert list(inspector.render())
+
+    async def test_tabs_switch_in_place_and_mark_the_current_selection(self) -> None:
+        inspector = OperationalInspector(DevToolsRuntime())
+        root = MessageRoot(inspector, access=Owner(1))
+        await root.send(delivered_to(sd.message_harness()))
+
+        for section in DevToolsSection:
+            await root.dispatch("section", interaction_harness(), values=[section.value])
+
+            view = commit_render(root)
+            assert_within_limits(view)
+            (picker,) = (
+                item
+                for item in view.walk_children()
+                if isinstance(item, discord.ui.Select) and any(option.value == "overview" for option in item.options)
+            )
+            assert {option.value for option in picker.options} == set(DevToolsSection)
+            assert [option.value for option in picker.options if option.default] == [section.value]
+            assert inspector.section == section
+            assert not root.finished
+
+    async def test_switching_tabs_clears_detail_and_confirmation_state(self) -> None:
+        inspector = OperationalInspector(DevToolsRuntime())
+        inspector.section = "sessions"
+        inspector.session_id = "old-session"
+        inspector.message_root_id = "old-root"
+        inspector.confirming_session = "old-session"
+        inspector.confirming_action = "purge_persistence"
+        inspector.selected_records = ("old-record",)
+        root = MessageRoot(inspector, access=Owner(1))
+        await root.send(delivered_to(sd.message_harness()))
+
+        await root.dispatch("section", interaction_harness(), values=["roots"])
+
+        assert inspector.section == "roots"
+        assert inspector.session_id is None
+        assert inspector.message_root_id is None
+        assert inspector.confirming_session is None
+        assert inspector.confirming_action is None
+        assert inspector.selected_records == ()
 
     async def test_root_and_session_detail_panels_render(self) -> None:
         manager = squid_ui_discord.SessionManager()

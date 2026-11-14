@@ -161,10 +161,10 @@ async def test_devtools_dispatch_and_dashboard_lifetime(replace: bool) -> None:
     context = Context(
         message=message,
         bot=bot,
-        view=StringView(""),
+        view=StringView("roots"),
         prefix="!",
-        command=cog.list_roots,
-        invoked_with="roots",
+        command=cog.ui_command,
+        invoked_with="ui",
     )
     send = AsyncCallRecorder(result=message)
     context.send = cast(Any, send)
