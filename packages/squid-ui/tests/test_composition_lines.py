@@ -15,7 +15,7 @@ from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupporte
 from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Alt, Drop, Never, Truncate
+from squid_ui.primitives.constraints import Alt, Condense, Drop, Never, Paginate, Truncate
 from squid_ui.target_types import DiscordAdapter
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-lines.discord", "1")
@@ -82,9 +82,14 @@ def test_region_pagination_precedes_static_spill_and_preserves_entry_order() -> 
     assert tuple(reconstructed) == entries
 
 
-def test_line_alternates_still_identify_the_missing_contract() -> None:
+def test_paginated_line_alternates_still_identify_the_missing_contract() -> None:
     with pytest.raises(JointUnsupportedError) as error:
-        plan(sl.region(native.Lines((Alt("Long entry", ("Short",)),)), key="r", title="R"), target=TARGETS[0])
+        plan(
+            sl.region(
+                native.Lines((Alt("Long entry", ("Short",)),), overflow=Paginate(key="lines")), key="r", title="R"
+            ),
+            target=TARGETS[0],
+        )
     assert "line degradation alternatives" in str(error.value.diagnostics)
 
 
@@ -98,3 +103,55 @@ def test_shortened_lines_in_checked_presentations_report_original_sources() -> N
     result = plan(document, target=TARGETS[0])
     assert "…/ijklmnop" in scene.Codec.dumps(result.scene)
     assert [event.path.split("/")[-1] for event in result.report.events] == ["first"]
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+def test_line_ladders_step_the_largest_eligible_entry_first(target: Target[Any, Any, Any, Any]) -> None:
+    node = native.Lines((Alt("abcdefgh", ("a",)), Alt("0123456789", ("0",))), keys=("first", "second"))
+    result = plan(node, target=target, composition=AUTOMATIC)
+    assert "abcdefgh\\n0" in scene.Codec.dumps(result.scene)
+    assert [(event.message, event.path.split("/")[-1]) for event in result.report.events] == [("Replacement", "second")]
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+def test_spill_preserves_priority_and_does_not_report_hidden_replacements(target: Target[Any, Any, Any, Any]) -> None:
+    node = native.Lines(
+        (Alt("low long", ("low",), priority=-5), Alt("HIGH", priority=10), "TAIL"), keys=("low", "high", "tail")
+    )
+    result = plan(node, target=target, composition=AUTOMATIC, chrome=Chrome(and_n_more=lambda count: f"+{count}"))
+    assert "HIGH\\n+2" in scene.Codec.dumps(result.scene)
+    assert {event.message for event in result.report.events} == {"Omission"}
+    assert {event.path.split("/")[-1] for event in result.report.events} == {"low", "tail"}
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+def test_condense_exhausts_ladders_before_shortening_the_joined_text(target: Target[Any, Any, Any, Any]) -> None:
+    node = native.Lines((Alt("Long primary", ("123456",)), "abcdef"), overflow=Condense(), keys=("first", "second"))
+    result = plan(node, target=target, composition=AUTOMATIC)
+    assert "123456\\nab…" in scene.Codec.dumps(result.scene)
+    assert {(event.message, event.path.split("/")[-1]) for event in result.report.events} == {
+        ("Replacement", "first"),
+        ("Shortening", "second"),
+    }
+    with pytest.raises(JointInfeasibleError):
+        plan(node, target=target, composition=AUTOMATIC, strict=True)
+
+
+def test_never_does_not_activate_line_replacement_ladders() -> None:
+    node = native.Lines((Alt("Long primary", ("Short",)),), overflow=Never())
+    with pytest.raises(JointInfeasibleError):
+        plan(node, target=TARGETS[0], composition=AUTOMATIC)
+
+
+def test_line_replacement_does_not_outrank_lossless_region_pages() -> None:
+    node = native.Lines((Alt("a" * 25, ("A",)), Alt("b" * 25, ("B",))))
+    result = plan(
+        sl.region(node, key="r", title="R"), target=components_v2_target(ADAPTER, limits=V2Limits(total_text=40))
+    )
+    assert result.allocation is not None
+    identity = next(iter(result.allocation.regions))
+    assert len(result.allocation.regions[identity].cuts) == 2
+    for index, expected in enumerate(("a" * 25, "b" * 25)):
+        page = result.for_page({identity: index})
+        assert expected in scene.Codec.dumps(page.scene)
+        assert not page.report.events

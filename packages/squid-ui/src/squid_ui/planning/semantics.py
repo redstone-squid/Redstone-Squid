@@ -299,10 +299,13 @@ def semantic_graph[RenderTargetT, ContextT](
             case primitive.Lines():
                 root = add(value, path, parent, atomic=False)
                 for i, line in enumerate(value.lines):
-                    if isinstance(line, Alt):
-                        message = "line degradation alternatives"
-                        raise UnsupportedSemanticError(message)
-                    visit(sem.ListItem(value.keys[i] if value.keys else f"@{i}", line), root, i)
+                    visit(
+                        sem.ListItem(
+                            value.keys[i] if value.keys else f"@{i}", line.primary if isinstance(line, Alt) else line
+                        ),
+                        root,
+                        i,
+                    )
             case primitive.Section():
                 root = add(value, path, parent, atomic=False)
                 for i, child in enumerate(value.texts):

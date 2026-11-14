@@ -86,7 +86,7 @@ from squid_ui.presentations import (
     TextPresentation,
 )
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import FIRST_PAGE, Alts, Drop, Never, PageOwnership, Spill, Truncate
+from squid_ui.primitives.constraints import FIRST_PAGE, Alt, Alts, Condense, Drop, Never, PageOwnership, Spill, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.text import TextLike, resolve_text
 
@@ -652,7 +652,7 @@ def semantic_offers[RenderTargetT, ContextT](
 
     if isinstance(value, primitive.Lines):
         overflow = Truncate(keep) if keep is not None else value.overflow
-        if not native_controls or not isinstance(overflow, Never | Truncate | Spill | Drop):
+        if not native_controls or not isinstance(overflow, Never | Truncate | Spill | Drop | Condense):
             return ()
         items = tuple(
             ReferencedText(ref, resolve_text(item.content, context.localization).nodes)
@@ -661,15 +661,21 @@ def semantic_offers[RenderTargetT, ContextT](
             if isinstance(item, sem.ListItem)
         )
         sequence = TextSequenceRealization(items, separator=value.join)
-        nodes = tuple(
-            node
-            for index, item in enumerate(items)
-            for node in (
-                *((tree.literal(value.join),) if index else ()),
-                *item.nodes,
+        line_separator = value.join
+
+        def line_payload(lines: tuple[ReferencedText, ...]) -> TextRealization:
+            return TextRealization(
+                tuple(
+                    node
+                    for index, item in enumerate(lines)
+                    for node in (
+                        *((tree.literal(line_separator),) if index else ()),
+                        *item.nodes,
+                    )
+                )
             )
-        )
-        payload = TextRealization(nodes)
+
+        payload = line_payload(items)
         full = RealizationOffer(
             occurrence,
             "lines",
@@ -683,13 +689,50 @@ def semantic_offers[RenderTargetT, ContextT](
             else None,
             preference_priority=value.priority,
         )
-        if isinstance(overflow, Truncate):
-            discovered = text_offers(full, payload, overflow.keep, value.priority)
+        line_offers = [full]
+        levels = [0] * len(items)
+        if isinstance(overflow, Spill | Condense):
+            while eligible := [
+                index
+                for index, line in enumerate(value.lines)
+                if isinstance(line, Alt) and levels[index] < len(line.fallbacks)
+            ]:
+                context.work.consume(len(items))
+                largest = max(
+                    eligible, key=lambda index: (sum(len(tree.plain(node)) for node in items[index].nodes), -index)
+                )
+                line = value.lines[largest]
+                assert isinstance(line, Alt)
+                nodes = resolve_text(line.fallbacks[levels[largest]], context.localization).nodes
+                levels[largest] += 1
+                items = (*items[:largest], replace(items[largest], nodes=nodes), *items[largest + 1 :])
+                sequence = replace(sequence, items=items)
+                replacement_effects = occurrence.scope_effects(
+                    tuple(Replacement(item.reference) for index, item in enumerate(items) if levels[index])
+                )
+                line_offers.append(
+                    replace(
+                        full,
+                        key=f"lines-alternate-{len(line_offers)}",
+                        payload=line_payload(items),
+                        effects=replacement_effects,
+                        preference=len(line_offers),
+                        fragments=replace(full.fragments, payload=sequence.fragment)
+                        if full.fragments is not None
+                        else None,
+                    )
+                )
+            full = line_offers[-1]
+            payload = line_payload(items)
+        if isinstance(overflow, Truncate | Condense):
+            discovered = text_offers(
+                full, payload, overflow.keep if isinstance(overflow, Truncate) else "head", value.priority
+            )
             if isinstance(discovered, OfferDiscovery):
-                return discovered
+                return replace(discovered, offers=(*line_offers[:-1], *discovered.offers))
             lengths = tuple(sum(len(tree.plain(node)) for node in item.nodes) for item in items)
             total = sum(lengths) + max(0, len(items) - 1) * len(value.join)
-            shortened_lines: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
+            shortened_lines: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = list(line_offers[:-1])
             for offer in discovered:
                 operation = offer.payload.shortening if isinstance(offer.payload, TextRealization) else None
                 if operation is None:
@@ -706,23 +749,37 @@ def semantic_offers[RenderTargetT, ContextT](
                     if retained < length:
                         line_effects.append(Shortening(item.reference, retained, operation.keep))
                     offset += length + len(value.join)
-                shortened_lines.append(replace(offer, effects=occurrence.scope_effects(tuple(line_effects))))
+                shortened_lines.append(
+                    replace(
+                        offer,
+                        preference=full.preference + offer.preference,
+                        effects=(*full.effects, *occurrence.scope_effects(tuple(line_effects))),
+                    )
+                )
             return tuple(shortened_lines)
         if isinstance(overflow, Never) or not items:
             return (full,)
-        offers = [full]
+        offers = list(line_offers)
+        line_priorities = tuple(line.priority if isinstance(line, Alt) else 0 for line in value.lines)
+        drop_order = sorted(
+            range(len(items)),
+            key=lambda index: (
+                line_priorities[index],
+                -index,
+            ),
+        )
         for removed in range(1, len(items) + 1) if isinstance(overflow, Spill) else (len(items),):
-            retained = items[:-removed]
+            dropped = set(drop_order[:removed])
+            retained = tuple(item for index, item in enumerate(items) if index not in dropped)
             context.work.consume(len(items))
-            effects = occurrence.scope_effects(tuple(Omission(item.reference) for item in items[-removed:]))
-            content = tuple(
-                node
-                for index, item in enumerate(retained)
-                for node in (
-                    *((tree.literal(value.join),) if index else ()),
-                    *item.nodes,
+            effects = occurrence.scope_effects(
+                tuple(
+                    Omission(item.reference) if index in dropped else Replacement(item.reference)
+                    for index, item in enumerate(items)
+                    if index in dropped or (isinstance(overflow, Spill) and levels[index])
                 )
             )
+            content = line_payload(retained).nodes
             if isinstance(overflow, Spill):
                 content = (
                     *content,
@@ -735,13 +792,18 @@ def semantic_offers[RenderTargetT, ContextT](
                     key=f"spill-{removed}",
                     payload=TextRealization(content),
                     effects=effects,
-                    preference=removed,
+                    preference=full.preference + removed,
                     fragments=None,
                 )
             )
         if isinstance(overflow, Spill):
             offers.append(
-                replace(offers[-1], key="spill-empty", payload=TextRealization(()), preference=len(items) + 1)
+                replace(
+                    offers[-1],
+                    key="spill-empty",
+                    payload=TextRealization(()),
+                    preference=full.preference + len(items) + 1,
+                )
             )
         return tuple(offers)
     if isinstance(value, primitive.Text | primitive.Heading | primitive.Footer | primitive.Code):

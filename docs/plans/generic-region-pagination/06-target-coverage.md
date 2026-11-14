@@ -94,8 +94,8 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Per-line replacement and condensation ladders,
-and rich primitive text fragmentation retain their existing non-region paths.
+Per-line alternatives combined with native `Paginate`, semantic spill/best-effort
+wrappers, and rich primitive text fragmentation retain their existing non-region paths.
 They do not declare the source correspondence and permitted fragments required
 for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
 or typed atomic target rules inside regions. No equivalence is inferred from
@@ -123,7 +123,9 @@ Static native `Lines` now expose complete-entry fragments and explicit spill,
 truncation and drop offers. Lossless pagination precedes spilling; an omitted-entry
 notice consumes real capacity. Omission and shortening reports identify the affected
 lines, including when the retained text crosses a joiner. Per-line `Alt` ladders
-remain on their compatibility path.
+step the largest eligible entry first. Spill removes lower-priority entries only
+after those ladders are exhausted; condensation then shortens the joined text.
+Combining per-line alternatives with native `Paginate` remains on its compatibility path.
 
 ## Application outcome and validation
 
@@ -323,4 +325,4 @@ loss effects. Tests cover separator-aware truncation, original source identity
 through checked presentations, spill notices, whole-collection drops, strict
 mode, and reconstruction across pages. Both UI suites pass (3,267 tests), with
 the additional source-mapping regression passing afterward. Whole-project Pyrefly
-reports zero errors. Per-line replacement and condensation ladders remain open.
+reports zero errors.
