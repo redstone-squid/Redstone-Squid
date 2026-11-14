@@ -996,6 +996,39 @@
       "packages/squid-ui/src/squid_ui/forms.py:567"
     ]
   },
+  "ui-page-jump-number": {
+    "fingerprint": "4baebd66f3ca9151c45b2e09cc0e3ff579b7eb94db98b27a53da22f3334693dc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/planning/navigation.py:320"
+    ]
+  },
+  "ui-page-jump-range": {
+    "fingerprint": "ada7f14d83cfc7c62765ca66fcd51f14b782d452c9f947c459dba11c8181b4c9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "pages",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/planning/navigation.py:321"
+    ]
+  },
+  "ui-page-jump-unavailable": {
+    "fingerprint": "7b5ae6945ccb382f231df711b1c561b87bc823728c8841c834b6e5888893e671",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/planning/navigation.py:352"
+    ]
+  },
   "ui-tally-option": {
     "fingerprint": "b591288eaa153cc777eb41be5108cb2fb6ed668c2b7242646d42bf1e30c1795d",
     "attributes": [],

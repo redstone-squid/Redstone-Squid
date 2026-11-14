@@ -12,7 +12,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui.planning.navigation import NavigationContext, page_select_nav
+from squid_ui.planning.navigation import NavigationContext, page_jump_nav, page_select_nav
 from squid_ui.primitives import Button, Row
 from squid_ui.sources import Position, Window
 from squid_ui_discord import Everyone, MessageRoot
@@ -257,3 +257,22 @@ async def test_source_ranked_list_uses_the_message_root_navigation_factory() -> 
     assert seen[-1].visible_range == (1, 2)
     assert seen[-1].total == 3
     assert message_root._candidates.view is not None and _labels(message_root._candidates.view) == ["More"]
+
+
+async def test_page_form_jumps_to_a_source_offset_beyond_25_pages() -> None:
+    source = ScoreSource(
+        tuple((f"Player {index}", index) for index in range(200)),
+        capabilities=sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
+    )
+    ranked = sp.SourceRankedList(source, key="ranked", identity=lambda entry: entry[0], page_size=2)
+    root = MessageRoot(ranked, access=Everyone(), timeout=None, nav=page_jump_nav)
+    await root.send(delivered_to(message_harness()))
+    for number in (73, 100, 1):
+        interaction = interaction_harness()
+        await root.dispatch("ranked.seek.jump", interaction)
+        modal = interaction.response.send_modal.await_args.args[0]
+        modal.children[0].component._value = str(number)
+        await modal.on_submit(interaction_harness())
+        assert source.requests[-1].offset == (number - 1) * 2
+        assert ranked.session.snapshot is not None
+        assert ranked.session.snapshot.loaded.window.position.offset == (number - 1) * 2

@@ -384,6 +384,13 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT =
 
     route: RouteEncoder[StateT]
     chrome: Chrome = DEFAULT_CHROME
+    jump_route: Callable[[TransitionRoute[StateT], int, int], str] | None = None
+    """Encode a page-form button from its input transition, current page, and page count.
+
+    The host presents ``page_jump_form(page, pages)``, validates against current
+    data, and transitions with ``values=(str(submitted_page - 1),)``. Encoding
+    must be deterministic and safe to repeat during planning.
+    """
 
     def render(
         self, machine: StateMachine[StateT, RenderTargetT, ContextT], state: StateT
@@ -391,7 +398,7 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT =
         """Render `state` with route-backed controls."""
         # As in `ComponentDriver.render`: `MachineControls`'s unused `StateT` is unsolvable for
         # BasedPyright when it matches a control object structurally.
-        controls = _RoutedControls(machine, state, self.route, self.chrome)
+        controls = _RoutedControls(machine, state, self.route, self.chrome, self.jump_route)
         return machine.render(state, controls)  # pyright: ignore[reportArgumentType]
 
     def transition(
@@ -416,11 +423,13 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         current: StateT,
         route: RouteEncoder[StateT],
         chrome: Chrome,
+        jump_route: Callable[[TransitionRoute[StateT], int, int], str] | None,
     ) -> None:
         self.machine = machine
         self.current = current
         self.route = route
         self.chrome = chrome
+        self.jump_route = jump_route
 
     def content(
         self, content: Sequence[LayoutNode[RenderTargetT, ContextT]]
@@ -504,4 +513,11 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         def seek() -> str:
             return self.route(TransitionRoute(action_name, self.current, "input"))
 
-        return (Lines(tuple(lines), overflow=Paginate(key=key, per=per, page=RoutedPage(page, turn, seek))),)
+        jump_route = self.jump_route
+
+        def jump(current_page: int, pages: int) -> str:
+            assert jump_route is not None
+            return jump_route(TransitionRoute(action_name, self.current, "input"), current_page, pages)
+
+        owner = RoutedPage(page, turn, seek, jump if jump_route is not None else None)
+        return (Lines(tuple(lines), overflow=Paginate(key=key, per=per, page=owner)),)

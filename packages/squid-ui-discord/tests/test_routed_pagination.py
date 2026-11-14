@@ -1,5 +1,7 @@
 """Routed pagination through layout, scene serialization, and Discord drawing."""
 
+from typing import cast
+
 import discord
 import pytest
 
@@ -9,12 +11,107 @@ from squid_ui import scene, testing
 from squid_ui.ownership import Controlled, Uncontrolled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, Target, plan
-from squid_ui.planning.navigation import default_nav, page_select_nav
+from squid_ui.planning.navigation import default_nav, page_jump_form, page_jump_nav, page_select_nav
 from squid_ui.presentation import CursorUpdate, PresentationState
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import RoutedPage
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
+from squid_ui_discord.modal import build_form_modal
+from squid_ui_discord.routing import Router
+from squid_ui_discord.testing import interaction_harness
 from squid_ui_widgets import testing as wt
+
+
+@pytest.mark.parametrize("target", [DISCORD_V1_DPY27, DISCORD_V2_DPY27])
+async def test_routed_jump_button_opens_form_after_router_recreation(target: Target) -> None:
+    jump = sl.routing.Route("page:jump:{page:int}:{pages:int}")
+    result = plan(
+        Lines(
+            tuple(f"Entry {index}" for index in range(100)),
+            overflow=Paginate(
+                key="rows",
+                per=1,
+                page=RoutedPage(
+                    2, lambda page: f"page:{page}", jump_route=lambda page, pages: jump.id(page=page, pages=pages)
+                ),
+            ),
+        ),
+        target=target,
+        nav=page_jump_nav,
+    )
+    restored = scene.Codec.loads(scene.Codec.dumps(result.scene))
+    button = testing.find_all(restored, scene.RoutedButton)[-1]
+    assert button.route_id == jump.id(page=2, pages=100)
+    assert not result.bindings and not result.form_bindings
+
+    # A fresh host registers its route without retaining anything from planning.
+    router = Router()
+    seen: list[int] = []
+
+    @router.route(jump)
+    async def open_form(interaction: discord.Interaction, page: int, pages: int) -> None:
+        spec = page_jump_form(page, pages)
+
+        async def submit(current: discord.Interaction, values: dict[str, object]) -> None:
+            parsed = await spec.evaluate(values)
+            assert not parsed.errors
+            seen.append(cast(int, parsed.values["page"]) - 1)
+            await current.response.defer()
+
+        await interaction.response.send_modal(build_form_modal(spec, on_submit=submit))
+
+    interaction = interaction_harness()
+    await router.dispatch(interaction, button.route_id)
+    modal = interaction.response.send_modal.await_args.args[0]
+    field = modal.children[0].component
+    assert field.default == "3"
+    field._value = "73"
+    await modal.on_submit(interaction_harness())
+    assert seen == [72]
+
+
+def test_dropdown_route_is_not_reused_for_a_form_button() -> None:
+    result = plan(
+        Lines(
+            ("a", "b"),
+            overflow=Paginate(
+                key="rows",
+                per=1,
+                page=RoutedPage(0, lambda page: f"page:{page}", lambda: "page:select"),
+            ),
+        ),
+        target=DISCORD_V2_DPY27,
+        nav=page_jump_nav,
+    )
+    assert [button.route_id for button in testing.find_all(result.scene, scene.RoutedButton)] == ["page:0", "page:1"]
+
+
+async def test_routed_widget_encodes_resolved_form_range_and_uses_existing_transition() -> None:
+    # Text pressure creates more pages than the requested four entries per page.
+    machine = sp.RankedList(tuple("x" * 1500 for _ in range(8)), key="ranked", label=str, value=len, page_size=4)
+    encoded: dict[str, tuple[sp.TransitionRoute[sp.RankedListState], int, int]] = {}
+
+    def jump(route: sp.TransitionRoute[sp.RankedListState], page: int, pages: int) -> str:
+        key = f"ranking:jump:{route.state.page}:{page}:{pages}"
+        encoded[key] = route, page, pages
+        return key
+
+    driver = sp.RouteDriver[sp.RankedListState, sl.DiscordTarget](
+        lambda route: f"ranking:{route.phase}:{route.state.page}",
+        jump_route=jump,
+    )
+    result = plan(driver.render(machine, machine.initial_state), target=DISCORD_V2_DPY27, nav=page_jump_nav)
+    button = testing.find_all(result.scene, scene.RoutedButton)[-1]
+    route, page, pages = encoded[button.route_id]
+    assert pages == result.scene.pagers[0].pages and pages > 2
+    form = page_jump_form(page, pages)
+    submitted = await form.evaluate({"page": str(pages)})
+    assert not submitted.errors
+    restored = sp.RouteDriver[sp.RankedListState, sl.DiscordTarget](lambda _route: "unused")
+    state = restored.transition(
+        machine, route.state, route.action, values=(str(cast(int, submitted.values["page"]) - 1),)
+    )
+    assert state.page == pages - 1
 
 
 @pytest.mark.parametrize("target", [DISCORD_V1_DPY27, DISCORD_V2_DPY27])

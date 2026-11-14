@@ -199,6 +199,9 @@ class NavigationContext:
     cursor always knows its own extent, so it always offers one.
     """
 
+    jump_route: str | None = None
+    """Persistent button route that opens a page-number form, when provided by the host."""
+
     @property
     def key(self) -> str:
         return self.state.key
@@ -333,9 +336,13 @@ def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     row = navigation_controls(context)
     state = context.state
     seek = context.on_seek
-    if not callable(seek) or state.page is None or state.extent is None or state.extent < 2:
+    if state.page is None or state.extent is None or state.extent < 2:
         return (row,)
     label = state.seek_label or DEFAULT_CHROME.jump_to_page
+    if context.jump_route is not None:
+        return (Row((*row.items, RoutedButton(label, context.jump_route))),)
+    if not callable(seek):
+        return (row,)
     form = FormBinding(
         f"{state.seek_key}.jump",
         page_jump_form(state.page, state.extent, title=label),
@@ -386,6 +393,7 @@ class PagerNav:
                     owner.route(max(0, page - 1)),
                     owner.route(min(extent - 1, page + 1)),
                     owner.seek_route() if owner.seek_route is not None else None,
+                    owner.jump_route(page, extent) if owner.jump_route is not None else None,
                 )
             )
         commit = PageCommit(owner, key, extent, self.session)

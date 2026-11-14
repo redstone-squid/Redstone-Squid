@@ -1129,9 +1129,33 @@ page and is present only where the cursor can address one: always for a material
 and for a source window only when it declares `SourceCapabilities.jumpable` with an exact count.
 `NavigationState.page` is a page number and pairs with `extent`. Source addresses remain
 with the browsing session and never enter the navigation factory. The stock `default_nav` draws no jump control, since a
-select costs a whole component row on every paginator in the process; `sd.page_select_nav`
+select costs a whole component row on every paginator in the process; `sd.navigation_controls.page_select_nav`
 opts into one, offering every page when there are at most 25 and an evenly spaced ladder across
 the whole range beyond that.
+
+For an arbitrary page number, opt into `sd.navigation_controls.page_jump_nav` instead:
+
+```python
+message_root = sd.MessageRoot(screen, access=sd.Owner(user.id), nav=sd.navigation_controls.page_jump_nav)
+```
+
+It adds a button beside Previous/Next that opens a form prefilled with the current page.
+The reader enters a number from 1 to the page count; invalid input gets a private error
+and retry button. Mounted submissions use the latest rendered range, preserve controlled
+page ownership, and reject the form if its pager has disappeared. Sources need a known
+page number, an exact count, and jump support. A single-page range has no jump button.
+
+Persistent pages provide `RoutedPage(..., jump_route=encode_jump)`, where
+`encode_jump(page, pages)` returns the route ID for opening the form. These are the
+planner's resolved zero-based page and page count, including splits caused by text limits.
+This route is separate from `seek_route`, which receives dropdown selections. The host
+opens `sd.navigation_controls.page_jump_form(page, pages)`, validates the submission
+against current data, and passes the parsed `page` minus one to its seek operation.
+It owns authorization, retry handling, and message replacement, as with other routed forms.
+For routed widgets, `RouteDriver(..., jump_route=encode_jump)` supplies the same contract
+with an additional first argument: the input `TransitionRoute`. After validation, call
+`driver.transition(machine, route.state, route.action, values=(str(number - 1),))`.
+Route encoders must be deterministic and safe for repeated planning calls.
 
 `sl.paged(container, key=..., chars=...)` applies an author-sized budget and pages between the
 container's heterogeneous children. Children are atomic unless a text child must split;

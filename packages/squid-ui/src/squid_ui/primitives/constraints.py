@@ -42,6 +42,12 @@ class RoutedPage:
     value: int
     route: Callable[[int], str]
     seek_route: Callable[[], str] | None = None
+    jump_route: Callable[[int, int], str] | None = None
+    """Encode a form-opening button from the resolved zero-based page and page count.
+
+    The host opens ``page_jump_form(page, pages)`` and validates its submission
+    against current data before seeking. This is separate from the select input route.
+    """
 
 
 type PageOwnership[ContextT = object] = Ownership[int, PageEvent[ContextT]] | RoutedPage
