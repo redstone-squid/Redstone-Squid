@@ -123,13 +123,17 @@ class HelpScreen(sd.Screen):
         )
         return sl.section(
             sl.heading(heading),
-            sl.paragraph(description).truncate(),
-            sl.bullets(
-                *(sl.bullet(f"/{child.qualified_name}") for child in children),
-                key="subcommands",
-            )
-            if children
-            else None,
+            sl.region(
+                sl.paragraph(description, key="description"),
+                sl.bullets(
+                    *(sl.bullet(f"/{child.qualified_name}") for child in children),
+                    key="subcommands",
+                )
+                if children
+                else None,
+                key=f"help:{qualified_name}",
+                title=heading,
+            ),
         )
 
     @override

@@ -13,6 +13,7 @@ from discord.ext import commands
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.help import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpCog, HelpScreen
+from squid_ui.planning.navigation import default_nav
 from squid_ui.testing import labels, texts, walk
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import ContextHarness, InteractionHarness
@@ -243,3 +244,30 @@ async def test_help_autocomplete_uses_the_public_prefix_and_slash_directory(
             assert "settings" in names
         elif needle == "build":
             assert "build" in names
+
+
+def test_long_command_help_pages_without_truncating_its_description() -> None:
+    description = "Detailed explanation. " * 220
+
+    @commands.command(help=description)
+    async def verbose(ctx: commands.Context) -> None:
+        pass
+
+    rendered = HelpScreen(_client(), [verbose], "verbose").render()
+    result = sl.planning.plan(
+        cast(sl.DocumentLike[sl.ComponentsV2Target], rendered), target=sd.DISCORD_V2_DPY27, nav=default_nav
+    )
+    assert result.allocation is not None
+    region = next(iter(result.allocation.regions))
+    content: list[str] = []
+    for index in range(len(result.allocation.regions[region].cuts)):
+        page = result.allocation.select({region: index})
+        panel = page.scene.components_v2.children[0]
+        assert isinstance(panel, sl.scene.Panel)
+        heading, paragraph = panel.children[:2]
+        assert isinstance(heading, sl.scene.Text)
+        assert "/verbose" in heading.content
+        assert isinstance(paragraph, sl.scene.Text)
+        content.append(paragraph.content)
+    assert len(content) > 1
+    assert "".join(content) == description
