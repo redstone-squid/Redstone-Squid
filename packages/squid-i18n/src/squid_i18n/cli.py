@@ -11,7 +11,7 @@ from squid_i18n.errors import CatalogError
 
 def distributions(root: Path) -> list[tuple[Path, Path]]:
     """Locate application and workspace resources using their distribution boundaries."""
-    owners = [(root / "squid", root / "locales")]
+    owners = [(root / "squid", root / "squid" / "locales")]
     owners.extend(
         (source, source / "locales")
         for source in sorted((root / "packages").glob("*/src/*"))

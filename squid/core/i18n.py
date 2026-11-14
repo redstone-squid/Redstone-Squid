@@ -16,7 +16,7 @@ SUPPORTED_LOCALES = frozenset({"en", "zh-CN"})
 
 def locales_dir() -> Path:
     """Return the application's shipped Fluent catalogs."""
-    return Path(__file__).resolve().parent.parent.parent / "locales"
+    return Path(__file__).resolve().parent.parent / "locales"
 
 
 @cache

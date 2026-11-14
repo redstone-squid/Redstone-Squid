@@ -92,7 +92,7 @@ def test_catalog_updates_preserve_translation_comments_and_require_review(tmp_pa
     source.parent.mkdir()
     source.write_text('tr(t"hello = Hello")')
     run("init", tmp_path, "fr")
-    translation = tmp_path / "locales/fr/messages.ftl"
+    translation = tmp_path / "squid/locales/fr/messages.ftl"
     translated = "# Keep this translator comment.\nhello = Bonjour\n"
     translation.write_text(translated)
     assert any("review hello" in report for report in run("check", tmp_path))
@@ -113,7 +113,7 @@ def test_catalog_check_allows_location_drift_without_rewriting_files(tmp_path: P
     source.parent.mkdir()
     source.write_text('tr(t"hello = Hello")')
     run("extract", tmp_path)
-    english = tmp_path / "locales/en"
+    english = tmp_path / "squid/locales/en"
     before = {path.name: path.read_bytes() for path in english.iterdir()}
 
     source.rename(source.with_name("moved.py"))
@@ -149,7 +149,7 @@ def test_catalog_check_rejects_missing_generated_files(tmp_path: Path, filename:
     source.parent.mkdir()
     source.write_text('tr(t"hello = Hello")')
     run("extract", tmp_path)
-    (tmp_path / "locales/en" / filename).unlink()
+    (tmp_path / "squid/locales/en" / filename).unlink()
     with pytest.raises(CatalogError, match="generated catalog is stale"):
         run("check", tmp_path)
 
@@ -169,7 +169,7 @@ def test_catalog_check_rejects_edited_english_resource(tmp_path: Path) -> None:
     source.parent.mkdir()
     source.write_text('tr(t"hello = Hello")')
     run("extract", tmp_path)
-    (tmp_path / "locales/en/messages.ftl").write_text("hello = Wrong\n")
+    (tmp_path / "squid/locales/en/messages.ftl").write_text("hello = Wrong\n")
     with pytest.raises(CatalogError, match="generated catalog is stale"):
         run("check", tmp_path)
 

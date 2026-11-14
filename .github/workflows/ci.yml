@@ -58,7 +58,6 @@ jobs:
               - 'contracts/**'
               - 'alembic/**'
               - 'schema/**'
-              - 'locales/**'
               - 'requirements/**'
               - 'deploy/**'
               - 'app.py'
