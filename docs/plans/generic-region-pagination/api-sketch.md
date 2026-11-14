@@ -1,9 +1,9 @@
 # Shared planner API sketch
 
-Status: working Phase 2 design. The declaration and correspondence types now exist in
-`squid_ui.presentations`; public exports and planning integration remain in progress.
-The `sl.*` examples below describe the intended integrated API. This sketch applies the agreed
-policies in [the Phase 2 draft](02-composition.md), without fixing the solver algorithm.
+Status: implemented Phase 2 boundary. Peer alternatives are exported from `squid_ui`; named
+resource budgets remain in `squid_ui.presentations` while the legacy budget API is migrated.
+Use `plan(..., composition=CompositionOptions(...))` for fixed composition choices. The
+[Phase 2 handoff](02-composition.md) inventories the temporary legacy routes.
 
 ## Authoring content and alternatives
 
@@ -52,7 +52,7 @@ summary = sl.alternatives(
 )
 ```
 
-Proposed defaults and interpretation:
+Defaults and interpretation:
 
 - Every candidate has the same fidelity, preference, and identity rules. `full` is simply a
   descriptive name; position in the list does not make it the semantic reference. Lower preference
@@ -279,3 +279,30 @@ Validate these details against the table, shared-resource, and persistent-conten
 the implementation sequence recorded in the Phase 2 plan. Concrete types and names may change
 as those examples exercise the contracts. Full joint search, state integration, cache optimization, and remaining target coverage
 continue in their assigned roadmap phases.
+
+## Public planning entry point
+
+```python
+from squid_ui.planning import CompositionOptions, OccurrenceId
+
+planned = sl.planning.plan(
+    summary,
+    target=sl.html.target(),
+    strict=True,
+    composition=CompositionOptions({OccurrenceId(("root", "build-summary")): "compact"}),
+)
+```
+
+The document occurrence is `("root",)`. Children append their semantic key, or a positional key
+such as `"@0"` when unkeyed. An alternative's selected presentation appends `"@presentation"`;
+its choice key is separate. A sole offer is automatic, but multiple offers require an explicit
+selection. Candidate rejection raises `CompositionRejectedError`, carrying structured violations.
+It does not retry, paginate, or claim that the document is unsolvable. Cache and memo reuse are
+bypassed until their shared-core integration.
+
+For custom rules, pass `FixedComposition(rules, selections)` instead. Opaque semantic leaves
+subclass `AtomicNode`; their offers carry `AtomicContract` costs, shared identities, capabilities,
+and legal placements. Use `occurrence.scope_effects(node.effects)` to retain source-scoped effects.
+Evaluation must report scoped resource usage, and validation must independently check the prepared
+native output. Richer internal adaptation requires semantic structure; an arbitrary payload is not
+permission to discover children or shorten its contents.

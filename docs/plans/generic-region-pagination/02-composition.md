@@ -1,9 +1,8 @@
 # Shared composition and target participation
 
-Status: implementation in progress. The first slice adds peer alternative declarations,
-scoped semantic references, and structural correspondence checks. These remain below the
-public planning entry point while the composition contract is built. The [API sketch](api-sketch.md)
-records the proposed author syntax and target contract.
+Status: complete. The shared composition boundary
+is available through `plan(..., composition=...)`. The [API sketch](api-sketch.md) records the
+implemented author syntax and target contract. Automatic joint search remains Phase 3 work.
 
 Establish the first usable boundary between the rich semantic planning core and target-specific
 realizations. The [Phase 1 handoff](01-shared-core.md#phase-2-handoff) supplies the requirements,
@@ -51,7 +50,7 @@ Examples include omitted fields, shortened text, and changed interaction behavio
 should make common declarations practical while exposing structured effects to shared planning.
 Coarse labels such as summarized or partial are not sufficient substitutes for those declarations.
 
-The concrete effect vocabulary and how declarations refer to semantic units remain design work.
+Omission, source-referenced shortening, and named interaction changes form the initial effect vocabulary.
 Author preference ranks permitted alternatives; it does not replace describing what an alternative
 changes or authorize undeclared loss.
 
@@ -94,8 +93,8 @@ implicitly supported. Current checks cover unit correspondence, known omissions,
 route, link, picker, toggle, and form behavior. Source constraints remain in the graph.
 Source-referenced text fragments now resolve shortening after localization, preserving source
 ranges and inline styling. Arbitrary prose remains an author assertion; unsupported rich inline
-shortening returns a candidate failure. Inherited layout requirements and strict admission still
-need contextual composition evaluation; these checks alone do not certify a valid plan.
+shortening returns a candidate failure. Contextual composition now enforces strict admission and structural budget boundaries; correspondence
+checks alone do not certify a valid plan.
 
 ### 2 Establish composition and target contracts
 
@@ -148,61 +147,72 @@ Convert the investigation probes into regression and conformance cases. Update a
 and the API sketch to the implemented names and behavior. Hand the shared candidate/evaluation
 model and its tested invariants to phase 3 for the full joint solver.
 
-## Remaining implementation tasks
+## Implemented boundary and migration inventory
 
-Finish this phase in the following reviewable pieces:
+`plan(..., composition=CompositionOptions(selections))` evaluates explicitly selected representations
+through shared composition. A sole offer needs no selection. Multiple offers require a choice by
+`OccurrenceId`, and unknown selection paths are errors. `CompositionRejectedError` describes one
+failed selection; it does not claim that another layout cannot fit. Work exhaustion remains a separate
+error. The opt-in path bypasses the legacy target planners and their caches.
 
-1. Connect checked alternatives and localized text fragments to composition. Retain source identity
-   across nested groups, and carry declared effects and provenance through evaluation.
-2. Carry visible action and form bindings without invoking handlers. Enforce supported inherited
-   requirements and preserve application-owned page inputs without publishing state.
-3. Add an atomic extension contract with explicit constraints, resources, and effects. Exercise
-   rejection and independent validation without allowing hidden fitting.
-4. Expose `plan(..., composition=...)` as an explicit opt-in to fixed representation choices and
-   migrate a representative caller. Keep candidate rejection distinct from unsolvability; inventory
-   legacy routing and its removal phases. Automatic selection remains Phase 3 work.
-5. Run composition, conformance, affected frontend, and whole-project type checks, then update the
-   handoff and author documentation to reflect the actual migration boundary.
+The composition core owns source correspondence, strict admission, enclosing resource budgets,
+atomic requirements, live binding collection, and the shared work allowance. Targets prepare immutable
+output once and independently validate construction. The core does not inspect concrete scene bodies.
+Target-specific preparation remains typed throughout; the public dispatcher checks the body type at
+the boundary to the existing `PlanResult` API.
 
-The explicit opt-in boundary is an agreed migration decision. Production documents that do not
-opt in continue through their existing planners until the later migration phases.
+Checked alternatives and source-referenced text now compose on V2, Slack messages, and HTML.
+Nested groups retain shared source identity. Source fragments resolve after localization, retain
+provenance, and reject unsupported rich shortening. Arbitrary rewritten prose still depends on the
+author's assertion. Effect reports retain their source scope.
 
-## Current implementation boundary
+Resource budgets use `squid_ui.presentations.budget(node, limits={Axis.COMPONENTS: 20})`. They are
+structural boundaries. Alternatives may rearrange content inside them; alternatives replacing a
+larger region must preserve inner boundaries with equal or tighter limits. Shared assets count once
+within each budget. Platform limits and reservations always apply. Unsupported axes reject the
+candidate, and budgets never authorize loss. Visual-length and allocation preferences remain separate.
 
-`planning/composition.py` now defines typed offers, occurrences, candidates, shared resources,
-work accounting, and candidate failures. `select_composition` takes explicit representation
-choices; it does not search or allocate pages. Direct V2 and Slack rules exercise paragraphs,
-tables, and ordered containers. V2 also exercises physical containers and shared downloads.
-They preserve table references, reject local and global overflows, and independently check the
-built output against typed evaluation preparation. Slack does not call the HTML planner. HTML
-now exercises the same preparation contract without global message limits, including tables,
-styled links, and shared file references.
+Selected controls retain source references and live handlers. V2, HTML, and Slack exercise actions,
+links, and durable routes; V2 also exercises modal form triggers. Planning invokes no action, submit,
+page-change, or route callbacks and publishes no presentation state. Regions are complete single-page
+compositions in this phase. Their ownership remains application-owned; overflowing regions reject
+rather than silently omitting content or pretending to have performed pagination.
 
-These paths are not routed through the production `plan` entry point yet. Source-referenced
-text and alternative validation are tested separately; connecting them to target composition,
-visible interaction bindings, native atomic extensions, inherited requirements, and the
-public migration boundary remains work in this phase. Unsupported vocabulary fails explicitly.
-Existing production planners and their known limitations remain in place until that migration.
+Custom widgets subclass `AtomicNode`, retaining a typed payload. Their rules supply `AtomicContract`
+with additive and shared-resource costs, required capabilities, and legal placements, together with
+author-authorized effects. The core checks those declarations against evaluation. It does not infer
+children or shortening operations from an opaque atom. `FixedComposition(rules, selections)` connects
+custom typed rules to the same public dispatcher and validation pipeline.
 
-Evaluation now returns a typed immutable preparation, which construction consumes directly.
-V2 and Slack serialize a candidate once; independent validation checks the constructed body,
-resource counts, text, and structure. A feasible selection without a preparation is a target
-contract error. Semantic selection remains in the core, and rejected candidates never construct
-or publish a body.
+The build-log consent banner is the first application caller using the opt-in path. It now uses
+semantic text and a routed action, retaining the existing notice and route. The clipboard icon is
+part of the button label. A frontend regression test disables the legacy planner while drawing it.
 
-`squid_ui.presentations.budget(node, limits={Axis.COMPONENTS: 20})` adds explicit resource
-limits to a subtree. Targets report supported axes and scoped protocol costs; the core checks
-every enclosing budget. Shared assets count once per scope, including a scope whose siblings
-already use the asset. Unsupported axes reject candidates, and missing measurements for supported
-axes are target contract errors. Platform limits remain automatic and cannot be relaxed by author
-budgets. Resource limits do not grant permission for content loss. The [API sketch](api-sketch.md)
-describes the implemented axes and counting rules.
+| Unmigrated area | Current behavior | Removal or replacement phase |
+| --- | --- | --- |
+| Automatic representation selection and pagination | Explicit choices only; no independent target search was added | Phase 3 joint solver |
+| Mounted runtime traversal, page reconciliation, navigation and state updates | Existing runtime paths; opt-in planning does not consume or commit their state | Phase 4 |
+| Structural caches and live memo reuse | Bypassed for opt-in composition | Phase 5 |
+| Classic Discord, Slack Home/modal, remaining semantic widgets and native extension registries | Existing planners; opt-in fails explicitly for unsupported vocabulary or targets | Phase 6 |
+| Production `sl.budget(min=..., prefer=..., stretch=...)`, `paged`, truncation and fallback helpers | Legacy behavior retained outside opt-in; workbench description and paged callers need intent-based migration | Phases 3 and 6 |
+| Document-level assets and external pagination options | Rejected by the fixed-composition entry point; downloads within supported content work | Phases 4 and 6 |
 
-Visual-length and allocation preferences remain separate design work. Production `sl.budget()`
-still follows the legacy implementation until planner cutover. That migration must review the
-layout workbench's description budget, the paged helper's page limits, and tests that rely on
-`prefer + stretch` acting as a cap. Callers should choose explicit resource limits or presentation
-preferences according to their intent, rather than mechanically renaming the old parameters.
+These routes are temporary migration boundaries, not separate long-term solvers. V2 panels,
+paragraphs, tables, downloads, persistent region content, and selected controls supply the current
+representative vocabulary. Slack participates directly, without HTML compilation or silent table
+slicing. HTML has no invented global resource axes. Further widget coverage belongs to Phase 6.
+
+## Phase 3 handoff
+
+Use `SemanticOccurrence`, `RealizationOffer`, `CandidateComposition`, and `Evaluation` as the search
+boundary. Keep source identity separate from presentation choice and placement. Replace explicit
+selection with joint search without changing the build-from-preparation contract. Preserve the
+separation between candidate rejection, proven infeasibility, and exhausted work.
+
+Choose ranking and sound pruning rules explicitly. Equal numeric costs do not make candidates with
+different shared resource identities interchangeable. Preserve budget, unbreakable, keep-with-next,
+and region boundaries when introducing legal page breaks. Include repeated headers, footers, and
+navigation in every relevant evaluation. Runtime page-path and delivery migration remains Phase 4.
 
 ## Validation and acceptance
 
@@ -216,6 +226,10 @@ The working implementation must demonstrate:
 - Atomic extension handling without undisclosed transformations.
 - Consistent candidate failures and work accounting, with no state publication during planning.
 - Target output that honors the selected composition, verified by independent target checks.
+
+Validation completed: 1,055 tests passed across the full portable UI suite, Discord rendering,
+form planning and regions, and the migrated consent banner. Whole-project Pyrefly reported zero
+errors; changed-file lint, formatting, and `git diff --check` passed.
 
 Run focused tests with `--no-cov` during development and after final changes, including the affected
 semantic, target-conformance, region, and frontend integration suites. Run whole-project type checking

@@ -336,3 +336,26 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.temporal` | Portable exact-time values and local-time resolution. |
 | `squid_ui.testing` | Tree queries, frontend doubles, and determinism controls for tests. |
 | `squid_ui.text` | Resolved text values and explicit Markdown interpolation. |
+
+## Shared semantic presentations
+
+These declarations are used with the opt-in shared composition planner. See the
+[composition API](../plans/generic-region-pagination/api-sketch.md) for fidelity and selection rules.
+
+::: squid_ui.Alternative
+::: squid_ui.Alternatives
+::: squid_ui.AtomicNode
+::: squid_ui.Correspondence
+::: squid_ui.Fidelity
+::: squid_ui.SemanticRef
+::: squid_ui.TextPresentation
+::: squid_ui.alternative
+::: squid_ui.alternatives
+::: squid_ui.change_interaction
+::: squid_ui.corresponds
+::: squid_ui.equivalent
+::: squid_ui.losses
+::: squid_ui.omit
+::: squid_ui.present_text
+::: squid_ui.ref
+::: squid_ui.shorten

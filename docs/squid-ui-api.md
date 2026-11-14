@@ -10,6 +10,7 @@ composition and adapter contracts.
 | Retain one model per key | Application-owned dictionary |
 | Declare stateful UI | `squid_ui.Component`, `state`, `computed`, `resource` |
 | Author layout | lowercase `squid_ui` factories such as `section`, `heading`, `choices` |
+| Evaluate explicit composition choices | `squid_ui.planning.CompositionOptions`, `plan(..., composition=...)` |
 | Plan portable output | `squid_ui.planning.plan`, an explicit target |
 | Select native HTML | `squid_ui.html.target` |
 | Encode a scene | `squid_ui.scene.Codec` |
@@ -86,3 +87,32 @@ not portable and cannot be planned to this target.
 
 The complete behavioral model—including transaction boundaries, action middleware, session scopes,
 durability, and ownership—is in [architecture and API interactions](squid-ui-architecture.md).
+
+## Explicit shared composition
+
+The shared composition path supports fixed choices on Components V2, Slack messages, and HTML:
+
+```python
+from squid_ui.planning import CompositionOptions
+
+planned = sl.planning.plan(
+    sl.paragraph("Ready for review."),
+    target=sl.html.target(),
+    composition=CompositionOptions(),
+)
+```
+
+Use `sl.alternatives(..., content=..., key=...)` for peer presentations with explicit fidelity.
+Multiple offers need a selection keyed by `OccurrenceId`; automatic joint search is not enabled
+on this path yet. `CompositionRejectedError` identifies a failed candidate, not proven
+unsolvability. Planning retains selected live bindings but performs no state updates.
+
+Named resource limits use `squid_ui.presentations.budget(node, limits={Axis.COMPONENTS: 20})`.
+They use target protocol counts and preserve structural boundaries across alternatives. This is
+separate from the legacy `sl.budget(min=..., prefer=...)` API. Platform limits remain automatic.
+
+`AtomicNode`, `AtomicContract`, and `FixedComposition` provide the typed custom-widget path.
+See the [composition API](plans/generic-region-pagination/api-sketch.md) for occurrence paths,
+source references, and custom rule responsibilities, and the
+[migration inventory](plans/generic-region-pagination/02-composition.md#implemented-boundary-and-migration-inventory)
+for supported vocabulary and remaining legacy routes.
