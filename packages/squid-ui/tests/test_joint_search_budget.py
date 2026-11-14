@@ -6,7 +6,6 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.assets import Asset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.composition import (
@@ -69,7 +68,7 @@ class FaultRules(V2CompositionRules[RenderTarget, object]):
     @override
     def evaluate(
         self, candidate: CandidateComposition[RenderTarget, object, Realization], context: PlanningContext
-    ) -> Evaluation[Asset, scene.ComponentsV2]:
+    ) -> Evaluation[object, scene.ComponentsV2]:
         self.checkpoint("evaluate", context)
         return super().evaluate(candidate, context)
 
@@ -82,14 +81,14 @@ class FaultRules(V2CompositionRules[RenderTarget, object]):
 
     @override
     def validate(
-        self, body: scene.ComponentsV2, expected: Evaluation[Asset, scene.ComponentsV2], context: PlanningContext
+        self, body: scene.ComponentsV2, expected: Evaluation[object, scene.ComponentsV2], context: PlanningContext
     ) -> None:
         self.checkpoint("validate", context)
         super().validate(body, expected, context)
 
     def finalize(
-        self, built: BuiltComposition[Asset, scene.ComponentsV2, scene.ComponentsV2, object], context: PlanningContext
-    ) -> BuiltComposition[Asset, scene.ComponentsV2, scene.ComponentsV2, object]:
+        self, built: BuiltComposition[object, scene.ComponentsV2, scene.ComponentsV2, object], context: PlanningContext
+    ) -> BuiltComposition[object, scene.ComponentsV2, scene.ComponentsV2, object]:
         self.checkpoint("finalize", context)
         return finish(built, context)
 
@@ -143,14 +142,14 @@ class DiscoveryRules:
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTarget, object, Realization], context: PlanningContext
-    ) -> Evaluation[Asset, scene.ComponentsV2]:
+    ) -> Evaluation[object, scene.ComponentsV2]:
         return self.target.evaluate(candidate, context)
 
     def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:
         return self.target.build(preparation, context)
 
     def validate(
-        self, body: scene.ComponentsV2, expected: Evaluation[Asset, scene.ComponentsV2], context: PlanningContext
+        self, body: scene.ComponentsV2, expected: Evaluation[object, scene.ComponentsV2], context: PlanningContext
     ) -> None:
         self.target.validate(body, expected, context)
 

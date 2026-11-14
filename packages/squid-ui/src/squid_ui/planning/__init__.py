@@ -36,6 +36,7 @@ from squid_ui.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
+from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
 from squid_ui.planning.planner import plan
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
@@ -78,6 +79,7 @@ __all__ = [
     "AutomaticComposition",
     "ClassicTarget",
     "ComponentsV2Target",
+    "ComposableExtension",
     "CompositionOptions",
     "CompositionRejectedError",
     "DiscordAdapter",
@@ -92,6 +94,7 @@ __all__ = [
     "JointUnsupportedError",
     "LayoutOverflowError",
     "MeasuredLayout",
+    "NativeComposition",
     "OccurrenceId",
     "PagePosition",
     "PagePositionPolicy",

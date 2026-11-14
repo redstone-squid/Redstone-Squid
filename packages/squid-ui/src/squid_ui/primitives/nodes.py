@@ -32,6 +32,7 @@ from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
+    from squid_ui.planning.native_extensions import NativeComposition
     from squid_ui.presentations import Correspondence
     from squid_ui.presentations import Fidelity as PresentationFidelity
     from squid_ui.runtime.definition import Component
@@ -276,6 +277,7 @@ class RawItem(Renderable[DiscordTarget]):
     kind: str = "discord.raw"
     version: int = 0
     payload: Mapping[str, object] = field(default_factory=dict)
+    composition: NativeComposition | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True, slots=True)

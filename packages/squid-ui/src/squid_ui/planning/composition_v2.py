@@ -28,6 +28,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.composition_discord import discord_text, discord_time_prefix, select_violations
 from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
 from squid_ui.planning.realizations import (
     ActionsRealization,
     CardRealization,
@@ -41,6 +42,7 @@ from squid_ui.planning.realizations import (
     GalleryRealization,
     ImageRealization,
     NativeSectionRealization,
+    OpaqueRealization,
     PanelRealization,
     PremiumRealization,
     Realization,
@@ -91,12 +93,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
-    ) -> Evaluation[Asset, scene.ComponentsV2]:
+    ) -> Evaluation[object, scene.ComponentsV2]:
         texts: list[str] = []
         text_chars = 0
         scopes: dict[OccurrenceId, ResourceCost] = {}
         scoped_resources: dict[OccurrenceId, frozenset[ResourceIdentity]] = {}
-        uses: list[SharedUse[Asset]] = [
+        uses: list[SharedUse[object]] = [
             SharedUse(ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1}))
             for asset in context.assets
         ]
@@ -104,6 +106,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         effects: list[FidelityEffect] = []
         interactions: set[SemanticRef] = set()
         components = 0
+        native_contracts: dict[str, NativeComposition] = {}
 
         def text(nodes: tuple[tree.Node, ...]) -> tuple[scene.Node, ...]:
             nonlocal components, text_chars
@@ -119,19 +122,37 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             return ()
 
         def realize(
-            part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool, in_row: bool = False
+            part: CandidateComposition[RenderTargetT, ContextT, Realization],
+            *,
+            in_panel: bool,
+            in_row: bool = False,
+            in_accessory: bool = False,
         ) -> tuple[scene.Node, ...]:
-            nonlocal components
+            nonlocal components, text_chars
             context.work.consume()
             effects.extend(part.offer.effects)
             if part.offer.interaction:
                 interactions.update(part.offer.occurrence.sources)
             match part.offer.payload:
+                case OpaqueRealization(node=node, resource=resource, composition=native):
+                    slot: NativePlacement = (
+                        "accessory" if in_accessory else "row" if in_row else "panel" if in_panel else "root"
+                    )
+                    if slot not in native.placements:
+                        violations.append(
+                            ConstraintViolation(part.offer.occurrence.identity, f"native extension placement: {slot}")
+                        )
+                    components += native.contract.cost.get(Axis.COMPONENTS)
+                    text_chars += native.contract.cost.get(Axis.DISPLAY_TEXT)
+                    texts.extend(native.text)
+                    uses.extend((*native.resources, resource))
+                    native_contracts[resource.identity.key] = native
+                    return (node,)
                 case NativeSectionRealization():
                     identity = part.offer.occurrence.identity
                     components += 1
                     children = tuple(node for child in part.children[:-1] for node in visit(child, in_panel=in_panel))
-                    accessories = visit(part.children[-1], in_panel=in_panel, in_row=True)
+                    accessories = visit(part.children[-1], in_panel=in_panel, in_row=True, in_accessory=True)
                     if (
                         not 1 <= len(children) <= self.limits.section_texts
                         or len(part.children) - 1 > self.limits.section_texts
@@ -140,7 +161,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         violations.append(ConstraintViolation(identity, "section text slots exceed native limits"))
                     if len(accessories) != 1 or not isinstance(
                         accessories[0],
-                        scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton,
+                        scene.Thumbnail
+                        | scene.Button
+                        | scene.RoutedButton
+                        | scene.Link
+                        | scene.PremiumButton
+                        | scene.Extension,
                     ):
                         violations.append(ConstraintViolation(identity, "section needs one accessory"))
                         return ()
@@ -208,7 +234,9 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     return (button,) if in_row else (scene.Row((button,)),)
                 case ActionsRealization(columns=columns):
                     output: list[scene.Node] = []
-                    pending: list[scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton] = []
+                    pending: list[
+                        scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton | scene.Extension
+                    ] = []
                     size = max(1, columns if columns is not None else self.limits.components.row_buttons)
                     if columns is not None and columns > self.limits.components.row_buttons:
                         violations.append(
@@ -231,7 +259,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         if isinstance(child.offer.payload, ActionsRealization):
                             flush()
                         for item in visit(child, in_panel=in_panel, in_row=True):
-                            if isinstance(item, scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton):
+                            if isinstance(
+                                item,
+                                scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton | scene.Extension,
+                            ):
                                 pending.append(item)
                                 if len(pending) == size:
                                     flush()
@@ -253,11 +284,14 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                                 self.limits.components.row_buttons,
                             )
                         )
-                    items: list[scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton] = []
+                    items: list[
+                        scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton | scene.Extension
+                    ] = []
                     for child in part.children:
                         for item in visit(child, in_panel=in_panel, in_row=True):
                             if not isinstance(
-                                item, scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton
+                                item,
+                                scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton | scene.Extension,
                             ):
                                 message = "navigation row contains a non-button"
                                 raise DrawInvariantError(message)
@@ -480,10 +514,14 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     assert_never(unknown)
 
         def visit(
-            part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool, in_row: bool = False
+            part: CandidateComposition[RenderTargetT, ContextT, Realization],
+            *,
+            in_panel: bool,
+            in_row: bool = False,
+            in_accessory: bool = False,
         ) -> tuple[scene.Node, ...]:
             components_before, text_before, uses_before = components, text_chars, len(uses)
-            nodes = realize(part, in_panel=in_panel, in_row=in_row)
+            nodes = realize(part, in_panel=in_panel, in_row=in_row, in_accessory=in_accessory)
             # An asset used by a sibling still counts within this subtree's budget.
             shared = SharedResources.combine(uses[uses_before:])
             scoped_resources[part.offer.occurrence.identity] = frozenset(shared.uses)
@@ -513,6 +551,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             resource_axes=frozenset({Axis.COMPONENTS, Axis.DISPLAY_TEXT, Axis.ATTACHMENTS}),
             scoped_costs=scopes,
             scoped_resources=scoped_resources,
+            validation=native_contracts,
         )
 
     def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:
@@ -520,23 +559,38 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         return preparation
 
     def validate(
-        self, body: scene.ComponentsV2, expected: Evaluation[Asset, scene.ComponentsV2], context: PlanningContext
+        self, body: scene.ComponentsV2, expected: Evaluation[object, scene.ComponentsV2], context: PlanningContext
     ) -> None:
         texts: list[str] = []
         assets: set[str] = {asset.key for asset in context.assets}
         components = 0
 
-        def visit(node: scene.Node, *, in_panel: bool) -> None:
+        def visit(node: scene.Node, *, in_panel: bool, slot: NativePlacement = "root") -> None:
             nonlocal components
             context.work.consume()
             components += 1
             match node:
+                case scene.Extension():
+                    key = node.payload.get("resource")
+                    native = expected.validation.get(key) if isinstance(key, str) else None
+                    resource = (
+                        expected.resources.uses.get(ResourceIdentity("native", key)) if isinstance(key, str) else None
+                    )
+                    if not isinstance(native, NativeComposition) or resource is None or slot not in native.placements:
+                        message = "built extension lacks a valid composition placement or resource"
+                        raise DrawInvariantError(message)
+                    if native.measure(node, resource.value, context) != native.contract.cost:
+                        message = "built extension disagrees with independent measurement"
+                        raise DrawInvariantError(message)
+                    components += native.contract.cost.get(Axis.COMPONENTS) - 1
+                    texts.extend(native.text)
+                    assets.update(use.value.key for use in native.resources)
                 case scene.Row(items=items):
                     if len(items) > self.limits.components.row_buttons:
                         msg = "built V2 action row exceeds its limit"
                         raise DrawInvariantError(msg)
                     for item in items:
-                        visit(item, in_panel=in_panel)
+                        visit(item, in_panel=in_panel, slot="row")
                 case scene.Button() | scene.RoutedButton() | scene.Link():
                     if (not node.label and node.emoji is None) or len(
                         node.label or ""
@@ -579,7 +633,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                             matches = [
                                 use.value.key
                                 for use in expected.resources.uses.values()
-                                if use.value.name == item.asset_name
+                                if isinstance(use.value, Asset) and use.value.name == item.asset_name
                             ]
                             if not matches:
                                 message = "built gallery has an undeclared asset"
@@ -588,19 +642,28 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                 case scene.File():
                     assets.add(node.asset_key)
                     use = expected.resources.uses.get(ResourceIdentity("attachment", node.asset_key))
-                    if use is None or (node.name, node.media_type) != (use.value.name, use.value.media_type):
+                    if (
+                        use is None
+                        or not isinstance(use.value, Asset)
+                        or (node.name, node.media_type) != (use.value.name, use.value.media_type)
+                    ):
                         message = "built file disagrees with its declared shared asset"
                         raise DrawInvariantError(message)
                 case scene.Section(texts=children, accessory=accessory):
                     if not 1 <= len(children) <= self.limits.section_texts or not isinstance(
                         accessory,
-                        scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton,
+                        scene.Thumbnail
+                        | scene.Button
+                        | scene.RoutedButton
+                        | scene.Link
+                        | scene.PremiumButton
+                        | scene.Extension,
                     ):
                         message = "built thumbnail section violates its structure"
                         raise DrawInvariantError(message)
                     for child in children:
                         visit(child, in_panel=in_panel)
-                    visit(accessory, in_panel=in_panel)
+                    visit(accessory, in_panel=in_panel, slot="accessory")
                 case scene.Thumbnail():
                     if len(node.description or "") > self.limits.gallery_item_description:
                         message = "built thumbnail description exceeds its limit"
@@ -616,7 +679,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         message = "built V2 container is nested inside another container"
                         raise DrawInvariantError(message)
                     for child in node.children:
-                        visit(child, in_panel=True)
+                        visit(child, in_panel=True, slot="panel")
                 case _:
                     message = "unexpected node in shared V2 composition"
                     raise DrawInvariantError(message)

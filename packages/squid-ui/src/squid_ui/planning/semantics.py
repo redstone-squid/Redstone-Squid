@@ -92,6 +92,8 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | RosterSection
     | RosterLabel
     | CardSlot
+    | primitive.Extension[Any, RenderTargetT]
+    | primitive.RawItem
     | primitive.Card
     | primitive.Content
     | TableCell
@@ -208,9 +210,9 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             return None
 
 
-def variant_alternatives(value: primitive.Variants) -> Alternatives[Any]:
+def variant_alternatives(value: primitive.Variants[Any]) -> Alternatives[Any]:
     """Expose native ladders through checked coverage and interaction declarations."""
-    choices = []
+    choices: list[Alternative[Any]] = []
     for index, variant in enumerate(value.variants):
         if variant.fidelity is primitive.Fidelity.LOSSY and variant.contract is None:
             message = "lossy native Variants require an explicit Variant.contract"
@@ -277,6 +279,9 @@ def semantic_graph[RenderTargetT, ContextT](
             case Alternatives():
                 root = add(value, path, parent, atomic=False)
                 visit(value.content, root, 0)
+            case primitive.Extension():
+                root = add(value, path, parent, atomic=False)
+                visit(cast(Renderable[RenderTargetT, ContextT], value.fallback), root, 0, name="@fallback")
             case sem.FallbackContent():
                 root = add(value, path, parent, atomic=False)
                 for i, branch in enumerate((value.primary, *value.alternates)):
@@ -542,6 +547,7 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Download()
                 | TextPresentation()
                 | AtomicNode()
+                | primitive.RawItem()
                 | sem.Column()
                 | sem.ListItem()
                 | sem.ActionControl()

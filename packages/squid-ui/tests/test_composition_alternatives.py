@@ -6,7 +6,6 @@ from typing import Literal
 import pytest
 
 import squid_ui as sl
-from squid_ui.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.composition import (
     BuiltComposition,
@@ -32,16 +31,16 @@ from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.text import NEUTRAL, Localization
 
 
-def compose[BodyT, PreparationT](
+def compose[BodyT, PreparationT, ResourceT](
     node: Renderable[RenderTarget, object],
-    rules: TargetRules[RenderTarget, object, Realization, Asset, BodyT, PreparationT],
+    rules: TargetRules[RenderTarget, object, Realization, ResourceT, BodyT, PreparationT],
     *,
     selections: Mapping[OccurrenceId, str] | None = None,
     strict: bool = True,
     localization: Localization = NEUTRAL,
 ) -> tuple[
     CandidateComposition[RenderTarget, object, Realization],
-    BuiltComposition[Asset, BodyT, PreparationT] | Evaluation[Asset, PreparationT],
+    BuiltComposition[ResourceT, BodyT, PreparationT] | Evaluation[ResourceT, PreparationT],
 ]:
     context = PlanningContext(WorkBudget(1000), localization=localization, strict=strict)
     graph = semantic_graph(node)

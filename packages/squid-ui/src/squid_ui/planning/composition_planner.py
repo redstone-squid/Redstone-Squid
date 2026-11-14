@@ -77,6 +77,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.shared_pagination or request.session is not None or nav is not None or request.positions is not None,
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,
+        extensions=request.target.extensions,
     )
 
 

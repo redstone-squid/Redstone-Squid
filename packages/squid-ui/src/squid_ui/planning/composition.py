@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_ui.assets import Asset
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -26,6 +26,9 @@ from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import Budget as NativeBudget
 from squid_ui.semantic import Budgeted
 from squid_ui.text import NEUTRAL, Localization
+
+if TYPE_CHECKING:
+    from squid_ui.planning.adapter import ExtensionAdapter
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,6 +312,7 @@ class PlanningContext:
     assets: tuple[Asset, ...] = ()
     escape_text: Callable[[str], str] | None = None
     presentation: PresentationState = field(default_factory=PresentationState)
+    extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,8 +410,11 @@ class Evaluation[ResourceT, PreparationT = None]:
     """Subtree usage with shared resources deduplicated independently within each scope."""
 
     scoped_resources: Mapping[OccurrenceId, frozenset[ResourceIdentity]] = field(default_factory=dict)
+    validation: Mapping[str, object] = field(default_factory=dict)
+    """Target-owned declarations retained for independent output validation."""
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "validation", MappingProxyType(dict(self.validation)))
         object.__setattr__(self, "scoped_costs", MappingProxyType(dict(self.scoped_costs)))
         object.__setattr__(self, "scoped_resources", MappingProxyType(dict(self.scoped_resources)))
 
@@ -485,12 +492,14 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 raise LayoutInvariantError(message)
             forms[form.key] = form
         semantic = part.offer.occurrence.graph.units[part.offer.occurrence.reference].value
-        if isinstance(semantic, AtomicNode):
+        if isinstance(semantic, AtomicNode) or part.offer.atomic is not None:
             contract = part.offer.atomic
             if contract is None or part.children:
                 message = "opaque atomic offers require a contract and cannot expose invented children"
                 raise LayoutInvariantError(message)
-            if part.offer.effects != part.offer.occurrence.scope_effects(semantic.effects):
+            if isinstance(semantic, AtomicNode) and part.offer.effects != part.offer.occurrence.scope_effects(
+                semantic.effects
+            ):
                 message = "atomic offers must retain the author's declared effects"
                 raise LayoutInvariantError(message)
             atoms[identity] = contract

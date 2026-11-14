@@ -95,7 +95,7 @@ class BadgeRules(V2CompositionRules[ComponentsV2Target, object]):
     @override
     def evaluate(
         self, candidate: CandidateComposition[ComponentsV2Target, object, Realization], context: PlanningContext
-    ) -> Evaluation[Asset, scene.ComponentsV2]:
+    ) -> Evaluation[object, scene.ComponentsV2]:
         self.calls.append("prepare")
         return super().evaluate(candidate, context)
 
@@ -106,7 +106,7 @@ class BadgeRules(V2CompositionRules[ComponentsV2Target, object]):
 
     @override
     def validate(
-        self, body: scene.ComponentsV2, expected: Evaluation[Asset, scene.ComponentsV2], context: PlanningContext
+        self, body: scene.ComponentsV2, expected: Evaluation[object, scene.ComponentsV2], context: PlanningContext
     ) -> None:
         self.calls.append("validate")
         super().validate(body, expected, context)

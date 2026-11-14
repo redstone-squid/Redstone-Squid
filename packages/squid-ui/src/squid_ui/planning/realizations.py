@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from hashlib import sha256
 from itertools import pairwise
-from typing import Literal
+from typing import Literal, cast
 from urllib.parse import quote
 
 from squid_i18n import tree
@@ -38,15 +38,18 @@ from squid_ui.planning.composition import (
     PlanningContext,
     RealizationOffer,
     RegionContract,
+    ResourceIdentity,
     SemanticOccurrence,
+    SharedUse,
     TargetRules,
     UnsupportedCapability,
 )
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
 from squid_ui.planning.limits import EmbedLimits
+from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
 from squid_ui.planning.navigation import PagerNav, default_nav
 from squid_ui.planning.pagination_content import RootRegion
-from squid_ui.planning.resources import Axis
+from squid_ui.planning.resources import EMPTY_COST, Axis
 from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.planning.semantic_adaptation.common import _button_style
 from squid_ui.planning.semantic_adaptation.handlers import (
@@ -72,6 +75,7 @@ from squid_ui.planning.semantics import (
     StructuralGroup,
     UnsupportedSemanticError,
     check_alternative,
+    interaction,
 )
 from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, resolve_accent, toggle_state
 from squid_ui.planning.text_presentations import (
@@ -364,8 +368,16 @@ class EntityRealization:
     choices: tuple[scene.Option, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class OpaqueRealization:
+    node: scene.Extension
+    resource: SharedUse[object]
+    composition: NativeComposition
+
+
 type Realization = (
-    TextSequenceRealization
+    OpaqueRealization
+    | TextSequenceRealization
     | ActionsRealization
     | RowRealization
     | ClassicContentRealization
@@ -710,6 +722,52 @@ def semantic_offers[RenderTargetT, ContextT](
         if cap is not None:
             text_capacity = min(text_capacity, cap) if text_capacity is not None else cap
 
+    if isinstance(value, primitive.Extension):
+        adapter = context.extensions.get(value.kind.name)
+        if adapter is None or not native_v2:
+            ref = occurrence.graph.children[occurrence.reference][0]
+            child = SemanticOccurrence(
+                OccurrenceId((*occurrence.identity.path, "@fallback")),
+                occurrence.graph,
+                ref,
+                occurrence.placement,
+                occurrence.origin,
+                palette=context.palette,
+                enclosing=occurrence.enclosing,
+            )
+            return (RealizationOffer(occurrence, "extension-fallback", FlowRealization(), (child,), flow=True),)
+        if not isinstance(adapter, ComposableExtension):
+            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "extension adapter needs compose()")
+        if any(
+            interaction(occurrence.graph.units[ref].value) is not None
+            for ref in occurrence.graph.atoms(occurrence.reference)
+        ):
+            return OfferDiscovery(
+                (), DiscoveryCompletion.UNSUPPORTED, "interactive extensions need typed control offers"
+            )
+        value = replace(adapter.compose(value.payload, context=context), kind=value.kind.name, version=value.version)
+    if isinstance(value, primitive.RawItem):
+        native = value.composition
+        if not native_v2 or native is None:
+            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "RawItem needs a native composition contract")
+        if set(native.contract.cost.axes) - {Axis.COMPONENTS, Axis.DISPLAY_TEXT}:
+            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "native V2 additive resource axes")
+        resource = SharedUse(
+            ResourceIdentity("native", "native:" + "/".join(occurrence.identity.path)), value.factory(), EMPTY_COST
+        )
+        node = scene.Extension(
+            value.kind,
+            value.version,
+            cast(dict[str, scene.JsonValue], {**value.payload, "resource": resource.identity.key}),
+        )
+        contract = replace(
+            native.contract, shared_costs={**native.contract.shared_costs, resource.identity: EMPTY_COST}
+        )
+        return (
+            RealizationOffer(
+                occurrence, "native-extension", OpaqueRealization(node, resource, native), atomic=contract
+            ),
+        )
     if isinstance(value, CardSlot):
         if embed_limits is None:
             return ()

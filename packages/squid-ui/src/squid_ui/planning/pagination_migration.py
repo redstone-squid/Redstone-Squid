@@ -11,6 +11,7 @@ from squid_ui import semantic as sem
 from squid_ui.document import Document
 from squid_ui.html.target import HtmlLimits
 from squid_ui.planning.limits import ClassicLimits, V2Limits
+from squid_ui.planning.native_extensions import ComposableExtension
 from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
@@ -182,11 +183,29 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     msg = "Discord native time on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 return node
+            case primitive.Extension():
+                adapter = request.target.extensions.get(node.kind.name)
+                if adapter is None or not isinstance(limits, V2Limits):
+                    visit(node.fallback)
+                elif not isinstance(adapter, ComposableExtension):
+                    msg = f"extension {node.kind.name!r} needs a compose() contract for shared allocation"
+                    raise UnsupportedSemanticError(msg)
+                pageable = True
+                return node
+            case primitive.RawItem():
+                if not isinstance(limits, V2Limits) or node.composition is None:
+                    msg = "RawItem requires a native Components V2 composition contract"
+                    raise UnsupportedSemanticError(msg)
+                pageable = True
+                return node
             case primitive.Row() | primitive.ControlGroup():
                 if not isinstance(limits, V2Limits | ClassicLimits):
                     msg = "Discord native controls on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 for item in node.items:
+                    if isinstance(item, primitive.RawItem):
+                        visit(item)
+                        continue
                     if not isinstance(
                         item, primitive.Button | primitive.RoutedButton | primitive.LinkButton | primitive.PremiumButton
                     ):

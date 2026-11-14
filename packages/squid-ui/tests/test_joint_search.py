@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import squid_ui as sl
+from squid_ui.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.allocation_policy import AllocationGoal, RegionPolicy, SearchCompletion
 from squid_ui.planning.composition import (
@@ -387,9 +388,9 @@ def test_resource_conflicts_only_reject_pages_where_uses_coexist() -> None:
     )
     assert result.diagnostics.optimal
     assert result.allocation.family.regions[OccurrenceId(("root",))].cuts == (1, 2)
-    assert [
-        next(iter(page.output.evaluation.resources.uses.values())).value.name for page in result.allocation.pages
-    ] == ["first.schem", "second.schem"]
+    assets = [next(iter(page.output.evaluation.resources.uses.values())).value for page in result.allocation.pages]
+    assert all(isinstance(asset, Asset) for asset in assets)
+    assert [asset.name for asset in assets if isinstance(asset, Asset)] == ["first.schem", "second.schem"]
 
 
 def test_unbreakable_and_keep_with_next_survive_budget_wrappers() -> None:

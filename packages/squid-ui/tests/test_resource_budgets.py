@@ -35,14 +35,14 @@ from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.text import NEUTRAL, Localization
 
 
-def evaluate[BodyT, PreparationT](
+def evaluate[BodyT, PreparationT, ResourceT](
     node: Renderable[RenderTarget, object],
-    rules: TargetRules[RenderTarget, object, Realization, Asset, BodyT, PreparationT],
+    rules: TargetRules[RenderTarget, object, Realization, ResourceT, BodyT, PreparationT],
     *,
     localization: Localization = NEUTRAL,
     strict: bool = True,
     selections: Mapping[OccurrenceId, str] | None = None,
-) -> Evaluation[Asset, PreparationT]:
+) -> Evaluation[ResourceT, PreparationT]:
     context = PlanningContext(WorkBudget(1000), localization=localization, strict=strict)
     occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("@0"))
     candidate = select_composition(occurrence, rules, context, selections=selections or {})
@@ -53,7 +53,7 @@ def evaluate[BodyT, PreparationT](
 
 def on_target(
     node: Renderable[RenderTarget, object], target: Literal["v2", "html", "slack"], *, strict: bool = True
-) -> Evaluation[Asset, scene.ComponentsV2 | scene.HtmlBody | scene.SlackMessage]:
+) -> Evaluation[object, scene.ComponentsV2] | Evaluation[Asset, scene.HtmlBody | scene.SlackMessage]:
     match target:
         case "v2":
             return evaluate(node, V2CompositionRules[RenderTarget, object](), strict=strict)
@@ -180,7 +180,7 @@ def test_target_cannot_certify_a_supported_budget_without_measuring_its_scope() 
         @override
         def evaluate(
             self, candidate: CandidateComposition[RenderTarget, object, Realization], context: PlanningContext
-        ) -> Evaluation[Asset, scene.ComponentsV2]:
+        ) -> Evaluation[object, scene.ComponentsV2]:
             return replace(super().evaluate(candidate, context), scoped_costs={})
 
     with pytest.raises(DrawInvariantError, match="did not measure resources"):

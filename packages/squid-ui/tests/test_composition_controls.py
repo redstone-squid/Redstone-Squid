@@ -6,7 +6,6 @@ from typing import Literal
 import pytest
 
 import squid_ui as sl
-from squid_ui.assets import Asset
 from squid_ui.capabilities import Capability
 from squid_ui.planning.composition import (
     BuiltComposition,
@@ -38,12 +37,12 @@ async def submitted(event: sl.forms.SubmitEvent[object]) -> None:
     pytest.fail("planning called a submit handler")
 
 
-def compose[BodyT, PreparationT](
+def compose[BodyT, PreparationT, ResourceT](
     node: Renderable[RenderTarget, object],
-    rules: TargetRules[RenderTarget, object, Realization, Asset, BodyT, PreparationT],
+    rules: TargetRules[RenderTarget, object, Realization, ResourceT, BodyT, PreparationT],
     *,
     strict: bool = True,
-) -> BuiltComposition[Asset, BodyT, PreparationT] | Evaluation[Asset, PreparationT]:
+) -> BuiltComposition[ResourceT, BodyT, PreparationT] | Evaluation[ResourceT, PreparationT]:
     context = PlanningContext(WorkBudget(1000), strict=strict, capabilities=frozenset({Capability.FORMS_MODAL}))
     graph = semantic_graph(node)
     root = next(ref for ref, unit in graph.units.items() if unit.parent is None)
