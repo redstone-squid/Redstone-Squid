@@ -230,13 +230,14 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
                     )
                 }
             )
-            if not semantic.stretch and actual + extra.get(Axis.DISPLAY_TEXT) > semantic.preferred:
+            ceiling = semantic.preferred + semantic.stretch
+            if actual + extra.get(Axis.DISPLAY_TEXT) > ceiling:
                 violations.append(
                     CapacityExceeded(
                         occurrence.identity,
                         Axis.DISPLAY_TEXT,
                         actual + extra.get(Axis.DISPLAY_TEXT),
-                        semantic.preferred,
+                        ceiling,
                     )
                 )
         if isinstance(semantic, Budget):

@@ -185,3 +185,15 @@ def test_intermediate_shortening_probes_keep_useful_content_with_bounded_work(co
     assert len(result.scene.body.children) == count
     assert sum(len(node.content) for node in result.scene.body.children if isinstance(node, scene.Text)) == 100
     assert result.metrics.work_used <= max(50_000, count * 100 * 200)
+
+
+@pytest.mark.parametrize("target", [components_v2_target(DISCORD), sl.html.target()], ids=lambda target: target.id)
+def test_positive_stretch_is_a_finite_allowance(target: Target[Any, Any, Any, Any]) -> None:
+    options = CompositionOptions(automatic=True)
+    inside = plan(sl.budget(sl.paragraph("123456"), min=2, prefer=4, stretch=2), target=target, composition=options)
+    assert inside.cost.get(Axis.DISPLAY_TEXT) == 6
+    with pytest.raises(JointInfeasibleError):
+        plan(sl.budget(sl.paragraph("1234567"), min=2, prefer=4, stretch=2), target=target, composition=options)
+    shortened = plan(sl.best_effort(sl.budget(sl.paragraph("1234567"), min=2, prefer=4, stretch=2)), target=target)
+    assert shortened.cost.get(Axis.DISPLAY_TEXT) == 6
+    assert [event.message for event in shortened.report.events] == ["Shortening"]

@@ -508,8 +508,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
             floors[identity] = budget_floor(
                 part.offer.occurrence.graph, part.offer.occurrence.reference, part.offer.occurrence.ancestors()
             )
-            if not semantic.stretch:
-                budgets[identity] = {Axis.DISPLAY_TEXT: semantic.preferred}
+            budgets[identity] = {Axis.DISPLAY_TEXT: semantic.preferred + semantic.stretch}
         pending.extend(part.children)
     if preflight:
         return Evaluation(violations=tuple(preflight))

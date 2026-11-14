@@ -652,8 +652,8 @@ def semantic_offers[RenderTargetT, ContextT](
         cap = (
             ancestor.chars
             if isinstance(ancestor, sem.Paged)
-            else ancestor.preferred
-            if isinstance(ancestor, sem.Budgeted) and not ancestor.stretch
+            else ancestor.preferred + ancestor.stretch
+            if isinstance(ancestor, sem.Budgeted)
             else ancestor.limits.get(Axis.DISPLAY_TEXT)
             if isinstance(ancestor, Budget)
             else None
