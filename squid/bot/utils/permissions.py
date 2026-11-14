@@ -19,7 +19,6 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
-from squid.permissions.application import PermissionService
 from squid.permissions.domain import CATALOGUE, CheckMode, PermissionNode
 from squid.permissions.errors import PermissionDeniedError, require_check
 
@@ -145,14 +144,10 @@ async def current_edit_actor(caller: sd.Request[Any, squid.bot.app.RedstoneSquid
     )
 
 
-def _permissions_of(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> PermissionService:
-    return caller.client.services.permissions
-
-
 async def allows(caller: sd.Request[Any, squid.bot.app.RedstoneSquid], node: PermissionNode | str) -> bool:
     """Whether the user behind `caller` holds `node`."""
     subject = await actor_for_interaction(caller)
-    return (await _permissions_of(caller).check(subject, node)).allowed
+    return (await caller.client.services.permissions.check(subject, node)).allowed
 
 
 async def enforce(
@@ -170,7 +165,7 @@ async def enforce(
     """
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
     subject = await actor_for_interaction(caller)
-    result = await _permissions_of(caller).check(subject, *resolved, mode=mode)
+    result = await caller.client.services.permissions.check(subject, *resolved, mode=mode)
     require_check(result, error_type=PermissionNodeRequired)
 
 
