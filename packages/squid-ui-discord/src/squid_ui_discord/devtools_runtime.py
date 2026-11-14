@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import anyio
 
-from squid_reactivity.topics import Address, BusSnapshot, CellAddress, Topic, TopicBus, TopicHandle
+from squid_reactivity.topics import Address, CellAddress, Topic, TopicBus, TopicBusStats, TopicName
 from squid_ui.errors import SquidUiError
 from squid_ui.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
 from squid_ui.runtime.histories import HistorySnapshot, inspect_histories
@@ -139,7 +139,7 @@ class OperationalSnapshot:
     sessions: tuple[SessionInspection, ...]
     message_roots: tuple[MessageRootSnapshot, ...]
     scheduler: MessageRootSchedulerSnapshot | None
-    topics: BusSnapshot | None
+    topics: TopicBusStats | None
     profiler: RuntimeSnapshot
     durable: DurableRuntimeSnapshot | None
 
@@ -190,10 +190,10 @@ AuditHook = Callable[[DevToolsOperation], None]
 class SnapshotableBus(Protocol):
     """Optional queue diagnostics for buses; delivery alone does not require this capability."""
 
-    def snapshot(self) -> BusSnapshot: ...
+    def snapshot(self) -> TopicBusStats: ...
 
 
-def _bus_snapshot(bus: TopicBus) -> BusSnapshot | None:
+def _bus_snapshot(bus: TopicBus) -> TopicBusStats | None:
     """This bus's queue depth, or None when it does not report one."""
     return bus.snapshot() if isinstance(bus, SnapshotableBus) else None
 
@@ -421,7 +421,7 @@ def _session_inspection(session: Session) -> SessionInspection:
 
 
 def _address_text(address: Address) -> str:
-    if isinstance(address, (Topic, TopicHandle)):
+    if isinstance(address, (TopicName, Topic)):
         return str(address)
     if isinstance(address, CellAddress):
         owner = type(address.owner)

@@ -8,7 +8,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui.profiling import MemoryProfiler, OperationKind
-from squid_ui.runtime import BusSnapshot
+from squid_ui.runtime import TopicBusStats
 from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.devtools_runtime import (
     ActionDisabled,
@@ -99,16 +99,16 @@ async def test_close_session_requires_confirmation_and_finishes_all_roots() -> N
 async def test_wait_idle_observes_sync_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
     profiler = MemoryProfiler()
     bus = sl.runtime.LocalTopicBus()
-    seen: list[sl.runtime.Topic] = []
+    seen: list[sl.runtime.TopicName] = []
     callback = seen.append
-    bus.subscribe(sl.runtime.Topic("devtools", "test"), callback)
-    bus.publish(sl.runtime.Topic("devtools", "test"))
+    bus.subscribe(sl.runtime.TopicName("devtools", "test"), callback)
+    bus.publish(sl.runtime.TopicName("devtools", "test"))
     with profiler.operation(OperationKind.DISPATCH, name="devtools-test"):
         pass
     runtime = DevToolsRuntime(bus=bus, profiler=profiler, policy=DevToolsPolicy.full_access())
 
     await runtime.wait_idle()
-    assert seen == [sl.runtime.Topic("devtools", "test")]
+    assert seen == [sl.runtime.TopicName("devtools", "test")]
     topics = runtime.snapshot().topics
     assert topics is not None
     assert topics.queued == 0
@@ -126,8 +126,8 @@ class _IdleQueue:
         self.waits = 0
         self.on_wait: Callable[[], None] | None = None
 
-    def snapshot(self) -> BusSnapshot:
-        return BusSnapshot((), queued=self.queued, in_flight=self.in_flight, delivered=0, failed=0)
+    def snapshot(self) -> TopicBusStats:
+        return TopicBusStats((), queued=self.queued, in_flight=self.in_flight, delivered=0, failed=0)
 
     async def wait_idle(self) -> None:
         self.waits += 1

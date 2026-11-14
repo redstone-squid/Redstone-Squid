@@ -42,7 +42,7 @@ from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.search.domain import SearchRequest, SearchScope, SearchSort
 from squid_i18n import md_tr
-from squid_reactivity import TopicBus, TopicHandle
+from squid_reactivity import Topic, TopicBus
 from squid_ui.sources import window_fingerprint
 
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
@@ -177,7 +177,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self,
         build: Build,
         *,
-        changes: TopicHandle,
+        changes: Topic,
         queries: BuildQueryService,
         builds: BuildService,
         edits: EditRunner,

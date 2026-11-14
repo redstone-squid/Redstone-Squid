@@ -84,7 +84,7 @@ decorators still work; explicitly supplied option fields override them, and omit
 Use `sd.ResponseSpec(live_updates=True)` on a screen, or pass `live_updates=True` when
 presenting it, to schedule refreshes when its observed values change. The installed scheduler
 works without a topic bus. `sd.Config(bus=...)` is optional: supply it when resources watch
-external changes such as `Topic("build", "42")`. The application publishes that topic after
+external changes through `bus.topic("build", "42")`. The application publishes that topic after
 updating the database; incoming remote events need a host-owned bridge.
 
 `sd.install()` starts no tasks. Run the installed runtime before opening panels, even when

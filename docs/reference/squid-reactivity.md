@@ -61,13 +61,13 @@ Optional invalidation for external dependencies, such as database records or fil
 The application obtains a handle with `bus.topic("build", "42")` and passes it to readers.
 A resource calls `handle.watch()`; after a committed database change, `handle.publish()`
 notifies its consumers. Looking up a handle does not track a read. Equal names on different
-buses are independent. Bridges use portable `Topic` names and publish into their local bus.
+buses are independent. Bridges use portable `TopicName` values and publish into their local bus.
 Reactive objects notify readers directly and need no topic bus. `LocalTopicBus` operates in one process; a host-owned
 bridge can publish events received from another process.
 
-::: squid_reactivity.Topic
+::: squid_reactivity.TopicName
 
-::: squid_reactivity.TopicHandle
+::: squid_reactivity.Topic
 
 ::: squid_reactivity.TopicBus
 
@@ -75,9 +75,9 @@ bridge can publish events received from another process.
 
 ::: squid_reactivity.TopicCodec
 
-::: squid_reactivity.KindKeyCodec
+::: squid_reactivity.DelimitedTopicCodec
 
-::: squid_reactivity.SubscriptionReconciler
+::: squid_reactivity.Subscriptions
 
 ## Addresses and cell inspection
 

@@ -81,12 +81,12 @@ the block read a computed `parity := count % 2`, changing `count` from 1 to 3 no
 but `parity` is the same and `current()` is still true. Check `current()` when you are
 notified, and skip the recomputation if nothing you read has a new value.
 
-To listen, give the addresses to a `SubscriptionReconciler`:
+To listen, give the addresses to `Subscriptions`:
 
 ```python
-from squid_reactivity import SubscriptionReconciler
+from squid_reactivity import Subscriptions
 
-subscriptions = SubscriptionReconciler(None, lambda address: print("changed:", address))
+subscriptions = Subscriptions(None, lambda address: print("changed:", address))
 subscriptions.stage(dependencies.addresses())
 subscriptions.commit()
 ...
@@ -95,7 +95,7 @@ subscriptions.close()
 
 `stage` subscribes to a new set of addresses while keeping the old set, and `commit` drops
 the old set, so no notification is missed while you recompute. Models hold subscribers
-weakly, so keep the reconciler for as long as you want callbacks. The UI runtime does all of
+weakly, so keep the subscriptions for as long as you want callbacks. The UI runtime does all of
 this for component renders.
 
 The block under `observe_reads()` is read-only, as are computed functions: assigning to
@@ -180,9 +180,9 @@ build_changes.publish()  # Notify after a database change or incoming bridge mes
 ```
 
 `watch()` records the dependency; fetching the handle does not. Handles appear in
-`dependencies.addresses()` and go to a `SubscriptionReconciler` like fields do. The same
+`dependencies.addresses()` and go to `Subscriptions` like fields do. The same
 name on two buses is two topics. A bridge that only has the name can call
-`bus.publish(Topic("build", "42"))` to the same effect.
+`bus.publish(TopicName("build", "42"))` to the same effect.
 
 `LocalTopicBus` calls subscribers synchronously, in subscription order. If one raises, the
 rest still run and the error goes to `on_subscriber_error`, which logs by default. For

@@ -561,7 +561,7 @@ class TestSelfWrites:
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(message_root.refresh)
             await started.wait()
-            assert address(workspace, "detail") in message_root._subscriptions.watched
+            assert address(workspace, "detail") in message_root._subscriptions.dependencies
             tasks.start_soon(dispatch)
             while workspace.detail != "new detail":
                 await asyncio.sleep(0)

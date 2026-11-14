@@ -17,22 +17,22 @@ import discord
 import squid_ui as sl
 from squid_ui import Component, resource, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import CellAddress, LocalTopicBus, PendingMode, Topic, TopicHandle
+from squid_ui.runtime import CellAddress, LocalTopicBus, PendingMode, Topic, TopicName
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.delivery import DeliveryResult, handle_for
 from squid_ui_discord.testing import delivered_to, message_harness
 
-BUILD = Topic("build", "1")
-OTHER = Topic("build", "2")
+BUILD = TopicName("build", "1")
+OTHER = TopicName("build", "2")
 
 
 class Watcher(Component[sl.ComponentsV2Target]):
     """One resource, one watched topic, chosen by state so a branch can drop it."""
 
-    topic: Topic = state(default=BUILD)
+    topic: TopicName = state(default=BUILD)
 
-    def __init__(self, bus: LocalTopicBus, load, *, topics: tuple[Topic, ...] | None = None) -> None:
+    def __init__(self, bus: LocalTopicBus, load, *, topics: tuple[TopicName, ...] | None = None) -> None:
         self._bus = bus
         self._load = load
         self._topics = topics
@@ -87,7 +87,7 @@ async def test_a_topic_watched_only_inside_a_loader_is_followed_by_the_root() ->
     load, _ = counting_loader(["first"])
     message_root, message = await mounted(Watcher(bus, load), bus, scheduler)
 
-    assert tuple(address for address in message_root.followed if isinstance(address, TopicHandle)) == (
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (
         bus.topic(BUILD.kind, BUILD.key),
     )
     assert message_root.observed == (
@@ -123,7 +123,7 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
     scheduler = MessageRootScheduler(bus)
     message_root, message = await mounted(Direct(), bus, scheduler)
 
-    assert tuple(address for address in message_root.followed if isinstance(address, TopicHandle)) == (
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (
         bus.topic(BUILD.kind, BUILD.key),
     )
 
@@ -239,14 +239,14 @@ async def test_a_dropped_conditional_watch_stops_refreshing_once_delivered() -> 
     load, _ = counting_loader(["first", "second"])
     panel = Watcher(bus, load)
     message_root, message = await mounted(panel, bus, scheduler)
-    assert tuple(address for address in message_root.followed if isinstance(address, TopicHandle)) == (
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (
         bus.topic(BUILD.kind, BUILD.key),
     )
 
     panel.topic = OTHER
     await message_root.refresh()
 
-    assert tuple(address for address in message_root.followed if isinstance(address, TopicHandle)) == (
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (
         bus.topic(OTHER.kind, OTHER.key),
     )
     assert {snapshot.topic for snapshot in bus.snapshot().topics} == {OTHER}
@@ -265,7 +265,7 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
 
     panel.topic = BUILD
     await message_root.refresh()
-    assert tuple(address for address in message_root.followed if isinstance(address, TopicHandle)) == (
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (
         bus.topic(BUILD.kind, BUILD.key),
     )
 
@@ -294,7 +294,7 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
     gc.collect()
     assert reference() is None
     assert not bus._topics
-    bus.publish(Topic("unwatched", "1"))
+    bus.publish(TopicName("unwatched", "1"))
     assert not bus._topics
 
 

@@ -35,7 +35,8 @@ from squid_reactivity.actions import (
 from squid_reactivity.addresses import CellAddress
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
-from squid_reactivity.topics import Address, SubscriptionReconciler, Topic
+from squid_reactivity.subscriptions import Subscriptions
+from squid_reactivity.topics import Address, TopicName
 from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
@@ -498,18 +499,18 @@ class MessageRoot[
         self.render_cache = render_cache if render_cache is not None else RenderProgramCache()
         self.scheduler = scheduler
         topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
-        reconciler_ref: weakref.ReferenceType[SubscriptionReconciler] | None = None
+        subscriptions_ref: weakref.ReferenceType[Subscriptions] | None = None
 
         def collected(_reference: weakref.ReferenceType[Any]) -> None:
-            if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
-                reconciler.close()
+            if subscriptions_ref is not None and (subscription_set := subscriptions_ref()) is not None:
+                subscription_set.close()
 
         message_root_ref = weakref.ref(self, collected)
 
         def refresh(address: Address) -> None:
             if (current := message_root_ref()) is None:
-                if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
-                    reconciler.close()
+                if subscriptions_ref is not None and (subscription_set := subscriptions_ref()) is not None:
+                    subscription_set.close()
                 return
             if current.scheduler is not None:
                 if isinstance(current.scheduler, ReactiveScheduler):
@@ -522,7 +523,7 @@ class MessageRoot[
         self.runtime.subscriptions.bus = topic_bus
         self.runtime.on_reactive_invalidate = refresh
         self._subscriptions = self.runtime.subscriptions
-        reconciler_ref = weakref.ref(self._subscriptions)
+        subscriptions_ref = weakref.ref(self._subscriptions)
         if isinstance(expiry, RenewEphemeral) and not isinstance(scheduler, ExpirySupervisor):
             message = "RenewEphemeral requires a scheduler that supervises mount expiry"
             raise TypeError(message)
@@ -630,7 +631,7 @@ class MessageRoot[
         These may cover both the committed generation and a staged successor. Topics followed
         separately by the host through its scheduler are not listed here.
         """
-        return self._subscriptions.followed
+        return self._subscriptions.subscribed_addresses
 
     @property
     def middleware(self) -> tuple[str, ...]:
@@ -949,7 +950,7 @@ class MessageRoot[
     def _warn_unwatched_topics(self, tree: ComponentTree[RenderTargetT, Any]) -> None:
         observed = tree.observations
         if (
-            any(isinstance(address, Topic) for address in observed)
+            any(isinstance(address, TopicName) for address in observed)
             and self._subscriptions.bus is None
             and not self._follow_warned
         ):

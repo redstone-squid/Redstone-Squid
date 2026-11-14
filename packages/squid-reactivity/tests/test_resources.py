@@ -9,7 +9,7 @@ from squid_reactivity import (
     LocalTopicBus,
     Reactive,
     ResourceEventSnapshot,
-    SubscriptionReconciler,
+    Subscriptions,
     action_scope,
     observe_events,
     observe_reads,
@@ -97,7 +97,7 @@ async def test_shared_resource_publishes_its_cell_address() -> None:
     preferences = Preferences()
     address = preferences.theme.address
     assert address is not None
-    subscriptions = SubscriptionReconciler(None, published.append)
+    subscriptions = Subscriptions(None, published.append)
     subscriptions.stage([address])
     subscriptions.commit()
 
@@ -294,7 +294,7 @@ async def test_standalone_resource_notifies_readers_without_an_owner_callback() 
     with observe_reads() as observation:
         assert value.status == Pending()
     seen = []
-    subscriptions = SubscriptionReconciler(None, seen.append)
+    subscriptions = Subscriptions(None, seen.append)
     subscriptions.stage(observation.addresses())
     subscriptions.commit()
 

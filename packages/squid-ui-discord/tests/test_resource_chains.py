@@ -15,13 +15,13 @@ from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, message_harness
 
-TOPIC = sl.runtime.Topic("build", "1")
+TOPIC = sl.runtime.TopicName("build", "1")
 
 
 class Chain(sl.Component[sl.ComponentsV2Target]):
     """`node` derives from `build`, which watches a topic."""
 
-    def __init__(self, source: str = "v1", *, changes: sl.runtime.TopicHandle | None = None) -> None:
+    def __init__(self, source: str = "v1", *, changes: sl.runtime.Topic | None = None) -> None:
         self.changes = changes if changes is not None else sl.runtime.LocalTopicBus().topic("build", "1")
         self.source = source
         self.build_loads = 0

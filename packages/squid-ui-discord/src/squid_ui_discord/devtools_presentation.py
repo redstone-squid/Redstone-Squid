@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from squid_reactivity.topics import BusSnapshot
+from squid_reactivity.topics import TopicBusStats
 from squid_ui_discord.message_root_scheduler import MessageRootSchedulerSnapshot
 
 if TYPE_CHECKING:
@@ -16,7 +16,7 @@ def scheduler_summary(snapshot: MessageRootSchedulerSnapshot | None) -> str:
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
 
 
-def topic_summary(snapshot: BusSnapshot | None) -> str:
+def topic_summary(snapshot: TopicBusStats | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"known={len(snapshot.topics)} queued={snapshot.queued} failed={snapshot.failed}"

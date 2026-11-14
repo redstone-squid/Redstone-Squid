@@ -10,7 +10,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
-from squid_reactivity.topics import Topic
+from squid_reactivity.topics import TopicName
 from squid_ui.primitives import Heading
 from squid_ui_discord import DiscordUIRuntime, install
 from squid_ui_discord.runtime import _INSTALLED, DiscordUIRuntimeMissing
@@ -118,11 +118,11 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     assert runtime.scheduler is not None
     message_root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
     message_root.refresh = AsyncCallRecorder()  # pyrefly: ignore
-    runtime.scheduler.follow(message_root, Topic("build", "42"))
+    runtime.scheduler.follow(message_root, TopicName("build", "42"))
 
     task = asyncio.create_task(runtime.run())
     try:
-        bus.publish(Topic("build", "42"))
+        bus.publish(TopicName("build", "42"))
         for _ in range(20):
             await asyncio.sleep(0)
             if message_root.refresh.await_count:

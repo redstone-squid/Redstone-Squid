@@ -75,7 +75,7 @@ from squid.submissions.domain.finalization import (
 )
 from squid.submissions.domain.intake import IntakeStatus
 from squid_i18n import NUMBER, Text, md_tr
-from squid_reactivity import TopicHandle
+from squid_reactivity import Topic
 from squid_ui.text import TextLike, md
 from squid_ui_discord.modal import FileField
 
@@ -134,7 +134,7 @@ class DraftWorkspace(sl.Reactive):
         draft: StoredDraft,
         manifest: FormManifest,
         *,
-        changes: TopicHandle,
+        changes: Topic,
         render_card: CardRenderer | None = None,
         resolve_actor: Callable[[], Awaitable[Actor]],
     ) -> None:
@@ -975,7 +975,7 @@ async def draft_editor(
     services: BotServices,
     draft_id: UUID,
     *,
-    changes: TopicHandle,
+    changes: Topic,
     render_card: CardRenderer | None = None,
     resolve_actor: Callable[[], Awaitable[Actor]],
     notice: sl.TextLike = "",

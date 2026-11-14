@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from squid_reactivity.resources import AsyncBinding
-from squid_reactivity.topics import Address, SubscriptionReconciler, TopicBus
+from squid_reactivity.subscriptions import Subscriptions
+from squid_reactivity.topics import Address, TopicBus
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache, PlanMemo
@@ -102,7 +103,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.presentation = presentation if presentation is not None else PresentationState()
         self.on_invalidate = on_invalidate
         self.on_reactive_invalidate = on_reactive_invalidate
-        self.subscriptions = SubscriptionReconciler(topic_bus, self._reactive_changed)
+        self.subscriptions = Subscriptions(topic_bus, self._reactive_changed)
         self.context = dict(context or {})
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.plan_memo = PlanMemo()
@@ -182,7 +183,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         requested = set(addresses)
         if not requested:
             return
-        active: set[Address] = set(self.subscriptions.watched)
+        active: set[Address] = set(self.subscriptions.dependencies)
         if self._committed_tree is not None:
             active.update(self._committed_tree.observations)
         if self._cached_tree is not None:

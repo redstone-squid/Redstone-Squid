@@ -1440,7 +1440,7 @@ from anyio.abc import TaskStatus
 
 from squid_ui import Component, ComponentsV2Target, DocumentLike, Reactive, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import ContextKey, ManagedService, Topic, TopicBus
+from squid_ui.runtime import ContextKey, ManagedService, TopicName, TopicBus
 
 
 class BuildUpdates(ManagedService):
@@ -1448,10 +1448,10 @@ class BuildUpdates(ManagedService):
 
     def __init__(self, bus: TopicBus, build_id: int) -> None:
         self.bus = bus
-        self.topic = Topic("build", str(build_id))
+        self.topic = TopicName("build", str(build_id))
 
     async def run(self, *, task_status: TaskStatus[None]) -> None:
-        def changed(_: Topic) -> None:
+        def changed(_: TopicName) -> None:
             self.changed = True
 
         unsubscribe = self.bus.subscribe(self.topic, changed)
@@ -1809,7 +1809,7 @@ Closed set. A seventh synonym for "it is over" puts the reader back where they s
 
 `close` and `finish` both end *the object*, so no class has both. `run`, `discard` and `cancel`
 name other subjects, which is why `PersistentStatePool` has `run` and `close`, and
-`SubscriptionReconciler` has `discard` and `close`.
+`Subscriptions` has `discard` and `close`.
 
 `Fragment.release` and `ActionParticipant.abort` sit outside the set on purpose: `release`
 transfers ownership to the caller (and its docstring argues why it is not `detach`), the stores

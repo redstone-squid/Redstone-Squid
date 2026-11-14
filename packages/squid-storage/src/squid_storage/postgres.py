@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import anyio
 
-from squid_reactivity.topics import Address, KindKeyCodec, Topic, TopicBus, TopicCodec
+from squid_reactivity.topics import Address, DelimitedTopicCodec, TopicBus, TopicCodec, TopicName
 from squid_storage.stores import (
     _SCHEMA_VERSION,
     AdmissionToken,
@@ -428,7 +428,7 @@ class PostgresTopicBridge:
         pool: Caller-owned asyncpg pool. The listener reserves one connection while
             connected; sending requires another available connection.
         bus: Local bus receiving this host's publishes and accepted notifications.
-        codec: Topic address encoding, defaulting to kind:key. Cell addresses stay local.
+        codec: TopicName address encoding, defaulting to kind:key. Cell addresses stay local.
         channel: PostgreSQL channel shared by the participating processes.
         on_resync: Awaited after LISTEN succeeds on each connection, before the listener
             is marked ready, to refresh state after potentially missed notifications.
@@ -462,7 +462,7 @@ class PostgresTopicBridge:
             raise ValueError(message)
         self.pool = pool
         self.bus = bus
-        self.codec: TopicCodec = KindKeyCodec() if codec is None else codec
+        self.codec: TopicCodec = DelimitedTopicCodec() if codec is None else codec
         self.channel = channel
         self.on_resync = on_resync
         self.reconnect_seconds = reconnect_seconds
@@ -491,7 +491,7 @@ class PostgresTopicBridge:
         for address in addresses:
             self._published += 1
             # A `CellAddress` names a live object, so it has no wire form to look for.
-            payload = self._wire_payload(address, _NORMAL_DELIVERY) if isinstance(address, Topic) else None
+            payload = self._wire_payload(address, _NORMAL_DELIVERY) if isinstance(address, TopicName) else None
             if payload is None:
                 self._local_only += 1
                 continue
@@ -505,7 +505,7 @@ class PostgresTopicBridge:
                 continue
             self._pending.add(payload)
 
-    async def publish_in(self, connection: _NotifyConnection, topic: Topic) -> None:
+    async def publish_in(self, connection: _NotifyConnection, topic: TopicName) -> None:
         """Notify through the supplied connection, delivering locally through the listener too.
 
         Wait for the running listener to be ready, then call pg_notify on the supplied
@@ -531,7 +531,7 @@ class PostgresTopicBridge:
         await connection.execute("SELECT pg_notify($1, $2)", self.channel, payload)
         self._notified += 1
 
-    def _wire_payload(self, topic: Topic, delivery: str) -> str | None:
+    def _wire_payload(self, topic: TopicName, delivery: str) -> str | None:
         """Return a tagged wire payload, or `None` when the topic cannot be carried."""
         encoded = self.codec.encode(topic)
         if encoded is None:

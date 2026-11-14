@@ -13,20 +13,20 @@ import asyncpg
 from squid.config import DatabaseConfig
 from squid.persistence.wake_listener import asyncpg_dsn
 from squid.posts.domain import ResourceKind
-from squid_reactivity import Address, Topic, TopicBus
+from squid_reactivity import Address, TopicBus, TopicName
 from squid_storage import PostgresTopicBridge
 
 RESOURCE_TOPIC_CHANNEL = "squid_resource_topics"
 """The PostgreSQL channel every Squid process shares."""
 
 
-def resource_topic(resource_kind: ResourceKind, resource_key: str) -> Topic:
+def resource_topic(resource_kind: ResourceKind, resource_key: str) -> TopicName:
     """Return a topic for an application resource.
 
     The ResourceKind annotation lets type checkers catch unknown resource kinds;
-    constructing Topic directly would accept any string.
+    constructing TopicName directly would accept any string.
     """
-    return Topic(resource_kind, resource_key)
+    return TopicName(resource_kind, resource_key)
 
 
 class TopicPublisher(Protocol):

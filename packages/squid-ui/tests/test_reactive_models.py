@@ -54,7 +54,7 @@ def test_nested_model_invalidates_multiple_runtimes_without_a_bus() -> None:
         runtime.commit(tree)
     runtimes[0].finish()
     search.query = "second"
-    assert not runtimes[0].subscriptions.followed
+    assert not runtimes[0].subscriptions.subscribed_addresses
     assert runtimes[1].dirty
 
 
@@ -105,14 +105,14 @@ def test_discard_preserves_old_reads_and_releases_prospective_reads() -> None:
     runtime.commit(runtime.render())
     panel.search = second
     candidate = runtime.render()
-    assert CellAddress(first, "query") in runtime.subscriptions.followed
-    assert CellAddress(second, "query") in runtime.subscriptions.followed
+    assert CellAddress(first, "query") in runtime.subscriptions.subscribed_addresses
+    assert CellAddress(second, "query") in runtime.subscriptions.subscribed_addresses
     runtime.discard()
-    assert CellAddress(first, "query") in runtime.subscriptions.followed
-    assert CellAddress(second, "query") not in runtime.subscriptions.followed
+    assert CellAddress(first, "query") in runtime.subscriptions.subscribed_addresses
+    assert CellAddress(second, "query") not in runtime.subscriptions.subscribed_addresses
     runtime.commit(candidate)
-    assert CellAddress(first, "query") not in runtime.subscriptions.followed
-    assert CellAddress(second, "query") in runtime.subscriptions.followed
+    assert CellAddress(first, "query") not in runtime.subscriptions.subscribed_addresses
+    assert CellAddress(second, "query") in runtime.subscriptions.subscribed_addresses
 
 
 def test_a_retained_model_does_not_keep_an_abandoned_runtime_alive() -> None:

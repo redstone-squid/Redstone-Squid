@@ -507,7 +507,7 @@ class Reactive:
     """Reusable reactive state and behavior, independent of rendering.
 
     Declare fields with `state()` and derived properties with `computed`. Consumers
-    automatically follow fields they read through a subscription reconciler. Fields without
+    automatically follow fields they read through `Subscriptions`. Fields without
     a default must be assigned before initialization finishes.
 
     Construction may assign ordinary attributes. Once the owner exists, writes

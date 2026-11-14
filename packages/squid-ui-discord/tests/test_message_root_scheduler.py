@@ -12,7 +12,7 @@ import pytest
 import squid_ui as sl
 from squid_ui import Component
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
-from squid_ui.runtime import LocalTopicBus, Topic
+from squid_ui.runtime import LocalTopicBus, TopicName
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
 from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
@@ -136,9 +136,9 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     scheduler = MessageRootScheduler(bus)
     message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
     message_root.refresh = AsyncCallRecorder()  # pyrefly: ignore
-    scheduler.follow(message_root, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
+    scheduler.follow(message_root, TopicName("build", "42"), TopicName("group", "7"), TopicName("index", "recent"))
 
-    bus.publish(Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
+    bus.publish(TopicName("build", "42"), TopicName("group", "7"), TopicName("index", "recent"))
 
     assert scheduler._queue.qsize() == 1
 
@@ -153,7 +153,7 @@ async def test_follow_rejects_a_message_root_that_already_finished() -> None:
     await message_root.finish(disable=False)
 
     with pytest.raises(ValueError, match="finished"):
-        scheduler.follow(message_root, Topic("build", "42"))
+        scheduler.follow(message_root, TopicName("build", "42"))
 
 
 async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() -> None:
@@ -283,7 +283,7 @@ def test_collected_message_root_unsubscribes() -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
     message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
-    scheduler.follow(message_root, Topic("build", "42"))
+    scheduler.follow(message_root, TopicName("build", "42"))
     reference = weakref.ref(message_root)
 
     del message_root
@@ -310,9 +310,9 @@ def test_follow_requires_its_bus_and_scheduler() -> None:
     message_root = MessageRoot(Empty(), access=Everyone())
 
     with pytest.raises(RuntimeError, match="topic bus"):
-        MessageRootScheduler().follow(message_root, Topic("build", "42"))
+        MessageRootScheduler().follow(message_root, TopicName("build", "42"))
     with pytest.raises(ValueError, match="scheduler"):
-        MessageRootScheduler(LocalTopicBus()).follow(message_root, Topic("build", "42"))
+        MessageRootScheduler(LocalTopicBus()).follow(message_root, TopicName("build", "42"))
 
 
 @pytest.mark.parametrize(

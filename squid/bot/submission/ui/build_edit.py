@@ -38,7 +38,7 @@ from squid.edits.domain import RevisionConflictError
 from squid.submissions.application.build_answers import BuildAnswers, answers_from_build, patch_from_answers
 from squid.submissions.domain import ChoiceOption, FormField, FormManifest, FormSection, SubmissionOrigin
 from squid_i18n import Text, md_tr
-from squid_reactivity import TopicHandle
+from squid_reactivity import Topic
 from squid_ui.text import TextLike, md
 
 type OptionLoader = Callable[[str], Awaitable[tuple[ChoiceOption, ...]]]
@@ -230,7 +230,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         actor: Callable[[], Awaitable[Actor]],
         render_build: CardRenderer,
         refresh_posts: Callable[[int], Awaitable[None]],
-        changes: TopicHandle | None = None,
+        changes: Topic | None = None,
         recovered: bool = False,
     ) -> None:
         if build.id is None:

@@ -1,4 +1,4 @@
-"""Topic delivery between independent pools and buses over PostgreSQL LISTEN/NOTIFY."""
+"""TopicName delivery between independent pools and buses over PostgreSQL LISTEN/NOTIFY."""
 
 import uuid
 from functools import partial
@@ -11,7 +11,7 @@ from testcontainers.postgres import PostgresContainer
 
 from squid.topics import resource_topic
 from squid_storage import PostgresTopicBridge
-from squid_ui.runtime import LocalTopicBus, Topic
+from squid_ui.runtime import LocalTopicBus, TopicName
 
 
 async def _announce(event: anyio.Event) -> None:
@@ -26,13 +26,13 @@ async def test_two_processes_exchange_topics_over_one_channel(postgres_container
     assert here_pool is not None
     assert there_pool is not None
     here, there = LocalTopicBus(), LocalTopicBus()
-    seen_here: list[Topic] = []
-    seen_there: list[Topic] = []
+    seen_here: list[TopicName] = []
+    seen_there: list[TopicName] = []
 
-    def record_here(topic: Topic) -> None:
+    def record_here(topic: TopicName) -> None:
         seen_here.append(topic)
 
-    def record_there(topic: Topic) -> None:
+    def record_there(topic: TopicName) -> None:
         seen_there.append(topic)
 
     here.subscribe(resource_topic("build", "42"), record_here)
@@ -85,13 +85,13 @@ async def test_transaction_publish_is_commit_ordered_and_self_delivered(
     here, there = LocalTopicBus(), LocalTopicBus()
     committed = resource_topic("build", "committed")
     rolled_back = resource_topic("build", "rolled-back")
-    seen_here: list[Topic] = []
-    seen_there: list[Topic] = []
+    seen_here: list[TopicName] = []
+    seen_there: list[TopicName] = []
 
-    def record_here(topic: Topic) -> None:
+    def record_here(topic: TopicName) -> None:
         seen_here.append(topic)
 
-    def record_there(topic: Topic) -> None:
+    def record_there(topic: TopicName) -> None:
         seen_there.append(topic)
 
     here.subscribe(committed, record_here)

@@ -54,14 +54,14 @@ def test_superseded_candidate_cannot_release_its_successors_subscriptions() -> N
     successor = runtime.stage(runtime.render())
 
     assert abandoned.settled
-    assert CellAddress(first, "value") in runtime.subscriptions.followed
-    assert CellAddress(second, "value") not in runtime.subscriptions.followed
-    assert CellAddress(third, "value") in runtime.subscriptions.followed
+    assert CellAddress(first, "value") in runtime.subscriptions.subscribed_addresses
+    assert CellAddress(second, "value") not in runtime.subscriptions.subscribed_addresses
+    assert CellAddress(third, "value") in runtime.subscriptions.subscribed_addresses
     with pytest.raises(LayoutInvariantError, match="already settled"):
         abandoned.discard()
     successor.discard()
-    assert CellAddress(first, "value") in runtime.subscriptions.followed
-    assert CellAddress(third, "value") not in runtime.subscriptions.followed
+    assert CellAddress(first, "value") in runtime.subscriptions.subscribed_addresses
+    assert CellAddress(third, "value") not in runtime.subscriptions.subscribed_addresses
     runtime.finish()
 
 
@@ -70,7 +70,7 @@ def test_finish_discards_an_outstanding_candidate() -> None:
     candidate = runtime.stage(runtime.render())
     runtime.finish()
     assert candidate.settled
-    assert runtime.subscriptions.followed == ()
+    assert runtime.subscriptions.subscribed_addresses == ()
     with pytest.raises(LayoutInvariantError, match="already settled"):
         candidate.commit()
 

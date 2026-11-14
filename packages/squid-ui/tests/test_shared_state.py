@@ -9,7 +9,7 @@ from typing import override
 
 import pytest
 
-from squid_reactivity import Address, SubscriptionReconciler, UndeclaredStateError, addresses, export_state
+from squid_reactivity import Address, Subscriptions, UndeclaredStateError, addresses, export_state
 from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, ReactiveConflictError, transaction
@@ -41,23 +41,23 @@ type Follow = Callable[[CellAddress, Callable[[Address], None]], Callable[[], No
 
 @pytest.fixture
 def follow() -> Iterator[Follow]:
-    subscriptions: list[SubscriptionReconciler] = []
+    subscriptions: list[Subscriptions] = []
 
     def observe(address: CellAddress, callback: Callable[[Address], None]) -> Callable[[], None]:
-        reconciler = SubscriptionReconciler(None, callback)
-        reconciler.stage([address])
-        reconciler.commit()
-        subscriptions.append(reconciler)
+        subscription_set = Subscriptions(None, callback)
+        subscription_set.stage([address])
+        subscription_set.commit()
+        subscriptions.append(subscription_set)
 
         def close() -> None:
-            reconciler.close()
-            subscriptions.remove(reconciler)
+            subscription_set.close()
+            subscriptions.remove(subscription_set)
 
         return close
 
     yield observe
-    for reconciler in subscriptions:
-        reconciler.close()
+    for subscription_set in subscriptions:
+        subscription_set.close()
 
 
 @pytest.fixture

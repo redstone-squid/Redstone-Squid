@@ -1,4 +1,4 @@
-"""Contracts for tracked topics, synchronous publication, and reconciliation."""
+"""Contracts for tracked topics, synchronous publication, and subscriptions."""
 
 import logging
 from collections.abc import Callable
@@ -6,11 +6,11 @@ from typing import override
 
 import pytest
 
-from squid_reactivity import LocalTopicBus, SubscriptionReconciler, Topic, TopicBus, observe_reads, watch
+from squid_reactivity import LocalTopicBus, Subscriptions, TopicBus, TopicName, observe_reads, watch
 from squid_reactivity.topics import Address
 
-BUILD = Topic("build", "1")
-OTHER = Topic("build", "2")
+BUILD = TopicName("build", "1")
+OTHER = TopicName("build", "2")
 
 
 def test_local_bus_satisfies_the_protocol_and_delivers_in_order() -> None:
@@ -69,43 +69,43 @@ def test_publish_moves_a_watched_version_without_subscribers() -> None:
     assert source.settle() != version
 
 
-def test_reconciler_keeps_committed_and_one_staged_set() -> None:
+def test_subscriptions_keeps_committed_and_one_staged_set() -> None:
     bus = LocalTopicBus()
     seen: list[Address] = []
-    subscriptions = SubscriptionReconciler(bus, seen.append)
+    subscriptions = Subscriptions(bus, seen.append)
 
     subscriptions.stage((BUILD, BUILD))
-    assert subscriptions.followed == (BUILD,)
+    assert subscriptions.subscribed_addresses == (BUILD,)
     subscriptions.commit()
 
     subscriptions.stage((OTHER,))
-    assert subscriptions.followed == (BUILD, OTHER)
+    assert subscriptions.subscribed_addresses == (BUILD, OTHER)
     with pytest.raises(RuntimeError, match="already staged"):
         subscriptions.stage((BUILD,))
     subscriptions.discard()
 
     assert subscriptions.committed == (BUILD,)
-    assert subscriptions.followed == (BUILD,)
+    assert subscriptions.subscribed_addresses == (BUILD,)
     bus.publish(BUILD, OTHER)
     assert seen == [BUILD]
 
 
-def test_reconciler_commit_promotes_and_close_releases() -> None:
+def test_subscriptions_commit_promotes_and_close_releases() -> None:
     bus = LocalTopicBus()
-    subscriptions = SubscriptionReconciler(bus, lambda _address: None)
+    subscriptions = Subscriptions(bus, lambda _address: None)
     subscriptions.stage((BUILD,))
     subscriptions.commit()
     subscriptions.stage((OTHER,))
     subscriptions.commit()
 
     assert subscriptions.committed == (OTHER,)
-    assert subscriptions.followed == (OTHER,)
+    assert subscriptions.subscribed_addresses == (OTHER,)
     subscriptions.close()
     subscriptions.close()
     assert bus.snapshot().topics == ()
 
 
-def test_reconciler_unwinds_a_partial_stage() -> None:
+def test_subscriptions_unwinds_a_partial_stage() -> None:
     class BrokenBus(LocalTopicBus):
         @override
         def subscribe[AddressT: Address](
@@ -116,13 +116,13 @@ def test_reconciler_unwinds_a_partial_stage() -> None:
             return super().subscribe(address, callback)
 
     bus = BrokenBus()
-    subscriptions = SubscriptionReconciler(bus, lambda _address: None)
+    subscriptions = Subscriptions(bus, lambda _address: None)
 
     with pytest.raises(RuntimeError, match="cannot subscribe"):
         subscriptions.stage((BUILD, OTHER))
 
     assert subscriptions.staged is None
-    assert subscriptions.followed == ()
+    assert subscriptions.subscribed_addresses == ()
     assert bus.snapshot().topics == ()
 
 
@@ -177,14 +177,14 @@ def test_handles_are_canonical_only_within_their_bus() -> None:
     assert not observation.sources
 
 
-def test_handles_follow_their_owner_without_a_reconciler_bus() -> None:
+def test_handles_follow_their_owner_without_an_explicit_bus() -> None:
     first, second = LocalTopicBus(), LocalTopicBus()
     handle = first.topic("build", "42")
     with observe_reads() as observation:
         handle.watch()
     source, version = next(iter(observation.sources.items()))
     seen: list[Address] = []
-    subscriptions = SubscriptionReconciler(None, seen.append)
+    subscriptions = Subscriptions(None, seen.append)
     subscriptions.stage(observation.addresses())
     subscriptions.commit()
 

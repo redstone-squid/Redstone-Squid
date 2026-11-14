@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, overload
 
 import anyio
 
-from squid_reactivity.topics import Address, CellAddress, Topic, TopicBus
+from squid_reactivity.topics import Address, CellAddress, TopicBus, TopicName
 from squid_ui.profiling import NoOpProfiler, OperationKind, PresentationStatus, Profiler, TraceLink
 
 if TYPE_CHECKING:
@@ -217,7 +217,7 @@ class MessageRootScheduler:
         await self._queue.join()
 
     @overload
-    def follow(self, message_root: MessageRoot, *topics: Topic) -> Callable[[], None]: ...
+    def follow(self, message_root: MessageRoot, *topics: TopicName) -> Callable[[], None]: ...
 
     @overload
     def follow(self, message_root: MessageRoot, *topics: CellAddress) -> Callable[[], None]: ...

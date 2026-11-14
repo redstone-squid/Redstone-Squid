@@ -20,7 +20,7 @@ from squid_ui.runtime import (
     ManagedService,
     ServiceOwner,
     ServiceRunStatus,
-    Topic,
+    TopicName,
     UIExecutionHost,
 )
 
@@ -1010,7 +1010,7 @@ async def test_async_exit_stack_attempts_remaining_cleanup_after_failure() -> No
 async def test_owned_subscription_stops_updating_retained_shared_state() -> None:
     async with running_host() as host:
         bus = LocalTopicBus()
-        topic = Topic("build", "42")
+        topic = TopicName("build", "42")
 
         class Updates(Reactive):
             count: int = state(default=0)
@@ -1021,7 +1021,7 @@ async def test_owned_subscription_stops_updating_retained_shared_state() -> None
 
             @override
             async def run(self, *, task_status: TaskStatus[None]) -> None:
-                def changed(_: Topic) -> None:
+                def changed(_: TopicName) -> None:
                     self.state.count += 1
 
                 unsubscribe = bus.subscribe(topic, changed)

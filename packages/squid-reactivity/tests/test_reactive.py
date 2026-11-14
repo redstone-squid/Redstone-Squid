@@ -5,7 +5,7 @@ import weakref
 
 import pytest
 
-from squid_reactivity import Reactive, SubscriptionReconciler, addresses, computed, state, transaction
+from squid_reactivity import Reactive, Subscriptions, addresses, computed, state, transaction
 
 
 class Search(Reactive):
@@ -19,7 +19,7 @@ class Search(Reactive):
 def test_direct_observation_follows_computed_inputs_and_rollback() -> None:
     search = Search()
     seen = []
-    subscription = SubscriptionReconciler(None, seen.append)
+    subscription = Subscriptions(None, seen.append)
     subscription.stage(addresses(lambda: search.normalized))
     subscription.commit()
     with transaction():
@@ -46,7 +46,7 @@ def test_long_lived_source_does_not_retain_its_consumer() -> None:
 
     consumer = Consumer()
     reference = weakref.ref(consumer)
-    subscription = SubscriptionReconciler(None, consumer.changed)
+    subscription = Subscriptions(None, consumer.changed)
     subscription.stage(addresses(lambda: search.query))
     subscription.commit()
     del consumer, subscription

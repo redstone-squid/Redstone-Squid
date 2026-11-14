@@ -22,14 +22,14 @@ from squid.schematics.application.previews import (
     StoredRender,
 )
 from squid.worker.rendering import SchematicPreviewWorker
-from squid_reactivity import LocalTopicBus, Topic
+from squid_reactivity import LocalTopicBus, TopicName
 from tests.support.schematic_job_uow import RenderScope
 
 PNG = b"\x89PNG\r\n\x1a\npreview"
 RECIPE_HASH = "a" * 64
 OBJECT_KEY = f"schematic-renders/aa/{RECIPE_HASH}.png"
 PUBLIC_URL = f"https://api.example/v1/schematic-renders/{RECIPE_HASH}/content"
-BUILD_TOPIC = Topic("build", "7")
+BUILD_TOPIC = TopicName("build", "7")
 
 
 class MemoryRenderJobs:
@@ -122,7 +122,7 @@ class PreviewScenario:
     schematics: PreparedPreviews
     artifacts: LocalArtifactStore
     topics: LocalTopicBus
-    published: list[Topic]
+    published: list[TopicName]
     directory: Path
 
     def worker(self, *, enabled: bool = True) -> SchematicPreviewWorker:
@@ -139,7 +139,7 @@ class PreviewScenario:
 @pytest.fixture
 def preview(tmp_path: Path) -> Iterator[PreviewScenario]:
     topics = LocalTopicBus()
-    published: list[Topic] = []
+    published: list[TopicName] = []
     unsubscribe = topics.subscribe(BUILD_TOPIC, published.append)
     try:
         yield PreviewScenario(

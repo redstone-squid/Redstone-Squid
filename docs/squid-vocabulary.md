@@ -47,7 +47,7 @@ enforceable.
 | Suffix | Means | After it |
 |---|---|---|
 | `State` | the facts, no metadata; restorable | `CursorState`, `MessageRootState` |
-| `Snapshot` | read-only view of a subject that is **still alive** | `BusSnapshot`, `HistorySnapshot` |
+| `Snapshot` | read-only view of a subject that is **still alive** | `HistorySnapshot` |
 | `Record` | a serialized fact that **outlives** its subject; what a `Store` holds | `StoredSessionRecord` |
 | `Report` | diagnostics about a finished operation, for a human | `PlanReport`, `AuditReport` |
 | `Metrics` | numbers about a finished operation, for a machine | `PlanMetrics` |
@@ -185,7 +185,7 @@ Three pairs, each with a sharp job, and no fourth:
 | Pair | For | Example |
 |---|---|---|
 | `dumps` / `loads` | JSON text, on a class named `*Codec`, mirroring `json` | `scene.Codec` |
-| `encode` / `decode` | a value to and from bytes or an opaque string | `KindKeyCodec`, `ClaimToken` |
+| `encode` / `decode` | a value to and from bytes or an opaque string | `DelimitedTopicCodec`, `ClaimToken` |
 | `parse` / `format` | **user-entered text** to and from a value | form fields |
 
 `format_prefill` becomes `format`. The three exist because they have three audiences — a

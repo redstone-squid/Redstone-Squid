@@ -11,7 +11,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
-from squid_reactivity import CellAddress, TopicHandle
+from squid_reactivity import CellAddress, Topic
 from squid_ui_discord import Everyone
 from squid_ui_discord.testing import delivered_to, message_harness
 from tests.support.services import bot_services
@@ -24,7 +24,7 @@ class Projection(sl.Component):
     that topic makes the mounted panel reload the value and schedule a new render.
     """
 
-    def __init__(self, read, changes: TopicHandle) -> None:
+    def __init__(self, read, changes: Topic) -> None:
         self._changes = changes
         self._read = read
 

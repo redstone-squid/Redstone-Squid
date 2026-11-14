@@ -5,7 +5,8 @@ from typing import override
 
 import pytest
 
-from squid_reactivity.topics import LocalTopicBus, SubscriptionReconciler, Topic
+from squid_reactivity.subscriptions import Subscriptions
+from squid_reactivity.topics import LocalTopicBus, TopicName
 from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives import Boundary, Text
@@ -243,7 +244,7 @@ def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
 
 def test_describe_names_the_namespace_scope_and_cell(preferences: Preferences) -> None:
     assert str(address(preferences, "theme")) == f"{preferences!r}.theme"
-    assert str(Topic("build", "7")) == "build:7"
+    assert str(TopicName("build", "7")) == "build:7"
 
 
 # --- Publication ----------------------------------------------------------------------------
@@ -255,7 +256,7 @@ async def test_a_commit_publishes_once_to_every_subscriber(bus: LocalTopicBus, p
     def subscriber(topic: object) -> None:
         seen.append(topic)
 
-    subscriptions = [SubscriptionReconciler(None, subscriber) for _ in range(2)]
+    subscriptions = [Subscriptions(None, subscriber) for _ in range(2)]
     for subscription in subscriptions:
         subscription.stage([address(preferences, "theme")])
         subscription.commit()
@@ -271,7 +272,7 @@ async def test_a_rolled_back_action_publishes_nothing(bus: LocalTopicBus, prefer
     def subscriber(topic: object) -> None:
         seen.append(topic)
 
-    subscription = SubscriptionReconciler(None, subscriber)
+    subscription = Subscriptions(None, subscriber)
     subscription.stage([address(preferences, "theme")])
     subscription.commit()
     with pytest.raises(RuntimeError, match="no"), transaction():
