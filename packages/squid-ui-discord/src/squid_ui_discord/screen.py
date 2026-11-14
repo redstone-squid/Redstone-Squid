@@ -302,12 +302,12 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
     async def open_child[ChildResultT](
         self,
         event: ActionEvent[ClientT],
-        child: Screen[ChildResultT, Any],
+        child: Screen[ChildResultT, Any, ClientT],
         *,
         on_result: Callable[[ScreenResultEvent[ChildResultT]], Awaitable[None]],
         on_cancel: Callable[[Cancelled], Awaitable[None]] | None = None,
         **overrides: Unpack[ResponseOverrides],
-    ) -> Presented[Screen[ChildResultT, Any]] | Rejected | Abandoned:
+    ) -> Presented[Screen[ChildResultT, Any, ClientT]] | Rejected | Abandoned:
         """Open a child with its own admission policy and attach its lifetime to this screen."""
         self._screen_validate_event(event)
         state, child_state = self._screen_flow, child._screen_flow
@@ -340,7 +340,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                 raise BaseExceptionGroup(message, [error, cleanup_error]) from None
             raise
         if isinstance(result, Presented):
-            return cast(Presented[Screen[ChildResultT, Any]], result)
+            return cast(Presented[Screen[ChildResultT, Any, ClientT]], result)
         await child._screen_opening_failed()
         assert isinstance(result, Rejected | Abandoned)
         return result

@@ -55,6 +55,8 @@ async def check(
     event: sl.PressEvent,
     press: sd.PressEvent[AppBot],
     screen: sd.Screen[None, Owner, AppBot],
+    child: sd.Screen[str, Owner, AppBot],
+    other_child: sd.Screen[str, Owner, OtherBot],
 ) -> None:
     runtime = sd.DiscordUIRuntime.of(bot)
     assert_type(runtime, sd.DiscordUIRuntime[AppBot])
@@ -75,6 +77,12 @@ async def check(
     assert_type(await scope.request(event), sd.Request[Owner, AppBot])
     assert_type(press.context.client, AppBot)
     assert_type(screen.opening, sd.Request[Owner, AppBot] | None)
+    async def selected(result: sd.ScreenResultEvent[str]) -> None:
+        pass
+
+    child_result = await screen.open_child(press, child, on_result=selected)
+    assert_type(child_result, sd.Presented[sd.Screen[str, Any, AppBot]] | sd.Rejected | sd.Abandoned)
+    await screen.open_child(press, other_child, on_result=selected)  # reject
     needs_app(request)
     general: sd.Request[Any, discord.Client] = request
     needs_app(await sd.request(untyped))  # reject
