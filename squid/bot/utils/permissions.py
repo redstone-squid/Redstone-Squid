@@ -7,7 +7,7 @@ home-server check separately limits where community features are available.
 
 from collections.abc import Callable
 from functools import cache
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
@@ -112,20 +112,20 @@ async def actor_for(ctx: Context[squid.bot.app.RedstoneSquid]) -> Actor:
     return subject
 
 
-async def actor_for_interaction(caller: sd.Request[Any]) -> Actor:
+async def actor_for_interaction(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> Actor:
     """Build the permission subject for a command, component, or modal request."""
     guild_id = None if caller.guild is None else caller.guild.id
-    return await build_actor(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
+    return await build_actor(caller.client, caller.user, guild_id)
 
 
-async def current_edit_actor(caller: sd.Request[Any]) -> Actor:
+async def current_edit_actor(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> Actor:
     """Refresh identity and guild membership for a long-lived editor action.
 
     An editor can outlive a role change or account merge. Its opening request is
     sufficient to identify the user, but not to authorize a later save or undo.
     Discord failures abort the edit; they must not fall back to stale roles.
     """
-    bot: squid.bot.app.RedstoneSquid = cast(Any, caller.client)
+    bot = caller.client
     user = caller.user
     guild = caller.guild
     member: discord.Member | None = None
@@ -145,18 +145,18 @@ async def current_edit_actor(caller: sd.Request[Any]) -> Actor:
     )
 
 
-def _permissions_of(caller: sd.Request[Any]) -> PermissionService:
-    return cast("squid.bot.app.RedstoneSquid", caller.client).services.permissions
+def _permissions_of(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> PermissionService:
+    return caller.client.services.permissions
 
 
-async def allows(caller: sd.Request[Any], node: PermissionNode | str) -> bool:
+async def allows(caller: sd.Request[Any, squid.bot.app.RedstoneSquid], node: PermissionNode | str) -> bool:
     """Whether the user behind `caller` holds `node`."""
     subject = await actor_for_interaction(caller)
     return (await _permissions_of(caller).check(subject, node)).allowed
 
 
 async def enforce(
-    caller: sd.Request[Any],
+    caller: sd.Request[Any, squid.bot.app.RedstoneSquid],
     *nodes: PermissionNode | str,
     mode: CheckMode = "all",
 ) -> None:

@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Iterable, Mapping
+from string.templatelib import Template
 
 from squid_ui.factories import is_layout_node, paragraph
 from squid_ui.semantic import LayoutNode
@@ -25,7 +26,7 @@ def normalize_content[RenderTargetT: RenderTarget, ContextT = object](
 
     Iterables are consumed immediately. Mappings and nested iterables are rejected.
     """
-    if isinstance(value, str | Text):
+    if isinstance(value, str | Text | Template):
         return (paragraph(value),)
     if is_layout_node(value):
         return (value,)
@@ -42,7 +43,7 @@ def _normalize_item[RenderTargetT: RenderTarget, ContextT = object](
     value: LayoutNode[RenderTargetT, ContextT] | TextLike, *, name: str
 ) -> LayoutNode[RenderTargetT, ContextT]:
     """Normalize one member of an iterable content slot."""
-    if isinstance(value, str | Text):
+    if isinstance(value, str | Text | Template):
         return paragraph(value)
     if is_layout_node(value):
         return value
@@ -67,4 +68,4 @@ def slug(value: TextLike) -> str:
 
 def display_text(value: object) -> str:
     """Render text wrappers directly, falling back to str for other values."""
-    return source_text(value) if isinstance(value, str | Text) else str(value)
+    return source_text(value) if isinstance(value, str | Text | Template) else str(value)

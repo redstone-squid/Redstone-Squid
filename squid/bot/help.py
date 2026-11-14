@@ -93,7 +93,7 @@ class HelpScreen(sd.Screen):
             key="commands",
             identity=lambda item: item.qualified_name,
             label=lambda item: f"/{item.qualified_name}",
-            summary=lambda item: f"`/{item.qualified_name}` — " + _summary(item),
+            summary=lambda item: sl.text.Text(t"`/{item.qualified_name}` — {_summary(item)}"),
             detail=self._detail,
             page_size=10,
             title=tr(t"help-redstone-squid-help = Redstone Squid help"),
@@ -192,7 +192,7 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             )
         },
     )
-    async def help(self, request: sd.Request[Self], command: str | None) -> HelpScreen:
+    async def help(self, request: sd.Request[Self, BotT], command: str | None) -> HelpScreen:
         """Show a grouped command directory or focused command details."""
         return HelpScreen(self.bot, self._all_commands(), command)
 

@@ -1,6 +1,6 @@
 """Private review of persisted recalculation candidates."""
 
-from typing import Self, override
+from typing import TYPE_CHECKING, Any, Self, override
 from uuid import UUID
 
 import squid_ui as sl
@@ -12,8 +12,11 @@ from squid.runtime import BotServices
 from squid.submissions.application.recalculation_values import RecalculationProposal
 from squid_i18n import md_tr
 
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
-class RecalculationProposalScreen(sd.Screen):
+
+class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
     """Review inferred corrections against an existing build before applying them.
 
     Choosing a target records the build revision shown in the diff. Approval may
@@ -31,7 +34,7 @@ class RecalculationProposalScreen(sd.Screen):
         self.targets = targets
 
     @classmethod
-    async def load(cls, services: BotServices, proposal_id: UUID, request: sd.Request) -> Self:
+    async def load(cls, services: BotServices, proposal_id: UUID, request: sd.Request[Any, RedstoneSquid]) -> Self:
         """Reload retained review state and current target choices after restart."""
         actor = await actor_for_interaction(request)
         proposal = await services.submission_recalculations.get(proposal_id, actor)
@@ -39,7 +42,7 @@ class RecalculationProposalScreen(sd.Screen):
         return cls(services, proposal, targets)
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         proposal = self.proposal
         if proposal.applied_revision is not None:
             build_id, revision = proposal.build_id, proposal.applied_revision
@@ -49,7 +52,7 @@ class RecalculationProposalScreen(sd.Screen):
             for name, value in proposal.after.items()
             if proposal.before.get(name) != value
         ]
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.section(
                 sl.heading(tr(t"recalculation-heading = Review recalculation")),
                 sl.paragraph(
@@ -88,7 +91,7 @@ class RecalculationProposalScreen(sd.Screen):
             )
         return nodes
 
-    async def _match(self, event: sd.ChoiceEvent) -> None:
+    async def _match(self, event: sd.ChoiceEvent[RedstoneSquid]) -> None:
         actor = await actor_for_interaction(event.context)
         try:
             self.proposal = await self.services.submission_recalculations.match(
@@ -97,7 +100,7 @@ class RecalculationProposalScreen(sd.Screen):
         except SquidError as error:
             self.notice = error.public_text()
 
-    async def _approve(self, event: sd.PressEvent) -> None:
+    async def _approve(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await event.acknowledge()
         actor = await actor_for_interaction(event.context)
         try:
@@ -105,7 +108,7 @@ class RecalculationProposalScreen(sd.Screen):
         except SquidError as error:
             self.notice = error.public_text()
 
-    async def _renew(self, event: sd.PressEvent) -> None:
+    async def _renew(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         actor = await actor_for_interaction(event.context)
         if self.proposal.build_id is not None:
             self.proposal = await self.services.submission_recalculations.match(

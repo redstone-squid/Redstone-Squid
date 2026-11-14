@@ -62,7 +62,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             )
         },
     )
-    async def tags_workspace(self, request: sd.Request[Self], build_id: int | None = None) -> TagsScreen:
+    async def tags_workspace(self, request: sd.Request[Self, BotT], build_id: int | None = None) -> TagsScreen:
         """Open the capability-aware build tag workspace."""
         nodes = (
             TAG_PROPOSAL_LIST,
@@ -103,7 +103,9 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         defer="private",
         default_permissions=discord.Permissions(manage_messages=True),
     )
-    async def archive_message_context(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
+    async def archive_message_context(
+        self, request: sd.Request[Self, BotT], message: discord.Message
+    ) -> sd.CommandResult:
         """Select a message to move with /paste in another channel."""
         await enforce(request, MESSAGE_ARCHIVE_CREATE)
         if request.guild is None or message.guild != request.guild:
@@ -120,7 +122,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     )
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
-    async def paste(self, request: sd.Request[Self]) -> sd.CommandResult:
+    async def paste(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
         """Move the caller's selected message within the same server.
 
         Selections last until used, replaced, or the bot restarts.
@@ -215,7 +217,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     )
     async def runtime_settings_slash(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         setting: str | None = None,
         value: str | None = None,
         revision: int | None = None,
@@ -226,7 +228,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @requires(SETTINGS_RUNTIME_VIEW, SETTINGS_RUNTIME_EDIT, mode="any")
     async def runtime_settings(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         setting: str | None = None,
         *,
         value: str | None = None,
@@ -237,7 +239,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     async def _runtime_settings(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         setting: str | None = None,
         *,
         value: str | None = None,
@@ -288,7 +290,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     @sd.prefix_command(name="s", hidden=True)
     @commands.is_owner()
-    async def sync(self, request: sd.Request[Self], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> sd.CommandResult:  # fmt: skip
+    async def sync(self, request: sd.Request[Self, BotT], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> sd.CommandResult:  # fmt: skip
         """Syncs the slash commands with the discord API."""
         tree = self.bot.tree
         if not guilds:
@@ -327,7 +329,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     @sd.prefix_command(name="gdb", hidden=True)
     @commands.is_owner()
-    async def get_sheets_link(self, request: sd.Request[Self]) -> sd.CommandResult:
+    async def get_sheets_link(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
         """Sends the google sheets link"""
         return link_node(
             tr(t"admin-build-spreadsheet = Build spreadsheet"),
@@ -337,7 +339,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     @sd.prefix_command(name="db", hidden=True)
     @commands.is_owner()
-    async def get_database_link(self, request: sd.Request[Self]) -> sd.CommandResult:
+    async def get_database_link(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
         """Sends the database link"""
         return link_node(
             tr(t"admin-database = Database"),
@@ -349,7 +351,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     # someone reaches for while holding a reference a user reported.
     @sd.prefix_command(name="raise-error", aliases=["e"], hidden=True, pending="Working…")
     @commands.is_owner()
-    async def raise_error(self, request: sd.Request[Self]) -> sd.CommandResult:
+    async def raise_error(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
         """Raises an error for testing purposes."""
         msg = "This is a test error."
         raise ValueError(msg)

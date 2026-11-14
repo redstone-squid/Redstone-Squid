@@ -176,7 +176,7 @@ async def test_devtools_dispatch_and_dashboard_lifetime(replace: bool) -> None:
         send.assert_awaited_once()
         request = await sd.request(context)
         assert request.scope is cog.ui
-        roots = [root for root in sd.live.message_roots() if bot.ui.scope_of_root(root) is cog.ui]
+        roots = list(cog.ui._lifetime.roots())
         assert len(roots) == 1
         assert roots[0].snapshot().access == sd.Owner(7)
 

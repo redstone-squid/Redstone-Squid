@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import fields as dataclass_fields
 from dataclasses import is_dataclass, replace
 from datetime import datetime
+from string.templatelib import Template
 from typing import Any, cast
 
 from squid_i18n import Text as TextExpression
@@ -785,7 +786,7 @@ class _Lowerer:
 
     def _form_element(self, field: forms.FormField[Any], prefill: object, path: str) -> scene.SlackInputElement:
         placeholder_value: object = getattr(field, "placeholder", None)
-        if placeholder_value is not None and not isinstance(placeholder_value, str | TextExpression):
+        if placeholder_value is not None and not isinstance(placeholder_value, str | TextExpression | Template):
             message = f"{path}: form field placeholder is not text"
             raise LayoutInvariantError(message)
         placeholder = (

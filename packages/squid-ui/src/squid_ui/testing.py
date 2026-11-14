@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from string.templatelib import Template
 from typing import Any
 
 from squid_ui.forms import FormIssue, FormLike, SubmitHandler
@@ -79,7 +80,7 @@ def _field_strings(tree: Tree, name: str) -> list[str]:
 
 
 def _is_text(value: object) -> bool:
-    return isinstance(value, str | Text) or hasattr(value, "content")
+    return isinstance(value, str | Text | Template) or hasattr(value, "content")
 
 
 def texts(tree: Tree) -> list[str]:

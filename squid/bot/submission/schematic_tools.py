@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Protocol, cast, override
+from typing import TYPE_CHECKING, Any, Literal, override
 
 import anyio
 
@@ -20,19 +20,19 @@ from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
     BUILD_SCHEMATIC_VIEW_PRIVATE,
 )
-from squid.runtime import BackgroundTaskSupervisor
 from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
 from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import SchematicRenderRefusedError
 from squid_i18n import md_tr
 
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
-class _VideoTaskHost(Protocol):
-    background_tasks: BackgroundTaskSupervisor
+type SchematicRequest = sd.Request[Any, RedstoneSquid]
 
 
-class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     """Own schematic actions, permission checks, and the latest generated result."""
 
     _schematic_result: sl.TextLike | None = sl.state(None, opaque=True)
@@ -57,7 +57,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._delivered_videos: set[int] = set()
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, SchematicRequest]:
         if self._show_details is not None and not self._show_details():
             return ()
         nodes = list(self._schematic_nodes())
@@ -75,50 +75,51 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             )
         return nodes
 
-    def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, SchematicRequest], ...]:
         if not self._schematics.available:
             return ()
         videos_enabled = self._schematics.videos is not None and self._schematics.videos.enabled
-        return (
-            sl.action_controls(
-                sl.action_control(
-                    tr(t"bot-submission-build-browse-schematic-info = Schematic info"),
-                    self._schematic_info,
-                    key="schematic-info",
-                ),
-                sl.action_control(
-                    tr(t"bot-submission-build-browse-download-schematic = Download schematic"),
-                    self._schematic_download,
-                    key="schematic-download",
-                ),
-                sl.action_control(
-                    tr(t"bot-submission-build-browse-render-schematic = Render schematic"),
-                    self._schematic_render,
-                    key="schematic-render",
-                ),
-                sl.form(
-                    tr(t"bot-submission-build-browse-convert-schematic = Convert schematic"),
-                    self._convert_form(),
-                    key="convert",
-                    on_submit=self._convert,
-                ),
-                videos_enabled
-                and sl.form(
-                    tr(t"schematic-video-action = Render video"),
-                    _VideoForm().spec(),
-                    key="schematic-video",
-                    on_submit=self._video,
-                ),
-                videos_enabled
-                and self._video_job_id is not None
-                and sl.action_control(
-                    tr(t"schematic-video-refresh = Check video"),
-                    self._refresh_video,
-                    key="video-refresh",
-                ),
-                key="schematic-actions",
+        entries: tuple[
+            sl.semantic.ActionControl[SchematicRequest] | sl.semantic.FormTrigger[SchematicRequest] | Literal[False],
+            ...,
+        ] = (
+            sl.action_control(
+                tr(t"bot-submission-build-browse-schematic-info = Schematic info"),
+                self._schematic_info,
+                key="schematic-info",
+            ),
+            sl.action_control(
+                tr(t"bot-submission-build-browse-download-schematic = Download schematic"),
+                self._schematic_download,
+                key="schematic-download",
+            ),
+            sl.action_control(
+                tr(t"bot-submission-build-browse-render-schematic = Render schematic"),
+                self._schematic_render,
+                key="schematic-render",
+            ),
+            sl.form(
+                tr(t"bot-submission-build-browse-convert-schematic = Convert schematic"),
+                self._convert_form(),
+                key="convert",
+                on_submit=self._convert,
+            ),
+            videos_enabled
+            and sl.form(
+                tr(t"schematic-video-action = Render video"),
+                _VideoForm().spec(),
+                key="schematic-video",
+                on_submit=self._video,
+            ),
+            videos_enabled
+            and self._video_job_id is not None
+            and sl.action_control(
+                tr(t"schematic-video-refresh = Check video"),
+                self._refresh_video,
+                key="video-refresh",
             ),
         )
+        return (sl.action_controls(*entries, key="schematic-actions"),)
 
     @staticmethod
     def _convert_form() -> sl.forms.FormSpec:
@@ -164,8 +165,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return
         self._asset = sl.file(rendered.png, filename=f"build-{self._build_id}-render.png")
 
-    async def _video(self, event: sl.SubmitEvent) -> None:
-        request = cast(sd.Request, event.context)
+    async def _video(self, event: sd.SubmitEvent[RedstoneSquid]) -> None:
+        request = event.context
         actor = await actor_for_interaction(request)
         stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
         service = self._schematics.videos
@@ -207,22 +208,22 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.",
             )
         )
-        host = cast(_VideoTaskHost, request.client)
+        host = request.client
         host.background_tasks.start(self._follow_video(request, status.id), name=f"schematic-video-{status.id}")
 
-    async def _follow_video(self, request: sd.Request, job_id: int) -> None:
+    async def _follow_video(self, request: SchematicRequest, job_id: int) -> None:
         with anyio.move_on_after(600):
             while request.interaction is not None and not request.interaction.is_expired():
                 if await self._deliver_video(request, job_id):
                     return
                 await anyio.sleep(2)
 
-    async def _refresh_video(self, event: sl.PressEvent) -> None:
-        request = cast(sd.Request, event.context)
+    async def _refresh_video(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        request = event.context
         if self._video_job_id is not None and not await self._deliver_video(request, self._video_job_id, repeat=True):
             await event.notice(tr(t"schematic-video-pending = The video is still rendering."))
 
-    async def _deliver_video(self, request: sd.Request, job_id: int, *, repeat: bool = False) -> bool:
+    async def _deliver_video(self, request: SchematicRequest, job_id: int, *, repeat: bool = False) -> bool:
         async with self._video_delivery_lock:
             # Explicit checks should show the result even after automatic delivery.
             if not repeat and job_id in self._delivered_videos:
@@ -232,7 +233,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 self._delivered_videos.add(job_id)
             return delivered
 
-    async def _deliver_video_once(self, request: sd.Request, job_id: int) -> bool:
+    async def _deliver_video_once(self, request: SchematicRequest, job_id: int) -> bool:
         service = self._schematics.videos
         actor = await actor_for_interaction(request)
         if service is None or actor.account_id is None:

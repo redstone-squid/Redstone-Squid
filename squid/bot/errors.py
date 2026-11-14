@@ -237,7 +237,7 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
 
 
 def _resolved(text: TextLike) -> str:
-    return text if isinstance(text, str) else text.resolve()
+    return Text(text).resolve()
 
 
 def _unexpected_error_detail(error_id: str) -> Text:

@@ -1,6 +1,6 @@
 """Discord transport boundary for opening build-edit screens."""
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import squid_ui_discord as sd
 from squid.bot.submission.build_card import render_build_card
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 async def prepare_build_editor(
-    request: sd.Request[Any],
+    request: sd.Request[Any, RedstoneSquid],
     build: Build,
     builds: BuildService | None = None,
     *,
@@ -31,7 +31,7 @@ async def prepare_build_editor(
     screen recheck permission, allowing a pending build's submitter or an account
     with build-edit permission to proceed.
     """
-    client = cast("RedstoneSquid", request.client)
+    client = request.client
     prepared: BuildEditScreen | None = None
 
     async def actor() -> Actor:
@@ -86,7 +86,7 @@ async def prepare_build_editor(
     return prepared
 
 
-async def show_build_editor(request: sd.Request[Any], screen: BuildEditScreen) -> BuildEditScreen | None:
+async def show_build_editor(request: sd.Request[Any, RedstoneSquid], screen: BuildEditScreen) -> BuildEditScreen | None:
     """Authorize and show a prepared editor under its user/build key."""
     if not await screen.may_edit():
         await request.respond(
@@ -106,7 +106,7 @@ async def show_build_editor(request: sd.Request[Any], screen: BuildEditScreen) -
 
 
 async def open_build_editor(
-    request: sd.Request[Any],
+    request: sd.Request[Any, RedstoneSquid],
     build: Build,
     *,
     recovered: bool = False,

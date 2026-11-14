@@ -30,7 +30,7 @@ class SettingsCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Setting
     )
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def settings(self, request: sd.Request[Self]) -> SettingsPanel:
+    async def settings(self, request: sd.Request[Self, BotT]) -> SettingsPanel:
         """Open this server's channel, locale, emoji, and vote-weight editor."""
         await enforce(
             request,

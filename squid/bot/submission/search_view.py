@@ -2,11 +2,12 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.app import RedstoneSquid
 from squid.bot.ui import tr
 from squid.builds.models import Build
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
-BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
+type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 
 
 def _hit_identity(hit: SearchHit) -> str:
@@ -80,8 +81,10 @@ class _SearchSource:
         return page
 
 
-class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
-    _build_node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = sl.state(None, persist=False, opaque=True)
+class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
+    _build_node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+        None, persist=False, opaque=True
+    )
 
     def __init__(
         self,
@@ -95,7 +98,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._render_build = render_build
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         detail = self._build_node or sl.section(
             sl.heading(self.hit.title),
             sl.paragraph(_detail_text(self.hit)).truncate(),
@@ -132,7 +135,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._build_node = await self._render_build(build)
 
 
-class SearchScreen(sd.Screen):
+class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A resource-backed search workspace that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=180, audience="public", session=sd.SessionSpec("search"))
@@ -210,14 +213,14 @@ class SearchScreen(sd.Screen):
 
     def _overview(
         self, loaded: sl.sources.LoadedWindow[SearchHit]
-    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | tuple[()]:
+    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | tuple[()]:
         warnings = self._source.page_for(loaded).warnings
         if not warnings:
             return ()
         return sl.note("\n".join(f"⚠ {item}" for item in warnings))
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         return (self._browser,)
 
 

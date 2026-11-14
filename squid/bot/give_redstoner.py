@@ -168,7 +168,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     )
     @app_commands.guild_only()
     @hide_unless(manage_roles=True)
-    async def redstoner(self, request: sd.Request[Self]) -> sd.CommandResult:
+    async def redstoner(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
         """Open deployment status for the configured owner server."""
         await enforce(request, REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC, mode="any")
         guild = request.guild

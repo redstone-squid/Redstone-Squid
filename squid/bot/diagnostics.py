@@ -30,7 +30,7 @@ class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         },
     )
     @hide_unless(manage_guild=True)
-    async def errors(self, request: sd.Request[Self], reference: str | None = None) -> ErrorReportScreen:
+    async def errors(self, request: sd.Request[Self, BotT], reference: str | None = None) -> ErrorReportScreen:
         """Browse private error reports, optionally opening one reference."""
         await enforce(request, DIAGNOSTICS_ERROR_READ)
 

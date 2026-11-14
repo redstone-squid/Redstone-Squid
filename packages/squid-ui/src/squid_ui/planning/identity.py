@@ -11,6 +11,7 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from enum import Enum
+from string.templatelib import Template
 
 from squid_ui.primitives.constraints import RoutedPage
 from squid_ui.text import Text
@@ -28,6 +29,8 @@ def stable_value(value: object) -> object:
         return "<callback>"
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, Template):
+        value = Text(value)
     if isinstance(value, Text):
         return {"type": type(value).__qualname__, "fields": {"_parts": stable_value(value.structural_key())}}
     if is_dataclass(value) and not isinstance(value, type):

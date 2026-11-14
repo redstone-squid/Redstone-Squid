@@ -1,7 +1,7 @@
 """Slash-only notification management and durable Discord DM delivery."""
 
 import logging
-from typing import Any, Self, override
+from typing import TYPE_CHECKING, Any, Self, override
 
 import discord
 
@@ -25,12 +25,14 @@ from squid_ui.text import Text, localization_scope
 logger = logging.getLogger(__name__)
 
 
-class NotificationCog(sd.Cog[Any]):
+if TYPE_CHECKING:
+    import squid.bot.app
+
+
+class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
     """Manage notification state and deliver queued DMs without prefix commands."""
 
-    bot: Any
-
-    def __init__(self, bot: Any) -> None:
+    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         super().__init__(bot)
         self._delivery_task: JobHandle | None = None
 
@@ -53,7 +55,7 @@ class NotificationCog(sd.Cog[Any]):
             tr(t"notifications-channel-preferences = Manage notification channels and subscriptions")
         ),
     )
-    async def notifications(self, request: sd.Request[Self]) -> NotificationScreen | None:
+    async def notifications(self, request: sd.Request[Self, squid.bot.app.RedstoneSquid]) -> NotificationScreen | None:
         """Open the notification preferences and subscription workspace."""
         account_id = await self._account_id(request)
         if account_id is None:
@@ -81,7 +83,7 @@ class NotificationCog(sd.Cog[Any]):
         )
 
     @staticmethod
-    async def _inbox_visibility(caller: sd.Request[Any]) -> InboxVisibility:
+    async def _inbox_visibility(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> InboxVisibility:
         return InboxVisibility(include_staff=await allows(caller, BUILD_SUBMISSION_VIEW_PENDING))
 
     async def process_deliveries(self) -> None:
@@ -107,7 +109,7 @@ class NotificationCog(sd.Cog[Any]):
             else:
                 await self.bot.services.notifications.complete_delivery(delivery)
 
-    async def _account_id(self, request: sd.Request[Self]) -> int | None:
+    async def _account_id(self, request: sd.Request[Self, squid.bot.app.RedstoneSquid]) -> int | None:
         """The caller's consented account, or `None` once they have been told why not."""
         return await ensure_consented_account(request, self.bot.services.accounts)
 

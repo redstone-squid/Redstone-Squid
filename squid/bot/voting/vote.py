@@ -52,7 +52,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         ),
     )
     @app_commands.guild_only()
-    async def poll(self, request: sd.Request[Self]) -> sd.CommandResult:
+    async def poll(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
         """Create a multi-option poll through an ephemeral preview wizard."""
         actor = request.user
         # A modal has to open on an unspent interaction, and showing the notice spends this one,
@@ -106,7 +106,9 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         return PollScreen(resolve_options, publish, allow_network=allow_network)
 
     @sd.context_menu(name=to_locale_str(tr(t"command-vote-to-delete-name = Vote to Delete")), defer="private")
-    async def delete_vote_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
+    async def delete_vote_context_menu(
+        self, request: sd.Request[Self, BotT], message: discord.Message
+    ) -> sd.CommandResult:
         """Open a vote on deleting the message that was right-clicked."""
         if request.guild is None or message.guild != request.guild:
             return error_node(

@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from string.templatelib import Template
 
 from squid_i18n import Text as TextExpression
 from squid_ui.document import DocumentLike
@@ -55,7 +56,7 @@ class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             label = label_or_content
             raw_content = content
         require_key(resolved_key, name="MenuEntry.key")
-        if not isinstance(label, str | TextExpression):
+        if not isinstance(label, str | TextExpression | Template):
             message = "MenuEntry.label must be text"
             raise TypeError(message)
         child_entries = tuple(entries)

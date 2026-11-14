@@ -51,7 +51,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         },
     )
     async def account(
-        self, request: sd.Request[Self], user: discord.Member | discord.User | None = None
+        self, request: sd.Request[Self, BotT], user: discord.Member | discord.User | None = None
     ) -> sd.CommandResult:
         """Show your account, or somebody else's creator page."""
         actor = request.user
@@ -109,7 +109,9 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
             can_refresh_identity=await allows(request, ACCOUNT_IDENTITY_REFRESH),
         )
 
-    async def _creator_page(self, request: sd.Request[Self], user: discord.Member | discord.User) -> sd.CommandResult:
+    async def _creator_page(
+        self, request: sd.Request[Self, BotT], user: discord.Member | discord.User
+    ) -> sd.CommandResult:
         """Somebody else's page is shared content and answers where the channel sees it."""
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:

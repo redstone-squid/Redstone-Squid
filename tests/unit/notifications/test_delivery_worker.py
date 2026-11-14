@@ -12,6 +12,7 @@ from aiohttp import ClientResponse
 from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
+from squid.bot.app import RedstoneSquid
 from squid.bot.notifications import NotificationCog
 from squid.notifications import NotificationService, PendingNotificationDelivery
 from squid.notifications.application import NotificationRepository
@@ -99,7 +100,7 @@ async def worker(mocker: MockerFixture) -> AsyncIterator[DeliveryWorker]:
         )
         mocker.patch.object(client, "notification_site_url", "https://example.test", create=True)
         try:
-            yield DeliveryWorker(NotificationCog(client), repository, user.send)
+            yield DeliveryWorker(NotificationCog(cast(RedstoneSquid, client)), repository, user.send)
         finally:
             await runtime.close()
 

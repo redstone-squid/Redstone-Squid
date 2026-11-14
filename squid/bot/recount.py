@@ -62,7 +62,7 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         },
     )
     @app_commands.guild_only()
-    async def recount(self, request: sd.Request[Self], message: str) -> sd.CommandResult:
+    async def recount(self, request: sd.Request[Self, BotT], message: str) -> sd.CommandResult:
         """Count the reactions on a vote or starboard message again."""
         guild = request.guild
         assert guild is not None

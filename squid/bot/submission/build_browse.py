@@ -42,7 +42,7 @@ from squid_i18n import md_tr
 from squid_reactivity import TopicBus, TopicHandle
 from squid_ui.sources import window_fingerprint
 
-type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
+type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 type BuildAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
 
@@ -155,15 +155,15 @@ class _NeighbourBuildSource:
         )
 
 
-class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Show one build and refresh its card when the build topic changes.
 
     Capabilities control which actions appear. Review, debug, and timing
     actions recheck permission through authorize; the routed editor checks its own access.
     """
 
-    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
-        None, opaque=True
+    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
+        sl.state(None, opaque=True)
     )
     _review: BoundEdit | None = sl.state(None, opaque=True)
     _pending_review: str | None = sl.state(None, persist=False)
@@ -209,7 +209,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._refresh_posts = refresh_posts
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
+    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
         self._changes.watch()
         build, self._seed = self._seed, None
         if build is None:
@@ -220,7 +220,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return build, await self._render_build(build)
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         state = self.projection.status
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-build-browse-loading-build = Loading build.")),)
@@ -231,7 +231,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             build, node = state.previous.value
         if self._decision is not None:
             return (node, self._review_prompt(), self._decision)
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [node]
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [node]
         nodes.append(self._detail_actions(build))
         nodes.extend(self.controller.controls())
         nodes.append(self.schematics)
@@ -248,7 +248,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
         self._show_schematics = not self._show_schematics
 
-    def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = []
         if self._capabilities.edit or (
             build.submission_status is Status.PENDING
@@ -297,7 +297,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         return sl.action_controls(*actions, key="build-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
 
-    def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         action = self._pending_review or "review"
         build_id = self._build_id
         return sl.section(
@@ -318,7 +318,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def _request_review(self, action: str, revision: int) -> None:
         self._review = self.controller.bind(BUILD_STATUS_EDIT, build_target(self._build_id), revision)
         self._pending_review = action
-        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
+        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]](
             tr(t"build-review-state-warning = This changes the build's review state."),
             (
                 sp.DecisionOption("confirm", tr(t"bot-submission-build-browse-confirm = Confirm"), sl.Tone.DANGER),
@@ -381,7 +381,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return False
 
 
-class BuildBrowseScreen(sd.Screen):
+class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A live build workspace that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
@@ -393,7 +393,9 @@ class BuildBrowseScreen(sd.Screen):
     _query: str = sl.state("")
     _sort: str = sl.state("")
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")
-    _selected: sp.Browser[Build, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
+    _selected: sp.Browser[Build, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+        None, opaque=True
+    )
 
     def __init__(
         self,
@@ -459,7 +461,7 @@ class BuildBrowseScreen(sd.Screen):
             await self._select(self._initial_id)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._show_search_help:
             return (self._workspace_controls(), *self._find_nodes())
         if self._selected is not None:
@@ -487,7 +489,7 @@ class BuildBrowseScreen(sd.Screen):
         listing = self._records if self._mode == "records" and self._records is not None else self._browser
         return (self._workspace_controls(), *self._find_nodes(), listing)
 
-    def _workspace_controls(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def _workspace_controls(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         return sl.action_controls(
             sl.action_control(
                 tr(t"build-browse-all-builds = Builds"),
@@ -532,8 +534,8 @@ class BuildBrowseScreen(sd.Screen):
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
 
-    def _find_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    def _find_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.action_controls(
                 sl.form(
                     tr(t"bot-submission-build-browse-open-by-id = Open by ID"),

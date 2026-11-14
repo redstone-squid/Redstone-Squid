@@ -179,7 +179,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     )
     async def submit_form(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         *,
         category: BuildCategoryLiteral = "Door",
         name: str | None = None,
@@ -320,7 +320,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             )
         },
     )
-    async def saved_drafts(self, request: sd.Request[Self], *, inbox: bool = False) -> sd.CommandResult:
+    async def saved_drafts(self, request: sd.Request[Self, BotT], *, inbox: bool = False) -> sd.CommandResult:
         """Reopen saved drafts, or browse the staff correction inbox."""
         account_id = await ensure_consented_account(request, self.bot.services.accounts)
         if account_id is None:
@@ -406,7 +406,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         await self.bot.refresh_posts("inference_run", str(run_id))
 
     @sd.context_menu(name=to_locale_str(tr(t"command-recalculate-build-name = Scan Build Message")), defer="private")
-    async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
+    async def recalc_context_menu(self, request: sd.Request[Self, BotT], message: discord.Message) -> sd.CommandResult:
         """Review proposed build corrections inferred from this message."""
         await enforce(request, BUILD_SUBMISSION_RECALC)
         if not await self._is_build_log_message(message):
@@ -438,7 +438,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
 
     async def propose_recalculation(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         message: discord.Message,
         *,
         owner_account_id: int,

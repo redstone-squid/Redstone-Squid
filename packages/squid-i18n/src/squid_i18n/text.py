@@ -73,18 +73,18 @@ class _Markdown:
 @dataclass(frozen=True, slots=True)
 class _Style:
     style: Literal["strong", "em"]
-    child: TextLike
+    child: Text
 
 
 @dataclass(frozen=True, slots=True)
 class _Link:
-    label: TextLike
+    label: Text
     destination: str
 
 
 @dataclass(frozen=True, slots=True)
 class _Code:
-    child: TextLike
+    child: Text
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,9 +113,11 @@ class Text:
 
     _parts: tuple[_Part, ...]
 
-    def __init__(self, value: str | Template, /) -> None:
-        if isinstance(value, str):
-            parts: tuple[_Part, ...] = (value,)
+    def __init__(self, value: TextLike, /) -> None:
+        if isinstance(value, Text):
+            parts = value._parts
+        elif isinstance(value, str):
+            parts = (value,)
         elif isinstance(value, Template):
             captured: list[_Part] = []
             for string, slot in zip(value.strings, value.interpolations, strict=False):
@@ -124,7 +126,7 @@ class Text:
             captured.append(value.strings[-1])
             parts = tuple(captured)
         else:
-            msg = "Text requires a string or Template"
+            msg = "Text requires a string, Template, or Text"
             raise TypeError(msg)
         object.__setattr__(self, "_parts", parts)
 
@@ -170,19 +172,24 @@ class Text:
         """
         return self._parts
 
-    def __add__(self, other: TextLike) -> Text:
-        return Text._from_parts(self._parts + ((other,) if isinstance(other, str) else other._parts))
+    def __bool__(self) -> bool:
+        """Empty literal text is false; structured text stays unevaluated."""
+        return any(self._parts)
 
-    def __radd__(self, other: str) -> Text:
-        return Text._from_parts((other, *self._parts))
+    def __add__(self, other: TextLike) -> Text:
+        return Text._from_parts(self._parts + Text(other)._parts)
+
+    def __radd__(self, other: TextLike) -> Text:
+        return Text._from_parts(Text(other)._parts + self._parts)
 
     @staticmethod
     def join(separator: TextLike, parts: Iterable[TextLike]) -> Text:
+        separator = Text(separator)
         result: list[_Part] = []
         for index, part in enumerate(parts):
             if index:
-                result.extend((separator,) if isinstance(separator, str) else separator._parts)
-            result.extend((part,) if isinstance(part, str) else part._parts)
+                result.extend(separator._parts)
+            result.extend(Text(part)._parts)
         return Text._from_parts(tuple(result))
 
     @property
@@ -216,7 +223,8 @@ class Text:
         return str(self)
 
 
-type TextLike = str | Text
+type TextLike = str | Template | Text
+"""Authored text accepted at construction and rendering boundaries."""
 
 
 @runtime_checkable
@@ -341,8 +349,7 @@ def md(value: str | Template, /, **values: object) -> Text:
 
 
 def resolve_text(value: TextLike, localization: Localization) -> _Document:
-    if isinstance(value, str):
-        return _Document((tree.literal(value),))
+    value = Text(value)
     nodes: list[tree.Node] = []
     for part in value._parts:
         match part:
@@ -423,17 +430,17 @@ def discord_text(value: _Document | _SceneText, *, escape: Callable[[str], str] 
 
 def strong(value: TextLike) -> Text:
     """Apply strong emphasis without interpreting the child as Markdown."""
-    return Text._from_parts((_Style("strong", value),))
+    return Text._from_parts((_Style("strong", Text(value)),))
 
 
 def emphasis(value: TextLike) -> Text:
     """Apply emphasis without interpreting the child as Markdown."""
-    return Text._from_parts((_Style("em", value),))
+    return Text._from_parts((_Style("em", Text(value)),))
 
 
 def inline_code(value: TextLike) -> Text:
     """Display the child as literal code, with delimiters chosen during rendering."""
-    return Text._from_parts((_Code(value),))
+    return Text._from_parts((_Code(Text(value)),))
 
 
 def text_link(label: TextLike, destination: str) -> Text:
@@ -441,7 +448,7 @@ def text_link(label: TextLike, destination: str) -> Text:
     if not tree.valid_link(destination):
         msg = "Text links require a safe destination"
         raise ValueError(msg)
-    return Text._from_parts((_Link(label, destination),))
+    return Text._from_parts((_Link(Text(label), destination),))
 
 
 def mention(identifier: int, *, kind: Literal["user", "role", "channel"] = "user") -> Text:

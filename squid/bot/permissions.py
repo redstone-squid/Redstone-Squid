@@ -62,7 +62,7 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
     @hide_unless(manage_guild=True)
     async def access(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         user: discord.Member | None = None,
         role: discord.Role | None = None,
     ) -> AccessScreen:

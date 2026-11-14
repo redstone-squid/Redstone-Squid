@@ -208,7 +208,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     )
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def starboard(self, request: sd.Request[Self]) -> StarboardScreen:
+    async def starboard(self, request: sd.Request[Self, BotT]) -> StarboardScreen:
         """Open capability-aware starboard configuration."""
         await enforce(request, *STARBOARD_CAPABILITIES, mode="any")
         guild = request.guild

@@ -126,7 +126,7 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
         name=to_locale_str(tr(t"command-versions-name = versions")),
         description=to_locale_str(tr(t"command-versions-help = Browse recognized Minecraft versions")),
     )
-    async def versions(self, request: sd.Request[Self]) -> VersionScreen:
+    async def versions(self, request: sd.Request[Self, BotT]) -> VersionScreen:
         """Open the paged version catalogue."""
 
         async def may_create() -> bool:

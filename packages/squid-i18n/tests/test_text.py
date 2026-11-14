@@ -92,3 +92,29 @@ def test_plain_preserves_its_conversions() -> None:
     assert source_text(plain(42)) == "42"
     instant = datetime(2026, 8, 22, tzinfo=UTC)
     assert source_text(plain(instant)) == instant.isoformat()
+
+
+def test_existing_text_is_captured_without_resolving_it() -> None:
+    original = tr("Hello", key="greeting")
+    captured = Text(original)
+    assert captured == original
+    assert captured.declaration is original.declaration
+    assert captured.bindings is original.bindings
+    with localization_scope(Localization("fr", ("greeting = Bonjour",))):
+        assert captured.resolve() == "Bonjour"
+
+
+def test_templates_work_at_composition_and_rendering_boundaries() -> None:
+    greeting = tr("Hello", key="greeting")
+    name = "*Ann*"
+    value = Text.join(t" / ", (t"{greeting}", t"{name}")) + t"!"
+    localization = Localization("fr", ("greeting = Bonjour",))
+    assert resolve_text(value, localization).plain() == "Bonjour / *Ann*!"
+    assert resolve_text(t"{greeting}, {name}", localization).plain() == "Bonjour, *Ann*"
+
+
+def test_literal_emptiness_does_not_resolve_translations() -> None:
+    assert not Text("")
+    assert not Text(t"")
+    assert Text(" ")
+    assert tr("Hello", key="greeting")

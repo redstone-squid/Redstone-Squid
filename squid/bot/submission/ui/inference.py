@@ -1,6 +1,6 @@
 """Private recovery and explicit category selection for retained inferred candidates."""
 
-from typing import override
+from typing import TYPE_CHECKING, Any, override
 from uuid import UUID
 
 import squid_ui as sl
@@ -16,8 +16,11 @@ from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid_i18n import md_tr
 
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
-class InferenceCandidatesScreen(sd.Screen):
+
+class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
     """Review retained candidates and choose missing categories before opening a draft."""
 
     policy = sd.ResponseSpec(audience="personal", timeout=600)
@@ -43,8 +46,8 @@ class InferenceCandidatesScreen(sd.Screen):
         return max(1, (len(self.candidates) + 24) // 25)
 
     @override
-    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.section(
                 sl.heading(tr(t"inference-candidates-heading = Inferred candidates")),
                 sl.paragraph(
@@ -134,7 +137,7 @@ class InferenceCandidatesScreen(sd.Screen):
             )
         return nodes
 
-    async def _retry(self, event: sd.PressEvent) -> None:
+    async def _retry(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await event.acknowledge()
         actor = await actor_for_interaction(event.context)
         try:
@@ -171,7 +174,7 @@ class InferenceCandidatesScreen(sd.Screen):
             self.selected = None
             self.category = None
 
-    async def _open(self, event: sd.PressEvent) -> None:
+    async def _open(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         actor = await actor_for_interaction(event.context)
         candidates = await self.services.submission_inference.get(self.run_id, actor)
         current = next((item for item in candidates if str(item.id) == self.selected), None)

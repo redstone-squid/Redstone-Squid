@@ -134,7 +134,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
     )
     async def search_records(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         scope: SearchTarget = SearchTarget.records,
         sort: str | None = None,
         mode: SearchModeChoice = SearchModeChoice.keyword,
@@ -181,7 +181,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             ),
         },
     )
-    async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
+    async def browse_builds(self, request: sd.Request[Self, BotT], build_id: int | None = None) -> BuildBrowseScreen:
         """Browse builds and record holders."""
         return await self._catalogue(request, build_id=build_id)
 
@@ -197,7 +197,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             )
         },
     )
-    async def records_workspace(self, request: sd.Request[Self], query: str | None = None) -> BuildBrowseScreen:
+    async def records_workspace(self, request: sd.Request[Self, BotT], query: str | None = None) -> BuildBrowseScreen:
         """Open the shared catalogue at its record standings."""
         screen = await self._catalogue(request, initial_records=True)
         if query is not None:
@@ -206,7 +206,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
 
     async def _catalogue(
         self,
-        request: sd.Request[Self],
+        request: sd.Request[Self, BotT],
         *,
         build_id: int | None = None,
         initial_records: bool = False,
