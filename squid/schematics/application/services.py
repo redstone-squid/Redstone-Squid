@@ -48,6 +48,7 @@ from squid.schematics.errors import (
     SchematicTooLargeError,
     SchematicWorkerCrashedError,
 )
+from squid_i18n import Text, inline_code, strong
 
 logger = logging.getLogger(__name__)
 
@@ -557,14 +558,17 @@ class SchematicService:
             raise SchematicSupportUnavailableError
 
 
-def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> str:
-    """Render a fidelity-loss report as human-readable lines."""
+def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> Text:
+    """Render a fidelity-loss report with one • line per entry, at most `limit` entries long."""
     if not losses:
-        return "No fidelity loss reported."
-    lines = [f"- **{loss.severity}** `{loss.path or loss.kind}` — {loss.detail}" for loss in losses[:limit]]
+        return Text("No fidelity loss reported.")
+    lines = [
+        Text(t"• {strong(loss.severity)} {inline_code(loss.path or loss.kind)} — {loss.detail}")
+        for loss in losses[:limit]
+    ]
     if len(losses) > limit:
-        lines.append(f"- …and {len(losses) - limit} more.")
-    return "\n".join(lines)
+        lines.append(Text(f"• …and {len(losses) - limit} more."))
+    return Text.join("\n", lines)
 
 
 def _log_fields(stored: StoredSchematic, operation: str) -> dict[str, str | int]:
