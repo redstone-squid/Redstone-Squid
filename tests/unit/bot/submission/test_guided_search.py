@@ -104,10 +104,9 @@ async def test_field_and_sort_pickers_stay_in_the_message(monkeypatch: pytest.Mo
                 while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
                     await anyio.sleep(0.01)
             await ui.select(ui.key_for("search-lookup.results"), [value])
-            assert screen.picker is None
+            assert (screen.picker is None) == (control == "field")
             assert not ui.root.finished
-        assert screen.selected is not None
-        assert screen.selected.name == "width"
+        assert screen.selected is None
         assert screen.sort == "-width"
         cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection("", "-width"))
 
@@ -133,6 +132,7 @@ async def test_guided_edits_preserve_or_and_negation() -> None:
             "value",
             "operator",
             "upper",
+            "negated",
         }
         await first.submit({"value": "7", "operator": "3"})
         assert screen.query == '(closing_time>7 OR opening_time>"5") AND NOT width:3'
@@ -176,4 +176,5 @@ async def test_filter_picker_has_specific_search_copy_and_shows_search_text(monk
             while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
                 await anyio.sleep(0.01)
         await ui.select(ui.key_for("search-lookup.results"), ["width"])
-        assert ui.control(ui.key_for("field")).payload["label"] == "Filter: Width"
+        assert ui.control(ui.key_for("field")).payload["label"] == "Add filter"
+        assert ui.control(ui.key_for("value")).payload["label"] == "Filter: Width"

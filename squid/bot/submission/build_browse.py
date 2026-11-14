@@ -516,6 +516,12 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 emphasis=sl.semantic.Emphasis.STRONG if self._mode == "tools" else sl.semantic.Emphasis.NORMAL,
                 available=self._mode != "tools",
             ),
+            sl.form(
+                tr(t"bot-submission-build-browse-open-by-id = Open by ID"),
+                _OpenBuildForm().spec(),
+                key="open-id",
+                on_submit=self._open_id,
+            ),
             key="catalogue-views",
             display=sl.semantic.ControlDisplay.INDIVIDUAL,
         )
@@ -527,8 +533,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._query = ""
         self._sort = ""
         self._record_categories = frozenset()
+        expanded = self._guided is not None
         self._guided = None
         self._mode = mode
+        if expanded:
+            self._open_search_editor()
         self._selected = None
         await self._browser._back(_event)
 
@@ -537,23 +546,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
 
     def _find_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
-            sl.action_controls(
-                sl.action_control(
-                    tr(t"build-browser-search-filters = Search & filters"),
-                    self._guided_search,
-                    key="guided-search",
-                    tone=sl.Tone.SUCCESS if self._guided is not None else sl.Tone.NEUTRAL,
-                ),
-                sl.action_control(
-                    tr(t"catalogue-search-help = Search help"),
-                    self._toggle_search_help,
-                    key="search-help",
-                    tone=sl.Tone.SUCCESS if self._show_search_help else sl.Tone.NEUTRAL,
-                ),
-                key="find-forms",
-            ),
-        ]
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         query = self._query or ("All standings" if self._mode == "records" else "All builds")
         sort = self._sort.removeprefix("-").replace("_", " ").title() if self._sort else "Default"
         if self._sort:
@@ -561,21 +554,17 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         nodes.append(
             sd.v2.section(
                 tr(t"browse-query-summary = Query: {query} · Sort: {sort}"),
-                accessory=sd.v2.button(tr(t"guided-search-reset = Reset"), self._reset_search, key="reset"),
+                accessory=sd.v2.button(
+                    tr(t"build-browser-edit-search = Edit"),
+                    self._guided_search,
+                    key="guided-search",
+                    style=sl.primitives.ActionStyle.SUCCESS
+                    if self._guided is not None
+                    else sl.primitives.ActionStyle.SECONDARY,
+                ),
             )
         )
         if self._guided is not None:
-            nodes.append(
-                sl.action_controls(
-                    sl.form(
-                        tr(t"bot-submission-build-browse-open-by-id = Open by ID"),
-                        _OpenBuildForm().spec(),
-                        key="open-id",
-                        on_submit=self._open_id,
-                    ),
-                    key="open-build-controls",
-                )
-            )
             nodes.append(self._guided)
         if self._mode == "records":
             nodes.extend(
@@ -617,14 +606,31 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             )
         return nodes
 
+    def _search_actions(self) -> tuple[sl.semantic.ActionControl[sd.Request[Any, RedstoneSquid]], ...]:
+        return (
+            sl.action_control(
+                tr(t"catalogue-search-help = Search help"),
+                self._toggle_search_help,
+                key="search-help",
+                tone=sl.Tone.SUCCESS if self._show_search_help else sl.Tone.NEUTRAL,
+            ),
+            sl.action_control(
+                tr(t"guided-search-reset = Reset"),
+                self._reset_search,
+                key="reset",
+                available=bool(self._query or self._sort or self._record_categories),
+            ),
+        )
+
     async def _toggle_search_help(self, _event: sl.PressEvent) -> None:
         self._show_search_help = not self._show_search_help
 
     async def _apply_search_example(self, query: str, _event: sl.PressEvent) -> None:
-        self._guided = None
         self._record_categories = frozenset()
         await self._run_search(query, "")
-        self._show_search_help = False
+        if self._guided is not None:
+            self._guided.clear()
+            self._guided.query = query
 
     def _detail(self, build: Build) -> _BuildDetail:
         return _BuildDetail(
@@ -674,13 +680,14 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         build_id = form.id
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
-        else:
-            self._guided = None
 
     async def _guided_search(self, event: sl.PressEvent) -> None:
         if self._guided is not None:
             self._guided = None
             return
+        self._open_search_editor()
+
+    def _open_search_editor(self) -> None:
         assert self._search_service is not None
 
         async def selected(selection: SearchSelection) -> None:
@@ -692,6 +699,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             query=self._query,
             sort=self._sort,
             on_apply=selected,
+            actions=self._search_actions,
         )
 
     async def _toggle_record_category(self, category: str, event: sl.ToggleEvent) -> None:

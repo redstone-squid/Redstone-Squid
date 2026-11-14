@@ -4,7 +4,7 @@ import json
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Any, cast, override
+from typing import Any, Literal, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -64,6 +64,8 @@ def query_leaves(
             leaf for index, item in enumerate(expression.operands) for leaf in query_leaves(item, (*path, index))
         )
     if isinstance(expression, NotExpression):
+        if isinstance(expression.operand, FieldExpression | TextExpression):
+            return ((path, expression),)
         return query_leaves(expression.operand, (*path, 0))
     return ((path, expression),)
 
@@ -104,7 +106,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     sort: str = sl.state("")
     selected: FieldDefinition | None = sl.state(None, persist=False)
     picker: sp.SearchPicker[Suggestion] | None = sl.state(None, opaque=True)
-    picking_sort: bool = sl.state(False)
+    panel: Literal["fields", "sort"] | None = sl.state(None)
     picker_title: sl.TextLike = sl.state("")
     clause_page: int = sl.state(0)
 
@@ -116,12 +118,14 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         query: str,
         sort: str,
         on_apply: Callable[[SearchSelection], Awaitable[None]],
+        actions: Callable[[], tuple[sl.semantic.ActionControl[sd.Request[Any, RedstoneSquid]], ...]] | None = None,
     ) -> None:
         self.service = service
         self.scope = scope
         self.query = query
         self.sort = sort
         self.on_apply = on_apply
+        self.actions = actions
         self.parser = SearchQueryParser()
 
     @override
@@ -151,26 +155,10 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
             BooleanExpression(BooleanOperator.AND, (expression, addition)) if expression is not None else addition
         )
         self.selected = None
+        self.panel = None
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        if self.picker is not None:
-            return (
-                sl.heading(self.picker_title),
-                self.picker,
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"guided-search-relevance = Use relevance"),
-                        self._relevance,
-                        key="relevance",
-                        available=self.picking_sort,
-                    ),
-                    sl.action_control(
-                        tr(t"guided-search-back-query = Back to query"), self._back_to_query, key="picker-back"
-                    ),
-                    key="picker-actions",
-                ),
-            )
         field_label = self.selected.name.replace("_", " ").title() if self.selected is not None else ""
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.action_controls(
@@ -181,28 +169,39 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                     on_submit=self._advanced,
                 ),
                 sl.action_control(
-                    tr(t"guided-search-selected-field = Filter: {field_label}")
-                    if self.selected is not None
-                    else tr(t"guided-search-add-filter = Add filter"),
+                    tr(t"guided-search-add-filter = Add filter"),
                     self._choose_field,
                     key="field",
+                    tone=sl.Tone.SUCCESS if self.panel == "fields" else sl.Tone.NEUTRAL,
                 ),
-                sl.action_control(tr(t"guided-search-sorting = Sorting"), self._choose_sort, key="sort"),
+                sl.action_control(
+                    tr(t"guided-search-sorting = Sorting"),
+                    self._choose_sort,
+                    key="sort",
+                    tone=sl.Tone.SUCCESS if self.panel == "sort" else sl.Tone.NEUTRAL,
+                ),
+                *(self.actions() if self.actions is not None else ()),
                 key="search-controls",
+                display=sl.semantic.ControlDisplay.INDIVIDUAL,
             ),
         ]
+        if self.picker is not None:
+            nodes.extend((sl.heading(self.picker_title), self.picker))
+            return tuple(nodes)
         clauses = self.clauses
         start = self.clause_page * 2
         for index, item in enumerate(clauses[start : start + 2], start):
             clause = render_expression(item)
+            operand = item.operand if isinstance(item, NotExpression) else item
+            negated = isinstance(item, NotExpression)
             label = truncate_display_text(clause, 65)
             nodes.append(
                 sl.action_controls(
                     sl.form(
                         tr(t"guided-search-edit-filter = Edit {label}"),
-                        self._field_form(self._field_options(item.field), item)
-                        if isinstance(item, FieldExpression)
-                        else self._text_form(item),
+                        self._field_form(self._field_options(operand.field), operand, negated=negated)
+                        if isinstance(operand, FieldExpression)
+                        else self._text_form(operand, negated=negated),
                         key=f"edit-{index}",
                         on_submit=partial(self._edit_clause, index),
                     ),
@@ -248,7 +247,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                 )
             nodes.append(
                 sl.form(
-                    tr(t"guided-search-add-filter-value = Add filter value"),
+                    tr(t"guided-search-selected-field = Filter: {field_label}"),
                     self._field_form(field),
                     key="value",
                     on_submit=partial(self._add, field),
@@ -274,6 +273,8 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self.query = self.parser.parse(str(event.values.get("query") or "")).normalized
         self.clause_page = 0
         self.selected = None
+        self.picker = None
+        self.panel = None
         await self._refresh()
 
     def _field_options(self, field: FieldDefinition) -> FieldDefinition:
@@ -290,6 +291,8 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self,
         field: FieldDefinition,
         existing: FieldExpression | None = None,
+        *,
+        negated: bool = False,
     ) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
         label = field.name.replace("_", " ").title()
         raw = existing.value if existing is not None else None
@@ -341,9 +344,18 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                     maximum=200,
                 )
             )
+        fields.append(
+            sl.forms.BoolField(
+                key="negated",
+                label=tr(t"guided-search-negated = Exclude (NOT)"),
+                default=negated,
+            )
+        )
         return sl.forms.FormSpec(label, tuple(fields))
 
-    def _text_form(self, item: QueryExpression) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
+    def _text_form(
+        self, item: QueryExpression, *, negated: bool = False
+    ) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
         assert isinstance(item, TextExpression)
         return sl.forms.FormSpec(
             tr(t"guided-search-edit-text = Edit keywords"),
@@ -351,6 +363,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                 sl.forms.TextField(
                     key="value", label=tr(t"guided-search-keywords = Keywords"), default=item.value, maximum=500
                 ),
+                sl.forms.BoolField(key="negated", label=tr(t"guided-search-negated = Exclude (NOT)"), default=negated),
             ),
         )
 
@@ -365,12 +378,13 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
 
     async def _edit_clause(self, index: int, event: sd.SubmitEvent) -> None:
         item = self.clauses[index]
+        item = item.operand if isinstance(item, NotExpression) else item
         replacement = (
             self._field_expression(item.field, event)
             if isinstance(item, FieldExpression)
             else TextExpression(str(event.values["value"]), phrase=True)
         )
-        self._replace(index, replacement)
+        self._replace(index, NotExpression(replacement) if event.values.get("negated") else replacement)
         await self._refresh()
 
     async def _page(self, direction: int, _event: sd.PressEvent) -> None:
@@ -381,10 +395,8 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self.sort = ""
         self.selected = None
         self.picker = None
+        self.panel = None
         self.clause_page = 0
-
-    async def _back_to_query(self, _event: sd.PressEvent[RedstoneSquid]) -> None:
-        self.picker = None
 
     async def _pick(
         self,
@@ -410,9 +422,9 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         async def picked(action: sl.ActionEvent, items: tuple[Suggestion, ...]) -> None:
             if items:
                 await on_pick(cast(sd.ActionEvent, action), items[0])
-                self.picker = None
+                if self.panel != "sort":
+                    self.picker = None
 
-        self.picking_sort = source == "search_sorts"
         self.picker_title = title
         picker = sp.SearchPicker(
             search,
@@ -432,6 +444,12 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self.picker = picker
 
     async def _choose_field(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        active = self.panel == "fields"
+        self.panel = None if active else "fields"
+        self.picker = None
+        self.selected = None
+        if active:
+            return
         await self._pick(
             event,
             "search_fields",
@@ -453,6 +471,12 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         await self._pick(event, VALUE_SOURCES[field.name], field.name.replace("_", " ").title(), selected)
 
     async def _choose_sort(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        active = self.panel == "sort"
+        self.panel = None if active else "sort"
+        self.picker = None
+        self.selected = None
+        if active:
+            return
         await self._pick(
             event,
             "search_sorts",
@@ -465,16 +489,13 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self.sort = item.value
         await self._refresh()
 
-    async def _relevance(self, _event: sd.PressEvent[RedstoneSquid]) -> None:
-        self.sort = ""
-        self.picker = None
-        await self._refresh()
-
     async def _add(self, field: FieldDefinition, event: sd.SubmitEvent) -> None:
-        addition = self._field_expression(field, event)
+        value = self._field_expression(field, event)
+        addition = NotExpression(value) if event.values.get("negated") else value
         expression = self.parser.parse(self.query).expression
         self._set_expression(BooleanExpression(BooleanOperator.AND, (expression, addition)) if expression else addition)
         self.selected = None
+        self.panel = None
         await self._refresh()
 
     async def _remove(self, index: int, _event: sd.PressEvent) -> None:

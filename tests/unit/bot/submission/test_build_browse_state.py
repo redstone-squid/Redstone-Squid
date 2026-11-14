@@ -94,14 +94,20 @@ def _screen(
 
 
 async def submit_search(ui: StagedUI[BuildBrowseScreen], query: str, sort: str = "") -> None:
+    if ui.component._guided is not None:
+        await ui.press(ui.key_for("guided-search"))
     ui.component._sort = sort
     await ui.press(ui.key_for("guided-search"))
     assert ui.component._guided is not None
     form = await ui.press_for_form(ui.key_for("advanced"))
     await form.submit({"query": query})
     assert ui.component._guided.query == SearchQueryParser().parse(query).normalized
-    assert ui.component._guided is not None
-    await ui.press(ui.key_for("guided-search"))
+
+
+async def toggle_help(ui: StagedUI[BuildBrowseScreen]) -> None:
+    if ui.component._guided is None:
+        await ui.press(ui.key_for("guided-search"))
+    await ui.press(ui.key_for("search-help"))
 
 
 async def test_back_to_builds_replaces_the_detail_with_the_catalogue() -> None:
@@ -185,12 +191,10 @@ async def test_schematic_controls_survive_opening_and_cancelling_review() -> Non
 
 async def test_open_id_through_the_discord_modal() -> None:
     async with stage(_screen(initial_id=None), owner=object()) as ui:
-        await ui.press(ui.key_for("guided-search"))
         form = await ui.press_for_form(ui.key_for("open-id"))
         await form.submit({"id": "7"})
         assert "Build #7" in ui.texts()
         ui.control(ui.key_for("linked-build.item-next"))
-        await ui.press(ui.key_for("guided-search"))
         ui.control(ui.key_for("open-id"))
 
 
@@ -272,7 +276,6 @@ async def test_missing_id_keeps_the_current_build() -> None:
     screen = _screen()
     async with stage(screen, owner=object()) as ui:
         cast(AsyncMock, screen._queries).get.return_value = None
-        await ui.press(ui.key_for("guided-search"))
         form = await ui.press_for_form(ui.key_for("open-id"))
         await form.submit({"id": "999"})
         assert "Build #7" in ui.texts()
@@ -349,12 +352,12 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
         ui.control(ui.key_for("schematic-tools"))
         assert any("Submission ID: 7" in text for text in ui.texts())
         ui.assert_within_limits()
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             assert any("Submission ID: 7" in text for text in ui.texts())
             ui.assert_within_limits()
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert any("Submission ID: 7" in text for text in ui.texts())
 
 
@@ -446,7 +449,7 @@ async def test_search_help_preserves_results_without_refetching(records: bool) -
     screen._mode = "records" if records else "builds"
     service = cast(AsyncMock, screen._search_service)
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert "## Search help" in ui.texts()
         assert any((r"all\_time" if records else "creator:Steve") in text for text in ui.texts())
         service.search.assert_not_awaited()
@@ -454,7 +457,7 @@ async def test_search_help_preserves_results_without_refetching(records: bool) -
         assert "## Search help" in ui.texts()
         assert "## Search results" in ui.texts()
         ui.assert_within_limits()
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert "## Search results" in ui.texts()
         assert "## Search help" not in ui.texts()
         assert service.search.await_count == 1
@@ -511,7 +514,7 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
     screen = _screen(initial_id=None)
     screen._mode = "records" if records else "builds"
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert any((r"fastest\_smallest" if records else r"completion\_at") in text for text in ui.texts())
         await ui.press(ui.key_for("search-reference.syntax"))
         assert any("NOT excludes" in text for text in ui.texts())
@@ -520,7 +523,7 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         ui.assert_within_limits()
         await ui.press(ui.key_for("example-0"))
         assert "## Search results" in ui.texts()
-        assert "## Search help" not in ui.texts()
+        assert "## Search help" in ui.texts()
         assert screen._record_categories == frozenset()
         assert screen._query == (
             "kind:door base_title:fastest version_scope:all_time" if records else "door width<=5 height<=6"
@@ -570,12 +573,12 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
 async def test_search_help_appends_to_selected_build() -> None:
     screen = _screen()
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert "Build #7" in ui.texts()
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             ui.assert_within_limits()
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert "Build #7" in ui.texts()
         ui.assert_within_limits()
 
@@ -604,14 +607,14 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
         prev=None,
     )
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("search-help"))
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
+        await toggle_help(ui)
         await submit_search(ui, "door", "")
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             ui.assert_within_limits()
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert "## Search results" in ui.texts()
         assert service.search.await_count == 1
 
@@ -733,7 +736,7 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         ui.control(ui.key_for("guided-search"))
         assert "## Search results" in ui.texts()
         assert screen._results is results
-        await ui.press(ui.key_for("picker-back"))
+        await ui.press(ui.key_for("field"))
         assert screen._guided is editor
         assert screen._results is results
         await ui.press(ui.key_for("guided-search"))
@@ -751,12 +754,12 @@ async def test_records_default_to_standings_and_highlight_active_controls() -> N
         assert "## Find a record" not in ui.texts()
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
         assert ui.control(ui.key_for("guided-search")).payload["style"] == 2
-        assert not any(key.endswith("open-id") for key in ui.root.snapshot().handler_keys)
+        ui.control(ui.key_for("open-id"))
         await ui.press(ui.key_for("guided-search"))
         assert ui.control(ui.key_for("guided-search")).payload["style"] == 3
         ui.control(ui.key_for("open-id"))
         assert not any(key.endswith("cancel") for key in ui.root.snapshot().handler_keys)
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         assert ui.control(ui.key_for("search-help")).payload["style"] == 3
         assert "## Records" in ui.texts()
         assert "## Search help" in ui.texts()
@@ -774,11 +777,14 @@ async def test_collapsed_query_and_sort_share_summary_with_reset() -> None:
     screen = _screen(initial_id=None)
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, "width:3", "-height")
+        await ui.press(ui.key_for("guided-search"))
         summaries = [text for text in ui.texts() if "Query:" in text]
         assert len(summaries) == 1
         assert "width:3" in summaries[0]
         assert "Height ↓" in summaries[0]
         assert screen._guided is None
+        assert not any(key.endswith("reset") for key in ui.root.snapshot().handler_keys)
+        await ui.press(ui.key_for("guided-search"))
         ui.control(ui.key_for("reset"))
         await ui.press(ui.key_for("reset"))
         assert screen._query == screen._sort == ""
@@ -805,7 +811,7 @@ async def test_expanded_editor_results_and_help_fit_together(records: bool) -> N
         await ui.press(ui.key_for("guided-search"))
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "kind:door AND title:door" if records else "width:3 AND height:5"})
-        await ui.press(ui.key_for("search-help"))
+        await toggle_help(ui)
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             assert "## Search results" in ui.texts()
