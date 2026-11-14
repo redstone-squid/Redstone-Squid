@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.core.errors import ValidationError
-from squid.search.domain import MetadataSearchHit, RecordSearchHit
+from squid.search.domain import MetadataSearchHit, RecordSearchHit, SearchMatch, SearchText
 
 
 class SearchSuggestions(BaseModel):
@@ -35,6 +35,9 @@ class RecordSearchEntry(BaseModel):
     version_scope: str
     tags: list[str]
     metrics: dict[str, str | int | float | bool]
+    holder_build_ids: list[int] = Field(default_factory=list)
+    matched: bool = True
+    title_match: SearchText | None = None
 
     @classmethod
     def from_domain(cls, hit: RecordSearchHit) -> RecordSearchEntry:
@@ -48,6 +51,9 @@ class RecordSearchEntry(BaseModel):
             version_scope=hit.version_scope,
             tags=list(hit.tags),
             metrics=dict(hit.metrics),
+            holder_build_ids=list(hit.holder_build_ids),
+            matched=hit.matched,
+            title_match=hit.title_match,
         )
 
 
@@ -81,6 +87,10 @@ class BuildSearchResult(BaseModel):
     resource_kind: Literal["build"] = "build"
     score: float | None
     build: BuildSummary
+    grouped: bool = False
+    records: list[RecordSearchEntry] = Field(default_factory=list)
+    matches: list[SearchMatch] = Field(default_factory=list)
+    title_match: SearchText | None = None
 
 
 class RecordSearchResult(BaseModel):
@@ -101,6 +111,8 @@ class MetadataSearchResult(BaseModel):
     resource_kind: Literal["metadata"] = "metadata"
     score: float | None
     metadata: MetadataSearchEntry
+    matches: list[SearchMatch] = Field(default_factory=list)
+    title_match: SearchText | None = None
 
 
 type SearchResult = Annotated[

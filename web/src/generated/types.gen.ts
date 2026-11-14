@@ -177,6 +177,10 @@ export type BuildSearchResult = {
     resource_kind?: 'build';
     score: number | null;
     build: BuildSummary;
+    grouped?: boolean;
+    records?: Array<RecordSearchEntry>;
+    matches?: Array<SearchMatch>;
+    title_match?: SearchText | null;
 };
 
 /**
@@ -1040,6 +1044,8 @@ export type MetadataSearchResult = {
     resource_kind?: 'metadata';
     score: number | null;
     metadata: MetadataSearchEntry;
+    matches?: Array<SearchMatch>;
+    title_match?: SearchText | null;
 };
 
 /**
@@ -1428,6 +1434,9 @@ export type RecordSearchEntry = {
     metrics: {
         [key: string]: string | number | number | boolean;
     };
+    holder_build_ids?: Array<number>;
+    matched?: boolean;
+    title_match?: SearchText | null;
 };
 
 /**
@@ -1552,6 +1561,15 @@ export type SearchField = {
 };
 
 /**
+ * SearchMatch
+ */
+export type SearchMatch = {
+    resource_kind: 'build' | 'record' | 'metadata';
+    source_id: string;
+    branches?: Array<string>;
+};
+
+/**
  * SearchScope
  *
  * Resources included in a search.
@@ -1563,6 +1581,17 @@ export type SearchScope = 'records' | 'builds' | 'metadata' | 'all';
  */
 export type SearchSuggestions = {
     suggestions: Array<string>;
+};
+
+/**
+ * SearchText
+ */
+export type SearchText = {
+    text: string;
+    spans?: Array<[
+        number,
+        number
+    ]>;
 };
 
 /**
@@ -5410,6 +5439,10 @@ export type SearchExecuteData = {
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
+        /**
+         * Combine matching records and builds before pagination.
+         */
+        group_by_build?: boolean;
     };
     url: '/v1/search';
 };

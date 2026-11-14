@@ -10791,6 +10791,20 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "group_by_build",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "description": "Combine matching records and builds before pagination.",
+              "default": false
+            },
+            "description": "Combine matching records and builds before pagination.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
           }
         ],
         "responses": {
@@ -17943,6 +17957,32 @@
           },
           "build": {
             "$ref": "#/components/schemas/BuildSummary"
+          },
+          "grouped": {
+            "type": "boolean",
+            "default": false
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/RecordSearchEntry"
+            },
+            "type": "array"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/SearchMatch"
+            },
+            "type": "array"
+          },
+          "title_match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SearchText"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -20832,6 +20872,22 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/MetadataSearchEntry"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/SearchMatch"
+            },
+            "type": "array"
+          },
+          "title_match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SearchText"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -22295,6 +22351,26 @@
               ]
             },
             "type": "object"
+          },
+          "holder_build_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "matched": {
+            "type": "boolean",
+            "default": true
+          },
+          "title_match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SearchText"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -22790,6 +22866,34 @@
         ],
         "title": "SearchField"
       },
+      "SearchMatch": {
+        "properties": {
+          "resource_kind": {
+            "type": "string",
+            "enum": [
+              "build",
+              "record",
+              "metadata"
+            ]
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "branches": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource_kind",
+          "source_id"
+        ],
+        "title": "SearchMatch"
+      },
       "SearchScope": {
         "type": "string",
         "enum": [
@@ -22816,6 +22920,33 @@
           "suggestions"
         ],
         "title": "SearchSuggestions"
+      },
+      "SearchText": {
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SearchText"
       },
       "ServerProfileSchema": {
         "properties": {

@@ -90,6 +90,9 @@ async def search(
     sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    group_by_build: Annotated[
+        bool, QueryParameter(description="Combine matching records and builds before pagination.")
+    ] = False,
 ) -> Page[SearchResult]:
     """Match builds, computed records, and taxonomy entries in one ranked page."""
     result = await search_service.search(
@@ -101,6 +104,7 @@ async def search(
             offset=offset or 0,
             sort=SearchSort.parse(sort),
             visible_statuses=PUBLIC_SEARCH_STATUSES,
+            group_by_build=group_by_build,
         )
     )
     builds = await hydrate_builds(build_queries, result.hits)
@@ -112,11 +116,29 @@ async def search(
                 # Dropped rather than rendered from the projection: a hit without an authoritative
                 # row means the index is stale, and hydrate_builds has already raised the alarm.
                 if build is not None:
-                    items.append(BuildSearchResult(score=hit.score, build=build))
+                    items.append(
+                        BuildSearchResult(
+                            score=hit.score,
+                            build=build,
+                            grouped=hit.grouped,
+                            records=[RecordSearchEntry.from_domain(record) for record in hit.records],
+                            matches=list(hit.matches),
+                            title_match=hit.title_match
+                            if hit.title_match is not None and hit.title_match.text == build.title
+                            else None,
+                        )
+                    )
             case "record":
                 items.append(RecordSearchResult(score=hit.score, record=RecordSearchEntry.from_domain(hit)))
             case "metadata":
-                items.append(MetadataSearchResult(score=hit.score, metadata=MetadataSearchEntry.from_domain(hit)))
+                items.append(
+                    MetadataSearchResult(
+                        score=hit.score,
+                        metadata=MetadataSearchEntry.from_domain(hit),
+                        matches=list(hit.matches),
+                        title_match=hit.title_match,
+                    )
+                )
     return Page(
         items=items,
         total=result.total,
