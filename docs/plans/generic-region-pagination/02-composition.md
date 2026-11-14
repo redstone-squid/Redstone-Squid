@@ -148,6 +148,26 @@ Convert the investigation probes into regression and conformance cases. Update a
 and the API sketch to the implemented names and behavior. Hand the shared candidate/evaluation
 model and its tested invariants to phase 3 for the full joint solver.
 
+## Current implementation boundary
+
+`planning/composition.py` now defines typed offers, occurrences, candidates, shared resources,
+work accounting, and candidate failures. `select_composition` takes explicit representation
+choices; it does not search or allocate pages. Direct V2 and Slack rules exercise paragraphs,
+tables, and ordered containers. V2 also exercises physical containers and shared downloads.
+They preserve table references, reject local and global overflows, and independently check the
+built output against typed evaluation evidence. Slack does not call the HTML planner.
+
+These paths are not routed through the production `plan` entry point yet. Source-referenced
+text and alternative validation are tested separately; connecting them to target composition,
+HTML, visible interaction bindings, native atomic extensions, inherited requirements, and the
+public migration boundary remains work in this phase. Unsupported vocabulary fails explicitly.
+Existing production planners and their known limitations remain in place until that migration.
+
+The working target rules expose a construction question: evaluation currently prepares enough
+structure to verify the entire output, then construction repeats the serialization. Decide
+whether construction should instead consume a typed immutable preparation before extending the
+contract to HTML and native resources. This does not move semantic selection into target rules.
+
 ## Validation and acceptance
 
 The working implementation must demonstrate:
