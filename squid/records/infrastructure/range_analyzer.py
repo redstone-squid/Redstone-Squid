@@ -13,9 +13,10 @@ from pydantic import ValidationError
 from squid.core.errors import ServiceUnavailableError
 from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
 from squid.records.application.models import CandidateBuild
+from squid.records.application.range_snapshots import RangeSource
 from squid.records.domain.regions import DEFAULT_REGION_LIMITS, RegionAnalysisStatus
 from squid.records.infrastructure.range_limits import DEFAULT_PROCESS_LIMITS, RangeProcessLimits
-from squid.records.infrastructure.range_wire import RANGE_RESULT, RangeSource, RangeWorkerRequest, failed_analysis
+from squid.records.infrastructure.range_wire import RANGE_RESULT, RangeWorkerRequest, failed_analysis
 
 
 class SubprocessRangeAnalyzer:

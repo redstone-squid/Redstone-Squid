@@ -30,6 +30,7 @@ from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuth
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
+from squid.records.infrastructure.range_publications import PostgresRangePublicationRepository
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewRepository
@@ -83,6 +84,7 @@ class SqlAlchemyUnitOfWork:
         self._notifications = PostgresNotificationRepository(self._active_session)
         self._votes = VoteRepository(self._active_session)
         self._records = PostgresRecordRepository(self._active_session)
+        self._record_ranges = PostgresRangePublicationRepository(self._active_session)
         self._idempotency = PostgresIdempotencyRepository(self._active_session, idempotency_cipher)
         self._builds = BuildRepository(self._active_session)
         self._build_history = BuildHistoryQueries(self._active_session)
@@ -227,6 +229,11 @@ class SqlAlchemyUnitOfWork:
     def records(self) -> PostgresRecordRepository:
         self._active_session()
         return self._records
+
+    @property
+    def record_ranges(self) -> PostgresRangePublicationRepository:
+        self._active_session()
+        return self._record_ranges
 
     @property
     def record_candidates(self) -> PostgresRecordRepository:

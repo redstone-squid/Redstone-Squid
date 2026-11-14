@@ -449,3 +449,71 @@ class ExtenderTimingVariant(Base, kw_only=True):
     extension_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     retraction_reset_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     extension_reset_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
+
+
+class DoorRangeRegistration(Base, kw_only=True):
+    """A registered range query and its latest reserved computation generation."""
+
+    __tablename__ = "door_range_registrations"
+    __table_args__ = (
+        UniqueConstraint("query_key", name="door_range_registrations_query_key_key"),
+        CheckConstraint("generation >= 0", name="door_range_registrations_generation_check"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    query_key: Mapped[str] = mapped_column(Text, nullable=False)
+    query: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    generation: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
+
+
+class DoorRangeRun(Base, kw_only=True):
+    """A reserved attempt whose complete result can replace one registered query."""
+
+    __tablename__ = "door_range_runs"
+    __table_args__ = (
+        UniqueConstraint("query_id", "generation", name="door_range_runs_generation_key"),
+        CheckConstraint("generation > 0", name="door_range_runs_generation_check"),
+        CheckConstraint(
+            "(result IS NOT NULL OR error IS NOT NULL) = (completed_at IS NOT NULL)",
+            name="door_range_runs_completion_check",
+        ),
+        CheckConstraint(
+            "NOT is_active OR (result->'analysis'->>'status' = 'exact') IS TRUE",
+            name="door_range_runs_active_check",
+        ),
+        Index("door_range_runs_one_active_idx", "query_id", unique=True, postgresql_where=text("is_active")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    query_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("door_range_registrations.id", ondelete="RESTRICT"), nullable=False
+    )
+    generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    rules_revision_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("rules_revisions.id", ondelete="RESTRICT"), nullable=False
+    )
+    started_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
+    error: Mapped[str | None] = mapped_column(Text, default=None)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+
+
+class DoorRangeSnapshot(Base, kw_only=True):
+    """Immutable arithmetic facts captured before a range worker starts."""
+
+    __tablename__ = "door_range_snapshots"
+    __table_args__ = (
+        CheckConstraint(
+            "(jsonb_typeof(document) = 'object' AND document->'schema_version' = '1'::jsonb) IS TRUE",
+            name="door_range_snapshots_version_check",
+        ),
+    )
+
+    run_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("door_range_runs.id", ondelete="RESTRICT"), primary_key=True
+    )
+    document: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
