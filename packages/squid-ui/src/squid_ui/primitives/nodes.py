@@ -32,6 +32,8 @@ from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
+    from squid_ui.presentations import Correspondence
+    from squid_ui.presentations import Fidelity as PresentationFidelity
     from squid_ui.runtime.definition import Component
     from squid_ui.runtime.histories import History
 
@@ -526,12 +528,16 @@ class Variant[RenderTargetT = DiscordTarget]:
 
     `nodes` are spliced into the parent, so a variant can produce several rows
     without adding a container. `fidelity` defaults to `EXACT`; authors must mark
-    alternatives that reformat or discard content.
+    alternatives that reformat or discard content. Shared composition uses
+    ``contract`` for specific losses and ``correspondence`` when source identities
+    cannot be matched structurally. A lossy rung needs that explicit contract.
     """
 
     nodes: tuple[Node, ...]
     requires: frozenset[str] = frozenset()
     fidelity: Fidelity = Fidelity.EXACT
+    contract: PresentationFidelity | None = field(default=None, kw_only=True)
+    correspondence: tuple[Correspondence, ...] = field(default=(), kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.nodes:
@@ -545,7 +551,9 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
 
     Text overflow policies shorten text; variants can also change component
     structure, such as replacing a button panel with a select. Unsupported
-    variants are removed before budget search.
+    variants are removed before budget search. ``content`` supplies canonical
+    semantics when the first rung is not an appropriate source. ``key`` gives
+    the group stable identity; otherwise identity follows its position.
 
     Position expresses preference, while `Fidelity` describes loss. Priority
     applies across the document: losing lower-priority content is cheaper.
@@ -559,6 +567,8 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
 
     variants: tuple[Variant[Any], ...]
     priority: int = 0
+    content: Renderable[Any] | None = field(default=None, kw_only=True)
+    key: str | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.variants:

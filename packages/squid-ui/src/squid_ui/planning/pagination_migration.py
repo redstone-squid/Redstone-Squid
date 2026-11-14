@@ -14,7 +14,7 @@ from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
-from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
+from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph, variant_alternatives
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Condense, Drop, Never, Paginate, Spill, Truncate
@@ -46,6 +46,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     text_choices = 0
     shortening_depth = 0
     card_depth = 0
+    variant_index = 0
     text_ladder = (
         limits.total_text
         if isinstance(limits, V2Limits)
@@ -57,7 +58,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     )
 
     def visit[NodeTargetT](node: Renderable[NodeTargetT]) -> Renderable[NodeTargetT]:
-        nonlocal pageable, combinations, shortening_depth, text_choices, card_depth
+        nonlocal pageable, combinations, shortening_depth, text_choices, card_depth, variant_index
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation() | sem.Grid():
                 pageable = True
@@ -293,6 +294,10 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.FallbackContent():
                 pageable = True
                 return replace(node, primary=visit(node.primary), alternates=tuple(map(visit, node.alternates)))
+            case primitive.Variants():
+                variant_index += 1
+                group = variant_alternatives(node)
+                return visit(replace(group, key=node.key or f"@variants-{variant_index}"))
             case Alternatives():
                 pageable = True
                 # Canonical content describes identity; it need not render on this target.
@@ -300,6 +305,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 choices = []
                 limitations = []
                 for choice in node.choices:
+                    if missing := choice.requires - request.target.capabilities:
+                        limitations.append("missing capabilities: " + ", ".join(sorted(missing)))
+                        continue
                     try:
                         choices.append(replace(choice, node=visit(choice.node)))
                     except UnsupportedSemanticError as error:

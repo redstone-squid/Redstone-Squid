@@ -137,6 +137,7 @@ class Alternative[RenderTargetT = RenderTarget, ContextT = object]:
     fidelity: Fidelity
     preference: int = 0
     correspondence: tuple[Correspondence, ...] = ()
+    requires: frozenset[str] = field(default=frozenset(), kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.key:
@@ -151,6 +152,7 @@ class Alternatives[RenderTargetT = RenderTarget, ContextT = object](Renderable[R
     content: Renderable[RenderTargetT, ContextT]
     choices: tuple[Alternative[RenderTargetT, ContextT], ...]
     key: str
+    priority: int = field(default=0, kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.key or not self.choices:

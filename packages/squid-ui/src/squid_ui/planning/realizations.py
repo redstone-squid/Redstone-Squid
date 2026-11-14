@@ -1288,6 +1288,8 @@ def semantic_offers[RenderTargetT, ContextT](
         choices: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
         for choice in value.choices:
             context.work.consume()
+            if not choice.requires <= context.capabilities:
+                continue
             checked = check_alternative(value, choice, consume=context.work.consume)
             origin = SourceScope(checked, occurrence.reference, occurrence.origin)
             root = next(ref for ref, unit in checked.presentation.units.items() if unit.parent is None)
@@ -1309,7 +1311,14 @@ def semantic_offers[RenderTargetT, ContextT](
             )
             choices.append(
                 RealizationOffer(
-                    occurrence, choice.key, FlowRealization(), (child,), effects, choice.preference, flow=True
+                    occurrence,
+                    choice.key,
+                    FlowRealization(),
+                    (child,),
+                    effects,
+                    choice.preference,
+                    flow=True,
+                    preference_priority=value.priority,
                 )
             )
         return tuple(choices)

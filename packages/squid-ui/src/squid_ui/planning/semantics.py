@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
@@ -23,6 +23,7 @@ from squid_ui.presentations import (
     Alternatives,
     AtomicNode,
     Budget,
+    Fidelity,
     InteractionChange,
     Omission,
     Replacement,
@@ -188,6 +189,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.MediaItem()
             | TextPresentation()
             | Alternatives()
+            | primitive.Variants()
             | AtomicNode()
             | primitive.Button()
             | primitive.SelectMenu()
@@ -204,6 +206,31 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             return key
         case _:
             return None
+
+
+def variant_alternatives(value: primitive.Variants) -> Alternatives[Any]:
+    """Expose native ladders through checked coverage and interaction declarations."""
+    choices = []
+    for index, variant in enumerate(value.variants):
+        if variant.fidelity is primitive.Fidelity.LOSSY and variant.contract is None:
+            message = "lossy native Variants require an explicit Variant.contract"
+            raise UnsupportedSemanticError(message)
+        choices.append(
+            Alternative(
+                sem.Group(variant.nodes, key="@content"),
+                key=f"rung-{index}",
+                fidelity=variant.contract or Fidelity(),
+                preference=index,
+                correspondence=variant.correspondence,
+                requires=variant.requires,
+            )
+        )
+    return Alternatives(
+        value.content or sem.Group(value.variants[0].nodes, key="@content"),
+        tuple(choices),
+        key=value.key or "@variants",
+        priority=value.priority,
+    )
 
 
 def semantic_graph[RenderTargetT, ContextT](
@@ -244,6 +271,8 @@ def semantic_graph[RenderTargetT, ContextT](
     ) -> None:
         key = name or _key(value) or f"@{index}"
         path = (*(() if parent is None else parent.keys), key)
+        if isinstance(value, primitive.Variants):
+            value = variant_alternatives(value)
         match value:
             case Alternatives():
                 root = add(value, path, parent, atomic=False)

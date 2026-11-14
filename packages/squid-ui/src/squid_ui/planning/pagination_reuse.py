@@ -138,6 +138,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
         case Alternatives(), Alternatives():
             return (
                 left.key == right.key
+                and left.priority == right.priority
                 and _same_node(left.content, right.content)
                 and len(left.choices) == len(right.choices)
                 and all(
