@@ -14,10 +14,7 @@ from typing import TYPE_CHECKING, Any, override
 import discord
 
 from squid_reactivity.operations import Cancelled
-from squid_reactivity.transaction_context import (
-    TransactionContext,
-    current_transaction_context,
-)
+from squid_reactivity.transaction_context import TransactionContext
 from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
@@ -225,7 +222,7 @@ class ActionResponder:
         if not self._action_active:
             message = "event.on_success() is only available during its action handler"
             raise RuntimeError(message)
-        if current_transaction_context() is not self._transaction_context:
+        if self._transaction is None or self._transaction.context is not self._transaction_context:
             message = "after-commit work requires a dispatcher-owned transaction, not a nested dispatch"
             raise RuntimeError(message)
         host = self.message_root.config.execution_host

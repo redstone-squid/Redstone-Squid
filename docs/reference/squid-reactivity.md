@@ -118,8 +118,6 @@ yields a `Transaction` whose context is available immediately and whose result i
 block finishes. Nested blocks share the handle. Callbacks receive a `TransactionCommit` or
 `TransactionRollback`; related operations and resource loads retain their own lifetimes and results.
 
-::: squid_reactivity.transaction_context_scope
-
 ::: squid_reactivity.current_transaction_context
 
 ::: squid_reactivity.fresh_transaction

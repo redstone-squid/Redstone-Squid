@@ -35,15 +35,15 @@ from squid_reactivity.errors import (
 from squid_reactivity.tracking import _bump_epoch
 from squid_reactivity.transaction_context import (
     ActorRef,
+    Causality,
     ExceptionReport,
     TransactionContext,
     TransactionPurpose,
     TransactionRelation,
+    causal_scope,
     continuation_callback,
     current_causality,
-    current_transaction_context,
     in_continuation,
-    transaction_context_scope,
 )
 from squid_reactivity.transaction_results import (
     ChangeReport,
@@ -787,7 +787,7 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
 def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> Iterator[Transaction]:
     """Own staging, the commit point, and outcome delivery for either transaction mode."""
     current = _Transaction(readonly=readonly, owner_task=_current_task(), context=context)
-    with transaction_context_scope(context):
+    with causal_scope(context.causal_ref(), context.root_transaction_id):
         token = _CURRENT_TRANSACTION.set(current)
         try:
             _checkpoint("transaction.enter_body")
@@ -865,18 +865,16 @@ def transaction(
     if transaction_context is not None and explicit_identity:
         message = "supply either transaction_context or transaction identity arguments"
         raise ValueError(message)
-    causality = current_causality() if caused_by is None else (caused_by.causal_ref(), caused_by.root_transaction_id)
-    context = (
-        transaction_context
-        or (current_transaction_context() if not explicit_identity and not in_continuation() else None)
-        or TransactionContext.create(
-            "transaction" if name is None else name,
-            actor=actor,
-            relation=relation,
-            kind=kind,
-            cause=None if causality is None else causality[0],
-            root_transaction_id=None if causality is None else causality[1],
-        )
+    causality = (
+        current_causality() if caused_by is None else Causality(caused_by.causal_ref(), caused_by.root_transaction_id)
+    )
+    context = transaction_context or TransactionContext.create(
+        "transaction" if name is None else name,
+        actor=actor,
+        relation=relation,
+        kind=kind,
+        cause=None if causality is None else causality.cause,
+        root_transaction_id=None if causality is None else causality.root_transaction_id,
     )
     with _run_transaction(context) as handle:
         yield handle
@@ -913,14 +911,10 @@ def readonly_transaction(*, transaction_context: TransactionContext | None = Non
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
     causality = current_causality()
-    context = (
-        transaction_context
-        or current_transaction_context()
-        or TransactionContext.create(
-            "read-only transaction",
-            cause=None if causality is None else causality[0],
-            root_transaction_id=None if causality is None else causality[1],
-        )
+    context = transaction_context or TransactionContext.create(
+        "read-only transaction",
+        cause=None if causality is None else causality.cause,
+        root_transaction_id=None if causality is None else causality.root_transaction_id,
     )
     with _run_transaction(context, readonly=True) as handle:
         yield handle

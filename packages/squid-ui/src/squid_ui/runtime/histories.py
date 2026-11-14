@@ -41,7 +41,6 @@ from squid_reactivity.transaction_context import (
     TransactionId,
     TransactionPurpose,
     TransactionRelation,
-    current_transaction_context,
 )
 from squid_reactivity.transaction_results import (
     ChangeToken,
@@ -49,6 +48,7 @@ from squid_reactivity.transaction_results import (
     TransactionCommit,
     TransactionContribution,
 )
+from squid_reactivity.transaction_state import current_transaction_context
 from squid_reactivity.transactions import (
     CellPatchSet,
     ConditionalCellPatch,

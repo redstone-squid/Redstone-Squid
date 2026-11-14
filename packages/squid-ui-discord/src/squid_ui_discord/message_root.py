@@ -32,11 +32,7 @@ from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import Address
-from squid_reactivity.transaction_context import (
-    ActorRef,
-    TransactionContext,
-    current_transaction_context,
-)
+from squid_reactivity.transaction_context import ActorRef, CausalRef, TransactionContext, current_causality
 from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
@@ -497,6 +493,7 @@ class MessageRoot[
         self._owns_render_cache = (render_cache := config.render_cache) is None
         self.render_cache = render_cache if render_cache is not None else RenderProgramCache()
         self.scheduler = scheduler
+        self._dispatch_origins: set[CausalRef] = set()
         subscriptions_ref: weakref.ReferenceType[Subscriptions] | None = None
 
         def collected(_reference: weakref.ReferenceType[Any]) -> None:
@@ -648,8 +645,8 @@ class MessageRoot[
         """
         if self._unscheduled_change is not None or self._handle is None or self.finished:
             return
-        action = current_transaction_context()
-        if action is not None and action.metadata.get("message_root_id") == self.id:
+        origin = current_causality()
+        if origin is not None and origin.cause in self._dispatch_origins:
             return
         if _SETTLING_ROOT.get() is self:
             return
@@ -2699,6 +2696,7 @@ class MessageRoot[
 
         request = event.context if isinstance(event.context, Request) else None
         previous_transaction = None if request is None else request._transaction
+        self._dispatch_origins.add(context.causal_ref())
         try:
             with self._action_transaction(binding.mode, context) as tx:
                 event = replace(event, _transaction=tx)
@@ -2712,7 +2710,7 @@ class MessageRoot[
                 await binding.handler(event)
                 adapter._action_active = False
                 if adapter._finish_requested or adapter._after_commit:
-                    if binding.mode is not ActionMode.PARALLEL_READ and current_transaction_context() is not context:
+                    if binding.mode is not ActionMode.PARALLEL_READ and tx.context is not context:
                         message = "after-commit work requires a dispatcher-owned transaction, not a nested dispatch"
                         raise RuntimeError(message)
                     if adapter._after_commit:
@@ -2734,6 +2732,7 @@ class MessageRoot[
                 self._accept_finish_locked(interaction=adapter.interaction)
                 adapter._finish_accepted = True
         finally:
+            self._dispatch_origins.discard(context.causal_ref())
             adapter._action_active = False
             adapter._transaction_context = None
             adapter._transaction = None

@@ -116,41 +116,39 @@ class ExceptionReport:
         return cls(type(error).__name__, str(error))
 
 
-_CURRENT_TRANSACTION_CONTEXT: ContextVar[TransactionContext | None] = ContextVar(
-    "squid_reactivity_transaction_context", default=None
-)
-_CURRENT_CAUSALITY: ContextVar[tuple[CausalRef, TransactionId | None] | None] = ContextVar(
-    "squid_reactivity_causality", default=None
-)
-_continuation_depth: ContextVar[int] = ContextVar("squid_reactivity_continuation_depth", default=0)
+@dataclass(frozen=True, slots=True)
+class Causality:
+    """Origin captured by detached work, independent of any writable transaction."""
+
+    cause: CausalRef
+    root_transaction_id: TransactionId | None
 
 
-def current_transaction_context() -> TransactionContext | None:
-    """Return the transaction context installed in this context, if any."""
-    return _CURRENT_TRANSACTION_CONTEXT.get()
+_CURRENT_CAUSALITY: ContextVar[Causality | None] = ContextVar("squid_reactivity_causality", default=None)
+"""Origin for implicitly created resource generations and transactions.
+
+Transactions install their identity through publication and outcome delivery. Operations
+install their captured execution identity while their loader runs. Child tasks inherit this
+immutable origin; it grants no permission to write through the originating transaction.
+"""
+
+_CONTINUATION: ContextVar[bool] = ContextVar("squid_reactivity_continuation", default=False)
+"""Result callbacks must open a new transaction before writing reactive state.
+
+Nested callback scopes restore the outer guard on exit. The guard is inherited by child
+tasks, so scheduling work does not accidentally permit direct writes from a callback.
+"""
 
 
-def current_causality() -> tuple[CausalRef, TransactionId | None] | None:
-    """Return the immutable cause/root pair installed for transaction, operation, or resource work."""
+def current_causality() -> Causality | None:
+    """Return the origin to capture when starting implicit reactive work."""
     return _CURRENT_CAUSALITY.get()
-
-
-@contextmanager
-def transaction_context_scope(context: TransactionContext) -> Iterator[TransactionContext]:
-    """Install a transaction context until the with block exits."""
-    token = _CURRENT_TRANSACTION_CONTEXT.set(context)
-    causal = _CURRENT_CAUSALITY.set((context.causal_ref(), context.root_transaction_id))
-    try:
-        yield context
-    finally:
-        _CURRENT_CAUSALITY.reset(causal)
-        _CURRENT_TRANSACTION_CONTEXT.reset(token)
 
 
 @contextmanager
 def causal_scope(cause: CausalRef, root_transaction_id: TransactionId | None) -> Iterator[None]:
     """Set cause and root identifiers without opening a transaction."""
-    token = _CURRENT_CAUSALITY.set((cause, root_transaction_id))
+    token = _CURRENT_CAUSALITY.set(Causality(cause, root_transaction_id))
     try:
         yield
     finally:
@@ -160,12 +158,12 @@ def causal_scope(cause: CausalRef, root_transaction_id: TransactionId | None) ->
 @contextmanager
 def continuation_callback() -> Iterator[None]:
     """Mark this with block as continuation work after a transaction result."""
-    token = _continuation_depth.set(_continuation_depth.get() + 1)
+    token = _CONTINUATION.set(True)
     try:
         yield
     finally:
-        _continuation_depth.reset(token)
+        _CONTINUATION.reset(token)
 
 
 def in_continuation() -> bool:
-    return _continuation_depth.get() > 0
+    return _CONTINUATION.get()

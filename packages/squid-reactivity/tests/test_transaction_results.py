@@ -1,5 +1,6 @@
 """Transaction outcomes remain accessible independently of diagnostic observers."""
 
+from contextvars import copy_context
 from typing import Literal
 
 import pytest
@@ -10,11 +11,13 @@ from squid_reactivity import (
     Reactive,
     StaleReactiveContextError,
     TransactionCommit,
+    TransactionContext,
     TransactionPurpose,
     TransactionRelation,
     TransactionResultSnapshot,
     TransactionRollback,
     apply_conditional_patches,
+    current_transaction_context,
     inspect_cells,
     readonly_transaction,
     state,
@@ -170,3 +173,29 @@ def test_result_hook_keys_are_shared_across_outcomes() -> None:
         assert tx.has_hook(key)
         with pytest.raises(RuntimeError, match="already registered"):
             tx.after_rollback(lambda result: None, key=key)
+
+
+def test_result_callbacks_keep_causality_without_an_active_transaction() -> None:
+    recovered: list[TransactionContext] = []
+
+    def recover(_commit: TransactionCommit) -> None:
+        assert current_transaction_context() is None
+        with transaction("recovery") as recovery:
+            assert current_transaction_context() is recovery.context
+            recovered.append(recovery.context)
+
+    with transaction("original") as original:
+        assert current_transaction_context() is original.context
+        original.after_commit(recover)
+
+    assert current_transaction_context() is None
+    assert recovered[0].transaction_id != original.context.transaction_id
+    assert recovered[0].cause == original.context.causal_ref()
+    assert recovered[0].root_transaction_id == original.context.root_transaction_id
+
+
+def test_copied_context_does_not_expose_a_finished_transaction_as_active() -> None:
+    with transaction() as tx:
+        inherited = copy_context()
+        assert inherited.run(current_transaction_context) is tx.context
+    assert inherited.run(current_transaction_context) is None

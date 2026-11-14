@@ -15,12 +15,7 @@ from squid_reactivity.errors import (
     ReactiveConflictError,
 )
 from squid_reactivity.internals import Cell as _Cell
-from squid_reactivity.transaction_context import (
-    ActorRef,
-    CausalRef,
-    TransactionContext,
-    TransactionPurpose,
-)
+from squid_reactivity.transaction_context import ActorRef, CausalRef, TransactionContext, TransactionPurpose
 from squid_reactivity.transaction_results import (
     ChangeReport,
     ConflictDetail,
@@ -210,8 +205,10 @@ class _ReplicationParticipant:
         self.branch = document.engine.branch()
         self.remote_payload = remote_payload
         self.remote_update_id = remote_update_id
+        self._transaction_context: TransactionContext | None = None
 
     def prepare(self, view: TransactionView) -> object:
+        self._transaction_context = view.context
         if self.remote_payload is not None:
             return self.document.engine.prepare_remote(self.remote_payload)
         base = self.branch.base
@@ -241,7 +238,8 @@ class _ReplicationParticipant:
             return
         self.document._notify()
         if self.remote_update_id is None and self.document.engine.change_token(prepared) is not None:
-            self.document._publish_update(prepared)
+            assert self._transaction_context is not None
+            self.document._publish_update(prepared, self._transaction_context)
 
 
 class ReplicatedDocument:
@@ -507,16 +505,13 @@ class ReplicatedDocument:
         for callback in tuple(self._listeners):
             callback(self.snapshot())
 
-    def _publish_update(self, prepared: object) -> None:
-        from squid_reactivity import current_transaction_context
-
-        context = current_transaction_context()
+    def _publish_update(self, prepared: object, context: TransactionContext) -> None:
         update = ReplicationUpdate.create(
             document_id=self.document_id,
             backend_id=self.engine.backend_id,
             source_replica_id=self.engine.replica_id,
             payload=self.engine.encode_prepared(prepared),
-            origin_transaction_id=None if context is None else context.transaction_id,
+            origin_transaction_id=context.transaction_id,
         )
         if len(self._pending_updates) == _PENDING_UPDATE_LIMIT:
             # Deque eviction is silent; remember the gap so drain_updates requires a resync.

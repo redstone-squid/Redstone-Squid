@@ -284,8 +284,8 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
         self._request_token = 0
         self._generation_id = uuid.uuid7()
         causality = current_causality()
-        self._generation_cause = None if causality is None else causality[0]
-        self._generation_root = None if causality is None else causality[1]
+        self._generation_cause = None if causality is None else causality.cause
+        self._generation_root = None if causality is None else causality.root_transaction_id
         self._rechecking = False
         self.version = 0
         """Version checked by dependent resources and computed values.
@@ -546,8 +546,8 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
             self._loading.scope.cancel()
         self._generation_id = uuid.uuid7()
         causality = current_causality()
-        self._generation_cause = None if causality is None else causality[0]
-        self._generation_root = None if causality is None else causality[1]
+        self._generation_cause = None if causality is None else causality.cause
+        self._generation_root = None if causality is None else causality.root_transaction_id
 
     def _emit_generation(
         self,

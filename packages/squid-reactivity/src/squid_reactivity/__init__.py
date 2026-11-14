@@ -63,8 +63,6 @@ from squid_reactivity.transaction_context import (
     TransactionContext,
     TransactionPurpose,
     TransactionRelation,
-    current_transaction_context,
-    transaction_context_scope,
 )
 from squid_reactivity.transaction_results import (
     ChangeReport,
@@ -77,7 +75,7 @@ from squid_reactivity.transaction_results import (
     TransactionResult,
     TransactionRollback,
 )
-from squid_reactivity.transaction_state import read_only, relaxed_read, strong_read
+from squid_reactivity.transaction_state import current_transaction_context, read_only, relaxed_read, strong_read
 from squid_reactivity.transactions import (
     CellPatch,
     CellPatchSet,
@@ -167,7 +165,6 @@ __all__ = [
     "state",
     "strong_read",
     "transaction",
-    "transaction_context_scope",
     "untracked",
     "watch",
 ]

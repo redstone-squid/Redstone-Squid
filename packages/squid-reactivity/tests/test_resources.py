@@ -14,10 +14,10 @@ from squid_reactivity import (
     observe_reads,
     state,
     transaction,
-    transaction_context_scope,
     watch,
 )
 from squid_reactivity.resources import Pending, PendingMode, Ready, Resource, abandon_superseded_loads, resource
+from squid_reactivity.transaction_context import causal_scope
 
 
 class Source(Reactive):
@@ -135,7 +135,7 @@ async def test_resource_generations_are_causal_without_profiler_retention() -> N
     ledger = EventLedger()
     with observe_events(ledger):
         action = TransactionContext.create("refresh")
-        with transaction_context_scope(action):
+        with causal_scope(action.causal_ref(), action.root_transaction_id):
             await source.value.reload()
 
         events = [event for event in ledger.events if isinstance(event, ResourceEventSnapshot)]
