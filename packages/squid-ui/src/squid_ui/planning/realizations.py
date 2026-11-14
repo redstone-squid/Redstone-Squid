@@ -21,6 +21,7 @@ from squid_ui.planning.composition import (
     CandidateComposition,
     FragmentContract,
     FragmentCoverage,
+    NavigationInput,
     OccurrenceId,
     OfferDiscovery,
     Placement,
@@ -144,7 +145,12 @@ class RegionNavigation[RenderTargetT, ContextT]:
                 placement=Placement.NAVIGATION,
                 fragment=FragmentCoverage(occurrence.identity, 0, 0, frozenset()),
             )
-            result.append(CandidateComposition(RealizationOffer(placed, "navigation", payload)))
+            navigation = None
+            if isinstance(payload, ControlRealization) and payload.route is not None:
+                navigation = NavigationInput(
+                    occurrence.identity, payload.route, int(payload.route.rsplit(".", 1)[1]), not payload.disabled
+                )
+            result.append(CandidateComposition(RealizationOffer(placed, "navigation", payload, navigation=navigation)))
         return tuple(result)
 
 

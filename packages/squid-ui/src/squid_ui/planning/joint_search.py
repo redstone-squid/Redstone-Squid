@@ -29,13 +29,16 @@ from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
     CapacityExceeded,
+    ConstraintViolation,
     DiscoveryCompletion,
     Evaluation,
     OccurrenceId,
     OfferDiscovery,
+    Placement,
     PlanningContext,
     RealizationOffer,
     SemanticOccurrence,
+    SharedResourceConflictError,
     TargetRules,
     UnsupportedCapability,
     construct_composition,
@@ -44,6 +47,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.presentations import Budget, FidelityEffect
+from squid_ui.semantic import Budgeted
 
 
 class JointInfeasibleError(UnsolvableLayoutError):
@@ -141,10 +145,11 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
     regions: Mapping[OccurrenceId, FragmentTree[RenderTargetT, ContextT, PayloadT]],
     policies: Mapping[OccurrenceId, RegionPolicy],
     context: PlanningContext,
-) -> tuple[tuple[CandidateViolation, ...], dict[OccurrenceId, ResourceCost], tuple[int, ...]]:
+) -> tuple[tuple[CandidateViolation, ...], dict[OccurrenceId, ResourceCost], dict[tuple[OccurrenceId, int], int]]:
     violations: list[CandidateViolation] = []
     costs: dict[OccurrenceId, ResourceCost] = {}
-    break_shortfalls: list[int] = []
+    break_shortfalls: dict[tuple[OccurrenceId, int], int] = {}
+    navigation_chars: dict[OccurrenceId, int] = {}
 
     def visit(part: CandidateComposition[RenderTargetT, ContextT, PayloadT]) -> ResourceCost:
         context.work.consume()
@@ -155,7 +160,12 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
         coverage = occurrence.fragment
         identity = coverage.logical if coverage is not None else occurrence.identity
         cost = evaluation.scoped_costs.get(occurrence.identity, EMPTY_COST)
-        if identity in regions and coverage is not None and occurrence.placement.value != "navigation":
+        navigation_chars[occurrence.identity] = (
+            cost.get(Axis.DISPLAY_TEXT)
+            if occurrence.placement == Placement.NAVIGATION
+            else sum(navigation_chars[child.offer.occurrence.identity] for child in part.children)
+        )
+        if identity in regions and coverage is not None and occurrence.placement != Placement.NAVIGATION:
             node = regions[identity]
             contract = node.candidate.offer.region
             assert contract is not None
@@ -164,7 +174,7 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
             navigation = sum(
                 evaluation.scoped_costs.get(child.offer.occurrence.identity, EMPTY_COST).get(Axis.DISPLAY_TEXT)
                 for child in part.children
-                if child.offer.occurrence.placement.value == "navigation"
+                if child.offer.occurrence.placement == Placement.NAVIGATION
             )
             body_cost = ResourceCost(
                 {**cost.values, Axis.DISPLAY_TEXT: max(0, cost.get(Axis.DISPLAY_TEXT) - navigation)}
@@ -179,9 +189,11 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
                     )
             ends = family.regions[identity].cuts
             if coverage.end == ends[-1]:
-                break_shortfalls.append(max(0, contract.widows - (coverage.end - coverage.start)) if node.units else 0)
+                break_shortfalls[(identity, coverage.end)] = int(
+                    bool(node.units) and coverage.end - coverage.start < contract.widows
+                )
             else:
-                break_shortfalls.append(max(0, contract.min_fill - body_cost.get(Axis.DISPLAY_TEXT)))
+                break_shortfalls[(identity, coverage.end)] = int(body_cost.get(Axis.DISPLAY_TEXT) < contract.min_fill)
             for goal in policies.get(identity, RegionPolicy()).goals:
                 context.work.consume()
                 if goal.axis not in evaluation.resource_axes:
@@ -190,7 +202,20 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
                     extra += ResourceCost(
                         {goal.axis: max(0, goal.minimum - body_cost.get(goal.axis) - extra.get(goal.axis))}
                     )
+            costs[identity] = body_cost + extra
         semantic = occurrence.graph.units[occurrence.reference].value
+        if isinstance(semantic, Budgeted):
+            actual = cost.get(Axis.DISPLAY_TEXT) - navigation_chars[occurrence.identity]
+            extra += ResourceCost({Axis.DISPLAY_TEXT: max(0, semantic.minimum - actual - extra.get(Axis.DISPLAY_TEXT))})
+            if not semantic.stretch and actual + extra.get(Axis.DISPLAY_TEXT) > semantic.preferred:
+                violations.append(
+                    CapacityExceeded(
+                        occurrence.identity,
+                        Axis.DISPLAY_TEXT,
+                        actual + extra.get(Axis.DISPLAY_TEXT),
+                        semantic.preferred,
+                    )
+                )
         if isinstance(semantic, Budget):
             violations.extend(
                 CapacityExceeded(occurrence.identity, axis, used, cap)
@@ -203,7 +228,7 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
         CapacityExceeded(visible.offer.occurrence.identity, axis, used, cap)
         for axis, used, cap in (evaluation.cost + extra).over(context.capacities)
     )
-    return tuple(violations), costs, tuple(break_shortfalls)
+    return tuple(violations), costs, break_shortfalls
 
 
 def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT, OutputT](
@@ -308,9 +333,13 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     continue
                 context.work.consume(len(task.choices))
                 choices = {offer.occurrence.identity: offer for offer, _ in task.choices}
+                if selected.keys() - choices.keys():
+                    continue
                 candidate = _candidate(root, choices, context)
                 regions = _region_trees(fragment_tree(candidate, context), context)
                 seen_regions.update(node.candidate.offer.occurrence.identity for node in regions)
+                if fixed_cuts.keys() - {node.candidate.offer.occurrence.identity for node in regions}:
+                    continue
                 cuts = tuple(
                     fixed_cuts.get(node.candidate.offer.occurrence.identity, (len(node.units),)) for node in regions
                 )
@@ -321,13 +350,24 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
             family = allocate_family(task.candidate, task.regions, task.cuts, context)
             region_map = {node.candidate.offer.occurrence.identity: node for node in task.regions}
             peaks: dict[OccurrenceId, ResourceCost] = {}
-            break_shortfalls: tuple[int, ...] = ()
+            page_violations: dict[tuple[OccurrenceId, int], int] = {}
             pages: list[CertifiedPage[OutputT]] = []
             feasible = True
             for coordinates, visible in family.combinations(context):
                 context.work.consume()
                 evaluations += 1
-                admitted = evaluate_composition(visible, rules, context)
+                try:
+                    admitted = evaluate_composition(visible, rules, context)
+                except SharedResourceConflictError as error:
+                    # Conflict is contextual: separate pages may use different
+                    # values of one identity. Only coexistence is forbidden.
+                    admitted = Evaluation(
+                        violations=(
+                            ConstraintViolation(
+                                visible.offer.occurrence.identity, f"shared resource conflict: {error.identity}"
+                            ),
+                        )
+                    )
                 if isinstance(admitted, Evaluation):
                     context.work.consume(len(admitted.violations))
                     violations.extend(admitted.violations)
@@ -351,8 +391,10 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     peaks[identity] = ResourceCost(
                         {axis: max(cost.get(axis), previous.get(axis)) for axis in {*cost.values, *previous.values}}
                     )
-                # Worst visible break shortfalls, without rewarding hidden regions.
-                break_shortfalls = max(break_shortfalls, tuple(sorted(shortfalls, reverse=True)))
+                # Count each logical page once, even across many sibling combinations.
+                for key, shortfall in shortfalls.items():
+                    context.work.consume()
+                    page_violations[key] = max(page_violations.get(key, 0), shortfall)
                 built = construct_composition(admitted, rules, context)
                 context.work.consume()
                 output = finalize(built, context)
@@ -368,8 +410,10 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     context.work.consume(1 + sum(len(value.goals) for value in policy.values()))
                     deficits = [
                         max(0, goal.minimum - peaks.get(identity, EMPTY_COST).get(axis))
-                        for identity in region_map
-                        for goal in policy.get(identity, RegionPolicy()).goals
+                        if identity in region_map
+                        else 0
+                        for identity, region_policy in policy.items()
+                        for goal in region_policy.goals
                         if goal.axis == axis and not goal.hard
                     ]
                     minimums.extend(sorted(deficits, reverse=True))
@@ -388,6 +432,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         for offer, _ in task.choices
                     )
                 )
+                break_shortfalls = tuple(sorted(page_violations.values(), reverse=True))
                 quality = AllocationQuality(
                     tuple(minimums),
                     preferences,

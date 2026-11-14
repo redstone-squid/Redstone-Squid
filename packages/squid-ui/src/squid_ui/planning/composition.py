@@ -47,6 +47,14 @@ class FragmentCoverage:
 
 
 @dataclass(frozen=True, slots=True)
+class NavigationInput:
+    region: OccurrenceId
+    route: str
+    page: int
+    enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
 class FragmentContract[PayloadT]:
     """Ordered source units and a pure constructor for an exact contiguous fragment.
 
@@ -168,6 +176,7 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     keep_with_next: bool = False
     fragments: FragmentContract[PayloadT] | None = None
     region: RegionContract[RenderTargetT, ContextT, PayloadT] | None = None
+    navigation: NavigationInput | None = None
 
 
 class DiscoveryCompletion(StrEnum):
@@ -267,6 +276,14 @@ class SharedUse[ResourceT]:
     cost: ResourceCost
 
 
+class SharedResourceConflictError(LayoutInvariantError):
+    """Two declarations cannot coexist in one visible resource scope."""
+
+    def __init__(self, identity: ResourceIdentity) -> None:
+        self.identity = identity
+        super().__init__(f"conflicting declarations for shared resource {identity}")
+
+
 @dataclass(frozen=True, slots=True)
 class SharedResources[ResourceT]:
     uses: Mapping[ResourceIdentity, SharedUse[ResourceT]] = field(default_factory=dict)
@@ -287,8 +304,7 @@ class SharedResources[ResourceT]:
         for use in uses:
             previous = combined.get(use.identity)
             if previous is not None and (previous.value != use.value or previous.cost != use.cost):
-                message = f"conflicting declarations for shared resource {use.identity}"
-                raise LayoutInvariantError(message)
+                raise SharedResourceConflictError(use.identity)
             combined.setdefault(use.identity, use)
         return cls(combined)
 

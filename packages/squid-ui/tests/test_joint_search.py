@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import squid_ui as sl
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.allocation_policy import AllocationGoal, RegionPolicy, SearchCompletion
 from squid_ui.planning.composition import (
     BuiltComposition,
@@ -372,3 +373,163 @@ def test_character_hints_survive_wrappers_and_hard_budget_floors() -> None:
             PlanningContext(WorkBudget(10000), capacities=limits.capacities),
             finalize=finish,
         )
+
+
+def test_resource_conflicts_only_reject_pages_where_uses_coexist() -> None:
+    asset = sl.file(b"a", filename="first.schem")
+    changed = replace(asset, name="second.schem")
+    node = sl.region(sl.download(asset, key="a"), sl.download(changed, key="b"), key="r", title="R")
+    result = search_composition(
+        occurrence(node),
+        V2CompositionRules[RenderTarget, object](),
+        PlanningContext(WorkBudget(10000)),
+        finalize=finish,
+    )
+    assert result.diagnostics.optimal
+    assert result.allocation.family.regions[OccurrenceId(("root",))].cuts == (1, 2)
+    assert [
+        next(iter(page.output.evaluation.resources.uses.values())).value.name for page in result.allocation.pages
+    ] == ["first.schem", "second.schem"]
+
+
+def test_unbreakable_and_keep_with_next_survive_budget_wrappers() -> None:
+    joined = sl.paragraph("aaa").keep_with_next().budget(min=0, prefer=30)
+    node = sl.region(joined, sl.paragraph("bbb"), sl.paragraph("ccc"), key="r", title="R")
+    result = search_composition(
+        occurrence(node),
+        V2CompositionRules[RenderTarget, object](),
+        PlanningContext(WorkBudget(10000)),
+        finalize=finish,
+        partitions={OccurrenceId(("root",)): (2, 3)},
+    )
+    assert result.allocation.pages[0].output.evaluation.text[:2] == ("aaa", "bbb")
+    with pytest.raises(LayoutInvariantError, match="legal boundaries"):
+        search_composition(
+            occurrence(node),
+            V2CompositionRules[RenderTarget, object](),
+            PlanningContext(WorkBudget(10000)),
+            finalize=finish,
+            partitions={OccurrenceId(("root",)): (1, 3)},
+        )
+
+
+def test_shared_asset_oracle_does_not_prune_a_costlier_standalone_offer() -> None:
+    shared = sl.file(b"shared", filename="shared.schem")
+    assets = (sl.file(b"left", filename="left.schem"), sl.file(b"right", filename="right.schem"))
+    regions = []
+    for index, asset in enumerate(assets):
+        source = sl.download(asset, key="file")
+        regions.append(
+            sl.region(
+                sl.alternatives(
+                    sl.alternative(source, key="a", fidelity=sl.equivalent()),
+                    sl.alternative(
+                        sl.download(shared, key="file", label="extra text"), key="b", fidelity=sl.equivalent()
+                    ),
+                    content=source,
+                    key="choice",
+                ),
+                key=str(index),
+                title=str(index),
+            )
+        )
+    node = sl.stack(*regions, key="root")
+    rules = V2CompositionRules[RenderTarget, object](V2Limits(attachments=1))
+    feasible = set()
+    observed = set()
+    for a, b in product(("a", "b"), repeat=2):
+        identities = {assets[0].key if a == "a" else shared.key, assets[1].key if b == "a" else shared.key}
+        if len(identities) <= 1:
+            feasible.add((a, b))
+        try:
+            search_composition(
+                occurrence(node),
+                rules,
+                PlanningContext(WorkBudget(20000)),
+                finalize=finish,
+                selections={OccurrenceId(("root", "0", "choice")): a, OccurrenceId(("root", "1", "choice")): b},
+            )
+        except JointInfeasibleError:
+            pass
+        else:
+            observed.add((a, b))
+    assert observed == feasible == {("b", "b")}
+    result = search_composition(occurrence(node), rules, PlanningContext(WorkBudget(30000)), finalize=finish)
+    choices = dict(result.allocation.selection)
+    assert tuple(choices[OccurrenceId(("root", str(index), "choice"))] for index in range(2)) == ("b", "b")
+    assert result.diagnostics.optimal
+
+
+def test_existing_budget_floor_and_new_hard_goal_share_one_capacity() -> None:
+    node = sl.stack(
+        sl.paragraph("a").budget(min=9, prefer=10), sl.region(sl.paragraph("b"), key="r", title="R"), key="root"
+    )
+    limits = V2Limits(total_text=17)
+    with pytest.raises(JointInfeasibleError):
+        search_composition(
+            occurrence(node),
+            V2CompositionRules[RenderTarget, object](limits),
+            PlanningContext(WorkBudget(10000), capacities=limits.capacities),
+            finalize=finish,
+            policies={
+                OccurrenceId(("root", "r")): RegionPolicy(goals=(AllocationGoal(Axis.DISPLAY_TEXT, 9, hard=True),))
+            },
+        )
+
+
+def test_hidden_nested_assets_do_not_create_a_false_union_overflow() -> None:
+    assets = (sl.file(b"a", filename="a.schem"), sl.file(b"b", filename="b.schem"))
+    node = sl.region(
+        *(sl.region(sl.download(asset, key="file"), key=str(i), title=str(i)) for i, asset in enumerate(assets)),
+        key="outer",
+        title="Outer",
+    )
+    result = search_composition(
+        occurrence(node),
+        V2CompositionRules[RenderTarget, object](V2Limits(attachments=1)),
+        PlanningContext(WorkBudget(10000)),
+        finalize=finish,
+        partitions={OccurrenceId(("root",)): (1, 2)},
+    )
+    assert result.diagnostics.optimal
+    assert len(result.allocation.pages) == 2
+    assert all(len(page.output.evaluation.resources.uses) == 1 for page in result.allocation.pages)
+
+
+@pytest.mark.parametrize("inner_fits,expected", [(True, "a"), (False, "b")])
+def test_conditional_choices_only_charge_active_dissatisfaction(inner_fits: bool, expected: str) -> None:
+    source = sl.paragraph("body", key="text")
+    inner = sl.alternatives(
+        sl.alternative(
+            sl.paragraph("x" * (4 if inner_fits else 20), key="text"), key="preferred", fidelity=sl.equivalent()
+        ),
+        sl.alternative(source, key="fallback", fidelity=sl.equivalent(), preference=10),
+        content=source,
+        key="inner",
+    )
+    node = sl.alternatives(
+        sl.alternative(inner, key="a", fidelity=sl.equivalent()),
+        sl.alternative(source, key="b", fidelity=sl.equivalent()),
+        content=source,
+        key="outer",
+    )
+    result = search_composition(
+        occurrence(node),
+        V2CompositionRules[RenderTarget, object](V2Limits(total_text=10)),
+        PlanningContext(WorkBudget(20000)),
+        finalize=finish,
+    )
+    assert dict(result.allocation.selection)[OccurrenceId(("root",))] == expected
+
+
+def test_enclosing_floor_does_not_double_reserve_a_nested_hard_goal() -> None:
+    node = sl.region(sl.paragraph("a"), key="r", title="R").budget(min=9, prefer=10)
+    limits = V2Limits(total_text=9)
+    result = search_composition(
+        occurrence(node),
+        V2CompositionRules[RenderTarget, object](limits),
+        PlanningContext(WorkBudget(10000), capacities=limits.capacities),
+        finalize=finish,
+        policies={OccurrenceId(("root", "r")): RegionPolicy(goals=(AllocationGoal(Axis.DISPLAY_TEXT, 9, hard=True),))},
+    )
+    assert result.diagnostics.optimal
