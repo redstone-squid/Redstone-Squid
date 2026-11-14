@@ -561,6 +561,8 @@ def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[Re
         if unit.parent is not None and not isinstance(
             unit.value,
             sem.Budgeted
+            | primitive.Budget
+            | primitive.Break
             | sem.KeepWithNext
             | sem.Unbreakable
             | sem.Truncated
@@ -653,7 +655,7 @@ def semantic_offers[RenderTargetT, ContextT](
             ancestor.chars
             if isinstance(ancestor, sem.Paged)
             else ancestor.preferred + ancestor.stretch
-            if isinstance(ancestor, sem.Budgeted)
+            if isinstance(ancestor, sem.Budgeted | primitive.Budget)
             else ancestor.limits.get(Axis.DISPLAY_TEXT)
             if isinstance(ancestor, Budget)
             else None
@@ -1093,7 +1095,7 @@ def semantic_offers[RenderTargetT, ContextT](
         return (replace(candidate.offer, key="native-control", interaction=True),)
     if isinstance(value, sem.Themed):
         context = replace(context, palette=value.palette)
-    if isinstance(value, sem.Budgeted | sem.Paged) and not character_budgets:
+    if isinstance(value, sem.Budgeted | primitive.Budget | sem.Paged) and not character_budgets:
         return ()
     if isinstance(value, sem.FallbackContent):
         refs = occurrence.graph.children[occurrence.reference]
@@ -1970,6 +1972,8 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.Region
         | sem.Paged
         | sem.Budgeted
+        | primitive.Budget
+        | primitive.Break
         | StructuralGroup
         | sem.Block
         | Budget
@@ -2059,8 +2063,12 @@ def semantic_offers[RenderTargetT, ContextT](
             "container",
             payload,
             children,
-            flow=not isinstance(value, sem.Unbreakable | sem.Figure),
-            keep_with_next=isinstance(value, sem.KeepWithNext),
+            flow=not (
+                isinstance(value, sem.Unbreakable | sem.Figure)
+                or (isinstance(value, primitive.Break) and value.unbreakable)
+            ),
+            keep_with_next=isinstance(value, sem.KeepWithNext)
+            or (isinstance(value, primitive.Break) and value.keep_with_next),
             region=region,
         )
         if isinstance(value, sem.Fields) and spill and value.fields:

@@ -23,6 +23,7 @@ from squid_ui.planning.semantics import SemanticGraph, SemanticValue, SourceScop
 from squid_ui.presentation import PresentationState
 from squid_ui.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
+from squid_ui.primitives.nodes import Budget as NativeBudget
 from squid_ui.semantic import Budgeted
 from squid_ui.text import NEUTRAL, Localization
 
@@ -504,7 +505,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 preflight.append(ConstraintViolation(identity, "atomic placement"))
         if isinstance(semantic, Budget) and semantic.limits:
             budgets[identity] = semantic.limits
-        if isinstance(semantic, Budgeted):
+        if isinstance(semantic, Budgeted | NativeBudget):
             floors[identity] = budget_floor(
                 part.offer.occurrence.graph, part.offer.occurrence.reference, part.offer.occurrence.ancestors()
             )

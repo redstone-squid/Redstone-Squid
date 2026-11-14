@@ -477,16 +477,16 @@ class Panel[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Budget[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
+class Budget[RenderTargetT = DiscordTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     """Group text under an explicit character reservation and preferred size.
 
     `minimum` reserves space before discretionary allocation. `preferred` is the
     normal target size; `stretch` permits extra space when the content fits within
-    that allowance. `best_effort` lets the minimum be breached with a degradation
-    note instead of a budget-floor failure.
+    that allowance. `best_effort` lets the minimum be breached without granting
+    additional permission to shorten or omit children.
     """
 
-    children: tuple[Node, ...]
+    children: tuple[Node[ContextT], ...]
     minimum: int
     preferred: int
     stretch: int = 0
@@ -494,10 +494,10 @@ class Budget[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Break[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
+class Break[RenderTargetT = DiscordTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     """Transparent group carrying region-break annotations through semantic lowering."""
 
-    children: tuple[Node, ...]
+    children: tuple[Node[ContextT], ...]
     unbreakable: bool = False
     keep_with_next: bool = False
 
@@ -652,8 +652,8 @@ type Node[ContextT = object] = (
     | MediaCollection
     | Section[ContextT]
     | Panel[ContextT]
-    | Budget
-    | Break
+    | Budget[Any, ContextT]
+    | Break[Any, ContextT]
     | RawItem
     | Boundary[Any, ContextT]
     | Card

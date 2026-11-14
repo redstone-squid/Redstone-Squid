@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Literal
+from typing import Literal, cast
 
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
@@ -96,6 +96,8 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | primitive.Code
     | primitive.Lines
     | primitive.Section[ContextT]
+    | primitive.Budget[RenderTargetT, ContextT]
+    | primitive.Break[RenderTargetT, ContextT]
     | primitive.Panel[ContextT]
     | primitive.Thumbnail
     | primitive.Sep
@@ -336,6 +338,12 @@ def semantic_graph[RenderTargetT, ContextT](
                 for i, child in enumerate(value.texts):
                     visit(child, root, i)
                 visit(value.accessory, root, len(value.texts), name="@accessory")
+            case primitive.Budget() | primitive.Break():
+                root = add(value, path, parent, atomic=False)
+                for i, child in enumerate(value.children):
+                    # Native policy wrappers carry Discord nodes; their generic marker
+                    # cannot express that child-target restriction to the type checker.
+                    visit(cast(Renderable[RenderTargetT, ContextT], child), root, i)
             case primitive.Panel():
                 root = add(value, path, parent, atomic=False)
                 for i, child in enumerate(value.children):
@@ -661,7 +669,10 @@ def budget_floor[RenderTargetT, ContextT](
 ) -> int:
     """Return the hard character reservation after explicit best-effort permission."""
     unit = graph.units[reference]
-    if not isinstance(unit.value, sem.Budgeted) or isinstance(unit.value.node, sem.BestEffort):
+    if isinstance(unit.value, primitive.Budget):
+        if unit.value.best_effort:
+            return 0
+    elif not isinstance(unit.value, sem.Budgeted) or isinstance(unit.value.node, sem.BestEffort):
         return 0
     if any(isinstance(value, sem.BestEffort) for value in inherited):
         return 0
@@ -692,7 +703,9 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | sem.Grid
             | primitive.Row
             | primitive.Section
-            | primitive.Panel,
+            | primitive.Panel
+            | primitive.Budget
+            | primitive.Break,
         ) and not (
             isinstance(
                 constraint, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
@@ -719,12 +732,16 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     preserved = all(
                         axis in other.limits and other.limits[axis] <= cap for axis, cap in constraint.limits.items()
                     )
-                case sem.Budgeted(), sem.Budgeted():
+                case (sem.Budgeted(), sem.Budgeted()) | (primitive.Budget(), primitive.Budget()):
                     preserved = (constraint.minimum, constraint.preferred, constraint.stretch) == (
                         other.minimum,
                         other.preferred,
                         other.stretch,
                     ) and budget_floor(checked.presentation, target) >= budget_floor(checked.source, reference)
+                case primitive.Break(), primitive.Break():
+                    preserved = (not constraint.unbreakable or other.unbreakable) and (
+                        not constraint.keep_with_next or other.keep_with_next
+                    )
                 case sem.Paged(), sem.Paged():
                     preserved = (
                         constraint.key,

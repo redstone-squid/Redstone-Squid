@@ -97,6 +97,13 @@ accessory controls count against native limits, and only visible accessories
 publish bindings. A section text slot cannot host a pager's controls; paginate the
 enclosing region instead. Other native extensions still need explicit composition rules.
 
+Native budget and break wrappers also participate directly. Budgets enforce the
+finite `preferred + stretch` ceiling; native `best_effort` only relaxes the minimum
+reservation. Children still need their own permission to lose content. Break
+annotations retain unbreakable groups and keep-with-next boundaries. Classic
+Discord rejects native character reservations within shared regions because its
+content and embed capacities are separate; use explicit resource budgets there.
+
 ## Compatibility and deferred contracts
 
 `regions.py` and its backend-probing frontier search are removed. Discovery lives

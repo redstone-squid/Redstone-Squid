@@ -185,7 +185,10 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             _,
         ):
             return left == right
-        case primitive.Panel(), primitive.Panel():
+        case (
+            (primitive.Panel() | primitive.Budget() | primitive.Break()),
+            (primitive.Panel() | primitive.Budget() | primitive.Break()),
+        ):
             return replace(left, children=()) == replace(right, children=()) and _same_children(
                 left.children, right.children
             )

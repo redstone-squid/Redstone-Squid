@@ -48,6 +48,7 @@ from squid_ui.planning.fragments import FragmentTree, fragment_tree
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.semantics import budget_floor
 from squid_ui.presentations import Budget, FidelityEffect
+from squid_ui.primitives.nodes import Budget as NativeBudget
 from squid_ui.semantic import Budgeted
 
 
@@ -218,7 +219,7 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
                     )
             costs[identity] = body_cost + extra
         semantic = occurrence.graph.units[occurrence.reference].value
-        if isinstance(semantic, Budgeted):
+        if isinstance(semantic, Budgeted | NativeBudget):
             actual = cost.get(Axis.DISPLAY_TEXT) - navigation_chars[occurrence.identity]
             extra += ResourceCost(
                 {

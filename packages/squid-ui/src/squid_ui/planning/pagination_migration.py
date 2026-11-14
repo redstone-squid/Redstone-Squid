@@ -121,6 +121,17 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                         raise UnsupportedSemanticError(message)
                     return replace(node, texts=tuple(map(visit, node.texts)), accessory=visit(node.accessory))
                 return node
+            case primitive.Budget() | primitive.Break():
+                if not isinstance(limits, V2Limits | ClassicLimits):
+                    msg = "Discord native layout policy on a non-Discord target"
+                    raise UnsupportedSemanticError(msg)
+                if isinstance(node, primitive.Budget) and not isinstance(limits, V2Limits):
+                    msg = "Budget requires one shared character axis; use resource budgets on this target"
+                    raise UnsupportedSemanticError(msg)
+                pageable = True
+                for child in node.children:
+                    visit(child)
+                return node
             case primitive.Time() | primitive.ZonedTime():
                 if not isinstance(limits, V2Limits | ClassicLimits):
                     msg = "Discord native time on a non-Discord target"
