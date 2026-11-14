@@ -1,6 +1,6 @@
 # Generic region pagination roadmap
 
-Status: proposed. Each phase is a separate task and starts with its own detailed plan.
+Status: phase 1 in progress. Each phase is a separate task and starts with its own detailed plan.
 
 Make joint region pagination part of the generic planning architecture. Sibling and nested
 regions should share target limits while preserving content, navigation, and reading position.
@@ -47,20 +47,25 @@ decisions; implementation phases must leave working changes. A phase may be spli
 when its detailed planning exposes independent work. Tests belong in every phase; the final
 phase checks the assembled system rather than postponing correctness work until the end.
 
-## Phase 1 Establish behavior and architectural boundaries
+## Phase 1 Establish a shared planning core
 
-Inventory the existing pagination paths, target capabilities, authored policies, and state
-owners. Use representative examples to clarify what joint pagination must preserve and which
-behaviors are intentionally target-specific. Include persistent content, nested containers,
-shared resources, alternative representations, and application-owned pages.
+Detailed task: [Shared core boundaries and behavior](01-shared-core.md).
 
-Explore where content structure, representation selection, composition, and allocation should
-meet. Decide what evidence is needed to compare candidate designs, including how to exercise
-more than one target early. Public APIs may evolve with an explicit migration decision.
+Inventory the whole planning pipeline across targets, including semantic interpretation,
+representation selection, composition, measurement, search, pagination, state reconciliation,
+caching, diagnostics, and scene construction. Identify duplicated responsibilities and actual
+target differences. The direction is one planning core with explicit target extensions;
+joint pagination belongs inside that core.
 
-Complete when there is a documented behavior and capability matrix, an architectural direction
-supported by examples or focused experiments, and enough evidence to plan the next phase.
-No particular intermediate representation or fragment protocol is prescribed here.
+Use representative examples to establish shared behavior and the information targets must
+supply. Include persistent content, nested containers, shared resources, alternatives,
+application-owned pages, and targets without a global message budget. Compare possible
+boundaries without prescribing an intermediate representation or extension protocol.
+
+Complete when there is a behavior and capability matrix, a responsibility map supported by
+examples or focused experiments, and enough evidence to plan the next phase. Public APIs may
+evolve with an explicit migration decision. Stop at consequential design choices to discuss
+the alternatives before treating them as settled; this phase may span several tasks.
 
 ## Phase 2 Establish composition across targets
 
@@ -153,5 +158,6 @@ Depends on phases 4 and 5. Target integration can begin earlier where contracts 
 - Cross-target tests and application scenarios support the documented behavior.
 - Remaining limitations are deliberate and documented; obsolete parallel machinery is removed.
 
-The next task is the detailed plan for phase 1. This roadmap does not start implementation of
-any phase.
+Phase 1 starts with investigation and design. Its findings may revise the later phases to
+account for convergence of the whole planning pipeline. Production changes follow the
+relevant phase plans; an open design question is not an implementation decision.
