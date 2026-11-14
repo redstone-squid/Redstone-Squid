@@ -257,5 +257,5 @@ ui-form-time-nonexistent = This local time does not exist in the selected timezo
 # packages/squid-ui/src/squid_ui/forms.py:567
 ui-form-timezone-offset-mismatch = The UTC offset does not match this local time in the selected timezone.
 
-# packages/squid-ui/src/squid_ui/factories.py:591
+# packages/squid-ui/src/squid_ui/factories.py:595
 ui-tally-option = { $label } — { NUMBER($count) }

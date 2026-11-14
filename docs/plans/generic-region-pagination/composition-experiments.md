@@ -51,10 +51,7 @@ target = replace(
     ),
 )
 columns = sl.columns(*(sl.column(key, key=key) for key in ("A", "B", "C")))
-rows = tuple(
-    sl.table_row(*(f"{key}{index}" for key in ("A", "B", "C")), key=f"row-{index}")
-    for index in range(1, 4)
-)
+rows = tuple(sl.table_row(*(f"{key}{index}" for key in ("A", "B", "C")), key=f"row-{index}") for index in range(1, 4))
 for display in (sl.semantic.TableDisplay.AUTO, sl.semantic.TableDisplay.RECORDS):
     result = sl.planning.plan(sl.table(columns, *rows, key="sample", display=display), target=target, strict=True)
     print(display, [[cell.content for cell in row] for row in result.scene.body.blocks[0].rows])

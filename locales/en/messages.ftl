@@ -750,7 +750,7 @@ bot-consent-value =
     { "*" }*{ $username }**
     `{ $uuid }`
 
-# squid/bot/notifications.py:129
+# squid/bot/notifications.py:131
 bot-notifications-a-credited-build-gained-record =
     { $count ->
         [one] A credited build gained { $count } record.
@@ -864,10 +864,10 @@ bot-notifications-view-version-scope = Version scope
 # squid/bot/notifications_view.py:153
 bot-notifications-view-web-inbox = Web inbox
 
-# squid/bot/notifications.py:138
+# squid/bot/notifications.py:140
 bot-notifications-your-build-was-confirmed = Your build was confirmed.
 
-# squid/bot/notifications.py:140
+# squid/bot/notifications.py:142
 bot-notifications-your-build-was-denied = Your build was denied.
 
 # squid/bot/profile_render.py:104
@@ -2564,25 +2564,28 @@ consent-storage-prerequisite = Before Redstone Squid stores anything about you
 # squid/bot/consent.py:160, squid/bot/consent.py:196
 consent-value-2 = { $user_mention } (`{ $user_id }`)
 
-# squid/core/errors.py:245
+# squid/core/errors.py:226
+core-account-required-action = A linked account is required for this action.
+
+# squid/core/errors.py:263
 core-configuration-invalid = Application configuration is invalid.
 
-# squid/core/errors.py:259
+# squid/core/errors.py:277
 core-dependency-failed = An infrastructure dependency failed.
 
 # squid/core/errors.py:84
 core-errors-an-application-error-occurred = An application error occurred.
 
-# squid/core/errors.py:234
+# squid/core/errors.py:252
 core-errors-an-internal-application-error-occurred = An internal application error occurred.
 
 # squid/core/errors.py:87
 core-errors-application-error = Application error
 
-# squid/core/errors.py:216
+# squid/core/errors.py:222
 core-errors-forbidden = Forbidden
 
-# squid/core/errors.py:237
+# squid/core/errors.py:255
 core-errors-internal-error = Internal error
 
 # squid/core/errors.py:183
@@ -2597,10 +2600,10 @@ core-errors-request-failed = Request failed
 # squid/core/errors.py:191
 core-errors-resource-not-found = Resource not found
 
-# squid/core/errors.py:284
+# squid/core/errors.py:302
 core-errors-service-unavailable = Service unavailable
 
-# squid/core/errors.py:223
+# squid/core/errors.py:241
 core-errors-too-many-requests = Too many requests
 
 # squid/core/errors.py:205
@@ -2609,8 +2612,11 @@ core-errors-unauthorized = Unauthorized.
 # squid/core/errors.py:206
 core-errors-unauthorized-2 = Unauthorized
 
-# squid/core/errors.py:213
+# squid/core/errors.py:219
 core-errors-you-do-not-have-permission-to-perform = You do not have permission to perform this action.
+
+# squid/core/errors.py:234
+core-guild-required-action = This action must be performed in the server it belongs to.
 
 # squid/core/errors.py:198
 core-operation-conflict = The operation conflicts with the current state.
@@ -2618,25 +2624,28 @@ core-operation-conflict = The operation conflicts with the current state.
 # squid/core/errors.py:174
 core-operation-failed = The requested operation could not be completed.
 
-# squid/core/errors.py:274
+# squid/core/errors.py:230
+core-owner-required-action = Only the owner can perform this action.
+
+# squid/core/errors.py:292
 core-persisted-data-inconsistent = Persisted data is inconsistent with application expectations.
 
-# squid/core/errors.py:266
+# squid/core/errors.py:284
 core-persistence-operation-failed = A persistence operation failed.
 
-# squid/core/errors.py:222
+# squid/core/errors.py:240
 core-rate-limited = Too many requests. Please try again later.
 
 # squid/core/errors.py:190
 core-requested-resource-not-found = The requested resource was not found.
 
-# squid/core/errors.py:283
+# squid/core/errors.py:301
 core-required-service-temporarily = A required service is temporarily unavailable.
 
-# squid/core/errors.py:239
+# squid/core/errors.py:257
 core-retry-later = Please try again later.
 
-# squid/core/errors.py:252
+# squid/core/errors.py:270
 core-state-invalid-operation = Application state is invalid for this operation.
 
 # squid/core/errors.py:182
@@ -3023,7 +3032,7 @@ draft-editor-title-editing = ## Submit a build · { $category }
 # squid/bot/submission/ui/drafts.py:749
 draft-editor-title-expired = ## Draft expired · { $category }
 
-# squid/bot/submission/submit.py:515
+# squid/bot/submission/submit.py:516
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
 # squid/bot/submission/ui/drafts.py:605
@@ -3101,73 +3110,64 @@ edits-revision-conflict = This item changed elsewhere. Reload it before editing.
 # squid/api/revisions.py:11
 edits-revision-required = Send the ETag you read in the If-Match header.
 
-# squid/bot/errors.py:177
-errors-all-permissions-required = You need these permissions to use this command:
-
-# squid/bot/errors.py:175
-errors-any-permission-required = You need any one of these permissions to use this command:
-
-# squid/bot/errors.py:232
+# squid/bot/errors.py:200
 errors-command-already-running = Command already running
 
-# squid/bot/errors.py:225
+# squid/bot/errors.py:193
 errors-command-on-cooldown = Command on cooldown
 
-# squid/bot/errors.py:237, squid/bot/errors.py:252
+# squid/bot/errors.py:205, squid/bot/errors.py:220
 errors-command-unavailable = Command unavailable
 
-# squid/bot/errors.py:198
+# squid/bot/errors.py:168
 errors-consent-required = Consent required
 
-# squid/bot/errors.py:199
+# squid/bot/errors.py:169
 errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it.
 
-# squid/bot/errors.py:238, squid/bot/errors.py:253
+# squid/bot/errors.py:206, squid/bot/errors.py:221
 errors-context-forbidden = You cannot use this command here.
 
-# squid/bot/errors.py:208
+# squid/bot/errors.py:178
 errors-context-unavailable = This command cannot be used in a private message.
 
-# squid/bot/errors.py:243
+# squid/bot/errors.py:211
 errors-invalid-arguments-hint = Check the command arguments and try again.
 
-# squid/bot/errors.py:242, squid/bot/errors.py:247
+# squid/bot/errors.py:210, squid/bot/errors.py:215
 errors-invalid-command-input = Invalid command input
 
-# squid/bot/errors.py:179, squid/bot/errors.py:212
+# squid/bot/errors.py:182, squid/permissions/errors.py:64
 errors-missing-permission = Missing permission
 
-# squid/bot/errors.py:248
+# squid/bot/errors.py:216
 errors-one-of-the-command-options-is-invalid = One of the command options is invalid.
 
-# squid/bot/errors.py:233
+# squid/bot/errors.py:201
 errors-operation-in-progress = Wait for the current operation to finish and try again.
 
-# squid/bot/errors.py:217
+# squid/bot/errors.py:187
 errors-owner-only = Owner only
 
-# squid/bot/errors.py:218
+# squid/bot/errors.py:188
 errors-owner-only-hint = Only the bot owner can use this command.
 
-# squid/bot/errors.py:213
+# squid/bot/errors.py:183
 errors-permission-required = You do not have permission to use this command.
 
-# squid/bot/errors.py:166
+# squid/permissions/errors.py:62
 errors-permission-withheld = Permission withheld
 
-# squid/bot/errors.py:167
-errors-permission-withheld-warning = An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.
-
-# squid/bot/errors.py:207
+# squid/bot/errors.py:177
 errors-server-only = Server only
 
-# squid/bot/errors.py:264
+# squid/bot/errors.py:232
 errors-something-went-wrong = Something went wrong
 
-# squid/bot/errors.py:226
+# squid/bot/errors.py:194
 errors-try-again-in-seconds = Try again in { NUMBER($seconds, minimumFractionDigits: 1, maximumFractionDigits: 1) } seconds.
 
-# squid/bot/errors.py:276
+# squid/bot/errors.py:244
 errors-unexpected-reference = An unexpected error occurred. Reference: `{ $error_id }`
 
 # squid/events/application.py:77
@@ -3796,13 +3796,13 @@ notification-history-read = Change read state
 # squid/bot/notifications_view.py:292
 notification-history-unfollow = Unfollow
 
-# squid/bot/notifications.py:125
+# squid/bot/notifications.py:127
 notifications-build-awaiting-review = A new build is awaiting staff review.
 
-# squid/bot/notifications.py:143
+# squid/bot/notifications.py:145
 notifications-build-ready = A build notification is available.
 
-# squid/bot/notifications.py:118
+# squid/bot/notifications.py:120
 notifications-build-review-link =
     A new build is awaiting staff review.
     Open it in Discord with `/build browse id:{ $build_id }`.
@@ -3831,7 +3831,7 @@ notifications-exact-predicate-value-required = exact predicates require a value
 # squid/bot/notifications_view.py:365
 notifications-follow-filter-confirmation = Following records matching that filter.
 
-# squid/bot/notifications.py:142
+# squid/bot/notifications.py:144
 notifications-followed-creator-build = A creator you follow has a newly confirmed build.
 
 # squid/bot/notifications_view.py:322
@@ -3882,6 +3882,9 @@ notifications-tag-predicates-objects = tag predicates must be objects
 # squid/notifications/domain.py:219
 notifications-tags-list = tags must be a list
 
+# squid/permissions/errors.py:35
+permissions-action-requirement = This action requires { $node }, but { $detail }.
+
 # squid/permissions/domain/catalogue.py:250
 permissions-add-alias-restriction = Add an alias for a restriction.
 
@@ -3903,7 +3906,7 @@ permissions-archive-tag = Archive a tag.
 # squid/permissions/domain/catalogue.py:483
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
-# squid/permissions/application/administration.py:60
+# squid/permissions/application/administration.py:70
 permissions-built-role = Built-in role
 
 # squid/permissions/domain/catalogue.py:382
@@ -3945,11 +3948,17 @@ permissions-create-poll-carded = Create a poll carded in every server's vote cha
 # squid/permissions/domain/catalogue.py:399
 permissions-create-starboard = Create a starboard.
 
+# squid/permissions/errors.py:82
+permissions-credential-scope = This action requires { $node }, but your credential does not include that permission.
+
 # squid/permissions/domain/catalogue.py:335
 permissions-delete-every-stored = Delete every stored error report.
 
 # squid/permissions/domain/catalogue.py:409
 permissions-delete-starboard-recorded = Delete a starboard and its recorded stars.
+
+# squid/permissions/errors.py:13
+permissions-deny-reason = an explicit deny rule blocks that permission
 
 # squid/permissions/domain/catalogue.py:188
 permissions-download-convert-schematics = Download or convert schematics that are not publicly downloadable, on builds you did not upload them to.
@@ -3962,6 +3971,12 @@ permissions-edit-unsubmitted-builds = Edit builds you did not submit.
 
 # squid/permissions/application/epoch.py:61
 permissions-epoch-watcher-built = This watcher was built without a wake listener.
+
+# squid/permissions/errors.py:11
+permissions-forbid-reason = an explicit forbid rule blocks that permission
+
+# squid/permissions/errors.py:14
+permissions-grant-reason = your current permissions do not grant it
 
 # squid/permissions/domain/catalogue.py:318
 permissions-grant-revoke-permissions = Grant or revoke permissions anywhere, including global ones.
@@ -3996,7 +4011,7 @@ permissions-measure-schematic-timing = Measure a schematic's timing.
 # squid/permissions/domain/models.py:83
 permissions-not-valid-permission = That is not a valid permission pattern.
 
-# squid/permissions/application/administration.py:48
+# squid/permissions/application/administration.py:58
 permissions-outside-authority = Outside your authority
 
 # squid/permissions/domain/catalogue.py:440
@@ -4041,10 +4056,16 @@ permissions-reject-tag-proposal = Reject a tag proposal.
 # squid/permissions/domain/catalogue.py:281
 permissions-relay-account-verification = Relay account verification on another user's behalf.
 
+# squid/permissions/errors.py:41
+permissions-require-all = This action requires all of these permissions:
+
+# squid/permissions/errors.py:39
+permissions-require-any = This action requires at least one of these permissions:
+
 # squid/permissions/domain/catalogue.py:445
 permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membership.
 
-# squid/permissions/application/administration.py:54
+# squid/permissions/application/administration.py:64
 permissions-role-not-yours = Role is not yours to manage
 
 # squid/permissions/domain/catalogue.py:350
@@ -4876,7 +4897,7 @@ submissions-application-forms-vertical-upward = Vertical upward
 # squid/submissions/application/attachments.py:79
 submissions-attachment-upload-authority = The draft attachment upload authority is no longer available.
 
-# squid/submissions/application/finalization.py:223
+# squid/submissions/application/finalization.py:224
 submissions-attention-retention-positive = finalization attention retention must be positive
 
 # squid/submissions/domain/drafts.py:121
@@ -4915,10 +4936,10 @@ submissions-choice-options-required = choice field { $field_id } requires option
 # squid/submissions/application/forms.py:348
 submissions-choose-explicitly-publication = Nothing is published unless you choose Anyone.
 
-# squid/submissions/application/finalization.py:422
+# squid/submissions/application/finalization.py:423
 submissions-claim-limit = finalization claim limit must be between 1 and { $maximum }
 
-# squid/submissions/application/finalization.py:68
+# squid/submissions/application/finalization.py:69
 submissions-claimed-finalization-metadata-invalid = claimed submission finalization metadata is invalid
 
 # squid/submissions/application/forms.py:462
@@ -4945,13 +4966,16 @@ submissions-declared-version-compatibility = Works in versions
 # squid/submissions/application/forms.py:230
 submissions-dimensions-versions = Size and version
 
+# squid/submissions/errors.py:33
+submissions-draft-account-required = No linked account was found for this request.
+
 # squid/submissions/domain/drafts.py:214
 submissions-draft-answers-exceed = The draft answers exceed the retained data limit.
 
 # squid/submissions/application/attachments.py:73
 submissions-draft-attachment-upload = Draft attachment upload authority is invalid.
 
-# squid/submissions/application/drafts.py:237
+# squid/submissions/application/drafts.py:239
 submissions-draft-capacity-positive = draft capacity must be positive
 
 # squid/submissions/domain/drafts.py:142
@@ -4963,10 +4987,10 @@ submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII ch
 # squid/submissions/domain/drafts.py:132
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
-# squid/submissions/application/drafts.py:352
+# squid/submissions/application/drafts.py:354
 submissions-draft-discovery-limit = draft discovery limit must be between 1 and { $maximum }
 
-# squid/submissions/application/drafts.py:418
+# squid/submissions/application/drafts.py:422
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
 # squid/submissions/domain/drafts.py:292, squid/submissions/domain/drafts.py:300
@@ -4993,8 +5017,14 @@ submissions-draft-json-object = draft JSON object keys must be strings
 # squid/submissions/domain/drafts.py:127
 submissions-draft-operation-required = draft changes require at least one operation
 
-# squid/submissions/application/drafts.py:277
+# squid/submissions/errors.py:39
+submissions-draft-owner-required = Only the account that owns this draft can perform this action.
+
+# squid/submissions/application/drafts.py:279
 submissions-draft-retention-positive = draft retention must be positive
+
+# squid/submissions/errors.py:35
+submissions-draft-staff-unconfigured = Staff access to submission drafts is not configured for this service. Contact the service operator.
 
 # squid/submissions/domain/drafts.py:237
 submissions-draft-transition = draft cannot transition from { $current } to { $next_status }
@@ -5029,10 +5059,10 @@ submissions-field-not-string = validated field { $field_id } is not a string
 # squid/submissions/domain/forms.py:230
 submissions-field-purpose = field { $field_id } must apply to at least one purpose
 
-# squid/submissions/application/finalization.py:259
+# squid/submissions/application/finalization.py:260
 submissions-finalization-job-missing = processing draft has no active finalization job
 
-# squid/submissions/application/finalization.py:265
+# squid/submissions/application/finalization.py:266
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
 # squid/submissions/domain/finalization.py:380
@@ -5104,10 +5134,10 @@ submissions-owner-account-id = owner_account_id must be positive
 # squid/submissions/domain/finalization.py:347
 submissions-paper-installation-only = Only Paper submissions may retain an installation provenance ID.
 
-# squid/submissions/application/drafts.py:307
+# squid/submissions/application/drafts.py:309
 submissions-paper-installation-provenance-required = Paper drafts require server-derived installation provenance.
 
-# squid/submissions/application/drafts.py:95
+# squid/submissions/application/drafts.py:97
 submissions-paper-may-retain = Only Paper drafts may retain an installation provenance ID.
 
 # squid/submissions/application/forms.py:649
@@ -5137,7 +5167,7 @@ submissions-repeatable-field-use = repeatable field { $field_id } must use strin
 # squid/submissions/application/forms.py:300
 submissions-restrictions-tags = Restrictions and tags
 
-# squid/submissions/application/finalization.py:404
+# squid/submissions/application/finalization.py:405
 submissions-retry-retention-limits = finalization retry and retention limits must be positive
 
 # squid/submissions/domain/finalization.py:173
@@ -5173,7 +5203,7 @@ submissions-state-edited = drafts in { $current_status } state cannot be edited
 # squid/submissions/domain/finalization.py:139
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
-# squid/submissions/application/drafts.py:210
+# squid/submissions/application/drafts.py:212
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
 # squid/submissions/domain/finalization.py:341

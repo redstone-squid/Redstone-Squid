@@ -1013,7 +1013,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/factories.py:591"
+      "packages/squid-ui/src/squid_ui/factories.py:595"
     ]
   }
 }
