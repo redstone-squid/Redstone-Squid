@@ -13,7 +13,7 @@ from typing import Protocol
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
-from squid_ui.planning.semantics import SemanticGraph
+from squid_ui.planning.semantics import SemanticGraph, SourceScope
 from squid_ui.presentations import Budget, FidelityEffect, SemanticRef
 from squid_ui.text import NEUTRAL, Localization
 
@@ -38,11 +38,16 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
     graph: SemanticGraph[RenderTargetT, ContextT]
     reference: SemanticRef
     placement: Placement = Placement.CONTENT
+    origin: SourceScope[RenderTargetT, ContextT] | None = None
 
     def __post_init__(self) -> None:
         if self.reference not in self.graph.units:
             message = "an occurrence needs a resolved reference in its semantic graph"
             raise LayoutInvariantError(message)
+
+    @property
+    def sources(self) -> frozenset[SemanticRef]:
+        return self.origin.references(self.reference) if self.origin is not None else self.graph.atoms(self.reference)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +82,7 @@ class CandidateComposition[RenderTargetT, ContextT, PayloadT]:
             child.offer.occurrence.graph is not expected_child.graph
             or child.offer.occurrence.reference != expected_child.reference
             or child.offer.occurrence.placement != expected_child.placement
+            or child.offer.occurrence.origin is not expected_child.origin
             for child, expected_child in zip(self.children, self.offer.children, strict=True)
         ):
             message = "candidate children must retain their declared semantic source and placement"

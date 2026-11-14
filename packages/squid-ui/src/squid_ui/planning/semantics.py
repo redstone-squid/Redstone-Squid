@@ -48,6 +48,7 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | sem.Adaptation[RenderTargetT, ContextT]
     | EmbeddedValue[ContextT]
     | Budget[RenderTargetT, ContextT]
+    | Alternatives[RenderTargetT, ContextT]
     | TableCell
     | FieldPart
     | TextPresentation
@@ -115,6 +116,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Paged()
             | sem.Download()
             | TextPresentation()
+            | Alternatives()
         ):
             return value.key
         case _:
@@ -153,12 +155,12 @@ def semantic_graph[RenderTargetT, ContextT](
         *,
         name: str | None = None,
     ) -> None:
-        if isinstance(value, Alternatives):
-            visit(value.content, parent, index, name=name)
-            return
         key = name or _key(value) or f"@{index}"
         path = (*(() if parent is None else parent.keys), key)
         match value:
+            case Alternatives():
+                root = add(value, path, parent, atomic=False)
+                visit(value.content, root, 0)
             case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.Paged() | Budget():
                 root = add(value, path, parent, atomic=False)
                 visit(value.node, root, 0)
@@ -390,3 +392,25 @@ def source_text[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, Con
         case _:
             message = f"a text fragment must reference one text unit, not {type(value).__name__}"
             raise LayoutInvariantError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class SourceScope[RenderTargetT, ContextT]:
+    """Translate one presentation's references back through enclosing alternatives."""
+
+    checked: CheckedAlternative[RenderTargetT, ContextT]
+    group: SemanticRef
+    parent: SourceScope[RenderTargetT, ContextT] | None = None
+
+    def source_references(self, reference: SemanticRef) -> frozenset[SemanticRef]:
+        scoped = SemanticRef((*self.group.keys, *reference.keys))
+        return self.parent.references(scoped) if self.parent is not None else frozenset({scoped})
+
+    def references(self, presentation: SemanticRef) -> frozenset[SemanticRef]:
+        sources = {
+            source
+            for target, covered in self.checked.coverage.items()
+            if target.keys[: len(presentation.keys)] == presentation.keys
+            for source in covered
+        }
+        return frozenset(result for source in sources for result in self.source_references(source))

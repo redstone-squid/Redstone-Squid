@@ -5,7 +5,7 @@ This module offers representations; it does not fit or paginate them.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from squid_i18n import tree
@@ -22,9 +22,10 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
-from squid_ui.planning.semantics import StructuralGroup
+from squid_ui.planning.semantics import SourceScope, StructuralGroup, check_alternative
 from squid_ui.planning.structure import resolve_accent
-from squid_ui.presentations import Budget, SemanticRef
+from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, resolve_presentation_text
+from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
 from squid_ui.primitives.styles import Color
 from squid_ui.text import resolve_text
 
@@ -32,6 +33,7 @@ from squid_ui.text import resolve_text
 @dataclass(frozen=True, slots=True)
 class TextRealization:
     nodes: tuple[tree.Node, ...]
+    provenance: ResolvedText | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +90,41 @@ def semantic_offers[RenderTargetT, ContextT](
 ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
     context.work.consume()
     value = occurrence.graph.units[occurrence.reference].value
+    if isinstance(value, Alternatives):
+        choices: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
+        for choice in value.choices:
+            context.work.consume()
+            checked = check_alternative(value, choice)
+            origin = SourceScope(checked, occurrence.reference, occurrence.origin)
+            root = next(ref for ref, unit in checked.presentation.units.items() if unit.parent is None)
+            child = SemanticOccurrence(
+                OccurrenceId((*occurrence.identity.path, "@presentation")),
+                checked.presentation,
+                root,
+                occurrence.placement,
+                origin,
+            )
+            effects = tuple(
+                replace(effect, source=source)
+                for effect in choice.fidelity.effects
+                for source in sorted(
+                    origin.source_references(checked.source.resolve(effect.source)), key=lambda ref: ref.keys
+                )
+            )
+            choices.append(
+                RealizationOffer(occurrence, choice.key, FlowRealization(), (child,), effects, choice.preference)
+            )
+        return tuple(choices)
+    if isinstance(value, TextPresentation):
+        if occurrence.origin is None:
+            message = "source-referenced text must belong to a checked alternative"
+            raise LayoutInvariantError(message)
+        resolved = resolve_presentation_text(
+            occurrence.origin.checked, occurrence.reference, localization=context.localization
+        )
+        if isinstance(resolved, UnsupportedText):
+            return ()
+        return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
     if isinstance(value, sem.Paragraph):
         return (
             RealizationOffer(
@@ -108,7 +145,11 @@ def semantic_offers[RenderTargetT, ContextT](
                 placement = Placement.FOOTER
         children = tuple(
             SemanticOccurrence(
-                OccurrenceId((*occurrence.identity.path, ref.keys[-1])), occurrence.graph, ref, placement
+                OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                occurrence.graph,
+                ref,
+                placement,
+                occurrence.origin,
             )
             for ref in refs
         )
