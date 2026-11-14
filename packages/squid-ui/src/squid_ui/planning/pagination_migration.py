@@ -315,6 +315,8 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 return replace(node, primary=visit(node.primary), alternates=tuple(map(visit, node.alternates)))
             case primitive.Variants():
                 variant_index += 1
+                # Conditional trees charge assignment copying and independent sibling probes.
+                combinations = max(combinations, 8 * variant_index * variant_index)
                 group = variant_alternatives(node)
                 return visit(replace(group, key=node.key or f"@variants-{variant_index}"))
             case Alternatives():

@@ -2302,6 +2302,7 @@ def semantic_offers[RenderTargetT, ContextT](
             keep_with_next=isinstance(value, sem.KeepWithNext)
             or (isinstance(value, primitive.Break) and value.keep_with_next),
             region=region,
+            preference_priority=int(value.flexibility) if isinstance(value, sem.ActionControls) else None,
         )
         if isinstance(value, sem.Fields) and spill and value.fields:
             order = sorted(range(len(children)), key=lambda index: (value.fields[index].importance, -index))
@@ -2370,6 +2371,7 @@ def semantic_offers[RenderTargetT, ContextT](
                     interaction=True,
                     binding=ActionBinding(key, RouteSelection(routes), ActionMode.EXCLUSIVE, routes=routes),
                     preference=0 if value.display == sem.ControlDisplay.GROUPED else 1,
+                    preference_priority=int(value.flexibility),
                 )
                 return (
                     (replace(container, preference=1), grouped)

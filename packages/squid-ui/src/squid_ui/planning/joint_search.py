@@ -83,6 +83,7 @@ class _Assignment[RenderTargetT, ContextT, PayloadT]:
     choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...] = ()
     probe: bool = False
     fraction: float = 1.0
+    repair: Mapping[OccurrenceId, str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +95,7 @@ class _Partitions[RenderTargetT, ContextT, PayloadT]:
     cuts: tuple[tuple[int, ...], ...]
     probe: bool = False
     expand_only: bool = False
+    repair: bool = False
 
 
 def _preferences[RenderTargetT, ContextT, PayloadT](
@@ -300,6 +302,13 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     seen_regions: set[OccurrenceId] = set()
     degradation_probed = False
     choice_counts: dict[OccurrenceId, int] = {}
+    discoveries: dict[
+        int,
+        tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]
+        | OfferDiscovery[RenderTargetT, ContextT, PayloadT],
+    ] = {}
+    discovery_owners: dict[int, SemanticOccurrence[RenderTargetT, ContextT]] = {}
+    repair_started = False
 
     def push(
         task: _Assignment[RenderTargetT, ContextT, PayloadT] | _Partitions[RenderTargetT, ContextT, PayloadT],
@@ -317,7 +326,17 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         probe = task.probe
         # Finish a probe before discovering every other probe's large offer ladder.
         # Candidate quality still compares the original preferences after certification.
-        heappush(queue, (0 if probe else 1, () if probe else ranks, turns, -len(task.choices), next(serials), task))
+        heappush(
+            queue,
+            (
+                -1 if probe and task.repair else 0 if probe else 1,
+                () if probe else ranks,
+                turns,
+                -len(task.choices),
+                next(serials),
+                task,
+            ),
+        )
 
     def expand(task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
         for index, node in enumerate(task.regions):
@@ -339,10 +358,16 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     occurrence, *rest = task.pending
                     seen_occurrences.add(occurrence.identity)
                     context.work.consume()
-                    discovery = rules.offers(
-                        occurrence,
-                        replace(context, palette=occurrence.palette) if occurrence.palette is not None else context,
-                    )
+                    # An occurrence's immutable context is shared by queued assignments.
+                    # Keep its owner alive so object identities cannot be recycled.
+                    discovery = discoveries.get(id(occurrence))
+                    if discovery is None:
+                        discovery = rules.offers(
+                            occurrence,
+                            replace(context, palette=occurrence.palette) if occurrence.palette is not None else context,
+                        )
+                        discoveries[id(occurrence)] = discovery
+                        discovery_owners[id(occurrence)] = occurrence
                     if isinstance(discovery, OfferDiscovery):
                         offers = discovery.offers
                         if discovery.completion == DiscoveryCompletion.EXHAUSTED:
@@ -378,8 +403,12 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                             if (occurrence.identity not in selected or entry[0].key == selected[occurrence.identity])
                             and not (context.strict and entry[0].effects)
                         ]
-                        position = min(len(eligible) - 1, int((len(eligible) - 1) * task.fraction + 0.5))
-                        ordered = eligible[position : position + 1] if eligible else []
+                        if task.repair is not None:
+                            preferred = task.repair.get(occurrence.identity)
+                            ordered = next(([entry] for entry in eligible if entry[0].key == preferred), eligible[:1])
+                        else:
+                            position = min(len(eligible) - 1, int((len(eligible) - 1) * task.fraction + 0.5))
+                            ordered = eligible[position : position + 1] if eligible else []
                     for offer, rank in ordered:
                         if occurrence.identity in selected and selected[occurrence.identity] != offer.key:
                             continue
@@ -395,6 +424,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                                 (*task.choices, (offer, rank)),
                                 probe=task.probe,
                                 fraction=task.fraction,
+                                repair=task.repair,
                             )
                         )
                     if occurrence.identity in selected and selected[occurrence.identity] not in keys:
@@ -441,7 +471,11 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                             ends = required
                         hinted.append(ends)
                     push(_Partitions(assignment, candidate, task.choices, regions, tuple(hinted), probe=True))
-                push(_Partitions(assignment, candidate, task.choices, regions, cuts, probe=True))
+                push(
+                    _Partitions(
+                        assignment, candidate, task.choices, regions, cuts, probe=True, repair=task.repair is not None
+                    )
+                )
                 # Try preserving every sibling while splitting just one region. Balanced
                 # probes alone can miss a small feasible family when both pagers' chrome
                 # cannot coexist. This only changes search order, not admissible cuts.
@@ -582,6 +616,37 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         ),
                     )
                     retained.append((quality, allocation))
+            if not feasible and (task.repair or not repair_started):
+                # Try one structural step at a time before the broad compact
+                # probes. This finds useful fits under component pressure without
+                # shortening every independent text ladder. Failed probes never prune.
+                repair_started = True
+                steps: list[tuple[int, int, tuple[str, ...], RealizationOffer[RenderTargetT, ContextT, PayloadT]]] = []
+                for current, rank in task.choices:
+                    if current.occurrence.identity in selected:
+                        continue
+                    discovery = discoveries[id(current.occurrence)]
+                    domain = discovery.offers if isinstance(discovery, OfferDiscovery) else discovery
+                    context.work.consume(len(domain))
+                    domain_ranks = dense_ranks(tuple(offer.preference for offer in domain))
+                    better = [
+                        (offer_rank, offer)
+                        for offer, offer_rank in zip(domain, domain_ranks, strict=True)
+                        if offer_rank > rank
+                        and (not context.strict or not offer.effects)
+                        and (not offer.effects or current.children or offer.children)
+                    ]
+                    if better:
+                        next_rank, next_offer = min(better, key=lambda entry: (entry[0], entry[1].key))
+                        steps.append(
+                            (current.preference_priority or 0, next_rank, current.occurrence.identity.path, next_offer)
+                        )
+                if steps:
+                    _, _, _, changed = min(steps, key=lambda entry: entry[:3])
+                    context.work.consume(len(task.choices))
+                    hints = {offer.occurrence.identity: offer.key for offer, _ in task.choices}
+                    hints[changed.occurrence.identity] = changed.key
+                    push(_Assignment((root,), probe=True, repair=hints))
             if feasible and satisfied:
                 continue
             if not feasible and not task.regions and not degradation_probed:

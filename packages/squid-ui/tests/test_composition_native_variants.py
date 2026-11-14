@@ -97,3 +97,27 @@ def test_unkeyed_sibling_variant_groups_do_not_collide() -> None:
     assert result.allocation is not None
     wire = scene.Codec.dumps(result.scene)
     assert "one" in wire and "two" in wire
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_component_pressure_steps_only_the_needed_ladders_before_shortening_text(strict: bool) -> None:
+    ladders = tuple(
+        native.Variants(
+            tuple(
+                native.Variant((node,), correspondence=(sl.corresponds("@content", "source"),))
+                for node in (
+                    native.Panel((native.Text(f"panel {index}"), native.Text("detail"), native.Text("more detail"))),
+                    native.Text(f"line {index}"),
+                )
+            ),
+            content=sl.paragraph("Complete fixture content", key="source"),
+            priority=index,
+        )
+        for index in range(12)
+    )
+    result = plan(sl.stack(*ladders), target=components_v2_target(ADAPTER), strict=strict)
+    assert result.allocation is not None
+    assert not result.report.events
+    body = result.scene.body
+    assert sum(isinstance(node, scene.Panel) for node in body.children) == 9
+    assert [node.content for node in body.children if isinstance(node, scene.Text)] == ["line 0", "line 1", "line 2"]

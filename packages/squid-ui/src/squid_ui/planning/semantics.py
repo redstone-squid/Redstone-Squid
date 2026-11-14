@@ -222,7 +222,15 @@ def variant_alternatives(value: primitive.Variants[Any]) -> Alternatives[Any]:
                 sem.Group(variant.nodes, key="@content"),
                 key=f"rung-{index}",
                 fidelity=variant.contract or Fidelity(),
-                preference=index,
+                preference=index
+                + len(value.variants)
+                * (
+                    2
+                    if variant.contract is not None and not variant.contract.lossless
+                    else 1
+                    if variant.fidelity is primitive.Fidelity.REFORMATTED
+                    else 0
+                ),
                 correspondence=variant.correspondence,
                 requires=variant.requires,
             )
