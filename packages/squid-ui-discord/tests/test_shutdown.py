@@ -14,6 +14,7 @@ from squid_ui import Component, ComponentsV2Target
 from squid_ui.primitives import Text
 from squid_ui.runtime import UIExecutionHost
 from squid_ui_discord import CloseReason, Everyone, MessageRoot, SessionManager
+from squid_ui_discord.message_root_wiring import ClassicMountedView, MountedView
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
@@ -104,6 +105,41 @@ async def test_callbacks_all_run_and_every_waiter_observes_same_failure() -> Non
     assert root.close_reason is CloseReason.CLOSED
     assert failures[0].subgroup(ValueError) is not None
     assert events == ["broken", "remaining"]
+
+
+@pytest.mark.parametrize("view_type", [MountedView, ClassicMountedView])
+async def test_discord_timeout_consumes_logged_shutdown_failure(
+    view_type: type[MountedView] | type[ClassicMountedView], caplog: pytest.LogCaptureFixture
+) -> None:
+    root = MessageRoot(Panel(), access=Everyone())
+    error = ValueError("callback failed")
+
+    async def broken(_root: MessageRoot) -> None:
+        raise error
+
+    root.on_finish(broken)
+    view = view_type(root, timeout=None)
+    await view.on_timeout()
+
+    assert root.close_reason is CloseReason.TIMEOUT
+    assert [record.message for record in caplog.records if record.name == "squid_ui_discord._shutdown"] == [
+        "shutdown failed"
+    ]
+    with pytest.raises(ExceptionGroup) as failure:
+        await root.wait()
+    assert failure.value is root._shutdown.error
+    assert failure.value.subgroup(lambda caught: caught is error) is not None
+
+
+async def test_discord_timeout_propagates_failure_before_shutdown_acceptance() -> None:
+    root = MessageRoot(Panel(), access=Everyone(), execution_host=None)
+    view = MountedView(root, timeout=None)
+
+    with pytest.raises(RuntimeError, match="running UIExecutionHost"):
+        await view.on_timeout()
+
+    assert not root.finished
+    assert root._shutdown.error is None
 
 
 @pytest.mark.parametrize("child_task", [False, True])

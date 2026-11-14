@@ -41,7 +41,13 @@ class _MountedBehaviour:
         self._root = message_root
 
     async def on_timeout(self) -> None:
-        await self._root.handle_timeout()
+        try:
+            await self._root.handle_timeout()
+        except Exception as error:
+            # Shutdown already logged and stored this failure for explicit waiters.
+            # discord.py does not retrieve exceptions from its timeout callback task.
+            if error is not self._root._shutdown.error:
+                raise
 
     def is_dispatchable(self) -> bool:
         # A mount wants storing even when it draws nothing dispatchable, because
