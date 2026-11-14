@@ -80,8 +80,139 @@ concrete requirements and unresolved limits rather than a speculative API to imp
 
 ## Progress
 
-- [ ] Map pipeline responsibilities and existing sharing.
+- [x] Map pipeline responsibilities and existing sharing in an initial code inventory.
 - [ ] Establish the behavior and capability matrix.
 - [ ] Discuss the shared policy and target extension boundary.
 - [ ] Probe composition and state assumptions.
 - [ ] Record the architectural direction and phase 2 handoff.
+
+## Initial pipeline inventory
+
+This is a code inventory, not a decision about the eventual boundaries. Paths below are
+relative to `packages/squid-ui/src/squid_ui/planning/`.
+
+| Responsibility | Current ownership | Implication for the investigation |
+| --- | --- | --- |
+| Request dispatch and frontend binding | `planner.plan_request` selects a whole backend or the region planner, disables caches for routed page factories, then binds handlers and prepares frontend forms. | A shared entry point exists, but it does not own the planning process. |
+| Semantic interpretation and alternatives | Discord nominates strategies and fallback branches before lowering. HTML compiles semantics directly and explores fallbacks under authored budgets. Slack consumes that HTML result. | Targets currently differ in when alternatives remain available for selection. |
+| Composition, measurement, and search | Discord evaluates lowered candidates through normalization, validation, and measurement. HTML handles local authored constraints. Slack applies text and block limits during conversion. Joint regions run another search around complete backend calls. | Target constraints can arrive after semantic choices have already been fixed. |
+| Fragmentation and navigation | `balanced_breaks` serves HTML paging and Discord text/semantic paging. Discord dialects own legacy root pagination. Joint regions use another partition search. HTML and Discord construct different navigation bodies. | Some algorithms are already shared; their inputs, orchestration, and navigation construction are not. |
+| Cursor reconciliation and staged state | Discord, HTML, and joint regions use `CursorCoordinator`; Slack forwards the HTML result's updates and pagers. | Preserve the existing ownership rules. Check that final target output still exposes the controls represented by those updates. |
+| Caching and live bindings | Each backend controls cache replay and binding reconstruction. Slack has an outer cache around an HTML compilation. Joint planning disables backend caches for its probes. | Reuse needs one consistent lifecycle without retaining stale callbacks or routes. |
+| Diagnostics and output | Discord reports semantic events and measured degradation; HTML and Slack report compilation events. Each backend constructs its final scene. | Shared decisions need comparable effects; final scene construction can remain target-specific. |
+
+The Discord V2 and classic dialects already share `DiscordPlanner` and provide operations for
+normalization, validation, root pagination, and scene construction. This is useful precedent,
+but its intermediate primitives and measurement machinery remain Discord-shaped.
+
+Source entry points:
+[dispatcher](../../../packages/squid-ui/src/squid_ui/planning/planner.py),
+[Discord](../../../packages/squid-ui/src/squid_ui/planning/discord_planner.py),
+[HTML](../../../packages/squid-ui/src/squid_ui/planning/html_planner.py),
+[Slack](../../../packages/squid-ui/src/squid_ui/planning/slack_planner.py), and
+[joint regions](../../../packages/squid-ui/src/squid_ui/planning/regions.py).
+
+## Initial target matrix
+
+These are properties of the current code. They are not a new support contract or a claim
+that every node placement has been tested.
+
+| Target | Constraints and structure | Current planning path |
+| --- | --- | --- |
+| Discord V2 | Message resource budgets plus component and nesting constraints. | Shared Discord compiler; joint regions are diverted to the V2-specific region solver. |
+| Discord classic | Content, embed, and control constraints with a different message body. | Same Discord compiler, with classic normalization, validation, pagination, and scene assembly. |
+| HTML | No global reservable resource axes; authored budgets and paging still apply. | Direct semantic compilation; authored paging uses the shared break and cursor helpers. |
+| Slack message and Home | Global block capacity and local text/control constraints. | HTML intermediate followed by Slack conversion and limit enforcement. |
+| Slack modal | Block limits and form-specific structure; requires one top-level form trigger. | HTML intermediate plus modal-specific conversion and validation. |
+
+Joint regions currently reject non-V2 bodies before any of these backend paths run. That
+restriction is an implementation gap, not evidence of target capability. The full behavior
+matrix remains unfinished; the first executable comparison below concerns alternatives and
+content loss, without any region nodes.
+
+## Experiment 1 Alternatives under target pressure
+
+Input: two paragraphs, `Length: 10 blocks` and `Width: 5 blocks`. An authored alternative
+contains both dimensions in one paragraph: `10 × 5 blocks`. Reserve all but one component on
+V2 and all but one block on Slack messages. These reduced limits are test conditions, not
+claims about the services' normal limits. Give HTML no global reservation.
+
+Observed through the public `sl.planning.plan` entry point:
+
+| Input and mode | Discord V2 | Slack message | HTML |
+| --- | --- | --- | --- |
+| Two paragraphs, non-strict | Fails with `UnsolvableLayoutError`. | Shows only the length paragraph and reports `slack.blocks.truncated`. | Shows both paragraphs. |
+| Authored alternative, non-strict | Selects `10 × 5 blocks` and reports a semantic fallback. | Still shows only the length paragraph and reports block truncation. | Shows both original paragraphs. |
+| Authored alternative, strict | Rejects the selected fallback with `LayoutDegradedError`. | Rejects block truncation with `LayoutDegradedError`. | Shows both original paragraphs. |
+| Authored alternative inside a 13-character budget | Not exercised in this comparison. | Not exercised in this comparison. | Selects the compact alternative in non-strict mode; strict mode rejects the fallback. |
+
+The Slack observation is about visible blocks. Its separate accessibility fallback text may
+still contain both original paragraphs; retaining that text does not make the visible layout
+use the supplied complete alternative.
+
+Reproduce the constrained alternative case from the repository root with `uv run --no-sync python`
+and the following input. `scene.Codec.dumps` exposes the result body and the diagnostic codes
+show which operation was selected.
+
+```python
+import squid_ui as sl
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.discord import components_v2_target
+from squid_ui.planning.resources import Axis, ResourceCost
+from squid_ui.target_types import DiscordAdapter, SlackAdapter
+
+content = sl.fallback(
+    sl.stack(sl.paragraph("Length: 10 blocks"), sl.paragraph("Width: 5 blocks")),
+    sl.paragraph("10 × 5 blocks"),
+)
+v2 = components_v2_target(AdapterProfile(DiscordAdapter, "probe.discord", "1"))
+slack = sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "probe.slack", "1"))
+for target in (
+    v2.reserve(ResourceCost({Axis.COMPONENTS: 39})),
+    slack.reserve(ResourceCost({Axis.BLOCKS: 49})),
+    sl.html.target(),
+):
+    result = sl.planning.plan(content, target=target)
+    print(target.id, sl.scene.Codec.dumps(result.scene))
+    print([event.code for event in result.report.events])
+```
+
+The source explains the difference: HTML's ordinary `FallbackContent` branch compiles only
+its primary. Slack then applies block limits to that completed intermediate and never sees
+the alternative. Its `_Lowerer.blocks` slices excess blocks even without an authored omission
+policy. Discord evaluates fallback branches while checking target feasibility.
+
+Validation: the focused HTML, Slack, and portable target-conformance suites passed, with
+266 tests. The comparison also exercised strict mode and HTML's authored budget directly.
+The existing Slack reservation test explicitly expects omission in non-strict mode; changing
+this behavior is a compatibility decision, not just moving code between modules.
+
+## Decision 1 Who authorizes content loss
+
+Status: open for discussion. Stop here before selecting a core representation or migrating
+backend behavior.
+
+The proposed shared core can have one content-policy contract, or it can orchestrate targets
+that retain their different fitting defaults. These choices have different consequences:
+
+- A shared contract makes permission to truncate or omit content an authored or explicit
+  request policy. Targets describe valid representations, limits, and effects; the core chooses
+  among permitted candidates. Target conversion cannot silently introduce additional loss after
+  selection. This changes Slack's current non-strict defaults and requires migration decisions.
+- Preserving target-specific defaults reduces immediate behavioral changes. Slack could keep
+  offering implicit omission while Discord does not. The core would still need to see these
+  choices before selection, but portable authored content would retain different loss permissions
+  depending on its target.
+
+Recommendation for discussion: make content-loss permission a shared policy, and make permissive
+fitting an explicit choice. The exact API and default migration strategy remain open. Targets
+still supply their own representations and unavoidable conversion effects; the core needs to
+know those effects to determine whether a candidate is permitted.
+
+This does not decide whether selecting an authored alternative should count as degradation,
+which alternatives are equivalent, or how strict mode should treat them. The experiment shows
+that strict mode currently rejects even the complete compact alternative on V2 and under an
+HTML budget. Those fidelity questions need their own decision after the ownership boundary.
+
+No production behavior has changed. Composition experiments, the full matrix, and the final
+architectural recommendation remain pending this discussion.
