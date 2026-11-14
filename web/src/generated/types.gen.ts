@@ -495,6 +495,13 @@ export type DoorRangeQuery = {
 };
 
 /**
+ * DoorRangeReference
+ */
+export type DoorRangeReference = {
+    query_id: number;
+};
+
+/**
  * DoorRangeResult
  */
 export type DoorRangeResult = {
@@ -1531,6 +1538,29 @@ export type PublicRecordDetail = {
 };
 
 /**
+ * PublishedDoorPoint
+ */
+export type PublishedDoorPoint = {
+    query_id: number;
+    query: DoorRangeQuery;
+    opening: [
+        number,
+        number,
+        number
+    ];
+    status: PublishedPointStatus;
+    publication: RangeAttemptSummary | null;
+    latest: RangeAttemptSummary | null;
+    region: SmallestRecordRegion | null;
+    configurations: Array<DoorRegionConfiguration>;
+};
+
+/**
+ * PublishedPointStatus
+ */
+export type PublishedPointStatus = 'published' | 'not_published' | 'outside_query';
+
+/**
  * PublishedTitle
  */
 export type PublishedTitle = {
@@ -1562,6 +1592,21 @@ export type RangeAttempt = {
     error: string | null;
     snapshot_hash: string | null;
     captured_at: string | null;
+};
+
+/**
+ * RangeAttemptSummary
+ */
+export type RangeAttemptSummary = {
+    id: number;
+    generation: number;
+    rules_revision_id: number;
+    started_at: string;
+    completed_at: string | null;
+    captured_at: string | null;
+    snapshot_hash: string | null;
+    analysis_status: RegionAnalysisStatus | null;
+    error: string | null;
 };
 
 /**
@@ -5395,6 +5440,166 @@ export type RecordsGetDoorRangesResponses = {
 };
 
 export type RecordsGetDoorRangesResponse = RecordsGetDoorRangesResponses[keyof RecordsGetDoorRangesResponses];
+
+export type RecordsRegisterDoorRangesData = {
+    body: DoorRangeQuery;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/records/ranges/door';
+};
+
+export type RecordsRegisterDoorRangesErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsRegisterDoorRangesError = RecordsRegisterDoorRangesErrors[keyof RecordsRegisterDoorRangesErrors];
+
+export type RecordsRegisterDoorRangesResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: DoorRangeReference;
+};
+
+export type RecordsRegisterDoorRangesResponse = RecordsRegisterDoorRangesResponses[keyof RecordsRegisterDoorRangesResponses];
+
+export type RecordsRefreshDoorRangesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        query_id: number;
+    };
+    query?: never;
+    url: '/v1/records/ranges/door/{query_id}/refresh';
+};
+
+export type RecordsRefreshDoorRangesErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsRefreshDoorRangesError = RecordsRefreshDoorRangesErrors[keyof RecordsRefreshDoorRangesErrors];
+
+export type RecordsRefreshDoorRangesResponses = {
+    /**
+     * Request accepted, processing continues off-line
+     */
+    202: DoorRangeReference;
+};
+
+export type RecordsRefreshDoorRangesResponse = RecordsRefreshDoorRangesResponses[keyof RecordsRefreshDoorRangesResponses];
+
+export type RecordsGetDoorRangePointData = {
+    body?: never;
+    path: {
+        query_id: number;
+        width: number;
+    };
+    query?: never;
+    url: '/v1/records/ranges/door/{query_id}/at/{width}';
+};
+
+export type RecordsGetDoorRangePointErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Internal Server Error
+     */
+    500: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsGetDoorRangePointError = RecordsGetDoorRangePointErrors[keyof RecordsGetDoorRangePointErrors];
+
+export type RecordsGetDoorRangePointResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PublishedDoorPoint;
+};
+
+export type RecordsGetDoorRangePointResponse = RecordsGetDoorRangePointResponses[keyof RecordsGetDoorRangePointResponses];
 
 export type BuildSchematicsListData = {
     body?: never;

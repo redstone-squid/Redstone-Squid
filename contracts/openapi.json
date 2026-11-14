@@ -9766,6 +9766,507 @@
         }
       }
     },
+    "/v1/records/ranges/door": {
+      "post": {
+        "tags": [
+          "records"
+        ],
+        "summary": "RegisterDoorRanges",
+        "description": "Register a query for automatic publication, reusing equivalent registrations.\n\nOnly a new registration queues initial computation. Use refresh to request\nanother attempt for an existing query.",
+        "operationId": "records_register_door_ranges",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoorRangeQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorRangeReference"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "record.entry.rebuild"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ]
+      }
+    },
+    "/v1/records/ranges/door/{query_id}/refresh": {
+      "post": {
+        "tags": [
+          "records"
+        ],
+        "summary": "RefreshDoorRanges",
+        "description": "Queue recomputation; the current publication remains readable until replacement.",
+        "operationId": "records_refresh_door_ranges",
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Request accepted, processing continues off-line",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorRangeReference"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "record.entry.rebuild"
+        ]
+      }
+    },
+    "/v1/records/ranges/door/{query_id}/at/{width}": {
+      "get": {
+        "tags": [
+          "records"
+        ],
+        "summary": "GetDoorRangePoint",
+        "description": "Read one opening from saved regions, with publication and latest-attempt provenance.",
+        "operationId": "records_get_door_range_point",
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "width",
+            "in": "path",
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647.0,
+              "minimum": 1.0
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedDoorPoint"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/builds/{build_id}/schematics": {
       "get": {
         "tags": [
@@ -19383,6 +19884,18 @@
         ],
         "title": "DoorRangeQuery"
       },
+      "DoorRangeReference": {
+        "properties": {
+          "query_id": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query_id"
+        ],
+        "title": "DoorRangeReference"
+      },
       "DoorRangeResult": {
         "properties": {
           "query": {
@@ -23064,6 +23577,90 @@
         ],
         "title": "PublicRecordDetail"
       },
+      "PublishedDoorPoint": {
+        "properties": {
+          "query_id": {
+            "type": "integer"
+          },
+          "query": {
+            "$ref": "#/components/schemas/DoorRangeQuery"
+          },
+          "opening": {
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PublishedPointStatus"
+          },
+          "publication": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RangeAttemptSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RangeAttemptSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "region": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmallestRecordRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "configurations": {
+            "items": {
+              "$ref": "#/components/schemas/DoorRegionConfiguration"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configurations",
+          "latest",
+          "opening",
+          "publication",
+          "query",
+          "query_id",
+          "region",
+          "status"
+        ],
+        "title": "PublishedDoorPoint"
+      },
+      "PublishedPointStatus": {
+        "type": "string",
+        "enum": [
+          "published",
+          "not_published",
+          "outside_query"
+        ],
+        "title": "PublishedPointStatus"
+      },
       "PublishedTitle": {
         "properties": {
           "id": {
@@ -23217,6 +23814,88 @@
           "started_at"
         ],
         "title": "RangeAttempt"
+      },
+      "RangeAttemptSummary": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "rules_revision_id": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "captured_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snapshot_hash": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "analysis_status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RegionAnalysisStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysis_status",
+          "captured_at",
+          "completed_at",
+          "error",
+          "generation",
+          "id",
+          "rules_revision_id",
+          "snapshot_hash",
+          "started_at"
+        ],
+        "title": "RangeAttemptSummary"
       },
       "RangePublication": {
         "properties": {

@@ -795,6 +795,7 @@ def build_services(
     idempotency: IdempotencyService | None = None,
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
+    range_publication: RangePublicationService | None = None,
 ) -> ApiServices:
     """Build the complete API graph with empty stores and injectable service replacements.
 
@@ -827,7 +828,7 @@ def build_services(
         vote_members=None,
         records=MockRecords(),
         public_records=MockPublicRecords(),
-        range_publication=MockRangePublication(),
+        range_publication=range_publication or MockRangePublication(),
         submission_forms=MockSubmissionForms(),
         submission_drafts=MockSubmissionDrafts(),
         submission_finalization=MockSubmissionFinalization(),
@@ -847,6 +848,7 @@ def build_app(
     idempotency: IdempotencyService | None = None,
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
+    range_publication: RangePublicationService | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[Litestar, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
@@ -857,6 +859,7 @@ def build_app(
         idempotency=idempotency,
         accounts=accounts,
         error_reports=error_reports,
+        range_publication=range_publication,
     )
     runtime = ApplicationRuntime(services, database.close, keep_database_active)
     return create_api_app(lambda _config: runtime, config=config), database

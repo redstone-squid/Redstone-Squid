@@ -368,7 +368,8 @@ Migration `b3e7a1d5c9f2` adds registrations, computation attempts, and immutable
 candidate snapshots. A registration identifies an exact `DoorRangeQuery`,
 including its bounds, category filters, and explicit Minecraft version. Canonical
 JSON sorts unordered category fields so equivalent requests share an identity.
-Registration is currently an application service operation, not a public write API.
+Registration is available through the application service and a permission-gated
+HTTP write API.
 
 `RangePublicationService.register(query)` queues the query's initial computation.
 `publish(query)` registers it if needed and computes immediately. Door rebuilds
@@ -405,7 +406,28 @@ live build formulas to saved winners. A registration without a successful result
 has a null active publication; an older result can remain active while the latest
 attempt is pending or failed.
 
-Next steps are registration/editing controls and published concrete-size views.
+The HTTP controls require `record.entry.rebuild` and accept an
+`Idempotency-Key`:
+
+| Method and path | Behavior |
+| --- | --- |
+| `POST /v1/records/ranges/door` | Accepts a `DoorRangeQuery`, returns its `query_id`, and queues initial computation for a new registration. Equivalent queries reuse the same registration. |
+| `POST /v1/records/ranges/door/{query_id}/refresh` | Returns HTTP 202 after queueing recomputation. Unknown IDs return 404. |
+
+Refresh currently recomputes all registered queries through the shared door
+queue. Neither write waits for arithmetic. The existing active result remains
+available until a successful replacement is published.
+
+`GET /v1/records/ranges/door/{query_id}/at/{width}` reads the saved region covering
+one opening, including residue classes, fixed-size exceptions, and unresolved
+ties. It returns the full opening, selected region, configuration mappings, and
+compact active/latest attempt provenance. It does not load live formulas or
+re-evaluate candidates. Status `not_published` means no successful publication
+exists; `outside_query` means the opening is beyond the registered bounds.
+Neither means `no_candidate`, which is a record outcome inside a published
+region. Unknown query IDs return 404; invalid widths are rejected.
+
+Dedicated bot/web controls and integration with fixed-title URLs remain.
 Broader competition identities, multiaxis regions, timing titles, caching,
 per-competition invalidation, and publication notifications remain separate work.
 Bump the range calculator/arithmetic versions when their semantics change and the
