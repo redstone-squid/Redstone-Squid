@@ -9,11 +9,12 @@ service persists the requested category and recomputes its standings.
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import replace
 from functools import partial
-from typing import TYPE_CHECKING, Literal, Protocol, override
+from typing import Any, Literal, Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import pick
 from squid.bot.ui import tr, truncate_display_text
 from squid.permissions.domain import PermissionNode
@@ -22,9 +23,6 @@ from squid.records.application import RebuildSummary, RecordGap, RecordLookupReq
 from squid.records.domain import BuildKind
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
-
-if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
 
 
 class RecordOperations(Protocol):
@@ -59,7 +57,7 @@ class RecordComputationOperations(Protocol):
 type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class RecordsScreen(sd.Screen):
+class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     """Show record diagnostics and maintenance controls for one guild session.
 
     Initial capabilities choose which tabs and forms are visible. Each maintenance
@@ -74,9 +72,15 @@ class RecordsScreen(sd.Screen):
 
     _version: Suggestion | None = sl.state(None, persist=False)
     _restrictions: tuple[Suggestion, ...] = sl.state(())
-    _gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
-    _titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
-    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
+    _gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+        None, opaque=True
+    )
+    _titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+        None, opaque=True
+    )
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+        None, opaque=True
+    )
 
     def __init__(
         self,
@@ -136,7 +140,7 @@ class RecordsScreen(sd.Screen):
         )
 
     def _build_tabs(self) -> None:
-        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
+        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         if self._gaps is not None and self._titles is not None:
             tabs.extend(
                 (
@@ -159,7 +163,7 @@ class RecordsScreen(sd.Screen):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._tabs is None:
             return (sl.status(tr(t"records-diagnostics-loading = Loading record diagnostics.")),)
         return (
@@ -167,12 +171,10 @@ class RecordsScreen(sd.Screen):
             if self._version
             else sl.note(tr(t"records-active-version = Using the active version")),
             sl.action_controls(
-                sl.action_control(
-                    tr(t"records-choose-version = Choose version"), sd.on_press(self._choose_version), key="version"
-                ),
+                sl.action_control(tr(t"records-choose-version = Choose version"), self._choose_version, key="version"),
                 sl.action_control(
                     tr(t"records-reset-version = Use active version"),
-                    sd.on_press(self._reset_version),
+                    self._reset_version,
                     key="active-version",
                 ),
                 key="version-actions",
@@ -180,7 +182,7 @@ class RecordsScreen(sd.Screen):
             self._tabs,
         )
 
-    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not (self._can_inspect or self._can_rebuild):
             return (sl.note(tr(t"records-no-maintenance-actions = No maintenance actions are available.")),)
         return (
@@ -188,13 +190,13 @@ class RecordsScreen(sd.Screen):
                 self._can_inspect
                 and sl.action_control(
                     tr(t"records-choose-definition = Find definition by name"),
-                    sd.on_press(self._choose_definition),
+                    self._choose_definition,
                     key="definition",
                 ),
                 self._can_inspect
                 and sl.action_control(
                     tr(t"records-choose-restriction = Add category restriction"),
-                    sd.on_press(self._choose_restriction),
+                    self._choose_restriction,
                     key="restriction",
                 ),
                 self._can_inspect

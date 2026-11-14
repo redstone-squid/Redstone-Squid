@@ -1,13 +1,14 @@
 """Manage notification channels, follows, and the newest visible inbox items."""
 
 from collections.abc import Awaitable, Callable, Mapping
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 from uuid import UUID
 
 from pydantic import JsonValue
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
@@ -35,7 +36,6 @@ from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
     from squid.notifications.application import NotificationService
 
 SESSION_SECONDS = 300
@@ -56,7 +56,7 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
             return tr(t"bot-notifications-view-record-filter = Record filter")
 
 
-class NotificationScreen(sd.Screen):
+class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
     """Compose notification workflows with one revision-aware edit history."""
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("notifications"))
@@ -89,7 +89,7 @@ class NotificationScreen(sd.Screen):
         await self.inbox.refresh()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         # Delivery settings are shown on their toggles, so the summary covers only the rest.
         fields = (
             sl.field(tr(t"bot-notifications-view-following = Following"), self.subscriptions.summary()),
@@ -136,7 +136,7 @@ class NotificationSettings(sl.Reactive):
         await edits.bind(kind, notification_target(self._account_id), revision).save(values, label)
 
 
-class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Edit delivery preferences using the shared settings revision."""
 
     def __init__(self, settings: NotificationSettings, edits: EditController) -> None:
@@ -152,7 +152,7 @@ class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Req
         return self._settings.preferences is not None and self._settings.preferences.dm_enabled
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         return (
             sl.action_controls(
                 sl.toggle(
@@ -196,7 +196,7 @@ class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Req
         )
 
 
-class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Own follow forms and the selection of subscriptions to remove."""
 
     selected_ids: tuple[str, ...] = sl.state(())
@@ -220,8 +220,8 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         return self._settings.subscriptions[self.page * MAX_LISTED : (self.page + 1) * MAX_LISTED]
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        selection: tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...] = ()
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        selection: tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...] = ()
         if self.subscriptions:
             selection = (
                 sl.choices(
@@ -244,16 +244,15 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
                     maximum=len(self.subscriptions),
                 ),
             )
-        follow_creator: sl.semantic.ActionControl[sd.Request] = sl.action_control(
-            tr(t"bot-notifications-view-follow-creator = Follow creator"),
-            sd.on_press(self._follow_creator),
-            key="follow-creator",
-        )
         actions = sl.action_controls(
-            follow_creator,
+            sl.action_control(
+                tr(t"bot-notifications-view-follow-creator = Follow creator"),
+                self._follow_creator,
+                key="follow-creator",
+            ),
             sl.action_control(
                 tr(t"bot-notifications-view-follow-record = Follow record"),
-                sd.on_press(self._follow_record),
+                self._follow_record,
                 key="follow-record",
             ),
             sl.form(
@@ -278,12 +277,12 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
             sl.action_controls(
                 sl.action_control(
                     tr(t"notification-choose-tag = Choose filter tag"),
-                    sd.on_press(self._choose_filter_tag),
+                    self._choose_filter_tag,
                     key="filter-tag",
                 ),
                 sl.action_control(
                     tr(t"notification-clear-tag = Clear filter tag"),
-                    sd.on_press(self._clear_filter_tag),
+                    self._clear_filter_tag,
                     key="clear-filter-tag",
                     available=self.filter_tag is not None,
                 ),
@@ -494,7 +493,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         return _kind_label(subscription.kind)
 
 
-class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Own visible inbox items, selection, and read-state changes."""
 
     _visibility: InboxVisibility = sl.state(DEFAULT_INBOX_VISIBILITY, persist=False)
@@ -535,7 +534,7 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not self._inbox:
             return ()
         return (

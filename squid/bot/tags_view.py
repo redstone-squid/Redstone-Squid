@@ -2,11 +2,12 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from functools import partial
-from typing import TYPE_CHECKING, Protocol, override
+from typing import Any, Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
@@ -39,9 +40,6 @@ from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_i18n import md_tr
 
-if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
-
 
 class TagOperations(Protocol):
     """Tag reads and mutations exposed by the workspace."""
@@ -65,7 +63,7 @@ type TagAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ModerationRequest = Callable[[sl.PressEvent, TagDefinition, str], Awaitable[None]]
 
 
-class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Portable actions for one tag detail."""
 
     def __init__(
@@ -79,7 +77,7 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._request = request
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         return (
             _tag_fields(self._tag),
             sl.action_controls(
@@ -97,7 +95,7 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
 
-class TagsScreen(sd.Screen):
+class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A tag workspace that ends when replaced or timed out."""
 
     _build_id: int | None = sl.state(None, persist=False)
@@ -105,17 +103,17 @@ class TagsScreen(sd.Screen):
     _restriction: tuple[Suggestion, Revision] | None = sl.state(None, persist=False)
     _build_revision: int | None = sl.state(default=None, persist=False)
     _tag_names: Mapping[int, str] = sl.state(factory=dict, persist=False)
-    _catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+    _catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         default=None, persist=False
     )
-    _pending: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+    _pending: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         default=None, persist=False
     )
-    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         default=None, persist=False
     )
-    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
-        default=None, persist=False
+    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
+        sl.state(default=None, persist=False)
     )
     _pending_action: tuple[TagDefinition, str] | None = sl.state(default=None, persist=False)
 
@@ -206,7 +204,7 @@ class TagsScreen(sd.Screen):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._pending_action is not None and self._decision is not None:
             tag, action = self._pending_action
             tag_name = tag.display_name
@@ -223,16 +221,14 @@ class TagsScreen(sd.Screen):
         return (
             sl.note(self._build_label or (f"Build #{self._build_id}" if self._build_id is not None else "")),
             sl.action_controls(
-                sl.action_control(
-                    tr(t"tags-choose-build = Choose build"), sd.on_press(self._choose_build), key="choose-build"
-                ),
+                sl.action_control(tr(t"tags-choose-build = Choose build"), self._choose_build, key="choose-build"),
                 key="build-actions",
             ),
             self._tabs,
             *self.edits.refresh_controls(),
         )
 
-    def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._actor_account_id is None:
             return (
                 sl.note(
@@ -262,8 +258,10 @@ class TagsScreen(sd.Screen):
         self._build_label = item.label
         await self._refresh()
 
-    def _tag_detail(self, tag: TagDefinition) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    def _tag_detail(
+        self, tag: TagDefinition
+    ) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             _ModerationActions(tag, ("archive",), self._request_moderation)
             if TAG_PROPOSAL_ARCHIVE in self._capabilities
             else _tag_fields(tag)
@@ -292,7 +290,7 @@ class TagsScreen(sd.Screen):
                     nodes.append(
                         sl.form(
                             tr(t"tags-apply-selected = Apply this tag"),
-                            sl.forms.FormSpec[sd.Request](tag.display_name, (field,)),
+                            sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](tag.display_name, (field,)),
                             key="apply-tag",
                             on_submit=handler,
                         )
@@ -315,12 +313,12 @@ class TagsScreen(sd.Screen):
     def _proposal_form() -> sl.forms.FormSpec:
         return _ProposalForm().spec()
 
-    def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.action_controls(
                 sl.action_control(
                     tr(t"tags-choose-restriction = Choose restriction"),
-                    sd.on_press(self._choose_restriction),
+                    self._choose_restriction,
                     key="choose-restriction",
                 ),
                 key="restriction-actions",
@@ -332,7 +330,7 @@ class TagsScreen(sd.Screen):
             nodes.append(
                 sl.form(
                     tr(t"bot-tags-view-add-restriction-alias = Add restriction alias"),
-                    sl.forms.FormSpec[sd.Request](
+                    sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](
                         item.label,
                         (
                             sl.forms.TextField(
@@ -436,7 +434,7 @@ class TagsScreen(sd.Screen):
         action: str,
     ) -> None:
         self._pending_action = (tag, action)
-        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
+        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]](
             tr(t"tags-public-catalogue-warning = This changes the public tag catalogue and cannot be undone here."),
             (
                 sp.DecisionOption("confirm", tr(t"bot-tags-view-confirm = Confirm"), sl.Tone.DANGER),

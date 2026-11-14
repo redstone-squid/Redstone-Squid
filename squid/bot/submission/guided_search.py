@@ -3,10 +3,11 @@
 import json
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import TYPE_CHECKING, override
+from typing import Any, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.records.domain import BuildKind
@@ -14,9 +15,6 @@ from squid.search.application import SearchService
 from squid.search.application.fields import FieldRegistry
 from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.suggestions.domain import Suggestion
-
-if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
 
 VALUE_SOURCES = {
     "creator": "creators",
@@ -54,7 +52,7 @@ def combine_query(advanced: str, keywords: str, filters: tuple[Filter, ...]) -> 
     return " AND ".join(parts)
 
 
-class GuidedSearch(sd.Screen[SearchSelection]):
+class GuidedSearch(sd.Screen[SearchSelection, Any, RedstoneSquid]):
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("guided-search"))
     advanced: str = sl.state("")
     keywords: str = sl.state("")
@@ -73,8 +71,8 @@ class GuidedSearch(sd.Screen[SearchSelection]):
             self.advanced, self.keywords, self.filters = previous.advanced, previous.keywords, previous.filters
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.heading(tr(t"guided-search-title = Search and filters")),
             sl.note(
                 tr(
@@ -84,7 +82,7 @@ class GuidedSearch(sd.Screen[SearchSelection]):
             sl.action_controls(
                 sl.form(
                     tr(t"guided-search-keywords = Keywords"),
-                    sl.forms.FormSpec[sd.Request](
+                    sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](
                         tr(t"guided-search-keywords = Keywords"),
                         (
                             sl.forms.TextField(
@@ -99,12 +97,8 @@ class GuidedSearch(sd.Screen[SearchSelection]):
                     key="keywords",
                     on_submit=self._keywords,
                 ),
-                sl.action_control(
-                    tr(t"guided-search-add-filter = Choose filter"), sd.on_press(self._choose_field), key="field"
-                ),
-                sl.action_control(
-                    tr(t"guided-search-sort = Choose sorting"), sd.on_press(self._choose_sort), key="sort"
-                ),
+                sl.action_control(tr(t"guided-search-add-filter = Choose filter"), self._choose_field, key="field"),
+                sl.action_control(tr(t"guided-search-sort = Choose sorting"), self._choose_sort, key="sort"),
                 sl.action_control(tr(t"guided-search-relevance = Use relevance"), self._relevance, key="relevance"),
                 key="search-controls",
             ),
@@ -152,7 +146,7 @@ class GuidedSearch(sd.Screen[SearchSelection]):
                     sl.action_controls(
                         sl.action_control(
                             tr(t"guided-search-choose-value = Choose named value"),
-                            sd.on_press(partial(self._choose_value, field)),
+                            partial(self._choose_value, field),
                             key="choose-value",
                         ),
                         key="value-lookup",
@@ -166,7 +160,7 @@ class GuidedSearch(sd.Screen[SearchSelection]):
             nodes.append(
                 sl.form(
                     tr(t"guided-search-add-filter-value = Add filter value"),
-                    sl.forms.FormSpec[sd.Request](
+                    sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](
                         label,
                         (
                             sl.forms.ChoiceField(
@@ -197,7 +191,7 @@ class GuidedSearch(sd.Screen[SearchSelection]):
             sl.action_controls(
                 sl.form(
                     tr(t"guided-search-advanced = Advanced query"),
-                    sl.forms.FormSpec[sd.Request](
+                    sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](
                         tr(t"guided-search-advanced = Advanced query"),
                         (
                             sl.forms.TextField(
@@ -281,7 +275,7 @@ class GuidedSearch(sd.Screen[SearchSelection]):
     async def _remove(self, index: int, _event: sd.PressEvent) -> None:
         self.filters = tuple(item for position, item in enumerate(self.filters) if position != index)
 
-    async def _apply(self, event: sd.PressEvent) -> None:
+    async def _apply(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         self.complete(
             event,
             SearchSelection(
@@ -293,5 +287,5 @@ class GuidedSearch(sd.Screen[SearchSelection]):
             ),
         )
 
-    async def _cancel(self, event: sd.PressEvent) -> None:
+    async def _cancel(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         self.cancel(event)
