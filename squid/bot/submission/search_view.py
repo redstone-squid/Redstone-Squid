@@ -311,8 +311,8 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._source,
             key="search",
             identity=_hit_identity,
-            label=lambda hit: _result_label(hit, request.scope),
-            summary=lambda hit: _result_description(hit, request.scope),
+            label=lambda hit: _result_label(hit, request),
+            summary=lambda hit: _result_description(hit, request),
             detail=self._detail,
             overview=self._overview,
             page_size=request.page_size,
@@ -360,7 +360,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
         return current.loaded
 
     def _detail(self, hit: SearchHit) -> _SearchDetail | _GroupedBuildDetail:
-        if isinstance(hit, BuildSearchHit) and hit.grouped:
+        if isinstance(hit, BuildSearchHit) and self._source.base_request.group_by_build:
             # The nested browser owns its state; reading it while constructing the
             # detail must not make the outer browser recreate it on navigation.
             with untracked():
@@ -419,16 +419,22 @@ def _metadata_label(kind: str) -> sl.TextLike:
             return kind
 
 
-def _result_title(hit: SearchHit, scope: SearchScope) -> SearchText:
-    if isinstance(hit, BuildSearchHit) and hit.grouped and scope is SearchScope.RECORDS and hit.records:
+def _result_title(hit: SearchHit, request: SearchRequest) -> SearchText:
+    """Return the heading of a result: in a grouped record search, a build is headed by its best record."""
+    if (
+        isinstance(hit, BuildSearchHit)
+        and request.group_by_build
+        and request.scope is SearchScope.RECORDS
+        and hit.records
+    ):
         record = hit.records[0]
         return record.title_match or SearchText(record.title)
     return hit.title_match or SearchText(hit.title)
 
 
-def _result_label(hit: SearchHit, scope: SearchScope) -> str:
-    title = _result_title(hit, scope).text
-    if isinstance(hit, BuildSearchHit) and hit.grouped:
+def _result_label(hit: SearchHit, request: SearchRequest) -> str:
+    title = _result_title(hit, request).text
+    if isinstance(hit, BuildSearchHit) and request.group_by_build:
         # Tied holders can share the same heading; keep their picker labels distinct.
         suffix = f" · #{hit.source_id}"
         return truncate_display_text(title, 80 - len(suffix)) + suffix
@@ -445,9 +451,10 @@ def _highlighted(value: SearchText) -> Text:
     return Text.join("", parts)
 
 
-def _result_description(hit: SearchHit, scope: SearchScope = SearchScope.RECORDS) -> sl.TextLike:
-    if isinstance(hit, BuildSearchHit) and hit.grouped:
-        title = _result_title(hit, scope)
+def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
+    if isinstance(hit, BuildSearchHit) and request.group_by_build:
+        scope = request.scope
+        title = _result_title(hit, request)
         build_id = hit.source_id
         identity = tr(t"search-grouped-build-identity = Build #{build_id}")
         if scope is SearchScope.RECORDS and hit.title != title.text:

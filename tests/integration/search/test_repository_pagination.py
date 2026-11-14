@@ -157,7 +157,6 @@ async def test_grouping_precedes_pagination_and_keeps_all_visible_holders(
     assert {record.source_id for record in builds["1"].records} == {"result:101", "result:102"}
     assert builds["2"].records[0].holder_build_ids == (1, 2)
     assert builds["2"].records[0].metrics == {"volume": 24, "width": 2}
-    assert builds["1"].grouped
     if scope is SearchScope.ALL:
         assert {(source.resource_kind, source.source_id) for source in builds["1"].matches} == {
             ("build", "1"),

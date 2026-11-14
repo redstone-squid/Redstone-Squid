@@ -174,7 +174,6 @@ class ResultPager:
                 hits.append(
                     replace(
                         hit,
-                        grouped=True,
                         records=records.get(hit.source_id, ()),
                         matches=sources,
                         title_match=highlight_title(hit.title, self.query),

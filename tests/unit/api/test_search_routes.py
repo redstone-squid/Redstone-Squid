@@ -139,7 +139,6 @@ async def test_grouped_api_returns_record_context_and_provenance() -> None:
         "42",
         "Stale title",
         "confirmed",
-        grouped=True,
         records=(record,),
         matches=(SearchMatch("record", "result:7", ("trigram",)),),
         title_match=SearchText("Stale title", ((0, 5),)),

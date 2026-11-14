@@ -202,7 +202,6 @@ def grouped_build() -> BuildSearchHit:
         "42",
         "2x2 Seamless Door",
         "confirmed",
-        grouped=True,
         title_match=SearchText("2x2 Seamless Door", ((0, 3),)),
         records=(
             RecordSearchHit(
@@ -234,20 +233,24 @@ def grouped_build() -> BuildSearchHit:
 
 def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() -> None:
     hit = grouped_build()
-    records = source_text(_result_description(hit, SearchScope.RECORDS), format="plain")
+
+    def grouped(scope: SearchScope = SearchScope.RECORDS) -> SearchRequest:
+        return SearchRequest("2x2", scope=scope, group_by_build=True)
+
+    records = source_text(_result_description(hit, grouped()), format="plain")
     assert records.splitlines() == ["Smallest 2x2 Door", "Build #42 · 2x2 Seamless Door", "Fastest 2x2 Door"]
     for scope in (SearchScope.BUILDS, SearchScope.ALL):
-        description = source_text(_result_description(hit, scope), format="plain")
+        description = source_text(_result_description(hit, grouped(scope)), format="plain")
         assert description.splitlines() == ["2x2 Seamless Door", "Build #42", "Smallest 2x2 Door", "Fastest 2x2 Door"]
     same = replace(hit, title="Smallest 2x2 Door", title_match=None, records=hit.records[:1])
     for scope in (SearchScope.BUILDS, SearchScope.ALL, SearchScope.RECORDS):
-        assert source_text(_result_description(same, scope), format="plain").splitlines() == [
+        assert source_text(_result_description(same, grouped(scope)), format="plain").splitlines() == [
             "Smallest 2x2 Door",
             "Build #42",
         ]
-    assert "**2x2**" in source_text(_result_description(hit), format="markdown")
-    assert _result_label(hit, SearchScope.RECORDS) == "Smallest 2x2 Door · #42"
-    assert _result_label(replace(hit, source_id="57"), SearchScope.RECORDS) == "Smallest 2x2 Door · #57"
+    assert "**2x2**" in source_text(_result_description(hit, grouped()), format="markdown")
+    assert _result_label(hit, grouped()) == "Smallest 2x2 Door · #42"
+    assert _result_label(replace(hit, source_id="57"), grouped()) == "Smallest 2x2 Door · #57"
 
 
 def test_highlights_do_not_interpret_build_titles_as_markdown() -> None:

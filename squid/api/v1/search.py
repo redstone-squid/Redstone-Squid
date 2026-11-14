@@ -119,7 +119,7 @@ async def search(
                         BuildSearchResult(
                             score=hit.score,
                             build=build,
-                            grouped=hit.grouped,
+                            grouped=group_by_build,
                             records=[RecordSearchEntry.from_domain(record) for record in hit.records],
                             matches=list(hit.matches),
                             title_match=hit.title_match

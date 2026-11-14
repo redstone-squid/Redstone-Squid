@@ -130,7 +130,6 @@ class BuildSearchHit:
     description: str | None = None
     score: float | None = None
     tags: tuple[str, ...] = ()
-    grouped: bool = False
     records: tuple[RecordSearchHit, ...] = ()
     matches: tuple[SearchMatch, ...] = ()
     title_match: SearchText | None = None

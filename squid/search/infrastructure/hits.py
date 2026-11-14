@@ -23,15 +23,15 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
     data = document.document_data
     tags = tuple(document.tags)
     if document.resource_kind == "record":
-        metrics = data.get("metrics", data.get("metric", {}))
-        holder_ids = data.get("holder_build_ids", ())
-        build_id = _integer(data, "build_id")
-        if not build_id and isinstance(holder_ids, list | tuple) and holder_ids:
-            first_holder = holder_ids[0]
-            if isinstance(first_holder, int) and not isinstance(first_holder, bool):
-                build_id = first_holder
+        # `metric` and `build_title` describe the first ranked holder. A record without a holder
+        # has no build to open, which 0 represents.
+        metrics = data.get("metric", {})
         if not isinstance(metrics, dict):
             metrics = {}
+        holder_ids = data.get("holder_build_ids", ())
+        build_id = 0
+        if isinstance(holder_ids, list | tuple) and holder_ids and type(holder_ids[0]) is int:
+            build_id = holder_ids[0]
         return RecordSearchHit(
             source_id=document.source_key,
             title=document.title,
@@ -70,8 +70,3 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
 def _string(data: dict[str, object], key: str, default: str) -> str:
     value = data.get(key)
     return value if isinstance(value, str) else default
-
-
-def _integer(data: dict[str, object], key: str) -> int:
-    value = data.get(key)
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0
