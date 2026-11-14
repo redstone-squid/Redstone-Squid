@@ -16,7 +16,7 @@ size records, but cannot enter categories that require expandability.
 
 Implementation order:
 
-1. **Storage and historical ingestion (current work):** preserve source claims,
+1. **Storage and historical ingestion (implemented):** preserve source claims,
    partial domains, parameters, formula branches, and evidence through inference,
    draft persistence, build finalization, and history. Do not require a solver.
 2. **Arithmetic feasibility spike:** validate exact one-variable crossovers,
@@ -55,6 +55,49 @@ Legacy expandable tags without formulas remain incomplete evidence.
 
 Until evaluation is implemented, structured families must not be treated as
 fixed-size record candidates using their sample measurements.
+
+## Storage implementation
+
+Migration `f2d5a8c1e4b7` adds `doors.expansion` and
+`submission_drafts.door_expansion`. Both are nullable JSONB with document-version
+checks. `DoorExpansion` in `squid/builds/domain/expansion.py` validates the source
+schema; SQLAlchemy converts immutable typed values to JSON and back.
+
+Inference carries the document through `BuildDraftPayload`. Materializing an
+inference candidate retains it beside submission form answers, so old pinned
+form manifests cannot discard it. Preparation includes it in door details;
+finalization payload version 6 preserves it for the worker. Build history captures
+the document on creation and edits. Existing documents and finalization payloads
+remain readable. The build API exposes `door.expansion` for reads and patches;
+omitting it preserves the value, and null clears it. Dedicated UI is deferred.
+
+For example, a partial source claim can be ingested as:
+
+```json
+{
+  "schema_version": 1,
+  "parameters": [
+    {"name": "n", "meaning": "opening width", "minimum": 2,
+     "maximum_kind": "unbounded", "initial_steps": [], "repeating_steps": [2]}
+  ],
+  "branches": [
+    {"opening_width": "n", "opening_height": "3", "opening_depth": "1",
+     "volume": "40+20n", "claimed_record_domain": "5 < n <= 8 or n > 15"}
+  ]
+}
+```
+
+This stores the claim without evaluating it. The default maximum_kind is
+`unknown`, not `unbounded`. Omitting step fields means unknown increments;
+`initial_steps: [1]` with `repeating_steps: [2]` differs from an empty initial
+sequence with `repeating_steps: [1, 2]`. Branch `domain` retains arbitrary source
+constraints, including coupled variables. `evidence` contains message IDs and
+excerpts, and `raw_description` retains qualifications or unsupported syntax.
+
+The fixed-size record loader excludes doors with an expansion document until
+the evaluator exists. Sample dimensions are retained but cannot accidentally
+establish a family record. No existing descriptions or expandable tags are
+backfilled automatically; those need source reprocessing or explicit review.
 
 ## Common coordinates and formula branches
 
