@@ -198,16 +198,6 @@ class SectionEditorScreen(sd.Screen[None]):
                 children.extend(self._picker(field, answers.get(field.id)))
             elif field.value_kind is ValueKind.CREDIT_LIST:
                 children.append(self.credits[field.id])
-                children.append(
-                    sl.action_controls(
-                        sl.action_control(
-                            tr(t"credits-advanced = Advanced credit lines"),
-                            partial(self._advanced_credits, field),
-                            key=f"advanced_{field.id}",
-                        ),
-                        key=f"advanced_credit_{field.id}",
-                    )
-                )
             elif (chunk := chunks.get(field.id)) is not None:
                 children.append(
                     sd.v2.section(
@@ -219,9 +209,6 @@ class SectionEditorScreen(sd.Screen[None]):
                 )
         children.extend((sd.v2.separator(), done_row(self._done)))
         return (sl.block(*children, accent=sl.AccentRole.BRAND), *self.workspace.history_controls())
-
-    async def _advanced_credits(self, field: FormField, event: sd.PressEvent) -> None:
-        await present_chunk_form(self.workspace, FormSection(field.id, field.label, (field,)), event)
 
     def _picker(self, field: FormField, value: JSONValue) -> list[Any]:
         """A catalogue field's current choice and one page of its options."""

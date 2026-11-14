@@ -119,6 +119,12 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     key="add-discord",
                     on_submit=partial(self._add_discord, credits, revision),
                 ),
+                sl.form(
+                    tr(t"credits-add-reference = Add identity reference"),
+                    _IdentityReferenceForm().spec(),
+                    key="identity-reference",
+                    on_submit=partial(self._add_reference, credits, revision),
+                ),
                 key="add-credit",
             )
         )
@@ -176,5 +182,44 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         await self._save((*credits, credit), revision)
 
+    async def _add_reference(self, credits: tuple[Credit, ...], revision: int, event: sd.SubmitEvent) -> None:
+        form = _IdentityReferenceForm.from_submission(event)
+        username = form.kind == "discord_username"
+        credit = Credit(
+            kind=CreditKind.DISCORD if username else CreditKind(form.kind),
+            name=form.name,
+            username=form.reference.removeprefix("@") if username else None,
+            subject=None if username else form.reference.strip(),
+            role=form.role,
+        )
+        await self._save((*credits, credit), revision)
+
     async def _page(self, page: int, _event: sd.PressEvent) -> None:
         self.page = max(0, page)
+
+
+class _IdentityReferenceForm(sl.forms.Form):
+    title = tr(t"credits-add-reference = Add identity reference")
+
+    kind = sl.forms.ChoiceField(
+        label=tr(t"credits-reference-type = Identity type"),
+        options=(
+            sl.forms.ChoiceOption("discord", tr(t"credits-reference-discord = Discord user ID"), "discord"),
+            sl.forms.ChoiceOption(
+                "discord_username", tr(t"credits-reference-discord-name = Discord username"), "discord_username"
+            ),
+            sl.forms.ChoiceOption(
+                "minecraft_java", tr(t"credits-reference-java = Minecraft Java UUID"), "minecraft_java"
+            ),
+            sl.forms.ChoiceOption(
+                "minecraft_bedrock", tr(t"credits-reference-bedrock = Minecraft Bedrock XUID"), "minecraft_bedrock"
+            ),
+        ),
+    )
+    reference = sl.forms.TextField(
+        label=tr(t"credits-reference = Identity reference"),
+        description=tr(t"credits-reference-help = Paste the ID or username for the identity type you chose."),
+        maximum=100,
+    )
+    name = sl.forms.TextField(label=tr(t"credits-name = Display name"), maximum=120)
+    role = role_field()

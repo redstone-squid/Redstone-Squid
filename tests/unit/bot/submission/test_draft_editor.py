@@ -784,3 +784,41 @@ async def test_credit_row_edit_keeps_provider_identity_and_evidence() -> None:
         await form.submit({"name": "New display", "role": ["designer"]})
     assert ws.stored_answers["credits"] == [replace(original, name="New display", role=CreditRole.DESIGNER).to_json()]
     assert drafts.changes[-1].base_revision == revision
+
+
+@pytest.mark.parametrize(
+    ("kind", "reference", "subject", "username"),
+    [
+        ("minecraft_java", "12345678123456781234567812345678", "12345678-1234-5678-1234-567812345678", None),
+        ("minecraft_bedrock", "123456789", "123456789", None),
+        ("discord", "123456789", "123456789", None),
+        ("discord_username", "@builder", None, "builder"),
+    ],
+)
+async def test_credit_reference_form_preserves_existing_evidence(
+    kind: str,
+    reference: str,
+    subject: str | None,
+    username: str | None,
+) -> None:
+    services, drafts = setup()
+    editor = await open_editor(services, drafts)
+    ws = editor.workspace
+    existing = Credit(name="Existing", kind=CreditKind.DISCORD, subject="456", attribution=CreditAttribution.CONFIRMED)
+    with transaction():
+        await ws.save_values({"credits": [existing.to_json()]})
+    revision = ws.revision
+    child = SectionEditorScreen(ws, "identity")
+    async with stage(child, owner=object()) as ui:
+        assert "Advanced credit lines" not in ui.texts()
+        form = await ui.press_for_form(ui.key_for("identity-reference"))
+        await form.submit({"kind": [kind], "reference": reference, "name": "New builder", "role": ["designer"]})
+    expected = Credit(
+        kind=CreditKind.DISCORD if kind == "discord_username" else CreditKind(kind),
+        name="New builder",
+        subject=subject,
+        username=username,
+        role=CreditRole.DESIGNER,
+    )
+    assert ws.stored_answers["credits"] == [existing.to_json(), expected.to_json()]
+    assert drafts.changes[-1].base_revision == revision
