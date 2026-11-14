@@ -33,6 +33,9 @@ class DraftFieldValueParserTest {
         assertEquals("minecraft_java", credits[1].jsonObject.getValue("kind").jsonPrimitive.content)
         assertEquals("layout", credits[1].jsonObject.getValue("role").jsonPrimitive.content)
         assertEquals("Alex", credits[1].jsonObject.getValue("username").jsonPrimitive.content)
+        val discord = DraftFieldValueParser.parse(field("credit_list", "credits"), "discord:123, discord:@alex").jsonArray
+        assertEquals("123", discord[0].jsonObject.getValue("subject").jsonPrimitive.content)
+        assertEquals("alex", discord[1].jsonObject.getValue("username").jsonPrimitive.content)
     }
 
     @Test

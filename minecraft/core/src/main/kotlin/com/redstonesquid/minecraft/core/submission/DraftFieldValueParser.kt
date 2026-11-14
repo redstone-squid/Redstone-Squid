@@ -3,6 +3,7 @@ package com.redstonesquid.minecraft.core.submission
 import com.redstonesquid.minecraft.protocol.ChoiceOption
 import com.redstonesquid.minecraft.protocol.FormField
 import java.math.BigDecimal
+import java.util.UUID
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -42,11 +43,17 @@ public object DraftFieldValueParser {
                     else -> "name"
                 }
                 val name = if (kind == "name") reference else reference.substringAfter(':').removePrefix("@")
+                val subject = when {
+                    kind == "minecraft_java" -> runCatching { UUID.fromString(name).toString() }.getOrNull()
+                    kind != "name" && !reference.substringAfter(':').startsWith("@") && name.all(Char::isDigit) -> name
+                    else -> null
+                }
                 buildJsonObject {
                     put("name", name)
                     put("kind", kind)
                     put("role", parts.getOrElse(1) { "creator" })
-                    if (kind != "name") put("username", name)
+                    if (subject != null) put("subject", subject)
+                    else if (kind != "name") put("username", name)
                 }
             })
             "string_list" -> JsonArray(parseList(field, rawValue).map(::JsonPrimitive))
