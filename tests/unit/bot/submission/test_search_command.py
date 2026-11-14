@@ -164,3 +164,21 @@ async def test_search_jump_form_preserves_the_query_and_fetches_the_requested_pa
         assert screen.request.offset == 180
         assert any("Door 180" in text for text in ui.texts())
         ui.assert_within_limits()
+
+
+@pytest.mark.parametrize("count", [2, 6])
+async def test_long_search_titles_fit_picker_controls_and_timeout(count: int) -> None:
+    # Small result sets become buttons (80 characters); larger sets become selects (100).
+    title = "A very elaborate redstone door " * 5
+    page = SearchPage(
+        hits=tuple(BuildSearchHit(str(index), title, "confirmed") for index in range(count)),
+        total=count,
+        next=None,
+        prev=None,
+    )
+    screen = SearchScreen(RecordingSearch(), SearchRequest("door"), page)
+    async with stage(screen, owner=object()) as ui:
+        assert any(title in text for text in ui.texts())
+        ui.assert_within_limits()
+        await ui.root.handle_timeout()
+        ui.assert_within_limits()

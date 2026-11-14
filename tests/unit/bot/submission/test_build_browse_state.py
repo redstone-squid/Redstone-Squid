@@ -19,7 +19,7 @@ from squid.builds.models import Build, DoorBuild
 from squid.core.pagination import Page, PageAnchor, PageSelector
 from squid.permissions.domain import PermissionNode
 from squid.records.application import RecordService
-from squid.records.application.models import PublishedTitle, RecordGap
+from squid.records.application.models import PublishedTitle, RecordGap, TitleDiagnosticGap
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
@@ -270,6 +270,53 @@ async def test_record_tools_load_on_request_and_return_to_builds() -> None:
         ui.assert_within_limits()
         await ui.press(ui.key_for("all-builds"))
         assert "## Build catalogue" in ui.texts()
+
+
+@pytest.mark.parametrize("count", [2, 6])
+@pytest.mark.parametrize("browser", ["records", "gaps", "titles"])
+async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, count: int) -> None:
+    title = "Smallest seamless flush redstone door " * 4
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(
+        items=tuple(
+            PublishedTitle(
+                id=index,
+                definition_id=index,
+                title_id=uuid4(),
+                title=title,
+                subtitle=None,
+                base_title=BaseTitle.SMALLEST,
+                build_kind=BuildKind.DOOR,
+                version_scope=VersionScope.ALL_TIME,
+                status=ResolutionStatus.RESOLVED,
+                holder_build_ids=(7,),
+                computed_at=datetime.now(UTC),
+            )
+            for index in range(count)
+        ),
+        total=count,
+        next=None,
+        prev=None,
+    )
+    records.gaps.return_value = tuple(
+        RecordGap(index, title, None, BaseTitle.SMALLEST, (7,), ("width",)) for index in range(count)
+    )
+    records.title_gaps.return_value = tuple(
+        TitleDiagnosticGap(index, title, ({"code": "unknown"},)) for index in range(count)
+    )
+    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    screen = _screen(initial_id=None, records=records, initial_records=True, record_tools=tools)
+    async with stage(screen, owner=object()) as ui:
+        if browser == "records":
+            await ui.press(ui.key_for("all-standings"))
+        else:
+            await ui.press(ui.key_for("record-tools"))
+            if browser == "titles":
+                await ui.press(ui.key_for("records-tabs.titles"))
+        assert any(title in text for text in ui.texts())
+        ui.assert_within_limits()
+        await ui.root.handle_timeout()
+        ui.assert_within_limits()
 
 
 async def test_full_build_card_fits_with_catalogue_navigation() -> None:

@@ -8,7 +8,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
-from squid.bot.ui import tr
+from squid.bot.ui import tr, truncate_display_text
 from squid.builds.models import Build
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
 from squid_i18n import md_tr
@@ -158,7 +158,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._source,
             key="search",
             identity=_hit_identity,
-            label=lambda hit: hit.title,
+            label=lambda hit: truncate_display_text(hit.title, 80),
             summary=_result_description,
             detail=self._detail,
             overview=self._overview,

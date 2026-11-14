@@ -12,7 +12,7 @@ from typing import Literal, Protocol, override
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import tr
+from squid.bot.ui import tr, truncate_display_text
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
@@ -97,7 +97,7 @@ class RecordsScreen(sd.Screen):
             sl.sources.list_source(gaps),
             key="evidence-gaps",
             identity=lambda gap: str(gap.definition_id),
-            label=lambda gap: gap.title,
+            label=lambda gap: truncate_display_text(gap.title, 80),
             summary=lambda gap: f"{gap.title} · missing {', '.join(gap.fields)}",
             detail=lambda gap: sl.fields(
                 sl.field(tr(t"bot-submission-records-definition = Definition"), str(gap.definition_id)),
@@ -112,7 +112,7 @@ class RecordsScreen(sd.Screen):
             sl.sources.list_source(titles),
             key="title-issues",
             identity=lambda gap: str(gap.definition_id),
-            label=lambda gap: gap.title,
+            label=lambda gap: truncate_display_text(gap.title, 80),
             summary=lambda gap: gap.title,
             detail=lambda gap: sl.fields(
                 sl.field(tr(t"bot-submission-records-definition = Definition"), str(gap.definition_id)),

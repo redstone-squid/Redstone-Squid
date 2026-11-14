@@ -6,7 +6,7 @@ from functools import partial
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import tr
+from squid.bot.ui import tr, truncate_display_text
 from squid.core.pagination import PageSelector
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle
@@ -74,7 +74,7 @@ def record_browser(
         RecordSource(records),
         key="records",
         identity=lambda record: str(record.id),
-        label=lambda record: record.title,
+        label=lambda record: truncate_display_text(record.title, 80),
         summary=lambda record: sl.md(t"**{record.title}** — {record.version_scope.replace('_', ' ')}"),
         detail=detail,
         page_size=8,
