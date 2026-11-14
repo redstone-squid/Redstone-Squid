@@ -141,6 +141,20 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
     )
     @app_commands.rename(tab=to_locale_str(tr(t"command-dev-ui-tab-name = tab")))
     @app_commands.describe(tab=to_locale_str(tr(t"command-dev-ui-tab-help = The dashboard tab to open first.")))
+    @app_commands.choices(
+        tab=[
+            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-overview = overview")), value="overview"),
+            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-roots = roots")), value="roots"),
+            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-sessions = sessions")), value="sessions"),
+            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-routes = routes")), value="routes"),
+            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-activity = activity")), value="activity"),
+            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-queues = queues")), value="queues"),
+            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-profile = profile")), value="profile"),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-dev-ui-choice-persistence = persistence")), value="persistence"
+            ),
+        ]
+    )
     async def ui_command(
         self,
         ctx: Context[BotT],
