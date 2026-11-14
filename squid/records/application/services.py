@@ -176,11 +176,12 @@ class RecordComputationService:
             for candidate in scoped
             if candidate.expansion is not None
             for base_key in sorted(concrete)
-            if (projected := family_at_category(candidate, CategoryIdentity(kind, base_key, ()))) is not None
+            if (projected := family_at_category(candidate, CategoryIdentity(kind, base_key, ()), competing_only=True))
+            is not None
         )
         categories = self._eager_categories(kind, (*fixed, *projected))
         for identity in requested:
-            category = self.requested_category(identity, scoped)
+            category = self.requested_category(identity, scoped, competing_only=True)
             if category is not None:
                 categories[identity.key] = category
 
@@ -306,14 +307,20 @@ class RecordComputationService:
         self,
         identity: CategoryIdentity,
         candidates: Sequence[CandidateBuild],
+        *,
+        competing_only: bool = False,
     ) -> CategoryCandidates | None:
-        """Build the category for one requested exact category, or None if no candidate qualifies."""
+        """Build the category for one requested exact category, or None if no candidate qualifies.
+
+        With competing_only, families proven absent from the category's opening do
+        not qualify; see family_at_category.
+        """
         items: list[tuple[CandidateBuild, tuple[CandidateFacet, ...]]] = []
         requested_ids = frozenset(identity.restriction_ids)
         requested_values = {tag_id: (operator, value) for tag_id, operator, value in identity.restriction_values}
         for source in candidates:
             if source.expansion is not None:
-                projected = family_at_category(source, identity)
+                projected = family_at_category(source, identity, competing_only=competing_only)
                 if projected is None:
                     continue
                 source = projected
@@ -533,7 +540,7 @@ class RecordService:
                 tuple(sorted(request.restriction_ids)),
                 tuple(sorted(request.restriction_values)),
             )
-            category = self._computation.requested_category(identity, scoped)
+            category = self._computation.requested_category(identity, scoped, competing_only=True)
             if category is None:
                 raise NoMatchingRecordCategoryError(kind=request.kind.value, base_key=request.base_key)
 

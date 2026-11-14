@@ -954,3 +954,35 @@ async def test_family_population_respects_version_and_category_identity() -> Non
     current = next(r for r in runs.batches[1].records if r.base_title is BaseTitle.SMALLEST)
     assert current.resolution.holder_ids == (1,)
     assert current.door_evidence is None
+
+
+async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
+    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    # Widths start at six, so this family cannot be a 2x2 door.
+    family = replace(
+        _door(2, volume=1, opening=0, restrictions=(flush,)),
+        expansion=DoorExpansion.model_validate(
+            {
+                "parameters": [
+                    {
+                        "name": "n",
+                        "minimum": 6,
+                        "maximum_kind": "unbounded",
+                        "initial_steps": [],
+                        "repeating_steps": [1],
+                    }
+                ],
+                "branches": [{"opening_width": "n", "opening_height": "2", "volume": "5n"}],
+            }
+        ),
+    )
+    candidates = FakeCandidates((_door(1, volume=100, opening=10, restrictions=()), family))
+    runs = FakeRuns()
+    await RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)).rebuild(kinds=(BuildKind.DOOR,))
+    records = runs.batches[0].records
+    # No empty "Flush 2x2" category appears, and the fixed-only category keeps its history.
+    assert {record.category.identity.restriction_ids for record in records} == {()}
+    smallest = next(record for record in records if record.base_title is BaseTitle.SMALLEST)
+    assert smallest.door_evidence is None
+    assert smallest.history_complete
+    assert [period.build_ids for period in smallest.history] == [(1,)]
