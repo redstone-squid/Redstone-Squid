@@ -1,0 +1,98 @@
+@layer components {
+  .sq-swatches {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .sq-swatch {
+    height: 4rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    margin-bottom: var(--space-2);
+  }
+  .sq-swatch--canvas {
+    background: var(--canvas);
+  }
+  .sq-swatch--surface {
+    background: var(--surface);
+  }
+  .sq-swatch--accent {
+    background: var(--accent);
+  }
+  .sq-swatch--success {
+    background: var(--success);
+  }
+  .sq-swatch--warning {
+    background: var(--warning);
+  }
+  .sq-swatch--text {
+    background: var(--text);
+  }
+  .sq-swatches code {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+  }
+  .sq-token-footer,
+  .sq-workbench-footer {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+  .sq-token-footer {
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-4);
+    margin-top: var(--space-5);
+  }
+  .sq-field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+  }
+  .sq-inline-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+  .sq-inline-note svg {
+    flex-shrink: 0;
+  }
+  .sq-build-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+  .sq-state-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+  .sq-state {
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    font-size: 0.875rem;
+  }
+  @media (max-width: 70rem) {
+    .sq-build-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 48rem) {
+    .sq-field-grid,
+    .sq-build-grid,
+    .sq-state-grid {
+      grid-template-columns: 1fr;
+    }
+    .sq-swatches {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+}

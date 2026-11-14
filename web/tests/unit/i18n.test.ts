@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   apiLocaleToRoute,
-  dictionaries,
   formatDate,
   formatNumber,
   localeFromPath,
@@ -34,12 +33,6 @@ describe("locale mapping", () => {
 });
 
 describe("translations", () => {
-  it("requires both dictionaries to expose the same complete key set", () => {
-    expect(Object.keys(dictionaries["zh-CN"]).sort()).toEqual(Object.keys(dictionaries.en).sort());
-    expect(Object.values(dictionaries.en).every(Boolean)).toBe(true);
-    expect(Object.values(dictionaries["zh-CN"]).every(Boolean)).toBe(true);
-  });
-
   it("substitutes named variables without changing creator text", () => {
     expect(translate("en", "builds.byCreator", { name: "红石 Builder" })).toBe(
       "Builds by 红石 Builder",

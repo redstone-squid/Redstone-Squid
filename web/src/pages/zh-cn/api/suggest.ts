@@ -1,3 +1,4 @@
+import { translate } from "../../../lib/i18n";
 import type { APIRoute } from "astro";
 
 import { asCatalogueError, fetchSuggestions } from "../../../lib/api";
@@ -15,7 +16,10 @@ export const GET: APIRoute = async ({ url }) => {
   } catch (caught) {
     const error = asCatalogueError(caught);
     return Response.json(
-      { title: error.problem?.title ?? "无法获取搜索建议", status: error.status },
+      {
+        title: error.problem?.title ?? translate("zh-CN", "suggestions.unavailable"),
+        status: error.status,
+      },
       { status: error.status, headers: { "Cache-Control": "no-store" } },
     );
   }

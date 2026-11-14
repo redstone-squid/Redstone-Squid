@@ -5,7 +5,7 @@ import type {
   StoredDraftResponse,
   SubmissionAttentionIssueResponse,
 } from "../generated/types.gen";
-import type { Locale } from "./i18n";
+import { translate, type Locale } from "./i18n";
 
 export const SUBMISSION_PROTOCOL = 1;
 export const WEB_SUBMISSION_CAPABILITIES = ["repeatable_text", "typed_credits"] as const;
@@ -205,6 +205,7 @@ export function fieldInputValue(field: FormFieldResponse, value: unknown): strin
 export function parseFieldInput(
   field: FormFieldResponse,
   raw: string,
+  locale: Locale = "en",
 ): { value?: DraftValue; error?: string } {
   if (field.value_kind === "string_list") {
     const value = raw
@@ -217,14 +218,14 @@ export function parseFieldInput(
   if (field.control === "duration") {
     const value = parseDuration(raw);
     return value === undefined
-      ? { error: "Use an explicit unit: game ticks (gt), redstone ticks (rt), or seconds (s)." }
+      ? { error: translate(locale, "validation.duration-unit") }
       : { value };
   }
   if (field.value_kind === "integer" || field.value_kind === "number") {
     const value = Number(raw);
     const valid =
       Number.isFinite(value) && (field.value_kind !== "integer" || Number.isSafeInteger(value));
-    return valid ? { value } : { error: "Enter a valid number." };
+    return valid ? { value } : { error: translate(locale, "validation.number") };
   }
   return { value: raw };
 }
@@ -234,59 +235,8 @@ export function issueMessage(
   label?: string,
   locale: Locale = "en",
 ): string {
-  if (locale === "zh-CN") {
-    const subject = label ?? (issue.field_id === "submission" ? "投稿" : issue.field_id);
-    const messages: Record<SubmissionAttentionIssueResponse["reason"], string> = {
-      unknown_field: "已不再被识别；请移除此项或创建新草稿",
-      required: "为必填项",
-      wrong_type: "的值格式不正确",
-      required_value: "必须确认",
-      below_minimum: "低于最小值",
-      above_maximum: "高于最大值",
-      too_short: "内容过短",
-      too_long: "内容过长",
-      too_few_items: "需要更多条目",
-      too_many_items: "条目过多",
-      unknown_option: "包含已不可用的选项",
-      schema_unsupported: "使用的表单版本无法由服务器完成投稿",
-      schematic_required: "需要由游戏内投稿客户端提供原理图",
-      schematic_primary_required: "需要选择主要原理图",
-      permission_revoked: "已不再有完成投稿的权限",
-      schematic_processing: "正在等待原理图处理",
-      schematic_rejected: "的原理图无法被接受",
-      media_processing: "正在等待媒体处理",
-      media_rejected: "的媒体无法被接受；请丢弃并上传替代文件",
-      sponsor_unavailable: "请求署名的服务器已不再公开或未选择接受赞助署名",
-      target_rejected: "无法创建目标作品记录",
-      retry_exhausted: "多次重试后仍无法完成投稿",
-    };
-    return `${subject}${messages[issue.reason]}。`;
-  }
-
-  const subject = label ?? (issue.field_id === "submission" ? "Submission" : issue.field_id);
-  const messages: Record<SubmissionAttentionIssueResponse["reason"], string> = {
-    unknown_field: "is no longer recognized; remove it or start a new draft",
-    required: "is required",
-    wrong_type: "has the wrong value format",
-    required_value: "must be accepted",
-    below_minimum: "is below the minimum",
-    above_maximum: "is above the maximum",
-    too_short: "is too short",
-    too_long: "is too long",
-    too_few_items: "needs more entries",
-    too_many_items: "has too many entries",
-    unknown_option: "contains an option that is no longer available",
-    schema_unsupported: "uses a form revision this server cannot finalize",
-    schematic_required: "needs a schematic from an in-game submission client",
-    schematic_primary_required: "requires a primary schematic to be selected",
-    permission_revoked: "no longer has permission to complete this submission",
-    schematic_processing: "is waiting for schematic processing",
-    schematic_rejected: "has a schematic that could not be accepted",
-    media_processing: "is waiting for media processing",
-    media_rejected: "has media that could not be accepted; discard it and upload a replacement",
-    sponsor_unavailable: "references a server that is no longer public or opted into sponsorship",
-    target_rejected: "could not create the target build record",
-    retry_exhausted: "could not be finalized after several retries",
-  };
-  return `${subject} ${messages[issue.reason]}.`;
+  const subject =
+    label ??
+    (issue.field_id === "submission" ? translate(locale, "issue.submission") : issue.field_id);
+  return translate(locale, `issue.${issue.reason}`, { subject });
 }

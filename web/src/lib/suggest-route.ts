@@ -1,13 +1,8 @@
 import { asCatalogueError, fetchSuggestionPage } from "./api";
-import type { Locale } from "./i18n";
+import { translate, type Locale } from "./i18n";
 
 const SOURCE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_QUERY_LENGTH = 200;
-
-const UNAVAILABLE_TITLE: Record<Locale, string> = {
-  en: "Suggestions unavailable",
-  "zh-CN": "无法获取搜索建议",
-};
 
 /**
  * Proxy a suggestion source using the locale selected by the route.
@@ -42,7 +37,10 @@ export async function respondWithSuggestions(
   } catch (caught) {
     const error = asCatalogueError(caught);
     return Response.json(
-      { title: error.problem?.title ?? UNAVAILABLE_TITLE[locale], status: error.status },
+      {
+        title: error.problem?.title ?? translate(locale, "suggestions.unavailable"),
+        status: error.status,
+      },
       { status: error.status, headers: { "Cache-Control": "no-store" } },
     );
   }

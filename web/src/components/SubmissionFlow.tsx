@@ -76,14 +76,14 @@ type Copy = {
   stripAudio: string;
   remove: string;
   noMedia: string;
-  limits: string;
+  limits: (images: number, videos: number, size: string) => string;
   submissionTitle: string;
   submissionBody: string;
   submit: string;
   submitting: string;
   pending: string;
   attention: string;
-  completed: string;
+  completed: (id: string | number) => string;
   dead: string;
   deleteDraft: string;
   deleteConfirm: string;
@@ -119,14 +119,15 @@ const copyFor = (locale: Locale): Copy => ({
   stripAudio: translate(locale, "submitFlow.stripAudio"),
   remove: translate(locale, "submitFlow.remove"),
   noMedia: translate(locale, "submitFlow.noMedia"),
-  limits: translate(locale, "submitFlow.limits"),
+  limits: (images, videos, size) =>
+    translate(locale, "submitFlow.limits", { images, videos, size }),
   submissionTitle: translate(locale, "submitFlow.submissionTitle"),
   submissionBody: translate(locale, "submitFlow.submissionBody"),
   submit: translate(locale, "submitFlow.submit"),
   submitting: translate(locale, "submitFlow.submitting"),
   pending: translate(locale, "submitFlow.pending"),
   attention: translate(locale, "submitFlow.attention"),
-  completed: translate(locale, "submitFlow.completed"),
+  completed: (id) => translate(locale, "submitFlow.completed", { id }),
   dead: translate(locale, "submitFlow.dead"),
   deleteDraft: translate(locale, "submitFlow.deleteDraft"),
   deleteConfirm: translate(locale, "submitFlow.deleteConfirm"),
@@ -834,7 +835,7 @@ function FieldEditor({
       .filter(Boolean)
       .join(" ") || undefined;
   const commitRaw = () => {
-    const parsed = parseFieldInput(field, raw);
+    const parsed = parseFieldInput(field, raw, locale);
     setParseError(parsed.error);
     if (!parsed.error) onCommit(parsed.value);
   };
@@ -1047,10 +1048,11 @@ function MediaSection({
       {media ? (
         <>
           <p className="submission-limit">
-            {copy.limits
-              .replace("{images}", String(media.limits.max_images))
-              .replace("{videos}", String(media.limits.max_videos))
-              .replace("{size}", readableBytes(media.limits.max_upload_bytes))}
+            {copy.limits(
+              media.limits.max_images,
+              media.limits.max_videos,
+              readableBytes(media.limits.max_upload_bytes),
+            )}
           </p>
           <div className="submission-upload-controls">
             <label className="button" htmlFor={inputId}>
@@ -1136,7 +1138,7 @@ function FinalizationStatus({
 }) {
   const message =
     value.status === "completed"
-      ? copy.completed.replace("{id}", value.build_id === null ? "—" : String(value.build_id))
+      ? copy.completed(value.build_id === null ? "—" : String(value.build_id))
       : value.status === "needs_attention"
         ? copy.attention
         : value.status === "dead"

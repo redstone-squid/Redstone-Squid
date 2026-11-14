@@ -1,7 +1,14 @@
 ---
+import { translate, type StaticMessageKey } from "../lib/i18n";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
+import "@fontsource/noto-sans-sc/400.css";
+import "@fontsource/noto-sans-sc/600.css";
 import "../ui/base.css";
+import "./workbench-layout.css";
 type Props = { title: string; locale: "en" | "zh-CN"; theme: "light" | "dark" };
 const { title, locale, theme } = Astro.props;
+const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
 <!doctype html>
@@ -15,7 +22,7 @@ const { title, locale, theme } = Astro.props;
   </head>
   <body>
     <a class="sq-skip" href="#main">
-      {locale === "en" ? "Skip to content" : "跳至内容"}
+      {t("workbench.skip-to-content")}
     </a>
     <header class="sq-topbar">
       <a class="sq-brand" href="/">
@@ -24,16 +31,16 @@ const { title, locale, theme } = Astro.props;
         </span>{" "}
         Redstone Squid
       </a>
-      <span class="sq-badge">{locale === "en" ? "Design system / 01" : "设计系统 / 01"}</span>
+      <span class="sq-badge">{t("workbench.design-system-01")}</span>
     </header>
     <div class="sq-shell">
       <aside class="sq-sidebar">
-        <p class="sq-kicker">{locale === "en" ? "WORKBENCH" : "组件工作台"}</p>
-        <nav aria-label={locale === "en" ? "Workbench" : "组件工作台"}>
-          <a href="#foundations">{locale === "en" ? "Foundations" : "基础规范"}</a>
-          <a href="#components">{locale === "en" ? "Components" : "组件"}</a>
-          <a href="#patterns">{locale === "en" ? "Page patterns" : "页面模式"}</a>
-          <a href="#states">{locale === "en" ? "Feedback states" : "反馈状态"}</a>
+        <p class="sq-kicker">{t("workbench.workbench")}</p>
+        <nav aria-label={t("workbench.workbench")}>
+          <a href="#foundations">{t("workbench.foundations")}</a>
+          <a href="#components">{t("workbench.components")}</a>
+          <a href="#patterns">{t("workbench.page-patterns")}</a>
+          <a href="#states">{t("workbench.feedback-states")}</a>
         </nav>
         <p class="sq-sidebar-note">
           Astro + React

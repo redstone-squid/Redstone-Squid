@@ -2,18 +2,18 @@
 import RuntimeSettings from "../components/RuntimeSettings";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { getRuntimeConfig } from "../lib/config";
-import type { Locale } from "../lib/i18n";
+import { translate, localizePath, type Locale } from "../lib/i18n";
 
 type Props = { locale: Locale };
 const { locale } = Astro.props;
-const title = locale === "zh-CN" ? "全局设置" : "Global settings";
+const title = translate(locale, "settings.global-settings");
 ---
 
 <BaseLayout
   title={title}
   description={title}
   locale={locale}
-  canonicalPath={locale === "zh-CN" ? "/zh-cn/admin/settings" : "/admin/settings"}
+  canonicalPath={localizePath("/admin/settings", locale)}
   noindex
 >
   <section class="page-shell">

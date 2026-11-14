@@ -1,22 +1,32 @@
 import { Dialog as Primitive } from "radix-ui";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import { cx } from "class-variance-authority";
+import type { ComponentProps, ReactNode } from "react";
 import { Button } from "./Button";
 
-type Props = {
+type Props = Omit<ComponentProps<typeof Primitive.Root>, "children"> & {
   trigger: ReactNode;
   title: string;
   description: string;
   closeLabel: string;
   children: ReactNode;
+  contentProps?: Omit<ComponentProps<typeof Primitive.Content>, "children" | "asChild">;
 };
-export function Dialog({ trigger, title, description, closeLabel, children }: Props) {
+export function Dialog({
+  trigger,
+  title,
+  description,
+  closeLabel,
+  children,
+  contentProps,
+  ...rootProps
+}: Props) {
   return (
-    <Primitive.Root>
+    <Primitive.Root {...rootProps}>
       <Primitive.Trigger asChild>{trigger}</Primitive.Trigger>
       <Primitive.Portal>
         <Primitive.Overlay className="sq-dialog-overlay" />
-        <Primitive.Content className="sq-dialog">
+        <Primitive.Content {...contentProps} className={cx("sq-dialog", contentProps?.className)}>
           <div className="sq-row sq-between">
             <Primitive.Title>{title}</Primitive.Title>
             <Primitive.Close asChild>

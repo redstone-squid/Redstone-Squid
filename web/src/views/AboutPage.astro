@@ -22,14 +22,12 @@ const config = getRuntimeConfig();
       <p>{translate(locale, "about.readOnlyBody")}</p>
       <h2>{translate(locale, "about.recordsTitle")}</h2>
       <p>{translate(locale, "about.recordsBody")}</p>
-      <h2>{locale === "zh-CN" ? "管理" : "Administration"}</h2>
+      <h2>{translate(locale, "about.administration")}</h2>
       <p>
         <a href={localizePath("/admin/settings", locale)}>
-          {locale === "zh-CN" ? "全局设置" : "Global settings"}
+          {translate(locale, "settings.global-settings")}
         </a>
-        {locale === "zh-CN"
-          ? "供全局管理员管理机器人行为。"
-          : " lets global administrators configure bot behavior."}
+        {translate(locale, "about.adminDescription")}
       </p>
       <div class="footer-links">
         <a class="button button--primary" href={config.discordCommunityUrl} rel="noreferrer">

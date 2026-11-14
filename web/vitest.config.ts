@@ -7,7 +7,12 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**/*.ts", "src/components/**/*.tsx"],
+      include: [
+        "src/lib/**/*.ts",
+        "src/components/**/*.tsx",
+        "src/ui/**/*.{ts,tsx}",
+        "src/features/**/*.{ts,tsx}",
+      ],
       exclude: ["src/generated/**"],
       reporter: ["text", "json-summary"],
       thresholds: {

@@ -5,8 +5,7 @@ export const buildFixtures = [
     creator: "CircuitSage · 红石猫",
     dimensions: "9 × 7 × 4",
     image: "/fixtures/copper-door.svg",
-    category: "Piston door",
-    categoryZh: "活塞门",
+    category: "workbench.piston-door",
     timing: "8 gt",
   },
   {
@@ -15,8 +14,7 @@ export const buildFixtures = [
     creator: "Space Builder",
     dimensions: "12 × 12 × 5",
     image: "/fixtures/iris-door.svg",
-    category: "Seamless door",
-    categoryZh: "无缝门",
+    category: "workbench.seamless-door",
     timing: "12 gt",
   },
   {
@@ -25,8 +23,7 @@ export const buildFixtures = [
     creator: "CircuitSage",
     dimensions: "3 × 5 × 8",
     image: null,
-    category: "Extender",
-    categoryZh: "活塞扩展器",
+    category: "workbench.extender",
     timing: "—",
   },
 ] as const;

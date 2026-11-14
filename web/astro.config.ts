@@ -10,6 +10,15 @@ export default defineConfig({
     checkOrigin: true,
   },
   vite: {
+    plugins: [
+      {
+        name: "squid:client-budget-manifest",
+        configEnvironment(name) {
+          if (name === "client") return { build: { manifest: true } };
+          return undefined;
+        },
+      },
+    ],
     build: {
       cssMinify: true,
     },

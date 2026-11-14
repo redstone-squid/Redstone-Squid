@@ -7,3 +7,4 @@ test-results/
 src/generated/
 openapi.json
 bun.lock
+review-gallery/
