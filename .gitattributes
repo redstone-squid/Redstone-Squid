@@ -117,8 +117,6 @@ minecraft/gradle/verification-metadata.xml linguist-generated=true
 .gitkeep       text export-ignore
 
 # Repository metadata and extensionless text files
-.cursor/**     text
-.cursorignore  text
 .dockerignore  text
 .env.example   text
 .gitmodules    text

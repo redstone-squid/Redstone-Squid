@@ -1,8 +1,0 @@
----
-description: Read this if you want to create a new migration.
-globs:
-alwaysApply: false
----
-Follow `docs/new-migration.md`. If you changed column names, also update `seed.sql` and every reference in the code base.
-
-Read `docs/new-build-attribute.md` for more details if you have to add a new build attribute.
