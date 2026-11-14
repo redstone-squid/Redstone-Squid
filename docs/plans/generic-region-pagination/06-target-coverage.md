@@ -114,6 +114,11 @@ effects. Head/tail retention and importance survive migration, while strict mode
 requires lossless output. Styling remains balanced and controls are never shortened.
 Rich inline links and entities still report a concrete shortening limitation.
 
+Native Discord text `Alts` and `Drop` policies also compose inside shared layouts.
+Fallback rungs report replacement, shortening the final rung adds its own effect,
+and whole-text drops report omission. An enclosing truncation wrapper retains its
+policy precedence. Strict planning still requires the primary content to fit.
+
 ## Application outcome and validation
 
 Focused command help now uses a shared region instead of truncating the command

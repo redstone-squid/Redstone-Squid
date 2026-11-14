@@ -86,7 +86,7 @@ from squid_ui.presentations import (
     TextPresentation,
 )
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership, Truncate
+from squid_ui.primitives.constraints import FIRST_PAGE, Alts, Drop, Never, PageOwnership, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.text import TextLike, resolve_text
 
@@ -632,7 +632,7 @@ def semantic_offers[RenderTargetT, ContextT](
                     key=f"shorten-{retained}",
                     payload=replace(payload, shortening=operation),
                     preference=length - retained,
-                    effects=occurrence.scope_effects((operation,)),
+                    effects=(*full.effects, *occurrence.scope_effects((operation,))),
                     fragments=None,
                     preference_priority=priority,
                 )
@@ -644,14 +644,15 @@ def semantic_offers[RenderTargetT, ContextT](
                 key="shorten-empty",
                 payload=replace(payload, shortening=Shortening(occurrence.reference, 0, permission), ellipsis=False),
                 preference=length + 1,
-                effects=occurrence.scope_effects((Shortening(occurrence.reference, 0, permission),)),
+                effects=(*full.effects, *occurrence.scope_effects((Shortening(occurrence.reference, 0, permission),))),
                 fragments=None,
                 preference_priority=priority,
             ),
         )
 
     if isinstance(value, primitive.Text | primitive.Heading | primitive.Footer | primitive.Code):
-        if not native_controls or not isinstance(value.overflow, Never | Truncate):
+        overflow = Truncate(keep) if keep is not None else value.overflow
+        if not native_controls or not isinstance(overflow, Never | Truncate | Alts | Drop):
             return ()
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)
         if isinstance(value, primitive.Heading):
@@ -660,10 +661,44 @@ def semantic_offers[RenderTargetT, ContextT](
             payload = replace(payload, role="note")
         elif isinstance(value, primitive.Code):
             payload = replace(payload, role="code", language=value.lang)
+        full = RealizationOffer(occurrence, "native-text", payload, preference_priority=value.priority)
+        if isinstance(overflow, Drop):
+            return (
+                full,
+                replace(
+                    full,
+                    key="drop",
+                    payload=replace(payload, nodes=(), role="paragraph"),
+                    preference=1,
+                    effects=tuple(Omission(source) for source in sorted(occurrence.sources, key=lambda ref: ref.keys)),
+                ),
+            )
+        if isinstance(overflow, Alts):
+            effects = occurrence.scope_effects((Replacement(occurrence.reference),))
+            replacements = tuple(
+                replace(
+                    full,
+                    key=f"alternate-{index}",
+                    preference=index,
+                    payload=replace(payload, nodes=resolve_text(content, context.localization).nodes),
+                    effects=effects,
+                )
+                for index, content in enumerate(overflow.ladder, 1)
+            )
+            context.work.consume(len(replacements))
+            last = replacements[-1]
+            shortened = text_offers(last, last.payload, "head", value.priority)
+            if isinstance(shortened, OfferDiscovery):
+                return replace(shortened, offers=(full, *replacements[:-1], *shortened.offers))
+            return (
+                full,
+                *replacements,
+                *(replace(offer, preference=last.preference + offer.preference) for offer in shortened[1:]),
+            )
         return text_offers(
-            RealizationOffer(occurrence, "native-text", payload),
+            full,
             payload,
-            keep or (value.overflow.keep if isinstance(value.overflow, Truncate) else None),
+            overflow.keep if isinstance(overflow, Truncate) else None,
             value.priority,
         )
     if isinstance(value, primitive.Thumbnail):
