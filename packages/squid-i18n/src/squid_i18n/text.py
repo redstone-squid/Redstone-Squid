@@ -13,7 +13,7 @@ from enum import StrEnum
 from string import Formatter
 from string.templatelib import Template
 from types import MappingProxyType
-from typing import Literal, LiteralString, Protocol, override, runtime_checkable
+from typing import Literal, LiteralString, Protocol, Self, override, runtime_checkable
 
 from squid_i18n import runtime, tree
 from squid_i18n.compiler import Declaration, compile_template
@@ -104,19 +104,40 @@ type _Part = str | _Translation | _Markdown | _Style | _Link | _Code | _Mention 
 
 @dataclass(frozen=True, slots=True)
 class Text:
-    """Composable text; use tr, md, plain, or a formatting constructor to create it.
+    """Composable text from a literal string or template.
 
-    Ordinary strings are literal. Concatenation preserves each fragment's structure
-    and defers translation until rendering for a reader.
+    Template strings stay literal; embedded Text retains its structure and deferred
+    translations. Use md for Markdown or tr for a translated message.
     """
 
     _parts: tuple[_Part, ...]
 
+    def __init__(self, value: str | Template, /) -> None:
+        if isinstance(value, str):
+            parts: tuple[_Part, ...] = (value,)
+        elif isinstance(value, Template):
+            captured: list[_Part] = []
+            for string, slot in zip(value.strings, value.interpolations, strict=False):
+                captured.append(string)
+                captured.extend(_capture(slot.value, slot.conversion, slot.format_spec)._parts)
+            captured.append(value.strings[-1])
+            parts = tuple(captured)
+        else:
+            msg = "Text requires a string or Template"
+            raise TypeError(msg)
+        object.__setattr__(self, "_parts", parts)
+
+    @classmethod
+    def _from_parts(cls, parts: tuple[_Part, ...]) -> Self:
+        text = object.__new__(cls)
+        object.__setattr__(text, "_parts", parts)
+        return text
+
     def __add__(self, other: TextLike) -> Text:
-        return Text(self._parts + ((other,) if isinstance(other, str) else other._parts))
+        return Text._from_parts(self._parts + ((other,) if isinstance(other, str) else other._parts))
 
     def __radd__(self, other: str) -> Text:
-        return Text((other, *self._parts))
+        return Text._from_parts((other, *self._parts))
 
     @staticmethod
     def join(separator: TextLike, parts: Iterable[TextLike]) -> Text:
@@ -125,7 +146,7 @@ class Text:
             if index:
                 result.extend((separator,) if isinstance(separator, str) else separator._parts)
             result.extend((part,) if isinstance(part, str) else part._parts)
-        return Text(tuple(result))
+        return Text._from_parts(tuple(result))
 
     @property
     def declaration(self) -> Declaration | None:
@@ -143,7 +164,7 @@ class Text:
         if not isinstance(part, _Translation) or name not in part.declaration.attributes:
             msg = f"Unknown attribute: {name}"
             raise DeclarationError(msg)
-        return Text((replace(part, selected_attribute=name),))
+        return Text._from_parts((replace(part, selected_attribute=name),))
 
     def resolve(self) -> str:
         return resolve_text(self, current_localization()).content
@@ -232,7 +253,7 @@ def tr(template: Template | LiteralString, /, *, key: LiteralString | None = Non
             msg = f"Conflicting captured values for {slot.name}"
             raise DeclarationError(msg)
         bindings[slot.name] = value
-    return Text((_Translation(declaration, MappingProxyType(bindings), markdown),))
+    return Text._from_parts((_Translation(declaration, MappingProxyType(bindings), markdown),))
 
 
 def md_tr(template: Template | LiteralString, /, *, key: LiteralString | None = None) -> Text:
@@ -242,13 +263,9 @@ def md_tr(template: Template | LiteralString, /, *, key: LiteralString | None = 
 
 def plain(value: object) -> Text:
     """Capture literal text, or a template whose bindings remain deferred."""
-    if isinstance(value, Template):
-        parts: list[TextLike] = []
-        for string, slot in zip(value.strings, value.interpolations, strict=False):
-            parts.extend((string, _capture(slot.value, slot.conversion, slot.format_spec)))
-        parts.append(value.strings[-1])
-        return Text.join("", parts)
-    return Text((value.isoformat() if isinstance(value, datetime) else str(value),))
+    if isinstance(value, str | Template):
+        return Text(value)
+    return Text(value.isoformat() if isinstance(value, datetime) else str(value))
 
 
 def _capture(value: object, conversion: str | None = None, spec: str = "") -> Text:
@@ -283,7 +300,7 @@ def md(value: str | Template, /, **values: object) -> Text:
                 parts.append(_capture(values[name], conversion, spec or ""))
     else:
         parts.append(value)
-    return Text((_Markdown(tuple(parts)),))
+    return Text._from_parts((_Markdown(tuple(parts)),))
 
 
 def resolve_text(value: TextLike, localization: Localization) -> _Document:
@@ -369,17 +386,17 @@ def discord_text(value: _Document | _SceneText, *, escape: Callable[[str], str] 
 
 def strong(value: TextLike) -> Text:
     """Apply strong emphasis without interpreting the child as Markdown."""
-    return Text((_Style("strong", value),))
+    return Text._from_parts((_Style("strong", value),))
 
 
 def emphasis(value: TextLike) -> Text:
     """Apply emphasis without interpreting the child as Markdown."""
-    return Text((_Style("em", value),))
+    return Text._from_parts((_Style("em", value),))
 
 
 def inline_code(value: TextLike) -> Text:
     """Display the child as literal code, with delimiters chosen during rendering."""
-    return Text((_Code(value),))
+    return Text._from_parts((_Code(value),))
 
 
 def text_link(label: TextLike, destination: str) -> Text:
@@ -387,7 +404,7 @@ def text_link(label: TextLike, destination: str) -> Text:
     if not tree.valid_link(destination):
         msg = "Text links require a safe destination"
         raise ValueError(msg)
-    return Text((_Link(label, destination),))
+    return Text._from_parts((_Link(label, destination),))
 
 
 def mention(identifier: int, *, kind: Literal["user", "role", "channel"] = "user") -> Text:
@@ -395,7 +412,7 @@ def mention(identifier: int, *, kind: Literal["user", "role", "channel"] = "user
     if identifier <= 0 or kind not in ("user", "role", "channel"):
         msg = "A mention requires a positive identifier and a user, role, or channel kind"
         raise ValueError(msg)
-    return Text((_Mention(kind, identifier),))
+    return Text._from_parts((_Mention(kind, identifier),))
 
 
 def timestamp_text(instant: datetime, *, style: Literal["t", "T", "d", "D", "f", "F", "R"] = "f") -> Text:
@@ -405,4 +422,4 @@ def timestamp_text(instant: datetime, *, style: Literal["t", "T", "d", "D", "f",
     if style not in ("t", "T", "d", "D", "f", "F", "R"):
         msg = "Unknown timestamp style"
         raise ValueError(msg)
-    return Text((_Timestamp(instant, style),))
+    return Text._from_parts((_Timestamp(instant, style),))
