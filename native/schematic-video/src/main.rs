@@ -242,6 +242,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 3. Mesh each member once ────────────────────────────────────────────
     let pack = ResourcePackSource::from_file(pack_path)?;
+    let source =
+        nucleation::formats::structure_snbt::from_structure_snbt(&std::fs::read(snbt_path)?)?;
     let mesh_config = MeshConfig::default();
     let mut mesh_cache: HashMap<(Pos, String), usize> = HashMap::new();
     let mut meshes: Vec<MeshOutput> = Vec::new();
@@ -260,6 +262,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let drawn = fluid_proxy(&member.state).unwrap_or(member.state.as_str());
                 one.set_block_from_string(member.pos.x, member.pos.y, member.pos.z, drawn)
                     .map_err(|e| format!("{}: {e}", member.state))?;
+                // Player skins live in block-entity NBT, outside the simulated block state.
+                if member.state.starts_with("minecraft:player_head")
+                    || member.state.starts_with("minecraft:player_wall_head")
+                {
+                    if let Some(entity) = source.get_block_entity_owned(
+                        nucleation::block_position::BlockPosition::new(
+                            member.pos.x,
+                            member.pos.y,
+                            member.pos.z,
+                        ),
+                    ) {
+                        one.add_block_entity(entity);
+                    }
+                }
                 let mesh = one.to_mesh(&pack, &mesh_config)?;
                 meshes.push(mesh);
                 mesh_cache.insert(key, meshes.len() - 1);
