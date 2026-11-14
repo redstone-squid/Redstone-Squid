@@ -25,7 +25,7 @@ def starboard_layout(
     content = message.content or tr(t"bot-starboard-render-no-text-content = -# (no text content)")
     children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
         sd.v2.section(
-            sd.v2.text(Text(t"{heading}\n{content}")),
+            sd.v2.text(t"{heading}\n{content}"),
             accessory=sd.v2.thumbnail(avatar_url),
         )
     ]

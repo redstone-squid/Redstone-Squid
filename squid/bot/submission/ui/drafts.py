@@ -577,7 +577,7 @@ class FilesEditorScreen(sd.Screen[None]):
         selected = next((item for item in files if str(item.id) == self.selected_file), None)
         children: list[Any] = [sd.v2.heading(tr(t"draft-editor-files-heading = Files"))]
         if ws.notice:
-            children.append(sd.v2.text(Text(t"⚠️ {ws.notice}")))
+            children.append(sd.v2.text(t"⚠️ {ws.notice}"))
         children.append(sd.v2.text(_files_text(ws, heading=False)))
         schematic_count = sum(item.kind == "schematic" for item in files)
         if schematic_count > 1:

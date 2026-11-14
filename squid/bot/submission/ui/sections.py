@@ -180,7 +180,7 @@ class SectionEditorScreen(sd.Screen[None]):
         answers = ws.answers
         children: list[Any] = [sd.v2.heading(md(t"{section.title}"))]
         if ws.notice:
-            children.append(sd.v2.text(Text(t"⚠️ {ws.notice}")))
+            children.append(sd.v2.text(t"⚠️ {ws.notice}"))
         # Follow the form's field order: a picker where its field is, and each modal group where it starts.
         chunks = {chunk.fields[0].id: chunk for chunk in modal_chunks(section)}
         for field in section.fields:
