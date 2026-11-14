@@ -29,6 +29,7 @@ from squid.notifications.edits import (
     notification_target,
 )
 from squid.notifications.models import InboxNotification, NotificationSubscription
+from squid.records.domain import BaseTitle, BuildKind, VersionScope
 from squid_i18n import md, md_tr
 
 if TYPE_CHECKING:
@@ -385,23 +386,32 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         return sl.forms.FormSpec(
             tr(t"bot-notifications-view-follow-matching-records = Follow matching records"),
             (
-                sl.forms.TextField(
+                sl.forms.ChoiceField(
                     key="build_kind",
                     label=tr(t"bot-notifications-view-build-kind = Build kind"),
                     required=False,
-                    maximum=100,
+                    options=tuple(
+                        sl.forms.ChoiceOption(item.value, item.value.replace("_", " ").title(), item.value)
+                        for item in BuildKind
+                    ),
                 ),
-                sl.forms.TextField(
+                sl.forms.ChoiceField(
                     key="base_title",
                     label=tr(t"bot-notifications-view-base-title = Base title"),
                     required=False,
-                    maximum=100,
+                    options=tuple(
+                        sl.forms.ChoiceOption(item.value, item.value.replace("_", " ").title(), item.value)
+                        for item in BaseTitle
+                    ),
                 ),
-                sl.forms.TextField(
+                sl.forms.ChoiceField(
                     key="version_scope",
                     label=tr(t"bot-notifications-view-version-scope = Version scope"),
                     required=False,
-                    maximum=100,
+                    options=tuple(
+                        sl.forms.ChoiceOption(item.value, item.value.replace("_", " ").title(), item.value)
+                        for item in VersionScope
+                    ),
                 ),
                 sl.forms.IntField(
                     key="tag",

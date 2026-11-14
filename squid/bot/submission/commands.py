@@ -195,6 +195,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
                 description=tr(
                     t"record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest."
                 ),
+                autocomplete=suggests("search_query"),
             )
         },
     )

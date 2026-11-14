@@ -2205,7 +2205,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:335"
+      "squid/bot/admin.py:341"
     ]
   },
   "admin-database": {
@@ -2214,7 +2214,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:345"
+      "squid/bot/admin.py:351"
     ]
   },
   "admin-globally": {
@@ -2223,7 +2223,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:310"
+      "squid/bot/admin.py:316"
     ]
   },
   "admin-message-queued": {
@@ -2241,7 +2241,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:347"
+      "squid/bot/admin.py:353"
     ]
   },
   "admin-open-spreadsheet": {
@@ -2250,7 +2250,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:337"
+      "squid/bot/admin.py:343"
     ]
   },
   "admin-paste-empty": {
@@ -2315,7 +2315,7 @@
       }
     ],
     "locations": [
-      "squid/bot/admin.py:315"
+      "squid/bot/admin.py:321"
     ]
   },
   "admin-synced-the-tree-to": {
@@ -2335,7 +2335,7 @@
       }
     ],
     "locations": [
-      "squid/bot/admin.py:328"
+      "squid/bot/admin.py:334"
     ]
   },
   "admin-that-message-is-not-from-this-server": {
@@ -2353,7 +2353,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:312"
+      "squid/bot/admin.py:318"
     ]
   },
   "api-errors-http-error": {
@@ -2549,7 +2549,7 @@
       }
     ],
     "locations": [
-      "squid/bot/notifications_view.py:439"
+      "squid/bot/notifications_view.py:449"
     ]
   },
   "bot-notifications-subscription": {
@@ -2569,7 +2569,7 @@
       }
     ],
     "locations": [
-      "squid/bot/notifications_view.py:429"
+      "squid/bot/notifications_view.py:439"
     ]
   },
   "bot-notifications-view-base-title": {
@@ -2578,7 +2578,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:396"
+      "squid/bot/notifications_view.py:400"
     ]
   },
   "bot-notifications-view-build-awaiting-review": {
@@ -2587,7 +2587,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:567"
+      "squid/bot/notifications_view.py:577"
     ]
   },
   "bot-notifications-view-build-confirmed": {
@@ -2596,7 +2596,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:559"
+      "squid/bot/notifications_view.py:569"
     ]
   },
   "bot-notifications-view-build-denied": {
@@ -2605,7 +2605,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:561"
+      "squid/bot/notifications_view.py:571"
     ]
   },
   "bot-notifications-view-build-kind": {
@@ -2614,7 +2614,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:390"
+      "squid/bot/notifications_view.py:391"
     ]
   },
   "bot-notifications-view-build-notification": {
@@ -2623,7 +2623,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:571"
+      "squid/bot/notifications_view.py:581"
     ]
   },
   "bot-notifications-view-creator": {
@@ -2632,7 +2632,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:48"
+      "squid/bot/notifications_view.py:49"
     ]
   },
   "bot-notifications-view-creator-build-confirmed": {
@@ -2641,7 +2641,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:563"
+      "squid/bot/notifications_view.py:573"
     ]
   },
   "bot-notifications-view-creator-profile-id": {
@@ -2650,7 +2650,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:241"
+      "squid/bot/notifications_view.py:242"
     ]
   },
   "bot-notifications-view-discord-dms": {
@@ -2659,7 +2659,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:159"
+      "squid/bot/notifications_view.py:160"
     ]
   },
   "bot-notifications-view-exact-tag-value": {
@@ -2668,7 +2668,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:414"
+      "squid/bot/notifications_view.py:424"
     ]
   },
   "bot-notifications-view-follow-a-creator": {
@@ -2677,7 +2677,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:237"
+      "squid/bot/notifications_view.py:238"
     ]
   },
   "bot-notifications-view-follow-a-record": {
@@ -2686,7 +2686,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:252"
+      "squid/bot/notifications_view.py:253"
     ]
   },
   "bot-notifications-view-follow-creator": {
@@ -2695,7 +2695,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:233"
+      "squid/bot/notifications_view.py:234"
     ]
   },
   "bot-notifications-view-follow-matching-records": {
@@ -2704,8 +2704,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:265",
-      "squid/bot/notifications_view.py:386"
+      "squid/bot/notifications_view.py:266",
+      "squid/bot/notifications_view.py:387"
     ]
   },
   "bot-notifications-view-follow-record": {
@@ -2714,7 +2714,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:250"
+      "squid/bot/notifications_view.py:251"
     ]
   },
   "bot-notifications-view-following": {
@@ -2723,7 +2723,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:91"
+      "squid/bot/notifications_view.py:92"
     ]
   },
   "bot-notifications-view-following-that-creator": {
@@ -2732,7 +2732,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:328"
+      "squid/bot/notifications_view.py:329"
     ]
   },
   "bot-notifications-view-following-that-record": {
@@ -2741,7 +2741,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:340"
+      "squid/bot/notifications_view.py:341"
     ]
   },
   "bot-notifications-view-mark-selected-read": {
@@ -2750,7 +2750,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:514"
+      "squid/bot/notifications_view.py:524"
     ]
   },
   "bot-notifications-view-mark-selected-unread": {
@@ -2759,7 +2759,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:520"
+      "squid/bot/notifications_view.py:530"
     ]
   },
   "bot-notifications-view-nothing-yet": {
@@ -2768,7 +2768,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:423"
+      "squid/bot/notifications_view.py:433"
     ]
   },
   "bot-notifications-view-notifications": {
@@ -2777,7 +2777,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:101"
+      "squid/bot/notifications_view.py:102"
     ]
   },
   "bot-notifications-view-read": {
@@ -2786,7 +2786,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:503"
+      "squid/bot/notifications_view.py:513"
     ]
   },
   "bot-notifications-view-record": {
@@ -2795,7 +2795,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:50"
+      "squid/bot/notifications_view.py:51"
     ]
   },
   "bot-notifications-view-record-filter": {
@@ -2804,7 +2804,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:52"
+      "squid/bot/notifications_view.py:53"
     ]
   },
   "bot-notifications-view-record-gained": {
@@ -2813,7 +2813,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:565"
+      "squid/bot/notifications_view.py:575"
     ]
   },
   "bot-notifications-view-record-title-id": {
@@ -2822,7 +2822,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:256"
+      "squid/bot/notifications_view.py:257"
     ]
   },
   "bot-notifications-view-showcase-tag-id": {
@@ -2831,7 +2831,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:408"
+      "squid/bot/notifications_view.py:418"
     ]
   },
   "bot-notifications-view-unfollow-selected": {
@@ -2840,7 +2840,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:272"
+      "squid/bot/notifications_view.py:273"
     ]
   },
   "bot-notifications-view-unread": {
@@ -2849,8 +2849,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:501",
-      "squid/bot/notifications_view.py:92"
+      "squid/bot/notifications_view.py:511",
+      "squid/bot/notifications_view.py:93"
     ]
   },
   "bot-notifications-view-version-scope": {
@@ -2859,7 +2859,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:402"
+      "squid/bot/notifications_view.py:409"
     ]
   },
   "bot-notifications-view-web-inbox": {
@@ -2868,7 +2868,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:153"
+      "squid/bot/notifications_view.py:154"
     ]
   },
   "bot-notifications-your-build-was-confirmed": {
@@ -7266,12 +7266,12 @@
     ]
   },
   "command-access-role-help": {
-    "fingerprint": "6a0631461d5163ee065b9262f4d7f8ce8c5fb667ac0ef179973bb54ed0d4b8f2",
+    "fingerprint": "a1171ffd7b372ecd438d8206fff2ebd360590789fc646b28aff89d758306464d",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/permissions.py:57"
+      "squid/bot/permissions.py:59"
     ]
   },
   "command-access-role-name": {
@@ -7280,16 +7280,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/permissions.py:57"
+      "squid/bot/permissions.py:58"
     ]
   },
   "command-access-user-help": {
-    "fingerprint": "0ceee41f005a94025929c0ba425e94c71a648675bb178279a0789ba2a87cb051",
+    "fingerprint": "e97019c416c0db6f4ad9b18da8b6983e2be2e8e00d512e537bec54cbf6448c07",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/permissions.py:54"
+      "squid/bot/permissions.py:55"
     ]
   },
   "command-access-user-name": {
@@ -7941,12 +7941,12 @@
     ]
   },
   "command-runtime-settings-revision-help": {
-    "fingerprint": "a84b550ed97bd46d7117311bbc4da30a8d8ea7ba1ecd310e908d8eb5ba158e4c",
+    "fingerprint": "6690878fa6ab03201c887e72bfaa439959890c96fee185ffd6672afe1536d1ca",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:214"
+      "squid/bot/admin.py:218"
     ]
   },
   "command-runtime-settings-revision-name": {
@@ -7955,11 +7955,11 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:213"
+      "squid/bot/admin.py:217"
     ]
   },
   "command-runtime-settings-setting-help": {
-    "fingerprint": "5c953a20034cd4c6c2cc9221c475cb572a4ca3c586fb05f7f984f0fa71d91dc5",
+    "fingerprint": "dfb978f6064011183d1505f60487e9078f04717b422ff118ff6e7786c8837841",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -7977,12 +7977,12 @@
     ]
   },
   "command-runtime-settings-value-help": {
-    "fingerprint": "0a65bdbde5666ac1feab43055173ce1428c0f27cce4f94aa08f4c937fa979ff8",
+    "fingerprint": "7755f99302a35cc6a5c7e24a95e6378d8eccabddde711d93c8a525e521c9e29d",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:210"
+      "squid/bot/admin.py:212"
     ]
   },
   "command-runtime-settings-value-name": {
@@ -7991,7 +7991,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/admin.py:209"
+      "squid/bot/admin.py:211"
     ]
   },
   "command-search-choice-mode-keyword": {
@@ -12348,7 +12348,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:316"
+      "squid/bot/notifications_view.py:317"
     ]
   },
   "notification-history-preferences": {
@@ -12357,7 +12357,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:181"
+      "squid/bot/notifications_view.py:182"
     ]
   },
   "notification-history-read": {
@@ -12366,7 +12366,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:547"
+      "squid/bot/notifications_view.py:557"
     ]
   },
   "notification-history-unfollow": {
@@ -12375,7 +12375,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:292"
+      "squid/bot/notifications_view.py:293"
     ]
   },
   "notifications-build-awaiting-review": {
@@ -12417,7 +12417,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:94"
+      "squid/bot/notifications_view.py:95"
     ]
   },
   "notifications-channel-preferences": {
@@ -12444,7 +12444,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:187"
+      "squid/bot/notifications_view.py:188"
     ]
   },
   "notifications-domain-invalid-tag-predicate": {
@@ -12491,7 +12491,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:365"
+      "squid/bot/notifications_view.py:366"
     ]
   },
   "notifications-followed-creator-build": {
@@ -12509,7 +12509,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:322"
+      "squid/bot/notifications_view.py:323"
     ]
   },
   "notifications-invalid-exact-tag-value": {
@@ -12527,7 +12527,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:334"
+      "squid/bot/notifications_view.py:335"
     ]
   },
   "notifications-list-nonempty-strings": {
@@ -12597,7 +12597,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:349"
+      "squid/bot/notifications_view.py:350"
     ]
   },
   "notifications-record-filter-single-predicate": {

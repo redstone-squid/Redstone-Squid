@@ -51,10 +51,14 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         description=tr(t"command-access-help = Inspect and manage this server's access controls"),
         options={
             "user": sd.Option(
-                name=tr(t"command-access-user-name = user"), description=tr(t"command-access-user-help = …")
+                name=tr(t"command-access-user-name = user"),
+                description=tr(t"command-access-user-help = Member whose access to inspect. Defaults to you."),
             ),
             "role": sd.Option(
-                name=tr(t"command-access-role-name = role"), description=tr(t"command-access-role-help = …")
+                name=tr(t"command-access-role-name = role"),
+                description=tr(
+                    t"command-access-role-help = Discord role whose access to inspect. Choose either a member or a role."
+                ),
             ),
         },
     )

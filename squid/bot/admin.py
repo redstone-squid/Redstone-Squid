@@ -203,15 +203,21 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         options={
             "setting": sd.Option(
                 name=tr(t"command-runtime-settings-setting-name = setting"),
-                description=tr(t"command-runtime-settings-setting-help = …"),
+                description=tr(
+                    t"command-runtime-settings-setting-help = Setting name. Omit to list available settings and their current values."
+                ),
             ),
             "value": sd.Option(
                 name=tr(t"command-runtime-settings-value-name = value"),
-                description=tr(t"command-runtime-settings-value-help = …"),
+                description=tr(
+                    t"command-runtime-settings-value-help = New JSON value, such as true or 0.25. Omit to inspect the setting."
+                ),
             ),
             "revision": sd.Option(
                 name=tr(t"command-runtime-settings-revision-name = revision"),
-                description=tr(t"command-runtime-settings-revision-help = …"),
+                description=tr(
+                    t"command-runtime-settings-revision-help = Optional revision from the settings snapshot to prevent overwriting newer changes."
+                ),
             ),
         },
     )
