@@ -182,7 +182,6 @@ def test_alternative_branches_keep_their_identity() -> None:
     "source",
     [
         family(branch(width="floor(n/2)")),
-        replace(family(), expansion=DoorExpansion(raw_description="unclear")),
         replace(fixed(6), door_opening=None),
     ],
 )
@@ -190,6 +189,14 @@ def test_untranslatable_sources_never_disappear(source: CandidateBuild) -> None:
     result = analyze_door_widths([source], height=3)
     assert result.analysis.status is RegionAnalysisStatus.UNSUPPORTED
     assert result.analysis.regions == ()
+
+
+def test_document_without_branches_is_listed_but_does_not_compete() -> None:
+    unclear = replace(family(), expansion=DoorExpansion(raw_description="unclear"))
+    result = analyze_door_widths([unclear, fixed(6)], height=3)
+    assert result.analysis.status is RegionAnalysisStatus.EXACT
+    assert_points([unclear, fixed(6)], result)
+    assert [d.code for c in result.configurations for d in c.diagnostics] == ["missing"]
 
 
 def test_adapter_and_compiler_share_work_allowance() -> None:

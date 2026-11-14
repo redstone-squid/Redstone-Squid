@@ -26,9 +26,20 @@ _UNIT_SCALES = {"game_tick": 1, "redstone_tick": 2, "second": 20}
 
 
 class PointStatus(StrEnum):
+    """Whether one configuration exists at the evaluated opening.
+
+    UNRESOLVED means the source makes a claim that does not settle this size:
+    the size lies beyond an unknown bound, or the opening expressions use syntax
+    the normalizer cannot invert. UNMAPPED means an opening expression is absent,
+    so the source never says which sizes the configuration has. An unresolved
+    configuration might hold a record and blocks an official result; an unmapped
+    one makes no claim and cannot compete anywhere.
+    """
+
     SUPPORTED = "supported"
     OUTSIDE_DOMAIN = "outside_domain"
     UNRESOLVED = "unresolved"
+    UNMAPPED = "unmapped"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +62,9 @@ class NormalizedBranch:
     index: int
     source: ExpansionBranch
     opening: tuple[Formula, ...]
+    # False when the source omits an opening expression, as opposed to stating
+    # one the normalizer cannot use.
+    opening_stated: bool
     inverse: tuple[tuple[Fraction, ...], ...] | None
     domain: Predicate | None
     domain_valid: bool
@@ -169,6 +183,7 @@ def _normalize_branch(parser: ExpressionParser, source: ExpansionBranch, index: 
         for field in ("opening_width", "opening_height", "opening_depth")
         if (parsed := formula(getattr(source, field), field)) is not None
     )
+    opening_stated = None not in (source.opening_width, source.opening_height, source.opening_depth)
     inverse = None
     try:
         inverse = _inverse(opening, len(parser.variables))
@@ -212,6 +227,7 @@ def _normalize_branch(parser: ExpressionParser, source: ExpansionBranch, index: 
         index,
         source,
         opening,
+        opening_stated,
         inverse,
         domain,
         domain_valid,
@@ -257,8 +273,8 @@ def evaluate_expansion(expansion: NormalizedExpansion, opening: tuple[int, int, 
     """Evaluate each branch at a positive integer opening, without enumerating sizes.
 
     Unknown domains produce unresolved membership. Outside branches do not
-    compete. Supported branches may still have unknown volume or timings;
-    callers must inspect metrics and diagnostics before ranking configurations.
+    compete, and neither do unmapped ones, which lack an opening expression. Supported branches may still have unknown volume or
+    timings; callers must inspect metrics and diagnostics before ranking configurations.
     """
     if len(opening) != 3 or any(
         type(value) is not int or value <= 0 or value.bit_length() > MAX_BITS for value in opening
@@ -276,7 +292,8 @@ def _evaluate_branch(
     expansion: NormalizedExpansion, branch: NormalizedBranch, opening: tuple[int, int, int]
 ) -> PointConfiguration:
     if branch.inverse is None:
-        return PointConfiguration(branch.index, PointStatus.UNRESOLVED, diagnostics=branch.diagnostics)
+        status = PointStatus.UNRESOLVED if branch.opening_stated else PointStatus.UNMAPPED
+        return PointConfiguration(branch.index, status, diagnostics=branch.diagnostics)
     parameters = tuple(
         sum((coefficient * value for coefficient, value in zip(row, (*opening, 1), strict=True)), Fraction(0))
         for row in branch.inverse

@@ -4,7 +4,9 @@ Fixing opening height and depth turns each affine inverse parameter mapping into
 one polynomial in width, even for XYZ families. We partition wherever opening
 consistency, bounds, progressions, or domain predicates can change, then consult
 the point evaluator for membership. Unknown membership blocks the whole query;
-known exclusions do not. Source record claims and sample metrics never compete.
+known exclusions do not. Documents and branches that omit an opening expression
+are listed with diagnostics but do not compete, as in point lookup.
+Source record claims and sample metrics never compete.
 """
 
 from collections.abc import Sequence
@@ -187,29 +189,32 @@ def _translate_sources(
         expansion = normalize_expansion(source.expansion)
         if not expansion.branches:
             configurations.append(
-                DoorRegionConfiguration(
-                    len(configurations),
-                    build.build_id,
-                    None,
-                    expansion.diagnostics,
-                )
+                DoorRegionConfiguration(len(configurations), build.build_id, None, expansion.diagnostics)
             )
-            msg = f"Build {build.build_id} has no normalizable expansion branches."
-            raise RegionArithmeticError(msg)
+            continue
         for branch in expansion.branches:
             id = len(configurations)
             configurations.append(DoorRegionConfiguration(id, build.build_id, branch.index, branch.diagnostics))
             if len(configurations) > limits.candidates:
                 msg = "Too many source configurations for width-region analysis."
                 raise RegionLimitError(msg)
-            candidate = _branch_candidate(expansion, branch, id, build.build_id, height, depth, query, limits, budget)
-            candidates.append(candidate)
+            if branch.inverse is None:
+                if branch.opening_stated:
+                    msg = f"Build {build.build_id}, branch {branch.index}: opening coordinates do not determine parameters."
+                    raise RegionArithmeticError(msg)
+                continue
+            candidates.append(
+                _branch_candidate(
+                    expansion, branch, branch.inverse, id, build.build_id, height, depth, query, limits, budget
+                )
+            )
     return candidates
 
 
 def _branch_candidate(
     expansion: NormalizedExpansion,
     branch: NormalizedBranch,
+    inverse: tuple[tuple[Fraction, ...], ...],
     id: int,
     build_id: int,
     height: int,
@@ -218,12 +223,9 @@ def _branch_candidate(
     limits: RegionLimits,
     budget: ArithmeticBudget,
 ) -> SmallestRegionCandidate:
-    if branch.inverse is None:
-        msg = f"Build {build_id}, branch {branch.index}: opening coordinates do not determine parameters."
-        raise RegionArithmeticError(msg)
     parameters = tuple(
         Polynomial.create(_VARIABLES, {(1,): row[0], (0,): row[1] * height + row[2] * depth + row[3]})
-        for row in branch.inverse
+        for row in inverse
     )
 
     def substitute(formula: Formula) -> Formula:

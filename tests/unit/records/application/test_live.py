@@ -116,10 +116,14 @@ def test_unknown_membership_blocks_official_holder() -> None:
     assert result.resolution.gaps[0].field == "expansion_membership"
 
 
-def test_unnormalizable_document_is_not_silently_omitted() -> None:
+def test_document_without_branches_is_reported_but_does_not_block() -> None:
+    # Ingestion keeps partial documents. One that names no opening size must not
+    # unresolve every record in its category.
     source = replace(family(), expansion=DoorExpansion(raw_description="unclear"))
     result = lookup(fixed(), source)
-    assert result.resolution.status is ResolutionStatus.UNRESOLVED
+    assert result.resolution.status is ResolutionStatus.RESOLVED
+    assert result.resolution.holder_ids == (1,)
+    assert result.configurations[1].membership is PointStatus.UNMAPPED
     assert result.configurations[1].diagnostics[0].code == "missing"
 
 

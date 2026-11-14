@@ -16,7 +16,8 @@ class LiveDoorConfiguration:
     """A fixed build or one family branch; metrics use blocks and game ticks.
 
     ID is local to this response. A null branch index represents a fixed build
-    or an unnormalizable whole family, distinguished by membership and diagnostics.
+    or a whole family without usable branches; the latter has unmapped membership
+    and diagnostics. Only unresolved membership blocks an official result.
     Family completion dates remain unknown until per-configuration evidence is modeled.
     """
 

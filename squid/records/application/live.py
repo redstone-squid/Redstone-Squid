@@ -120,12 +120,14 @@ def evaluate_door_record(
             continue
         point = evaluate_expansion(normalize_expansion(source.expansion), request.opening)
         if not point.configurations:
+            # A document without usable branches describes no opening size. Report
+            # it, but do not let it block records it makes no claim about.
             configurations.append(
                 LiveDoorConfiguration(
                     len(configurations),
                     build.build_id,
                     None,
-                    PointStatus.UNRESOLVED,
+                    PointStatus.UNMAPPED,
                     diagnostics=point.diagnostics,
                 )
             )

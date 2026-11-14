@@ -126,11 +126,17 @@ def test_branches_keep_their_own_metrics_and_phase_guards() -> None:
     assert [result.volume for result in evaluate_expansion(overlapping, (6, 3, 1)).configurations] == [160, 120]
 
 
-@pytest.mark.parametrize("opening", [{"opening_width": "n*n"}, {"opening_depth": None}, {"opening_width": "3"}])
+@pytest.mark.parametrize("opening", [{"opening_width": "n*n"}, {"opening_width": "3"}])
 def test_unsupported_or_ambiguous_mapping_is_reported(opening: dict[str, object]) -> None:
     result = evaluate_expansion(normalize_expansion(family(**opening)), (6, 3, 1)).configurations[0]
     assert result.status is PointStatus.UNRESOLVED
     assert any(d.code == "ambiguous_mapping" for d in result.diagnostics)
+
+
+def test_branch_without_an_opening_expression_makes_no_claim() -> None:
+    result = evaluate_expansion(normalize_expansion(family(opening_width=None)), (6, 3, 1)).configurations[0]
+    assert result.status is PointStatus.UNMAPPED
+    assert any(d.code == "missing" for d in result.diagnostics)
 
 
 def test_missing_branches_and_unsupported_names_have_diagnostics() -> None:
