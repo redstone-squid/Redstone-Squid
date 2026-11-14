@@ -49,7 +49,7 @@ from squid_reactivity.errors import (
 )
 from squid_reactivity.tracking import (
     _CONSUMER,
-    ReactiveOwner,
+    ReactiveStateOwner,
     _bump_epoch,
     _ReactiveSource,
     cycle_path,
@@ -273,7 +273,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
 
     def __init__(
         self,
-        owner: ReactiveOwner,
+        owner: ReactiveStateOwner,
         loader: Callable[[], Awaitable[ValueT]],
         *,
         name: str,
@@ -616,7 +616,7 @@ class AtomicResource[ValueT](Resource[ValueT]):
         return status
 
 
-class _ResourceDescriptor[OwnerT: ReactiveOwner, ValueT]:
+class _ResourceDescriptor[OwnerT: ReactiveStateOwner, ValueT]:
     _reactive_resource_descriptor = True
 
     """Bind one loader per component instance."""
@@ -661,7 +661,7 @@ class _ResourceDescriptor[OwnerT: ReactiveOwner, ValueT]:
         return bound
 
 
-class _AtomicResourceDescriptor[OwnerT: ReactiveOwner, ValueT](_ResourceDescriptor[OwnerT, ValueT]):
+class _AtomicResourceDescriptor[OwnerT: ReactiveStateOwner, ValueT](_ResourceDescriptor[OwnerT, ValueT]):
     """Bind an atomic resource while preserving its narrowed descriptor type."""
 
     @overload
@@ -691,7 +691,7 @@ class _AtomicResourceDescriptor[OwnerT: ReactiveOwner, ValueT](_ResourceDescript
 
 
 @overload
-def resource[OwnerT: ReactiveOwner, ValueT](
+def resource[OwnerT: ReactiveStateOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
@@ -700,7 +700,7 @@ def resource[OwnerT: ReactiveOwner, ValueT](
 
 
 @overload
-def resource[OwnerT: ReactiveOwner, ValueT](
+def resource[OwnerT: ReactiveStateOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
@@ -709,14 +709,14 @@ def resource[OwnerT: ReactiveOwner, ValueT](
 
 
 @overload
-def resource[OwnerT: ReactiveOwner, ValueT](
+def resource[OwnerT: ReactiveStateOwner, ValueT](
     *,
     pending: Literal[PendingMode.ATOMIC],
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _AtomicResourceDescriptor[OwnerT, ValueT]]: ...
 
 
 @overload
-def resource[OwnerT: ReactiveOwner, ValueT](
+def resource[OwnerT: ReactiveStateOwner, ValueT](
     *,
     pending: PendingMode = PendingMode.EXPLICIT,
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _ResourceDescriptor[OwnerT, ValueT]]: ...
@@ -741,7 +741,7 @@ def resource(
 
     def decorate(
         function: Callable[[Any], Awaitable[Any]],
-    ) -> _ResourceDescriptor[ReactiveOwner, Any] | _AtomicResourceDescriptor[ReactiveOwner, Any]:
+    ) -> _ResourceDescriptor[ReactiveStateOwner, Any] | _AtomicResourceDescriptor[ReactiveStateOwner, Any]:
         descriptor = _AtomicResourceDescriptor if pending is PendingMode.ATOMIC else _ResourceDescriptor
         return descriptor(function, pending_mode=pending)
 

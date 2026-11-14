@@ -14,7 +14,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity.addresses import CellAddress, CellOwner, SubscriberRegistry, publish
+from squid_reactivity.addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
 
 if TYPE_CHECKING:
     from squid_reactivity.transactions import _Transaction
@@ -28,8 +28,8 @@ _MISSING = object()
 """A cell that has never been assigned. Distinct from ``None``, which is a real value."""
 
 
-class ReactiveOwner(CellOwner, Protocol):
-    """Hooks called when an owner's state commits or rolls back.
+class ReactiveStateOwner(SubscriptionSource, Protocol):
+    """A subscription source whose state participates in commit and rollback.
 
     State descriptors also require an instance dictionary for cell storage.
     """
@@ -258,7 +258,7 @@ def read_only() -> Iterator[None]:
         yield
 
 
-def _check_write(owner: ReactiveOwner, name: str) -> None:
+def _check_write(owner: ReactiveStateOwner, name: str) -> None:
     scope = _READ_ONLY.get()
     if scope is not None and owner.__dict__.get("_reactive_initialization") is not scope:
         message = (

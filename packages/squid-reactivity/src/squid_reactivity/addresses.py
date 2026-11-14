@@ -16,8 +16,8 @@ _logger = logging.getLogger(__name__)
 type SubscriberRegistry = dict[str, list[weakref.ReferenceType[_Subscription]]]
 
 
-class CellOwner(Protocol):
-    """Store weak subscriptions to an object's reactive fields."""
+class SubscriptionSource(Protocol):
+    """Provide the registry used to subscribe to named changes on an object."""
 
     _reactive_subscribers: SubscriberRegistry
 
@@ -26,7 +26,7 @@ class CellOwner(Protocol):
 class CellAddress:
     """Identify a reactive field by owner identity and field name."""
 
-    owner: CellOwner
+    owner: SubscriptionSource
     name: str
 
     @override

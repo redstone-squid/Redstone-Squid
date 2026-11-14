@@ -34,7 +34,7 @@ from squid_reactivity.errors import (
 from squid_reactivity.tracking import (
     _CURRENT,
     _MISSING,
-    ReactiveOwner,
+    ReactiveStateOwner,
     _active,
     _bump_epoch,
     _Cell,
@@ -134,7 +134,7 @@ class _Staged:
     from the cell being replaced, which may have changed since staging began.
     """
 
-    owner: ReactiveOwner
+    owner: ReactiveStateOwner
     name: str
     cell: _Cell
     value: Any
@@ -169,18 +169,18 @@ class CellTarget:
     report which target expired even when the cell and its readable address are gone.
     """
 
-    _owner: weakref.ReferenceType[ReactiveOwner]
+    _owner: weakref.ReferenceType[ReactiveStateOwner]
     _cell: weakref.ReferenceType[_Cell]
     name: str
     identity: str
 
-    def __init__(self, owner: ReactiveOwner, name: str, cell: _Cell) -> None:
+    def __init__(self, owner: ReactiveStateOwner, name: str, cell: _Cell) -> None:
         object.__setattr__(self, "_owner", weakref.ref(owner))
         object.__setattr__(self, "_cell", weakref.ref(cell))
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "identity", f"slot:{cell.identity}")
 
-    def resolve(self, expected_version: int) -> tuple[ReactiveOwner, _Cell]:
+    def resolve(self, expected_version: int) -> tuple[ReactiveStateOwner, _Cell]:
         """Return the live slot or report an expired conditional inverse."""
         owner = self._owner()
         cell = self._cell()
@@ -258,7 +258,7 @@ def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
         _write(owner, patch.target.name, cell, patch.value.raw())
 
 
-def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
+def _write(owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> None:
     """Stage a write into the transaction in flight, or land it now if there is none.
 
     `enlist` already returns `None` when no transaction is open; this is the same
@@ -381,7 +381,7 @@ class _Transaction:
     """The subset of `observed` taken inside `strong_read()`, which must still hold at commit."""
     preconditions: dict[_Cell, int] = field(default_factory=dict)
     # Identity keys support unhashable owners; values retain them in first-write order.
-    changed: dict[int, tuple[ReactiveOwner, set[str]]] = field(default_factory=dict)
+    changed: dict[int, tuple[ReactiveStateOwner, set[str]]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
     commit_hooks: list[tuple[object | None, Callable[[TransactionCommit], None]]] = field(default_factory=list)
@@ -486,7 +486,7 @@ class _Transaction:
             raise ReactiveConflictError(detail, "incompatible inverse preconditions")
         self.preconditions[cell] = version
 
-    def stage(self, owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
+    def stage(self, owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> None:
         """Hold a write for commit, visible only to readers of this transaction."""
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)

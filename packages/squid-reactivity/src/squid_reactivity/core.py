@@ -21,7 +21,7 @@ from squid_reactivity.tracking import (
     _READ_ONLY,
     _RELAXED_READS,
     _STRONG_READS,
-    ReactiveOwner,
+    ReactiveStateOwner,
     _active,
     _Cell,
     _check_write,
@@ -90,25 +90,25 @@ class _State:
     def has_initial(self) -> bool:
         return self._default is not _MISSING or self._factory is not None
 
-    def _initial(self, instance: ReactiveOwner) -> Any:
+    def _initial(self, instance: ReactiveStateOwner) -> Any:
         if self._factory is None:
             # No copy: a state value is replaced, never mutated, so instances may share it.
             return self._default
         return self._factory()
 
-    def cell(self, instance: ReactiveOwner) -> _Cell:
+    def cell(self, instance: ReactiveStateOwner) -> _Cell:
         """Return this field's storage on `instance`, empty until something assigns it."""
         cell = instance.__dict__.get(self._name)
         if cell is None:
             cell = instance.__dict__[self._name] = _Cell(address=CellAddress(instance, self.public_name))
         return cell
 
-    def is_set(self, instance: ReactiveOwner) -> bool:
+    def is_set(self, instance: ReactiveStateOwner) -> bool:
         """Whether this field currently holds a value of its own rather than its default."""
         cell = instance.__dict__.get(self._name)
         return cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING)
 
-    def mutated(self, instance: ReactiveOwner) -> None:
+    def mutated(self, instance: ReactiveStateOwner) -> None:
         """Stage a version change for an opaque value that was mutated in place.
 
         The mutation itself cannot be undone. Staging delays its notification until
@@ -121,7 +121,7 @@ class _State:
             held = cell.value
         _write(instance, self._name, cell, held)
 
-    def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
+    def __get__(self, instance: ReactiveStateOwner | None, owner: type | None = None) -> Any:
         if instance is None:
             return self
         cell = instance.__dict__.get(self._name)
@@ -146,7 +146,7 @@ class _State:
         # rather than replace it with this.
         return self._initial(instance)
 
-    def __set__(self, instance: ReactiveOwner, value: Any) -> None:
+    def __set__(self, instance: ReactiveStateOwner, value: Any) -> None:
         _check_write(instance, self.public_name)
         cell = instance.__dict__.get(self._name)
         if cell is not None:
@@ -159,7 +159,7 @@ class _State:
                 return
         _write(instance, self._name, self.cell(instance), value)
 
-    def __delete__(self, instance: ReactiveOwner) -> None:
+    def __delete__(self, instance: ReactiveStateOwner) -> None:
         """Reject deletion and direct callers to reset the field by assignment.
 
         History can still restore an unassigned slot through the internal write
@@ -311,7 +311,7 @@ def _descriptors[DescriptorT](cls: type, kind: type[DescriptorT]) -> Iterator[tu
                 yield name, descriptor
 
 
-def inspect_cells(owner: ReactiveOwner) -> dict[str, CellReport]:
+def inspect_cells(owner: ReactiveStateOwner) -> dict[str, CellReport]:
     """Report every declared state field on `owner`, by public name."""
     reports: dict[str, CellReport] = {}
     for name, descriptor in _descriptors(type(owner), _State):
@@ -320,7 +320,7 @@ def inspect_cells(owner: ReactiveOwner) -> dict[str, CellReport]:
     return reports
 
 
-def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
+def inspect_computed(owner: ReactiveStateOwner) -> dict[str, ComputedReport]:
     """Report every computed on `owner`, without evaluating one that has never run."""
     reports: dict[str, ComputedReport] = {}
     for name, descriptor in _descriptors(type(owner), _Computed):
@@ -329,7 +329,7 @@ def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
     return reports
 
 
-def declared_cells(owner: ReactiveOwner) -> dict[_Cell, int]:
+def declared_cells(owner: ReactiveStateOwner) -> dict[_Cell, int]:
     """Return all declared cells and their current versions.
 
     Resources use these as initial dependencies when replace supplies a value
@@ -344,11 +344,11 @@ def declared_cells(owner: ReactiveOwner) -> dict[_Cell, int]:
     return presumed
 
 
-def _state_fields(owner: ReactiveOwner) -> dict[str, _State]:
+def _state_fields(owner: ReactiveStateOwner) -> dict[str, _State]:
     return {name: descriptor for name, descriptor in _descriptors(type(owner), _State) if descriptor.persist}
 
 
-def export_state(owner: ReactiveOwner) -> dict[str, Any]:
+def export_state(owner: ReactiveStateOwner) -> dict[str, Any]:
     """Return the value of every persistent state descriptor that currently has one."""
     return {
         name: getattr(owner, name)
@@ -357,7 +357,7 @@ def export_state(owner: ReactiveOwner) -> dict[str, Any]:
     }
 
 
-def restore_state(owner: ReactiveOwner, values: Mapping[str, Any]) -> None:
+def restore_state(owner: ReactiveStateOwner, values: Mapping[str, Any]) -> None:
     """Restore declared persistent state, rejecting stale or misspelled field names."""
     fields = _state_fields(owner)
     unknown = set(values) - set(fields)
@@ -379,7 +379,7 @@ class _Derived:
 
     __slots__ = ("_epoch", "_function", "_label", "_settled", "_view", "owner", "sources", "value", "version")
 
-    def __init__(self, function: Callable[[Any], Any], owner: ReactiveOwner, label: str) -> None:
+    def __init__(self, function: Callable[[Any], Any], owner: ReactiveStateOwner, label: str) -> None:
         self._function = function
         self._label = label
         self.owner = owner
@@ -451,14 +451,14 @@ class _Computed:
         self._name = f"__computed_{name}"
         self._label = f"{owner.__name__}.{name}"
 
-    def node(self, instance: ReactiveOwner) -> _Derived:
+    def node(self, instance: ReactiveStateOwner) -> _Derived:
         """Return this computed's node on `instance`, unevaluated until something reads it."""
         node = instance.__dict__.get(self._name)
         if node is None:
             node = instance.__dict__[self._name] = _Derived(self._function, instance, self._label)
         return node
 
-    def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
+    def __get__(self, instance: ReactiveStateOwner | None, owner: type | None = None) -> Any:
         if instance is None:
             return self
         return self.node(instance).read()
