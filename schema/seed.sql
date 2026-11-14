@@ -116,6 +116,7 @@ with aliases (stable_key, alias) as (
     values
     ('no_observers', 'Observerless'),
     ('no_observers', 'Obsless'),
+    ('no_observers', 'Obless'),
     ('no_note_blocks', 'Noteblockless'),
     ('no_note_blocks', 'Note Blockless'),
     ('no_note_blocks', 'Note-blockless'),
