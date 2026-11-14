@@ -23,16 +23,14 @@ from squid_reactivity.diagnostics import (
     has_event_observers,
 )
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, settling
-from squid_reactivity.transaction_context import (
+from squid_reactivity.transactions import fresh_transaction
+from squid_reactivity.transactions.context import (
     CausalRef,
     ExceptionReport,
     TransactionContext,
     TransactionId,
     TransactionPurpose,
     causal_scope,
-)
-from squid_reactivity.transactions import (
-    fresh_transaction,
 )
 
 

@@ -3,13 +3,13 @@
 from dataclasses import dataclass, replace
 from datetime import datetime
 
-from squid_reactivity.transaction_context import (
+from squid_reactivity.transactions.context import (
     ActorRef,
     CausalRef,
     ExceptionReport,
     TransactionRelation,
 )
-from squid_reactivity.transaction_results import (
+from squid_reactivity.transactions.results import (
     ChangeReport,
     CommitSequence,
     ConflictDetail,

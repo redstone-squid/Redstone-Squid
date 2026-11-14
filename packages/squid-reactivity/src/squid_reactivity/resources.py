@@ -48,18 +48,14 @@ from squid_reactivity.errors import (
     ReactivityError,
 )
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _bump_epoch, _ReactiveSource, cycle_path, settling
-from squid_reactivity.transaction_context import (
+from squid_reactivity.transactions import TransactionView, enlist, transaction_participant
+from squid_reactivity.transactions.context import (
     CausalRef,
     ExceptionReport,
     TransactionId,
     current_causality,
 )
-from squid_reactivity.transaction_state import ReactiveStateOwner
-from squid_reactivity.transactions import (
-    TransactionView,
-    enlist,
-    transaction_participant,
-)
+from squid_reactivity.transactions.state import ReactiveStateOwner
 
 
 class LoadScope(Protocol):

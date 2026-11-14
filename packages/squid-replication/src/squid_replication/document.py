@@ -15,17 +15,12 @@ from squid_reactivity.errors import (
     ReactiveConflictError,
 )
 from squid_reactivity.internals import Cell as _Cell
-from squid_reactivity.transaction_context import ActorRef, CausalRef, TransactionContext, TransactionPurpose
-from squid_reactivity.transaction_results import (
+from squid_reactivity.transactions import TransactionView, enlist, transaction, transaction_participant
+from squid_reactivity.transactions.context import ActorRef, CausalRef, TransactionContext, TransactionPurpose
+from squid_reactivity.transactions.results import (
     ChangeReport,
     ConflictDetail,
     TransactionContribution,
-)
-from squid_reactivity.transactions import (
-    TransactionView,
-    enlist,
-    transaction,
-    transaction_participant,
 )
 from squid_replication.engine import ReplicationBackend, ReplicationEngine
 from squid_replication.model import (

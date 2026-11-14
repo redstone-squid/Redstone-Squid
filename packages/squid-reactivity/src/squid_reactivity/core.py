@@ -16,7 +16,9 @@ import squid_reactivity.tracking as tracking
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.cells import _MISSING, _Cell, _staged_value
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _equal, _ReactiveSource, settling, untracked
-from squid_reactivity.transaction_state import (
+from squid_reactivity.transactions import transaction
+from squid_reactivity.transactions.engine import _write, report_undeclared_write
+from squid_reactivity.transactions.state import (
     _CURRENT_TRANSACTION,
     _READ_CONSISTENCY,
     _READ_ONLY,
@@ -24,11 +26,6 @@ from squid_reactivity.transaction_state import (
     _active,
     _check_write,
     read_only,
-)
-from squid_reactivity.transactions import (
-    _write,
-    report_undeclared_write,
-    transaction,
 )
 
 _log = logging.getLogger(__name__)

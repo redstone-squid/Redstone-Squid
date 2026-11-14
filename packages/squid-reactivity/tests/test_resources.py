@@ -17,7 +17,7 @@ from squid_reactivity import (
     watch,
 )
 from squid_reactivity.resources import Pending, PendingMode, Ready, Resource, abandon_superseded_loads, resource
-from squid_reactivity.transaction_context import causal_scope
+from squid_reactivity.transactions.context import causal_scope
 
 
 class Source(Reactive):

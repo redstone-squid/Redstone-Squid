@@ -12,10 +12,8 @@ from squid_reactivity.core import (
     _State as StateDescriptor,
 )
 from squid_reactivity.resources import _AtomicResourcePending as AtomicResourcePending
-from squid_reactivity.transaction_state import _CURRENT_TRANSACTION as CURRENT_TRANSACTION
-from squid_reactivity.transactions import (
-    _Transaction as Transaction,
-)
+from squid_reactivity.transactions.engine import _TransactionEngine as Transaction
+from squid_reactivity.transactions.state import _CURRENT_TRANSACTION as CURRENT_TRANSACTION
 
 __all__ = [
     "CURRENT_TRANSACTION",

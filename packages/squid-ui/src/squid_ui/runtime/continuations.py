@@ -22,7 +22,7 @@ from squid_reactivity.operations import (
     Pending,
     ProgressReporter,
 )
-from squid_reactivity.transaction_results import (
+from squid_reactivity.transactions.results import (
     TransactionCommit,
     TransactionRollback,
 )

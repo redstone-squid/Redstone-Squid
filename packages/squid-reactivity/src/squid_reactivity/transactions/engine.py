@@ -1,31 +1,26 @@
-"""Stage reactive writes and publish validated transactions.
+"""Stage writes, validate participants, publish changes, and deliver transaction outcomes.
 
-Each transaction owns its read versions, pending cell replacements, participant
-changes, and result hooks. Preparation validates the complete overlay before the
-commit point; later notifications cannot undo a published result.
+Publication is the commit boundary. Preparation may abort; notification failures after
+publication are reported without undoing the committed changes.
 """
 
 import asyncio
 import inspect
 import logging
-import threading
 import uuid
-import weakref
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum, auto
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity.cells import _MISSING, _Cell
+from squid_reactivity.cells import _Cell
 from squid_reactivity.diagnostics import (
     emit_continuation_failure,
     emit_result,
 )
 from squid_reactivity.errors import (
-    FrameworkIntegrityError,
-    FreshTransactionError,
     ReactiveConflictError,
     ReactiveWriteError,
     StaleReactiveContextError,
@@ -33,19 +28,14 @@ from squid_reactivity.errors import (
     UndeclaredStateError,
 )
 from squid_reactivity.tracking import _bump_epoch
-from squid_reactivity.transaction_context import (
-    ActorRef,
-    Causality,
+from squid_reactivity.transactions.context import (
     ExceptionReport,
     TransactionContext,
-    TransactionPurpose,
-    TransactionRelation,
-    causal_scope,
     continuation_callback,
-    current_causality,
     in_continuation,
 )
-from squid_reactivity.transaction_results import (
+from squid_reactivity.transactions.patches import CellPatch, CellPatchSet, CellTarget, SlotValue
+from squid_reactivity.transactions.results import (
     ChangeReport,
     CommitSequence,
     ConflictDetail,
@@ -56,15 +46,19 @@ from squid_reactivity.transaction_results import (
     TransactionResult,
     TransactionRollback,
 )
-from squid_reactivity.transaction_state import (
+from squid_reactivity.transactions.state import (
     _CURRENT_TRANSACTION,
     ReactiveStateOwner,
     _active,
     _check_write,
     _checkpoint,
     _current_task,
+    block_writes,
     relaxed_read,
 )
+
+if TYPE_CHECKING:
+    from squid_reactivity.transactions.api import Transaction
 
 _log = logging.getLogger(__name__)
 
@@ -140,121 +134,9 @@ class _Staged:
     version: int
 
 
-@dataclass(frozen=True, slots=True)
-class SlotValue:
-    """A state slot value that distinguishes absence from a present ``None``."""
-
-    present: bool
-    value: Any = None
-
-    @classmethod
-    def from_raw(cls, value: Any) -> SlotValue:
-        return cls(value is not _MISSING, None if value is _MISSING else value)
-
-    def raw(self) -> Any:
-        return self.value if self.present else _MISSING
-
-
 def _slot_name(cell: _Cell) -> str:
     """Return the shared field address, or an opaque slot ID for local state."""
     return f"slot:{cell.identity}" if cell.address is None else str(cell.address)
-
-
-@dataclass(frozen=True, slots=True, init=False)
-class CellTarget:
-    """Refer to a reversible state slot without keeping its owner alive.
-
-    The opaque identity remains available after collection. History can therefore
-    report which target expired even when the cell and its readable address are gone.
-    """
-
-    _owner: weakref.ReferenceType[ReactiveStateOwner]
-    _cell: weakref.ReferenceType[_Cell]
-    name: str
-    identity: str
-
-    def __init__(self, owner: ReactiveStateOwner, name: str, cell: _Cell) -> None:
-        object.__setattr__(self, "_owner", weakref.ref(owner))
-        object.__setattr__(self, "_cell", weakref.ref(cell))
-        object.__setattr__(self, "name", name)
-        object.__setattr__(self, "identity", f"slot:{cell.identity}")
-
-    def resolve(self, expected_version: int) -> tuple[ReactiveStateOwner, _Cell]:
-        """Return the live slot or report an expired conditional inverse."""
-        owner = self._owner()
-        cell = self._cell()
-        if owner is None or cell is None:
-            detail = ConflictDetail(self.identity, expected_version, -1)
-            raise ReactiveConflictError(detail, f"{self.identity} no longer exists; nothing was published")
-        return owner, cell
-
-    def live_cell(self) -> _Cell | None:
-        """Return the slot for non-mutating diagnostics, or ``None`` after collection."""
-        return self._cell()
-
-
-@dataclass(frozen=True, slots=True)
-class CellPatch:
-    """One state replacement with exact before/after version lineage."""
-
-    target: CellTarget
-    before: SlotValue
-    after: SlotValue
-    before_version: int
-    after_version: int
-
-    def inverse(self) -> ConditionalCellPatch:
-        return ConditionalCellPatch(self.target, self.before, self.after_version)
-
-
-@dataclass(frozen=True, slots=True)
-class ConditionalCellPatch:
-    """A replacement applicable only while the target has the expected version."""
-
-    target: CellTarget
-    value: SlotValue
-    expected_version: int
-
-
-@dataclass(frozen=True, slots=True)
-class CellPatchSet:
-    """Immutable physical changes from one committed transaction."""
-
-    patches: tuple[CellPatch, ...] = ()
-
-    def __iter__(self) -> Iterator[CellPatch]:
-        return iter(self.patches)
-
-    def __len__(self) -> int:
-        return len(self.patches)
-
-    def addresses(self) -> tuple[Any, ...]:
-        found: list[Any] = []
-        seen: set[int] = set()
-        for patch in self.patches:
-            cell = patch.target.live_cell()
-            address = None if cell is None else cell.address
-            if address is None or id(address) in seen:
-                continue
-            seen.add(id(address))
-            found.append(address)
-        return tuple(found)
-
-    def inverse(self) -> tuple[ConditionalCellPatch, ...]:
-        return tuple(patch.inverse() for patch in reversed(self.patches))
-
-
-def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
-    """Stage an all-or-nothing conditional patch set in the active transaction."""
-    current = _CURRENT_TRANSACTION.get()
-    if current is None or not current.writable():
-        message = "conditional patches require an active writable transaction"
-        raise RuntimeError(message)
-    resolved = tuple((patch, *patch.target.resolve(patch.expected_version)) for patch in patches)
-    for patch, _, cell in resolved:
-        current.require_version(cell, patch.expected_version)
-    for patch, owner, cell in resolved:
-        _write(owner, patch.target.name, cell, patch.value.raw())
 
 
 def _write(owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> None:
@@ -278,72 +160,6 @@ def _write(owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> Non
     current.stage(owner, name, cell, value)
 
 
-class Transaction:
-    """The identity and eventual outcome of one transaction.
-
-    Nested blocks share this handle. Result is None until the outer block finishes,
-    then remains available even if it raised. Hooks run after the outcome is fixed.
-    """
-
-    def __init__(self, context: TransactionContext, *, readonly: bool = False) -> None:
-        self._readonly = readonly
-        self._context = context
-        self._result: TransactionResult | None = None
-
-    @property
-    def context(self) -> TransactionContext:
-        return self._context
-
-    @property
-    def result(self) -> TransactionResult | None:
-        return self._result
-
-    def after_commit(self, callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
-        """Run after commit; callback failures cannot change the committed result."""
-        self._add_hook("commit", callback, key=key)
-
-    def after_rollback(self, callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
-        """Run after rollback; callback failures cannot change the discarded result."""
-        self._add_hook("rollback", callback, key=key)
-
-    def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
-        """Run after either outcome. Further writes require a new transaction."""
-        self._add_hook("result", callback, key=key)
-
-    @property
-    def readonly(self) -> bool:
-        """Whether this transaction rejects state writes."""
-        return self._readonly
-
-    def has_hook(self, key: object) -> bool:
-        """Check whether this active transaction has a result callback registered under key."""
-        current = self._check_current()
-        return any(
-            registered is key
-            for hooks in (current.commit_hooks, current.rollback_hooks, current.result_hooks)
-            for registered, _ in hooks
-        )
-
-    def _add_hook(self, kind: str, callback: Callable[..., None], *, key: object | None) -> None:
-        current = self._check_current()
-        if not current.writable():
-            current.reject_stale("a result hook")
-        if key is not None and self.has_hook(key):
-            message = f"{key!r} already registered a result hook for this transaction"
-            raise RuntimeError(message)
-        hooks = {"commit": current.commit_hooks, "rollback": current.rollback_hooks, "result": current.result_hooks}[
-            kind
-        ]
-        hooks.append((key, callback))
-
-    def _check_current(self) -> _Transaction:
-        current = _CURRENT_TRANSACTION.get()
-        if current is None or current.handle is not self:
-            message = "callbacks must be registered inside their transaction"
-            raise StaleReactiveContextError(message)
-        return current
-
-
 class _Phase(Enum):
     """Publication is terminal even if participant apply or later notifications fail."""
 
@@ -354,7 +170,7 @@ class _Phase(Enum):
 
 
 @dataclass(slots=True)
-class _Transaction:
+class _TransactionEngine:
     """Own an overlay until it is discarded or its patch plan is published.
 
     Preparation freezes writes while retaining overlay reads. Publication closes
@@ -362,6 +178,7 @@ class _Transaction:
     after that point cannot turn the committed transaction into a rollback.
     """
 
+    handle: Transaction
     readonly: bool = False
     phase: _Phase = _Phase.STAGING
     owner_task: object | None = None
@@ -393,10 +210,6 @@ class _Transaction:
     cleanup_errors: list[ExceptionReport] = field(default_factory=list)
     prepared_participants: list[tuple[TransactionParticipant[Any], Any]] = field(default_factory=list)
     commit_record: TransactionCommit | None = None
-    handle: Transaction = field(init=False)
-
-    def __post_init__(self) -> None:
-        self.handle = Transaction(self.context, readonly=self.readonly)
 
     @property
     def closed(self) -> bool:
@@ -674,7 +487,7 @@ class _Transaction:
 class _FrozenTransactionView:
     """The immutable overlay exposed only during participant preparation."""
 
-    transaction: _Transaction
+    transaction: _TransactionEngine
 
     @property
     def context(self) -> TransactionContext:
@@ -712,9 +525,6 @@ def report_undeclared_write(owner: object, name: str) -> None:
         f"Declare it with state()."
     )
     raise UndeclaredStateError(message)
-
-
-_COMMIT_GATE = threading.RLock()
 
 
 def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackReason:
@@ -755,14 +565,14 @@ def _notify_hooks(
                 )
 
 
-def _emit_commit(current: _Transaction, commit: TransactionCommit) -> None:
+def _emit_commit(current: _TransactionEngine, commit: TransactionCommit) -> None:
     current.handle._result = commit
     emit_result(commit)
     _notify_hooks(commit, current.commit_hooks)
     _notify_hooks(commit, current.result_hooks)
 
 
-def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit: bool) -> TransactionRollback:
+def _emit_rollback(current: _TransactionEngine, error: BaseException, *, during_commit: bool) -> TransactionRollback:
     cleanup_errors = current.abort(error)
     rolled_back_at = datetime.now(UTC)
     rollback = TransactionRollback(
@@ -781,182 +591,3 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
     _notify_hooks(rollback, current.rollback_hooks)
     _notify_hooks(rollback, current.result_hooks)
     return rollback
-
-
-@contextmanager
-def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> Iterator[Transaction]:
-    """Own staging, the commit point, and outcome delivery for either transaction mode."""
-    current = _Transaction(readonly=readonly, owner_task=_current_task(), context=context)
-    with causal_scope(context.causal_ref(), context.root_transaction_id):
-        token = _CURRENT_TRANSACTION.set(current)
-        try:
-            _checkpoint("transaction.enter_body")
-            yield current.handle
-        except BaseException as error:
-            _CURRENT_TRANSACTION.reset(token)
-            _emit_rollback(current, error, during_commit=False)
-            raise
-        _CURRENT_TRANSACTION.reset(token)
-        try:
-            _checkpoint("transaction.close_staging")
-            with _COMMIT_GATE:
-                commit = current.commit()
-        except BaseException as error:
-            if current.phase is _Phase.COMMITTED:
-                # Publication is the commit point. An apply failure is an adapter integrity
-                # defect, not a user rollback; retain the commit truth and fail loudly.
-                assert current.commit_record is not None
-                integrity_commit = replace(
-                    current.commit_record,
-                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
-                )
-                current.handle._result = integrity_commit
-                emit_result(integrity_commit)
-                message = f"an infallible transaction adapter failed after the commit point: {error}"
-                raise FrameworkIntegrityError(message) from error
-            else:
-                _emit_rollback(current, error, during_commit=True)
-            raise
-        try:
-            _checkpoint("commit.gate_released")
-            current.finalize_commit()
-        finally:
-            _emit_commit(current, commit)
-
-
-@contextmanager
-def transaction(
-    name: str | None = None,
-    *,
-    actor: ActorRef | None = None,
-    caused_by: TransactionContext | None = None,
-    kind: TransactionPurpose = TransactionPurpose.NORMAL,
-    relation: TransactionRelation | None = None,
-    transaction_context: TransactionContext | None = None,
-) -> Iterator[Transaction]:
-    """Stage state changes and publish them together when the context exits.
-
-    An exception in the body or preparation discards staged changes. Nested
-    calls share the outer transaction; they are not independent savepoints.
-    Only the task that opened the transaction may write through it. The yielded
-    handle exposes the final result and registers outcome callbacks. Supply
-    caused_by to link a new transaction to an earlier one. Identity arguments apply
-    only when opening an outer transaction.
-
-    Participants must not fail during apply, which runs after the commit point.
-    Such a failure raises FrameworkIntegrityError and is recorded as a damaged
-    commit, since already applied external changes cannot be rolled back here.
-    """
-    outer = _CURRENT_TRANSACTION.get()
-    if outer is not None:
-        # Checked at the `with`, not at the first write inside it, so a task that inherited
-        # someone else's transaction is told where it went wrong rather than where it showed.
-        if not outer.writable():
-            outer.reject_stale("a nested transaction")
-        yield outer.handle
-        return
-    explicit_identity = (
-        name is not None
-        or actor is not None
-        or caused_by is not None
-        or kind is not TransactionPurpose.NORMAL
-        or relation is not None
-    )
-    if transaction_context is not None and explicit_identity:
-        message = "supply either transaction_context or transaction identity arguments"
-        raise ValueError(message)
-    causality = (
-        current_causality() if caused_by is None else Causality(caused_by.causal_ref(), caused_by.root_transaction_id)
-    )
-    context = transaction_context or TransactionContext.create(
-        "transaction" if name is None else name,
-        actor=actor,
-        relation=relation,
-        kind=kind,
-        cause=None if causality is None else causality.cause,
-        root_transaction_id=None if causality is None else causality.root_transaction_id,
-    )
-    with _run_transaction(context) as handle:
-        yield handle
-
-
-@contextmanager
-def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Transaction]:
-    """Start a distinct causal transaction while an empty admitting transaction is open.
-
-    Mounted undo/redo handlers are admitted inside the dispatch transaction. Suspending that
-    empty envelope lets the history operation remain a real transaction with its own identity. An
-    outer transaction that already staged work is rejected because committing the inner transaction
-    could not then be rolled back with the outer one.
-    """
-    outer = _CURRENT_TRANSACTION.get()
-    if outer is not None and (outer.writes or outer.participants or outer.preconditions):
-        message = "a fresh transaction cannot start after the admitting transaction staged changes"
-        raise FreshTransactionError(message)
-    with _CURRENT_TRANSACTION.set(None), transaction(transaction_context=transaction_context) as handle:
-        yield handle
-
-
-@contextmanager
-def batch() -> Iterator[None]:
-    """Coalesce related state writes into one invalidation per component."""
-    with transaction():
-        yield
-
-
-@contextmanager
-def readonly_transaction(*, transaction_context: TransactionContext | None = None) -> Iterator[Transaction]:
-    """Run an identified read-only transaction and reject any state mutation."""
-    if _CURRENT_TRANSACTION.get() is not None:
-        message = "a read-only transaction cannot nest inside a writable transaction"
-        raise RuntimeError(message)
-    causality = current_causality()
-    context = transaction_context or TransactionContext.create(
-        "read-only transaction",
-        cause=None if causality is None else causality.cause,
-        root_transaction_id=None if causality is None else causality.root_transaction_id,
-    )
-    with _run_transaction(context, readonly=True) as handle:
-        yield handle
-
-
-def enlist[ParticipantT: TransactionParticipant[Any]](
-    key: object, factory: Callable[[], ParticipantT]
-) -> ParticipantT | None:
-    """Take part in the transaction in flight, staging writes instead of publishing them.
-
-    Returns the participant registered for `key`, built by `factory` on first use, or
-    `None` when no transaction is open -- the caller's signal that its write has nothing
-    to wait for and should land now. `key` identifies the subsystem, is usually the
-    subsystem itself, and must be hashable.
-    """
-    current = _CURRENT_TRANSACTION.get()
-    if current is None:
-        return None
-    return current.enlist(key, factory)
-
-
-def transaction_participant(key: object) -> TransactionParticipant[Any] | None:
-    """Return the participant already registered for ``key``, without creating one."""
-    current = _CURRENT_TRANSACTION.get()
-    return None if current is None else current.participants.get(key)
-
-
-@contextmanager
-def block_writes(reason: str) -> Iterator[None]:
-    """Reject component-state writes for the duration of the block.
-
-    Narrower than `readonly_transaction`: the transaction stays open and keeps everything it
-    has recorded. For code that runs *inside* a transaction but must not touch the tree, such as
-    an undo entry's external inverse, whose writes a following restore would silently clobber.
-    """
-    current = _CURRENT_TRANSACTION.get()
-    if current is None:
-        yield
-        return
-    previous = current.write_block
-    current.write_block = reason
-    try:
-        yield
-    finally:
-        current.write_block = previous

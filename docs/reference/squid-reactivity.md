@@ -128,9 +128,9 @@ rules documented at each declaration:
 
 | Module | Scoped state | Lifetime |
 |---|---|---|
-| `transaction_state` | Active transaction, read policy, write restriction | Transaction body or nested read scope; test interception is separate. |
+| `transactions.state` | Active transaction, read policy, write restriction | Transaction body or nested read scope; test interception is separate. |
 | `tracking` | Dependency collector and evaluation stack | Computation, resource load, or render. |
-| `transaction_context` | Immutable causality and callback write guard | Transaction publication, operation execution, or result callback. |
+| `transactions.context` | Immutable causality and callback write guard | Transaction publication, operation execution, or result callback. |
 | `async_values` | Observed async bindings | One render expansion. |
 | `resources` | Host cancellation-scope factory | Host execution, inherited by nested resource awaits. |
 | `diagnostics.observers` | Event registrations | Observation scope; exit disables inherited registrations too. |

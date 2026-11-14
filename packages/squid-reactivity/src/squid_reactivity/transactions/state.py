@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, Protocol
 
 from squid_reactivity.addresses import SubscriptionSource
 from squid_reactivity.errors import ReactiveWriteError
-from squid_reactivity.transaction_context import TransactionContext
+from squid_reactivity.transactions.context import TransactionContext
 
 if TYPE_CHECKING:
-    from squid_reactivity.transactions import _Transaction
+    from squid_reactivity.transactions.engine import _TransactionEngine
 
 
 class ReactiveStateOwner(SubscriptionSource, Protocol):
@@ -30,7 +30,7 @@ class ReactiveStateOwner(SubscriptionSource, Protocol):
     def _state_rolled_back(self) -> None: ...
 
 
-_CURRENT_TRANSACTION: ContextVar[_Transaction | None] = ContextVar("squid_reactivity_transaction", default=None)
+_CURRENT_TRANSACTION: ContextVar[_TransactionEngine | None] = ContextVar("squid_reactivity_transaction", default=None)
 """Transaction overlay used by field descriptors during staging.
 
 Only its owning task may write. Child tasks inherit the same transaction object;
@@ -47,7 +47,7 @@ def _current_task() -> object | None:
         return None
 
 
-def _active() -> _Transaction | None:
+def _active() -> _TransactionEngine | None:
     """Return the open transaction used for reads, ignoring a finished context.
 
     A child task may retain a transaction after its context exits. Reads then
@@ -158,3 +158,23 @@ def _checkpoint(name: str) -> None:
     interleaver = _INTERLEAVER.get()
     if interleaver is not None:
         interleaver(name)
+
+
+@contextmanager
+def block_writes(reason: str) -> Iterator[None]:
+    """Reject component-state writes for the duration of the block.
+
+    Narrower than `readonly_transaction`: the transaction stays open and keeps everything it
+    has recorded. For code that runs *inside* a transaction but must not touch the tree, such as
+    an undo entry's external inverse, whose writes a following restore would silently clobber.
+    """
+    current = _CURRENT_TRANSACTION.get()
+    if current is None:
+        yield
+        return
+    previous = current.write_block
+    current.write_block = reason
+    try:
+        yield
+    finally:
+        current.write_block = previous

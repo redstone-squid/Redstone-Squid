@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-import squid_reactivity.transaction_state as transaction_state
+import squid_reactivity.transactions.state as transaction_state
 
 
 class InterleavingHarness:

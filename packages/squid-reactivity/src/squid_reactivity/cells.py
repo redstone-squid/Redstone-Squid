@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _bump_epoch, _ReactiveSource
-from squid_reactivity.transaction_state import _READ_CONSISTENCY, _active, _ReadConsistency
+from squid_reactivity.transactions.state import _READ_CONSISTENCY, _active, _ReadConsistency
 
 if TYPE_CHECKING:
     from squid_reactivity.topics import DependencyAddress

@@ -3,7 +3,7 @@
 TransactionContext gives a transaction an identity and links it to the event that
 caused it. Operations and resource loads carry causal references so their later
 results can still be traced to the initiating transaction. Transaction outcomes and
-reversible changes are defined in transaction_results.
+reversible changes are defined in transactions.results.
 """
 
 import uuid

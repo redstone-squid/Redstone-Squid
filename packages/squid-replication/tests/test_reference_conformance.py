@@ -28,7 +28,7 @@ from squid_reactivity import (
     transaction,
 )
 from squid_reactivity.testing import InterleavingHarness
-from squid_reactivity.transaction_state import _CURRENT_TRANSACTION
+from squid_reactivity.transactions.state import _CURRENT_TRANSACTION
 from squid_replication import (
     PreparedReplicationInverse,
     ReferenceBackend,

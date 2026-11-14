@@ -9,7 +9,7 @@ import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid_i18n import md_tr
 from squid_reactivity.errors import ReactiveConflictError
-from squid_reactivity.transaction_results import (
+from squid_reactivity.transactions.results import (
     ConflictDetail,
 )
 from squid_ui.runtime import ReversibleOperation

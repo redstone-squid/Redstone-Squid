@@ -11,11 +11,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity.transaction_context import ExceptionReport, TransactionContext
+from squid_reactivity.transactions.context import ExceptionReport, TransactionContext
 
 if TYPE_CHECKING:
     # Transaction execution constructs results; patches are only needed for annotations here.
-    from squid_reactivity.transactions import CellPatchSet
+    from squid_reactivity.transactions.patches import CellPatchSet
 
 
 class RollbackReason(Enum):

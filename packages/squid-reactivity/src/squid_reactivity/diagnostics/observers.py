@@ -21,10 +21,10 @@ from squid_reactivity.diagnostics.snapshots import (
     RedactionPolicy,
     TransactionResultSnapshot,
 )
-from squid_reactivity.transaction_context import (
+from squid_reactivity.transactions.context import (
     ExceptionReport,
 )
-from squid_reactivity.transaction_results import (
+from squid_reactivity.transactions.results import (
     TransactionCommit,
     TransactionResult,
     TransactionRollback,

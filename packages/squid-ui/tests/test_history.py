@@ -19,11 +19,9 @@ from squid_reactivity import (
     observe_events,
 )
 from squid_reactivity.operations import OperationContext
-from squid_reactivity.transaction_results import (
+from squid_reactivity.transactions import readonly_transaction
+from squid_reactivity.transactions.results import (
     ChangeToken,
-)
-from squid_reactivity.transactions import (
-    readonly_transaction,
 )
 from squid_ui import Component, DiscordTarget, Reactive, state
 from squid_ui.primitives import Text

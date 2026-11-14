@@ -12,7 +12,7 @@ from squid_reactivity.internals import AtomicResourcePending
 from squid_reactivity.resources import AsyncBinding, observe_async_bindings, unique_async_bindings
 from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.tracking import capture_reads
-from squid_reactivity.transaction_state import read_only
+from squid_reactivity.transactions.state import read_only
 from squid_ui.context import ContextKey
 from squid_ui.document import Asset, Document, DocumentLike
 from squid_ui.errors import LayoutInvariantError

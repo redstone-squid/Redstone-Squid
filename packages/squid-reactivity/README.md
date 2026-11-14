@@ -191,6 +191,7 @@ queues or network delivery, implement the `TopicBus` protocol.
 ## Code layout
 
 `core` declares models, `cells` stores versioned values, and `tracking` captures and checks
-dependencies. `transaction_state` holds internal read/write controls; `transactions` stages
-and publishes writes. `transaction_context` and `transaction_results` describe identity and
-outcomes. `diagnostics` delivers events; `topics`, `resources`, and `operations` handle external work.
+dependencies. The `transactions` package separates the public API (`api`), execution
+(`engine`), reversible changes (`patches`), identity (`context`), outcomes (`results`),
+and scoped controls (`state`). `diagnostics` delivers events; `topics`, `resources`, and
+`operations` handle external work.

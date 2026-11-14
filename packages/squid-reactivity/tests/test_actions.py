@@ -34,7 +34,7 @@ from squid_reactivity import (
     strong_read,
     transaction,
 )
-from squid_reactivity.transaction_state import _CURRENT_TRANSACTION
+from squid_reactivity.transactions.state import _CURRENT_TRANSACTION
 
 
 class Preferences(Reactive):
