@@ -18,9 +18,8 @@ from squid_reactivity.cells import _MISSING, _Cell, _staged_value
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _equal, _ReactiveSource, settling, untracked
 from squid_reactivity.transaction_state import (
     _CURRENT_TRANSACTION,
+    _READ_CONSISTENCY,
     _READ_ONLY,
-    _RELAXED_READS,
-    _STRONG_READS,
     ReactiveStateOwner,
     _active,
     _check_write,
@@ -394,7 +393,7 @@ class _Derived:
     def settle(self) -> int:
         """Return the version after validating this read view and its dependencies."""
         current = _active()
-        view = None if current is None else (current.read_view, _RELAXED_READS.get() > 0, _STRONG_READS.get() > 0)
+        view = None if current is None else (current.read_view, _READ_CONSISTENCY.get())
         # A cache belongs to one read view. Re-evaluate on entry to an action or
         # a different read policy so cache hits cannot bypass conflict observations.
         if self._view == view:

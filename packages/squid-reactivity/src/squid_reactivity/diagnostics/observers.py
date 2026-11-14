@@ -69,7 +69,12 @@ class _Observer:
     redaction: RedactionPolicy
 
 
-_observers: ContextVar[tuple[_Observer, ...]] = ContextVar("squid_reactivity_observers", default=())
+_EVENT_OBSERVERS: ContextVar[tuple[_Observer, ...]] = ContextVar("squid_reactivity_observers", default=())
+"""Diagnostic registrations for this scope, inherited by spawned tasks.
+
+Each registration is disabled when its owning scope exits, including in child contexts.
+Hosts copying registrations into background work preserve that lifetime, not just the sink.
+"""
 
 
 @contextmanager
@@ -81,12 +86,12 @@ def observe_events(sink: EventSink, *, redaction: RedactionPolicy = DEFAULT_REDA
     deliver once using the innermost active scope's policy.
     """
     registration = _Observer(sink, redaction)
-    token = _observers.set((*_observers.get(), registration))
+    token = _EVENT_OBSERVERS.set((*_EVENT_OBSERVERS.get(), registration))
     try:
         yield sink
     finally:
         registration.sink = None
-        _observers.reset(token)
+        _EVENT_OBSERVERS.reset(token)
 
 
 def copy_event_observers(base: Context) -> Context:
@@ -96,22 +101,22 @@ def copy_event_observers(base: Context) -> Context:
     Registrations keep their original lifetimes; this does not extend a scope.
     """
     context = base.copy()
-    inherited = context.get(_observers, ())
-    registrations = {id(observer): observer for observer in (*inherited, *_observers.get())}
-    context.run(_observers.set, tuple(registrations.values()))
+    inherited = context.get(_EVENT_OBSERVERS, ())
+    registrations = {id(observer): observer for observer in (*inherited, *_EVENT_OBSERVERS.get())}
+    context.run(_EVENT_OBSERVERS.set, tuple(registrations.values()))
     return context
 
 
 def has_event_observers() -> bool:
     """Whether this execution scope has any active diagnostic observers."""
-    return any(observer.sink is not None for observer in _observers.get())
+    return any(observer.sink is not None for observer in _EVENT_OBSERVERS.get())
 
 
 def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
     seen: set[int] = set()
     snapshots: dict[RedactionPolicy, CausalEventSnapshot] = {}
     failures: list[tuple[str, Exception]] = []
-    for observer in reversed(_observers.get()):
+    for observer in reversed(_EVENT_OBSERVERS.get()):
         sink = observer.sink
         if sink is None or id(sink) in seen:
             continue

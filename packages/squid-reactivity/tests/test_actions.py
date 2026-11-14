@@ -186,16 +186,37 @@ def test_retained_patch_uses_weak_slot_authority() -> None:
         apply_conditional_patches(inverse)
 
 
-def test_relaxed_read_opts_back_out_of_a_strong_read() -> None:
+@pytest.mark.parametrize("relaxed_outer", [False, True])
+def test_relaxed_read_wins_in_either_nesting_order(relaxed_outer: bool) -> None:
     preferences = Preferences()
+    outer = relaxed_read if relaxed_outer else strong_read
+    inner = strong_read if relaxed_outer else relaxed_read
 
-    with transaction(), strong_read():
-        with relaxed_read():
+    with transaction():
+        with outer(), inner():
             assert preferences.theme == "system"
         preferences.locale = "fr"
         _outside_write(preferences, "theme", "dark")
 
     assert preferences.locale == "fr"
+
+
+def test_failed_relaxed_scope_restores_strong_reads_for_a_cached_computed() -> None:
+    preferences = Preferences()
+
+    class Banner(Reactive):
+        @computed
+        def theme(self) -> str:
+            return preferences.theme
+
+    banner = Banner()
+    with pytest.raises(ReactiveConflictError), transaction(), strong_read():
+        with pytest.raises(ValueError, match="leave scope"), relaxed_read():
+            assert banner.theme == "system"
+            raise ValueError("leave scope")
+        assert banner.theme == "system"
+        preferences.locale = "fr"
+        _outside_write(preferences, "theme", "dark")
 
 
 def test_relaxed_read_drops_the_precondition_on_a_cell_the_action_also_writes() -> None:

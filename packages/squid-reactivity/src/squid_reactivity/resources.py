@@ -102,9 +102,18 @@ class _NoAbandonment:
         """Leave the loader running; its obsolete result will be discarded."""
 
 
-_NO_ABANDONMENT = _NoAbandonment()
+_NO_LOAD_SCOPE_FACTORY = _NoAbandonment()
 
-_ABANDONMENT: ContextVar[Callable[[], LoadScope] | None] = ContextVar("squid_reactivity_load_abandonment", default=None)
+_LOAD_SCOPE_FACTORY: ContextVar[Callable[[], LoadScope] | None] = ContextVar(
+    "squid_reactivity_load_abandonment", default=None
+)
+"""Host cancellation policy inherited by nested resource awaits and child tasks.
+
+The first caller that starts a load supplies the factory; the load retains the resulting
+scope until completion. Joiners do not replace it. Keep the factory scoped because a loader
+can await resources unknown to its host; passing policy only to the outer resolve would
+leave those nested loads uncancellable. None preserves the dependency-free default.
+"""
 
 
 @contextmanager
@@ -118,16 +127,16 @@ def abandon_superseded_loads(scope: Callable[[], LoadScope]) -> Iterator[None]:
     Without a factory, obsolete loaders run to completion and their results are
     discarded. Loaders must be safe to repeat or abandon in either mode.
     """
-    token = _ABANDONMENT.set(scope)
+    token = _LOAD_SCOPE_FACTORY.set(scope)
     try:
         yield
     finally:
-        _ABANDONMENT.reset(token)
+        _LOAD_SCOPE_FACTORY.reset(token)
 
 
 def _load_scope() -> LoadScope:
-    factory = _ABANDONMENT.get()
-    return _NO_ABANDONMENT if factory is None else factory()
+    factory = _LOAD_SCOPE_FACTORY.get()
+    return _NO_LOAD_SCOPE_FACTORY if factory is None else factory()
 
 
 @dataclass(frozen=True, slots=True)

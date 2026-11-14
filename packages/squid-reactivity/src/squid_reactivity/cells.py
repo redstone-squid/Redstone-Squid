@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _bump_epoch, _ReactiveSource
-from squid_reactivity.transaction_state import _RELAXED_READS, _STRONG_READS, _active
+from squid_reactivity.transaction_state import _READ_CONSISTENCY, _active, _ReadConsistency
 
 if TYPE_CHECKING:
     from squid_reactivity.topics import Topic
@@ -63,8 +63,9 @@ class _Cell:
                 # commit-time version precondition.
                 self.track(entry.version)
                 return entry.value
-            if self.address is not None and _RELAXED_READS.get() == 0:
-                current.observe(self, strong=_STRONG_READS.get() > 0)
+            policy = _READ_CONSISTENCY.get()
+            if self.address is not None and policy is not _ReadConsistency.RELAXED:
+                current.observe(self, strong=policy is _ReadConsistency.STRONG)
         self.track(self.version)
         return self.value
 

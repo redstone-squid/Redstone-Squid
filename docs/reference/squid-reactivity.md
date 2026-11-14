@@ -111,6 +111,29 @@ Apply targeted cell changes, optionally conditioned on what the writer last saw.
 
 ::: squid_reactivity.apply_conditional_patches
 
+## Scoped execution state
+
+Field reads need implicit access to their transaction and dependency collector. Other work
+should carry its origin explicitly: use `operation.start(caused_by=tx.context)` for an operation
+initiated by a transaction. `start()` alone creates an unlinked execution. Resource generations
+capture the current causal origin because resource access happens through descriptors.
+
+The remaining context variables are grouped by responsibility, with ownership and inheritance
+rules documented at each declaration:
+
+| Module | Scoped state | Lifetime |
+|---|---|---|
+| `transaction_state` | Active transaction, read policy, write restriction | Transaction body or nested read scope; test interception is separate. |
+| `tracking` | Dependency collector and evaluation stack | Computation, resource load, or render. |
+| `transaction_context` | Immutable causality and callback write guard | Transaction publication, operation execution, or result callback. |
+| `async_values` | Observed async bindings | One render expansion. |
+| `resources` | Host cancellation-scope factory | Host execution, inherited by nested resource awaits. |
+| `diagnostics.observers` | Event registrations | Observation scope; exit disables inherited registrations too. |
+
+Child tasks inherit context values, not independent copies of mutable objects. A transaction
+still checks its owning task before accepting writes. Causal references can outlive the
+transaction; they do not grant access to its overlay or make it active again.
+
 ## Transaction context and results
 
 `TransactionContext` identifies why work ran and what caused it. `transaction(name, actor=..., caused_by=...)`

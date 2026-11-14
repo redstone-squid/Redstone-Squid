@@ -52,13 +52,18 @@ class _Execution[StatusT]:
             self.completion.resolve(status())
 
 
-_CURRENT_BINDINGS: ContextVar[list[AsyncBinding[object]] | None] = ContextVar(
+_ASYNC_BINDING_COLLECTOR: ContextVar[list[AsyncBinding[object]] | None] = ContextVar(
     "squid_reactivity_observed_async_bindings", default=None
 )
+"""Bindings accessed while expanding one render, separate from versioned dependencies.
+
+The expansion scope owns the list. Nested scopes replace it and restore the outer list;
+child tasks inherit that same list. Collection discovers work but never starts loaders.
+"""
 
 
 def _observe(binding: AsyncBinding[object]) -> None:
-    observed = _CURRENT_BINDINGS.get()
+    observed = _ASYNC_BINDING_COLLECTOR.get()
     if observed is not None:
         observed.append(binding)
 
@@ -67,11 +72,11 @@ def _observe(binding: AsyncBinding[object]) -> None:
 def observe_async_bindings() -> Iterator[list[AsyncBinding[object]]]:
     """Collect asynchronous bindings accessed by one expanded component render."""
     observed: list[AsyncBinding[object]] = []
-    token = _CURRENT_BINDINGS.set(observed)
+    token = _ASYNC_BINDING_COLLECTOR.set(observed)
     try:
         yield observed
     finally:
-        _CURRENT_BINDINGS.reset(token)
+        _ASYNC_BINDING_COLLECTOR.reset(token)
 
 
 def unique_async_bindings(bindings: list[AsyncBinding[object]]) -> tuple[AsyncBinding[object], ...]:

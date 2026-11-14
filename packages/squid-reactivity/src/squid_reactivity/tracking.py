@@ -39,7 +39,15 @@ class _DependencyCollector(Protocol):
     sources: dict[_ReactiveSource, int]
 
 
-_DEPENDENCY_COLLECTOR: ContextVar[_DependencyCollector | None] = ContextVar("squid_reactivity_consumer", default=None)
+_DEPENDENCY_COLLECTOR: ContextVar[_DependencyCollector | None] = ContextVar(
+    "squid_reactivity_dependency_collector", default=None
+)
+"""Destination for reads made by the active computation, resource load, or render.
+
+Capture scopes and loaders install their own collector; untracked clears it temporarily.
+Child tasks inherit the same collector object. Operation loaders explicitly clear it so
+awaiting an operation does not make its inputs dependencies of the awaiting computation.
+"""
 
 
 def _equal(left: object, right: object) -> bool:
@@ -58,7 +66,7 @@ class _SettlingNode(Protocol):
     _label: str
 
 
-_SETTLING: ContextVar[tuple[_SettlingNode, ...]] = ContextVar("squid_reactivity_settling", default=())
+_EVALUATION_STACK: ContextVar[tuple[_SettlingNode, ...]] = ContextVar("squid_reactivity_settling", default=())
 """The derived nodes currently producing a value on this task, outermost first.
 
 Task-local rather than global: two independent values settled concurrently each copy the
@@ -73,7 +81,7 @@ def cycle_path(node: _SettlingNode) -> tuple[str, ...] | None:
     The path starts at the first occurrence of the node and repeats it at the
     end. Callers that led into the cycle are excluded from the diagnostic.
     """
-    stack = _SETTLING.get()
+    stack = _EVALUATION_STACK.get()
     for index, entered in enumerate(stack):
         if entered is node:
             return (*(held._label for held in stack[index:]), node._label)
@@ -86,7 +94,7 @@ def settling(node: _SettlingNode) -> Iterator[None]:
     path = cycle_path(node)
     if path is not None:
         raise ReactiveCycleError(path)
-    with _SETTLING.set((*_SETTLING.get(), node)):
+    with _EVALUATION_STACK.set((*_EVALUATION_STACK.get(), node)):
         yield
 
 

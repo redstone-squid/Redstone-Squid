@@ -8,6 +8,7 @@ import asyncio
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
 from squid_reactivity.addresses import SubscriptionSource
@@ -30,20 +31,12 @@ class ReactiveStateOwner(SubscriptionSource, Protocol):
 
 
 _CURRENT_TRANSACTION: ContextVar[_Transaction | None] = ContextVar("squid_reactivity_transaction", default=None)
-_RELAXED_READS: ContextVar[int] = ContextVar("squid_reactivity_relaxed_reads", default=0)
-_STRONG_READS: ContextVar[int] = ContextVar("squid_reactivity_strong_reads", default=0)
-_INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
-    "squid_reactivity_deterministic_interleaver", default=None
-)
-_INTERLEAVER_USERS: int = 0
+"""Transaction overlay used by field descriptors during staging.
 
-
-def _checkpoint(name: str) -> None:
-    if _INTERLEAVER_USERS == 0:
-        return
-    interleaver = _INTERLEAVER.get()
-    if interleaver is not None:
-        interleaver(name)
+Only its owning task may write. Child tasks inherit the same transaction object;
+closed overlays are ignored for reads and rejected for writes. Publication resets
+this slot before notifying consumers, so callbacks cannot join a finished overlay.
+"""
 
 
 def _current_task() -> object | None:
@@ -64,7 +57,22 @@ def _active() -> _Transaction | None:
     return None if current is None or current.closed else current
 
 
+def current_transaction_context() -> TransactionContext | None:
+    """Return the active transaction's metadata, or None outside its staging phase.
+
+    Metadata lives on the transaction itself. Publication and result callbacks use
+    captured causality instead; an inherited, closed transaction is not active.
+    """
+    current = _active()
+    return None if current is None else current.context
+
+
 _READ_ONLY: ContextVar[object | None] = ContextVar("squid_reactivity_read_only", default=None)
+"""Identity of the current computation's write restriction, or None when unrestricted.
+
+A fresh identity permits initialization only for objects born in this exact scope.
+A boolean would incorrectly allow a nested computation to mutate outer-scope objects.
+"""
 
 
 @contextmanager
@@ -89,6 +97,22 @@ def _check_write(owner: ReactiveStateOwner, name: str) -> None:
         raise ReactiveWriteError(message)
 
 
+class _ReadConsistency(Enum):
+    DEFAULT = "default"
+    STRONG = "strong"
+    RELAXED = "relaxed"
+
+
+_READ_CONSISTENCY: ContextVar[_ReadConsistency] = ContextVar(
+    "squid_reactivity_read_consistency", default=_ReadConsistency.DEFAULT
+)
+"""Commit preconditions for reads, independent of reactive dependency capture.
+
+Relaxed scopes override strong scopes in either nesting order. Each scope restores
+its caller's policy on exit; children inherit the policy present when spawned.
+"""
+
+
 @contextmanager
 def relaxed_read() -> Iterator[None]:
     """Read reactive state without adding a commit-time consistency precondition.
@@ -97,7 +121,7 @@ def relaxed_read() -> Iterator[None]:
     writes, and any read taken inside :func:`strong_read`. Unlike :func:`untracked`, this
     does not change reactive dependency tracking.
     """
-    with _RELAXED_READS.set(_RELAXED_READS.get() + 1):
+    with _READ_CONSISTENCY.set(_ReadConsistency.RELAXED):
         yield
 
 
@@ -108,17 +132,29 @@ def strong_read() -> Iterator[None]:
     The upgrade an action opts into when it branches on reactive state it does not write --
     read A, write B, and by default nothing says A was still true. Wrap the whole handler
     body to make one action serializable over what it read; wrap one read to guard just that
-    one. :func:`relaxed_read` nested inside opts a read back out.
+    one. Any enclosing or nested :func:`relaxed_read` opts reads back out.
     """
-    with _STRONG_READS.set(_STRONG_READS.get() + 1):
+    policy = _READ_CONSISTENCY.get()
+    if policy is not _ReadConsistency.RELAXED:
+        policy = _ReadConsistency.STRONG
+    with _READ_CONSISTENCY.set(policy):
         yield
 
 
-def current_transaction_context() -> TransactionContext | None:
-    """Return the active transaction's metadata, or None outside its staging phase.
+_INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
+    "squid_reactivity_deterministic_interleaver", default=None
+)
+"""Test-only checkpoint callback installed by InterleavingHarness.
 
-    Metadata lives on the transaction itself. Publication and result callbacks use
-    captured causality instead; an inherited, closed transaction is not active.
-    """
-    current = _active()
-    return None if current is None else current.context
+It inherits into child tasks like transaction state. The process-wide count below
+lets production checkpoints skip context lookup when no harness is installed.
+"""
+_INTERLEAVER_USERS: int = 0
+
+
+def _checkpoint(name: str) -> None:
+    if _INTERLEAVER_USERS == 0:
+        return
+    interleaver = _INTERLEAVER.get()
+    if interleaver is not None:
+        interleaver(name)
