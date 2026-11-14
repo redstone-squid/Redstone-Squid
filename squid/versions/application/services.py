@@ -72,10 +72,13 @@ class VersionService:
         Unlike parse_version_string, these edition names are case-sensitive.
         Results follow selection order and catalog order within each selection.
         Overlapping selections can produce duplicates; unknown versions contribute
-        no entries. Malformed numeric input can raise ValueError.
+        no entries. An edition alone selects no particular release. Malformed
+        numeric input can raise ValueError.
         """
         edition = self._edition_from_spec(version_spec)
         normalized_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
+        if not normalized_spec and version_spec.strip() in {"Java", "Bedrock"}:
+            return []
         normalized_spec = re.sub(r"(?<=\d)\s*[~\uff5e\u2013\u2014]\s*(?=\d)", " - ", normalized_spec)
         versions = await self.list_versions(edition)
         available = [(version.major, version.minor, version.patch) for version in versions]

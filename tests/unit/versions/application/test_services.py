@@ -100,3 +100,11 @@ async def test_version_ranges_accept_message_separators(separator: str) -> None:
         "Java 1.17.0",
         "Java 1.17.1",
     ]
+
+
+@pytest.mark.parametrize("edition", ["Java", "Bedrock"])
+async def test_edition_without_a_version_does_not_claim_compatibility_with_every_release(edition: str) -> None:
+    committed = CommittedState(FakeVersionRepository())
+    committed.value.versions = [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
+    assert await service.resolve_spec(edition) == []

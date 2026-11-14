@@ -686,3 +686,59 @@ async def test_seamless_and_reset_measurements_remain_separate_from_the_duration
     assert build.normal_opening_time == 2
     assert build.visible_opening_time is None
     assert build.description == "Opening: 0.1s; 0.25s seamless, 0.05s reset"
+
+
+async def test_inference_keeps_valid_links_when_the_model_invents_an_empty_or_malformed_url() -> None:
+    urls = ["", "javascript:alert(1)", "https://[invalid", "https://example.test/a b", "https://example.test/video.mp4"]
+    message = ContextMessage(10, "Builder", 20, "References: " + " ".join(urls), "", "primary")
+    value = inferred(links=[{"url": url, "media_type": "video"} for url in urls])
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert [link.url for link in build.links] == [urls[-1]]
+    assert build.description == "Reference: https://example.test/video.mp4"
+    prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+    assert prefill.unresolved == ()
+    assert prefill.answers["video_urls"] == [urls[-1]]
+
+
+@pytest.mark.parametrize(("spec", "expected"), [(None, "Bedrock"), ("1.16+", "Bedrock 1.16+")])
+async def test_explicit_edition_survives_without_guessing_a_release(spec: str | None, expected: str) -> None:
+    versions = FakeVersions()
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(edition="Bedrock", version_spec=spec)])),
+        FakeTaxonomy(),
+        versions,
+        "system",
+    )
+    [build] = await service.infer(source(), model="test")
+    assert build.version_spec == expected
+    assert versions.resolved_specs == [expected]
+
+
+def test_discord_credit_preserves_a_source_alias_with_the_observed_username_and_id() -> None:
+    message = ContextMessage(
+        10,
+        "New Display",
+        20,
+        "By FormerName (<@30>)",
+        "",
+        "primary",
+        mentions=(ContextIdentity(30, "Current Display", "current_username"),),
+    )
+    value = inferred(
+        credits=[
+            {
+                "name": "FormerName",
+                "kind": "discord",
+                "subject": "30",
+                "role": "creator",
+                "source_message_id": 10,
+            }
+        ]
+    )
+    [credit] = BuildInferenceService._credits(value, [message])
+    assert credit.name == "FormerName"
+    assert credit.username == "current_username"
+    assert credit.subject == "30"

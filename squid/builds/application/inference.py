@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass, replace
 from html import escape
 from typing import Literal, Protocol, cast
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
 from whenever import Instant
@@ -116,6 +117,9 @@ class InferredBuild(BaseModel):
         description="Every explicit attribution, including MC Username or IGN labels."
     )
     version_spec: str | None
+    edition: Literal["Java", "Bedrock"] | None = Field(
+        default=None, description="Explicit Minecraft edition, even when no release number is stated."
+    )
     author_notes: list[InferredAuthorNote] = Field(
         description=(
             "Verbatim primary-message excerpts containing additional concrete facts, such as operating requirements, "
@@ -356,7 +360,10 @@ class BuildInferenceService:
                 if identity is None:
                     subject = None
                 else:
-                    name, username = identity.name, identity.username
+                    # An old post may use an alias while Discord supplies today's
+                    # display name. Both can refer to the same observed ID.
+                    name = value.name if value.name.strip() and value.name in message.content else identity.name
+                    username = identity.username
             elif subject is not None and subject not in message.content:
                 subject = None
             if username is not None:
@@ -504,6 +511,11 @@ class BuildInferenceService:
                 # which carries the description but not arbitrary extra_info metadata.
                 notes.append(f"{label}: {'; '.join(part for part in (timing.value, timing.qualifier) if part)}")
         build.version_spec = (inferred.version_spec or "").strip() or None
+        if inferred.edition is not None:
+            if build.version_spec is None:
+                build.version_spec = inferred.edition
+            elif not build.version_spec.startswith(("Java", "Bedrock")):
+                build.version_spec = f"{inferred.edition} {build.version_spec}"
         if build.version_spec is not None:
             try:
                 build.versions = await self._versions.resolve_spec(build.version_spec)
@@ -519,12 +531,24 @@ class BuildInferenceService:
         if inferred.volume:
             notes.append(f"Reported volume: {inferred.volume}")
         for link in inferred.links:
+            try:
+                parsed_url = urlsplit(link.url)
+                valid_url = (
+                    parsed_url.scheme in {"https", "http"}
+                    and bool(parsed_url.hostname)
+                    and not any(
+                        character.isspace() or ord(character) < 32 or ord(character) == 127 for character in link.url
+                    )
+                )
+            except ValueError:
+                valid_url = False
+            if not valid_url:
+                continue
             if not any(link.url in (message.content or "") for message in build.source_messages):
                 continue
             if link.media_type is not None and all(existing.url != link.url for existing in build.links):
                 build.links.append(BuildLink(link.url, link.media_type))
-            # Submission forms collect uploaded media rather than external URLs, so
-            # retain references in the description as well as the candidate's links.
+            # Untyped references have no media field, so keep their URLs in the description too.
             if not any(link.url in note for note in notes):
                 notes.append(f"Reference: {link.url}")
         notes.extend(f"Needs review: {note}" for note in inferred.review_notes)
