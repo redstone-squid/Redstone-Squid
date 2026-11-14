@@ -494,10 +494,9 @@ class TestRouteGroups:
         first = root.group("polls")
         second = root.group("polls")
         first.define("{action}")
-        second.define("close")
-
-        with pytest.raises(ValueError, match="overlaps the included route"):
-            Router(namespace=root, on_gone=_noop)
+        assert second is first
+        with pytest.raises(ValueError, match="overlaps"):
+            second.define("close")
 
     def test_a_group_from_another_namespace_is_rejected(self) -> None:
         router = Router(namespace="r", on_gone=_noop)
@@ -535,6 +534,7 @@ class TestRouteGroups:
         router = Router(namespace=root, on_gone=_noop)
         router.register(_FakeClient())  # type: ignore[arg-type]
 
+        assert root.group("polls") is polls
         assert polls.define("close") is route
         with pytest.raises(ValueError, match="changed aliases"):
             polls.define("close", aliases=("old:close",))
@@ -565,6 +565,41 @@ class TestMiddleware:
     def test_the_base_class_requires_dispatch(self) -> None:
         with pytest.raises(TypeError, match="abstract"):
             cast(Any, squid_ui_discord.routing.Middleware)()
+
+    @pytest.mark.parametrize("on_group", [False, True])
+    async def test_keyed_middleware_reloads_in_place_after_registration(self, on_group: bool) -> None:
+        seen: list[str] = []
+
+        class Record(squid_ui_discord.routing.Middleware[discord.Client]):
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            @override
+            async def dispatch(
+                self,
+                request: squid_ui_discord.routing.RouteRequest[discord.Client],
+                proceed: squid_ui_discord.routing.RouteProceed,
+            ) -> None:
+                seen.append(self.name)
+                await proceed()
+
+        root = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        router = Router(namespace=root, on_gone=_noop)
+        owner = root if on_group else router
+        owner.add_middleware(Record("old"), key="policy")
+        owner.add_middleware(Record("last"))
+
+        @root.route("test")
+        async def handle(interaction: discord.Interaction[discord.Client]) -> None:
+            seen.append("handler")
+
+        router.register(_FakeClient())  # type: ignore[arg-type]
+        owner.add_middleware(Record("new"), key="policy")
+        with pytest.raises(RuntimeError, match="before"):
+            owner.add_middleware(Record("extra"), key="extra")
+        await router.dispatch(interaction_harness(), handle.id())
+
+        assert seen == ["new", "last", "handler"]
 
     async def test_router_and_group_middleware_compose_outermost_first(self) -> None:
         seen: list[str] = []

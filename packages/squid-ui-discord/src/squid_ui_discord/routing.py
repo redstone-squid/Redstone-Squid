@@ -227,15 +227,22 @@ class RouteGroup[BotT: discord.Client]:
         self._definitions: list[Route] = []
         self._routes: list[RouteHandle[...]] = []
         self._middleware: list[Middleware[BotT]] = []
+        self._middleware_keys: dict[str, int] = {}
         self._routers: weakref.WeakSet[Router[Any]] = weakref.WeakSet()
         self._frozen = False
 
     def group(self, *prefix: str) -> RouteGroup[BotT]:
-        """Create a child whose final prefix is composed immediately."""
+        """Get or create a child group, reusing the same prefix across reloads.
+
+        Existing children remain available after registration; new children do not.
+        """
+        child = RouteGroup(*prefix, _parent=self)
+        for existing in self._children:
+            if existing.prefix == child.prefix:
+                return existing
         if self._frozen:
             message = f"child groups of {self.prefix!r} must be created before registration"
             raise RuntimeError(message)
-        child = RouteGroup(*prefix, _parent=self)
         for router in self._routers:
             router._validate_group(child)
             child._attach(router)
@@ -340,13 +347,23 @@ class RouteGroup[BotT: discord.Client]:
         self._routes.append(handle)
         return handle
 
-    def add_middleware(self, middleware: Middleware[BotT]) -> None:
-        """Append one middleware instance, idempotently by object identity."""
-        if any(existing is middleware for existing in self._middleware):
+    def add_middleware(self, middleware: Middleware[BotT], *, key: str | None = None) -> None:
+        """Append middleware, or replace an existing key in its original position.
+
+        Keys allow replacement after registration, including extension reloads. New
+        keys must be installed before registration. Without a key, repeated instances
+        are ignored by object identity.
+        """
+        if key is not None and key in self._middleware_keys:
+            self._middleware[self._middleware_keys[key]] = middleware
+            return
+        if key is None and any(existing is middleware for existing in self._middleware):
             return
         if self._frozen:
             message = f"middleware for route group {self.prefix!r} must be added before registration"
             raise RuntimeError(message)
+        if key is not None:
+            self._middleware_keys[key] = len(self._middleware)
         self._middleware.append(middleware)
 
     def _freeze(self) -> None:
@@ -413,6 +430,7 @@ class Router[BotT: discord.Client]:
         self._routes: list[RouteHandle[...]] = []
         self._groups: list[RouteGroup[BotT]] = []
         self._middleware: list[Middleware[BotT]] = []
+        self._middleware_keys: dict[str, int] = {}
         self._registered = False
         self.namespace = namespace_value
         self.on_gone = on_gone
@@ -466,13 +484,23 @@ class Router[BotT: discord.Client]:
         self._groups.append(group)
         group._attach(self)
 
-    def add_middleware(self, middleware: Middleware[BotT]) -> None:
-        """Append one router-wide middleware instance, idempotently by identity."""
-        if any(existing is middleware for existing in self._middleware):
+    def add_middleware(self, middleware: Middleware[BotT], *, key: str | None = None) -> None:
+        """Append middleware, or replace an existing key in its original position.
+
+        Keys allow replacement after registration, including extension reloads. New
+        keys must be installed before registration. Without a key, repeated instances
+        are ignored by object identity.
+        """
+        if key is not None and key in self._middleware_keys:
+            self._middleware[self._middleware_keys[key]] = middleware
+            return
+        if key is None and any(existing is middleware for existing in self._middleware):
             return
         if self._registered:
             message = "router middleware must be added before Router.register(client)"
             raise RuntimeError(message)
+        if key is not None:
+            self._middleware_keys[key] = len(self._middleware)
         self._middleware.append(middleware)
 
     def _validate_group(self, group: RouteGroup[Any]) -> None:
