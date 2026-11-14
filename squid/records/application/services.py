@@ -7,10 +7,12 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from itertools import combinations, groupby, product
 
-from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
+import anyio
+
+from squid.core.errors import DataIntegrityError, InvalidStateError, ServiceUnavailableError, ValidationError
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
-from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
 from squid.records.application.models import (
     CandidateBuild,
@@ -28,7 +30,12 @@ from squid.records.application.models import (
     RecordLookupRequest,
     TitleDiagnosticGap,
 )
-from squid.records.application.ports import PublicBuildSummaryReader, RecordQueryUnitOfWork, RecordUnitOfWork
+from squid.records.application.ports import (
+    DoorRangeAnalyzer,
+    PublicBuildSummaryReader,
+    RecordQueryUnitOfWork,
+    RecordUnitOfWork,
+)
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
@@ -304,9 +311,13 @@ class RecordService:
         computation: RecordComputationService,
         *,
         uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
+        range_analyzer: DoorRangeAnalyzer | None = None,
+        range_concurrency: int = 2,
     ) -> None:
         self._uow_factory = uow_factory
         self._computation = computation
+        self._range_analyzer = range_analyzer
+        self._range_limiter = anyio.CapacityLimiter(range_concurrency)
 
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         """Return decisive facts missing from active record results."""
@@ -372,40 +383,47 @@ class RecordService:
             evaluated_at=datetime.now(UTC),
         )
 
-    async def lookup_door_ranges(self, request: DoorRangeQuery) -> DoorRangeAnalysis:
+    async def lookup_door_ranges(self, request: DoorRangeQuery) -> DoorRangeResult:
         """Analyze live smallest-record widths without publishing or storing regions.
 
-        This backend entry point is not exposed over HTTP until arithmetic has
-        worker isolation. It shares taxonomy and version rules with point lookup.
+        Admission covers database loading and analysis. The worker receives
+        immutable facts after the read-only transaction closes. Saturation fails
+        immediately; requests do not queue with loaded candidate documents.
         """
-        async with self._uow_factory() as uow:
-            sources = tuple(
-                await uow.record_candidates.list_for_door_widths(
-                    request.height,
-                    request.depth,
-                    request.orientation,
-                    request.version_id,
-                    minimum=request.minimum,
-                    maximum=request.maximum,
+        if self._range_analyzer is None:
+            raise ServiceUnavailableError(context={"reason": "range_analyzer_unavailable"})
+        try:
+            self._range_limiter.acquire_nowait()
+        except anyio.WouldBlock as error:
+            raise ServiceUnavailableError(context={"reason": "range_capacity"}) from error
+        try:
+            async with self._uow_factory() as uow:
+                sources = tuple(
+                    await uow.record_candidates.list_for_door_widths(
+                        request.height,
+                        request.depth,
+                        request.orientation,
+                        request.version_id,
+                        minimum=request.minimum,
+                        maximum=request.maximum,
+                    )
                 )
+            # Compare taxonomy at a common size; the adapter retains each source's
+            # real opening domain for the subsequent arithmetic.
+            size = f"{request.minimum}x{request.height}" + (f"x{request.depth}" if request.depth != 1 else "")
+            category_sources = tuple(
+                replace(source, door=replace(source.door, size=size)) for source in sources if source.door is not None
             )
-        # Compare taxonomy at a common size; the adapter retains each source's
-        # real opening domain for the subsequent arithmetic.
-        size = f"{request.minimum}x{request.height}" + (f"x{request.depth}" if request.depth != 1 else "")
-        category_sources = tuple(
-            replace(source, door=replace(source.door, size=size)) for source in sources if source.door is not None
-        )
-        category = self._computation.requested_category(
-            request.identity_for_opening((request.minimum, request.height, request.depth)), category_sources
-        )
-        matched_ids = {candidate.build_id for candidate in category.candidates} if category is not None else set()
-        return analyze_door_widths(
-            tuple(source for source in sources if source.candidate.build_id in matched_ids),
-            height=request.height,
-            depth=request.depth,
-            minimum=request.minimum,
-            maximum=request.maximum,
-        )
+            category = self._computation.requested_category(
+                request.identity_for_opening((request.minimum, request.height, request.depth)), category_sources
+            )
+            matched_ids = {candidate.build_id for candidate in category.candidates} if category is not None else set()
+            result = await self._range_analyzer.analyze(
+                tuple(source for source in sources if source.candidate.build_id in matched_ids), request
+            )
+            return DoorRangeResult(request, datetime.now(UTC), result.analysis, result.configurations)
+        finally:
+            self._range_limiter.release()
 
     async def materialize_definition(
         self,

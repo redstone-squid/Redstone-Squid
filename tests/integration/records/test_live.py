@@ -17,6 +17,7 @@ from squid.records.application.services import RecordComputationService, RecordS
 from squid.records.domain import BaseTitle, ResolutionStatus, TimingVariant
 from squid.records.domain.regions import RegionAnalysisStatus
 from squid.records.infrastructure import repository
+from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.records.models import (
     ComputationRun,
@@ -86,7 +87,9 @@ async def test_live_lookup_does_not_materialize_large_sizes(
     async with sessions() as session:
         before = [await session.scalar(select(func.count()).select_from(model)) for model in models]
     factory = partial(SqlAlchemyUnitOfWork, sessions)
-    service = RecordService(RecordComputationService(uow_factory=factory), uow_factory=factory)
+    service = RecordService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, range_analyzer=SubprocessRangeAnalyzer()
+    )
     with record_queries(sessions) as statements:
         result = await service.lookup_door(DoorRecordLookup(opening=(6, 3, 1)))
         assert result.resolution.holder_ids == (family_id,)
@@ -205,7 +208,9 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
     async with sessions() as session:
         before = [await session.scalar(select(func.count()).select_from(model)) for model in models]
     factory = partial(SqlAlchemyUnitOfWork, sessions)
-    service = RecordService(RecordComputationService(uow_factory=factory), uow_factory=factory)
+    service = RecordService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, range_analyzer=SubprocessRangeAnalyzer()
+    )
     with record_queries(sessions) as statements:
         result = await service.lookup_door_ranges(DoorRangeQuery(height=3, version_id=version_id))
         assert result.analysis.status is RegionAnalysisStatus.EXACT

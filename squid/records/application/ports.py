@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.builds.application.queries import PublicBuildSummary
+from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
 from squid.records.application.models import (
     CandidateBuild,
     CategoryIdentity,
@@ -65,6 +66,12 @@ class RecordCandidateRepository(Protocol):
         opening and still require domain analysis before competing.
         """
         ...
+
+
+class DoorRangeAnalyzer(Protocol):
+    """Run admitted arithmetic outside the caller's database transaction."""
+
+    async def analyze(self, sources: Sequence[CandidateBuild], query: DoorRangeQuery) -> DoorRangeAnalysis: ...
 
 
 class PublicBuildSummaryReader(Protocol):

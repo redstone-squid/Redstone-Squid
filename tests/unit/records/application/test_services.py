@@ -3,13 +3,15 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import create_autospec
 
+import anyio
 import pytest
 
 from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
-from squid.core.errors import DataIntegrityError, ValidationError
-from squid.records.application.expansion_regions import DoorRangeQuery
+from squid.core.errors import DataIntegrityError, ServiceUnavailableError, ValidationError
+from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup
 from squid.records.application.models import (
     CandidateBuild,
@@ -21,7 +23,7 @@ from squid.records.application.models import (
     RecordLookupRequest,
     TitleDiagnosticGap,
 )
-from squid.records.application.ports import RecomputeLease
+from squid.records.application.ports import DoorRangeAnalyzer, RecomputeLease
 from squid.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.records.domain import (
     BaseTitle,
@@ -36,6 +38,7 @@ from squid.records.domain import (
 from squid.records.domain.models import FacetKind
 from squid.records.domain.regions import RegionAnalysisStatus
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
+from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from tests.support.record_uow import RecordQueryScope, RecordScope
 
 
@@ -777,6 +780,7 @@ async def test_width_lookup_filters_taxonomy_and_versions_without_writes() -> No
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
         uow_factory=lambda: RecordScope(candidates, runs),
+        range_analyzer=SubprocessRangeAnalyzer(),
     )
     result = await service.lookup_door_ranges(DoorRangeQuery(height=2, type_ids=frozenset({20}), version_id=3))
     assert result.analysis.status is RegionAnalysisStatus.EXACT
@@ -788,3 +792,40 @@ async def test_width_lookup_filters_taxonomy_and_versions_without_writes() -> No
     assert {c.build_id for c in result.configurations} == {1, 2}
     assert runs.batches == []
     assert runs.requested == {}
+
+
+async def test_range_admission_precedes_loading_and_releases_on_cancellation() -> None:
+    candidates = create_autospec(FakeCandidates, instance=True)
+    candidates.list_for_door_widths.return_value = ()
+    runs = FakeRuns()
+    analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
+    started = anyio.Event()
+
+    async def blocked(sources: Sequence[CandidateBuild], query: DoorRangeQuery) -> DoorRangeAnalysis:
+        started.set()
+        await anyio.sleep_forever()
+        raise AssertionError("Cancelled analysis returned")
+
+    analyzer.analyze.side_effect = blocked
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+        range_analyzer=analyzer,
+        range_concurrency=1,
+    )
+    request = DoorRangeQuery(height=3)
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as group:
+            group.start_soon(service.lookup_door_ranges, request)
+            await started.wait()
+            with pytest.raises(ServiceUnavailableError):
+                await service.lookup_door_ranges(request)
+            candidates.list_for_door_widths.assert_awaited_once()
+            group.cancel_scope.cancel()
+    analyzer.analyze.side_effect = None
+    analyzer.analyze.return_value = analyze_door_widths((), height=3)
+    result = await service.lookup_door_ranges(request)
+    assert result.query == request
+    assert result.analysis.status is RegionAnalysisStatus.EXACT
+    assert candidates.list_for_door_widths.await_count == 2
+    assert runs.batches == []

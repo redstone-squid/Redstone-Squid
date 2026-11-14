@@ -9,12 +9,13 @@ known exclusions do not. Source record claims and sample metrics never compete.
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime
 from fractions import Fraction
 from itertools import pairwise
 from math import lcm
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 
 from squid.builds.domain.expansion_evaluation import (
     ExpansionDiagnostic,
@@ -69,6 +70,14 @@ class DoorRangeQuery(DoorRecordCategory):
     minimum: LookupDimension = 1
     maximum: LookupDimension | None = None
 
+    @field_validator("height", "depth", "minimum", "maximum", mode="before")
+    @classmethod
+    def validate_dimensions(cls, value: object) -> object:
+        if value is not None and type(value) is not int:
+            msg = "Opening dimensions and bounds must be integers."
+            raise ValueError(msg)
+        return value
+
     @model_validator(mode="after")
     def validate_width_bounds(self) -> Self:
         if self.maximum is not None and self.maximum < self.minimum:
@@ -89,6 +98,16 @@ class DoorRegionConfiguration:
 
 @dataclass(frozen=True, slots=True)
 class DoorRangeAnalysis:
+    analysis: SmallestRegionAnalysis
+    configurations: tuple[DoorRegionConfiguration, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DoorRangeResult:
+    """A live analysis of confirmed facts, without a persistent record identity."""
+
+    query: DoorRangeQuery
+    evaluated_at: datetime
     analysis: SmallestRegionAnalysis
     configurations: tuple[DoorRegionConfiguration, ...]
 

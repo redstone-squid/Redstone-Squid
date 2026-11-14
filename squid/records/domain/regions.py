@@ -87,6 +87,7 @@ class RegionAnalysisStatus(StrEnum):
     EXACT = "exact"
     UNSUPPORTED = "unsupported"
     LIMIT_EXCEEDED = "limit_exceeded"
+    TIMED_OUT = "timed_out"
 
 
 @dataclass(frozen=True, slots=True)
