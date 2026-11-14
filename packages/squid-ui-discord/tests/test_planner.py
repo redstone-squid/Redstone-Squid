@@ -189,7 +189,7 @@ def test_planner_requires_explicit_unique_pager_keys() -> None:
     with pytest.raises(LayoutInvariantError, match="requires an explicit key"):
         plan(Text("content", overflow=Paginate()), target=DISCORD_V2_DPY27)
 
-    with pytest.raises(LayoutInvariantError, match="duplicate pager key 'results'"):
+    with pytest.raises(LayoutInvariantError, match="duplicate semantic identity"):
         plan(
             (
                 Lines(("one",), overflow=Paginate(key="results", per=1)),

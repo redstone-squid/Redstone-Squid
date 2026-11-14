@@ -209,7 +209,7 @@ def test_v2_constructs_and_validates_without_serializing_again(monkeypatch: pyte
     assert isinstance(candidate, CandidateComposition)
     evaluated = rules.evaluate(candidate, context)
     assert evaluated.preparation is not None
-    monkeypatch.setattr("squid_ui.planning.composition_v2._text", reject_reserialization)
+    monkeypatch.setattr("squid_ui.planning.composition_v2.tree.markdown", reject_reserialization)
     body = rules.build(evaluated.preparation, context)
     rules.validate(body, evaluated, context)
     assert body is evaluated.preparation

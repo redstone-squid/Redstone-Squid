@@ -54,9 +54,9 @@ SEEK_OPTION_LIMIT = 25
 class PageCommit(_HandlerComposition):
     """Send a page turn on one materialized pager to whoever owns its page.
 
-    An uncontrolled page moves the pager's cursor in the presentation session and
-    redraws. A controlled page goes to the application's `on_change`, which decides
-    whether to accept it.
+    Shared pagination stages an uncontrolled page request until delivery commits
+    the display; legacy pagination moves the cursor immediately. A controlled page
+    goes to the application's `on_change`, which decides whether to accept it.
     """
 
     owner: Ownership[int, PageEvent]

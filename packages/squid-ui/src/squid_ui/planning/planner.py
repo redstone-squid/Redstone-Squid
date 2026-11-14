@@ -1,6 +1,7 @@
 """Public target-neutral planning dispatcher."""
 
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any, cast
 
 from squid_ui import scene
@@ -14,13 +15,14 @@ from squid_ui.planning.composition_planner import plan_composition
 from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 from squid_ui.planning.identity import has_routed_page
 from squid_ui.planning.navigation import PlannedNav
+from squid_ui.planning.pagination_migration import prepare_pagination
 from squid_ui.planning.regions import contains_regions, plan_regions
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation import PresentationState, RetainedCompositionUpdate
 from squid_ui.text import NEUTRAL, Localization
 
 
@@ -51,16 +53,21 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     the frontend must apply the result's session_updates so remembered pages and
     selections match the display. Reservations withhold space needed by other content.
 
-    `composition=CompositionOptions(...)` opts into fixed choices through the shared
-    core. A failed choice raises CompositionRejectedError without claiming other
-    representations are infeasible. This path does not paginate or use caches.
+    Supported layout pagination uses shared allocation search. Other capabilities
+    use the legacy target planner; report.legacy_pagination names the limitation.
+    A failed or exhausted shared search never retries through that legacy planner.
+
+    `composition=CompositionOptions(...)` selects the shared core explicitly, with
+    optional fixed choices or automatic search. A rejected fixed choice does not
+    claim that other representations are infeasible.
 
     The backend controls fitting and supported adaptations. Discord's strict check
     rejects lossy measurement diagnostics; HTML and Slack reject degradation events.
 
     `cache` reuses callback-free structure; `memo` retains an owner's live result.
-    The evaluation budget bounds Discord layout search; other backends compile
-    their supported representations directly.
+    Shared pagination retains one mounted owner's committed allocation for page
+    turns. Structural caching remains specific to the legacy backends. An explicit
+    search_budget bounds shared operations, or legacy Discord layout evaluations.
     """
     request = PlanRequest(
         target=target,
@@ -97,11 +104,33 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
             memo = None
         backend = request.target.dialect.planner
         document = as_document(rendered)
-        result = (
-            plan_regions(document, request)
-            if contains_regions(document.children)
-            else backend.plan(rendered, request, cache=cache, memo=memo)
-        )
+        migration = prepare_pagination(document, request)
+        if migration.enabled:
+            # The default adopts shared operation units; explicit limits remain bounded.
+            options = CompositionOptions(
+                automatic=True,
+                work_limit=(
+                    max(CompositionOptions().work_limit, min(2_000_000, migration.combinations * 200))
+                    if request.search_budget == DEFAULT_SEARCH_BUDGET
+                    else request.search_budget
+                ),
+            )
+            result = plan_composition(migration.document, replace(request, shared_pagination=True), options)
+        else:
+            result = (
+                plan_regions(document, request)
+                if contains_regions(document.children)
+                else backend.plan(rendered, request, cache=cache, memo=memo)
+            )
+            result = replace(result, session_updates=(*result.session_updates, RetainedCompositionUpdate(None)))
+            if migration.limitation is not None:
+                result = replace(
+                    result,
+                    report=replace(
+                        result.report,
+                        legacy_pagination=migration.limitation,
+                    ),
+                )
     # Automatic composition prepares every reachable output inside its work
     # allowance. Cursor selection must not leave other pages with raw handlers.
     return result if result.allocation is not None else prepare_bindings(result, request)

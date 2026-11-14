@@ -33,7 +33,7 @@ from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.limits import V2Limits
-from squid_ui.planning.navigation import PagerNav
+from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
 from squid_ui.planning.realizations import select_composition
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
@@ -56,6 +56,12 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     work_limit: int | None = None,
 ) -> PlanningContext:
+    nav = request.nav
+    if nav is None and request.shared_pagination:
+        if request.target.body_type is scene.HtmlBody:
+            nav = page_select_nav
+        elif request.target.body_type is scene.SlackMessage:
+            nav = default_nav
     return PlanningContext(
         WorkBudget(request.search_budget if work_limit is None else work_limit),
         request.localization,
@@ -64,8 +70,9 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.target.capabilities,
         request.target.reserve(request.reservation).capacities,
         request.chrome,
-        PagerNav(request.nav, request.presentation, staged=True) if request.nav is not None else None,
-        request.session is not None or request.nav is not None or request.positions is not None,
+        PagerNav(nav, request.presentation, staged=True) if nav is not None else None,
+        request.shared_pagination or request.session is not None or nav is not None or request.positions is not None,
+        escape_text=request.target.adapter.escape_text,
     )
 
 
@@ -80,22 +87,11 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     context = _context(request, options.work_limit if options is not None and automatic else None)
     document = as_document(rendered)
     context = replace(context, assets=document.assets)
-    if not automatic and (document.assets or (not automatic and (request.positions or request.nav is not None))):
+    if not automatic and (document.assets or request.positions or request.nav is not None):
         violation = UnsupportedCapability(
             OccurrenceId(("root",)),
             "composition does not support document assets or mounted pagination inputs; use composition.pages",
         )
-        if automatic:
-            raise JointUnsupportedError(
-                SearchDiagnostics(
-                    SearchCompletion.UNSUPPORTED,
-                    optimal=False,
-                    work_used=context.work.spent,
-                    work_limit=context.work.limit,
-                    violations=(violation,),
-                    unsupported=(violation.occurrence,),
-                )
-            )
         raise CompositionRejectedError((violation,))
     try:
         graph = semantic_graph(Group(document.children, key=document.key or "@document"), consume=context.work.consume)

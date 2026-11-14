@@ -25,9 +25,11 @@ from squid_ui.planning.realizations import (
     PanelRealization,
     Realization,
     RowRealization,
+    SelectRealization,
     TableForm,
     TableRealization,
     TextRealization,
+    TextSequenceRealization,
     record_text,
     semantic_offers,
 )
@@ -107,6 +109,70 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             route=scene.HtmlRouteRef(control.route) if control.route is not None else None,
                             url=scene.HtmlUrlRef(control.url) if control.url is not None else None,
                         ),
+                    )
+                case SelectRealization(node=control):
+                    texts.extend(option.label for option in control.options)
+                    options = tuple(
+                        scene.HtmlElement(
+                            scene.HtmlTag.OPTION,
+                            (scene.HtmlText(option.label),),
+                            attributes=(
+                                scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, option.value),
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.SELECTED, value=True),)
+                                    if option.default
+                                    else ()
+                                ),
+                            ),
+                        )
+                        for option in control.options
+                    )
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.SELECT,
+                            options,
+                            attributes=(
+                                scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MIN, control.min_values),
+                                scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MAX, control.max_values),
+                            ),
+                            action=scene.HtmlActionRef(control.action, control.mode)
+                            if isinstance(control, scene.Select)
+                            else None,
+                            route=scene.HtmlRouteRef(control.route_id)
+                            if isinstance(control, scene.RoutedSelect)
+                            else None,
+                        ),
+                    )
+                case TextSequenceRealization() as sequence:
+                    if sequence.list_ordered is not None:
+                        items = tuple(
+                            scene.HtmlElement(
+                                scene.HtmlTag.LI,
+                                (text(item.nodes),),
+                                attributes=(scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, item.ordinal),)
+                                if sequence.list_ordered
+                                else (),
+                            )
+                            for item in sequence.items
+                        )
+                        return (
+                            scene.HtmlElement(scene.HtmlTag.OL if sequence.list_ordered else scene.HtmlTag.UL, items),
+                            *(node for child in part.children for node in visit(child)),
+                        )
+                    rendered = (
+                        *tuple(
+                            node
+                            for index, item in enumerate(sequence.items)
+                            for node in (
+                                tree.literal((sequence.separator if index else sequence.prefix) + item.prefix),
+                                *item.nodes,
+                            )
+                        ),
+                        tree.literal(sequence.suffix),
+                    )
+                    return (
+                        scene.HtmlElement(scene.HtmlTag.P, (text(rendered),)),
+                        *(node for child in part.children for node in visit(child)),
                     )
                 case TextRealization(nodes=nodes):
                     return (scene.HtmlElement(scene.HtmlTag.P, (text(nodes),)),)

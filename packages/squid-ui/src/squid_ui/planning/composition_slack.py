@@ -27,6 +27,7 @@ from squid_ui.planning.realizations import (
     TableForm,
     TableRealization,
     TextRealization,
+    TextSequenceRealization,
     record_text,
     semantic_offers,
 )
@@ -139,6 +140,28 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                     )
                     texts.append(control.label)
                     blocks += 1
+                case TextSequenceRealization() as sequence:
+                    nodes = (
+                        *tuple(
+                            node
+                            for index, item in enumerate(sequence.items)
+                            for node in (
+                                tree.literal((sequence.separator if index else sequence.prefix) + item.prefix),
+                                *item.nodes,
+                            )
+                        ),
+                        tree.literal(sequence.suffix),
+                    )
+                    rendered = text(nodes, capacity=self.limits.components.section_text, name="section.text")
+                    if rendered:
+                        blocks += 1
+                        prepared_blocks.append(
+                            scene.SlackSection(scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False))
+                        )
+                    elif rendered == "":
+                        texts.pop()
+                    for child in part.children:
+                        visit(child)
                 case TextRealization(nodes=nodes):
                     rendered = text(nodes, capacity=self.limits.components.section_text, name="section.text")
                     blocks += int(bool(rendered))

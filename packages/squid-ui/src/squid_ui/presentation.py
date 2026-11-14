@@ -122,14 +122,14 @@ class PresentationState:
 
     def reset_cursor(self, key: str | None = None) -> None:
         if key is None:
-            self.pending_positions.clear()
-            if not self.cursors:
+            if not self.cursors and not self.pending_positions:
                 return
+            self.pending_positions.clear()
             self.cursors.clear()
             self._touch()
         else:
-            self.pending_positions.pop(key, None)
-            if self.cursors.pop(key, None) is not None:
+            pending = self.pending_positions.pop(key, None)
+            if self.cursors.pop(key, None) is not None or pending is not None:
                 self._touch()
 
     def selection(self, key: str, *, initial: tuple[str, ...] = ()) -> SelectionState:
@@ -195,8 +195,8 @@ class PresentationState:
                     if self.region_layout != state:
                         self.region_layout = state
                         changed = True
-                case CursorUpdate(key=key, state=cursor):
-                    if key in self.pending_positions:
+                case CursorUpdate(key=key, state=cursor, requested=requested):
+                    if requested is not None and self.pending_positions.get(key) == requested:
                         del self.pending_positions[key]
                         changed = True
                     if self.cursors.get(key) != cursor:
@@ -230,6 +230,7 @@ class PresentationState:
 class CursorUpdate:
     key: str
     state: CursorState
+    requested: PagePosition | None = None
 
 
 @dataclass(frozen=True, slots=True)

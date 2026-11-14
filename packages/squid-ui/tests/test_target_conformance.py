@@ -139,9 +139,7 @@ _TARGETS: dict[str, Callable[[], Any]] = {
 # rejects measured timestamps, these wrappers around text, and the media fixture because
 # their required conversion or strategy is missing.
 _REFUSALS: dict[tuple[type, str], str] = {
-    (semantic.Region, "html"): "joint regions currently require a Components V2 target",
     (semantic.Region, "discord-classic"): "joint regions currently require a Components V2 target",
-    (semantic.Region, "slack-message"): "joint regions currently require a Components V2 target",
     (semantic.Region, "slack-home"): "joint regions currently require a Components V2 target",
     (semantic.Timestamp, "discord-classic"): "MeasuredTime cannot appear in a card description",
     (semantic.ZonedTimestamp, "discord-classic"): "MeasuredZonedTime cannot appear in a card description",

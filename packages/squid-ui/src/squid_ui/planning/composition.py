@@ -69,6 +69,7 @@ class FragmentContract[PayloadT]:
     legal_ends: tuple[int, ...]
     payload: Callable[[int, int], PayloadT]
     repeated: frozenset[SemanticRef] = frozenset()
+    continuations: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -80,7 +81,7 @@ class FragmentContract[PayloadT]:
             raise LayoutInvariantError(message)
         seen: set[SemanticRef] = set()
         for unit in self.units:
-            if not unit or seen.intersection(unit) or self.repeated.intersection(unit):
+            if not unit or (not self.continuations and seen.intersection(unit)) or self.repeated.intersection(unit):
                 message = "ordinary fragment sources must be nonempty, disjoint, and separate from continuation sources"
                 raise LayoutInvariantError(message)
             seen.update(unit)
@@ -100,6 +101,7 @@ class RegionContract[RenderTargetT, ContextT, PayloadT]:
     owner: PageOwnership = FIRST_PAGE
     cursor_key: str | None = None
     per: int | None = None
+    required_ends: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +283,7 @@ class PlanningContext:
     navigation: PagerNav | None = None
     mounted: bool = False
     assets: tuple[Asset, ...] = ()
+    escape_text: Callable[[str], str] | None = None
 
 
 @dataclass(frozen=True, slots=True)

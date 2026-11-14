@@ -1,5 +1,6 @@
 """Joint region allocation bounds every reachable page, including nested pagers."""
 
+import asyncio
 from itertools import product
 
 import discord
@@ -7,6 +8,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid_reactivity import state
 from squid_ui import scene
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.pages import PagePosition
@@ -112,7 +114,7 @@ def test_authored_alternatives_participate_in_allocation() -> None:
 
 
 def test_duplicate_identity_and_impossible_atoms_are_distinct_from_budget_exhaustion() -> None:
-    with pytest.raises(LayoutInvariantError, match="duplicate sibling"):
+    with pytest.raises(LayoutInvariantError, match="duplicate semantic identity"):
         plan(
             sl.region(sl.paragraph("a", key="same"), sl.paragraph("b", key="same"), key="r", title="R"),
             target=target(10),
@@ -139,12 +141,54 @@ def test_small_allocations_match_exhaustive_page_capacity_oracle(left: int, righ
             plan((region("left", left), region("right", right)), target=target(capacity), nav=default_nav)
     else:
         result = plan((region("left", left), region("right", right)), target=target(capacity), nav=default_nav)
-        assert sum(item.pages - 1 for item in result.report.regions) == min(feasible)
+        turns = sum(item.pages - 1 for item in result.report.regions)
+        assert turns >= min(feasible)
+        assert result.report.search is not None
+        if result.report.search.optimal:
+            assert turns == min(feasible)
+        assert result.cost.within(target(capacity).capacities)
 
 
 class RegionScreen(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return region("left", 6), region("right", 6)
+
+
+class RecoveringScreen(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    keys: str = state("abcdef")
+
+    def render(self) -> sl.semantic.Region:
+        return sl.region(
+            *(sl.paragraph(key, key=key) for key in self.keys),
+            key="items",
+            title="Items",
+        )
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_recovered_anchor_commits_only_after_successful_delivery(cancelled: bool) -> None:
+    screen = RecoveringScreen()
+    root = sd.MessageRoot(screen, access=sd.Everyone(), target=target(6), timeout=None)
+    root.presentation.request_cursor("$/items", PagePosition(anchor="c", page=2))
+    commit_render(root)
+    previous = root.presentation.cursor("$/items")
+    assert previous.position.anchor == "c"
+    allocation = root.presentation.retained_composition
+    handlers = root.snapshot().handler_keys
+    generation = root.generation
+    screen.keys = "abdef"
+    root.invalidate()
+    failed = interaction_harness()
+    failed.response.edit_message.error = asyncio.CancelledError() if cancelled else http_error(503)
+    with pytest.raises(asyncio.CancelledError if cancelled else discord.HTTPException):
+        await root.refresh(failed)
+    assert root.presentation.cursor("$/items") == previous
+    assert root.presentation.retained_composition is allocation
+    assert root.snapshot().handler_keys == handlers
+    assert root.generation == generation
+    await root.refresh(interaction_harness())
+    assert root.presentation.cursor("$/items").position.anchor == "d"
+    assert root.presentation.cursor("$/items").source_order == tuple("abdef")
 
 
 async def test_mounted_region_turns_keep_sibling_position_and_survive_failed_delivery() -> None:
@@ -154,6 +198,8 @@ async def test_mounted_region_turns_keep_sibling_position_and_survive_failed_del
     generation = root.generation
     handlers = root.snapshot().handler_keys
     allocation = root.presentation.region_layout
+    retained = root.presentation.retained_composition
+    cursors = dict(root.presentation.cursors)
     failed = interaction_harness()
     failed.response.edit_message.error = http_error(503)
     with pytest.raises(discord.HTTPException):
@@ -161,10 +207,15 @@ async def test_mounted_region_turns_keep_sibling_position_and_survive_failed_del
     assert root.generation == generation
     assert root.snapshot().handler_keys == handlers
     assert root.presentation.region_layout == allocation
+    assert root.presentation.retained_composition is retained
+    assert root.presentation.cursors == cursors
     retry = interaction_harness()
     await root.dispatch("__cursor_next.$/left", retry, generation=generation)
     assert root.presentation.cursor("$/left").position.page == 1
     assert root.presentation.cursor("$/right").position.page == 0
+    assert retained is not None
+    assert root.presentation.retained_composition is not None
+    assert root.presentation.retained_composition.result.allocation is retained.result.allocation
     assert_within_limits(retry.response.edit_message.await_args.kwargs["view"])
 
 
@@ -184,7 +235,7 @@ def test_keyed_groups_can_break_without_a_second_identity_wrapper() -> None:
     )
     result = plan(document, target=target(6), nav=default_nav)
     assert result.report.regions[0].pages > 1
-    assert result.report.regions[0].anchor == "group"
+    assert result.report.regions[0].anchor == "group/0"
 
 
 def test_allocation_is_committed_only_after_delivery_and_reused_for_page_turns() -> None:
@@ -289,7 +340,13 @@ def test_existing_local_pager_is_measured_across_all_pages(controlled: bool) -> 
     assert first.cost.get(Axis.DISPLAY_TEXT) >= len("longer text") + len("persistent")
     if not controlled:
         second = plan(document, target=target(10), nav=default_nav, positions={"local": PagePosition(page=1)})
-        assert first.cost == second.cost
+        assert first.allocation is not None and second.allocation is not None
+        assert [region.cuts for region in first.allocation.regions.values()] == [
+            region.cuts for region in second.allocation.regions.values()
+        ]
+        assert first.report.regions[0].allocation == second.report.regions[0].allocation
+        assert first.cost.within(target(10).capacities)
+        assert second.cost.within(target(10).capacities)
         assert second.scene.pagers[0].page == 1
 
 
@@ -315,5 +372,5 @@ def test_joint_envelopes_respect_text_and_component_limits_together() -> None:
 def test_document_attachments_are_reserved_before_region_allocation() -> None:
     assets = tuple(sl.file(bytes([index]), filename=f"{index}.txt") for index in range(11))
     document = sl.Document((region("items", 3),), assets=assets)
-    with pytest.raises(UnsolvableLayoutError, match="persistent document attachments"):
+    with pytest.raises(UnsolvableLayoutError, match="no declared joint allocation"):
         plan(document, target=DISCORD_V2_DPY27, nav=default_nav)

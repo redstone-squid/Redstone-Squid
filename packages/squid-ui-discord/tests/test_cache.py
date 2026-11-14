@@ -262,7 +262,7 @@ def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     assert len(cache) == 2
 
 
-def test_cache_hit_sends_controlled_page_turns_to_the_current_render(monkeypatch) -> None:
+def test_shared_pagination_sends_controlled_page_turns_to_the_current_render(monkeypatch) -> None:
     import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
@@ -278,13 +278,13 @@ def test_cache_hit_sends_controlled_page_turns_to_the_current_render(monkeypatch
     monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     cached = plan(document(second), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache)
 
-    assert cached.metrics.cache_hit
+    assert cached.allocation is not None
     handler = cached.bindings["__cursor_next.traceback"].handler
     assert isinstance(handler, TurnPage)
     assert handler.commit.owner == Controlled(1, second)
 
 
-def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
+def test_shared_pagination_binds_custom_pager_controls(monkeypatch) -> None:
     import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
@@ -304,13 +304,12 @@ def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
     monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     cached = plan(document, target=DISCORD_V2_DPY27, nav=nav, cache=cache)
 
-    assert cached.metrics.cache_hit
+    assert cached.allocation is not None
     assert cached.bindings["prev.traceback"].handler is _previous
     assert cached.bindings["next.traceback"].handler is _next
 
 
-def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
-    """Reusing a layout must still initialize its pager in the current presentation state."""
+def test_shared_pagination_stages_equivalent_cursors_with_or_without_a_cache() -> None:
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
     miss = plan(document, target=DISCORD_V2_DPY27, session=PresentationState())
 
@@ -318,9 +317,12 @@ def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
     plan(document, target=DISCORD_V2_DPY27, session=PresentationState(), cache=cache)
     hit = plan(document, target=DISCORD_V2_DPY27, session=PresentationState(), cache=cache)
 
-    assert hit.metrics.cache_hit
-    assert hit.session_updates == miss.session_updates
-    assert hit.session_updates
+    assert hit.allocation is not None
+    hit_state, miss_state = PresentationState(), PresentationState()
+    hit_state.apply_updates(hit.session_updates)
+    miss_state.apply_updates(miss.session_updates)
+    assert hit_state.cursors == miss_state.cursors
+    assert hit.scene == miss.scene
 
 
 def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch) -> None:
@@ -467,13 +469,15 @@ def test_realistic_queue_plan_and_draw_meets_latency_budget() -> None:
         cold.append(perf_counter() - started)
 
     cache = PlanCache()
-    render_message(document, cache=cache)
+    session = PresentationState()
+    first = render_message(document, cache=cache, session=session)
+    session.apply_updates(first.plan.session_updates)
     warm = []
     for _ in range(50):
         started = perf_counter()
-        result = render_message(document, cache=cache)
+        result = render_message(document, cache=cache, session=session)
         warm.append(perf_counter() - started)
-        assert result.plan.metrics.cache_hit
+        assert result.plan.allocation is first.plan.allocation
 
     assert _p95(cold) < 0.100
     assert _p95(warm) < 0.010

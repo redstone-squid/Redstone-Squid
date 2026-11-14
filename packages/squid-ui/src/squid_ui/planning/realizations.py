@@ -35,11 +35,13 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
+from squid_ui.planning.pagination_content import RootRegion, TextPages
+from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_adaptation.common import _button_style
 from squid_ui.planning.semantic_adaptation.handlers import PresentForm
 from squid_ui.planning.semantics import SourceScope, StructuralGroup, UnsupportedSemanticError, check_alternative
 from squid_ui.planning.structure import resolve_accent
-from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, resolve_presentation_text
+from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
@@ -51,6 +53,9 @@ from squid_ui.text import TextLike, resolve_text
 class TextRealization:
     nodes: tuple[tree.Node, ...]
     provenance: ResolvedText | None = None
+
+    def fragment(self, start: int, end: int) -> Realization:
+        return replace(self, nodes=_slice(self.nodes, start, end))
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +72,22 @@ class PanelRealization:
 class ReferencedText:
     reference: SemanticRef
     nodes: tuple[tree.Node, ...]
+    prefix: str = ""
+    continuation: bool = False
+    ordinal: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class TextSequenceRealization:
+    items: tuple[ReferencedText, ...]
+    separator: str = "\n"
+    prefix: str = ""
+    suffix: str = ""
+    list_ordered: bool | None = None
+    literal: bool = False
+
+    def fragment(self, start: int, end: int) -> Realization:
+        return replace(self, items=self.items[start:end])
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +142,8 @@ class SelectRealization:
 
 
 type Realization = (
-    RowRealization
+    TextSequenceRealization
+    | RowRealization
     | SelectRealization
     | TextRealization
     | FlowRealization
@@ -166,6 +188,13 @@ class RegionNavigation[RenderTargetT, ContextT]:
                 if context.navigation is None
                 else context.navigation(self.cursor_key, page, pages, context.chrome, self.owner)
             )
+            if not self.disabled_controls:
+                controls = tuple(
+                    replace(node, items=tuple(item for item in node.items if not getattr(item, "disabled", False)))
+                    if isinstance(node, primitive.Row)
+                    else node
+                    for node in controls
+                )
             return (
                 footer,
                 *(
@@ -312,6 +341,20 @@ def navigation_candidate[RenderTargetT, ContextT](
     )
 
 
+def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[RenderTargetT, ContextT]) -> str:
+    """Keep layout-policy wrappers out of public region cursor paths."""
+    parts: list[str] = []
+    ref: SemanticRef | None = occurrence.reference
+    while ref is not None:
+        unit = occurrence.graph.units[ref]
+        if unit.parent is not None and not isinstance(
+            unit.value, sem.Budgeted | sem.KeepWithNext | sem.Unbreakable | Budget
+        ):
+            parts.append(quote(ref.keys[-1], safe=""))
+        ref = unit.parent
+    return "$/" + "/".join(reversed(parts))
+
+
 def semantic_offers[RenderTargetT, ContextT](
     occurrence: SemanticOccurrence[RenderTargetT, ContextT],
     context: PlanningContext,
@@ -323,6 +366,13 @@ def semantic_offers[RenderTargetT, ContextT](
 ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
     context.work.consume()
     value = occurrence.graph.units[occurrence.reference].value
+    text_capacity = context.capacities.get(Axis.DISPLAY_TEXT)
+    parent = occurrence.graph.units[occurrence.reference].parent
+    while parent is not None:
+        ancestor = occurrence.graph.units[parent]
+        if isinstance(ancestor.value, sem.Paged):
+            text_capacity = min(text_capacity, ancestor.value.chars) if text_capacity else ancestor.value.chars
+        parent = ancestor.parent
     if isinstance(value, sem.Budgeted | sem.Paged) and not character_budgets:
         return ()
     if isinstance(value, Alternatives):
@@ -352,6 +402,72 @@ def semantic_offers[RenderTargetT, ContextT](
                 )
             )
         return tuple(choices)
+    if isinstance(value, sem.List | TextPages):
+        items = tuple(
+            ReferencedText(
+                ref,
+                resolve_text(item.content, context.localization).nodes,
+                f"{index + 1}. "
+                if isinstance(value, sem.List) and value.ordered
+                else "• "
+                if isinstance(value, sem.List)
+                else "",
+                ordinal=index + 1,
+            )
+            for index, (ref, item) in enumerate(
+                zip(occurrence.graph.children.get(occurrence.reference, ()), value.items, strict=True)
+            )
+        )
+        per = value.per if isinstance(value, TextPages) else value.page_size
+        required: list[int] = []
+        expanded: list[ReferencedText] = []
+        capacity = text_capacity
+        for index, item in enumerate(items):
+            plain = "".join(tree.plain(node) for node in item.nodes)
+            if capacity is not None and len(plain) > capacity // 2:
+                size = max(1, min(256, capacity // 8))
+                context.work.consume(1 + len(plain) // size)
+                expanded.extend(
+                    replace(
+                        item,
+                        nodes=_slice(item.nodes, start, start + size),
+                        prefix=item.prefix if start == 0 else "",
+                        continuation=start > 0,
+                    )
+                    for start in range(0, len(plain), size)
+                )
+            else:
+                expanded.append(item)
+            if per is not None and (index + 1) % per == 0:
+                required.append(len(expanded))
+        items = tuple(expanded)
+        payload = (
+            TextSequenceRealization(items, list_ordered=value.ordered)
+            if isinstance(value, sem.List)
+            else TextSequenceRealization(items, value.separator, value.prefix, value.suffix, literal=value.literal)
+        )
+        units = tuple(frozenset({item.reference}) for item in items)
+        fragments = (
+            FragmentContract(units, tuple(range(1, len(items) + 1)), payload.fragment, continuations=True)
+            if items
+            else None
+        )
+        contract = RegionContract(
+            value.key,
+            RegionNavigation(
+                occurrence,
+                disabled_controls,
+                value.footer if isinstance(value, TextPages) else None,
+                value.page,
+                value.key,
+            ),
+            min_fill=value.min_fill if isinstance(value, TextPages) else 0,
+            widows=value.widows if isinstance(value, TextPages) else 1,
+            owner=value.page,
+            cursor_key=value.key,
+            required_ends=tuple(required),
+        )
+        return (RealizationOffer(occurrence, "text-pages", payload, fragments=fragments, region=contract),)
     if isinstance(value, TextPresentation):
         if occurrence.origin is None:
             message = "source-referenced text must belong to a checked alternative"
@@ -412,11 +528,18 @@ def semantic_offers[RenderTargetT, ContextT](
                 payload = ControlRealization(label, url=value.url)
         return (RealizationOffer(occurrence, "button", payload, interaction=True, binding=binding, form=form),)
     if isinstance(value, sem.Paragraph):
-        return (
-            RealizationOffer(
-                occurrence, "text", TextRealization(resolve_text(value.content, context.localization).nodes)
-            ),
-        )
+        payload = TextRealization(resolve_text(value.content, context.localization).nodes)
+        length = sum(len(tree.plain(node)) for node in payload.nodes)
+        fragments = None
+        if text_capacity is not None and length > text_capacity:
+            context.work.consume(length)
+            fragments = FragmentContract(
+                (frozenset({occurrence.reference}),) * length,
+                tuple(range(1, length + 1)),
+                payload.fragment,
+                continuations=True,
+            )
+        return (RealizationOffer(occurrence, "text", payload, fragments=fragments),)
     if isinstance(value, sem.Block) and not panels:
         return ()
     if isinstance(
@@ -465,9 +588,15 @@ def semantic_offers[RenderTargetT, ContextT](
         )
         region = None
         if isinstance(value, sem.Region | sem.Paged):
+            parent = occurrence.graph.units[occurrence.reference].parent
+            nested_region = False
+            while parent is not None:
+                unit = occurrence.graph.units[parent]
+                nested_region |= isinstance(unit.value, sem.Region)
+                parent = unit.parent
             cursor_key = (
-                "$/" + "/".join(quote(part, safe="") for part in occurrence.identity.path[1:])
-                if isinstance(value, sem.Region)
+                region_cursor_key(occurrence)
+                if (isinstance(value, sem.Region) or nested_region) and not isinstance(value, RootRegion)
                 else value.key
             )
             region = RegionContract(

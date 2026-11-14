@@ -173,18 +173,17 @@ class TestRegionPagination:
             chars=50,
         )
 
-        with pytest.raises(sl.errors.UnsolvableLayoutError, match="unbreakable region child"):
+        with pytest.raises(sl.errors.UnsolvableLayoutError, match="no declared joint allocation is feasible"):
             sl.planning.plan(document, target=DISCORD_V2_DPY27)
 
     def test_an_oversized_text_child_splits_losslessly(self) -> None:
         document = sl.paged(sl.block(sl.paragraph("x" * 120)), key="prose", chars=50)
 
-        pages = [
-            sl.planning.plan(document, target=DISCORD_V2_DPY27, positions={"prose": sl.pages.PagePosition(page=index)})
-            for index in range(3)
-        ]
-
-        assert pages[0].scene.pagers[0].pages == 3
+        first = sl.planning.plan(document, target=DISCORD_V2_DPY27)
+        assert first.allocation is not None
+        identity = next(iter(first.allocation.regions))
+        pages = [first.for_page({identity: index}) for index in range(first.scene.pagers[0].pages)]
+        assert all(len(self._texts(page)[0]) <= 50 for page in pages)
         content = "".join(self._texts(result)[0] for result in pages)
         assert content == "x" * 120
 
@@ -200,7 +199,7 @@ class TestRegionPagination:
 
         assert self._texts(last)[:3] == ["2" * 20, "3" * 20, "4" * 20]
 
-    def test_a_large_region_is_broken_without_a_size_dependent_heuristic(self) -> None:
+    def test_a_large_region_preserves_all_children_with_bounded_search(self) -> None:
         document = sl.paged(
             sl.block(*(sl.paragraph("x" * 10) for _ in range(100))),
             key="large-region",
@@ -209,5 +208,8 @@ class TestRegionPagination:
 
         first = sl.planning.plan(document, target=DISCORD_V2_DPY27)
 
-        assert first.scene.pagers[0].pages == 10
-        assert self._texts(first)[:10] == ["x" * 10] * 10
+        assert first.allocation is not None
+        identity = next(iter(first.allocation.regions))
+        pages = [first.for_page({identity: index}) for index in range(first.scene.pagers[0].pages)]
+        assert all(sum(map(len, self._texts(page))) <= 100 for page in pages)
+        assert [text for page in pages for text in self._texts(page)] == ["x" * 10] * 100

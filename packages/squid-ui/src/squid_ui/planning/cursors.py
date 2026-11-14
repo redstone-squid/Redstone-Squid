@@ -144,6 +144,7 @@ class CursorCoordinator:
                         request.owner.request if isinstance(request.owner, RevealPage) else None,
                         request.source_order,
                     ),
+                    requested=self.session.pending_positions.get(request.key),
                 )
             )
 

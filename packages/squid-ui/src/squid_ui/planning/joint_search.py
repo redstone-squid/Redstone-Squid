@@ -89,6 +89,7 @@ class _Partitions[RenderTargetT, ContextT, PayloadT]:
     regions: tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...]
     cuts: tuple[tuple[int, ...], ...]
     probe: bool = False
+    expand_only: bool = False
 
 
 def _preferences[RenderTargetT, ContextT, PayloadT](
@@ -187,6 +188,14 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
                     violations.append(
                         CapacityExceeded(identity, Axis.DISPLAY_TEXT, body_cost.get(Axis.DISPLAY_TEXT), contract.chars)
                     )
+            if (
+                contract.per is not None
+                and coverage.end > coverage.start
+                and coverage.start // contract.per != (coverage.end - 1) // contract.per
+            ):
+                violations.append(ConstraintViolation(identity, "authored item page boundary"))
+            if any(coverage.start < boundary < coverage.end for boundary in contract.required_ends):
+                violations.append(ConstraintViolation(identity, "authored item page boundary"))
             ends = family.regions[identity].cuts
             if coverage.end == ends[-1]:
                 break_shortfalls[(identity, coverage.end)] = int(
@@ -269,7 +278,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     generated = certified = 0
     initial_evaluations = context.work.target_evaluations
     exhausted = False
-    seen_partitions: set[tuple[int, tuple[tuple[int, ...], ...]]] = set()
+    seen_partitions: set[tuple[int, tuple[tuple[int, ...], ...], bool]] = set()
     seen_occurrences: set[OccurrenceId] = set()
     seen_regions: set[OccurrenceId] = set()
 
@@ -279,7 +288,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         nonlocal generated
         context.work.consume(1 + len(task.choices))
         if isinstance(task, _Partitions):
-            identity = (task.assignment, task.cuts)
+            identity = (task.assignment, task.cuts, task.expand_only)
             if identity in seen_partitions:
                 return
             seen_partitions.add(identity)
@@ -288,6 +297,16 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         turns = sum(len(cuts) - 1 for cuts in task.cuts) if isinstance(task, _Partitions) else 0
         probe = isinstance(task, _Partitions) and task.probe
         heappush(queue, (0 if probe else 1, ranks, turns, -len(task.choices), next(serials), task))
+
+    def expand(task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
+        for index, node in enumerate(task.regions):
+            if node.candidate.offer.occurrence.identity in fixed_cuts:
+                continue
+            for end in node.legal_ends[:-1]:
+                context.work.consume()
+                if end not in task.cuts[index]:
+                    changed = (*task.cuts[:index], tuple(sorted((*task.cuts[index], end))), *task.cuts[index + 1 :])
+                    push(replace(task, cuts=changed, probe=False, expand_only=False))
 
     try:
         push(_Assignment((root,)))
@@ -341,12 +360,33 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                 seen_regions.update(node.candidate.offer.occurrence.identity for node in regions)
                 if fixed_cuts.keys() - {node.candidate.offer.occurrence.identity for node in regions}:
                     continue
-                cuts = tuple(
-                    fixed_cuts.get(node.candidate.offer.occurrence.identity, (len(node.units),)) for node in regions
-                )
-                push(_Partitions(next(serials), candidate, task.choices, regions, cuts, probe=True))
+                initial: list[tuple[int, ...]] = []
+                for node in regions:
+                    contract = node.candidate.offer.region
+                    assert contract is not None
+                    required = contract.required_ends or (
+                        tuple(range(contract.per, len(node.units), contract.per)) if contract.per else ()
+                    )
+                    required = tuple(end for end in required if end < len(node.units))
+                    initial.append(
+                        fixed_cuts.get(node.candidate.offer.occurrence.identity, (*required, len(node.units)))
+                    )
+                cuts = tuple(initial)
+                assignment = next(serials)
+                push(_Partitions(assignment, candidate, task.choices, regions, cuts, probe=True))
+                # Try preserving every sibling while splitting just one region. Balanced
+                # probes alone can miss a small feasible family when both pagers' chrome
+                # cannot coexist. This only changes search order, not admissible cuts.
+                if len(regions) > 1:
+                    for index, node in enumerate(regions):
+                        if node.candidate.offer.occurrence.identity not in fixed_cuts and len(node.legal_ends) <= 64:
+                            unilateral = (*cuts[:index], node.legal_ends or (0,), *cuts[index + 1 :])
+                            push(_Partitions(assignment, candidate, task.choices, regions, unilateral, probe=True))
                 continue
 
+            if task.expand_only:
+                expand(task)
+                continue
             context.work.consume()
             family = allocate_family(task.candidate, task.regions, task.cuts, context)
             region_map = {node.candidate.offer.occurrence.identity: node for node in task.regions}
@@ -490,14 +530,11 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         refined.append(tuple(sorted((*ends, middle))))
                 if tuple(refined) != task.cuts:
                     push(replace(task, cuts=tuple(refined), probe=True))
-            for index, node in enumerate(task.regions):
-                if node.candidate.offer.occurrence.identity in fixed_cuts:
-                    continue
-                for end in node.legal_ends[:-1]:
-                    context.work.consume()
-                    if end not in task.cuts[index]:
-                        changed = (*task.cuts[:index], tuple(sorted((*task.cuts[index], end))), *task.cuts[index + 1 :])
-                        push(replace(task, cuts=changed, probe=False))
+                # Certify the next probe before spending the allowance on its many
+                # alternatives. Deferred expansion still explores every legal cut.
+                push(replace(task, probe=False, expand_only=True))
+            else:
+                expand(task)
     except LayoutSearchExhaustedError:
         exhausted = True
 

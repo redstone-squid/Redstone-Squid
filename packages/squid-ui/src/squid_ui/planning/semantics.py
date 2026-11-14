@@ -8,6 +8,7 @@ from typing import Literal
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.interaction_semantics import Interaction, interaction_changes
+from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import (
     Alternative,
     Alternatives,
@@ -63,6 +64,7 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | FieldPart
     | TextPresentation
     | StructuralGroup
+    | TextPages[RenderTargetT]
 )
 
 
@@ -102,7 +104,8 @@ class SemanticGraph[RenderTargetT, ContextT]:
 def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | EmbeddedValue[ContextT]) -> str | None:
     match value:
         case (
-            sem.Group()
+            TextPages()
+            | sem.Group()
             | sem.Stack()
             | sem.Block()
             | sem.Section()
@@ -200,7 +203,7 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 add(FieldPart("label", value.label), (*path, "label"), root, atomic=True)
                 add(FieldPart("value", value.value), (*path, "value"), root, atomic=True)
-            case sem.List():
+            case sem.List() | TextPages():
                 root = add(value, path, parent, atomic=False)
                 for i, item in enumerate(value.items):
                     visit(item, root, i)

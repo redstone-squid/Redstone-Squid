@@ -62,6 +62,8 @@ class PlanReport:
     scene_fingerprint: str = ""
     regions: tuple[RegionReport, ...] = ()
     search: SearchDiagnostics | None = None
+    legacy_pagination: str | None = None
+    """Capability still requiring the legacy planner; absent on shared allocations."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -17,6 +17,7 @@ from squid_ui.planning.composition import (
     CandidateComposition,
     NavigationInput,
     OccurrenceId,
+    Placement,
     PlanningContext,
     RegionContract,
 )
@@ -102,6 +103,23 @@ def allocate_family[RenderTargetT, ContextT, PayloadT](
         if ends != tuple(sorted(set(ends))) or not ends or ends[-1] != len(node.units):
             message = "region cuts must cover every unit exactly once"
             raise LayoutInvariantError(message)
+        nested: list[tuple[frozenset[SemanticRef], SemanticRef]] = []
+        pending = list(node.children)
+        while pending:
+            child = pending.pop()
+            child_offer = child.candidate.offer
+            if child_offer.region is not None:
+                nested.append((child_offer.occurrence.sources, child_offer.occurrence.reference))
+            else:
+                pending.extend(child.children)
+        anchor_units: list[frozenset[SemanticRef]] = []
+        for unit in node.units:
+            sources = set(unit)
+            for covered, reference in nested:
+                if covered and covered <= sources:
+                    sources.difference_update(covered)
+                    sources.add(reference)
+            anchor_units.append(frozenset(sources))
         pages: list[CandidateComposition[RenderTargetT, ContextT, PayloadT]] = []
         anchors: list[frozenset[SemanticRef]] = []
         start = 0
@@ -109,15 +127,19 @@ def allocate_family[RenderTargetT, ContextT, PayloadT](
             context.work.consume()
             fragment = slice_fragment(node, start, end, context)
             chrome = offer.region.navigation(index, len(ends), context)
-            children = (*fragment.children, *chrome)
+            children = (
+                *(child for child in fragment.children if child.offer.occurrence.placement != Placement.FOOTER),
+                *chrome,
+                *(child for child in fragment.children if child.offer.occurrence.placement == Placement.FOOTER),
+            )
             pages.append(
                 CandidateComposition(
                     replace(fragment.offer, children=tuple(child.offer.occurrence for child in children)), children
                 )
             )
-            anchors.append(frozenset(source for unit in node.units[start:end] for source in unit))
+            anchors.append(frozenset(source for unit in anchor_units[start:end] for source in unit))
             start = end
-        sources = frozenset(source for unit in node.units for source in unit)
+        sources = frozenset(source for unit in anchor_units for source in unit)
         ordered = tuple(ref for ref in root.offer.occurrence.graph.units if ref in sources)
         allocated[offer.occurrence.identity] = RegionAllocation(
             offer.occurrence.identity, offer.region.key, ends, tuple(pages), tuple(anchors), source_order=ordered

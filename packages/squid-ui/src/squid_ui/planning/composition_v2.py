@@ -35,16 +35,13 @@ from squid_ui.planning.realizations import (
     TableForm,
     TableRealization,
     TextRealization,
+    TextSequenceRealization,
     record_text,
     semantic_offers,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.text import Markup
-
-
-def _text(nodes: tuple[tree.Node, ...]) -> str:
-    return tree.markdown(nodes, discord=True)
 
 
 def _select_violations(node: scene.Select | scene.RoutedSelect, limits: V2Limits) -> tuple[str, ...]:
@@ -98,7 +95,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
 
         def text(nodes: tuple[tree.Node, ...]) -> tuple[scene.Node, ...]:
             nonlocal components, text_chars
-            rendered = _text(nodes)
+            return rendered_text(tree.markdown(nodes, discord=True, escape=context.escape_text))
+
+        def rendered_text(rendered: str) -> tuple[scene.Node, ...]:
+            nonlocal components, text_chars
             text_chars += len(rendered)
             if rendered:
                 components += 1
@@ -172,6 +172,25 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         for detail in _select_violations(node, self.limits)
                     )
                     return (node,)
+                case TextSequenceRealization() as sequence:
+                    rendered = (
+                        sequence.prefix
+                        + "".join(
+                            (sequence.separator if index and not item.continuation else "")
+                            + item.prefix
+                            + (
+                                "".join(tree.plain(node) for node in item.nodes)
+                                if sequence.literal
+                                else tree.markdown(item.nodes, discord=True, escape=context.escape_text)
+                            )
+                            for index, item in enumerate(sequence.items)
+                        )
+                        + sequence.suffix
+                    )
+                    return (
+                        *rendered_text(rendered),
+                        *(node for child in part.children for node in visit(child, in_panel=in_panel)),
+                    )
                 case TextRealization(nodes=nodes):
                     return text(nodes)
                 case TableRealization() as table:
