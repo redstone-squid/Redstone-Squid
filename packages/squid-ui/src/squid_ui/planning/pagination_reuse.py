@@ -11,7 +11,6 @@ from typing import Any
 from squid_ui import semantic as sem
 from squid_ui.document import Document
 from squid_ui.ownership import Controlled
-from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import PageOwnership, Paginate
@@ -61,7 +60,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             return replace(left, node=sem.Group(()), page=_page_configuration(left.page)) == replace(
                 right, node=sem.Group(()), page=_page_configuration(right.page)
             ) and _same_node(left.node, right.node)
-        case ((sem.List() | TextPages()), (sem.List() | TextPages())):
+        case ((sem.List()), (sem.List())):
             return replace(left, page=_page_configuration(left.page)) == replace(
                 right, page=_page_configuration(right.page)
             )
@@ -193,7 +192,22 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             return _same_children(left.texts, right.texts) and _same_node(left.accessory, right.accessory)
         case ((primitive.Thumbnail() | primitive.Sep() | primitive.Time() | primitive.ZonedTime()), _):
             return left == right
-        case primitive.Lines(overflow=Paginate() as a), primitive.Lines(overflow=Paginate() as b):
+        case (
+            (
+                primitive.Lines(overflow=Paginate() as a)
+                | primitive.Text(overflow=Paginate() as a)
+                | primitive.Heading(overflow=Paginate() as a)
+                | primitive.Footer(overflow=Paginate() as a)
+                | primitive.Code(overflow=Paginate() as a)
+            ),
+            (
+                primitive.Lines(overflow=Paginate() as b)
+                | primitive.Text(overflow=Paginate() as b)
+                | primitive.Heading(overflow=Paginate() as b)
+                | primitive.Footer(overflow=Paginate() as b)
+                | primitive.Code(overflow=Paginate() as b)
+            ),
+        ):
             return replace(left, overflow=replace(a, page=_page_configuration(a.page))) == replace(
                 right, overflow=replace(b, page=_page_configuration(b.page))
             )

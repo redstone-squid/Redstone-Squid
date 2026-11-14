@@ -11,7 +11,7 @@ from squid_ui import semantic as sem
 from squid_ui.document import Document
 from squid_ui.html.target import HtmlLimits
 from squid_ui.planning.limits import ClassicLimits, V2Limits
-from squid_ui.planning.pagination_content import RootRegion, TextPages
+from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import UnsupportedSemanticError
@@ -186,38 +186,11 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     if overflow.per is not None:
                         combinations *= max(1, (len(node.lines) + overflow.per - 1) // overflow.per)
                     return node
-                if not isinstance(node.content, str):
-                    msg = "rich text fragmentation"
-                    raise UnsupportedSemanticError(msg)
-                content = node.content.replace("```", "``\u200b`") if isinstance(node, primitive.Code) else node.content
-                separator = overflow.boundary
-                parts = content.split(separator) if separator else [content]
-                items = tuple(sem.ListItem(f"@{index}", part) for index, part in enumerate(parts))
+                content = resolve_text(node.content, request.localization).plain()
+                count = len(content.split(overflow.boundary)) if overflow.boundary else 1
                 if overflow.per is not None:
-                    combinations *= max(1, (len(items) + overflow.per - 1) // overflow.per)
-                prefix = (
-                    f"```{node.lang}\n"
-                    if isinstance(node, primitive.Code)
-                    else "#" * node.level + " "
-                    if isinstance(node, primitive.Heading)
-                    else "-# "
-                    if isinstance(node, primitive.Footer)
-                    else ""
-                )
-                suffix = "\n```" if isinstance(node, primitive.Code) else ""
-                return TextPages[NodeTargetT](
-                    items,
-                    overflow.key,
-                    overflow.page,
-                    separator,
-                    prefix,
-                    suffix,
-                    overflow.per,
-                    overflow.min_fill,
-                    overflow.widows,
-                    overflow.footer,
-                    literal=isinstance(node, primitive.Code),
-                )
+                    combinations *= max(1, (count + overflow.per - 1) // overflow.per)
+                return node
             case (
                 sem.Heading()
                 | sem.Note()

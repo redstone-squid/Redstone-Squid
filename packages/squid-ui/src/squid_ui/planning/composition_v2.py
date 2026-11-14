@@ -279,7 +279,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                                 if sequence.literal
                                 else tree.markdown(item.nodes, discord=True, escape=context.escape_text)
                             )
-                            for index, item in enumerate(sequence.items)
+                            for index, item in enumerate(sequence.display_items)
                         )
                         + sequence.suffix
                     )

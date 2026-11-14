@@ -290,7 +290,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                                 if sequence.list_ordered
                                 else (),
                             )
-                            for item in sequence.items
+                            for item in sequence.display_items
                         )
                         return (
                             scene.HtmlElement(scene.HtmlTag.OL if sequence.list_ordered else scene.HtmlTag.UL, items),
@@ -304,7 +304,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                     rendered = (
                         *tuple(
                             node
-                            for index, item in enumerate(sequence.items)
+                            for index, item in enumerate(sequence.display_items)
                             for node in (
                                 tree.literal((sequence.separator if index else sequence.prefix) + item.prefix),
                                 *item.nodes,

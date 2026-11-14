@@ -1,5 +1,6 @@
 """Resolve source-referenced text, preserving provenance through composition."""
 
+from bisect import bisect_right
 from dataclasses import dataclass, replace
 from typing import Literal
 
@@ -52,6 +53,54 @@ def _unsupported(nodes: tuple[tree.Node, ...]) -> str | None:
         if found := _unsupported(node.children):
             return found
     return None
+
+
+def text_ends(nodes: tuple[tree.Node, ...]) -> tuple[int, ...]:
+    """Legal visible-text cuts, keeping entity leaves and other opaque nodes intact."""
+    ends: list[int] = []
+    offset = 0
+    for node in nodes:
+        length = len(tree.plain(node))
+        if node.kind in _SHORTENABLE | {"link"}:
+            cuts = text_ends(node.children) if node.children else tuple(range(1, length + 1))
+            ends.extend(offset + end for end in cuts)
+        elif length:
+            ends.append(offset + length)
+        offset += length
+    return tuple(ends)
+
+
+def text_fragments(nodes: tuple[tree.Node, ...], size: int) -> tuple[tuple[tree.Node, ...], ...]:
+    """Split near the requested size; an indivisible entity may exceed it."""
+    ends = text_ends(nodes)
+    if not ends:
+        return (nodes,)
+    fragments: list[tuple[tree.Node, ...]] = []
+    start = 0
+    while start < ends[-1]:
+        index = bisect_right(ends, start + size) - 1
+        end = ends[max(0, index)]
+        if end <= start:
+            end = ends[bisect_right(ends, start)]
+        fragments.append(_slice(nodes, start, end))
+        start = end
+    return tuple(fragments)
+
+
+def join_text(left: tuple[tree.Node, ...], right: tuple[tree.Node, ...]) -> tuple[tree.Node, ...]:
+    """Rejoin adjacent pieces without introducing literal Markdown between styles."""
+    if not left or not right:
+        return (*left, *right)
+    a, b = left[-1], right[0]
+    if a.kind in _SHORTENABLE | {"link"} and replace(a, children=(), content="") == replace(b, children=(), content=""):
+        if a.children and b.children:
+            merged = replace(a, children=join_text(a.children, b.children))
+        elif a.kind in ("text", "code_inline"):
+            merged = replace(a, content=a.content + b.content)
+        else:
+            return (*left, *right)
+        return (*left[:-1], merged, *right[1:])
+    return (*left, *right)
 
 
 def _slice(nodes: tuple[tree.Node, ...], start: int, end: int) -> tuple[tree.Node, ...]:

@@ -41,7 +41,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
 from squid_ui.planning.navigation import PagerNav, default_nav
-from squid_ui.planning.pagination_content import RootRegion, TextPages
+from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_adaptation.common import _button_style
 from squid_ui.planning.semantic_adaptation.handlers import (
@@ -74,7 +74,10 @@ from squid_ui.planning.text_presentations import (
     UnsupportedText,
     _slice,
     _unsupported,
+    join_text,
     resolve_presentation_text,
+    text_ends,
+    text_fragments,
 )
 from squid_ui.presentations import (
     Alternatives,
@@ -224,6 +227,16 @@ class TextSequenceRealization:
     list_ordered: bool | None = None
     literal: bool = False
     notice: tuple[tree.Node, ...] = ()
+
+    @property
+    def display_items(self) -> tuple[ReferencedText, ...]:
+        items: list[ReferencedText] = []
+        for item in self.items:
+            if item.continuation and items:
+                items[-1] = replace(items[-1], nodes=join_text(items[-1].nodes, item.nodes))
+            else:
+                items.append(item)
+        return tuple(items)
 
     def fragment(self, start: int, end: int) -> Realization:
         return replace(self, items=self.items[start:end])
@@ -733,8 +746,8 @@ def semantic_offers[RenderTargetT, ContextT](
                     size = max(1, min(256, text_capacity // 8))
                     context.work.consume(1 + length // size)
                     fragments_items.extend(
-                        replace(item, nodes=_slice(item.nodes, start, start + size), continuation=start > 0)
-                        for start in range(0, length, size)
+                        replace(item, nodes=nodes, continuation=index > 0)
+                        for index, nodes in enumerate(text_fragments(item.nodes, size))
                     )
                 else:
                     fragments_items.append(item)
@@ -883,7 +896,7 @@ def semantic_offers[RenderTargetT, ContextT](
         return tuple(offers)
     if isinstance(value, primitive.Text | primitive.Heading | primitive.Footer | primitive.Code):
         overflow = Truncate(keep) if keep is not None else value.overflow
-        if not native_controls or not isinstance(overflow, Never | Truncate | Alts | Drop):
+        if not native_controls or not isinstance(overflow, Never | Truncate | Alts | Drop | Paginate):
             return ()
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)
         if isinstance(value, primitive.Heading):
@@ -892,6 +905,77 @@ def semantic_offers[RenderTargetT, ContextT](
             payload = replace(payload, role="note")
         elif isinstance(value, primitive.Code):
             payload = replace(payload, role="code", language=value.lang)
+        if isinstance(overflow, Paginate):
+            if overflow.key is None:
+                return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "unkeyed primitive pagination")
+            nodes = payload.nodes
+            if isinstance(value, primitive.Code):
+                nodes = (tree.literal("".join(tree.plain(node) for node in nodes).replace("```", "``\u200b`")),)
+            plain = "".join(tree.plain(node) for node in nodes)
+            safe_ends = frozenset((0, *text_ends(nodes)))
+            context.work.consume(len(plain) + len(safe_ends))
+            spans: list[tuple[int, int]] = []
+            start = offset = 0
+            if overflow.boundary:
+                while (offset := plain.find(overflow.boundary, offset)) >= 0:
+                    after = offset + len(overflow.boundary)
+                    if offset in safe_ends and after in safe_ends:
+                        spans.append((start, offset))
+                        start = after
+                    offset = after
+            spans.append((start, len(plain)))
+            parts: list[ReferencedText] = []
+            ends: list[int] = []
+            for index, (start, end) in enumerate(spans):
+                chunk = _slice(nodes, start, end)
+                pieces = (
+                    text_fragments(chunk, max(1, min(256, text_capacity // 8)))
+                    if text_capacity is not None and end - start > text_capacity // 2
+                    else (chunk,)
+                )
+                parts.extend(
+                    ReferencedText(occurrence.reference, piece, continuation=i > 0) for i, piece in enumerate(pieces)
+                )
+                if overflow.per is not None and (index + 1) % overflow.per == 0:
+                    ends.append(len(parts))
+            prefix = (
+                f"```{value.lang}\n"
+                if isinstance(value, primitive.Code)
+                else "#" * value.level + " "
+                if isinstance(value, primitive.Heading)
+                else "-# "
+                if isinstance(value, primitive.Footer)
+                else ""
+            )
+            sequence = TextSequenceRealization(
+                tuple(parts),
+                overflow.boundary,
+                prefix,
+                "\n```" if isinstance(value, primitive.Code) else "",
+                literal=isinstance(value, primitive.Code),
+            )
+            return (
+                RealizationOffer(
+                    occurrence,
+                    "native-text-pages",
+                    sequence,
+                    fragments=FragmentContract(
+                        tuple(frozenset({occurrence.reference}) for _ in parts),
+                        tuple(range(1, len(parts) + 1)),
+                        sequence.fragment,
+                        continuations=True,
+                    ),
+                    region=RegionContract(
+                        overflow.key,
+                        RegionNavigation(occurrence, disabled_controls, overflow.footer, overflow.page, overflow.key),
+                        min_fill=overflow.min_fill,
+                        widows=overflow.widows,
+                        owner=overflow.page,
+                        cursor_key=overflow.key,
+                        required_ends=tuple(ends),
+                    ),
+                ),
+            )
         full = RealizationOffer(occurrence, "native-text", payload, preference_priority=value.priority)
         if isinstance(overflow, Drop):
             return (
@@ -1084,23 +1168,19 @@ def semantic_offers[RenderTargetT, ContextT](
                 )
             )
         return tuple(choices)
-    if isinstance(value, sem.List | TextPages):
+    if isinstance(value, sem.List):
         items = tuple(
             ReferencedText(
                 ref,
                 resolve_text(item.content, context.localization).nodes,
-                f"{index + 1}. "
-                if isinstance(value, sem.List) and value.ordered
-                else "• "
-                if isinstance(value, sem.List)
-                else "",
+                f"{index + 1}. " if value.ordered else "• ",
                 ordinal=index + 1,
             )
             for index, (ref, item) in enumerate(
                 zip(occurrence.graph.children.get(occurrence.reference, ()), value.items, strict=True)
             )
         )
-        per = value.per if isinstance(value, TextPages) else value.page_size
+        per = value.page_size
         required: list[int] = []
         expanded: list[ReferencedText] = []
         capacity = text_capacity
@@ -1112,22 +1192,18 @@ def semantic_offers[RenderTargetT, ContextT](
                 expanded.extend(
                     replace(
                         item,
-                        nodes=_slice(item.nodes, start, start + size),
-                        prefix=item.prefix if start == 0 else "",
-                        continuation=start > 0,
+                        nodes=nodes,
+                        prefix=item.prefix if index == 0 else "",
+                        continuation=index > 0,
                     )
-                    for start in range(0, len(plain), size)
+                    for index, nodes in enumerate(text_fragments(item.nodes, size))
                 )
             else:
                 expanded.append(item)
             if per is not None and (index + 1) % per == 0:
                 required.append(len(expanded))
         items = tuple(expanded)
-        payload = (
-            TextSequenceRealization(items, list_ordered=value.ordered)
-            if isinstance(value, sem.List)
-            else TextSequenceRealization(items, value.separator, value.prefix, value.suffix, literal=value.literal)
-        )
+        payload = TextSequenceRealization(items, list_ordered=value.ordered)
         units = tuple(frozenset({item.reference}) for item in items)
         fragments = (
             FragmentContract(units, tuple(range(1, len(items) + 1)), payload.fragment, continuations=True)
@@ -1139,18 +1215,16 @@ def semantic_offers[RenderTargetT, ContextT](
             RegionNavigation(
                 occurrence,
                 disabled_controls,
-                value.footer if isinstance(value, TextPages) else None,
+                None,
                 value.page,
                 value.key,
             ),
-            min_fill=value.min_fill if isinstance(value, TextPages) else 0,
-            widows=value.widows if isinstance(value, TextPages) else 1,
             owner=value.page,
             cursor_key=value.key,
             required_ends=tuple(required),
         )
         complete = RealizationOffer(occurrence, "text-pages", payload, fragments=fragments, region=contract)
-        if not spill or not isinstance(value, sem.List) or not value.items:
+        if not spill or not value.items:
             return (complete,)
         originals = tuple(
             ReferencedText(
@@ -1757,7 +1831,7 @@ def semantic_offers[RenderTargetT, ContextT](
             context.work.consume(length)
             fragments = FragmentContract(
                 (frozenset({occurrence.reference}),) * length,
-                tuple(range(1, length + 1)),
+                text_ends(payload.nodes),
                 payload.fragment,
                 continuations=True,
             )

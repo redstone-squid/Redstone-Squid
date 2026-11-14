@@ -17,7 +17,6 @@ from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorReque
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.interaction_semantics import ItemSummary
 from squid_ui.planning.navigation import PlannedNav
-from squid_ui.planning.pagination_content import TextPages
 from squid_ui.planning.pagination_reuse import same_allocation_document
 from squid_ui.planning.realizations import region_cursor_key
 from squid_ui.planning.request import PlanRequest
@@ -119,17 +118,19 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
         authored = graph.units.get(SemanticRef(region.source_prefix))
         owner = (
             authored.value.page
-            if authored is not None and isinstance(authored.value, Region | Paged | List | TextPages)
+            if authored is not None and isinstance(authored.value, Region | Paged | List)
             else region.owner
         )
         content = (
             replace(authored.value, page=FIRST_PAGE)
-            if authored is not None and isinstance(authored.value, Region | Paged | List | TextPages)
+            if authored is not None and isinstance(authored.value, Region | Paged | List)
             else None
         )
         if (
             authored is not None
-            and isinstance(authored.value, primitive.Lines)
+            and isinstance(
+                authored.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+            )
             and isinstance(authored.value.overflow, Paginate)
         ):
             owner = authored.value.overflow.page
@@ -180,8 +181,11 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
         if isinstance(unit.value, Items):
             keys = (f"{unit.value.key}.items", *(f"{unit.value.key}.{item.key}.detail" for item in unit.value.items))
             retained.update(key for key in keys if key in request.presentation.cursors)
-        if not isinstance(unit.value, Region | Paged | List | Navigation | TextPages) and not (
-            isinstance(unit.value, primitive.Lines) and isinstance(unit.value.overflow, Paginate)
+        if not isinstance(unit.value, Region | Paged | List | Navigation) and not (
+            isinstance(
+                unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+            )
+            and isinstance(unit.value.overflow, Paginate)
         ):
             continue
         parent = unit.parent
@@ -194,7 +198,9 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
             nested_region |= isinstance(ancestor.value, Region)
             parent = ancestor.parent
         if hidden:
-            if isinstance(unit.value, primitive.Lines):
+            if isinstance(
+                unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+            ):
                 assert isinstance(unit.value.overflow, Paginate)
                 key = unit.value.overflow.key
             else:

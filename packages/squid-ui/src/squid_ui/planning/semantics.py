@@ -15,7 +15,6 @@ from squid_ui.planning.interaction_semantics import (
     NavigationChoice,
     interaction_changes,
 )
-from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import (
     Alternative,
     Alternatives,
@@ -87,7 +86,6 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | FieldPart
     | TextPresentation
     | StructuralGroup
-    | TextPages[RenderTargetT]
     | ItemBranch[RenderTargetT, ContextT]
     | primitive.Row[ContextT]
     | primitive.ControlGroup[ContextT]
@@ -141,8 +139,7 @@ class SemanticGraph[RenderTargetT, ContextT]:
 def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | EmbeddedValue[ContextT]) -> str | None:
     match value:
         case (
-            TextPages()
-            | sem.Group()
+            sem.Group()
             | sem.Stack()
             | sem.Block()
             | sem.Section()
@@ -179,7 +176,13 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | primitive.EntitySelect()
         ):
             return value.key
-        case primitive.Lines(overflow=Paginate(key=key)):
+        case (
+            primitive.Lines(overflow=Paginate(key=key))
+            | primitive.Text(overflow=Paginate(key=key))
+            | primitive.Heading(overflow=Paginate(key=key))
+            | primitive.Footer(overflow=Paginate(key=key))
+            | primitive.Code(overflow=Paginate(key=key))
+        ):
             return key
         case _:
             return None
@@ -273,7 +276,7 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 add(FieldPart("label", value.label), (*path, "label"), root, atomic=True)
                 add(FieldPart("value", value.value), (*path, "value"), root, atomic=True)
-            case sem.List() | TextPages():
+            case sem.List():
                 root = add(value, path, parent, atomic=False)
                 for i, item in enumerate(value.items):
                     visit(item, root, i)
@@ -609,8 +612,9 @@ class SourceScope[RenderTargetT, ContextT]:
     def page_boundary(self, presentation: SemanticRef) -> SemanticRef:
         """Locate a preserved pager in the authored graph, across nested alternatives."""
         value = self.checked.presentation.units[presentation].value
-        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | TextPages) and not (
-            isinstance(value, primitive.Lines) and isinstance(value.overflow, Paginate)
+        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items) and not (
+            isinstance(value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code)
+            and isinstance(value.overflow, Paginate)
         ):
             message = "page boundary resolution needs a pagination scope"
             raise LayoutInvariantError(message)
@@ -671,9 +675,13 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | sem.Items
             | primitive.Row
             | primitive.Section
-            | primitive.Panel
-            | TextPages,
-        ) and not (isinstance(constraint, primitive.Lines) and isinstance(constraint.overflow, Paginate)):
+            | primitive.Panel,
+        ) and not (
+            isinstance(
+                constraint, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+            )
+            and isinstance(constraint.overflow, Paginate)
+        ):
             continue
         inside = checked.source.atoms(reference)
         targets = frozenset(target for target, covered in checked.coverage.items() if covered & inside)
@@ -726,17 +734,23 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.page,
                         other.page_size,
                     )
-                case primitive.Lines(), primitive.Lines():
+                case (
+                    (
+                        primitive.Lines()
+                        | primitive.Text()
+                        | primitive.Heading()
+                        | primitive.Footer()
+                        | primitive.Code()
+                    ),
+                    (
+                        primitive.Lines()
+                        | primitive.Text()
+                        | primitive.Heading()
+                        | primitive.Footer()
+                        | primitive.Code()
+                    ),
+                ):
                     preserved = constraint.overflow == other.overflow
-                case TextPages(), TextPages():
-                    preserved = (
-                        constraint.key,
-                        constraint.page,
-                        constraint.per,
-                        constraint.min_fill,
-                        constraint.widows,
-                        constraint.footer,
-                    ) == (other.key, other.page, other.per, other.min_fill, other.widows, other.footer)
                 case (sem.Unbreakable(), sem.Unbreakable()) | (sem.KeepWithNext(), sem.KeepWithNext()):
                     preserved = True
                 case primitive.Row(), primitive.Row():

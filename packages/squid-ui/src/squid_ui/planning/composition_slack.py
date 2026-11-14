@@ -304,7 +304,7 @@ class SlackCompositionRules[
                     nodes = (
                         *tuple(
                             node
-                            for index, item in enumerate(sequence.items)
+                            for index, item in enumerate(sequence.display_items)
                             for node in (
                                 tree.literal(
                                     (

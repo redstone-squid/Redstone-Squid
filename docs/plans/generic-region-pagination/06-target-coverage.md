@@ -100,11 +100,12 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Rich primitive text fragmentation retains its existing non-region path.
-It does not yet declare the permitted rich fragments required for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
-or typed atomic target rules inside regions. No equivalence is inferred from
-arbitrary replacement text. Native extensions are usable through explicit custom
-composition rules, rather than an opaque production backend probe.
+Native text, headings, code and footers now expose their own keyed pagination
+contracts, including rich inline content. Fragments preserve styles and link
+destinations, keep entity leaves intact, and rejoin adjacent styled fragments
+before serialization. Count boundaries never split an entity identifier. The
+synthetic `TextPages` migration bridge is removed. Native extensions still use
+explicit typed composition rules; no equivalence is inferred from replacement text.
 
 Item browsers and disclosures now expose only their open content to shared
 allocation, retaining hidden layout cursors until that content reopens. Navigation now uses shared

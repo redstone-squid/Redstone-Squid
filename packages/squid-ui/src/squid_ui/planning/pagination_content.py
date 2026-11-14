@@ -1,27 +1,9 @@
-"""Materialized text pages retained before target realization and joint allocation."""
+"""A keyed document root using the shared region contract."""
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
-from squid_ui.semantic import ListItem, Region
-from squid_ui.target_types import Renderable, RenderTarget
-from squid_ui.text import TextLike
-
-
-@dataclass(frozen=True, slots=True)
-class TextPages[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    items: tuple[ListItem, ...]
-    key: str
-    page: PageOwnership = FIRST_PAGE
-    separator: str = "\n"
-    prefix: str = ""
-    suffix: str = ""
-    per: int | None = None
-    min_fill: int = 0
-    widows: int = 1
-    footer: Callable[[int, int], TextLike] | None = None
-    literal: bool = False
+from squid_ui.semantic import Region
+from squid_ui.target_types import RenderTarget
 
 
 @dataclass(frozen=True, slots=True)

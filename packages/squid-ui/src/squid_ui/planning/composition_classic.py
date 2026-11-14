@@ -168,10 +168,14 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                                 if sequence.literal
                                 else markdown(item.nodes)
                             )
-                            for index, item in enumerate(sequence.items)
+                            for index, item in enumerate(sequence.display_items)
                         )
                         + sequence.suffix
-                        + (("\n" if sequence.items else "") + markdown(sequence.notice) if sequence.notice else "")
+                        + (
+                            ("\n" if sequence.display_items else "") + markdown(sequence.notice)
+                            if sequence.notice
+                            else ""
+                        )
                     )
                     for child in part.children:
                         visit(child, output, embedded=embedded)
