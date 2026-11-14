@@ -10695,7 +10695,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:129"
+      "squid/bot/submission/guided_search.py:126"
     ]
   },
   "guided-search-previous-filters": {
@@ -10704,7 +10704,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:123"
+      "squid/bot/submission/guided_search.py:120"
     ]
   },
   "guided-search-query-label": {
@@ -14069,15 +14069,6 @@
       "squid/bot/submission/build_browse.py:587"
     ]
   },
-  "record-filter-hint": {
-    "fingerprint": "c24fcb84d25e6bbd2848151da41e79a5dcdbbdf5f49e74919306dcda7a68b866",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/build_browse.py:600"
-    ]
-  },
   "record-search-query-help": {
     "fingerprint": "2c13c6b23364cf5c65cedb2e93d2eb3536e9441e31eebee38384595aef589677",
     "attributes": [],
@@ -14108,8 +14099,8 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:668",
-      "squid/records/application/services.py:699"
+      "squid/records/application/services.py:729",
+      "squid/records/application/services.py:760"
     ]
   },
   "records-category-not-found-title": {
@@ -14200,7 +14191,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:712"
+      "squid/records/application/services.py:773"
     ]
   },
   "records-fixed-volume-positive": {
@@ -14290,7 +14281,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/records/application/services.py:629"
+      "squid/records/application/services.py:690"
     ]
   },
   "records-rebuild-summary": {
@@ -14370,7 +14361,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:452"
+      "squid/records/application/services.py:512"
     ]
   },
   "records-record-category-not-found": {
@@ -14394,7 +14385,7 @@
       }
     ],
     "locations": [
-      "squid/records/infrastructure/repository.py:565"
+      "squid/records/infrastructure/repository.py:573"
     ]
   },
   "records-record-not-found-title": {
@@ -14418,7 +14409,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:730"
+      "squid/records/application/services.py:791"
     ]
   },
   "records-reset-version": {

@@ -3248,10 +3248,10 @@ guided-search-keywords = Keywords
 # squid/bot/submission/guided_search.py:301, squid/bot/submission/guided_search.py:317
 guided-search-negated = Exclude (NOT)
 
-# squid/bot/submission/guided_search.py:129
+# squid/bot/submission/guided_search.py:126
 guided-search-next-filters = Next filters
 
-# squid/bot/submission/guided_search.py:123
+# squid/bot/submission/guided_search.py:120
 guided-search-previous-filters = Previous filters
 
 # squid/bot/submission/guided_search.py:217
@@ -4323,16 +4323,13 @@ record-browser-first = First
 # squid/bot/submission/build_browse.py:587
 record-browser-smallest = Smallest
 
-# squid/bot/submission/build_browse.py:600
-record-filter-hint = Toggle any record types; none selected means all types. Search keeps your selection.
-
 # squid/bot/submission/commands.py:198
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
 # squid/bot/submission/records.py:172
 records-active-version = Using the active version
 
-# squid/records/application/services.py:668, squid/records/application/services.py:699
+# squid/records/application/services.py:729, squid/records/application/services.py:760
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/records/errors.py:29, squid/records/errors.py:45
@@ -4359,7 +4356,7 @@ records-exact-category = Lookup exact category
 # squid/bot/submission/records.py:396
 records-exact-category-key = Exact category key
 
-# squid/records/application/services.py:712
+# squid/records/application/services.py:773
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/records/domain/models.py:115
@@ -4389,7 +4386,7 @@ records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 # squid/bot/submission/records.py:387
 records-operation-permission-denied = You are no longer allowed to perform this records operation.
 
-# squid/records/application/services.py:629
+# squid/records/application/services.py:690
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/submission/records.py:377
@@ -4401,19 +4398,19 @@ records-recompute-definition = Recompute definition
 # squid/bot/submission/records.py:306, squid/bot/submission/records.py:355
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/records/application/services.py:452
+# squid/records/application/services.py:512
 records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
 # squid/records/errors.py:28
 records-record-category-not-found = Record category not found.
 
-# squid/records/infrastructure/repository.py:565
+# squid/records/infrastructure/repository.py:573
 records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
 # squid/records/errors.py:16
 records-record-not-found-title = Record not found
 
-# squid/records/application/services.py:730
+# squid/records/application/services.py:791
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/submission/records.py:176
