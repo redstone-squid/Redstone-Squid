@@ -1,7 +1,7 @@
 # Generic region pagination roadmap
 
-Status: phases 1 and 2 complete. Phase 3 joint search is planned in
-[Shared allocation search](03-joint-search.md); implementation has not started.
+Status: phases 1–3 complete. [Shared allocation search](03-joint-search.md) documents the implemented
+opt-in solver, validation, and phase 4 handoff. Mounted pagination integration is next.
 
 Make joint region pagination part of the generic planning architecture. Sibling and nested
 regions should share target limits while preserving content, navigation, and reading position.
@@ -93,8 +93,8 @@ Depends on phase 1.
 
 ## Phase 3 Build the shared allocation search
 
-Implementation plan: [Shared allocation search](03-joint-search.md), including the agreed
-preference, allocation stability, and search exhaustion policies.
+Completed implementation: [Shared allocation search](03-joint-search.md), including preference
+ordering, stable allocations, bounded work, direct target participation, and exhaustive test fixtures.
 
 Implement joint allocation using the established contracts. Account for persistent content,
 navigation, legal breaks, nested regions, and authored alternatives. Determine the optimization
@@ -171,5 +171,5 @@ Depends on phases 4 and 5. Target integration can begin earlier where contracts 
 
 Phase 1 established shared content-loss policy, fidelity-based strictness, a rich semantic core,
 and direct target participation. Phase 2 supplies an opt-in composition entry point, peer alternatives over shared semantic content,
-structural resource budgets, live bindings, and typed atomic extension contracts. Production changes follow the relevant phase plans; an open design
-question is not an implementation decision.
+structural resource budgets, live bindings, and typed atomic extension contracts. Phase 3 adds automatic
+joint search and certified page selection. Mounted ownership and delivery integration remain phase 4.

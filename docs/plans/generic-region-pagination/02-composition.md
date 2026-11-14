@@ -2,12 +2,12 @@
 
 Status: complete. The shared composition boundary
 is available through `plan(..., composition=...)`. The [API sketch](api-sketch.md) records the
-implemented author syntax and target contract. Automatic joint search remains Phase 3 work.
+implemented author syntax and target contract. Automatic joint search is now implemented in [phase 3](03-joint-search.md).
 
 Establish the first usable boundary between the rich semantic planning core and target-specific
 realizations. The [Phase 1 handoff](01-shared-core.md#phase-2-handoff) supplies the requirements,
 and the [composition experiments](composition-experiments.md) supply initial acceptance cases.
-The joint allocation algorithm and ranking policy remain Phase 3 work.
+The joint allocation algorithm and ranking policy are documented in [phase 3](03-joint-search.md).
 
 ## Agreed design choices
 
@@ -190,7 +190,7 @@ part of the button label. A frontend regression test disables the legacy planner
 
 | Unmigrated area | Current behavior | Removal or replacement phase |
 | --- | --- | --- |
-| Automatic representation selection and pagination | Explicit choices only; no independent target search was added | Phase 3 joint solver |
+| Automatic representation selection and pagination | Implemented through `CompositionOptions(automatic=True)` | Phase 3 complete; mounted integration in phase 4 |
 | Mounted runtime traversal, page reconciliation, navigation and state updates | Existing runtime paths; opt-in planning does not consume or commit their state | Phase 4 |
 | Structural caches and live memo reuse | Bypassed for opt-in composition | Phase 5 |
 | Classic Discord, Slack Home/modal, remaining semantic widgets and native extension registries | Existing planners; opt-in fails explicitly for unsupported vocabulary or targets | Phase 6 |

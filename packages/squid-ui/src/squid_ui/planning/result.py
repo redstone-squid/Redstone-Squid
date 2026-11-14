@@ -5,11 +5,14 @@ updates remain here; hosts apply updates only after successfully delivering the 
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
+from squid_ui.planning.allocation import AllocationSelection
+from squid_ui.planning.allocation_policy import SearchDiagnostics
+from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.degradation import DegradationProfile
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.presentation import SessionUpdate
@@ -58,6 +61,7 @@ class PlanReport:
     logical_fingerprint: str = ""
     scene_fingerprint: str = ""
     regions: tuple[RegionReport, ...] = ()
+    search: SearchDiagnostics | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +73,10 @@ class PlanMetrics:
     cache_hit: bool = False
     reuse: PlanReuse = PlanReuse.MISS
     search_fallback: bool = False
+    work_used: int = 0
+    generated_states: int = 0
+    target_evaluations: int = 0
+    certified_combinations: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,3 +111,18 @@ class PlanResult[BodyT = Body]:
     discard them if delivery fails so planning does not move stored page or selection
     values ahead of the display the reader received.
     """
+
+    allocation: AllocationSelection[PlanResult[BodyT]] | None = field(default=None, kw_only=True)
+
+    def for_page(self, coordinates: Mapping[OccurrenceId, int]) -> PlanResult[BodyT]:
+        """Select already certified output while retaining allocation diagnostics."""
+        if self.allocation is None:
+            message = "this result has no joint allocation"
+            raise ValueError(message)
+        selected = self.allocation.select(coordinates)
+        return replace(
+            selected,
+            report=replace(selected.report, search=self.report.search),
+            metrics=self.metrics,
+            allocation=self.allocation,
+        )

@@ -1,9 +1,10 @@
 # Shared planner API sketch
 
-Status: implemented Phase 2 boundary. Peer alternatives are exported from `squid_ui`; named
+Status: implemented phases 2 and 3. Peer alternatives are exported from `squid_ui`; named
 resource budgets remain in `squid_ui.presentations` while the legacy budget API is migrated.
-Use `plan(..., composition=CompositionOptions(...))` for fixed composition choices. The
-[Phase 2 handoff](02-composition.md) inventories the temporary legacy routes.
+Use `plan(..., composition=CompositionOptions(automatic=True))` for joint representation and page
+search, or omit `automatic` for fixed choices. The [phase 3 handoff](03-joint-search.md) records
+implemented behavior and remaining production routes.
 
 ## Authoring content and alternatives
 
@@ -58,7 +59,8 @@ Defaults and interpretation:
   descriptive name; position in the list does not make it the semantic reference. Lower preference
   values are favored among otherwise comparable admissible choices. Automatic comparison is specified
   by the [phase 3 plan](03-joint-search.md#preference-and-fidelity), including ordinal preference ranks
-  and fair compromise between regions; the fixed-composition implementation does not rank choices.
+  and fair compromise between regions. Automatic composition implements this policy; fixed composition
+  evaluates the supplied choices without ranking them.
 - An alternative must explicitly declare its fidelity. Omitting a declaration does not silently
   assert equivalence. Supplying `losses(...)` authorizes those specific effects in non-strict mode,
   subject to inherited hard requirements. It does not authorize unrelated loss elsewhere. Strict
@@ -266,7 +268,7 @@ For HTML, target rules can expose an unbounded full-content realization. Explici
 and constraints still apply, but the core does not invent a global message budget. Slack receives
 the same semantic information directly and contributes its own realizations and constraints.
 
-## Details to validate during implementation
+## Evidence and remaining integration
 
 1. How typed references and correspondence helpers carry semantic units through combined or split
    presentations of the explicit shared content source.
@@ -276,10 +278,8 @@ the same semantic information directly and contributes its own realizations and 
 4. Where incremental measurement and native extension preparation fit without retaining stale
    bindings or losing the shared work-budget contract.
 
-Validate these details against the table, shared-resource, and persistent-content examples in
-the implementation sequence recorded in the Phase 2 plan. Concrete types and names may change
-as those examples exercise the contracts. Full joint search, state integration, cache optimization, and remaining target coverage
-continue in their assigned roadmap phases.
+The phase 2 composition fixtures and phase 3 search oracles exercise these boundaries. State integration,
+cache optimization, and remaining target coverage continue in their assigned roadmap phases.
 
 ## Public planning entry point
 
@@ -296,7 +296,7 @@ planned = sl.planning.plan(
 
 The document occurrence is `("root",)`. Children append their semantic key, or a positional key
 such as `"@0"` when unkeyed. An alternative's selected presentation appends `"@presentation"`;
-its choice key is separate. A sole offer is automatic, but multiple offers require an explicit
+its choice key is separate. In fixed mode, a sole offer is automatic; multiple offers require an explicit
 selection. Candidate rejection raises `CompositionRejectedError`, carrying structured violations.
 It does not retry, paginate, or claim that the document is unsolvable. Cache and memo reuse are
 bypassed until their shared-core integration.
@@ -307,3 +307,40 @@ and legal placements. Use `occurrence.scope_effects(node.effects)` to retain sou
 Evaluation must report scoped resource usage, and validation must independently check the prepared
 native output. Richer internal adaptation requires semantic structure; an arbitrary payload is not
 permission to discover children or shorten its contents.
+
+
+## Automatic composition and stable pages
+
+```python
+from squid_ui.planning import AllocationGoal, CompositionOptions, OccurrenceId, RegionPolicy
+from squid_ui.planning.resources import Axis
+
+region = OccurrenceId(("root", "results"))
+options = CompositionOptions(
+    automatic=True,
+    policies={region: RegionPolicy(goals=(AllocationGoal(Axis.DISPLAY_TEXT, 200),))},
+    work_limit=50_000,
+)
+result = plan(document, target=target, composition=options)
+second_page = result.for_page({region: 1})
+```
+
+`work_limit` covers automatic semantic traversal, discovery, enumeration, every reachable page's
+certification, and output preparation. Fixed mode continues to use the request's `search_budget`.
+`pages` selects initial zero-based coordinates, `selections` pins offer keys, and `partitions` pins
+legal exclusive page ends. Pinning leaves the same contextual evaluation and validation in place.
+Use `AutomaticComposition(rules, options)` for custom typed rules.
+
+The result carries immutable region cuts, source anchors, navigation inputs, and a request-local
+allocation identity. `for_page` selects an already prepared scene with its visible resources and
+bindings, retaining that identity and search diagnostics. It performs no fitting or state publication.
+`report.search` distinguishes completion, unsupported branches, and exhaustion; `metrics` separates
+work, generated states, target evaluations, and certified combinations. An exhausted search returns
+its best certified allocation when available, or raises `JointExhaustedError`. A completed impossible
+domain raises `JointInfeasibleError`; unsupported domains retain `JointUnsupportedError`.
+
+Targets expose fragment units and repeated sources with `FragmentContract`, flow boundaries with
+`RealizationOffer.flow`, and page chrome with `RegionContract`. `OfferDiscovery` distinguishes complete,
+unsupported, and interrupted enumeration. The [phase 3 implementation](03-joint-search.md) specifies
+the comparison policy, correctness bounds, and limitations. Mounted page ownership, cursor
+reconciliation, and delivery-time publication still belong to phase 4.

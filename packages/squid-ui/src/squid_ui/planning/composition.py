@@ -227,7 +227,7 @@ class CandidateComposition[RenderTargetT, ContextT, PayloadT]:
 class WorkBudget:
     """One shared allowance for offers, evaluation, construction, and validation."""
 
-    __slots__ = ("_limit", "_spent")
+    __slots__ = ("_evaluations", "_limit", "_spent")
 
     def __init__(self, limit: int) -> None:
         if limit < 0:
@@ -235,6 +235,7 @@ class WorkBudget:
             raise LayoutInvariantError(message)
         self._limit = limit
         self._spent = 0
+        self._evaluations = 0
 
     @property
     def spent(self) -> int:
@@ -243,6 +244,10 @@ class WorkBudget:
     @property
     def limit(self) -> int:
         return self._limit
+
+    @property
+    def target_evaluations(self) -> int:
+        return self._evaluations
 
     @property
     def remaining(self) -> int:
@@ -470,6 +475,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         pending.extend(part.children)
     if preflight:
         return Evaluation(violations=tuple(preflight))
+    context.work._evaluations += 1
     evaluation = rules.evaluate(candidate, context)
     if set(evaluation.effects) - allowed:
         message = "target evaluation introduced an undeclared fidelity effect"

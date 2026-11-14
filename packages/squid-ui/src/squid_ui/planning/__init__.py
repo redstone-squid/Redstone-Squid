@@ -11,9 +11,10 @@ reservations tell the planner how much space that particular display can use.
 
 from squid_ui.pages import PagePosition, PagePositionPolicy, resolve_page_position
 from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.allocation_policy import AllocationGoal, RegionPolicy, SearchCompletion, SearchDiagnostics
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.composition import AtomicContract, OccurrenceId
-from squid_ui.planning.composition_planner import CompositionRejectedError, FixedComposition
+from squid_ui.planning.composition_planner import AutomaticComposition, CompositionRejectedError, FixedComposition
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.dialect import TargetDialect
 from squid_ui.planning.discord import (
@@ -24,6 +25,7 @@ from squid_ui.planning.discord import (
     dynamic_classic_target,
     dynamic_components_v2_target,
 )
+from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.layout_measurement.diagnostics import (
     LayoutOverflowError,
     SolveNote,
@@ -71,7 +73,9 @@ __all__ = [
     "DEFAULT_SEARCH_BUDGET",
     "V2_PROTOCOL_CAPABILITIES",
     "AdapterProfile",
+    "AllocationGoal",
     "AtomicContract",
+    "AutomaticComposition",
     "ClassicTarget",
     "ComponentsV2Target",
     "CompositionOptions",
@@ -83,6 +87,9 @@ __all__ = [
     "FixedComposition",
     "HtmlAdapter",
     "HtmlTarget",
+    "JointExhaustedError",
+    "JointInfeasibleError",
+    "JointUnsupportedError",
     "LayoutOverflowError",
     "MeasuredLayout",
     "OccurrenceId",
@@ -97,9 +104,12 @@ __all__ = [
     "PlanReuse",
     "PlanSeverity",
     "PreparedExtension",
+    "RegionPolicy",
     "RenderTarget",
     "Renderable",
     "ResourceCost",
+    "SearchCompletion",
+    "SearchDiagnostics",
     "SlackAdapter",
     "SlackHomeTarget",
     "SlackMessageTarget",

@@ -8,11 +8,12 @@ cursor change can select output without rerunning search or changing a sibling.
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field, replace
-from hashlib import sha256
 from types import MappingProxyType
+from typing import Protocol
+from uuid import uuid4
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.composition import CandidateComposition, OccurrenceId, PlanningContext
+from squid_ui.planning.composition import CandidateComposition, NavigationInput, OccurrenceId, PlanningContext
 from squid_ui.planning.fragments import FragmentTree, slice_fragment
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.presentations import SemanticRef
@@ -121,6 +122,25 @@ class CertifiedPage[OutputT]:
 
 
 @dataclass(frozen=True, slots=True)
+class RegionPages:
+    key: str
+    cuts: tuple[int, ...]
+    anchors: tuple[frozenset[SemanticRef], ...]
+    allocation: ResourceCost
+    navigation: tuple[tuple[NavigationInput, ...], ...]
+
+
+class AllocationSelection[OutputT](Protocol):
+    @property
+    def identity(self) -> str: ...
+
+    @property
+    def regions(self) -> Mapping[OccurrenceId, RegionPages]: ...
+
+    def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> OutputT: ...
+
+
+@dataclass(frozen=True, slots=True)
 class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
     """A request-local allocation identity and all certified visible page combinations.
 
@@ -133,10 +153,31 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
     pages: tuple[CertifiedPage[OutputT], ...]
     selection: tuple[tuple[OccurrenceId, str], ...]
     identity: str = field(init=False)
+    regions: Mapping[OccurrenceId, RegionPages] = field(init=False)
 
     def __post_init__(self) -> None:
-        shape = tuple((identity.path, region.cuts) for identity, region in self.family.regions.items())
-        object.__setattr__(self, "identity", sha256(repr((self.selection, shape)).encode()).hexdigest())
+        object.__setattr__(self, "identity", uuid4().hex)
+        object.__setattr__(
+            self,
+            "regions",
+            MappingProxyType(
+                {
+                    identity: RegionPages(
+                        region.key,
+                        region.cuts,
+                        region.anchors,
+                        region.allocation,
+                        tuple(
+                            tuple(
+                                child.offer.navigation for child in page.children if child.offer.navigation is not None
+                            )
+                            for page in region.pages
+                        ),
+                    )
+                    for identity, region in self.family.regions.items()
+                }
+            ),
+        )
 
     def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> OutputT:
         """Select clamped zero-based coordinates; hidden nested coordinates are ignored."""

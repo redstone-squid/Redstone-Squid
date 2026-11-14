@@ -1,15 +1,14 @@
 """Public target-neutral planning dispatcher."""
 
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import Any, cast
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike, PortableDocumentLike, as_document
-from squid_ui.handlers import bind_handlers
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.binding_preparation import prepare_bindings
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.composition_planner import plan_composition
 from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
@@ -103,27 +102,9 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
             if contains_regions(document.children)
             else backend.plan(rendered, request, cache=cache, memo=memo)
         )
-    frontend = request.target.adapter.frontend or request.target.adapter.name
-    bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend)
-    result = (
-        replace(result, bindings=bindings, form_bindings=forms)
-        if bindings is not result.bindings or forms is not result.form_bindings
-        else result
-    )
-    if (prepare_form := request.target.adapter.form_planner) is not None and forms:
-        result = replace(
-            result,
-            form_plans={
-                key: prepare_form(
-                    binding.spec,
-                    target=request.target,
-                    localization=request.localization,
-                    strict=request.strict or request.composition is not None,
-                )
-                for key, binding in forms.items()
-            },
-        )
-    return result
+    # Automatic composition prepares every reachable output inside its work
+    # allowance. Cursor selection must not leave other pages with raw handlers.
+    return result if result.allocation is not None else prepare_bindings(result, request)
 
 
 __all__ = ["plan", "plan_request"]

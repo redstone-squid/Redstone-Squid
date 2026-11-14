@@ -1,6 +1,6 @@
 # Shared allocation search
 
-Status: planning. The product decisions below are agreed; implementation has not started.
+Status: implemented and validated. Automatic composition is opt-in; mounted state integration remains phase 4.
 This phase replaces explicit selection with joint representation and page allocation search
 through the [phase 2 composition boundary](02-composition.md#phase-3-handoff).
 
@@ -75,232 +75,181 @@ mismatch is an invariant failure, not permission to silently repair or discard t
 Optimality and infeasibility claims apply to the declared representations and legal breaks available
 to this search. They do not claim that no other imaginable rendering of the content exists.
 
-## Current evidence and required extensions
+## Implemented boundary
 
-Paths in this section are relative to `packages/squid-ui/src/squid_ui/planning/`.
+Use `CompositionOptions(automatic=True)` with `plan`. V2, Slack messages, and HTML use their
+composition rules directly. `AutomaticComposition(rules, options)` provides the same search for
+custom typed rules. `CompositionOptions()` and `FixedComposition` retain the phase 2 fixed-selection
+behavior. Fixed selections and partitions can also constrain automatic search for reproducible tests.
 
-- `composition.py` exposes occurrences, offers, candidate trees, contextual evaluations, and immutable
-  target preparations. Reuse this boundary; target scene bodies remain opaque to search.
-- `RealizationOffer` has children, effects, and preference, but no break or continuation contract.
-  `CandidateComposition` requires exactly the offer's declared children. Introduce explicit fragment
-  occurrences rather than paginating by silently slicing candidate children.
-- `realizations.py` exposes complete tables and represents regions as ordinary flow containers.
-  Preserve region structure during search and expose table row breaks with repeated column headings
-  and source identity.
-- `build_composition` performs preflight, evaluation, shared-policy checks, construction, and independent
-  validation together. Separate admission/evaluation from construction without bypassing those checks.
-- `WorkBudget` spans composition operations, while legacy `regions.py` has separate measurement and
-  squared search allowances. Extend the composition allowance to enumeration and certification.
-- Legacy region frontiers compare numeric envelopes, degradation, turns, and summed preference.
-  Shared identities and ordinal preferences make that dominance relation unsuitable for the new solver.
-- `balanced_breaks` solves an additive sequence problem with hard break boundaries and soft
-  `min_fill`/`widows`. It cannot settle a joint problem with contextual costs or shared assets.
-- `PlanMetrics.states_explored` documents measurement calls, but fixed composition stores total work
-  there. Give the new path explicit work and search counters instead of extending that ambiguity.
+The implementation is in `packages/squid-ui/src/squid_ui/planning/`:
 
-Existing evidence includes `test_candidate_composition.py`, `test_composition_targets.py`, and
-`test_resource_budgets.py` in `packages/squid-ui/tests/`, plus `packages/squid-ui-discord/tests/test_regions.py`.
-They cover shared identities, contextual nesting, construction mismatches, sibling page combinations,
-nested visibility, stable allocation, and a small additive allocation oracle. They do not establish
-correctness of a generic joint solver or its new ranking policy.
+| Module | Responsibility |
+| --- | --- |
+| `allocation_policy.py` | Dense preference ranks, recursive fairness, fidelity comparison, goals, diagnostics. |
+| `composition.py` | Offer discovery, fragment and region contracts, admission, construction, independent validation. |
+| `fragments.py` | Legal break units, source coverage, continuation placements, wrapper preservation. |
+| `allocation.py` | Immutable region partitions and certified visible page combinations. |
+| `joint_search.py` | Bounded enumeration, contextual certification, conservative pruning, retained results. |
+| `composition_planner.py` | Public target selection, scene assembly, diagnostics, one DEBUG exhaustion log. |
+| `binding_preparation.py` | Frontend handler and form preparation, without registration or publication. |
 
-## Search design
+`RealizationOffer.flow` exposes legal child boundaries. `FragmentContract` exposes ordered leaf
+units, legal ends, repeated source references, and a constructor for a contiguous payload.
+`RegionContract` supplies page chrome. `FragmentCoverage` separates source anchors from placement
+identity. Tables expose row boundaries and repeat column headings without changing presentation.
+`unbreakable` suppresses internal breaks; `keep_with_next` propagates through flow wrappers.
 
-### Candidate space and stable page families
+`OfferDiscovery` distinguishes a complete domain, unsupported vocabulary, and interrupted discovery.
+Existing nonempty tuple-returning rules declare a complete domain; their empty tuple means unsupported.
+A complete empty `OfferDiscovery` means no choices, rather than unsupported vocabulary. Extensions
+must charge their own discovery, preparation, construction, and validation through `context.work`.
 
-A complete candidate chooses representations and legal partitions for the whole region tree.
-It includes persistent content, continuation shells, headers, footers, and navigation for every page.
-An independently paged sibling can visit any of its pages. A nested region contributes visible
-content and navigation only on parent pages that contain it. Certify those reachable combinations;
-do not require combinations of mutually hidden content to fit together.
+`evaluate_composition` retains the phase 2 preflight, fidelity, interaction, atomic, and structural
+resource checks. `construct_composition` builds admitted preparation and independently validates it.
+Fixed and automatic composition share both functions. The solver never inspects a native scene body.
 
-Begin with exact evaluation of reachable combinations, generated lazily. A candidate is usable
-only after all its combinations have been certified. A conservative resource envelope may establish
-that they all fit, but an oversized envelope is not proof that a real combination overflows.
-Shared assets must be deduplicated within each visible structural budget, with conflicts checked
-only where the uses coexist. Numeric maxima alone cannot carry this information.
+## Resolved comparison policy
 
-Extend the typed contracts with legal fragment boundaries, source coverage, continuation requirements,
-and navigation occurrences. Keep fragments of one semantic occurrence tied to its presentation
-choice unless the author has explicitly allowed variation. Preserve `unbreakable`, `keep_with_next`,
-structural budgets, and region boundaries through alternatives and wrappers. Atoms remain indivisible
-unless a richer contract supplies their structure. Do not infer breaks from opaque target payloads.
-Offer discovery must distinguish a complete set of choices from unsupported vocabulary or interrupted
-enumeration; an empty tuple alone cannot explain all three outcomes.
+The step 1 checkpoints are now implemented with these rules:
 
-Fragmentation must neither lose nor duplicate ordinary source content. Repeated headings and controls
-need explicit continuation roles and distinct placement identities. Carry source anchors separately
-from fragment IDs so phase 4 can reconcile positions without treating a new page as new content.
-Navigation extent, labels, disabled states, and container placement participate in evaluation;
-there is no constant navigation allowance assumed to work for every target or page count.
+1. Hard resource limits, structural constraints, permissions, and strictness determine admissibility.
+2. Compare soft allocation minimum shortfalls before presentation preferences. Within each resource
+   axis, compare the largest shortfall first. Axes use the declared `Axis` order; quantities on
+   different axes are never added. An inactive conditional region has zero shortfall.
+3. Normalize distinct preferences within each offer group before filtering feasibility. Within a
+   region, compare active ranks worst-first with missing entries treated as zero. Its own choices
+   precede its nested region groups. Equal-priority siblings compare their worst region first;
+   higher `RegionPolicy.priority` tiers precede lower tiers. Extra satisfied conditional choices
+   are neutral; extra dissatisfied choices can worsen an allocation.
+4. For tied preferences, lossless dominates lossy; a strict subset of the same source-scoped effects
+   dominates its superset. Unrelated losses remain incomparable. Retain all nondominated outcomes.
+5. Within comparable fidelity, minimize violated `min_fill` and `widows` goals, then total page turns.
+   Count each logical page once, even across many sibling combinations. A violation in any reachable
+   context counts. This compares satisfaction without mixing character and item shortfall magnitudes.
+6. Resolve equivalent results by occurrence paths, offer keys, and cuts. Select deterministically from
+   incomparable results without claiming one preserves more meaning.
 
-### Comparing candidates
+`RegionPolicy.goals` contains `AllocationGoal(axis, minimum, hard=False)`. A hard goal reserves
+unused capacity and participates in enclosing structural and global limits. Existing
+`sl.budget(min=..., prefer=..., stretch=...)` retains its hard character floor. With zero stretch,
+its preferred grant caps body characters. `Paged.chars` remains a body cap; navigation is measured
+separately in the enclosing composition. Nested floors reserve their maximum requirement, rather
+than double reserving overlapping space. Every nonempty region still needs a complete legal unit;
+no additional arbitrary default character minimum is invented.
 
-Implement the agreed ordering explicitly rather than reusing `search.CostVector` or adding raw
-preference values. Normalize each group's distinct declared preference values into dense ranks,
-retaining ties. Normalize before candidate feasibility filtering so rejection of a preferred choice
-does not disguise a compromise. Count a logical choice once, not once per page or repeated header.
+The tests cover ordinal gaps, reordered offers, second/second fairness, explicit priorities,
+nested and conditional choices, strict and non-strict loss, and incomparable effects. The recursive
+fairness policy intentionally does not offer richer first/third versus second/second tradeoff controls.
 
-The proposed fairness comparison is lexicographic minimization of worst dissatisfaction first.
-Within a region, sort its active choice ranks from worst to best. Compare these vectors with missing
-entries treated as zero. Among equal-priority sibling regions, sort their vectors from worst to best
-and compare in that order. Higher explicit priority tiers are compared first. Apply the grouping
-recursively for nested regions; do not let one region gain priority simply by having more rows.
-For two regions with one choice each, ranks `(1, 1)` therefore beat `(0, 2)`. The numeric preference
-gaps never enter the comparison. Step 1 must exercise conditional alternatives and unequal numbers
-of choices before this proposed generalization becomes the implemented contract.
+## Search and completeness
 
-Compare soft allocation and break-policy satisfaction before page-count improvements. Represent
-allocation goals in their declared units, separate from preference ranks; a resource cap is never
-a soft goal. Preserve `min_fill` and `widows` as soft preferences rather than discarding them or
-turning them into hard requirements. The exact ordering of soft allocation goals against presentation
-preferences remains a design checkpoint in step 1: our discussion established useful minimums first,
-but did not assign precedence to every combination of author hints.
+A deterministic best-first queue holds partial offer assignments and legal partition states.
+Conditional children are discovered only when their branch is visited. Balanced refinements run
+first as probes to find a usable allocation early. They only affect work order: every legal cut
+remains in the supported domain. Partition states are deduplicated only within the exact same
+representation assignment. Opaque payloads and equal scalar costs are never used for dominance.
 
-For tied preferences, lossless dominates lossy. Among lossy candidates, use only established semantic
-comparisons, such as an otherwise identical candidate with a strict subset of the same source-scoped
-effects. Different omitted fields or unrelated interaction changes need not be comparable. Keep
-those candidates separate; do not count effects as a measure of importance. Minimize total page
-turns, `sum(max(0, pages - 1))` over logical regions, within comparable fidelity classes. This is a
-navigation proxy, not an estimate of how often a reader visits each nested region.
+The initial sound bound discards refinements of a feasible family whose soft goals are all satisfied.
+Those refinements preserve its choices and effects and necessarily add page turns. Otherwise search
+retains the partitions. It does not assume monotonic target costs or prune using standalone costs.
+The bound and queue are checked against independently enumerated small domains.
 
-Use stable occurrence paths, offer keys, and cut positions to resolve remaining equivalent choices.
-For incomparable fidelity outcomes, select deterministically from the nondominated results without
-claiming one preserves more meaning. An optimal result means no candidate is better under the
-specified comparison, not that every valid layout has a unique quality score. Oracle tests must
-check the nondominated set as well as the deterministic selected result.
-Retain incomparable outcomes until dominance is settled; keeping only the current deterministic
-winner could lose an outcome needed after a later candidate dominates that winner.
+Each candidate certifies all reachable visible sibling combinations. Nested regions contribute only
+on parent pages containing them. Resource sharing is evaluated in each actual visible scope, rather
+than using a union or scalar maximum as proof of infeasibility. Conflicting values for one shared
+identity reject their coexistence; they may appear on separate pages. Construction mismatches remain
+fatal invariant errors, even when an earlier valid allocation exists.
 
-### Algorithm and sound pruning
+Every reachable page is built, independently validated, and assembled, including frontend bindings
+and form preparation, before its family can become an incumbent. This is stronger than building
+only the requested page: cursor coordinates cannot affect search work or the returned partition.
+Page selection requires no new target evaluation, construction, or handler preparation.
 
-Start with lazy branch-and-bound enumeration of partial assignments and legal partitions. Use a
-deterministic best-first work queue to try promising assignments early and retain a validated best
-result while search continues. Generate each conditional offer's children only when that branch is
-visited; do not first materialize the Cartesian product of choices or page combinations.
+Completeness requires finite declared offers and legal ends, complete supported discovery, and enough
+work to drain the queue. Optimality means nondominance under the comparison above, within that domain.
+It does not mean that no imaginable rendering could be better. The larger default-allowance fixture
+establishes a usable certified result; it does not require exhaustive completion for large domains.
+Cross-request reuse and stronger bounds remain phase 5 work.
 
-Use ranking and fit estimates to order work. Prune only with a separately justified bound or proof:
+## Work and outcomes
 
-- Reject a complete candidate on its actual violations. A partial candidate's overflow is sufficient
-  only when a proven lower bound shows every completion also overflows.
-- Discard a partial candidate on ranking only when its optimistic bound cannot improve the retained
-  result, including the final deterministic tie policy. Incomparable fidelity is not such a proof.
-- Merge identical states only when they admit the same future choices and retain the same source,
-  effects, region structure, constraints, context, resource identities, and interaction ownership.
-  Where equality cannot be established for an opaque extension, keep both states.
+Automatic composition uses `CompositionOptions.work_limit`, defaulting to 50,000 declared operations.
+This is one allowance from semantic traversal through result assembly, shared with target operations.
+Fixed composition retains `PlanRequest.search_budget`. Work units bound declared operations, rather
+than wall-clock time spent in arbitrary custom Python or callbacks.
 
-Initially prefer weak or absent bounds over speculative dominance. Equal scalar costs or a cheaper
-standalone representation do not justify pruning: another region may share the expensive candidate's
-asset, and container context can change feasibility. Each stronger rule needs a counterexample test
-and an exhaustive comparison. Never truncate a frontier and then report established infeasibility.
+`PlanReport.search` contains completion, optimality, work used and allowed, violations, and unsupported
+occurrences. `PlanMetrics` separates `work_used`, `generated_states`, `target_evaluations`, and
+`certified_combinations`; the legacy `states_explored` measurement counter is not repurposed.
 
-This choice avoids extending the legacy additive frontier beyond its assumptions. An additive
-dynamic program remains useful for proven independent sequences; a beam search would sacrifice
-completeness even with ample work. Pure exhaustive enumeration supplies the test oracle, but useful
-search order and sound bounds should find usable production results earlier.
+- Completed search returns a certified allocation with established optimality over the supported domain.
+- Exhaustion with an incumbent returns that allocation, with `completion=EXHAUSTED` and `optimal=False`.
+- Exhaustion without an incumbent raises `JointExhaustedError` with structured diagnostics.
+- Completed infeasibility raises `JointInfeasibleError`.
+- Unsupported vocabulary or resource axes raises `JointUnsupportedError` if no allocation is available.
+  A result found while another branch is unsupported carries `completion=UNSUPPORTED`, without optimality.
 
-Completeness is conditional on finite declared offers, finite legal fragment boundaries, complete
-target enumeration, and enough work to drain the queue. Unsupported fragmentation is reported as
-unsupported, not proved impossible. Exhaustion makes no completeness or optimality claim. Phase 3
-must include a representative larger case to prevent an exact but unusable default search; broader
-performance targets and cross-request reuse still belong to phase 5.
+Exhaustion logs once at DEBUG at the public boundary. The returned layout has no user-facing warning.
+Fault injection covers discovery, evaluation, construction, validation, and finalization. It verifies
+that partially certified families never replace an earlier validated result. Neither planning nor
+preparing discarded bindings invokes application handlers or publishes presentation state.
 
-### Work limits and retaining a usable result
+## Public use
 
-Use one allowance for semantic traversal, offer discovery, state generation, page-combination
-evaluation, policy checks, preparation, building, validation, and result assembly. Charge loops and
-queue admission incrementally, before doing the work; shared and target operations cannot reset
-the allowance. A work unit bounds declared operations, not wall-clock time for arbitrary custom
-Python. Finite offers alone do not excuse uncharged work inside a target extension.
+```python
+from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 
-Keep a result eligible for return only after its entire page family is certified and its requested
-scene is built and independently validated. Store its body, bindings, resources, page structure,
-and diagnostics together. If evaluating or finalizing a better candidate exhausts the allowance,
-return the earlier scene with the updated search status. If no such result exists, report exhaustion. Do not spend
-unaccounted work after exhaustion to turn an evaluated candidate into a deliverable result.
+result = plan(
+    document,
+    target=target,
+    composition=CompositionOptions(automatic=True),
+)
 
-The structured outcome records completion or exhaustion, whether optimality is established, work
-used and allowed, and the available candidate violations. Keep generated states, target evaluations,
-and certified page combinations as separate counters. Emit the DEBUG exhaustion log once at the
-public planning boundary. Building a discarded candidate must not publish bindings or mutate
-presentation state, and construction mismatches must still propagate as invariant failures.
+# Zero-based explicit coordinates; no new allocation or target work.
+next_page = result.for_page({OccurrenceId(("root", "results")): 1})
+```
 
-## Reviewable implementation sequence
+`CompositionOptions.pages` selects the initial output. Unknown region paths are rejected; indexes
+clamp to valid extents, and coordinates for currently hidden nested regions are ignored.
+`selections` pins offer keys, `partitions` pins exclusive legal page ends, and `policies` supplies
+region priorities and goals. All mappings are copied into immutable views.
 
-1. **Define comparison and outcomes.** Add typed allocation policy and search outcome contracts,
-   dense preference ranks, and examples for fair compromise, authorized loss, and deterministic
-   ties. Resolve the soft-goal ordering and conditional-choice comparison checkpoints above using
-   concrete fixtures; discuss any resulting policy change before implementation. Keep region
-   priority ordinal and distinct from legacy `stretch`. Establish the independent exhaustive oracle.
-2. **Expose legal fragments and navigation.** Extend semantic occurrences and target offers with
-   region boundaries, break units, continuation roles, and navigation structure. Separate evaluation
-   from construction while retaining all phase 2 admission, atomic, budget, and binding checks.
-   Exercise fixed fragment configurations on V2, Slack messages, and HTML before adding search.
-3. **Implement joint enumeration.** Search representations and partitions together; certify all
-   reachable page combinations and retain stable allocation structures. Start with conservative
-   pruning and cover nested visibility, multiple axes, repeated chrome, and shared resources against
-   the oracle. Keep target-specific body construction outside the solver.
-4. **Bound work and retain validated results.** Charge each search and target operation to the same
-   allowance. Inject exhaustion during discovery, combination certification, building, and validation.
-   Return a prior validated result where available; distinguish unsupported, infeasible, and exhausted
-   outcomes. Add structured diagnostics and one DEBUG log at the boundary.
-5. **Expose automatic planning and hand off.** Extend the opt-in composition entry point with automatic
-   search and explicit page coordinates for testing. Preserve fixed selections as reproducible test
-   inputs through the same evaluation path. Pass immutable allocations and anchors to the phase 4
-   boundary without migrating mounted state now. Update the API sketch and migration inventory to
-   implemented names, run focused conformance and regression checks, and record remaining limitations.
+`result.allocation.regions` exposes each region's key, cuts, source anchors, measured allocation,
+and typed `NavigationInput` records for each page. `result.for_page` retains the same allocation,
+diagnostics, and metrics while selecting the visible scene, resources, bindings, and forms.
+Allocation identity is a request-local token, stable for this allocation's lifetime. It deliberately
+is not a content fingerprint or a cross-request cache key.
 
-Each step should leave an independently valid commit. Do not route automatic search through legacy
-complete planners, silently weaken authored policies, or advertise full pagination migration at step 5.
+## Validation and phase 4 handoff
 
-## Validation
+Focused tests include `test_allocation_policy.py`, `test_composition_fragments.py`,
+`test_joint_search.py`, `test_joint_search_budget.py`, and `test_automatic_composition.py`.
+They compare feasible sets and selected optima with exhaustive preference, partition, multi-axis,
+and shared-resource fixtures; check incomparable nondominated effects; exercise all three targets;
+and cover wrapper constraints, repeated chrome, nested visibility, hard and soft goals, stable pages,
+source anchors, exhaustion, reservations, and page-local bindings. Existing composition, resource,
+semantic correspondence, UI, and Discord region tests remain regression evidence.
 
-Build the exhaustive oracle independently of production ranking and pruning helpers. On small finite
-fixtures, enumerate every offer assignment, legal partition, and reachable page combination. Compare
-feasible sets, nondominated outcomes, and deterministic selections with the solver under sufficient
-work. With bounded work, assert result validity and accurate completion status instead of optimality.
+Phase 4 should retain the certified allocation for cursor-only movement, use source anchors to
+reconcile changed content, bind its navigation inputs to the authored ownership policy, and stage
+state changes for successful delivery. A changed document, target, reservation, localization, chrome,
+policy, or live resource requires a new allocation. Hidden coordinates need not be discarded, but
+hidden controls and resources must not be published. Failed delivery must retain the prior committed
+allocation and bindings.
 
-Acceptance fixtures must cover:
+The automatic path does not consume mounted `positions`, external `nav`, or document-level assets.
+Region ownership is not reconciled with session state yet. Download nodes in supported content work.
+Character-specific `Paged`/`Budgeted` vocabulary requires a measured character axis; Slack and HTML
+report it unsupported rather than guessing a conversion. HTML regions and explicit row fragmentation
+work without inventing a global resource budget. The broader widget and target matrix remains phase 6.
 
-- Preference gap changes and offer reordering; second/second versus first/third; explicit priorities;
-  tied preferences; nested and conditional choices; repeated content counted once for ranking.
-- Preferred authorized loss in non-strict mode, strict rejection, detail preservation on a preference
-  tie, and incomparable losses without invented importance scores.
-- Soft minimum shortfalls versus hard minimum failures, one complete unit per visible region,
-  empty regions, impossible atoms, hard breaks, `min_fill`, and `widows` through wrappers.
-- Stable presentations and page boundaries at every sibling coordinate, including short final pages,
-  nested hidden children, repeated headings and navigation, and page-count-dependent chrome costs.
-- Shared attachments that reverse standalone cost rankings, equal counts with different identities,
-  conflicting co-visible uses, separate budget scopes, and multiple simultaneous resource limits.
-- Exhaustion before any result and after a valid result, including during replacement construction;
-  no uncharged finalization, no state publication, and fatal construction/evaluation mismatches.
-- Direct V2 and Slack participation with legacy planners disabled; HTML without invented global limits;
-  unsupported target features reported distinctly from exhausted search and infeasible candidates.
+| Remaining production route | Removal or integration phase |
+| --- | --- |
+| `planning/regions.py`, mounted region allocation and staged updates | Phase 4 |
+| Legacy root and local pagination, controlled/uncontrolled/routed ownership | Phase 4 |
+| `PlanCache`/`PlanMemo`, fingerprints, cross-request reuse | Phase 5 |
+| Classic Discord, Slack modal/home, and unsupported composition widgets | Phase 6 |
+| Legacy complete backend discovery and target-specific fallbacks | Phase 6 after coverage and caller migration |
 
-Run focused tests with `--no-cov` during implementation and after final relevant edits, plus changed-file
-format/lint hooks, `git diff --check`, and whole-project `just typecheck`. Keep all workspace source
-directories in Pyrefly's search path. The full suite remains CI's responsibility unless impact warrants
-a broader local run.
-
-Planning validation: the 68 existing tests in the candidate composition, composition targets, resource
-budgets, breaking, and Discord regions files passed with `--no-cov`; whole-project Pyrefly reported
-zero errors. This is baseline evidence, not validation of the proposed algorithm. Implementation
-completion requires the new oracle and acceptance cases above.
-
-## Completion criteria
-
-- Automatic representation selection and joint fragmentation use the shared composition boundary.
-- All reachable page combinations satisfy target limits, local constraints, and enclosing budgets.
-- Stable allocations and presentations do not depend on the currently selected page.
-- Preference ordering, fair compromise, fidelity defaults, and hard requirements have direct tests.
-- Small cases agree with an independent exhaustive oracle, including non-additive resource cases.
-- One work allowance covers shared and target operations, including returning a validated result.
-- Exhaustion with a valid result, exhaustion without one, and established infeasibility are distinct.
-- V2, Slack messages, and HTML exercise the solver without calling a legacy complete target planner.
-- Phase 4 receives immutable page structures, source anchors, visible binding information, and a
-  documented boundary for state integration. Planning publishes no state or handler registrations.
-
-The phase 4 handoff must document stable allocation identity, how to select a visible page without
-reallocating siblings, source anchors, nested visibility, navigation inputs, and when content or
-constraints invalidate an allocation. It must also list remaining production routes and their removal
-phases. No phase 3 result commits runtime state; successful delivery remains the publication boundary.
+All five implementation steps are complete. This finishes phase 3, not the entire pagination migration.

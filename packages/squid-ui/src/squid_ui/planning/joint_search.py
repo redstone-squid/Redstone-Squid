@@ -266,7 +266,8 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     retained: list[tuple[AllocationQuality, CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]]] = []
     unsupported: set[OccurrenceId] = set()
     violations: list[CandidateViolation] = []
-    generated = evaluations = certified = 0
+    generated = certified = 0
+    initial_evaluations = context.work.target_evaluations
     exhausted = False
     seen_partitions: set[tuple[int, tuple[tuple[int, ...], ...]]] = set()
     seen_occurrences: set[OccurrenceId] = set()
@@ -355,7 +356,6 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
             feasible = True
             for coordinates, visible in family.combinations(context):
                 context.work.consume()
-                evaluations += 1
                 try:
                     admitted = evaluate_composition(visible, rules, context)
                 except SharedResourceConflictError as error:
@@ -517,7 +517,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         context.work.spent,
         context.work.limit,
         generated,
-        evaluations,
+        context.work.target_evaluations - initial_evaluations,
         certified,
         tuple(violations),
         tuple(sorted(unsupported, key=lambda identity: identity.path)),
