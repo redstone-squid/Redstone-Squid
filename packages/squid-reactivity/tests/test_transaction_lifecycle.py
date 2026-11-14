@@ -132,8 +132,8 @@ def test_owner_notifications_group_fields_by_identity_and_preserve_order() -> No
         right.second = 3
         right.first = 4
     assert commits == [
-        ("right", frozenset({"__state_first", "__state_second"})),
-        ("left", frozenset({"__state_second"})),
+        ("right", frozenset({"first", "second"})),
+        ("left", frozenset({"second"})),
     ]
     assert not rollbacks
 

@@ -42,7 +42,7 @@ def test_transaction_publishes_once_and_computed_reads_staged_state() -> None:
         assert counter.doubled == 4
 
     assert counter.value == 2
-    assert counter.commits == [frozenset({"__state_value"})]
+    assert counter.commits == [frozenset({"value"})]
 
 
 def test_transaction_rollback_discards_staged_state() -> None:

@@ -553,7 +553,7 @@ class Reactive:
         self.on_state_rollback()
 
     def on_state_commit(self, names: frozenset[str]) -> None:
-        """React after the named state fields publish together."""
+        """React after state fields publish together. `names` holds their declared field names."""
 
     def on_state_rollback(self) -> None:
         """React after an attempted transaction restores this owner."""
@@ -584,15 +584,19 @@ class Reactive:
         descriptor.mutated(self)
 
     def _state_changed(self, names: frozenset[str]) -> None:
-        for descriptor in type(self)._state_descriptors.values():
-            if descriptor._name in names:
-                publish(CellAddress(self, descriptor.public_name))
+        # Transactions identify a write by its storage key (`__state_<field>`). Subscribers and
+        # `on_state_commit` are addressed by the field name the author declared.
+        changed = [
+            descriptor.public_name for descriptor in type(self)._state_descriptors.values() if descriptor._name in names
+        ]
+        for name in changed:
+            publish(CellAddress(self, name))
         for listener in tuple(self._reactive_commit_listeners):
             try:
                 listener()
             except Exception:
                 _log.exception("reactive commit listener failed")
-        self.on_state_commit(names)
+        self.on_state_commit(frozenset(changed))
 
     def _add_commit_listener(self, listener: Callable[[], None]) -> None:
         self._reactive_commit_listeners.add(listener)
