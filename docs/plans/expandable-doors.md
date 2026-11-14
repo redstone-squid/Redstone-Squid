@@ -192,6 +192,10 @@ responses expose this evidence; list responses stay compact. Holder metrics,
 search projections and activation events use the evaluated result. Later source
 edits cannot change a published configuration until another rebuild.
 
+The ordinary web record page displays a family holder's saved opening, parameters,
+volume, timing variants, formulas and source excerpts. It hides that holder's
+sample measurements and shows alternative configurations separately.
+
 Unknown membership prevents an official result. Alternative configurations stay
 separate, and a holder metric is scalar only when all selected alternatives agree.
 Family completion dates remain unverified; categories involving families report
@@ -233,10 +237,10 @@ Until verified per-configuration completion evidence is modeled, families cannot
 win `first`, and completion ties across builds remain unresolved. Source completion
 text remains unverified.
 
-These results are live evaluations, not published records. Immutable candidate
-snapshots, caching by snapshot, symbolic winning regions, and published point
-views remain part of the publication stage below. Discord/UI integration is also
-pending; the API and application service are the current entry points.
+The live endpoint evaluates current facts without publishing them. Ordinary
+record pages use the saved concrete results described above; symbolic ranges
+and published range-point views use the separate publication path below.
+Dedicated live-query controls and caching by snapshot remain pending.
 
 ## Common coordinates and formula branches
 

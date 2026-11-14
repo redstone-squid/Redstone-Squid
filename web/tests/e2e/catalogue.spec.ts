@@ -106,6 +106,28 @@ test("renders authoritative record holders and creator searches", async ({ page 
   await expect(page.getByRole("link", { name: "Observerless Iris" })).toBeVisible();
 });
 
+test("shows the published family configuration instead of its measured sample", async ({
+  page,
+}) => {
+  await page.goto("/records/13");
+  await expect(page.getByRole("heading", { name: "Smallest 6×3 door" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Expandable n×3 door" })).toBeVisible();
+  const configuration = page.getByRole("region", { name: "Configuration for this record" });
+  await expect(configuration.getByText("Opening dimensions: 6 × 3 × 1")).toBeVisible();
+  await expect(configuration.getByText("n = 6")).toBeVisible();
+  await expect(configuration.getByText("30", { exact: true })).toBeVisible();
+  await expect(configuration.getByText("Opening: 3 game ticks")).toBeVisible();
+  await expect(page.getByText("99 × 3 × 1")).toHaveCount(0);
+  await expect(page.getByText("198 game ticks")).toHaveCount(0);
+  await configuration.getByText("Source formulas and evidence").click();
+  await expect(configuration.getByText("10ceil(n/2)", { exact: true })).toBeVisible();
+  await expect(
+    configuration.getByText("Add one width layer; opening takes floor(n/2) game ticks."),
+  ).toBeVisible();
+  await page.goto("/zh-cn/records/13");
+  await expect(page.getByRole("heading", { name: "此纪录对应的配置" })).toBeVisible();
+});
+
 test("renders build, record, and metadata search results", async ({ page }) => {
   await page.goto("/search?q=door");
   await expect(page.getByRole("link", { name: "Copper Bolt 5×5" })).toBeVisible();

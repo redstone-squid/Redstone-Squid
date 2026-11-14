@@ -175,14 +175,24 @@ export const messageKeys = [
   "nav.search",
   "nav.skip",
   "nav.submit",
+  "record.alternativeConfigurations",
   "record.baseTitle",
+  "record.closingReset",
+  "record.closingVisible",
   "record.computed",
+  "record.configuration",
   "record.detail",
   "record.holderCount",
   "record.holders",
   "record.kind",
+  "record.openingReset",
+  "record.openingVisible",
+  "record.parameters",
+  "record.sourceFormulas",
   "record.status",
+  "record.timingVariant",
   "record.versionScope",
+  "record.volume",
   "records.empty",
   "records.intro",
   "records.title",
@@ -451,6 +461,7 @@ export type MessageVariables = {
   "record.computed": { date: string | number };
   "record.detail": { id: string | number };
   "record.holderCount": { count: string | number };
+  "record.timingVariant": { number: string | number };
   "submitFlow.completed": { id: string | number };
   "submitFlow.limits": {
     images: string | number;

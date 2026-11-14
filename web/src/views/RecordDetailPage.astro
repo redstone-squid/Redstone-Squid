@@ -1,5 +1,6 @@
 ---
 import BuildCard from "../components/BuildCard.astro";
+import DoorRecordConfigurations from "../components/DoorRecordConfigurations.astro";
 import ErrorState from "../components/ErrorState.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, CatalogueApiError, fetchRecord } from "../lib/api";
@@ -107,7 +108,22 @@ const canonicalPath = recordId ? localizePath(`/records/${recordId}`, locale) : 
         </div>
         <div class="card-grid">
           {record!.holder_builds.map((build) => (
-            <BuildCard build={build} locale={locale} />
+            <div>
+              <BuildCard
+                build={build}
+                locale={locale}
+                showMeasurements={
+                  !record!.door_evidence?.sources.some((source) => source.build_id === build.id)
+                }
+              />
+              {record!.door_evidence && (
+                <DoorRecordConfigurations
+                  evidence={record!.door_evidence}
+                  buildId={build.id}
+                  locale={locale}
+                />
+              )}
+            </div>
           ))}
         </div>
       </section>

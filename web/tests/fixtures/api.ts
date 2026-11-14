@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { doorEvidence } from "./door-record";
 
 import type {
   BuildDetail,
@@ -142,6 +143,21 @@ const records = [
 ] satisfies [PublishedTitle, PublishedTitle];
 
 const recordDetail: PublicRecordDetail = { ...records[0], holder_builds: [builds[0]] };
+const expandableRecord: PublicRecordDetail = {
+  ...records[0],
+  id: 13,
+  title: "Smallest 6×3 door",
+  base_title: "smallest",
+  door_evidence: doorEvidence,
+  holder_builds: [
+    {
+      ...builds[0],
+      title: "Expandable n×3 door",
+      dimensions: { width: 99, height: 3, depth: 1 },
+      opening_time: 198,
+    },
+  ],
+};
 
 function json(body: unknown, status = 200, contentType = "application/json"): Response {
   return new Response(JSON.stringify(body), {
@@ -268,6 +284,7 @@ async function routeRequest(request: Request): Promise<Response> {
 
   if (url.pathname === "/v1/records") return json(recordPage(url) satisfies RecordsListResponse);
   if (url.pathname === "/v1/records/11") return json(recordDetail satisfies PublicRecordDetail);
+  if (url.pathname === "/v1/records/13") return json(expandableRecord);
   if (/^\/v1\/records\/\d+$/.test(url.pathname)) return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/search/suggest") {
