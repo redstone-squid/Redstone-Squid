@@ -3734,7 +3734,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:770"
+      "squid/bot/submission/build_browse.py:764"
     ]
   },
   "bot-submission-build-browse-cancel": {
@@ -3832,7 +3832,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:768"
+      "squid/bot/submission/build_browse.py:762"
     ]
   },
   "bot-submission-build-browse-open-by-id": {
@@ -6266,7 +6266,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/build_browse.py:546",
-      "squid/bot/submission/build_browse.py:682"
+      "squid/bot/submission/build_browse.py:676"
     ]
   },
   "build-input-extender-orientation": {
@@ -6702,7 +6702,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:612",
+      "squid/bot/submission/build_browse.py:606",
       "squid/bot/submission/search_help.py:181"
     ]
   },
@@ -10659,7 +10659,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:129"
+      "squid/bot/submission/guided_search.py:126"
     ]
   },
   "guided-search-previous-filters": {
@@ -10668,7 +10668,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:123"
+      "squid/bot/submission/guided_search.py:120"
     ]
   },
   "guided-search-query-label": {
@@ -10695,7 +10695,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:618"
+      "squid/bot/submission/build_browse.py:612"
     ]
   },
   "guided-search-search-filter": {
@@ -13995,15 +13995,6 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/build_browse.py:583"
-    ]
-  },
-  "record-filter-hint": {
-    "fingerprint": "c24fcb84d25e6bbd2848151da41e79a5dcdbbdf5f49e74919306dcda7a68b866",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/build_browse.py:600"
     ]
   },
   "record-search-query-help": {

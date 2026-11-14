@@ -1108,7 +1108,7 @@ bot-submission-build-browse-build = { $action } build #{ $build_id }?
 # squid/bot/submission/build_browse.py:459
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:770
+# squid/bot/submission/build_browse.py:764
 bot-submission-build-browse-build-id = Build ID
 
 # squid/bot/submission/build_browse.py:330
@@ -1138,7 +1138,7 @@ bot-submission-build-browse-edit = Edit
 # squid/bot/submission/build_browse.py:227
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:768
+# squid/bot/submission/build_browse.py:762
 bot-submission-build-browse-open-build = Open build
 
 # squid/bot/submission/build_browse.py:520
@@ -1880,7 +1880,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:374
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/submission/build_browse.py:546, squid/bot/submission/build_browse.py:682
+# squid/bot/submission/build_browse.py:546, squid/bot/submission/build_browse.py:676
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -2018,7 +2018,7 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/submission/build_browse.py:612, squid/bot/submission/search_help.py:181
+# squid/bot/submission/build_browse.py:606, squid/bot/submission/search_help.py:181
 catalogue-search-help = Search help
 
 # squid/catalogue/domain/titles.py:67
@@ -3236,10 +3236,10 @@ guided-search-keywords = Keywords
 # squid/bot/submission/guided_search.py:301, squid/bot/submission/guided_search.py:317
 guided-search-negated = Exclude (NOT)
 
-# squid/bot/submission/guided_search.py:129
+# squid/bot/submission/guided_search.py:126
 guided-search-next-filters = Next filters
 
-# squid/bot/submission/guided_search.py:123
+# squid/bot/submission/guided_search.py:120
 guided-search-previous-filters = Previous filters
 
 # squid/bot/submission/guided_search.py:217
@@ -3248,7 +3248,7 @@ guided-search-query-label = Query
 # squid/bot/submission/guided_search.py:203
 guided-search-remove-clause = Remove
 
-# squid/bot/submission/build_browse.py:618
+# squid/bot/submission/build_browse.py:612
 guided-search-reset = Reset
 
 # squid/bot/submission/guided_search.py:395
@@ -4298,9 +4298,6 @@ record-browser-first = First
 
 # squid/bot/submission/build_browse.py:583
 record-browser-smallest = Smallest
-
-# squid/bot/submission/build_browse.py:600
-record-filter-hint = Toggle any record types; none selected means all types. Search keeps your selection.
 
 # squid/bot/submission/commands.py:195
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
