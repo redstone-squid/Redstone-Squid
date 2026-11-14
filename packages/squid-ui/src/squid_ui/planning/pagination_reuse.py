@@ -179,6 +179,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             | primitive.Button()
             | primitive.RoutedButton()
             | primitive.LinkButton()
+            | primitive.PremiumButton()
             | primitive.SelectMenu()
             | primitive.RoutedSelect()
             | primitive.EntitySelect(),

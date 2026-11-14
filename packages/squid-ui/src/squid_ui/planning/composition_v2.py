@@ -38,6 +38,7 @@ from squid_ui.planning.realizations import (
     ImageRealization,
     NativeSectionRealization,
     PanelRealization,
+    PremiumRealization,
     Realization,
     RowRealization,
     SelectRealization,
@@ -134,7 +135,8 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     ):
                         violations.append(ConstraintViolation(identity, "section text slots exceed native limits"))
                     if len(accessories) != 1 or not isinstance(
-                        accessories[0], scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link
+                        accessories[0],
+                        scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton,
                     ):
                         violations.append(ConstraintViolation(identity, "section needs one accessory"))
                         return ()
@@ -160,6 +162,15 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                 case SeparatorRealization(node=node):
                     components += 1
                     return (node,)
+                case PremiumRealization(sku_id=sku_id):
+                    identity = part.offer.occurrence.identity
+                    if Capability.ACTIONS_DISCORD_PREMIUM not in context.capabilities:
+                        violations.append(UnsupportedCapability(identity, "Discord premium buttons"))
+                    if self.limits.components.row_buttons < 1:
+                        violations.append(LocalCapacityExceeded(identity, "row.buttons", 1, 0))
+                    components += 1 if in_row else 2
+                    premium = scene.PremiumButton(sku_id)
+                    return (premium,) if in_row else (scene.Row((premium,)),)
                 case ControlRealization() as control:
                     identity = part.offer.occurrence.identity
                     for name, used, capacity in (
@@ -193,7 +204,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     return (button,) if in_row else (scene.Row((button,)),)
                 case ActionsRealization(columns=columns):
                     output: list[scene.Node] = []
-                    pending: list[scene.Button | scene.RoutedButton | scene.Link] = []
+                    pending: list[scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton] = []
                     size = max(1, columns if columns is not None else self.limits.components.row_buttons)
                     if columns is not None and columns > self.limits.components.row_buttons:
                         violations.append(
@@ -216,7 +227,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         if isinstance(child.offer.payload, ActionsRealization):
                             flush()
                         for item in visit(child, in_panel=in_panel, in_row=True):
-                            if isinstance(item, scene.Button | scene.RoutedButton | scene.Link):
+                            if isinstance(item, scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton):
                                 pending.append(item)
                                 if len(pending) == size:
                                     flush()
@@ -238,10 +249,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                                 self.limits.components.row_buttons,
                             )
                         )
-                    items: list[scene.Button | scene.RoutedButton | scene.Link] = []
+                    items: list[scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton] = []
                     for child in part.children:
                         for item in visit(child, in_panel=in_panel, in_row=True):
-                            if not isinstance(item, scene.Button | scene.RoutedButton | scene.Link):
+                            if not isinstance(
+                                item, scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton
+                            ):
                                 message = "navigation row contains a non-button"
                                 raise DrawInvariantError(message)
                             items.append(item)
@@ -515,7 +528,8 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         raise DrawInvariantError(message)
                 case scene.Section(texts=children, accessory=accessory):
                     if not 1 <= len(children) <= self.limits.section_texts or not isinstance(
-                        accessory, scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link
+                        accessory,
+                        scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link | scene.PremiumButton,
                     ):
                         message = "built thumbnail section violates its structure"
                         raise DrawInvariantError(message)
@@ -525,6 +539,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                 case scene.Thumbnail():
                     if len(node.description or "") > self.limits.gallery_item_description:
                         message = "built thumbnail description exceeds its limit"
+                        raise DrawInvariantError(message)
+                case scene.PremiumButton():
+                    if node.sku_id <= 0 or Capability.ACTIONS_DISCORD_PREMIUM not in context.capabilities:
+                        message = "built premium button lacks a valid SKU or capability"
                         raise DrawInvariantError(message)
                 case scene.Separator():
                     pass

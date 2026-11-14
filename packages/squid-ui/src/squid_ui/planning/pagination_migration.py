@@ -142,13 +142,16 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     msg = "Discord native controls on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 for item in node.items:
-                    if not isinstance(item, primitive.Button | primitive.RoutedButton | primitive.LinkButton):
+                    if not isinstance(
+                        item, primitive.Button | primitive.RoutedButton | primitive.LinkButton | primitive.PremiumButton
+                    ):
                         raise UnsupportedSemanticError(type(item).__name__)
                 return node
             case (
                 primitive.Button()
                 | primitive.RoutedButton()
                 | primitive.LinkButton()
+                | primitive.PremiumButton()
                 | primitive.SelectMenu()
                 | primitive.RoutedSelect()
                 | primitive.EntitySelect()

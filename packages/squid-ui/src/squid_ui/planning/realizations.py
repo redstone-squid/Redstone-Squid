@@ -294,6 +294,11 @@ class ControlRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class PremiumRealization:
+    sku_id: int
+
+
+@dataclass(frozen=True, slots=True)
 class RowRealization:
     pass
 
@@ -343,6 +348,7 @@ type Realization = (
     | ImageRealization
     | DownloadRealization
     | ControlRealization
+    | PremiumRealization
 )
 
 
@@ -485,6 +491,8 @@ def navigation_candidate[RenderTargetT, ContextT](
                 disabled=node.disabled,
                 emoji=normalize_emoji(node.emoji),
             )
+        case primitive.PremiumButton():
+            payload = PremiumRealization(node.sku_id)
         case primitive.LinkButton():
             payload = ControlRealization(
                 label(node.label) or "", url=node.url, disabled=node.disabled, emoji=normalize_emoji(node.emoji)
@@ -1085,6 +1093,7 @@ def semantic_offers[RenderTargetT, ContextT](
         primitive.Button
         | primitive.RoutedButton
         | primitive.LinkButton
+        | primitive.PremiumButton
         | primitive.SelectMenu
         | primitive.RoutedSelect
         | primitive.EntitySelect,

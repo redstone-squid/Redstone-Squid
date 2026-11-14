@@ -49,6 +49,7 @@ type Interaction[ContextT] = (
     | primitive.Button[ContextT]
     | primitive.RoutedButton
     | primitive.LinkButton
+    | primitive.PremiumButton
     | primitive.SelectMenu[ContextT]
     | primitive.RoutedSelect
     | primitive.EntitySelect[ContextT]
@@ -88,6 +89,9 @@ def interaction_changes[ContextT](
                 ("route_id", other is None or source.route_id != other.route_id),
                 ("disabled", other is None or source.disabled != other.disabled),
             )
+        case primitive.PremiumButton():
+            other = target if isinstance(target, primitive.PremiumButton) else None
+            changes = (("sku_id", other is None or source.sku_id != other.sku_id),)
         case primitive.LinkButton():
             other = target if isinstance(target, primitive.LinkButton) else None
             changes = (

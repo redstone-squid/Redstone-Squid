@@ -94,7 +94,9 @@ Native V2 sections, panels, thumbnails and separators now participate directly.
 Sections retain their exact text slots and accessory; panels may continue across
 pages while retaining accent and spoiler settings. Thumbnail descriptions and
 accessory controls count against native limits, and only visible accessories
-publish bindings. A section text slot cannot host a pager's controls; paginate the
+publish bindings. Premium buttons retain their SKU in exact rows, automatic rows,
+and section accessories; they require the target's premium-button capability and
+introduce no application callback. A section text slot cannot host a pager's controls; paginate the
 enclosing region instead. Other native extensions still need explicit composition rules.
 
 Native budget and break wrappers also participate directly. Budgets enforce the

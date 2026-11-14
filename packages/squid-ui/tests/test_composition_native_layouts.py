@@ -36,10 +36,11 @@ async def untouched(event: sl.PressEvent) -> None:
         native.Button("Open", untouched, "open"),
         native.LinkButton("Docs", "https://example.com"),
         native.RoutedButton("Route", "test.route"),
+        native.PremiumButton(123),
     ],
 )
 def test_native_section_preserves_accessory_and_measures_its_cost(
-    accessory: native.Thumbnail | native.Button | native.LinkButton | native.RoutedButton,
+    accessory: native.Thumbnail | native.Button | native.LinkButton | native.RoutedButton | native.PremiumButton,
 ) -> None:
     node = native.Section((native.Text("Body", overflow=Never()),), accessory)
     result = plan(sl.region(node, key="r", title="R"), target=TARGET, strict=True)

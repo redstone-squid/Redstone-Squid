@@ -36,6 +36,7 @@ from squid_ui.planning.realizations import (
     FlowRealization,
     ImageRealization,
     PanelRealization,
+    PremiumRealization,
     Realization,
     RowRealization,
     SelectRealization,
@@ -211,6 +212,15 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                             ),
                         )
 
+                case PremiumRealization(sku_id=sku_id):
+                    if Capability.ACTIONS_DISCORD_PREMIUM not in context.capabilities:
+                        violations.append(UnsupportedCapability(identity, "Discord premium buttons"))
+                    limit("row.buttons", 1, self.limits.components.row_buttons)
+                    premium = scene.PremiumButton(sku_id)
+                    if row is None:
+                        rows.append(scene.ClassicRow((premium,)))
+                    else:
+                        row.append(premium)
                 case ControlRealization() as control:
                     limit("row.buttons", 1, self.limits.components.row_buttons)
                     limit("button.label", len(control.label), self.limits.components.button_label)
@@ -272,7 +282,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                             controls.clear()
 
                     for child in part.children:
-                        if isinstance(child.offer.payload, ControlRealization):
+                        if isinstance(child.offer.payload, ControlRealization | PremiumRealization):
                             visit(child, output, embedded=embedded, row=controls)
                             if len(controls) == size:
                                 flush()

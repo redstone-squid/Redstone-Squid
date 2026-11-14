@@ -7,6 +7,7 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
+from squid_ui.capabilities import Capability
 from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding, FormSpec, SubmitEvent, TextField
@@ -38,6 +39,41 @@ def rows(body: scene.Body) -> tuple[tuple[scene.Node, ...], ...]:
             return tuple(row.controls for row in controls)
         case _:
             pytest.fail("expected a Discord scene")
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+@pytest.mark.parametrize("grouped", [False, True])
+def test_premium_buttons_retain_skus_in_exact_and_automatic_rows(
+    target: Target[Any, Any, Any, Any], grouped: bool
+) -> None:
+    buttons = tuple(native.PremiumButton(index + 1) for index in range(6 if grouped else 2))
+    node = native.ControlGroup(buttons) if grouped else native.Row(buttons)
+    result = plan(sl.region(node, key="r", title="R"), target=target, strict=True)
+    assert result.allocation is not None
+    assert [
+        item.sku_id for row in rows(result.scene.body) for item in row if isinstance(item, scene.PremiumButton)
+    ] == [button.sku_id for button in buttons]
+    assert [len(row) for row in rows(result.scene.body)] == ([5, 1] if grouped else [2])
+    assert not result.bindings and not result.report.events
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+def test_premium_buttons_require_the_target_capability(
+    target: Target[Any, Any, Any, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        target.dialect, "capabilities", target.protocol_capabilities - {Capability.ACTIONS_DISCORD_PREMIUM}
+    )
+    with pytest.raises(JointUnsupportedError) as error:
+        plan(sl.region(native.PremiumButton(123), key="r", title="R"), target=target)
+    assert "Discord premium buttons" in str(error.value.diagnostics)
+
+
+def test_premium_button_alternative_cannot_silently_change_the_sku() -> None:
+    source = native.PremiumButton(123)
+    choice = alternative(native.PremiumButton(456), key="changed", fidelity=equivalent())
+    with pytest.raises(LayoutInvariantError, match="interaction"):
+        check_alternative(alternatives(choice, content=source, key="choice"), choice)
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
