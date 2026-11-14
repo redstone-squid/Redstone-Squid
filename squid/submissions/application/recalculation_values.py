@@ -9,6 +9,7 @@ from whenever import Instant
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.builds.domain.credits import Credit
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import JSONValue, ValidationError
 
@@ -26,6 +27,7 @@ class RecalculationFacts:
     door_height: int | None = None
     door_depth: int | None = None
     door_orientation: str | None = None
+    door_expansion: DoorExpansion | None = None
     normal_opening_time: int | None = None
     normal_closing_time: int | None = None
     patterns: tuple[str, ...] = ()
@@ -50,6 +52,7 @@ class RecalculationFacts:
             door_height=draft.door_height,
             door_depth=draft.door_depth,
             door_orientation=draft.door_orientation,
+            door_expansion=draft.door_expansion,
             normal_opening_time=draft.normal_opening_time,
             normal_closing_time=draft.normal_closing_time,
             patterns=tuple(draft.patterns),
@@ -65,7 +68,9 @@ class RecalculationFacts:
         """Build an edit patch without clearing values omitted by inference.
 
         Nonempty lists replace existing lists. Missing dimensions preserve the
-        corresponding build dimension. A differing category is rejected.
+        corresponding build dimension. An inferred expansion document replaces
+        the build's document; no inferred document keeps it. A differing
+        category is rejected.
         """
         if self.category is not None and self.category != build.category:
             message = "The inferred category differs from this build; choose a matching candidate."
@@ -108,6 +113,8 @@ class RecalculationFacts:
                 values["door_type"] = list(self.patterns)
             if self.door_orientation is not None:
                 values["door_orientation_type"] = self.door_orientation
+            if self.door_expansion is not None:
+                values["door_expansion"] = self.door_expansion
             for name in ("normal_opening_time", "normal_closing_time"):
                 if (value := getattr(self, name)) is not None:
                     values[name] = value
@@ -156,4 +163,8 @@ def recalculation_values(build: Build) -> dict[str, JSONValue]:
                 "closing_time": build.normal_closing_time,
             }
         )
+        # Omitted when absent so proposals saved before this field existed still
+        # match their recorded values.
+        if build.expansion is not None:
+            values["expansion"] = build.expansion.model_dump(mode="json")
     return values

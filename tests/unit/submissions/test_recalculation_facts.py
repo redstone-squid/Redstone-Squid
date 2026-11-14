@@ -3,6 +3,7 @@
 import pytest
 
 from squid.builds.domain import BuildCategory, BuildDraft, Status
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.models import DoorBuild
 from squid.core.errors import ValidationError
 from squid.submissions.application.recalculation_values import RecalculationFacts, recalculation_values
@@ -37,3 +38,15 @@ def test_inferred_category_change_requires_a_different_target() -> None:
 def test_recalculation_retains_original_inferred_note() -> None:
     facts = RecalculationFacts.from_draft(BuildDraft(description="Source explanation"))
     assert facts.description == "Source explanation"
+
+
+def test_inferred_expansion_replaces_the_document_and_its_absence_keeps_it() -> None:
+    document = DoorExpansion(raw_description="n x 3 expandable")
+    build = DoorBuild(id=12)
+    assert "expansion" not in recalculation_values(build)
+    facts = RecalculationFacts.from_draft(BuildDraft(category=BuildCategory.DOOR, door_expansion=document))
+    facts.patch(build).apply(build)
+    assert build.expansion == document
+    assert recalculation_values(build)["expansion"] == document.model_dump(mode="json")
+    RecalculationFacts(category=BuildCategory.DOOR, description="note").patch(build).apply(build)
+    assert build.expansion == document

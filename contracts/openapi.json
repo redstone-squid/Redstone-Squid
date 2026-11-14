@@ -22963,9 +22963,11 @@
         "enum": [
           "supported",
           "outside_domain",
-          "unresolved"
+          "unresolved",
+          "unmapped"
         ],
-        "title": "PointStatus"
+        "title": "PointStatus",
+        "description": "Whether one configuration exists at the evaluated opening.\n\nUNRESOLVED means the source makes a claim that does not settle this size:\nthe size lies beyond an unknown bound, or the opening expressions use syntax\nthe normalizer cannot invert. UNMAPPED means the opening width or height is absent,\nso the source never says which sizes the configuration has. An unresolved\nconfiguration might hold a record and blocks an official result; an unmapped\none makes no claim and cannot compete anywhere.\n"
       },
       "PollScope": {
         "type": "string",
@@ -24076,6 +24078,16 @@
             "oneOf": [
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "door_expansion": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DoorExpansion"
               },
               {
                 "type": "null"

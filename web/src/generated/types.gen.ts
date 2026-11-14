@@ -1385,8 +1385,18 @@ export type PaperChallengeExchangeRequest = {
 
 /**
  * PointStatus
+ *
+ * Whether one configuration exists at the evaluated opening.
+ *
+ * UNRESOLVED means the source makes a claim that does not settle this size:
+ * the size lies beyond an unknown bound, or the opening expressions use syntax
+ * the normalizer cannot invert. UNMAPPED means the opening width or height is absent,
+ * so the source never says which sizes the configuration has. An unresolved
+ * configuration might hold a record and blocks an official result; an unmapped
+ * one makes no claim and cannot compete anywhere.
+ *
  */
-export type PointStatus = 'supported' | 'outside_domain' | 'unresolved';
+export type PointStatus = 'supported' | 'outside_domain' | 'unresolved' | 'unmapped';
 
 /**
  * PollScope
@@ -1651,6 +1661,7 @@ export type RecalculationFacts = {
     door_height?: number | null;
     door_depth?: number | null;
     door_orientation?: string | null;
+    door_expansion?: DoorExpansion | null;
     normal_opening_time?: number | null;
     normal_closing_time?: number | null;
     patterns?: Array<string>;
