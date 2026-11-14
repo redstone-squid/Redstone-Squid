@@ -1,7 +1,8 @@
 # Shared composition and target participation
 
 Status: design discussion in progress. This draft records decisions for the Phase 2 plan;
-implementation steps and concrete interfaces are not settled.
+implementation steps and concrete interfaces are not settled. The [API sketch](api-sketch.md)
+proposes author syntax, planning concepts, and target participation for review.
 
 Establish the first usable boundary between the rich semantic planning core and target-specific
 realizations. The [Phase 1 handoff](01-shared-core.md#phase-2-handoff) supplies the requirements,
