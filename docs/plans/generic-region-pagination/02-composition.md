@@ -34,12 +34,23 @@ and effects. The core can place and account for such widgets without inspecting 
 Adaptation requires richer semantics: the core must not invent internal breaks or transformations
 from an opaque payload. Target adapters cannot perform undisclosed fitting after selection.
 
-## Questions currently under discussion
+### Offer built-in lossless alternatives by default
 
-- Whether semantic widgets and targets supply built-in lossless alternatives automatically, with
-  authors able to constrain them, or whether all alternatives must be listed by the author.
-- How specifically authors must describe loss in non-equivalent alternatives, and how concise
-  declarations relate to the effects the core needs for validation and comparison.
+Semantic widgets and targets supply lossless alternatives without requiring authors to enumerate
+every representation. Authors can constrain the permitted representations and express preferences
+among them. Automatic adaptation still respects hard requirements, content relationships, and
+interaction behavior; a different visual shape alone is not evidence that a transformation is safe.
+
+### Declare specific losses with concise helpers
+
+Author-supplied lossy alternatives describe the particular content or behavior changes they allow.
+Examples include omitted fields, shortened text, and changed interaction behavior. Concise helpers
+should make common declarations practical while exposing structured effects to shared planning.
+Coarse labels such as summarized or partial are not sufficient substitutes for those declarations.
+
+The concrete effect vocabulary and how declarations refer to semantic units remain design work.
+Author preference ranks permitted alternatives; it does not replace describing what an alternative
+changes or authorize undeclared loss.
 
 ## Remaining design work
 
