@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 import anyio
 
 from squid_reactivity.completion import Completion
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.transactions import current_transaction
 from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.runtime.tasks import task_is_within
 
@@ -20,8 +20,7 @@ async def cleanup_outside_action(work: Callable[[], Awaitable[None]], host: UIEx
     Inside an action the host owns the work; cancelling the waiter does not cancel cleanup.
     Outside an action, cleanup runs in the caller's existing cancellation scope.
     """
-    current = CURRENT_TRANSACTION.get()
-    if current is None or current.closed or host is None:
+    if current_transaction() is None or host is None:
         await work()
         return
     done = Completion[Exception | None]()

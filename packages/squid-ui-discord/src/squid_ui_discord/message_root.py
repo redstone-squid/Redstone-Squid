@@ -28,11 +28,10 @@ import anyio
 import discord
 
 from squid_reactivity.addresses import CellAddress
-from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import DependencyAddress
-from squid_reactivity.transactions import Transaction, readonly_transaction, transaction
+from squid_reactivity.transactions import Transaction, current_transaction, readonly_transaction, transaction
 from squid_reactivity.transactions.context import ActorRef, CausalRef, TransactionContext, current_causality
 from squid_reactivity.transactions.results import (
     TransactionCommit,
@@ -1903,8 +1902,7 @@ class MessageRoot[
         it never supplies an edit handle for the parent's message. Call after the child's
         transaction and action lock end. False means the callback did not commit successfully.
         """
-        current = CURRENT_TRANSACTION.get()
-        if current is not None and not current.closed:
+        if current_transaction() is not None:
             message = "screen results must run after the child action commits"
             raise RuntimeError(message)
         key = "screen:result"
@@ -3085,8 +3083,7 @@ class MessageRoot[
         delete: bool = False,
         reason: CloseReason = CloseReason.CLOSED,
     ) -> None:
-        current = CURRENT_TRANSACTION.get()
-        if current is not None and not current.closed:
+        if current_transaction() is not None:
             message = (
                 "immediate panel closure is unavailable inside a transaction; use event.finish_on_success() "
                 "for this panel or event.on_success(...) for another target"

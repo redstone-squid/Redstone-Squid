@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any, overload, override
 
 from squid_reactivity.async_values import AsyncBinding, _Execution, _observe
-from squid_reactivity.cells import _Signal
+from squid_reactivity.cells import Signal
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     emit_causal_event,
@@ -113,7 +113,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
         self._loader = loader
         self.context = context
         self._label = context.name
-        self._signal = _Signal()
+        self._signal = Signal()
         self._status: OperationStatus[ValueT, ProgressT] = Pending(initial)
         self._execution: _Execution[OperationStatus[ValueT, ProgressT]] = _Execution()
 

@@ -6,7 +6,7 @@ from typing import Any, override
 
 import pytest
 
-from squid_reactivity.internals import Cell, StateDescriptor
+from squid_reactivity import CellReport, inspect_cells
 from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
 
@@ -20,11 +20,8 @@ class Service:
     """Opaque collaborator used to distinguish identity tracking from ordinary value comparison."""
 
 
-def cell_of(component: Component[Any, Any], name: str) -> Cell:
-    descriptor = next(
-        vars(klass)[name] for klass in type(component).__mro__ if isinstance(vars(klass).get(name), StateDescriptor)
-    )
-    return descriptor.cell(component)
+def cell_of(component: Component[Any, Any], name: str) -> CellReport:
+    return inspect_cells(component)[name]
 
 
 class Panel(Component[DiscordTarget]):

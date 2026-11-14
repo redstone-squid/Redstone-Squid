@@ -300,14 +300,11 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
 
 def test_watching_a_topic_installs_no_commit_precondition() -> None:
     """Watching a topic tracks invalidation without adding an optimistic transaction precondition."""
-    from squid_reactivity.internals import CURRENT_TRANSACTION, Transaction
-
     bus = LocalTopicBus()
-    with sl.runtime.transaction():
+    with sl.runtime.transaction() as tx:
         bus.topic(BUILD.kind, BUILD.key).watch()
-        current = CURRENT_TRANSACTION.get()
-        assert isinstance(current, Transaction)
-        assert not current.observed
+    assert tx.result is not None
+    assert not tx.result.reads
 
 
 # --- Against the resource's own machinery ---------------------------------------------

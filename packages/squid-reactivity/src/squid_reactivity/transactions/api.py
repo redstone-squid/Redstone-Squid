@@ -44,6 +44,7 @@ from squid_reactivity.transactions.results import (
 )
 from squid_reactivity.transactions.state import (
     _CURRENT_TRANSACTION,
+    _active,
     _checkpoint,
     _current_task,
 )
@@ -116,6 +117,17 @@ class Transaction:
 
 
 _COMMIT_GATE = threading.RLock()
+
+
+def current_transaction() -> Transaction | None:
+    """Return the handle of the transaction this code is running in, or None outside one.
+
+    The transaction counts from the start of its block until its outcome is decided.
+    Result callbacks run after that and see None, as does a task that inherited the
+    transaction and outlived it.
+    """
+    current = _active()
+    return None if current is None else current.handle
 
 
 @contextmanager

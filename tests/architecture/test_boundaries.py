@@ -368,6 +368,22 @@ def test_private_names_do_not_cross_distribution_boundaries() -> None:
     assert violations == []
 
 
+def test_application_does_not_import_reactivity_internals() -> None:
+    """Keep `squid_reactivity.internals` for the framework packages that integrate with storage.
+
+    The application builds on the public API. A need for an internal name there means the
+    public API is missing something.
+    """
+    violations = [
+        (str(path), node.lineno)
+        for path in Path("squid").rglob("*.py")
+        for node in ast.walk(source_tree(path))
+        if isinstance(node, ast.ImportFrom) and node.module == "squid_reactivity.internals"
+    ]
+
+    assert violations == []
+
+
 def test_reactive_package_has_no_hard_dependencies() -> None:
     """The extracted runtime may import only itself and Python's standard library."""
     allowed = sys.stdlib_module_names | {"squid_reactivity"}

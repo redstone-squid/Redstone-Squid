@@ -10,6 +10,7 @@ The resources and operations modules add asynchronous loading and progress while
 keeping component renders synchronous.
 """
 
+from squid_reactivity.cells import Signal
 from squid_reactivity.core import (
     CellReport,
     ComputedReport,
@@ -67,6 +68,7 @@ from squid_reactivity.transactions import (
     apply_conditional_patches,
     batch,
     block_writes,
+    current_transaction,
     enlist,
     fresh_transaction,
     readonly_transaction,
@@ -91,7 +93,7 @@ from squid_reactivity.transactions.results import (
     TransactionResult,
     TransactionRollback,
 )
-from squid_reactivity.transactions.state import current_transaction_context, read_only, relaxed_read, strong_read
+from squid_reactivity.transactions.state import read_only, relaxed_read, strong_read
 
 __all__ = [
     "ActorRef",
@@ -127,6 +129,7 @@ __all__ = [
     "RedactionPolicy",
     "ResourceEventSnapshot",
     "RollbackReason",
+    "Signal",
     "StaleReactiveContextError",
     "Subscriptions",
     "Topic",
@@ -152,7 +155,7 @@ __all__ = [
     "block_writes",
     "capture_reads",
     "computed",
-    "current_transaction_context",
+    "current_transaction",
     "enlist",
     "export_state",
     "fresh_transaction",

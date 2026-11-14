@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Protocol, Self, overload
 
+from squid_reactivity import Signal
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     emit_causal_event,
@@ -32,7 +33,6 @@ from squid_reactivity.errors import (
     ReactiveConflictError,
     ReactiveWriteError,
 )
-from squid_reactivity.internals import Signal
 from squid_reactivity.operations import OperationContext
 from squid_reactivity.transactions import (
     CellPatchSet,
@@ -41,6 +41,7 @@ from squid_reactivity.transactions import (
     TransactionParticipant,
     TransactionView,
     apply_conditional_patches,
+    current_transaction,
     enlist,
     fresh_transaction,
 )
@@ -58,7 +59,6 @@ from squid_reactivity.transactions.results import (
     TransactionCommit,
     TransactionContribution,
 )
-from squid_reactivity.transactions.state import current_transaction_context
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import SquidUiError
 from squid_ui.factories import action_control, control_group
@@ -681,7 +681,8 @@ class History:
             assert entry.last_result is not None
             return entry.last_result
         entry.state = HistoryEntryState.REAPPLYING if redo else HistoryEntryState.REVERSING
-        cause = current_transaction_context()
+        active = current_transaction()
+        cause = None if active is None else active.context
         context = TransactionContext.create(
             f"{'Redo' if redo else 'Undo'} {source_text(entry.label)}",
             kind=TransactionPurpose.REDO if redo else TransactionPurpose.UNDO,
@@ -750,7 +751,8 @@ class History:
     ) -> UndoResult:
         previous = entry.state
         entry.state = HistoryEntryState.REVERSING
-        cause = current_transaction_context()
+        active = current_transaction()
+        cause = None if active is None else active.context
         context = transaction_context or TransactionContext.create(
             f"Undo {source_text(entry.label)}",
             kind=TransactionPurpose.UNDO,
@@ -964,7 +966,8 @@ class History:
             return HistoryResult(HistoryResultStatus.EMPTY)
         previous = entry.state
         entry.state = HistoryEntryState.REAPPLYING
-        cause = current_transaction_context()
+        active = current_transaction()
+        cause = None if active is None else active.context
         context = TransactionContext.create(
             f"Redo {source_text(entry.label)}",
             kind=TransactionPurpose.REDO,

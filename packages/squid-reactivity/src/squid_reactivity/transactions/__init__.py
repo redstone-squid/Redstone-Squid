@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from squid_reactivity.transactions.api import Transaction as Transaction
     from squid_reactivity.transactions.api import apply_conditional_patches as apply_conditional_patches
     from squid_reactivity.transactions.api import batch as batch
+    from squid_reactivity.transactions.api import current_transaction as current_transaction
     from squid_reactivity.transactions.api import enlist as enlist
     from squid_reactivity.transactions.api import fresh_transaction as fresh_transaction
     from squid_reactivity.transactions.api import readonly_transaction as readonly_transaction
@@ -44,7 +45,6 @@ if TYPE_CHECKING:
     from squid_reactivity.transactions.results import TransactionResult as TransactionResult
     from squid_reactivity.transactions.results import TransactionRollback as TransactionRollback
     from squid_reactivity.transactions.state import block_writes as block_writes
-    from squid_reactivity.transactions.state import current_transaction_context as current_transaction_context
     from squid_reactivity.transactions.state import read_only as read_only
     from squid_reactivity.transactions.state import relaxed_read as relaxed_read
     from squid_reactivity.transactions.state import strong_read as strong_read
@@ -55,6 +55,7 @@ _EXPORT_MODULES = {
     "readonly_transaction": "api",
     "fresh_transaction": "api",
     "batch": "api",
+    "current_transaction": "api",
     "enlist": "api",
     "transaction_participant": "api",
     "apply_conditional_patches": "api",
@@ -85,7 +86,6 @@ _EXPORT_MODULES = {
     "TransactionResult": "results",
     "TransactionRollback": "results",
     "block_writes": "state",
-    "current_transaction_context": "state",
     "read_only": "state",
     "relaxed_read": "state",
     "strong_read": "state",
@@ -136,7 +136,7 @@ __all__ = [
     "apply_conditional_patches",
     "batch",
     "block_writes",
-    "current_transaction_context",
+    "current_transaction",
     "enlist",
     "fresh_transaction",
     "read_only",

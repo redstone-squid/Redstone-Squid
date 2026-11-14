@@ -1,26 +1,16 @@
 """Private integration points for other Squid UI packages.
 
-The component runtime and replication bindings use these exports to work with
-reactive storage and transactions. They may change in any release. Application
-code should import from ``squid_reactivity`` instead.
+The component runtime and replication bindings need a few pieces of reactive
+storage and resource loading that applications never touch. These exports may
+change in any release. Application code imports from ``squid_reactivity``.
 """
 
 from squid_reactivity.async_values import _Execution as Execution
 from squid_reactivity.cells import _Cell as Cell
-from squid_reactivity.cells import _Signal as Signal
-from squid_reactivity.core import (
-    _State as StateDescriptor,
-)
 from squid_reactivity.resources import _AtomicResourcePending as AtomicResourcePending
-from squid_reactivity.transactions.engine import _TransactionEngine as Transaction
-from squid_reactivity.transactions.state import _CURRENT_TRANSACTION as CURRENT_TRANSACTION
 
 __all__ = [
-    "CURRENT_TRANSACTION",
     "AtomicResourcePending",
     "Cell",
     "Execution",
-    "Signal",
-    "StateDescriptor",
-    "Transaction",
 ]

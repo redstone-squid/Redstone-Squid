@@ -11,8 +11,8 @@ from collections.abc import Awaitable, Callable, Generator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from squid_reactivity import Signal
 from squid_reactivity.completion import Completion
-from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_reactivity.operations import (
     Failed,
     OperationContext,
@@ -22,6 +22,7 @@ from squid_reactivity.operations import (
     Pending,
     ProgressReporter,
 )
+from squid_reactivity.transactions import current_transaction
 from squid_reactivity.transactions.results import (
     TransactionCommit,
     TransactionRollback,
@@ -92,8 +93,7 @@ class PostCommitOperation[ValueT]:
     async def wait(self) -> ValueT:
         """Observe the result, raising the callback's failure or ActionDiscardedError."""
         if not self._done.done:
-            current = CURRENT_TRANSACTION.get()
-            if current is not None and not current.closed:
+            if current_transaction() is not None:
                 message = "wait for after-commit work outside the action transaction"
                 raise RuntimeError(message)
             if self._runner is not None and task_is_within({self._runner}):

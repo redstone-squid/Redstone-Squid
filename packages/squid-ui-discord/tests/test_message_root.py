@@ -22,8 +22,7 @@ import squid_ui as sl
 import squid_ui_discord
 import squid_ui_discord.message_root_contracts
 from squid_i18n import tr
-from squid_reactivity import EventLedger, observe_events
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity import EventLedger, current_transaction, observe_events
 from squid_ui import (
     ActionEvent,
     Component,
@@ -4203,7 +4202,7 @@ class TestLoading:
 
             @override
             async def on_load(self) -> None:
-                seen.append(CURRENT_TRANSACTION.get() is not None)
+                seen.append(current_transaction() is not None)
                 self.untracked = "a plain attribute, written with nothing watching"
                 self.label = "loaded"
 

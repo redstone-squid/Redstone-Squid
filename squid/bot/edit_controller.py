@@ -21,7 +21,7 @@ from squid.edits.domain import (
     Revision,
 )
 from squid_i18n import md_tr
-from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
+from squid_reactivity import Signal, current_transaction
 from squid_ui.text import TextLike
 
 logger = logging.getLogger(__name__)
@@ -263,7 +263,7 @@ class EditController:
 
 
 def _require_writable_action() -> None:
-    current = CURRENT_TRANSACTION.get()
+    current = current_transaction()
     if current is not None and current.readonly:
         message = "An edit requires a writable UI action"
         raise sl.runtime.ReactiveWriteError(message)

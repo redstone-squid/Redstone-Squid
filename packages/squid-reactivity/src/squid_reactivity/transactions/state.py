@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Protocol
 
 from squid_reactivity.addresses import SubscriptionSource
 from squid_reactivity.errors import ReactiveWriteError
-from squid_reactivity.transactions.context import TransactionContext
 
 if TYPE_CHECKING:
     from squid_reactivity.transactions.engine import _TransactionEngine
@@ -55,16 +54,6 @@ def _active() -> _TransactionEngine | None:
     """
     current = _CURRENT_TRANSACTION.get()
     return None if current is None or current.closed else current
-
-
-def current_transaction_context() -> TransactionContext | None:
-    """Return the active transaction's metadata, or None outside its staging phase.
-
-    Metadata lives on the transaction itself. Publication and result callbacks use
-    captured causality instead; an inherited, closed transaction is not active.
-    """
-    current = _active()
-    return None if current is None else current.context
 
 
 _READ_ONLY: ContextVar[object | None] = ContextVar("squid_reactivity_read_only", default=None)

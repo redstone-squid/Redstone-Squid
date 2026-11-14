@@ -88,12 +88,16 @@ def _staged_value(cell: _Cell) -> Any:
     return _MISSING if entry is None else entry.value
 
 
-class _Signal:
-    """Observe framework-managed changes that do not belong to an action transaction.
+class Signal:
+    """A reactive source with no value, for changes that publish outside transactions.
 
-    Operation progress and history bookkeeping publish immediately. Keeping their
-    versions in the ordinary dependency graph makes computed values and renders
-    follow them without assigning either a component owner.
+    Use one for state kept in ordinary attributes that readers should still follow, such
+    as operation progress or undo-history bookkeeping. Call `track` wherever that state is
+    read and `notify` after changing it. A computed value or render that tracked the
+    signal then refreshes like any other reader.
+
+    `notify` publishes immediately, even inside a transaction, and a rollback does not
+    undo it. State that should commit and roll back with an action belongs in `state()`.
     """
 
     def __init__(self) -> None:
@@ -102,6 +106,7 @@ class _Signal:
         self.version = 0
 
     def track(self) -> None:
+        """Make the computation or render now running depend on this signal."""
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = self.version
@@ -113,6 +118,7 @@ class _Signal:
         return self.version
 
     def notify(self) -> None:
+        """Tell readers that tracked this signal that the state behind it changed."""
         self.version += 1
         _bump_epoch()
         publish(self.address)

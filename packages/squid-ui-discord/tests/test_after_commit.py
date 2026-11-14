@@ -11,12 +11,12 @@ from typing import override
 import anyio
 import pytest
 
+from squid_reactivity import current_transaction
 from squid_reactivity.diagnostics import (
     EventLedger,
     OperationEventSnapshot,
     observe_events,
 )
-from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.operations import Failed, Pending, Succeeded
 from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, Reactive, state
 from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest
@@ -148,7 +148,7 @@ async def test_operation_observes_commit_and_shares_history_causality_without_re
         panel.value = 1
 
         async def callback() -> int:
-            assert CURRENT_TRANSACTION.get() is None
+            assert current_transaction() is None
             observed.append(panel.value)
             return 42
 

@@ -17,7 +17,7 @@ from squid_reactivity import (
     TransactionResultSnapshot,
     TransactionRollback,
     apply_conditional_patches,
-    current_transaction_context,
+    current_transaction,
     inspect_cells,
     readonly_transaction,
     state,
@@ -179,16 +179,16 @@ def test_result_callbacks_keep_causality_without_an_active_transaction() -> None
     recovered: list[TransactionContext] = []
 
     def recover(_commit: TransactionCommit) -> None:
-        assert current_transaction_context() is None
+        assert current_transaction() is None
         with transaction("recovery") as recovery:
-            assert current_transaction_context() is recovery.context
+            assert current_transaction() is recovery
             recovered.append(recovery.context)
 
     with transaction("original") as original:
-        assert current_transaction_context() is original.context
+        assert current_transaction() is original
         original.after_commit(recover)
 
-    assert current_transaction_context() is None
+    assert current_transaction() is None
     assert recovered[0].transaction_id != original.context.transaction_id
     assert recovered[0].cause == original.context.causal_ref()
     assert recovered[0].root_transaction_id == original.context.root_transaction_id
@@ -197,5 +197,5 @@ def test_result_callbacks_keep_causality_without_an_active_transaction() -> None
 def test_copied_context_does_not_expose_a_finished_transaction_as_active() -> None:
     with transaction() as tx:
         inherited = copy_context()
-        assert inherited.run(current_transaction_context) is tx.context
-    assert inherited.run(current_transaction_context) is None
+        assert inherited.run(current_transaction) is tx
+    assert inherited.run(current_transaction) is None

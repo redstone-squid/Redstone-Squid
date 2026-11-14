@@ -7,7 +7,7 @@ from typing import override
 import anyio
 import pytest
 
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity import current_transaction
 from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, state
 from squid_ui.interactions import ActionMiddleware, ActionProceed, ActionRequest
 from squid_ui.primitives import Button, Row, Text
@@ -47,20 +47,20 @@ async def test_result_uses_parent_transaction_after_child_unlock_and_preserves_m
         assert event.responder.message_root is parent
         assert parent._action_lock.locked()
         assert not child._action_lock.locked()
-        assert CURRENT_TRANSACTION.get() is not None
-        assert CURRENT_TRANSACTION.get() is not child_transaction
+        assert current_transaction() is not None
+        assert current_transaction() is not child_transaction
         assert child_panel.value == 1
         parent_panel.value = 2
 
     async def finish(event: ActionEvent) -> None:
         nonlocal child_transaction
-        child_transaction = CURRENT_TRANSACTION.get()
+        child_transaction = current_transaction()
         child_panel.value = 1
         assert isinstance(event.responder, ActionResponder)
         responder = event.responder
 
         async def publish() -> None:
-            assert CURRENT_TRANSACTION.get() is None
+            assert current_transaction() is None
             observed.append(await parent._dispatch_screen_result(responder.interaction, completed))
 
         responder.on_success(publish)

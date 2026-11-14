@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Unpack, cast
 import discord
 
 from squid_reactivity.completion import Completion
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.transactions import current_transaction
 from squid_ui.interactions import ActionEvent as PortableActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.tasks import anyio, task_is_within
@@ -139,8 +139,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
 
     async def wait(self) -> Completed[ResultT] | Cancelled:
         """Observe closure without cancelling it when this waiter is cancelled."""
-        current = CURRENT_TRANSACTION.get()
-        if current is not None and not current.closed:
+        if current_transaction() is not None:
             msg = "wait for a screen outside the action transaction"
             raise RuntimeError(msg)
         state = self._screen_flow

@@ -66,10 +66,10 @@ def _outside(panel: Panel) -> str:
     """Read in a copied context with only the transaction cleared, simulating an unrelated reader."""
     import contextvars
 
-    from squid_reactivity.internals import CURRENT_TRANSACTION
+    from squid_reactivity.transactions.state import _CURRENT_TRANSACTION
 
     context = contextvars.copy_context()
-    context.run(CURRENT_TRANSACTION.set, None)
+    context.run(_CURRENT_TRANSACTION.set, None)
     return context.run(lambda: panel.value.value)
 
 
