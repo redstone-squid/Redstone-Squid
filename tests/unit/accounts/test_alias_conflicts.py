@@ -40,7 +40,7 @@ def test_the_internal_account_id_never_reaches_a_public_surface() -> None:
         holder_account_id=HOLDER_ACCOUNT_ID,
     ).with_holder_name("Notch")
 
-    bot_text = build_error_notice(error, "en").detail
+    bot_text = build_error_notice(error, "en").detail.resolve()
     assert isinstance(error.title, Text)
     problem = ProblemDetail(
         title=error.title.resolve(),

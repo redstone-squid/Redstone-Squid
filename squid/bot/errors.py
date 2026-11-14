@@ -32,7 +32,7 @@ from squid.observability import (
     record_current_exception,
     trace_span,
 )
-from squid_i18n import NUMBER, Text, md_tr
+from squid_i18n import NUMBER, Markup, Text, current_localization, md, md_tr, resolve_text
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.text import NEUTRAL, TextLike, localization_scope
 
@@ -52,8 +52,8 @@ def _reports_from(client: object) -> ErrorReportService | None:
 class ErrorNotice:
     """Safe Discord-facing representation of an exception."""
 
-    title: str
-    detail: str
+    title: Text
+    detail: Text
     error_id: str | None = None
     reference: str | None = None
     """The shortened form of `error_id` shown to the user, who has to retype it.
@@ -236,8 +236,13 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
     )
 
 
-def _resolved(text: TextLike) -> str:
-    return Text(text).resolve()
+def _resolved(text: TextLike) -> Text:
+    """Translate `text` now and keep its markup, so the card renders it the way it was authored.
+
+    The result stays `Text` because a Markdown string passed on as plain text would be escaped again.
+    """
+    document = resolve_text(text, current_localization())
+    return md(document.content) if document.markup is Markup.MARKDOWN else Text(document.content)
 
 
 def _unexpected_error_detail(error_id: str) -> Text:

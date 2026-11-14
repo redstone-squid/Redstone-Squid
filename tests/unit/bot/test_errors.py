@@ -86,29 +86,32 @@ def test_domain_error_presentation_exposes_only_public_detail() -> None:
 
     notice = build_error_notice(error)
 
-    assert notice.title == "Resource not found"
-    assert notice.detail == "Build not found. Check the build ID and try again."
+    assert notice.title.resolve() == "Resource not found"
+    assert notice.detail.resolve() == "Build not found. Check the build ID and try again."
     assert notice.error_id is None
 
 
 def test_minecraft_service_outage_is_rendered_as_a_stable_retryable_bot_error() -> None:
     notice = build_error_notice(MinecraftServiceUnavailableError(), locale="en-GB")
 
-    assert notice.title == "Service unavailable"
-    assert notice.detail == "The Minecraft account service is temporarily unavailable. Try again in a few minutes."
+    assert notice.title.resolve() == "Service unavailable"
+    assert (
+        notice.detail.resolve()
+        == "The Minecraft account service is temporarily unavailable. Try again in a few minutes."
+    )
     assert notice.error_id is None
 
 
 def test_unexpected_error_presentation_redacts_diagnostic_detail(error_correlation: str) -> None:
     notice = build_error_notice(InternalError("database password leaked"))
 
-    assert "database password leaked" not in notice.detail
+    assert "database password leaked" not in notice.detail.resolve()
     assert notice.error_id == error_correlation
     # The card shows the short reference, since the user has to retype it; the full id stays on
     # the log line and the stored report.
     assert notice.reference == "b" * 12
-    assert notice.detail.count("b" * 12) == 1
-    assert "b" * 13 not in notice.detail
+    assert notice.detail.resolve().count("b" * 12) == 1
+    assert "b" * 13 not in notice.detail.resolve()
 
 
 @pytest.mark.parametrize(
@@ -125,7 +128,7 @@ def test_unexpected_error_presentation_redacts_diagnostic_detail(error_correlati
     ],
 )
 def test_permission_errors_name_the_missing_nodes(error: Exception, title: str) -> None:
-    assert build_error_notice(error).title == title
+    assert build_error_notice(error).title.resolve() == title
 
 
 @pytest.mark.parametrize("failed", [False, True], ids=["success", "failure"])

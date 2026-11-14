@@ -419,8 +419,8 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
         "permission_reason": "missing_grant",
     }
     notice = build_error_notice(denied.value)
-    assert notice.detail == (
+    assert notice.detail.resolve() == (
         "This action requires build.submission.edit, but your current permissions do not grant it."
     )
-    assert "account_id" not in notice.detail
-    assert "discord_user_id" not in notice.detail
+    assert "account_id" not in notice.detail.resolve()
+    assert "discord_user_id" not in notice.detail.resolve()
