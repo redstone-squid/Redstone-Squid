@@ -14,6 +14,7 @@ from squid.community.application import WelcomeRelayService
 from squid.community.domain import WelcomeRelayPolicy
 from squid.runtime import BotServices
 from squid.settings.domain.runtime import RuntimeSettings
+from squid_i18n.text import NEUTRAL, discord_text, resolve_text
 from squid_ui_discord.testing import AsyncCallRecorder
 from tests.support.services import bot_services
 from tests.support.settings import RuntimeSettingsStub
@@ -101,7 +102,9 @@ async def test_welcome_relay_forwards_once_in_either_event_order_without_cache_o
         return send
 
     mocker.patch.object(welcome_relay, "send_to", side_effect=send_to)
-    mocker.patch.object(welcome_relay, "text_node", side_effect=lambda content: content.resolve())
+    mocker.patch.object(
+        welcome_relay, "text_node", side_effect=lambda content: discord_text(resolve_text(content, NEUTRAL))
+    )
     mocker.patch.object(welcome_relay, "render_payload", side_effect=lambda nodes: nodes)
 
     with anyio.fail_after(0.2):
