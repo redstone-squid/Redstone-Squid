@@ -46,6 +46,10 @@ test("reflows at 320px and retains controls in forced colours", async ({ page })
   await page.setViewportSize({ width: 320, height: 800 });
   await page.emulateMedia({ forcedColors: "active" });
   await page.goto("/design-system?lang=zh-CN");
+  await page.keyboard.press("Tab");
+  const skipLink = page.getByRole("link", { name: "跳至内容" });
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toHaveCSS("clip-path", "none");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );

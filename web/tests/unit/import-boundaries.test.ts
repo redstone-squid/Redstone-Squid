@@ -10,12 +10,27 @@ const feature = "/workspace/web/src/features/builds/Editor.tsx";
 
 tester.run("frontend import boundaries", importBoundaries, {
   valid: [
+    {
+      filename: "/workspace/web/src/ui/svelte/Dialog.svelte",
+      code: 'import { Dialog } from "bits-ui";',
+    },
     { filename: ui, code: 'import { Field } from "./Field";' },
     { filename: ui, code: 'import { Dialog } from "radix-ui";' },
     { filename: feature, code: 'import { Button } from "../../ui/react/Button";' },
     { filename: "/workspace/web/src/features/builds/server.ts", code: 'import fs from "node:fs";' },
   ],
   invalid: [
+    {
+      filename: "/workspace/web/src/features/builds/Editor.svelte",
+      code: 'import { Dialog } from "bits-ui";',
+      errors: [{ messageId: "radix" }],
+    },
+    {
+      filename: "/workspace/web/src/features/builds/Editor.svelte",
+      code: 'import("./server");',
+      errors: [{ messageId: "server" }],
+    },
+
     {
       filename: ui,
       code: 'import { api } from "../../features/builds/api";',

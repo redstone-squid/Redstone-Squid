@@ -74,6 +74,7 @@
   .sq-skip {
     position: fixed;
     top: -10rem;
+    clip-path: inset(50%);
     left: 1rem;
     z-index: 100;
     padding: 1rem;
@@ -81,6 +82,7 @@
   }
   .sq-skip:focus {
     top: 1rem;
+    clip-path: none;
   }
   @media (max-width: 70rem) {
     .sq-shell {

@@ -6,11 +6,11 @@ import { DraftTrial } from "../features/workbench/DraftTrial";
 import SvelteDraftTrial from "../features/workbench/DraftTrial.svelte";
 import "../features/workbench/workbench.css";
 const locale = Astro.url.searchParams.get("lang") === "zh-CN" ? "zh-CN" : "en";
-const framework = Astro.url.searchParams.get("framework") === "svelte" ? "svelte" : "react";
+const framework = Astro.url.searchParams.get("framework") === "react" ? "react" : "svelte";
 const retryFirstSave = Astro.url.searchParams.get("scenario") === "retry";
 ---
 
-<WorkbenchLayout title={translate(locale, "trial.title")} locale={locale} theme="light">
+<WorkbenchLayout title={translate(locale, "trial.title")} locale={locale} theme="light" {framework}>
   <header class="sq-page-heading">
     <h1>{translate(locale, "trial.title")}</h1>
     <p>{framework === "svelte" ? "Svelte 5" : "React"}</p>

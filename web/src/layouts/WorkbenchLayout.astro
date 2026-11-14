@@ -6,8 +6,13 @@ import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
 import "../ui/base.css";
 import "./workbench-layout.css";
-type Props = { title: string; locale: "en" | "zh-CN"; theme: "light" | "dark" };
-const { title, locale, theme } = Astro.props;
+type Props = {
+  title: string;
+  locale: "en" | "zh-CN";
+  theme: "light" | "dark";
+  framework?: "react" | "svelte";
+};
+const { title, locale, theme, framework = "svelte" } = Astro.props;
 const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
@@ -43,9 +48,9 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
           <a href="#states">{t("workbench.feedback-states")}</a>
         </nav>
         <p class="sq-sidebar-note">
-          Astro + React
+          Astro + {framework === "svelte" ? "Svelte" : "React"}
           <br />
-          Radix primitives
+          {framework === "svelte" ? "Bits UI" : "Radix primitives"}
         </p>
       </aside>
       <main id="main" class="sq-main">

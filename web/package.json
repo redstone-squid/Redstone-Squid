@@ -22,6 +22,7 @@
     "test:lighthouse": "bun scripts/check-lighthouse.ts",
     "check:bundle": "bun scripts/check-bundle.ts",
     "test:review": "playwright test --config playwright.review.config.ts",
+    "test:compatibility": "playwright test --config playwright.compatibility.config.ts",
     "test:review:update": "bun run test:review --update-snapshots=all",
     "i18n:check": "bun scripts/check-i18n.ts",
     "i18n:generate": "bun scripts/check-i18n.ts --write"

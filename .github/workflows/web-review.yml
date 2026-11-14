@@ -29,9 +29,10 @@ jobs:
         with:
           bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
+      - run: bunx playwright install --with-deps chromium firefox webkit
       - run: bun run build
       - run: bun run test:review
+      - run: bun run test:compatibility
       - name: Upload screenshots, recordings, and diagnostic report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -40,7 +41,9 @@ jobs:
           path: |
             web/review-gallery/
             web/playwright-report/review/
+            web/playwright-report/compatibility/
             web/test-results/review/
+            web/test-results/compatibility/
           if-no-files-found: error
           retention-days: 14
       - name: Explain review artifacts

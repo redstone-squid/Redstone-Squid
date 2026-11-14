@@ -10,11 +10,12 @@ import { Controls } from "../features/workbench/Controls";
 import { buildFixtures } from "../features/workbench/fixtures";
 const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
+const framework = Astro.url.searchParams.get("framework") === "react" ? "react" : "svelte";
 const locale = chinese ? "zh-CN" : "en";
 const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
-<WorkbenchLayout title={t("workbench.page-title")} locale={locale} theme={theme}>
+<WorkbenchLayout title={t("workbench.page-title")} locale={locale} theme={theme} {framework}>
   <header class="sq-page-heading">
     <div>
       <p class="sq-kicker">{t("workbench.the-foundation")}</p>
@@ -22,10 +23,12 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
       <p class="sq-lede">{t("workbench.intro")}</p>
     </div>
     <div class="sq-row">
-      <LinkButton href={`?lang=${chinese ? "en" : "zh-CN"}&theme=${theme}`}>
+      <LinkButton href={`?lang=${chinese ? "en" : "zh-CN"}&theme=${theme}&framework=${framework}`}>
         {t("workbench.switch-language")}
       </LinkButton>
-      <LinkButton href={`?lang=${locale}&theme=${theme === "light" ? "dark" : "light"}`}>
+      <LinkButton
+        href={`?lang=${locale}&theme=${theme === "light" ? "dark" : "light"}&framework=${framework}`}
+      >
         {theme === "light" ? t("workbench.dark-theme") : t("workbench.light-theme")}
       </LinkButton>
     </div>
@@ -54,7 +57,7 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
     description={t("workbench.components-description")}
   >
     {" "}
-    {Astro.url.searchParams.get("framework") === "svelte" ? (
+    {framework === "svelte" ? (
       <SvelteControls client:load locale={locale} />
     ) : (
       <Controls client:load locale={locale} />

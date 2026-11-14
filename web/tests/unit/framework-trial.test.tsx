@@ -1,7 +1,7 @@
 import { render as renderReact, screen, cleanup as cleanupReact } from "@testing-library/react";
 import { render as renderSvelte, cleanup as cleanupSvelte } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DraftTrial } from "../../src/features/workbench/DraftTrial";
 import SvelteDraftTrial from "../../src/features/workbench/DraftTrial.svelte";
 
@@ -68,7 +68,13 @@ for (const framework of ["react", "svelte"] as const) {
       expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
       expect(screen.queryByText("Attached: first.schem")).not.toBeInTheDocument();
       await user.upload(upload, new File(["fixture"], "second.schem"));
-      view.unmount();
+      const abort = vi.spyOn(AbortController.prototype, "abort");
+      try {
+        view.unmount();
+        expect(abort).toHaveBeenCalled();
+      } finally {
+        abort.mockRestore();
+      }
     });
   });
 }

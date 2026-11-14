@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
 import { Button } from "../../ui/react/Button";
 import { Field } from "../../ui/react/Field";
@@ -12,6 +12,7 @@ import {
 
 type Props = { locale: Locale; retryFirstSave: boolean };
 export function DraftTrial({ locale, retryFirstSave }: Props) {
+  const id = useId();
   const t = (key: StaticMessageKey): string => translate(locale, key);
   const [input, setInput] = useState<DraftInput>({
     title: "",
@@ -46,6 +47,7 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
     setPhase("saving");
     try {
       const result = await api.save(input, controller.signal);
+      if (controller.signal.aborted || operation.current !== controller) return;
       if (result.kind === "invalid") {
         setErrors(result.errors);
         setPhase("idle");
@@ -63,7 +65,11 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
     setAttachment("");
     setPhase("uploading");
     try {
-      setAttachment(await api.upload(file, controller.signal, setProgress));
+      const uploaded = await api.upload(file, controller.signal, (percent) => {
+        if (!controller.signal.aborted && operation.current === controller) setProgress(percent);
+      });
+      if (controller.signal.aborted || operation.current !== controller) return;
+      setAttachment(uploaded);
       setPhase("idle");
     } catch {
       if (!controller.signal.aborted) setPhase("error");
@@ -89,10 +95,10 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
           error={errors.title ? t(`trial.${errors.title}`) : undefined}
         />
         <div className="sq-field">
-          <label htmlFor="trial-category">{t("trial.category")}</label>
+          <label htmlFor={`${id}-category`}>{t("trial.category")}</label>
           <select
             className="sq-input"
-            id="trial-category"
+            id={`${id}-category`}
             value={input.category}
             onChange={(event) => update({ category: event.target.value as DraftInput["category"] })}
           >
@@ -120,13 +126,13 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
           }}
         />
         <div className="sq-field">
-          <label htmlFor="trial-version">{t("workbench.minecraft-version")}</label>
+          <label htmlFor={`${id}-version`}>{t("workbench.minecraft-version")}</label>
           <select
             className="sq-input"
-            id="trial-version"
+            id={`${id}-version`}
             value={input.version}
             aria-invalid={Boolean(errors.version)}
-            aria-describedby={errors.version ? "trial-version-error" : undefined}
+            aria-describedby={errors.version ? `${id}-version-error` : undefined}
             required
             onChange={(event) => update({ version: event.target.value })}
           >
@@ -138,15 +144,15 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
             ))}
           </select>
           {errors.version && (
-            <p id="trial-version-error" className="sq-error">
+            <p id={`${id}-version-error`} className="sq-error">
               {t(`trial.${errors.version}`)}
             </p>
           )}
         </div>
         <div className="sq-field">
-          <label htmlFor="trial-upload">{t("trial.upload")}</label>
+          <label htmlFor={`${id}-upload`}>{t("trial.upload")}</label>
           <input
-            id="trial-upload"
+            id={`${id}-upload`}
             type="file"
             onChange={(event) => {
               void upload(event.target.files?.[0]);
@@ -157,8 +163,8 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
       </fieldset>
       {phase === "uploading" && (
         <div className="sq-field">
-          <label htmlFor="trial-progress">{t("trial.uploading")}</label>
-          <progress id="trial-progress" max={100} value={progress}>
+          <label htmlFor={`${id}-progress`}>{t("trial.uploading")}</label>
+          <progress id={`${id}-progress`} max={100} value={progress}>
             {progress}%
           </progress>
         </div>

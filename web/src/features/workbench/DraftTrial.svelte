@@ -11,6 +11,7 @@
     type DraftInput,
   } from "./draft-fixture";
   let { locale, retryFirstSave }: { locale: Locale; retryFirstSave: boolean } = $props();
+  const id = $props.id();
   const t = (key: StaticMessageKey): string => translate(locale, key);
   let input = $state<DraftInput>({ title: "", category: "door", width: "", version: "" });
   let search = $state("");
@@ -39,6 +40,7 @@
     phase = "saving";
     try {
       const result = await api.save(input, controller.signal);
+      if (controller.signal.aborted || operation !== controller) return;
       if (result.kind === "invalid") {
         errors = result.errors;
         phase = "idle";
@@ -56,9 +58,11 @@
     attachment = "";
     phase = "uploading";
     try {
-      attachment = await api.upload(file, controller.signal, (percent) => {
-        progress = percent;
+      const uploaded = await api.upload(file, controller.signal, (percent) => {
+        if (!controller.signal.aborted && operation === controller) progress = percent;
       });
+      if (controller.signal.aborted || operation !== controller) return;
+      attachment = uploaded;
       phase = "idle";
     } catch {
       if (!controller.signal.aborted) phase = "error";
@@ -85,9 +89,9 @@
       error={errors.title ? t(`trial.${errors.title}`) : undefined}
     />
     <div class="sq-field">
-      <label for="trial-category">{t("trial.category")}</label><select
+      <label for={`${id}-category`}>{t("trial.category")}</label><select
         class="sq-input"
-        id="trial-category"
+        id={`${id}-category`}
         bind:value={input.category}
         onchange={edited}
         ><option value="door">{t("trial.door")}</option><option value="utility"
@@ -113,24 +117,24 @@
       }}
     />
     <div class="sq-field">
-      <label for="trial-version">{t("workbench.minecraft-version")}</label><select
+      <label for={`${id}-version`}>{t("workbench.minecraft-version")}</label><select
         class="sq-input"
-        id="trial-version"
+        id={`${id}-version`}
         bind:value={input.version}
         aria-invalid={Boolean(errors.version)}
-        aria-describedby={errors.version ? "trial-version-error" : undefined}
+        aria-describedby={errors.version ? `${id}-version-error` : undefined}
         required
         onchange={edited}
         ><option value="">{t("trial.choose-version")}</option
         >{#each versions as version (version)}<option value={version}>{version}</option
           >{/each}</select
-      >{#if errors.version}<p id="trial-version-error" class="sq-error">
+      >{#if errors.version}<p id={`${id}-version-error`} class="sq-error">
           {t(`trial.${errors.version}`)}
         </p>{/if}
     </div>
     <div class="sq-field">
-      <label for="trial-upload">{t("trial.upload")}</label><input
-        id="trial-upload"
+      <label for={`${id}-upload`}>{t("trial.upload")}</label><input
+        id={`${id}-upload`}
         type="file"
         onchange={(event) => {
           void upload(event.currentTarget.files?.[0]);
@@ -140,8 +144,8 @@
     </div>
   </fieldset>
   {#if phase === "uploading"}<div class="sq-field">
-      <label for="trial-progress">{t("trial.uploading")}</label><progress
-        id="trial-progress"
+      <label for={`${id}-progress`}>{t("trial.uploading")}</label><progress
+        id={`${id}-progress`}
         max={100}
         value={progress}>{progress}%</progress
       >

@@ -44,16 +44,16 @@ const budgets: EntryBudget[] = [
   },
   {
     entries: ["src/features/workbench/Controls.tsx"],
-    label: "Design workbench",
+    label: "React workbench reference",
     initialKiB: 110,
     completeKiB: 140,
   },
   {
     entries: ["src/features/workbench/Controls.svelte"],
     renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
-    label: "Svelte workbench comparison",
-    initialKiB: 110,
-    completeKiB: 140,
+    label: "Design workbench (Svelte)",
+    initialKiB: 65,
+    completeKiB: 90,
   },
   {
     entries: ["src/features/workbench/DraftTrial.tsx"],
@@ -65,8 +65,8 @@ const budgets: EntryBudget[] = [
     entries: ["src/features/workbench/DraftTrial.svelte"],
     renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
     label: "Svelte draft trial",
-    initialKiB: 110,
-    completeKiB: 140,
+    initialKiB: 50,
+    completeKiB: 80,
   },
 ];
 const clientDirectory = path.resolve("dist/client");

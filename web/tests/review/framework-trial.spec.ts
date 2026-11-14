@@ -1,6 +1,11 @@
+import { readFileSync } from "node:fs";
+import type { BundleManifest } from "../../scripts/bundle-budgets";
 import AxeBuilder from "@axe-core/playwright";
 import { test, expect } from "./test";
 
+const manifest = JSON.parse(
+  readFileSync("dist/client/.vite/manifest.json", "utf8"),
+) as BundleManifest;
 test.use({ video: "on" });
 for (const framework of ["react", "svelte"]) {
   for (const locale of ["en", "zh-CN"]) {
@@ -32,7 +37,7 @@ for (const framework of ["react", "svelte"]) {
             dialog: "新建草稿",
             close: "关闭对话框",
           };
-    test(`${framework} / ${locale} / draft workflow`, async ({ page }, testInfo) => {
+    test(`${framework} / ${locale} / draft workflow`, async ({ page, browserName }, testInfo) => {
       await page.goto(`/design-system-trial?framework=${framework}&lang=${locale}&scenario=retry`);
       await page.getByRole("button", { name: labels.save, exact: true }).click();
       await expect(page.getByLabel(labels.title, { exact: true })).toHaveAttribute(
@@ -55,16 +60,32 @@ for (const framework of ["react", "svelte"]) {
       await page.getByRole("button", { name: labels.save, exact: true }).click();
       await page.getByRole("button", { name: labels.retry, exact: true }).click();
       await expect(page.getByRole("status")).toHaveText(labels.saved);
+      await expect(page.locator("astro-island")).toHaveCount(1);
+      const otherFramework = framework === "svelte" ? "react" : "svelte";
+      const otherRenderer =
+        manifest[`node_modules/@astrojs/${otherFramework}/dist/client.js`]?.file;
+      if (!otherRenderer) throw new Error("Comparison renderer missing from manifest");
+      const requested = await page.evaluate(() =>
+        performance.getEntriesByType("resource").map((entry) => new URL(entry.name).pathname),
+      );
+      expect(requested).not.toContain(`/${otherRenderer}`);
       await expect(page.getByLabel(labels.title, { exact: true })).toHaveValue("Copper Bolt");
-      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      // Run axe in Chromium; compatibility projects exercise the workflow itself.
+      // Playwright's Firefox 1572 crashes in axe on this form in both implementations.
+      if (browserName === "chromium") {
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      }
       await page.evaluate(() => document.fonts.ready);
+      await page.getByLabel(labels.title, { exact: true }).focus();
       const screenshot = testInfo.outputPath("draft.png");
       await page.screenshot({ path: screenshot, fullPage: true });
       await testInfo.attach(`${framework}-${locale}`, {
         path: screenshot,
         contentType: "image/png",
       });
-      await expect(page).toHaveScreenshot(`trial-${framework}-${locale}.png`, { fullPage: true });
+      if (["desktop", "mobile"].includes(testInfo.project.name)) {
+        await expect(page).toHaveScreenshot(`trial-${framework}-${locale}.png`, { fullPage: true });
+      }
       await page.getByLabel(labels.category).selectOption("utility");
       await expect(page.getByLabel(labels.width)).toHaveCount(0);
       await page.getByLabel(labels.title, { exact: true }).fill("Reserved");
