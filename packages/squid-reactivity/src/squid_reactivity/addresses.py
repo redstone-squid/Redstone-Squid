@@ -42,9 +42,10 @@ class _Subscription:
     active: bool = True
 
 
-def subscribe(owner: object, name: str, callback: Callable[[CellAddress], None]) -> Callable[[], None]:
+def subscribe(address: CellAddress, callback: Callable[[CellAddress], None]) -> Callable[[], None]:
     """Subscribe until the returned callable is called or released."""
-    subscribers = vars(owner).setdefault("_reactive_subscribers", {})
+    subscribers = vars(address.owner).setdefault("_reactive_subscribers", {})
+    name = address.name
     entries = subscribers.setdefault(name, [])
     subscription = _Subscription(callback)
     reference = weakref.ref(subscription)

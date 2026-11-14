@@ -299,7 +299,7 @@ class SubscriptionReconciler:
                 if address in self._follows:
                     continue
                 if isinstance(address, CellAddress):
-                    self._follows[address] = subscribe(address.owner, address.name, self.callback)
+                    self._follows[address] = subscribe(address, self.callback)
                 elif isinstance(address, TopicHandle):
                     self._follows[address] = address.subscribe(self.callback)
                 elif bus is not None:
