@@ -453,6 +453,10 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
 _TIME_PATTERN = re.compile(r"[~≈]?\s*(?P<value>[+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*-?\s*(?P<unit>[a-z][a-z\s_-]*))?")
 """A number with an optional approximation marker and an optional unit."""
 
+_COMPOUND_TIME_TERM = re.compile(
+    r"(?P<value>\d+(?:\.\d+)?|\.\d+)\s*(?P<unit>hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)(?![a-z])"
+)
+
 _TICKS_PER_UNIT: Mapping[str, float] = {
     # A bare number is seconds, which is how submissions and the inference prompt quote timings.
     "": 20,
@@ -466,6 +470,11 @@ _TICKS_PER_UNIT: Mapping[str, float] = {
     "mins": 1200,
     "minute": 1200,
     "minutes": 1200,
+    "h": 72000,
+    "hr": 72000,
+    "hrs": 72000,
+    "hour": 72000,
+    "hours": 72000,
     "t": 1,
     "gt": 1,
     "tick": 1,
@@ -478,20 +487,46 @@ _TICKS_PER_UNIT: Mapping[str, float] = {
 }
 
 
+def _parse_compound_time(value: str) -> int | None:
+    """Read descending hour/minute/second terms without combining separate measurements."""
+    remaining = value.removeprefix("~").removeprefix("≈").strip()
+    previous_unit = float("inf")
+    total = 0.0
+    terms = 0
+    while remaining:
+        match = _COMPOUND_TIME_TERM.match(remaining)
+        if match is None:
+            return None
+        unit = _TICKS_PER_UNIT[match["unit"]]
+        if unit >= previous_unit:
+            return None
+        total += float(match["value"]) * unit
+        previous_unit = unit
+        terms += 1
+        remaining = remaining[match.end() :].strip()
+        if remaining.startswith("and "):
+            remaining = remaining[4:].strip()
+            if not remaining:
+                return None
+    return round(total) if terms > 1 else None
+
+
 def parse_time_string(time_string: str | None) -> int | None:
     """Convert a time string to game ticks, or return None for unrecognized input.
 
     A bare number means seconds; one minute is 1200 game ticks, one second is 20, and one redstone
     tick is two game ticks. For example, "1.5s" gives 30 and "3 redstone ticks"
-    gives 6. Approximation markers such as "~" are ignored. Fractional ticks
+    gives 6. Compound durations such as "4h 47m 30s" are also accepted.
+    Approximation markers such as "~" are ignored. Fractional ticks
     use Python's round(), which rounds exact halves to the nearest even integer.
     """
     if time_string is None:
         return None
 
-    match = _TIME_PATTERN.fullmatch(time_string.strip().lower())
+    value = time_string.strip().lower()
+    match = _TIME_PATTERN.fullmatch(value)
     if match is None:
-        return None
+        return _parse_compound_time(value)
 
     # Separators inside a unit are noise, so "game ticks", "game-ticks" and "gameticks" all collapse to one key.
     unit = re.sub(r"[\s_-]+", "", match["unit"] or "")

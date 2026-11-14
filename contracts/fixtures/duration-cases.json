@@ -24,6 +24,9 @@
     { "input": "", "python_ticks": null, "reason": "not a duration anywhere" }
   ],
   "python_only": [
+    { "input": "4h 47m 30s", "ticks": 345000 },
+    { "input": "2 minutes and 35.5 seconds", "ticks": 3110 },
+    { "input": "~3min25s", "ticks": 4100 },
     { "input": "~2s", "ticks": 40 },
     { "input": "9-gt", "ticks": 9 },
     { "input": "~42 minutes", "ticks": 50400 },
