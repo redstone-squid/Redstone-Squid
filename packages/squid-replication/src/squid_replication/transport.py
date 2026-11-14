@@ -25,7 +25,7 @@ class ReplicationUpdate:
     source_replica_id: str
     update_id: uuid.UUID
     payload: bytes
-    origin_action_id: uuid.UUID | None = None
+    origin_transaction_id: uuid.UUID | None = None
     schema: int = 1
 
     @classmethod
@@ -36,9 +36,9 @@ class ReplicationUpdate:
         backend_id: str,
         source_replica_id: str,
         payload: bytes,
-        origin_action_id: uuid.UUID | None,
+        origin_transaction_id: uuid.UUID | None,
     ) -> ReplicationUpdate:
-        return cls(document_id, backend_id, source_replica_id, uuid.uuid7(), payload, origin_action_id)
+        return cls(document_id, backend_id, source_replica_id, uuid.uuid7(), payload, origin_transaction_id)
 
     def encode(self) -> bytes:
         """Encode the envelope without interpreting the backend payload."""
@@ -46,7 +46,7 @@ class ReplicationUpdate:
             "backend": self.backend_id,
             "document": self.document_id,
             "hash": hashlib.sha256(self.payload).hexdigest(),
-            "origin_action": None if self.origin_action_id is None else str(self.origin_action_id),
+            "origin_action": None if self.origin_transaction_id is None else str(self.origin_transaction_id),
             "payload": base64.b64encode(self.payload).decode("ascii"),
             "schema": self.schema,
             "source_replica": self.source_replica_id,

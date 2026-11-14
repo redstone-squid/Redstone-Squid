@@ -21,15 +21,6 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Protocol, Self, overload
 
-from squid_reactivity.actions import (
-    ActionContext,
-    ActionId,
-    ActionPurpose,
-    ActionRelation,
-    CausalRef,
-    ExceptionReport,
-    current_action,
-)
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     emit_causal_event,
@@ -37,12 +28,21 @@ from squid_reactivity.diagnostics import (
 )
 from squid_reactivity.errors import (
     FrameworkIntegrityError,
-    FreshActionError,
+    FreshTransactionError,
     ReactiveConflictError,
     ReactiveWriteError,
 )
 from squid_reactivity.internals import Signal
 from squid_reactivity.operations import OperationContext
+from squid_reactivity.transaction_context import (
+    CausalRef,
+    ExceptionReport,
+    TransactionContext,
+    TransactionId,
+    TransactionPurpose,
+    TransactionRelation,
+    current_transaction_context,
+)
 from squid_reactivity.transaction_results import (
     ChangeToken,
     ConflictDetail,
@@ -57,7 +57,7 @@ from squid_reactivity.transactions import (
     TransactionView,
     apply_conditional_patches,
     enlist,
-    fresh_action_transaction,
+    fresh_transaction,
 )
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import SquidUiError
@@ -166,7 +166,7 @@ class CompensationExecution:
         emit_causal_event(
             OperationEventSnapshot(
                 str(self.context.execution_id),
-                None if self.context.root_action_id is None else str(self.context.root_action_id),
+                None if self.context.root_transaction_id is None else str(self.context.root_transaction_id),
                 self.context.cause,
                 self.context.name,
                 status.value,
@@ -178,10 +178,10 @@ class CompensationExecution:
 
 @dataclass(frozen=True, slots=True)
 class CompensationIntent:
-    """Record which action needs external undo work and the key used to deduplicate it."""
+    """Record which transaction needs external undo work and the key used to deduplicate it."""
 
     context: OperationContext
-    original_action_id: uuid.UUID
+    original_transaction_id: uuid.UUID
     idempotency_key: str
     started_at: datetime
 
@@ -352,6 +352,7 @@ class _CompensationIntentParticipant:
 class CompensationRecordCodec:
     """JSON schema 1 codec for application-owned durable compensation records."""
 
+    # Schema 1 retains its original JSON keys so saved records remain readable.
     schema_version = 1
     max_encoded_bytes = 65_536
 
@@ -363,9 +364,9 @@ class CompensationRecordCodec:
             "cause": None
             if context.cause is None
             else {"kind": context.cause.kind, "identity": context.cause.identity},
-            "root_action_id": None if context.root_action_id is None else str(context.root_action_id),
+            "root_action_id": None if context.root_transaction_id is None else str(context.root_transaction_id),
             "name": context.name,
-            "original_action_id": str(record.intent.original_action_id),
+            "original_action_id": str(record.intent.original_transaction_id),
             "idempotency_key": record.intent.idempotency_key,
             "started_at": record.intent.started_at.isoformat(),
             "status": record.status.value,
@@ -443,15 +444,15 @@ class UndoPlan:
 
 @dataclass(slots=True)
 class HistoryEntry:
-    """One retained committed action and the fresh plan that can reverse it."""
+    """One retained committed transaction and the fresh plan that can reverse it."""
 
     label: TextLike
-    original_action_id: ActionId
+    original_transaction_id: TransactionId
     undo_plan: UndoPlan
     state: HistoryEntryState = HistoryEntryState.READY
     recorded_at: float = field(default_factory=time.monotonic)
     last_result: HistoryResult | None = None
-    undo_action_id: ActionId | None = None
+    undo_transaction_id: TransactionId | None = None
     redo_plan: UndoPlan | None = None
     compensation: CompensationSpec | None = None
     original_commit: TransactionCommit | None = None
@@ -467,7 +468,7 @@ class HistoryResult:
 
     status: HistoryResultStatus
     entry: HistoryEntry | None = None
-    action_id: ActionId | None = None
+    transaction_id: TransactionId | None = None
     conflict: ConflictDetail | None = None
     error: Exception | None = None
 
@@ -486,7 +487,7 @@ class HistoryEntrySnapshot:
 
     label: str
     recorded_at: float
-    action_id: str
+    transaction_id: str
     state: str
     conflict: str | None
 
@@ -588,12 +589,12 @@ class History:
         """
 
         def committed(commit: TransactionCommit) -> None:
-            if commit.context.kind in {ActionPurpose.UNDO, ActionPurpose.REDO}:
+            if commit.context.kind in {TransactionPurpose.UNDO, TransactionPurpose.REDO}:
                 return
             self._push(
                 HistoryEntry(
                     label,
-                    commit.context.action_id,
+                    commit.context.transaction_id,
                     UndoPlan.from_commit(commit),
                     compensation=compensate,
                     original_commit=commit,
@@ -610,7 +611,9 @@ class History:
         """
         self._reserve(
             transaction,
-            lambda commit: self._push(HistoryEntry(label, commit.context.action_id, UndoPlan(()), operation=operation)),
+            lambda commit: self._push(
+                HistoryEntry(label, commit.context.transaction_id, UndoPlan(()), operation=operation)
+            ),
         )
 
     def accept_committed(
@@ -618,7 +621,7 @@ class History:
         label: TextLike,
         operation: ReversibleOperation,
         *,
-        operation_id: ActionId,
+        operation_id: TransactionId,
         targets: frozenset[str] = frozenset(),
     ) -> HistoryEntry:
         """Retain a confirmed external commit independently of the UI transaction.
@@ -628,22 +631,22 @@ class History:
         Repeated delivery returns the existing entry while it remains retained.
         """
         for entry in (*self._undone, *self._redoable):
-            if entry.original_action_id == operation_id:
+            if entry.original_transaction_id == operation_id:
                 return entry
         entry = HistoryEntry(label, operation_id, UndoPlan(()), operation=operation, targets=targets)
         self._push(entry)
         return entry
 
-    def settle_reversal(self, action_id: ActionId, *, inverse: ReversibleOperation | None) -> None:
+    def settle_reversal(self, transaction_id: TransactionId, *, inverse: ReversibleOperation | None) -> None:
         """Resolve an uncertain external reversal after the application checks its outcome.
 
         Pass the committed inverse to finish moving the entry, or None after
         proving no write occurred. No external operation is executed here.
         """
-        entry = self._select(self._undone, action_id)
+        entry = self._select(self._undone, transaction_id)
         undoing = entry is not None
         if entry is None:
-            entry = self._select(self._redoable, action_id)
+            entry = self._select(self._redoable, transaction_id)
         if entry is None or entry.state is not HistoryEntryState.NEEDS_RECONCILIATION:
             message = "only an uncertain retained reversal can be reconciled"
             raise HistoryError(message)
@@ -678,17 +681,17 @@ class History:
             assert entry.last_result is not None
             return entry.last_result
         entry.state = HistoryEntryState.REAPPLYING if redo else HistoryEntryState.REVERSING
-        cause = current_action()
-        context = ActionContext.create(
+        cause = current_transaction_context()
+        context = TransactionContext.create(
             f"{'Redo' if redo else 'Undo'} {source_text(entry.label)}",
-            kind=ActionPurpose.REDO if redo else ActionPurpose.UNDO,
+            kind=TransactionPurpose.REDO if redo else TransactionPurpose.UNDO,
             cause=None if cause is None else cause.causal_ref(),
-            relation=ActionRelation("reapplies" if redo else "reverses", entry.original_action_id),
+            relation=TransactionRelation("reapplies" if redo else "reverses", entry.original_transaction_id),
         )
         try:
-            with fresh_action_transaction(action_context=context):
+            with fresh_transaction(transaction_context=context):
                 inverse = await entry.operation.reverse()
-        except FreshActionError:
+        except FreshTransactionError:
             entry.state = HistoryEntryState.UNDONE if redo else HistoryEntryState.READY
             raise
         except ReactiveConflictError as error:
@@ -716,18 +719,18 @@ class History:
         self._signal.notify()
         return result
 
-    async def undo(self, action_id: ActionId | None = None) -> UndoResult:
+    async def undo(self, transaction_id: TransactionId | None = None) -> UndoResult:
         """Serialize reversals, including asynchronous external operations."""
         async with self._operation_lock:
-            return await self._undo(action_id)
+            return await self._undo(transaction_id)
 
-    async def _undo(self, action_id: ActionId | None = None) -> UndoResult:
+    async def _undo(self, transaction_id: TransactionId | None = None) -> UndoResult:
         """Reverse the latest retained action, or the one with the supplied original action ID.
 
         Return EMPTY when absent. Conflicts leave transactional state unchanged; compensation
         may instead return NEEDS_RECONCILIATION after an external effect has succeeded.
         """
-        entry = self._select(self._undone, action_id)
+        entry = self._select(self._undone, transaction_id)
         if entry is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
         if entry.state is HistoryEntryState.NEEDS_RECONCILIATION and entry.last_result is not None:
@@ -743,20 +746,20 @@ class History:
         entry: HistoryEntry,
         *,
         retain_redo: bool = True,
-        action_context: ActionContext | None = None,
+        transaction_context: TransactionContext | None = None,
     ) -> UndoResult:
         previous = entry.state
         entry.state = HistoryEntryState.REVERSING
-        cause = current_action()
-        context = action_context or ActionContext.create(
+        cause = current_transaction_context()
+        context = transaction_context or TransactionContext.create(
             f"Undo {source_text(entry.label)}",
-            kind=ActionPurpose.UNDO,
+            kind=TransactionPurpose.UNDO,
             cause=None if cause is None else cause.causal_ref(),
-            root_action_id=None if cause is None else cause.root_action_id,
-            relation=ActionRelation("reverses", entry.original_action_id),
+            root_transaction_id=None if cause is None else cause.root_transaction_id,
+            relation=TransactionRelation("reverses", entry.original_transaction_id),
         )
         try:
-            with fresh_action_transaction(action_context=context) as tx:
+            with fresh_transaction(transaction_context=context) as tx:
                 planned: list[tuple[ChangeToken[Any], object]] = []
                 for change in entry.undo_plan.participants:
                     inverse = change.token.plan_inverse()
@@ -772,10 +775,10 @@ class History:
                 def committed(commit: TransactionCommit) -> None:
                     assert entry is not None
                     self._release_entry(entry)
-                    entry.undo_action_id = commit.context.action_id
+                    entry.undo_transaction_id = commit.context.transaction_id
                     entry.redo_plan = UndoPlan.from_commit(commit)
                     entry.state = HistoryEntryState.UNDONE
-                    result = HistoryResult(HistoryResultStatus.APPLIED, entry, commit.context.action_id)
+                    result = HistoryResult(HistoryResultStatus.APPLIED, entry, commit.context.transaction_id)
                     entry.last_result = result
                     self._remove_identity(self._undone, entry)
                     if retain_redo:
@@ -786,17 +789,17 @@ class History:
                 tx.after_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
-            result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
+            result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.transaction_id, error.detail, error)
             entry.last_result = result
             self._signal.notify()
             return result
-        except FrameworkIntegrityError, FreshActionError:
+        except FrameworkIntegrityError, FreshTransactionError:
             # No inverse was admitted, so the entry is still whatever it was selected as.
             entry.state = previous
             raise
         except Exception as error:
             entry.state = HistoryEntryState.FAILED
-            result = HistoryResult(HistoryResultStatus.FAILED, entry, context.action_id, error=error)
+            result = HistoryResult(HistoryResultStatus.FAILED, entry, context.transaction_id, error=error)
             entry.last_result = result
             self._signal.notify()
             return result
@@ -810,25 +813,25 @@ class History:
         operation_context = OperationContext(
             uuid.uuid7(),
             original.causal_ref(),
-            original.root_action_id,
+            original.root_transaction_id,
             f"Compensate {source_text(entry.label)}",
         )
         execution = CompensationExecution(operation_context, key)
         execution.transition(CompensationStatus.REVERTING)
-        intent = CompensationIntent(operation_context, original.action_id, key, datetime.now(UTC))
+        intent = CompensationIntent(operation_context, original.transaction_id, key, datetime.now(UTC))
         previous = entry.state
         entry.compensation_execution = execution
         entry.state = HistoryEntryState.REVERSING
         self._signal.notify()
-        intent_context = ActionContext.create(
+        intent_context = TransactionContext.create(
             f"Begin compensation for {source_text(entry.label)}",
-            kind=ActionPurpose.COMPENSATION,
+            kind=TransactionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
-            root_action_id=original.root_action_id,
-            relation=ActionRelation("compensates", original.action_id),
+            root_transaction_id=original.root_transaction_id,
+            relation=TransactionRelation("compensates", original.transaction_id),
         )
         try:
-            with fresh_action_transaction(action_context=intent_context):
+            with fresh_transaction(transaction_context=intent_context):
                 participant = getattr(self._compensation_outbox, "participant", None)
                 if participant is not None:
                     joined = enlist(
@@ -842,7 +845,7 @@ class History:
             entry.state = HistoryEntryState.FAILED
             self._signal.notify()
             raise
-        except FrameworkIntegrityError, FreshActionError:
+        except FrameworkIntegrityError, FreshTransactionError:
             # No compensation was admitted, so the entry is still whatever it was selected as.
             entry.state = previous
             self._signal.notify()
@@ -900,14 +903,14 @@ class History:
                 entry.last_result = result
                 self._signal.notify()
                 return result
-        compensation_context = ActionContext.create(
+        compensation_context = TransactionContext.create(
             f"Apply compensation for {source_text(entry.label)}",
-            kind=ActionPurpose.COMPENSATION,
+            kind=TransactionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
-            root_action_id=original.root_action_id,
-            relation=ActionRelation("compensates", original.action_id),
+            root_transaction_id=original.root_transaction_id,
+            relation=TransactionRelation("compensates", original.transaction_id),
         )
-        result = self._undo_state(entry, retain_redo=False, action_context=compensation_context)
+        result = self._undo_state(entry, retain_redo=False, transaction_context=compensation_context)
         if result.status in {HistoryResultStatus.CONFLICT, HistoryResultStatus.FAILED}:
             execution.transition(CompensationStatus.NEEDS_RECONCILIATION)
             entry.state = HistoryEntryState.NEEDS_RECONCILIATION
@@ -919,7 +922,7 @@ class History:
             result = HistoryResult(
                 HistoryResultStatus.NEEDS_RECONCILIATION,
                 entry,
-                result.action_id,
+                result.transaction_id,
                 result.conflict,
                 outbox_error or result.error,
             )
@@ -934,7 +937,7 @@ class History:
                 result = HistoryResult(
                     HistoryResultStatus.NEEDS_RECONCILIATION,
                     entry,
-                    result.action_id,
+                    result.transaction_id,
                     error=error,
                 )
                 entry.last_result = result
@@ -961,16 +964,16 @@ class History:
             return HistoryResult(HistoryResultStatus.EMPTY)
         previous = entry.state
         entry.state = HistoryEntryState.REAPPLYING
-        cause = current_action()
-        context = ActionContext.create(
+        cause = current_transaction_context()
+        context = TransactionContext.create(
             f"Redo {source_text(entry.label)}",
-            kind=ActionPurpose.REDO,
+            kind=TransactionPurpose.REDO,
             cause=None if cause is None else cause.causal_ref(),
-            root_action_id=None if cause is None else cause.root_action_id,
-            relation=ActionRelation("reapplies", entry.original_action_id),
+            root_transaction_id=None if cause is None else cause.root_transaction_id,
+            relation=TransactionRelation("reapplies", entry.original_transaction_id),
         )
         try:
-            with fresh_action_transaction(action_context=context) as tx:
+            with fresh_transaction(transaction_context=context) as tx:
                 planned: list[tuple[ChangeToken[Any], object]] = []
                 for change in entry.redo_plan.participants:
                     inverse = change.token.plan_inverse()
@@ -989,7 +992,7 @@ class History:
                     entry.undo_plan = UndoPlan.from_commit(commit)
                     entry.retentions = self._retain_plan(entry.undo_plan)
                     entry.state = HistoryEntryState.READY
-                    result = HistoryResult(HistoryResultStatus.APPLIED, entry, commit.context.action_id)
+                    result = HistoryResult(HistoryResultStatus.APPLIED, entry, commit.context.transaction_id)
                     entry.last_result = result
                     self._remove_identity(self._redoable, entry)
                     self._undone.append(entry)
@@ -998,31 +1001,31 @@ class History:
                 tx.after_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
-            result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
+            result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.transaction_id, error.detail, error)
             entry.last_result = result
             self._signal.notify()
             return result
-        except FrameworkIntegrityError, FreshActionError:
+        except FrameworkIntegrityError, FreshTransactionError:
             # No inverse was admitted, so the entry is still whatever it was selected as.
             entry.state = previous
             raise
         except Exception as error:
             entry.state = HistoryEntryState.FAILED
-            result = HistoryResult(HistoryResultStatus.FAILED, entry, context.action_id, error=error)
+            result = HistoryResult(HistoryResultStatus.FAILED, entry, context.transaction_id, error=error)
             entry.last_result = result
             self._signal.notify()
             return result
         assert entry.last_result is not None
         return entry.last_result
 
-    def delete_conflicted(self, action_id: ActionId | None = None) -> HistoryEntry | None:
+    def delete_conflicted(self, transaction_id: TransactionId | None = None) -> HistoryEntry | None:
         """Remove a matching conflicted entry without changing application state.
 
         With no action ID, inspect only the newest entry of each stack; this does not search
         past an unconflicted top entry.
         """
         for stack in (self._undone, self._redoable):
-            entry = self._select(stack, action_id)
+            entry = self._select(stack, transaction_id)
             if entry is not None and entry.state is HistoryEntryState.CONFLICTED:
                 self._remove_identity(stack, entry)
                 self._release_entry(entry)
@@ -1093,10 +1096,10 @@ class History:
                 release()
 
     @staticmethod
-    def _select(stack: list[HistoryEntry], action_id: ActionId | None) -> HistoryEntry | None:
-        if action_id is None:
+    def _select(stack: list[HistoryEntry], transaction_id: TransactionId | None) -> HistoryEntry | None:
+        if transaction_id is None:
             return stack[-1] if stack else None
-        return next((entry for entry in reversed(stack) if entry.original_action_id == action_id), None)
+        return next((entry for entry in reversed(stack) if entry.original_transaction_id == transaction_id), None)
 
     @staticmethod
     def _remove_identity(stack: list[HistoryEntry], entry: HistoryEntry) -> None:
@@ -1174,7 +1177,7 @@ def _entry_snapshot(entry: HistoryEntry) -> HistoryEntrySnapshot:
         None if entry.last_result is None or entry.last_result.conflict is None else str(entry.last_result.conflict)
     )
     return HistoryEntrySnapshot(
-        source_text(entry.label), entry.recorded_at, str(entry.original_action_id), entry.state.value, conflict
+        source_text(entry.label), entry.recorded_at, str(entry.original_transaction_id), entry.state.value, conflict
     )
 
 

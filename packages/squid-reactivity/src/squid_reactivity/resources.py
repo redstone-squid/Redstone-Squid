@@ -21,12 +21,6 @@ from enum import StrEnum
 from types import TracebackType
 from typing import Any, Literal, Protocol, overload, override
 
-from squid_reactivity.actions import (
-    ActionId,
-    CausalRef,
-    ExceptionReport,
-    current_causality,
-)
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.async_values import (
     AsyncBinding as AsyncBinding,
@@ -60,6 +54,12 @@ from squid_reactivity.tracking import (
     _ReactiveSource,
     cycle_path,
     settling,
+)
+from squid_reactivity.transaction_context import (
+    CausalRef,
+    ExceptionReport,
+    TransactionId,
+    current_causality,
 )
 from squid_reactivity.transactions import (
     TransactionView,
@@ -558,17 +558,17 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
     def _emit_generation(
         self,
         status: str,
-        generation: tuple[uuid.UUID, CausalRef | None, ActionId | None],
+        generation: tuple[uuid.UUID, CausalRef | None, TransactionId | None],
         error: BaseException | None = None,
     ) -> None:
         if not has_event_observers():
             return
-        generation_id, cause, root_action_id = generation
+        generation_id, cause, root_transaction_id = generation
         exception = None if error is None else ExceptionReport.capture(error)
         emit_causal_event(
             ResourceEventSnapshot(
                 str(generation_id),
-                None if root_action_id is None else str(root_action_id),
+                None if root_transaction_id is None else str(root_transaction_id),
                 cause,
                 self._label,
                 status,

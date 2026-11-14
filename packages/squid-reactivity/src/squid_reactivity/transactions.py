@@ -18,29 +18,17 @@ from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any, Protocol
 
-from squid_reactivity.actions import (
-    ActionContext,
-    ActionPurpose,
-    ActionRelation,
-    ActorRef,
-    ExceptionReport,
-    action_scope,
-    continuation_callback,
-    current_action,
-    current_causality,
-    in_continuation,
-)
 from squid_reactivity.diagnostics import (
     emit_continuation_failure,
     emit_result,
 )
 from squid_reactivity.errors import (
-    ActionValidationError,
     FrameworkIntegrityError,
-    FreshActionError,
+    FreshTransactionError,
     ReactiveConflictError,
     ReactiveWriteError,
     StaleReactiveContextError,
+    TransactionValidationError,
     UndeclaredStateError,
 )
 from squid_reactivity.tracking import (
@@ -54,6 +42,18 @@ from squid_reactivity.tracking import (
     _checkpoint,
     _current_task,
     relaxed_read,
+)
+from squid_reactivity.transaction_context import (
+    ActorRef,
+    ExceptionReport,
+    TransactionContext,
+    TransactionPurpose,
+    TransactionRelation,
+    continuation_callback,
+    current_causality,
+    current_transaction_context,
+    in_continuation,
+    transaction_context_scope,
 )
 from squid_reactivity.transaction_results import (
     ChangeReport,
@@ -87,7 +87,7 @@ class TransactionView(Protocol):
     def read_committed(self, target: CellTarget) -> SlotValue: ...
 
     @property
-    def context(self) -> ActionContext: ...
+    def context(self) -> TransactionContext: ...
 
 
 class TransactionParticipant[PreparedT](Protocol):
@@ -95,7 +95,7 @@ class TransactionParticipant[PreparedT](Protocol):
 
     Register through enlist. During commit, prepare validates the staged changes
     and returns the data apply needs. Preparation must not publish changes. If it
-    fails, the action aborts before publication.
+    fails, the transaction aborts before publication.
 
     Apply runs synchronously after the commit point and must not fail. Finalize
     runs after all participants have applied, when subscribers can read the full
@@ -105,7 +105,7 @@ class TransactionParticipant[PreparedT](Protocol):
     def prepare(self, view: TransactionView) -> PreparedT:
         """Validate the staged writes and return what `apply` needs, publishing none of them.
 
-        Raise to abort the action: every participant is aborted, component state is
+        Raise to abort the transaction: every participant is aborted, component state is
         restored, and the error reaches whoever called the handler.
         """
         ...
@@ -122,7 +122,7 @@ class TransactionParticipant[PreparedT](Protocol):
     def finalize(self, prepared: PreparedT) -> None:
         """Notify subscribers after all participants have applied.
 
-        An exception here is reported but does not roll back the committed action.
+        An exception here is reported but does not roll back the committed transaction.
         """
 
 
@@ -219,7 +219,7 @@ class ConditionalCellPatch:
 
 @dataclass(frozen=True, slots=True)
 class CellPatchSet:
-    """Immutable physical changes from one committed action."""
+    """Immutable physical changes from one committed transaction."""
 
     patches: tuple[CellPatch, ...] = ()
 
@@ -262,7 +262,7 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     """Stage a write into the transaction in flight, or land it now if there is none.
 
     `enlist` already returns `None` when no transaction is open; this is the same
-    signal read directly. A component built during the action is not protected by it, so
+    signal read directly. A component built during the transaction is not protected by it, so
     its construction lands immediately too.
     """
     _check_write(owner, name)
@@ -286,13 +286,13 @@ class Transaction:
     then remains available even if it raised. Hooks run after the outcome is fixed.
     """
 
-    def __init__(self, context: ActionContext, *, readonly: bool = False) -> None:
+    def __init__(self, context: TransactionContext, *, readonly: bool = False) -> None:
         self._readonly = readonly
         self._context = context
         self._result: TransactionResult | None = None
 
     @property
-    def context(self) -> ActionContext:
+    def context(self) -> TransactionContext:
         return self._context
 
     @property
@@ -360,7 +360,7 @@ class _Transaction:
 
     Preparation freezes writes while retaining overlay reads. Publication closes
     the read view before applying participants and notifying owners; failures
-    after that point cannot turn the committed action into a rollback.
+    after that point cannot turn the committed transaction into a rollback.
     """
 
     readonly: bool = False
@@ -371,11 +371,11 @@ class _Transaction:
     """Cache identity without retaining the transaction and its owners."""
     writes: dict[_Cell, _Staged] = field(default_factory=dict)
     observed: dict[_Cell, int] = field(default_factory=dict)
-    """Committed versions this action read out of addressed cells, first read per cell.
+    """Committed versions this transaction read out of addressed cells, first read per cell.
 
-    Only shared cells are recorded, because only they can move under a running action.
+    Only shared cells are recorded, because only they can move under a running transaction.
     Recorded whether or not the read carries a precondition, because the ledger reports what
-    an action looked at and that is true either way.
+    a transaction looked at and that is true either way.
     """
     strong: dict[_Cell, int] = field(default_factory=dict)
     """The subset of `observed` taken inside `strong_read()`, which must still hold at commit."""
@@ -387,7 +387,7 @@ class _Transaction:
     commit_hooks: list[tuple[object | None, Callable[[TransactionCommit], None]]] = field(default_factory=list)
     rollback_hooks: list[tuple[object | None, Callable[[TransactionRollback], None]]] = field(default_factory=list)
     result_hooks: list[tuple[object | None, Callable[[TransactionResult], None]]] = field(default_factory=list)
-    context: ActionContext = field(default_factory=ActionContext.create)
+    context: TransactionContext = field(default_factory=TransactionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
@@ -420,7 +420,7 @@ class _Transaction:
         if self.closed:
             message = (
                 f"{what} was written through a transaction that has already finished. The write "
-                f"came from a task that outlived the action which opened it, so nothing would "
+                f"came from a task that outlived the transaction which opened it, so nothing would "
                 f"publish it: give the task an owner inside the handler, or write in the handler."
             )
         else:
@@ -434,13 +434,13 @@ class _Transaction:
     def protects(self, owner: object) -> bool:
         """Whether this transaction is responsible for the owner's state.
 
-        A transaction restores the view the action started from. An object created during the
-        action had no state then, so writing to it is construction, not mutation.
+        A transaction restores the view the transaction started from. An object created during the
+        transaction had no state then, so writing to it is construction, not mutation.
         """
         return id(owner) not in self.born
 
     def staged(self, cell: _Cell) -> _Staged | None:
-        """This action's pending write to `cell`, if it has made one."""
+        """This transaction's pending write to `cell`, if it has made one."""
         return self.writes.get(cell)
 
     def observe(self, cell: _Cell, *, strong: bool) -> None:
@@ -456,7 +456,7 @@ class _Transaction:
     def check_preconditions(self) -> None:
         """Check required versions before publishing writes or participant changes.
 
-        Reads of cells this action also writes are checked automatically. Strong
+        Reads of cells this transaction also writes are checked automatically. Strong
         reads and explicit patch preconditions are checked even when their cells
         are not written. Other reads are recorded for diagnostics only. Blind writes
         have no read precondition, so the last commit wins.
@@ -473,7 +473,7 @@ class _Transaction:
                 continue
             detail = ConflictDetail(_slot_name(cell), version, cell.version)
             message = (
-                f"{_slot_name(cell)} changed while this action was running: expected version "
+                f"{_slot_name(cell)} changed while this transaction was running: expected version "
                 f"{version}, found {cell.version}. Nothing was published."
             )
             raise ReactiveConflictError(detail, message)
@@ -491,7 +491,7 @@ class _Transaction:
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
-            message = "parallel-read actions cannot mutate component state"
+            message = "read-only transactions cannot mutate component state"
             raise ReactiveWriteError(message)
         entry = self.writes.get(cell)
         if entry is None:
@@ -501,7 +501,7 @@ class _Transaction:
             entry.version += 1
         _, names = self.changed.setdefault(id(owner), (owner, set()))
         names.add(name)
-        # The staged version is what a read inside this action reports, so a computed that
+        # The staged version is what a read inside this transaction reports, so a computed that
         # sampled it has to be told the world moved even though nothing is published yet.
         _bump_epoch()
 
@@ -517,7 +517,7 @@ class _Transaction:
     def enlist[ParticipantT: TransactionParticipant[Any]](
         self, key: object, factory: Callable[[], ParticipantT]
     ) -> ParticipantT:
-        """Return this action's participant for `key`, creating it on first use.
+        """Return this transaction's participant for `key`, creating it on first use.
 
         The guards run on every call, not just the first: a participant enlisted before a
         `block_writes` region may not keep staging writes inside one.
@@ -527,7 +527,7 @@ class _Transaction:
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
-            message = "parallel-read actions cannot stage writes"
+            message = "read-only transactions cannot stage writes"
             raise ReactiveWriteError(message)
         existing = self.participants.get(key)
         if existing is not None:
@@ -537,7 +537,7 @@ class _Transaction:
         return created
 
     def patches(self) -> CellPatchSet:
-        """Freeze the physical slot lineage written by this action."""
+        """Freeze the physical slot lineage written by this transaction."""
         if not self.writes:
             return CellPatchSet()
         return CellPatchSet(
@@ -678,7 +678,7 @@ class _FrozenTransactionView:
     transaction: _Transaction
 
     @property
-    def context(self) -> ActionContext:
+    def context(self) -> TransactionContext:
         return self.transaction.context
 
     def read_staged(self, target: CellTarget) -> SlotValue:
@@ -705,11 +705,11 @@ def report_undeclared_write(owner: object, name: str) -> None:
         message = f"{current.write_block} ({label})"
         raise ReactiveWriteError(message)
     if current.readonly:
-        message = f"parallel-read actions cannot mutate component state ({label})"
+        message = f"read-only transactions cannot mutate component state ({label})"
         raise ReactiveWriteError(message)
     message = (
         f"{label} was assigned inside a transaction but is not declared state: it would not be "
-        f"rolled back if the action failed, and it would not trigger a re-render. "
+        f"rolled back if the transaction failed, and it would not trigger a re-render. "
         f"Declare it with state()."
     )
     raise UndeclaredStateError(message)
@@ -723,7 +723,7 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
         return RollbackReason.CANCELLED
     if isinstance(error, ReactiveConflictError):
         return RollbackReason.CONFLICT
-    if isinstance(error, ActionValidationError):
+    if isinstance(error, TransactionValidationError):
         return RollbackReason.VALIDATION_FAILED
     if during_commit:
         return RollbackReason.PARTICIPANT_PREPARE_FAILED
@@ -744,10 +744,10 @@ def _notify_hooks(
                 if inspect.isawaitable(callback_result):
                     if inspect.iscoroutine(callback_result):
                         callback_result.close()
-                    message = "action continuation hooks must be synchronous; start an operation instead"
+                    message = "transaction continuation hooks must be synchronous; start an operation instead"
                     raise TypeError(message)  # noqa: TRY301
             except Exception as error:
-                _log.exception("an action continuation hook failed")
+                _log.exception("a transaction continuation hook failed")
                 emit_continuation_failure(
                     result,
                     "hook",
@@ -785,10 +785,10 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
 
 
 @contextmanager
-def _run_transaction(context: ActionContext, *, readonly: bool = False) -> Iterator[Transaction]:
-    """Own staging, the commit point, and outcome delivery for either action mode."""
+def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> Iterator[Transaction]:
+    """Own staging, the commit point, and outcome delivery for either transaction mode."""
     current = _Transaction(readonly=readonly, owner_task=_current_task(), context=context)
-    with action_scope(context):
+    with transaction_context_scope(context):
         token = _CURRENT.set(current)
         try:
             _checkpoint("transaction.enter_body")
@@ -830,10 +830,10 @@ def transaction(
     name: str | None = None,
     *,
     actor: ActorRef | None = None,
-    caused_by: ActionContext | None = None,
-    kind: ActionPurpose = ActionPurpose.NORMAL,
-    relation: ActionRelation | None = None,
-    action_context: ActionContext | None = None,
+    caused_by: TransactionContext | None = None,
+    kind: TransactionPurpose = TransactionPurpose.NORMAL,
+    relation: TransactionRelation | None = None,
+    transaction_context: TransactionContext | None = None,
 ) -> Iterator[Transaction]:
     """Stage state changes and publish them together when the context exits.
 
@@ -841,7 +841,7 @@ def transaction(
     calls share the outer transaction; they are not independent savepoints.
     Only the task that opened the transaction may write through it. The yielded
     handle exposes the final result and registers outcome callbacks. Supply
-    caused_by to link a new action to an earlier one. Identity arguments apply
+    caused_by to link a new transaction to an earlier one. Identity arguments apply
     only when opening an outer transaction.
 
     Participants must not fail during apply, which runs after the commit point.
@@ -860,23 +860,23 @@ def transaction(
         name is not None
         or actor is not None
         or caused_by is not None
-        or kind is not ActionPurpose.NORMAL
+        or kind is not TransactionPurpose.NORMAL
         or relation is not None
     )
-    if action_context is not None and explicit_identity:
-        message = "supply either action_context or transaction identity arguments"
+    if transaction_context is not None and explicit_identity:
+        message = "supply either transaction_context or transaction identity arguments"
         raise ValueError(message)
-    causality = current_causality() if caused_by is None else (caused_by.causal_ref(), caused_by.root_action_id)
+    causality = current_causality() if caused_by is None else (caused_by.causal_ref(), caused_by.root_transaction_id)
     context = (
-        action_context
-        or (current_action() if not explicit_identity and not in_continuation() else None)
-        or ActionContext.create(
-            "action" if name is None else name,
+        transaction_context
+        or (current_transaction_context() if not explicit_identity and not in_continuation() else None)
+        or TransactionContext.create(
+            "transaction" if name is None else name,
             actor=actor,
             relation=relation,
             kind=kind,
             cause=None if causality is None else causality[0],
-            root_action_id=None if causality is None else causality[1],
+            root_transaction_id=None if causality is None else causality[1],
         )
     )
     with _run_transaction(context) as handle:
@@ -884,19 +884,19 @@ def transaction(
 
 
 @contextmanager
-def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[Transaction]:
+def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Transaction]:
     """Start a distinct causal transaction while an empty admitting transaction is open.
 
     Mounted undo/redo handlers are admitted inside the dispatch transaction. Suspending that
-    empty envelope lets the history operation remain a real action with its own identity. An
-    outer transaction that already staged work is rejected because committing the inner action
+    empty envelope lets the history operation remain a real transaction with its own identity. An
+    outer transaction that already staged work is rejected because committing the inner transaction
     could not then be rolled back with the outer one.
     """
     outer = _CURRENT.get()
     if outer is not None and (outer.writes or outer.participants or outer.preconditions):
-        message = "a fresh action cannot start after the admitting transaction staged changes"
-        raise FreshActionError(message)
-    with _CURRENT.set(None), transaction(action_context=action_context) as handle:
+        message = "a fresh transaction cannot start after the admitting transaction staged changes"
+        raise FreshTransactionError(message)
+    with _CURRENT.set(None), transaction(transaction_context=transaction_context) as handle:
         yield handle
 
 
@@ -908,19 +908,19 @@ def batch() -> Iterator[None]:
 
 
 @contextmanager
-def readonly_transaction(*, action_context: ActionContext | None = None) -> Iterator[Transaction]:
-    """Run an identified read-only action and reject any state mutation."""
+def readonly_transaction(*, transaction_context: TransactionContext | None = None) -> Iterator[Transaction]:
+    """Run an identified read-only transaction and reject any state mutation."""
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
     causality = current_causality()
     context = (
-        action_context
-        or current_action()
-        or ActionContext.create(
-            "read-only action",
+        transaction_context
+        or current_transaction_context()
+        or TransactionContext.create(
+            "read-only transaction",
             cause=None if causality is None else causality[0],
-            root_action_id=None if causality is None else causality[1],
+            root_transaction_id=None if causality is None else causality[1],
         )
     )
     with _run_transaction(context, readonly=True) as handle:
@@ -954,7 +954,7 @@ def block_writes(reason: str) -> Iterator[None]:
     """Reject component-state writes for the duration of the block.
 
     Narrower than `readonly_transaction`: the transaction stays open and keeps everything it
-    has recorded. For code that runs *inside* an action but must not touch the tree, such as
+    has recorded. For code that runs *inside* a transaction but must not touch the tree, such as
     an undo entry's external inverse, whose writes a following restore would silently clobber.
     """
     current = _CURRENT.get()

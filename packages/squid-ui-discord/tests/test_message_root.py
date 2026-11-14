@@ -566,8 +566,10 @@ class TestDispatchProfiling:
             await message_root.dispatch("inc", interaction_harness())
 
             handler = next(span for span in _profile_trace(profiler).spans if span.name == "handler")
-            action_id = dict((attribute.key, attribute.value) for attribute in handler.attributes)["action_id"]
-            assert any(result.action_id == action_id for result in ledger.results)
+            transaction_id = dict((attribute.key, attribute.value) for attribute in handler.attributes)[
+                "transaction_id"
+            ]
+            assert any(result.transaction_id == transaction_id for result in ledger.results)
 
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()

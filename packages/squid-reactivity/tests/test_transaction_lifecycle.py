@@ -22,7 +22,7 @@ from squid_reactivity.testing import InterleavingHarness
 
 @pytest.mark.parametrize("readonly", [False, True])
 @pytest.mark.parametrize("checkpoint", ["transaction.enter_body", "commit.before_validation"])
-def test_cancellation_before_commit_clears_the_transaction_context(readonly: bool, checkpoint: str) -> None:
+def test_cancellation_before_commit_clears_the_transtransaction_context(readonly: bool, checkpoint: str) -> None:
     schedule = InterleavingHarness()
 
     def cancel() -> None:

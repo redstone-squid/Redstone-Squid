@@ -111,7 +111,7 @@ class PostCommitOperation[ValueT]:
     def _commit(self, commit: TransactionCommit, host: UIExecutionHost) -> None:
         definition = OperationDefinition(self._invoke, name=self._name, initial=None)
         self._execution = definition.start(
-            cause=commit.context.causal_ref(), root_action_id=commit.context.root_action_id
+            cause=commit.context.causal_ref(), root_transaction_id=commit.context.root_transaction_id
         )
         self._signal.notify()
         try:

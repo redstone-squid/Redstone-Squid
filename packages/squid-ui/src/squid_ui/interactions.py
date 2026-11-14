@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity.actions import ActionContext
+from squid_reactivity.transaction_context import TransactionContext
 from squid_reactivity.transactions import Transaction
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.entity import EntityRef
@@ -240,7 +240,7 @@ class ActionRequest:
     mode: ActionMode
     submitted_generation: int | None
     active_generation: int
-    context: ActionContext
+    context: TransactionContext
     rebased: bool = False
 
 

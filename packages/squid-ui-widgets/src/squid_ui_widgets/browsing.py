@@ -167,7 +167,7 @@ class BrowseSession[ItemT](Reactive):
 
             async def resolve(_progress: ProgressReporter[None]) -> None:
                 candidate = await self._resolve(request)
-                with execution.start_action("browse.accept"):
+                with execution.start_transaction("browse.accept"):
                     if self.revision == revision:
                         self._publish(candidate)
 

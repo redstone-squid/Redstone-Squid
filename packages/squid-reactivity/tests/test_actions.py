@@ -10,9 +10,6 @@ from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from squid_reactivity import (
-    ActionContext,
-    ActionPurpose,
-    ActionValidationError,
     ActorRef,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
@@ -22,8 +19,11 @@ from squid_reactivity import (
     ReactiveWriteError,
     RedactionPolicy,
     TransactionCommit,
+    TransactionContext,
+    TransactionPurpose,
     TransactionResultSnapshot,
     TransactionRollback,
+    TransactionValidationError,
     apply_conditional_patches,
     computed,
     enlist,
@@ -63,13 +63,13 @@ def test_each_action_emits_one_identified_terminal_outcome() -> None:
     ledger = EventLedger()
     with observe_events(ledger):
         preferences = Preferences()
-        context = ActionContext.create("change theme")
-        with transaction(action_context=context):
+        context = TransactionContext.create("change theme")
+        with transaction(transaction_context=context):
             preferences.theme = "dark"
 
         assert len(ledger.results) == 1
         result = ledger.results[0]
-        assert result.action_id == str(context.action_id)
+        assert result.transaction_id == str(context.transaction_id)
         assert result.terminal == "committed"
         assert result.changes.cells == 1
 
@@ -262,7 +262,7 @@ def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
         assert len(ledger.results) == 1
         failure = ledger.events[-1]
         assert isinstance(failure, ContinuationFailureSnapshot)
-        assert failure.cause.identity == ledger.results[0].action_id
+        assert failure.cause.identity == ledger.results[0].transaction_id
         assert failure.exception.type_name == "RuntimeError"
         assert failure.exception.message == "[redacted]"
 
@@ -366,15 +366,15 @@ def test_continuation_recovery_is_a_fresh_causally_linked_action() -> None:
         assert preferences.theme == "recovered"
         assert [result.terminal for result in ledger.results] == ["rolled_back", "committed"]
         assert ledger.results[1].cause is not None
-        assert ledger.results[1].cause.identity == ledger.results[0].action_id
-        assert ledger.results[1].root_action_id == ledger.results[0].root_action_id
+        assert ledger.results[1].cause.identity == ledger.results[0].transaction_id
+        assert ledger.results[1].root_transaction_id == ledger.results[0].root_transaction_id
 
 
 def test_undo_kind_is_explicit_identity_not_hook_timing() -> None:
-    context = ActionContext.create("undo", kind=ActionPurpose.UNDO)
+    context = TransactionContext.create("undo", kind=TransactionPurpose.UNDO)
     ledger = EventLedger()
     with observe_events(ledger):
-        with transaction(action_context=context):
+        with transaction(transaction_context=context):
             pass
         assert ledger.results[0].kind == "undo"
 
@@ -382,14 +382,14 @@ def test_undo_kind_is_explicit_identity_not_hook_timing() -> None:
 def test_application_validation_has_a_distinct_rollback_reason() -> None:
     ledger = EventLedger()
     with observe_events(ledger):
-        with pytest.raises(ActionValidationError), transaction():
-            raise ActionValidationError("name is required")
+        with pytest.raises(TransactionValidationError), transaction():
+            raise TransactionValidationError("name is required")
 
         assert ledger.results[0].reason == "validation_failed"
 
 
 def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -> None:
-    context = ActionContext.create(
+    context = TransactionContext.create(
         "sensitive",
         actor=ActorRef("user", "42"),
         metadata={"tenant": "safe", "token": "secret"},
@@ -397,7 +397,7 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     ledger = EventLedger()
     rollbacks: list[TransactionRollback] = []
     with observe_events(ledger):
-        with pytest.raises(RuntimeError), transaction(action_context=context) as tx:
+        with pytest.raises(RuntimeError), transaction(transaction_context=context) as tx:
             tx.after_rollback(lambda rollback: rollbacks.append(rollback))
             raise RuntimeError("private failure message")
 
@@ -422,8 +422,8 @@ def test_each_result_sink_receives_its_declared_redaction_projection() -> None:
             redaction=RedactionPolicy(include_actor=False, include_metadata=True, include_exception_messages=True),
         ),
     ):
-        context = ActionContext.create("sensitive", actor=ActorRef("user", "42"), metadata={"tenant": "safe"})
-        with pytest.raises(RuntimeError), transaction(action_context=context):
+        context = TransactionContext.create("sensitive", actor=ActorRef("user", "42"), metadata={"tenant": "safe"})
+        with pytest.raises(RuntimeError), transaction(transaction_context=context):
             raise RuntimeError("failure detail")
 
         assert default.results[0].actor == ActorRef("user", "42")

@@ -10,16 +10,6 @@ The resources and operations modules add asynchronous loading and progress while
 keeping component renders synchronous.
 """
 
-from squid_reactivity.actions import (
-    ActionContext,
-    ActionPurpose,
-    ActionRelation,
-    ActorRef,
-    CausalRef,
-    ExceptionReport,
-    action_scope,
-    current_action,
-)
 from squid_reactivity.core import (
     CellReport,
     ComputedReport,
@@ -43,14 +33,14 @@ from squid_reactivity.diagnostics import (
     observe_events,
 )
 from squid_reactivity.errors import (
-    ActionValidationError,
     FrameworkIntegrityError,
-    FreshActionError,
+    FreshTransactionError,
     ReactiveConflictError,
     ReactiveCycleError,
     ReactiveWriteError,
     ReactivityError,
     StaleReactiveContextError,
+    TransactionValidationError,
     UndeclaredStateError,
 )
 from squid_reactivity.subscriptions import Subscriptions
@@ -75,6 +65,16 @@ from squid_reactivity.tracking import (
     strong_read,
     untracked,
 )
+from squid_reactivity.transaction_context import (
+    ActorRef,
+    CausalRef,
+    ExceptionReport,
+    TransactionContext,
+    TransactionPurpose,
+    TransactionRelation,
+    current_transaction_context,
+    transaction_context_scope,
+)
 from squid_reactivity.transaction_results import (
     ChangeReport,
     CommitSequence,
@@ -97,16 +97,12 @@ from squid_reactivity.transactions import (
     batch,
     block_writes,
     enlist,
-    fresh_action_transaction,
+    fresh_transaction,
     readonly_transaction,
     transaction,
 )
 
 __all__ = [
-    "ActionContext",
-    "ActionPurpose",
-    "ActionRelation",
-    "ActionValidationError",
     "ActorRef",
     "Address",
     "CausalEventSnapshot",
@@ -127,7 +123,7 @@ __all__ = [
     "EventSink",
     "ExceptionReport",
     "FrameworkIntegrityError",
-    "FreshActionError",
+    "FreshTransactionError",
     "LocalTopicBus",
     "ObservedRead",
     "OperationEventSnapshot",
@@ -147,24 +143,27 @@ __all__ = [
     "TopicName",
     "Transaction",
     "TransactionCommit",
+    "TransactionContext",
     "TransactionContribution",
     "TransactionParticipant",
+    "TransactionPurpose",
+    "TransactionRelation",
     "TransactionResult",
     "TransactionResultSnapshot",
     "TransactionRollback",
+    "TransactionValidationError",
     "TransactionView",
     "UndeclaredStateError",
-    "action_scope",
     "addresses",
     "apply_conditional_patches",
     "batch",
     "block_writes",
     "capture_reads",
     "computed",
-    "current_action",
+    "current_transaction_context",
     "enlist",
     "export_state",
-    "fresh_action_transaction",
+    "fresh_transaction",
     "inspect_cells",
     "inspect_computed",
     "observe_events",
@@ -176,6 +175,7 @@ __all__ = [
     "state",
     "strong_read",
     "transaction",
+    "transaction_context_scope",
     "untracked",
     "watch",
 ]

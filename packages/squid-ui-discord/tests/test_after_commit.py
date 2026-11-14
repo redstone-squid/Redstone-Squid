@@ -332,9 +332,9 @@ async def test_readonly_action_can_schedule_work_with_its_dispatch_identity() ->
         await root.dispatch("save", interaction_harness())
     assert observed == [True]
     assert handles[0].context is not None
-    assert str(handles[0].context.root_action_id) == ledger.results[0].root_action_id
+    assert str(handles[0].context.root_transaction_id) == ledger.results[0].root_transaction_id
     assert handles[0].context.cause is not None
-    assert handles[0].context.cause.identity == ledger.results[0].action_id
+    assert handles[0].context.cause.identity == ledger.results[0].transaction_id
     await root.finish()
 
 

@@ -4,17 +4,17 @@ import anyio
 import pytest
 
 from squid_reactivity import (
-    ActionContext,
     EventLedger,
     LocalTopicBus,
     Reactive,
     ResourceEventSnapshot,
     Subscriptions,
-    action_scope,
+    TransactionContext,
     observe_events,
     observe_reads,
     state,
     transaction,
+    transaction_context_scope,
     watch,
 )
 from squid_reactivity.resources import Pending, PendingMode, Ready, Resource, abandon_superseded_loads, resource
@@ -134,15 +134,15 @@ async def test_resource_generations_are_causal_without_profiler_retention() -> N
     source = Source()
     ledger = EventLedger()
     with observe_events(ledger):
-        action = ActionContext.create("refresh")
-        with action_scope(action):
+        action = TransactionContext.create("refresh")
+        with transaction_context_scope(action):
             await source.value.reload()
 
         events = [event for event in ledger.events if isinstance(event, ResourceEventSnapshot)]
         assert [event.status for event in events] == ["started", "ready"]
         assert {event.generation_id for event in events} == {events[0].generation_id}
         assert events[0].cause == action.causal_ref()
-        assert events[0].root_action_id == str(action.root_action_id)
+        assert events[0].root_transaction_id == str(action.root_transaction_id)
 
 
 async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads() -> None:

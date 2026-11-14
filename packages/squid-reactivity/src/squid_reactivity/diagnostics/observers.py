@@ -14,15 +14,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
-from squid_reactivity.actions import (
-    ExceptionReport,
-)
 from squid_reactivity.diagnostics.snapshots import (
     DEFAULT_REDACTION,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
     RedactionPolicy,
     TransactionResultSnapshot,
+)
+from squid_reactivity.transaction_context import (
+    ExceptionReport,
 )
 from squid_reactivity.transaction_results import (
     TransactionCommit,
@@ -153,7 +153,7 @@ def emit_continuation_failure(result: TransactionResult, stage: str, callback: s
     emit_causal_event(
         ContinuationFailureSnapshot(
             str(uuid.uuid7()),
-            str(result.context.root_action_id),
+            str(result.context.root_transaction_id),
             result.context.causal_ref(),
             stage,
             callback,

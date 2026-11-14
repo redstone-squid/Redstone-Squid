@@ -853,10 +853,10 @@ def _trace_summary(trace: RuntimeTrace) -> str:
 def _action_text(status: TransactionResultSnapshot) -> str:
     cause = "root" if status.cause is None else f"{status.cause.kind}:{status.cause.identity}"
     detail = status.terminal if status.reason is None else f"{status.terminal}:{status.reason}"
-    relation = "" if status.relation is None else f" {status.relation.kind}={status.relation.action_id}"
+    relation = "" if status.relation is None else f" {status.relation.kind}={status.relation.transaction_id}"
     conflict = "" if status.conflict is None else f" conflict={status.conflict.target_id}"
     return (
-        f"{status.action_id} {status.kind} {status.name} {detail} cause={cause} "
+        f"{status.transaction_id} {status.kind} {status.name} {detail} cause={cause} "
         f"cells={status.changes.cells} participants={status.changes.participants}{relation}{conflict}"
     )
 

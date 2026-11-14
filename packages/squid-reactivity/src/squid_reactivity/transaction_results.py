@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity.actions import ActionContext, ExceptionReport
+from squid_reactivity.transaction_context import ExceptionReport, TransactionContext
 
 if TYPE_CHECKING:
     # Transaction execution constructs results; patches are only needed for annotations here.
@@ -88,7 +88,7 @@ class TransactionContribution:
 class TransactionCommit:
     """The immutable in-process record of a transaction that crossed the commit point."""
 
-    context: ActionContext
+    context: TransactionContext
     sequence: CommitSequence
     committed_at: datetime
     duration: timedelta
@@ -102,7 +102,7 @@ class TransactionCommit:
 class TransactionRollback:
     """The result of a transaction that discarded its staged writes."""
 
-    context: ActionContext
+    context: TransactionContext
     rolled_back_at: datetime
     duration: timedelta
     reason: RollbackReason

@@ -5,13 +5,13 @@ from typing import Literal
 import pytest
 
 from squid_reactivity import (
-    ActionPurpose,
-    ActionRelation,
     ActorRef,
     FrameworkIntegrityError,
     Reactive,
     StaleReactiveContextError,
     TransactionCommit,
+    TransactionPurpose,
+    TransactionRelation,
     TransactionResultSnapshot,
     TransactionRollback,
     apply_conditional_patches,
@@ -58,11 +58,11 @@ def test_rollback_result_survives_the_original_exception_and_can_start_recovery(
         raise ValueError("failed")
     assert tx.result is seen[0]
     assert model.value == 0
-    with transaction("recover", caused_by=tx.context, kind=ActionPurpose.RECOVERY) as recovery:
+    with transaction("recover", caused_by=tx.context, kind=TransactionPurpose.RECOVERY) as recovery:
         model.value = 4
-    assert recovery.context.action_id != tx.context.action_id
+    assert recovery.context.transaction_id != tx.context.transaction_id
     assert recovery.context.cause == tx.context.causal_ref()
-    assert recovery.context.root_action_id == tx.context.root_action_id
+    assert recovery.context.root_transaction_id == tx.context.root_transaction_id
 
 
 def test_a_callback_can_open_a_new_identified_transaction() -> None:
@@ -78,7 +78,7 @@ def test_a_callback_can_open_a_new_identified_transaction() -> None:
         model.value = 1
         tx.after_commit(follow_up)
     assert model.value == 2
-    assert children[0].context.action_id != tx.context.action_id
+    assert children[0].context.transaction_id != tx.context.transaction_id
     assert children[0].context.cause == tx.context.causal_ref()
 
 
@@ -146,7 +146,7 @@ def test_rollback_notifies_each_owner_once_and_preserves_the_original_error() ->
 def test_history_relation_survives_snapshot_conversion(kind: Literal["reverses", "reapplies", "compensates"]) -> None:
     with transaction("original") as original:
         pass
-    relation = ActionRelation(kind, original.context.action_id)
+    relation = TransactionRelation(kind, original.context.transaction_id)
     with transaction("history", relation=relation) as tx:
         pass
     assert isinstance(tx.result, TransactionCommit)

@@ -4,7 +4,7 @@ An operation definition is reusable; each `start()` creates a separate execution
 such as one export requested by a user. Awaiting the execution runs or joins its
 loader in the caller's task. Progress and terminal outcomes notify every reader
 so separate components can display the same execution. Work that publishes reactive state can open
-a causally linked action through the execution's `start_action` method.
+a causally linked transaction through the execution's `start_transaction` method.
 """
 
 import asyncio
@@ -15,15 +15,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, overload, override
 
-from squid_reactivity.actions import (
-    ActionContext,
-    ActionId,
-    ActionPurpose,
-    CausalRef,
-    ExceptionReport,
-    causal_scope,
-    current_action,
-)
 from squid_reactivity.async_values import AsyncBinding, _Execution, _observe
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
@@ -35,18 +26,27 @@ from squid_reactivity.tracking import (
     _Signal,
     settling,
 )
+from squid_reactivity.transaction_context import (
+    CausalRef,
+    ExceptionReport,
+    TransactionContext,
+    TransactionId,
+    TransactionPurpose,
+    causal_scope,
+    current_transaction_context,
+)
 from squid_reactivity.transactions import (
-    fresh_action_transaction,
+    fresh_transaction,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class OperationContext:
-    """Identify an execution and the action or event that caused it."""
+    """Identify an execution and the transaction or event that caused it."""
 
     execution_id: uuid.UUID
     cause: CausalRef | None
-    root_action_id: ActionId | None
+    root_transaction_id: TransactionId | None
     name: str
 
     def causal_ref(self) -> CausalRef:
@@ -179,7 +179,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
         # of a resource that happens to be the first caller awaiting it.
         consumer = _CONSUMER.set(None)
         try:
-            with causal_scope(self.context.causal_ref(), self.context.root_action_id):
+            with causal_scope(self.context.causal_ref(), self.context.root_transaction_id):
                 value = await self._loader(progress)
         except asyncio.CancelledError:
             current = self._status
@@ -204,15 +204,17 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
         return self._status
 
     @contextmanager
-    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.SYSTEM) -> Iterator[ActionContext]:
-        """Start a fresh state-publishing action caused by this execution."""
-        context = ActionContext.create(
+    def start_transaction(
+        self, name: str, *, kind: TransactionPurpose = TransactionPurpose.SYSTEM
+    ) -> Iterator[TransactionContext]:
+        """Start a fresh state-publishing transaction caused by this execution."""
+        context = TransactionContext.create(
             name,
             kind=kind,
             cause=self.context.causal_ref(),
-            root_action_id=self.context.root_action_id,
+            root_transaction_id=self.context.root_transaction_id,
         )
-        with fresh_action_transaction(action_context=context):
+        with fresh_transaction(transaction_context=context):
             yield context
 
     def _emit(self, status: str, error: BaseException | None = None) -> None:
@@ -222,7 +224,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
         emit_causal_event(
             OperationEventSnapshot(
                 str(self.context.execution_id),
-                None if self.context.root_action_id is None else str(self.context.root_action_id),
+                None if self.context.root_transaction_id is None else str(self.context.root_transaction_id),
                 self.context.cause,
                 self.context.name,
                 status,
@@ -250,18 +252,18 @@ class OperationDefinition[ValueT, ProgressT]:
         self,
         *,
         cause: CausalRef | None = None,
-        root_action_id: ActionId | None = None,
+        root_transaction_id: TransactionId | None = None,
     ) -> OperationExecution[ValueT, ProgressT]:
         """Create an execution without running its loader.
 
-        Omitted cause and root identifiers come from the current action, if any.
+        Omitted cause and root identifiers come from the current transaction, if any.
         Await the returned execution, or let the host settle it during rendering.
         """
-        action = current_action()
-        if action is not None:
-            cause = cause or action.causal_ref()
-            root_action_id = root_action_id or action.root_action_id
-        context = OperationContext(uuid.uuid7(), cause, root_action_id, self.name)
+        origin = current_transaction_context()
+        if origin is not None:
+            cause = cause or origin.causal_ref()
+            root_transaction_id = root_transaction_id or origin.root_transaction_id
+        context = OperationContext(uuid.uuid7(), cause, root_transaction_id, self.name)
         execution = OperationExecution(self._loader, context=context, initial=self.initial)
         execution._emit("started")
         return execution

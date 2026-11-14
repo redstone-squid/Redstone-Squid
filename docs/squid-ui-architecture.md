@@ -685,7 +685,7 @@ when the action commits. The action reads its own writes, and so do the computed
 of them; another task reading the same component across an `await` sees the committed value
 until then. Rolling back is dropping the overlay.
 
-Every transaction has a stable `ActionContext` and exactly one terminal outcome. A publishing
+Every transaction has a stable `TransactionContext` and exactly one terminal outcome. A publishing
 transaction validates every strong reactive/replicated read by version, freezes its cell patches,
 and prepares all participants under the runtime commit gate. Installing patches and synchronously
 applying the prepared participants is the commit point. Reactive notifications, participant

@@ -27,16 +27,16 @@ from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
 import anyio
 import discord
 
-from squid_reactivity.actions import (
-    ActionContext,
-    ActorRef,
-    current_action,
-)
 from squid_reactivity.addresses import CellAddress
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import Address, TopicName
+from squid_reactivity.transaction_context import (
+    ActorRef,
+    TransactionContext,
+    current_transaction_context,
+)
 from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
@@ -652,7 +652,7 @@ class MessageRoot[
         """
         if self._unscheduled_change is not None or self._handle is None or self.finished:
             return
-        action = current_action()
+        action = current_transaction_context()
         if action is not None and action.metadata.get("message_root_id") == self.id:
             return
         if _SETTLING_ROOT.get() is self:
@@ -1164,13 +1164,13 @@ class MessageRoot[
         return _LifecycleCandidate(view, rendered, handlers, generation)
 
     @contextmanager
-    def _action_transaction(self, mode: ActionMode, context: ActionContext) -> Iterator[Transaction]:
+    def _action_transaction(self, mode: ActionMode, context: TransactionContext) -> Iterator[Transaction]:
         """Run a handler and preserve application commits even for unrendered writes."""
         if mode is ActionMode.PARALLEL_READ:
-            with readonly_transaction(action_context=context) as tx:
+            with readonly_transaction(transaction_context=context) as tx:
                 yield tx
             return
-        with transaction(action_context=context) as tx:
+        with transaction(transaction_context=context) as tx:
             tx.after_commit(self._note_action_commit, key=self)
             yield tx
 
@@ -2510,7 +2510,7 @@ class MessageRoot[
         )
         async with self._interaction_tasks(interaction, profile, busy):
             event = await self._event(interaction, values)
-            action_context = ActionContext.create(
+            transaction_context = TransactionContext.create(
                 f"{type(self.component).__name__}.{key}",
                 actor=ActorRef("discord_user", str(interaction.user.id)),
                 metadata={"message_root_id": self.id, "generation": str(active_generation)},
@@ -2522,12 +2522,12 @@ class MessageRoot[
                 binding.mode,
                 submitted_generation,
                 active_generation,
-                action_context,
+                transaction_context,
                 rebased,
             )
 
             async def handle() -> None:
-                await self._run_action(binding, event, action_context)
+                await self._run_action(binding, event, transaction_context)
 
             try:
                 handled = await self._execute_action(
@@ -2627,7 +2627,7 @@ class MessageRoot[
                     binding.mode,
                     generation,
                     active_generation,
-                    action_context := ActionContext.create(
+                    transaction_context := TransactionContext.create(
                         f"{type(self.component).__name__}.{key}",
                         actor=ActorRef("discord_user", str(interaction.user.id)),
                         metadata={"message_root_id": self.id, "generation": str(active_generation)},
@@ -2636,7 +2636,7 @@ class MessageRoot[
                 )
 
                 async def handle() -> None:
-                    await self._run_action(binding, event, action_context)
+                    await self._run_action(binding, event, transaction_context)
 
                 handled = await self._execute_action(
                     request, handle, profile.operation, cast(ActionResponder, event.responder), release
@@ -2710,7 +2710,7 @@ class MessageRoot[
             release()
             responder._start_after_commit()
 
-    async def _run_action(self, binding: ActionBinding, event: ActionEvent, context: ActionContext) -> None:
+    async def _run_action(self, binding: ActionBinding, event: ActionEvent, context: TransactionContext) -> None:
         adapter = event.responder
         assert isinstance(adapter, ActionResponder)
         locked = False
@@ -2726,13 +2726,13 @@ class MessageRoot[
                 if request is not None:
                     request._transaction = tx
                 adapter._action_active = True
-                adapter._action_context = context
+                adapter._transaction_context = context
                 if binding.record is not None:
                     binding.record.record(tx, binding.label)
                 await binding.handler(event)
                 adapter._action_active = False
                 if adapter._finish_requested or adapter._after_commit:
-                    if binding.mode is not ActionMode.PARALLEL_READ and current_action() is not context:
+                    if binding.mode is not ActionMode.PARALLEL_READ and current_transaction_context() is not context:
                         message = "after-commit work requires a dispatcher-owned transaction, not a nested dispatch"
                         raise RuntimeError(message)
                     if adapter._after_commit:
@@ -2755,7 +2755,7 @@ class MessageRoot[
                 adapter._finish_accepted = True
         finally:
             adapter._action_active = False
-            adapter._action_context = None
+            adapter._transaction_context = None
             adapter._transaction = None
             if request is not None:
                 request._transaction = previous_transaction
@@ -2771,7 +2771,7 @@ class MessageRoot[
         """Compose the frozen mount middleware in first-listed, outermost order."""
 
         handled = False
-        action_attributes = {"action_id": str(request.context.action_id)}
+        action_attributes = {"transaction_id": str(request.context.transaction_id)}
 
         async def invoke(index: int) -> None:
             nonlocal handled

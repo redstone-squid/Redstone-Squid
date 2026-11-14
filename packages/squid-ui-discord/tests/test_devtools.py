@@ -163,7 +163,7 @@ class TestDashboardCommand:
 
             rendered = str(ctx.send.await_args.kwargs["view"].to_components())
             assert "Action results" in rendered
-            assert ledger.results[0].action_id in rendered
+            assert ledger.results[0].transaction_id in rendered
 
     async def test_activity_renders_operation_nodes_with_profiler_disabled(self) -> None:
         ledger = EventLedger()

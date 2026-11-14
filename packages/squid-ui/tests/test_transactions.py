@@ -698,7 +698,7 @@ class TestActionParticipants:
         assert panel.notified == [frozenset({"__state_declared"})]
 
     def test_parallel_read_actions_cannot_stage_writes(self):
-        with pytest.raises(ReactiveWriteError, match="parallel-read"), readonly_transaction():
+        with pytest.raises(ReactiveWriteError, match="read-only"), readonly_transaction():
             enlist(object(), lambda: Recorder([], "a"))
 
     def test_a_blocked_write_reaches_a_participant_already_enlisted(self):

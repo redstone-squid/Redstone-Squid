@@ -3,14 +3,14 @@
 Squid treats the transaction outcome as the source of truth. History, DevTools, profiling, audit
 sinks, and optional replicated state consume that truth; none defines whether a transaction committed.
 
-`ActionContext` identifies the intent and links work to its cause. `TransactionCommit` and
+`TransactionContext` identifies the intent and links work to its cause. `TransactionCommit` and
 `TransactionRollback` describe the transaction's published or discarded changes; their union is
 `TransactionResult`. These records live in `squid_reactivity.transaction_results`, while
 `squid_reactivity.transactions` owns staging, validation, publication, and result callbacks.
 
 ## Commit and rollback pipeline
 
-A Discord dispatch receives an `ActionContext` before middleware. A local transaction then:
+A Discord dispatch receives a `TransactionContext` before middleware. A local transaction then:
 
 1. stages reactive and participant work in an isolated overlay;
 2. closes staging and enters the runtime-local, no-await commit gate;
@@ -195,7 +195,7 @@ history.record(
     "Create channel",
     compensate=sl.runtime.CompensationSpec(
         operation=delete_channel,
-        idempotency_key=lambda commit: f"undo:{commit.context.action_id}",
+        idempotency_key=lambda commit: f"undo:{commit.context.transaction_id}",
     ),
 )
 ```

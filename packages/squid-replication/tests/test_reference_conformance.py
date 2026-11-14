@@ -133,7 +133,7 @@ def test_committed_local_updates_are_routed_and_attributed_after_commit() -> Non
     assert update.document_id == "project"
     assert update.backend_id == "squid-reference-v1"
     assert update.source_replica_id == "replica-a"
-    assert update.origin_action_id is not None
+    assert update.origin_transaction_id is not None
     assert document.drain_updates() == (update,)
 
 

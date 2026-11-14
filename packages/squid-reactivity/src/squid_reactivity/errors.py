@@ -16,19 +16,19 @@ class ReactivityError(Exception):
 
 
 class ReactiveWriteError(ReactivityError, RuntimeError):
-    """A state mutation was attempted inside a read-only action."""
+    """A state mutation was attempted inside a read-only transaction."""
 
 
-class ActionValidationError(ReactivityError, ValueError):
-    """An admitted action failed application validation before publication."""
+class TransactionValidationError(ReactivityError, ValueError):
+    """An admitted transaction failed application validation before publication."""
 
 
 class FrameworkIntegrityError(ReactivityError, RuntimeError):
     """An infallible publication adapter failed after the local commit point."""
 
 
-class FreshActionError(ReactivityError, RuntimeError):
-    """A distinct action was requested after its admitting transaction staged work."""
+class FreshTransactionError(ReactivityError, RuntimeError):
+    """A distinct transaction was requested after its admitting transaction staged work."""
 
 
 class UndeclaredStateError(ReactivityError, RuntimeError):
@@ -61,7 +61,7 @@ class StaleReactiveContextError(ReactivityError, RuntimeError):
 class ReactiveConflictError(ReactivityError, RuntimeError):
     """A required shared-state version changed before commit.
 
-    The action discards its staged changes. The error is raised when the
+    The transaction discards its staged changes. The error is raised when the
     transaction context exits, so catch it outside the with block.
     """
 

@@ -124,15 +124,15 @@ with observe_events(ledger):
 assert isinstance(tx.result, TransactionCommit)
 ```
 
-`tx.context` is the transaction's `ActionContext`: its name, its actor, and the earlier
-action that caused it. `tx.result` is set once the outermost block exits, even if it raised.
+`tx.context` is the transaction's `TransactionContext`: its name, its actor, and the earlier
+transaction that caused it. `tx.result` is set once the outermost block exits, even if it raised.
 It is a `TransactionCommit` listing what was published, or a `TransactionRollback` saying
 what was discarded and why.
 
 `after_commit`, `after_rollback`, and `after_result` run a callback with that result. A
 callback cannot change the result, even by raising. To write from one, open a new
-transaction with `caused_by=result.context` so the two stay linked. `ActionRelation` marks a
-transaction as the undo, redo, or compensation of an earlier action.
+transaction with `caused_by=result.context` so the two stay linked. `TransactionRelation` marks a
+transaction as the undo, redo, or compensation of an earlier transaction.
 
 `observe_events(sink)` is for code that did not start the work. While the block is open, and
 in tasks started inside it, the sink receives a snapshot of each transaction result, resource
@@ -191,5 +191,5 @@ queues or network delivery, implement the `TopicBus` protocol.
 ## Code layout
 
 `core` declares models, `tracking` records reads, and `transactions` stages and publishes
-writes. `transaction_results` defines results, `actions` defines contexts, and `diagnostics`
+writes. `transaction_results` defines results, `transaction_context` defines contexts, and `diagnostics`
 delivers events. `topics`, `resources`, and `operations` cover the last two sections.

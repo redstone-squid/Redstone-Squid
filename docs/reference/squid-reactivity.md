@@ -111,22 +111,22 @@ Apply targeted cell changes, optionally conditioned on what the writer last saw.
 
 ::: squid_reactivity.apply_conditional_patches
 
-## Action context and transaction results
+## Transaction context and results
 
-`ActionContext` identifies why work ran and what caused it. `transaction(name, actor=..., caused_by=...)`
+`TransactionContext` identifies why work ran and what caused it. `transaction(name, actor=..., caused_by=...)`
 yields a `Transaction` whose context is available immediately and whose result is set when the outer
 block finishes. Nested blocks share the handle. Callbacks receive a `TransactionCommit` or
 `TransactionRollback`; related operations and resource loads retain their own lifetimes and results.
 
-::: squid_reactivity.action_scope
+::: squid_reactivity.transaction_context_scope
 
-::: squid_reactivity.current_action
+::: squid_reactivity.current_transaction_context
 
-::: squid_reactivity.fresh_action_transaction
+::: squid_reactivity.fresh_transaction
 
-::: squid_reactivity.ActionContext
+::: squid_reactivity.TransactionContext
 
-::: squid_reactivity.ActionPurpose
+::: squid_reactivity.TransactionPurpose
 
 ::: squid_reactivity.TransactionCommit
 
@@ -134,7 +134,7 @@ block finishes. Nested blocks share the handle. Callbacks receive a `Transaction
 
 ::: squid_reactivity.Transaction
 
-::: squid_reactivity.ActionRelation
+::: squid_reactivity.TransactionRelation
 
 ::: squid_reactivity.ActorRef
 
@@ -199,8 +199,8 @@ Every deliberate failure derives from `ReactivityError` alongside its stdlib bas
 
 ::: squid_reactivity.UndeclaredStateError
 
-::: squid_reactivity.ActionValidationError
+::: squid_reactivity.TransactionValidationError
 
-::: squid_reactivity.FreshActionError
+::: squid_reactivity.FreshTransactionError
 
 ::: squid_reactivity.FrameworkIntegrityError

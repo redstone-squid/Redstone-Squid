@@ -3,11 +3,11 @@
 from dataclasses import dataclass, replace
 from datetime import datetime
 
-from squid_reactivity.actions import (
-    ActionRelation,
+from squid_reactivity.transaction_context import (
     ActorRef,
     CausalRef,
     ExceptionReport,
+    TransactionRelation,
 )
 from squid_reactivity.transaction_results import (
     ChangeReport,
@@ -22,8 +22,8 @@ from squid_reactivity.transaction_results import (
 class TransactionResultSnapshot:
     """A transaction summary containing change counts instead of cell values."""
 
-    action_id: str
-    root_action_id: str
+    transaction_id: str
+    root_transaction_id: str
     cause: CausalRef | None
     kind: str
     name: str
@@ -35,7 +35,7 @@ class TransactionResultSnapshot:
     tags: frozenset[str] = frozenset()
     actor: ActorRef | None = None
     metadata: tuple[tuple[str, str], ...] = ()
-    relation: ActionRelation | None = None
+    relation: TransactionRelation | None = None
     conflict: ConflictDetail | None = None
     exception: ExceptionReport | None = None
 
@@ -66,8 +66,8 @@ class TransactionResultSnapshot:
             conflict = result.conflict
             exception = result.exception
         snapshot = cls(
-            action_id=str(context.action_id),
-            root_action_id=str(context.root_action_id),
+            transaction_id=str(context.transaction_id),
+            root_transaction_id=str(context.root_transaction_id),
             cause=context.cause,
             kind=context.kind.value,
             name=context.name,
@@ -123,7 +123,7 @@ class OperationEventSnapshot:
     """One start or terminal transition of a causally identified operation execution."""
 
     execution_id: str
-    root_action_id: str | None
+    root_transaction_id: str | None
     cause: CausalRef | None
     name: str
     status: str
@@ -136,7 +136,7 @@ class ResourceEventSnapshot:
     """One start or terminal transition of a causally identified resource generation."""
 
     generation_id: str
-    root_action_id: str | None
+    root_transaction_id: str | None
     cause: CausalRef | None
     name: str
     status: str
@@ -149,7 +149,7 @@ class ContinuationFailureSnapshot:
     """A post-result failure that cannot alter the immutable transaction result."""
 
     failure_id: str
-    root_action_id: str
+    root_transaction_id: str
     cause: CausalRef
     stage: str
     callback: str

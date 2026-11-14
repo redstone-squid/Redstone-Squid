@@ -10,16 +10,16 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from squid_reactivity.actions import (
-    ActionContext,
-    ActionPurpose,
-    ActorRef,
-    CausalRef,
-)
 from squid_reactivity.errors import (
     ReactiveConflictError,
 )
 from squid_reactivity.internals import Cell as _Cell
+from squid_reactivity.transaction_context import (
+    ActorRef,
+    CausalRef,
+    TransactionContext,
+    TransactionPurpose,
+)
 from squid_reactivity.transaction_results import (
     ChangeReport,
     ConflictDetail,
@@ -354,7 +354,7 @@ class ReplicatedDocument:
             backend_id=self.engine.backend_id,
             source_replica_id=self.engine.replica_id,
             payload=self.engine.export_since(version),
-            origin_action_id=None,
+            origin_transaction_id=None,
         )
         return update.encode()
 
@@ -383,17 +383,19 @@ class ReplicatedDocument:
         if update_id in self._seen_update_ids:
             return
         cause = (
-            None if envelope.origin_action_id is None else CausalRef("remote_action", str(envelope.origin_action_id))
+            None
+            if envelope.origin_transaction_id is None
+            else CausalRef("remote_action", str(envelope.origin_transaction_id))
         )
-        context = ActionContext.create(
+        context = TransactionContext.create(
             f"Import {self.document_id}",
-            kind=ActionPurpose.REMOTE,
+            kind=TransactionPurpose.REMOTE,
             cause=cause,
-            root_action_id=envelope.origin_action_id,
+            root_transaction_id=envelope.origin_transaction_id,
             actor=ActorRef("replica", envelope.source_replica_id),
             metadata={"document_id": self.document_id, "update_id": update_id},
         )
-        with transaction(action_context=context):
+        with transaction(transaction_context=context):
             joined = enlist(
                 self,
                 lambda: _ReplicationParticipant(self, remote_payload=envelope.payload, remote_update_id=update_id),
@@ -502,15 +504,15 @@ class ReplicatedDocument:
             callback(self.snapshot())
 
     def _publish_update(self, prepared: object) -> None:
-        from squid_reactivity import current_action
+        from squid_reactivity import current_transaction_context
 
-        context = current_action()
+        context = current_transaction_context()
         update = ReplicationUpdate.create(
             document_id=self.document_id,
             backend_id=self.engine.backend_id,
             source_replica_id=self.engine.replica_id,
             payload=self.engine.encode_prepared(prepared),
-            origin_action_id=None if context is None else context.action_id,
+            origin_transaction_id=None if context is None else context.transaction_id,
         )
         if len(self._pending_updates) == _PENDING_UPDATE_LIMIT:
             # Deque eviction is silent; remember the gap so drain_updates requires a resync.

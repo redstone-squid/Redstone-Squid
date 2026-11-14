@@ -1,6 +1,7 @@
 """Commit-ledger history and version-conditional undo/redo."""
 
 import gc
+import json
 import uuid
 import weakref
 from datetime import UTC, datetime
@@ -326,7 +327,7 @@ async def test_selective_targeting_uses_action_identity() -> None:
     with transaction() as tx:
         subject.history.record(tx, "page")
         subject.page = 2
-    first_id = subject.history.entries[-1].original_action_id
+    first_id = subject.history.entries[-1].original_transaction_id
     with transaction() as tx:
         subject.history.record(tx, "select")
         workspace.selected = 7
@@ -416,7 +417,7 @@ async def test_failed_compensation_is_truthful_and_retry_gets_new_execution() ->
         subject.history.record(
             tx,
             "page",
-            compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.action_id}"),
+            compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.transaction_id}"),
         )
         subject.page = 4
 
@@ -443,7 +444,7 @@ async def test_external_success_then_local_conflict_needs_reconciliation_without
         subject.history.record(
             tx,
             "page",
-            compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.action_id}"),
+            compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.transaction_id}"),
         )
         subject.page = 4
     with transaction():
@@ -476,7 +477,9 @@ async def test_compensation_intent_and_local_inverse_are_causal_actions() -> Non
         result = await subject.history.undo()
 
         assert result.applied
-        descendants = [result for result in ledger.results if result.root_action_id == original.root_action_id]
+        descendants = [
+            result for result in ledger.results if result.root_transaction_id == original.root_transaction_id
+        ]
         assert [result.kind for result in descendants] == ["normal", "compensation", "compensation"]
         assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
         operation_events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
@@ -570,7 +573,12 @@ async def test_compensation_record_round_trips_and_recovers_after_restart() -> N
     await outbox.update(intent, CompensationStatus.FAILED)
     codec = CompensationRecordCodec()
 
-    restored = MemoryCompensationOutbox(records=(codec.decode(codec.encode(outbox.records[0])),))
+    encoded = codec.encode(outbox.records[0])
+    payload = json.loads(encoded)
+    assert payload["schema"] == 1
+    assert payload["root_action_id"] == str(root)
+    assert payload["original_action_id"] == str(original)
+    restored = MemoryCompensationOutbox(records=(codec.decode(encoded),))
     retry_context = OperationContext(uuid.uuid7(), context.causal_ref(), root, context.name)
     retry_intent = CompensationIntent(retry_context, original, intent.idempotency_key, datetime.now(UTC))
     retry = await restored.claim(retry_intent, CompensationRetryPolicy(max_attempts=3))
