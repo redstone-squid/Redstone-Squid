@@ -22,6 +22,7 @@ from squid.submissions.application.forms import build_submission_manifest
 from squid.submissions.application.prefill import project_submission
 from squid.submissions.domain import SubmissionOrigin
 from squid.versions.errors import InvalidVersionError
+from tests.support.expansion import expansion_document
 
 
 def inferred(**overrides: Any) -> InferredBuild:
@@ -571,3 +572,23 @@ async def test_measurement_qualifications_and_variant_ranges_remain_source_excer
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
     assert build.description == "(including floor)\nbreaks record at: n=5-14 wide"
+
+
+async def test_expandable_source_facts_survive_inference_without_sample_dimensions() -> None:
+    document = expansion_document()
+    generator = FakeTextGenerator(
+        InferenceResult(
+            builds=[
+                inferred(
+                    door_expansion=document,
+                    door_width=None,
+                    door_height=None,
+                    door_depth=None,
+                )
+            ]
+        )
+    )
+    service = BuildInferenceService(generator, FakeTaxonomy(), FakeVersions(), "system prompt")
+    builds = await service.infer(source(), model="test-model")
+    assert builds[0].door_expansion == document
+    assert builds[0].door_dimensions == (None, None, None)

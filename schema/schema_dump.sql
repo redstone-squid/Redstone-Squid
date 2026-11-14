@@ -122,7 +122,7 @@ CREATE FUNCTION public.build_history_snapshot_v1(target_build_id bigint) RETURNS
     AS $$
 SELECT jsonb_build_object(
     'build', jsonb_build_object('submission_status', b.submission_status, 'extra_info', b.extra_info, 'width', b.width, 'height', b.height, 'depth', b.depth, 'completion_time', b.completion_time, 'submission_time', b.submission_time, 'category', b.category, 'ai_generated', b.ai_generated, 'version_spec', b.version_spec, 'completion_at', b.completion_at, 'completion_evidence', b.completion_evidence, 'description', b.description, 'submitter_account_id', b.submitter_account_id, 'display_name', b.display_name, 'source_submission_draft_id', b.source_submission_draft_id, 'sponsor_installation_id', b.sponsor_installation_id, 'sponsor_display_name', b.sponsor_display_name, 'sponsor_address', b.sponsor_address, 'sponsor_description', b.sponsor_description, 'sponsor_website_url', b.sponsor_website_url),
-    'doors', (SELECT jsonb_build_object('orientation', d.orientation, 'door_width', d.door_width, 'door_height', d.door_height, 'door_depth', d.door_depth, 'normal_opening_time', d.normal_opening_time, 'normal_closing_time', d.normal_closing_time, 'visible_opening_time', d.visible_opening_time, 'visible_closing_time', d.visible_closing_time) FROM public.doors d WHERE d.build_id = b.id),
+    'doors', (SELECT jsonb_build_object('orientation', d.orientation, 'door_width', d.door_width, 'door_height', d.door_height, 'door_depth', d.door_depth, 'expansion', d.expansion, 'normal_opening_time', d.normal_opening_time, 'normal_closing_time', d.normal_closing_time, 'visible_opening_time', d.visible_opening_time, 'visible_closing_time', d.visible_closing_time) FROM public.doors d WHERE d.build_id = b.id),
     'extenders', (SELECT jsonb_build_object('orientation', d.orientation, 'extension_length', d.extension_length, 'extender_type', d.extender_type, 'extension_time', d.extension_time, 'retraction_time', d.retraction_time) FROM public.extenders d WHERE d.build_id = b.id),
     'creators', COALESCE((SELECT jsonb_agg(jsonb_build_object('alias_id', a.id, 'name', a.name, 'account_id', a.account_id) ORDER BY a.id) FROM public.build_credits c JOIN public.creator_aliases a ON a.id = c.alias_id WHERE c.build_id = b.id), '[]'::jsonb),
     'credits', COALESCE((SELECT jsonb_agg(jsonb_build_object('kind', c.kind, 'name', c.name, 'username', c.username, 'subject', c.subject, 'role', c.role, 'attribution', c.attribution, 'source_message_id', c.source_message_id, 'alias_id', c.alias_id) ORDER BY c.position) FROM public.build_credits c WHERE c.build_id = b.id), '[]'::jsonb),
@@ -2549,7 +2549,9 @@ CREATE TABLE public.doors (
     normal_opening_time bigint,
     normal_closing_time bigint,
     visible_opening_time bigint,
-    visible_closing_time bigint
+    visible_closing_time bigint,
+    expansion jsonb,
+    CONSTRAINT doors_expansion_version_check CHECK (((expansion IS NULL) OR (((jsonb_typeof(expansion) = 'object'::text) AND ((expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE)))
 );
 
 
@@ -4892,6 +4894,8 @@ CREATE TABLE public.submission_drafts (
     source_files jsonb DEFAULT '[]'::jsonb NOT NULL,
     source_messages jsonb DEFAULT '[]'::jsonb NOT NULL,
     inference_run_id uuid,
+    door_expansion jsonb,
+    CONSTRAINT submission_drafts_expansion_check CHECK (((door_expansion IS NULL) OR (((category = 'door'::text) AND (jsonb_typeof(door_expansion) = 'object'::text) AND ((door_expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
     CONSTRAINT submission_drafts_expiry_after_creation CHECK ((expires_at > created_at)),
     CONSTRAINT submission_drafts_inference_origin_check CHECK (((NOT inferred) OR (origin = 'discord'::text))),
     CONSTRAINT submission_drafts_installation_requires_paper CHECK (((source_installation_id IS NULL) OR (origin = 'paper'::text))),

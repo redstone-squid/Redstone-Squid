@@ -5,6 +5,7 @@ from typing import cast
 from uuid import UUID
 
 from squid.builds.domain.credits import name_credits, read_credits
+from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
@@ -37,6 +38,7 @@ def normalize_submission(
     *,
     origin: SubmissionOrigin,
     source_installation_id: UUID | None = None,
+    door_expansion: DoorExpansion | None = None,
 ) -> NormalizedSubmission:
     """Convert validated form answers and resolved facts to a finalization payload.
 
@@ -56,6 +58,7 @@ def normalize_submission(
     details: DoorSubmissionDetails | ExtenderSubmissionDetails | GeneralSubmissionDetails
     if category is SubmissionCategory.DOOR:
         details = DoorSubmissionDetails(
+            expansion=door_expansion,
             opening=SubmissionDimensions(
                 _optional_int(answers, "opening_width"),
                 _optional_int(answers, "opening_height"),

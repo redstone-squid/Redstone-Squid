@@ -6,6 +6,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from squid.builds.domain.credits import Credit, creator_names
+from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
@@ -256,6 +257,7 @@ class DoorSubmissionDetails:
     orientation: DoorOrientation | None
     pattern_keys: tuple[str, ...] = ()
     pattern_proposals: tuple[str, ...] = ()
+    expansion: DoorExpansion | None = None
     timing: DoorTiming = field(default_factory=DoorTiming)
 
     def __post_init__(self) -> None:

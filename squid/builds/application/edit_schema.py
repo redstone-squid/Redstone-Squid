@@ -8,6 +8,7 @@ from pydantic_core import PydanticCustomError
 
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain.credits import Credit
+from squid.builds.domain.expansion import DoorExpansion
 
 _INVALID_VALUE = "value_error"
 
@@ -23,6 +24,7 @@ class DoorPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    expansion: DoorExpansion | None = None
     door_dimensions: InputDimensions | None = None
     orientation: str | None = Field(default=None, max_length=100)
     patterns: list[str] | None = Field(default=None, max_length=50)
@@ -33,6 +35,7 @@ class DoorPatch(BaseModel):
 
     # Wire name -> BuildEditPatch field name.
     _EDIT_FIELDS: ClassVar[Mapping[str, str]] = {
+        "expansion": "door_expansion",
         "door_dimensions": "door_dimensions",
         "orientation": "door_orientation_type",
         "patterns": "door_type",
@@ -59,6 +62,8 @@ class DoorPatch(BaseModel):
     def edit_attributes(self) -> dict[str, object]:
         """Flatten the supplied fields onto the application patch's names."""
         supplied = self.model_dump(exclude_unset=True)
+        if "expansion" in supplied:
+            supplied["expansion"] = self.expansion
         return {self._EDIT_FIELDS[name]: value for name, value in supplied.items()}
 
 

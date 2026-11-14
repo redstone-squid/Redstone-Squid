@@ -19,6 +19,7 @@ from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.builds.application import BuildService
+from squid.builds.domain.expansion import DoorExpansion
 from squid.core.actors import Actor
 from squid.messages.domain import MessageSnapshot
 from squid.permissions.application import PermissionService, SubjectRecords
@@ -119,6 +120,7 @@ class Drafts(SubmissionDraftService):
         now: Instant | None = None,
         draft_id: UUID | None = None,
         inferred: bool = False,
+        door_expansion: DoorExpansion | None = None,
         source_messages: tuple[MessageSnapshot, ...] = (),
         source_files: tuple[SubmissionSourceFile, ...] = (),
         source_issues: tuple[str, ...] = (),

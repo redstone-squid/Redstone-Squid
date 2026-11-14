@@ -12,6 +12,7 @@ from squid.builds.application.edit_schema import DoorPatch as DoorPatch
 from squid.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
 from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.builds.domain import Status
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 
 
@@ -60,6 +61,7 @@ class DoorDetails(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category: Literal["Door"] = "Door"
+    expansion: DoorExpansion | None = None
     door_dimensions: PublicBuildDimensions
     orientation: str | None
     patterns: list[str]
@@ -97,6 +99,7 @@ def _details(build: Build) -> BuildDetails:
     match build:
         case DoorBuild():
             return DoorDetails(
+                expansion=build.expansion,
                 door_dimensions=PublicBuildDimensions(
                     width=build.door_width, height=build.door_height, depth=build.door_depth
                 ),

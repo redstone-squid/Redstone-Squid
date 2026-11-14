@@ -8,6 +8,7 @@ from squid.builds.application.commands import Dimensions
 from squid.builds.application.input import normalize_extender_orientation, validate_extension_length
 from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo, UnresolvedTaxonomy
 from squid.builds.domain.credits import Credit
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
@@ -45,6 +46,7 @@ class BuildEditPatch:
     versions: PatchValue[list[str]] = UNSET
     showcase_tags: PatchValue[list[str]] = UNSET
     dimensions: PatchValue[Dimensions] = UNSET
+    door_expansion: PatchValue[DoorExpansion | None] = UNSET
     door_dimensions: PatchValue[Dimensions] = UNSET
     door_type: PatchValue[list[str]] = UNSET
     door_orientation_type: PatchValue[str | None] = UNSET
@@ -88,6 +90,7 @@ class BuildEditPatch:
                 versions=_latest(combined.versions, patch.versions),
                 showcase_tags=_latest(combined.showcase_tags, patch.showcase_tags),
                 dimensions=_latest(combined.dimensions, patch.dimensions),
+                door_expansion=_latest(combined.door_expansion, patch.door_expansion),
                 door_dimensions=_latest(combined.door_dimensions, patch.door_dimensions),
                 door_type=_latest(combined.door_type, patch.door_type),
                 door_orientation_type=_latest(combined.door_orientation_type, patch.door_orientation_type),
@@ -142,6 +145,8 @@ class BuildEditPatch:
         for name, value in changes.items():
             if name == "credits" and isinstance(value, list):
                 value = [Credit.from_json(item) if isinstance(item, dict) else item for item in value]
+            if name == "door_expansion" and value is not None:
+                value = DoorExpansion.model_validate(value)
             object.__setattr__(patch, name, value)
         return patch
 
@@ -208,6 +213,7 @@ class BuildEditPatch:
             build.dimensions = self.dimensions
 
         door_fields = (
+            "door_expansion",
             "door_dimensions",
             "door_orientation_type",
             "normal_closing_time",
@@ -224,6 +230,8 @@ class BuildEditPatch:
                     context={"build_id": build.id, "category": build.category, "fields": patched_door_fields},
                     public_context={"fields": patched_door_fields},
                 )
+            if self.door_expansion is not UNSET:
+                build.expansion = self.door_expansion
             if self.door_dimensions is not UNSET:
                 width, height, depth = self.door_dimensions
                 build.door_width = width

@@ -16,6 +16,7 @@ from squid.submissions.application.forms import FormOptionSet, SubmissionFormSer
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid.submissions.domain import DraftChange, DraftSnapshot, SubmissionOrigin
+from tests.support.expansion import expansion_document
 
 
 class Drafts:
@@ -36,6 +37,7 @@ class Drafts:
                 now,
                 now.add(days=7, days_assumed_24h_ok=True),
                 inferred=kwargs["inferred"],
+                door_expansion=kwargs.get("door_expansion"),
                 source_messages=kwargs["source_messages"],
             )
         return self.current
@@ -100,3 +102,18 @@ async def test_unknown_category_requires_explicit_selection() -> None:
     )
     assert result.snapshot.category == "extender"
     assert candidate.facts.category is None
+
+
+async def test_expansion_survives_materialization_outside_the_form_answers() -> None:
+    document = expansion_document()
+    candidate = InferenceCandidate(
+        uuid4(), uuid4(), 7, BuildDraft(category=BuildCategory.DOOR, door_expansion=document)
+    )
+    stored = await materialize_candidate(
+        candidate,
+        cast(SubmissionDraftService, Drafts()),
+        cast(SubmissionFormService, Forms()),
+        actor=Actor(account_id=7),
+    )
+    assert stored.door_expansion == document
+    assert "door_expansion" not in stored.snapshot.answers

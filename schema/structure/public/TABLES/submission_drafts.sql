@@ -20,6 +20,8 @@ CREATE TABLE public.submission_drafts (
     source_files jsonb DEFAULT '[]'::jsonb NOT NULL,
     source_messages jsonb DEFAULT '[]'::jsonb NOT NULL,
     inference_run_id uuid,
+    door_expansion jsonb,
+    CONSTRAINT submission_drafts_expansion_check CHECK (((door_expansion IS NULL) OR (((category = 'door'::text) AND (jsonb_typeof(door_expansion) = 'object'::text) AND ((door_expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
     CONSTRAINT submission_drafts_expiry_after_creation CHECK ((expires_at > created_at)),
     CONSTRAINT submission_drafts_inference_origin_check CHECK (((NOT inferred) OR (origin = 'discord'::text))),
     CONSTRAINT submission_drafts_installation_requires_paper CHECK (((source_installation_id IS NULL) OR (origin = 'paper'::text))),

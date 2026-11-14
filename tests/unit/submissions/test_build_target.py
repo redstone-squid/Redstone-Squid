@@ -40,6 +40,7 @@ from squid.submissions.infrastructure.finalization_payloads import decode_submis
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
+from tests.support.expansion import expansion_document
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")
 MEDIA_ID = UUID("00000000-0000-4000-8000-000000000502")
@@ -566,3 +567,15 @@ async def test_external_links_survive_payload_and_build_preparation_without_beco
 def test_external_link_payloads_reject_non_web_references(url: str) -> None:
     with pytest.raises(ValidationError, match="absolute HTTP"):
         SubmissionLink(url, "image")
+
+
+async def test_expansion_survives_finalization_payload_and_build_preparation() -> None:
+    document = expansion_document()
+    submission = _submission(SubmissionCategory.DOOR)
+    assert isinstance(submission.details, DoorSubmissionDetails)
+    submission = replace(submission, details=replace(submission.details, expansion=document))
+    decoded = decode_submission(encode_submission(submission))
+    assert decoded == submission
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(decoded)
+    assert isinstance(build, DoorBuild)
+    assert build.expansion == document

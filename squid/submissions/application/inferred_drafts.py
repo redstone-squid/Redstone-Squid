@@ -43,6 +43,7 @@ async def materialize_candidate(
         category=prefill.category,
         origin=SubmissionOrigin.DISCORD,
         inferred=True,
+        door_expansion=source.door_expansion if selected is BuildCategory.DOOR else None,
         source_messages=source.source_messages,
         source_files=candidate.source_files,
         source_issues=prefill.unresolved,

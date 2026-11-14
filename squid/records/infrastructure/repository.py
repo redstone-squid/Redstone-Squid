@@ -62,7 +62,7 @@ from squid.tags.models import TagAssignment, TagDefinition, display_conversion_s
 from squid_i18n import md_tr
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
-CALCULATOR_VERSION = "3"
+CALCULATOR_VERSION = "4"
 FORMATTER_VERSION = "2"
 
 RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
@@ -570,6 +570,7 @@ class PostgresRecordRepository:
             select(DoorBuild)
             .where(
                 DoorBuild.submission_status == Status.CONFIRMED,
+                DoorBuild.expansion.is_(None),
                 DoorBuild.door_width.is_not(None),
                 DoorBuild.door_height.is_not(None),
                 DoorBuild.orientation.is_not(None),

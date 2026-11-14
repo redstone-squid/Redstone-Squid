@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from whenever import Instant
 
 from squid.builds.domain.credits import name_credits
+from squid.builds.domain.expansion import DoorExpansion
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
@@ -89,6 +90,7 @@ class StoredDraft:
     preparation_retry_at: Instant | None = None
     inferred: bool = False
     submission_actor_account_id: int | None = None
+    door_expansion: DoorExpansion | None = None
     source_messages: tuple[MessageSnapshot, ...] = ()
     source_files: tuple[SubmissionSourceFile, ...] = ()
     source_issues: tuple[str, ...] = ()
@@ -309,6 +311,7 @@ class SubmissionDraftService:
         now: Instant | None = None,
         draft_id: UUID | None = None,
         inferred: bool = False,
+        door_expansion: DoorExpansion | None = None,
         source_messages: tuple[MessageSnapshot, ...] = (),
         source_files: tuple[SubmissionSourceFile, ...] = (),
         source_issues: tuple[str, ...] = (),
@@ -321,6 +324,9 @@ class SubmissionDraftService:
                 t"= Paper drafts require server-derived installation provenance."
             )
             raise ValidationError(msg)
+        if door_expansion is not None and category != "door":
+            message = "Expansion facts can only be retained on door drafts."
+            raise ValidationError(message)
         if inferred and origin is not SubmissionOrigin.DISCORD:
             message = "Inferred drafts require Discord source provenance."
             raise ValidationError(message)
@@ -345,6 +351,7 @@ class SubmissionDraftService:
             expires_at=created_at.add(days=self._retention_days, days_assumed_24h_ok=True),
             source_installation_id=source_installation_id,
             inferred=inferred,
+            door_expansion=door_expansion,
             source_messages=source_messages,
             source_files=source_files,
             source_issues=source_issues,

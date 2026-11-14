@@ -20,6 +20,7 @@ from squid.builds.domain import (
     parse_time_string,
 )
 from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.models import BuildLink
 from squid.core.concurrency import run_all_awaitables
 from squid.messages.domain import MessageSnapshot
@@ -113,6 +114,11 @@ class InferredBuild(BaseModel):
     )
     confidence: Literal["high", "medium", "low"]
     display_name: str | None = Field(default=None, description="An explicit build title or name from the source.")
+    door_expansion: DoorExpansion | None = Field(
+        default=None,
+        description="Source-stated expandable door parameters, domains and formula branches. Preserve raw syntax, "
+        "unknown bounds and evidence; never infer a minimum, constant timing or computed record region.",
+    )
     volume: str | None = Field(default=None, description="Reported volume or size formula; never a restriction.")
     completion_time: str | None = Field(default=None, description="Explicit completion/design date, not a record date.")
     links: list[InferredLink] = Field(default_factory=list)
@@ -437,6 +443,7 @@ class BuildInferenceService:
         build.category = categories[inferred.build_category] if inferred.build_category is not None else None
         orientation = inferred.door_orientation
         build.door_orientation = "Door" if orientation == "Normal" else cast(DoorOrientationLiteral | None, orientation)
+        build.door_expansion = inferred.door_expansion
         build.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
         build.dimensions = (inferred.build_width, inferred.build_height, inferred.build_depth)
         sources = {message.id: " ".join((message.content or "").split()) for message in build.source_messages}

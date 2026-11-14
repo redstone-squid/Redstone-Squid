@@ -50,6 +50,7 @@ from squid.submissions.errors import DraftAccessDeniedError
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.submissions.payload_integrity import submission_payload_digest
 from tests.support.draft_uow import DraftScope
+from tests.support.expansion import expansion_document
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000401")
@@ -822,3 +823,29 @@ async def test_ingestion_still_rejects_invalid_values_and_requires_publication_r
     assert result.status is DraftStatus.NEEDS_ATTENTION
     assert SubmissionAttentionIssue(field, reason) in jobs.attention
     assert jobs.enqueued is None
+
+
+async def test_ingested_expansion_reaches_the_durable_finalization_payload() -> None:
+    document = expansion_document()
+    draft = replace(
+        _stored(
+            SubmissionOrigin.DISCORD,
+            category="door",
+            answers={"ai_generated": True, "schematic_visibility": "reviewer_only"},
+        ),
+        inferred=True,
+        inference_run_id=UUID(int=999),
+        door_expansion=document,
+    )
+    repository = FakeDraftRepository(draft)
+    jobs = FakeFinalizationJobs()
+    service = SubmissionFinalizationService(
+        _drafts(repository),
+        SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
+        uow_factory=partial(FinalizationScope, jobs, repository),
+    )
+    await service.submit(DRAFT_ID, Actor(account_id=7), locale="en", now=NOW)
+    assert jobs.enqueued is not None
+    assert isinstance(jobs.enqueued.details, DoorSubmissionDetails)
+    assert jobs.enqueued.details.expansion == document
+    assert encode_submission(jobs.enqueued)["payload_schema"] == 6

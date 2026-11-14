@@ -15,6 +15,7 @@ from squid.builds.domain import (
     Status,
 )
 from squid.builds.domain.credits import Credit, name_credits
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.models import BuildLink
 from squid.messages.domain import MessageSnapshot
 from squid.sponsors import PublicSponsor
@@ -108,6 +109,7 @@ class BuildDraftPayload:
 
     # Category-specific facts, staged flat until the category is known.
     door_orientation: DoorOrientationLiteral | None = None
+    door_expansion: DoorExpansion | None = None
     door_width: int | None = None
     door_height: int | None = None
     door_depth: int | None = None

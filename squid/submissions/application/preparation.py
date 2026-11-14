@@ -121,6 +121,7 @@ class SubmissionPreparation:
                 sponsor,
                 origin=draft.origin,
                 source_installation_id=draft.source_installation_id,
+                door_expansion=draft.door_expansion,
             )
         )
 

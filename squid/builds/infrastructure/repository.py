@@ -141,6 +141,7 @@ def _public_summary_from_selected_row(
         build = DoorBuild(
             **common,
             orientation=row["door_orientation"],
+            expansion=row["door_expansion"],
             door_width=row["door_width"],
             door_height=row["door_height"],
             door_depth=row["door_depth"],
@@ -237,6 +238,7 @@ class BuildRepository:
                         builds.c.extra_info["unknown_restrictions"].label("unknown_restrictions"),
                         builds.c.extra_info["unknown_patterns"].label("unknown_patterns"),
                         door.c.orientation.label("door_orientation"),
+                        door.c.expansion.label("door_expansion"),
                         door.c.door_width.label("door_width"),
                         door.c.door_height.label("door_height"),
                         door.c.door_depth.label("door_depth"),

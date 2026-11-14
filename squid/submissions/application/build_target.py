@@ -222,6 +222,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
         opening = submission.details.opening
         return DoorBuild(
             **common,
+            expansion=submission.details.expansion,
             door_width=opening.width,
             door_height=opening.height,
             door_depth=opening.depth,

@@ -18683,6 +18683,16 @@
             "const": "Door",
             "default": "Door"
           },
+          "expansion": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DoorExpansion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "door_dimensions": {
             "$ref": "#/components/schemas/PublicBuildDimensions"
           },
@@ -18733,8 +18743,79 @@
         ],
         "title": "DoorDetails"
       },
+      "DoorExpansion": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "default": 1
+          },
+          "raw_description": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parameters": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ExpansionParameter"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "maxItems": 16,
+            "default": []
+          },
+          "branches": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ExpansionBranch"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "default": []
+          },
+          "evidence": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ExpansionEvidence"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "DoorExpansion"
+      },
       "DoorPatch": {
         "properties": {
+          "expansion": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DoorExpansion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "door_dimensions": {
             "oneOf": [
               {
@@ -19501,6 +19582,266 @@
           "surface"
         ],
         "title": "ErrorReportSummary"
+      },
+      "ExpansionBranch": {
+        "properties": {
+          "label": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "opening_width": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "opening_height": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "opening_depth": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domain": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "volume": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timings": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ExpansionTiming"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "default": []
+          },
+          "claimed_record_domain": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completion_time": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ExpansionEvidence"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "ExpansionBranch"
+      },
+      "ExpansionEvidence": {
+        "properties": {
+          "source_message_id": {
+            "type": "integer",
+            "minimum": 1.0
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_message_id",
+          "text"
+        ],
+        "title": "ExpansionEvidence"
+      },
+      "ExpansionParameter": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "meaning": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minimum": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maximum_kind": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "finite",
+              "unbounded"
+            ],
+            "default": "unknown"
+          },
+          "maximum": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "initial_steps": {
+            "oneOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "maxLength": 64
+          },
+          "repeating_steps": {
+            "oneOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "maxLength": 64,
+            "minLength": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ExpansionParameter"
+      },
+      "ExpansionTiming": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "opening",
+              "opening_visible",
+              "closing",
+              "closing_visible",
+              "opening_reset",
+              "closing_reset"
+            ]
+          },
+          "expression": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "game_tick",
+              "redstone_tick",
+              "second",
+              "unknown"
+            ],
+            "default": "unknown"
+          },
+          "variant": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "expression",
+          "method"
+        ],
+        "title": "ExpansionTiming"
       },
       "ExtenderDetails": {
         "properties": {

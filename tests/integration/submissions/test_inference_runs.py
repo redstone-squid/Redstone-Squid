@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from tests.support.expansion import expansion_document
 from tests.support.submission_targets import seed_account_and_version
 from tests.support.unit_of_work import transact
 
@@ -29,7 +30,12 @@ async def test_completed_run_replays_original_candidates_and_rejects_changed_inp
     candidates = await transact(
         repository,
         lambda uow: uow.inference_runs.complete(
-            run, claim.token, (BuildDraft(category=None), BuildDraft(category=BuildCategory.DOOR, door_width=3))
+            run,
+            claim.token,
+            (
+                BuildDraft(category=None),
+                BuildDraft(category=BuildCategory.DOOR, door_width=3, door_expansion=expansion_document()),
+            ),
         ),
         commit=True,
     )
@@ -40,6 +46,7 @@ async def test_completed_run_replays_original_candidates_and_rejects_changed_inp
     assert replay.candidates == candidates
     assert candidates[0].facts.category is None
     assert candidates[1].facts.door_width == 3
+    assert candidates[1].facts.door_expansion == expansion_document()
     with pytest.raises(ConflictError):
         await transact(
             repository,

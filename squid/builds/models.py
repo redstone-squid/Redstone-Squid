@@ -41,8 +41,10 @@ from squid.builds.domain import (
     Status,
 )
 from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, StagedCredits
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.domain.models import StagedMedia, StagedTaxonomy, freeze_fields, frozen_field
 from squid.builds.errors import InvalidBuildError
+from squid.builds.persistence_types import DoorExpansionJSON
 from squid.config import EMBEDDING_DIMENSION
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
@@ -359,6 +361,15 @@ class DoorBuild(Build, kw_only=True):
         init=False,
         compare=False,
     )
+    __table_args__ = (
+        CheckConstraint(
+            "expansion IS NULL OR (jsonb_typeof(expansion) = 'object' "
+            "AND expansion->'schema_version' = '1'::jsonb) IS TRUE",
+            name="doors_expansion_version_check",
+        ),
+    )
+
+    expansion: Mapped[DoorExpansion | None] = mapped_column(DoorExpansionJSON(), default=None)
     orientation: Mapped[DoorOrientationLiteral | None] = mapped_column(Text, default=None)
     door_width: Mapped[int | None] = mapped_column(Integer, default=None)
     door_height: Mapped[int | None] = mapped_column(Integer, default=None)

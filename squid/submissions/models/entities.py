@@ -19,6 +19,8 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
+from squid.builds.domain.expansion import DoorExpansion
+from squid.builds.persistence_types import DoorExpansionJSON
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, StrEnumText
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
@@ -28,6 +30,7 @@ class SubmissionDraft(Base, kw_only=True):
     """The compact current state of an account-owned submission draft."""
 
     __tablename__ = "submission_drafts"
+    door_expansion: Mapped[DoorExpansion | None] = mapped_column(DoorExpansionJSON(), default=None)
     source_messages: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, default_factory=list, server_default=text("'[]'::jsonb")
     )
@@ -37,6 +40,11 @@ class SubmissionDraft(Base, kw_only=True):
     source_issues: Mapped[list[str]] = mapped_column(JSONB, default_factory=list, server_default=text("'[]'::jsonb"))
     inference_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None, index=True)
     __table_args__ = (
+        CheckConstraint(
+            "door_expansion IS NULL OR (category = 'door' AND jsonb_typeof(door_expansion) = 'object' "
+            "AND door_expansion->'schema_version' = '1'::jsonb) IS TRUE",
+            name="submission_drafts_expansion_check",
+        ),
         CheckConstraint("schema_revision > 0", name="submission_drafts_schema_revision_positive"),
         CheckConstraint("revision >= 0", name="submission_drafts_revision_nonnegative"),
         CheckConstraint("NOT inferred OR origin = 'discord'", name="submission_drafts_inference_origin_check"),

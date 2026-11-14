@@ -7,7 +7,9 @@ CREATE TABLE public.doors (
     normal_opening_time bigint,
     normal_closing_time bigint,
     visible_opening_time bigint,
-    visible_closing_time bigint
+    visible_closing_time bigint,
+    expansion jsonb,
+    CONSTRAINT doors_expansion_version_check CHECK (((expansion IS NULL) OR (((jsonb_typeof(expansion) = 'object'::text) AND ((expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE)))
 );
 
 COMMENT ON TABLE public.doors IS 'A door build with specific dimensions and timing information.';

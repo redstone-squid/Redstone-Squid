@@ -3,10 +3,11 @@
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from squid.builds.domain.credits import Credit, CreditAttribution, name_credits
+from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import DataIntegrityError, JSONValue
 from squid.core.errors import ValidationError as DomainValidationError
 from squid.sponsors import PublicSponsor
@@ -95,10 +96,18 @@ class _DoorDetailsPayload(_StrictPayloadModel):
     orientation: str | None
     pattern_keys: list[str]
     pattern_proposals: list[str]
+    expansion: DoorExpansion | None = None
     timing: _DoorTimingPayload
+
+    @field_validator("expansion", mode="before")
+    @classmethod
+    def read_expansion(cls, value: object) -> DoorExpansion | None:
+        # The outer wire contract is strict, but JSON arrays represent immutable tuples here.
+        return DoorExpansion.model_validate(value) if value is not None else None
 
     def to_domain(self) -> DoorSubmissionDetails:
         return DoorSubmissionDetails(
+            expansion=self.expansion,
             opening=self.opening.to_domain(),
             orientation=DoorOrientation(self.orientation) if self.orientation is not None else None,
             pattern_keys=tuple(self.pattern_keys),
@@ -313,8 +322,22 @@ class FinalizationPayloadV5(_TypedFinalizationPayload):
         return tuple(link.to_domain() for link in self.links)
 
 
+class FinalizationPayloadV6(_TypedFinalizationPayload):
+    """Expandable-door source facts alongside typed credits and links."""
+
+    payload_schema: Literal[6]
+    links: list[_LinkPayload]
+
+    def _links(self) -> tuple[SubmissionLink, ...]:
+        return tuple(link.to_domain() for link in self.links)
+
+
 type FinalizationPayload = Annotated[
-    FinalizationPayloadV2 | FinalizationPayloadV3 | FinalizationPayloadV4 | FinalizationPayloadV5,
+    FinalizationPayloadV2
+    | FinalizationPayloadV3
+    | FinalizationPayloadV4
+    | FinalizationPayloadV5
+    | FinalizationPayloadV6,
     Field(discriminator="payload_schema"),
 ]
 
@@ -322,12 +345,17 @@ _PAYLOAD_ADAPTER = TypeAdapter(FinalizationPayload)
 
 
 def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
-    """Use a payload version that preserves links and credits; retain older shapes when neither needs one."""
-    typed = bool(submission.links) or any(
-        credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits
+    """Choose a payload version that preserves expansion, credits, and links without changing older shapes."""
+    expandable = isinstance(submission.details, DoorSubmissionDetails) and submission.details.expansion is not None
+    typed = (
+        expandable
+        or bool(submission.links)
+        or any(credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits)
     )
     model_type = (
-        FinalizationPayloadV5
+        FinalizationPayloadV6
+        if expandable
+        else FinalizationPayloadV5
         if submission.links
         else FinalizationPayloadV4
         if typed
@@ -337,15 +365,19 @@ def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
         document = _submission_document(submission)
         if typed:
             document.update(payload_schema=4, creators=[], credits=[credit.to_json() for credit in submission.credits])
-        if submission.links:
+        if submission.links or expandable:
             document.update(
-                payload_schema=5, links=[{"url": link.url, "media_type": link.media_type} for link in submission.links]
+                payload_schema=6 if expandable else 5,
+                links=[{"url": link.url, "media_type": link.media_type} for link in submission.links],
             )
         payload = model_type.model_validate(document)
     except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:
         msg = "normalized submission cannot be encoded as a durable payload"
         raise DataIntegrityError(msg) from error
-    return cast(dict[str, object], payload.model_dump(mode="json"))
+    encoded = cast(dict[str, object], payload.model_dump(mode="json"))
+    if not expandable and isinstance(encoded.get("details"), dict):
+        encoded["details"].pop("expansion", None)
+    return encoded
 
 
 def decode_submission(value: object) -> NormalizedSubmission:
@@ -363,6 +395,7 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
     if isinstance(submission.details, DoorSubmissionDetails):
         details = {
             "kind": "door",
+            "expansion": submission.details.expansion.model_dump(mode="json") if submission.details.expansion else None,
             "opening": _dimensions_document(submission.details.opening),
             "orientation": submission.details.orientation.value if submission.details.orientation is not None else None,
             "pattern_keys": list(submission.details.pattern_keys),

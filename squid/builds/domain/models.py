@@ -20,6 +20,7 @@ from typing import (
 from whenever import Instant
 
 from squid.builds.domain.credits import Credit, StagedCredits
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.messages.domain import MessageSnapshot
@@ -347,6 +348,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
 
     # Category-specific facts, staged flat until the category is known.
     door_orientation: DoorOrientationLiteral | None = None
+    door_expansion: DoorExpansion | None = None
     door_width: int | None = None
     door_height: int | None = None
     door_depth: int | None = None
@@ -422,6 +424,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
                 return DoorBuild(
                     **common,
                     orientation=self.door_orientation,
+                    expansion=self.door_expansion,
                     door_width=self.door_width,
                     door_height=self.door_height,
                     door_depth=self.door_depth,
