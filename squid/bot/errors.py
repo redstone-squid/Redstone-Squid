@@ -366,6 +366,7 @@ async def observe_request_error(
         result=delivery,
         presented=delivery is not None,
         reports=_reports_from(request.client),
+        request=request,
     )
 
 
@@ -425,6 +426,7 @@ async def record_operation_error(
     result: sd.delivery.DeliveryResult | None,
     presented: bool,
     reports: ErrorReportService | None = None,
+    request: sd.Request[Any] | None = None,
 ) -> None:
     """Capture an operation failure and mark it only when its card reached Discord."""
     if is_error_presented(error):
@@ -435,6 +437,14 @@ async def record_operation_error(
         "channel_id": result.message.channel.id if result is not None and result.message is not None else None,
         "message_id": result.message_id if result is not None else None,
     }
+    if request is not None:
+        command = request.command
+        context.update(
+            command=command.qualified_name if command is not None else None,
+            guild_id=request.guild.id if request.guild is not None else None,
+            channel_id=getattr(request.channel, "id", None),
+            owner=type(request.owner).__qualname__,
+        )
     if isinstance(original, UnsolvableLayoutError | LayoutSearchExhaustedError):
         context = {**(context or {}), "layout": original.context}
     if notice.error_id is not None:

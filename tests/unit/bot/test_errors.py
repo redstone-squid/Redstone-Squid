@@ -410,3 +410,22 @@ async def test_layout_failure_metadata_is_saved(
     await record_operation_error(error, locale=None, result=None, presented=False, reports=reports)
 
     assert reports.record.call_args.kwargs["context"]["layout"] == error.context
+
+
+async def test_operation_report_identifies_the_command_without_delivery(mocker: MockerFixture) -> None:
+    reports = mocker.Mock(spec=ErrorReportService)
+    reports.record = mocker.AsyncMock()
+    request = mocker.Mock(spec=sd.Request)
+    request.command.qualified_name = "build browse"
+    request.guild.id = 123
+    request.channel.id = 456
+    request.owner = object()
+
+    await record_operation_error(
+        RuntimeError("invalid option"), locale=None, result=None, presented=False, reports=reports, request=request
+    )
+
+    report = reports.record.call_args.kwargs
+    assert report["origin"] == "build browse"
+    assert report["context"]["channel_id"] == 456
+    assert report["context"]["guild_id"] == 123
