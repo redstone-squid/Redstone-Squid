@@ -596,12 +596,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                         key="record-categories",
                         display=sl.semantic.ControlDisplay.INDIVIDUAL,
                     ),
-                    sl.note(
-                        tr(
-                            t"record-filter-hint = Toggle any record types; none selected means all types. "
-                            t"Search keeps your selection."
-                        )
-                    ),
                 )
             )
         return nodes
