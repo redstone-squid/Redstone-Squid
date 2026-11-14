@@ -74,7 +74,10 @@
         const build = builds[id];
         const recordFirst = state.scope === 'records';
         const title = recordFirst ? records[build.records[0]].title : build.title;
-        const remaining = recordFirst ? build.records.slice(1) : build.records;
+        let remaining = recordFirst ? build.records.slice(1) : build.records;
+        if (state.scope === 'everything' && remaining.length === 1 && records[remaining[0]].title === title) {
+          remaining = [];
+        }
         const identity = `Build #${id}` + (recordFirst && build.title !== title ? ` · ${highlighted(build.title)}` : '');
         const titles = remaining.map(key => `<li>${highlighted(records[key].title)}</li>`).join('');
         return `<div class="entry"><h4>${highlighted(title)}</h4><p class="secondary">${identity}</p>` +

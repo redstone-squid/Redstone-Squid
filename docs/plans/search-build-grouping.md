@@ -24,11 +24,14 @@ In Records, choose the heading from the strongest matching record, with a stable
 Keep the remaining titles in a compact list, preserving their full names rather than shortening them to
 “Smallest” or “Fastest”. Start with two supporting titles and a remaining count when more are available;
 the detail action exposes the complete list. A build with no records needs no placeholder text.
+In Everything, omit a lone supporting record title when it repeats the build heading. Keep a differing
+record title, and retain the record and its details even when its repeated display text is omitted.
 
 Bold the query words within displayed titles, including a differing build title on the identity line.
 Keep the rest of each result heading at regular weight so the emphasis remains visible. The mockup
 illustrates `2x2` matching the displayed `2×2`. Production highlighting must use actual match information,
-escape display text, and support normalization without inventing literal matches for semantic results.
+where available, with conservative best-effort text matching as a fallback. Escape display text and support
+normalization without inventing literal matches for semantic results.
 Record titles shown as context in Builds or Everything should not receive emphasis unless they actually
 match. Bold is the initial proposal; color is optional reinforcement where the rendering platform supports it.
 
@@ -54,11 +57,39 @@ and distinguishes builds from metadata. Opening another holder must not discard 
 position. Records scope includes only matching records. Builds and Everything also show held records as
 context, even if those records did not cause the build to match; this enrichment does not affect ranking.
 
+## Match information and highlighting
+
+Extend the result contract alongside grouping; replacing the search algorithm is not a prerequisite.
+`PostgresSearchBackend` already separates exact-title, full-text, trigram, and semantic candidates, but
+`reciprocal_rank_fusion` returns only identity, title, and fused score. The compiler separately applies
+the complete query predicate. Preserve contributing document IDs and ranking branches through grouping;
+branch participation explains a ranking contribution, not which query clauses or displayed words matched.
+Sorted and filter-only searches have no ranking branches and must still produce usable grouped results.
+
+Keep source-match information separate from optional display highlights. Return the contributing build
+and record identities, known matching fields or clauses where available, and text spans tied to the exact
+display string. Distinguish verified spans from best-effort spans internally, and permit an empty set.
+This lets Discord and the web share matching logic without passing rendered markup between them.
+
+Start with normalized literal occurrences of positive query terms in eligible fields. Preserve field
+constraints and boolean structure: do not highlight excluded terms or use the flattened ranking text as
+an explanation of the full query. Held records added only as context must not be reported as contributing
+matches. If displayed text differs from the indexed snapshot, recompute its highlights or omit them.
+
+PostgreSQL's [`similarity`](https://www.postgresql.org/docs/current/pgtrgm.html) returns a score rather than
+matched character positions. Keep trigram provenance, but leave word emphasis absent when there is no
+confident textual correspondence. Semantic ranking likewise needs no invented word-level explanation.
+Full-text [`ts_headline`](https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-HEADLINE)
+can help locate query words, but it highlights words even when their positions do not satisfy query
+restrictions; its output is not proof that a clause matched and is not safe to render as raw HTML.
+Evaluate richer full-text highlighting later, on returned results only. Grouping and pagination must work
+even when highlighting cannot explain a result.
+
 ## Implementation sequence after UX review
 
 1. Define a grouped search result containing a build identity, its matching record identities, and match
-   information for highlighting, plus a separate metadata result. Load held-record context for Builds and
-   Everything. Retain all holder identities and their display data rather than taking only
+   information with optional best-effort highlighting, plus a separate metadata result. Load held-record
+   context for Builds and Everything. Retain all holder identities and their display data rather than taking only
    `holder_build_ids[0]`. Apply build visibility rules to every holder.
 2. Implement grouping before totals and pagination in the shared search backend. Handle relevance,
    filter-only, and explicit-sort paths together. Deduplicating one fetched page cannot provide correct
@@ -74,8 +105,9 @@ context, even if those records did not cause the build to match; this enrichment
 5. Verify duplicate records across page boundaries, tied holders, direct-plus-record matches, metadata,
    holderless titles, visibility, version scopes, stable ordering, and long summaries. Check scope-specific
    headings, identical versus differing build titles, unmatched contextual titles, and normalized match
-   highlighting. Exercise the actual Discord layout at narrow widths and with enough records to overflow
-   the detail view.
+   highlighting. Cover omitted duplicate titles, fuzzy matches with no literal span, field-qualified and
+   negated terms, and results without ranking provenance. Exercise the actual Discord layout at narrow
+   widths and with enough records to overflow the detail view.
 
 ## Review gate
 
