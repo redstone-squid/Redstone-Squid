@@ -11,6 +11,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.ui import render_payload, text_node
 from squid.community.domain import WelcomeRelayDecision, WelcomeRelayPolicy
 from squid.settings.domain.runtime import RuntimeSettings
+from squid_i18n import Text, mention
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -68,7 +69,8 @@ class WelcomeRelay[BotT: squid.bot.app.RedstoneSquid](Cog):
             logger.warning("General channel %s is not messageable", channel_id)
             return
 
-        content = decision.system_content.replace(decision.matched_name, f"<@{decision.member_id}>")
+        # Text keeps the mention structured; a "<@id>" string would be escaped as literal text.
+        content = Text.join(mention(decision.member_id), decision.system_content.split(decision.matched_name))
         await send_to(
             general_channel,
             allowed_mentions=AllowedMentions(users=False, roles=False, everyone=False, replied_user=False),
