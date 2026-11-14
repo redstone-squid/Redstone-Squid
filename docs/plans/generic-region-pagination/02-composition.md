@@ -148,6 +148,25 @@ Convert the investigation probes into regression and conformance cases. Update a
 and the API sketch to the implemented names and behavior. Hand the shared candidate/evaluation
 model and its tested invariants to phase 3 for the full joint solver.
 
+## Remaining implementation tasks
+
+Finish this phase in the following reviewable pieces:
+
+1. Connect checked alternatives and localized text fragments to composition. Retain source identity
+   across nested groups, and carry declared effects and provenance through evaluation.
+2. Carry visible action and form bindings without invoking handlers. Enforce supported inherited
+   requirements and preserve application-owned page inputs without publishing state.
+3. Add an atomic extension contract with explicit constraints, resources, and effects. Exercise
+   rejection and independent validation without allowing hidden fitting.
+4. Expose `plan(..., composition=...)` as an explicit opt-in to fixed representation choices and
+   migrate a representative caller. Keep candidate rejection distinct from unsolvability; inventory
+   legacy routing and its removal phases. Automatic selection remains Phase 3 work.
+5. Run composition, conformance, affected frontend, and whole-project type checks, then update the
+   handoff and author documentation to reflect the actual migration boundary.
+
+The explicit opt-in boundary is an agreed migration decision. Production documents that do not
+opt in continue through their existing planners until the later migration phases.
+
 ## Current implementation boundary
 
 `planning/composition.py` now defines typed offers, occurrences, candidates, shared resources,
