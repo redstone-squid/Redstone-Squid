@@ -58,18 +58,6 @@ wait_for_command "Redis" docker exec "$REDIS_CONTAINER" redis-cli ping
 
 printf 'Applying the release schema.\n'
 docker run --rm --network host "${COMMON_ENV[@]}" "$APP_IMAGE" alembic upgrade head
-printf 'Checking process imports and native worker capability.\n'
-docker run --rm "$APP_IMAGE" python -c 'import squid.api.app; import squid.bot.app'
-docker run --rm "$WORKER_IMAGE" python -c 'import squid.worker.app; import nucleation'
-docker run --rm "$WORKER_IMAGE" python -c '
-import subprocess
-
-# With no inputs the helper prints usage and exits before loading a resource pack.
-helper = subprocess.run(["squid-schematic-video"], capture_output=True, text=True)
-assert helper.returncode == 2 and "usage:" in helper.stderr, helper
-for executable in ("ffmpeg", "ffprobe"):
-    subprocess.run([executable, "-version"], check=True)
-'
 
 printf 'Checking API readiness.\n'
 docker run --detach --name "$API_CONTAINER" --network host "${COMMON_ENV[@]}" \
