@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
+from functools import partial
 from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
@@ -9,9 +10,19 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.ui import tr, truncate_display_text
+from squid.builds.domain import Status
 from squid.builds.models import Build
-from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
-from squid_i18n import md_tr
+from squid.search.domain import (
+    BuildSearchHit,
+    RecordSearchHit,
+    SearchHit,
+    SearchPage,
+    SearchRequest,
+    SearchScope,
+    SearchText,
+)
+from squid_i18n import Text, md_tr, strong
+from squid_reactivity import untracked
 from squid_ui.sources import window_fingerprint
 
 if TYPE_CHECKING:
@@ -135,6 +146,148 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
         self._build_node = await self._render_build(build)
 
 
+class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
+    _show_records: bool = sl.state(False)
+    _holder_id: int | None = sl.state(None)
+
+    def __init__(
+        self,
+        hit: BuildSearchHit,
+        scope: SearchScope,
+        *,
+        load_build: BuildLoader | None,
+        render_build: BuildRenderer | None,
+    ) -> None:
+        self.hit = hit
+        self._load_build = load_build
+        self._render_build = render_build
+        self._records_label = (
+            tr(t"search-grouped-matching-records = Matching records")
+            if scope is SearchScope.RECORDS
+            else tr(t"search-grouped-records = Records")
+        )
+        self._records = sp.Browser(
+            sl.sources.list_source(hit.records),
+            key="search-records",
+            identity=lambda record: record.source_id,
+            label=lambda record: truncate_display_text(record.title, 80),
+            summary=lambda record: Text.join(
+                "\n",
+                (
+                    _highlighted(record.title_match or SearchText(record.title)),
+                    record.subtitle or record.version_scope,
+                ),
+            ),
+            detail=self._record_detail,
+            page_size=5,
+            title=self._records_label,
+        )
+
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
+    async def card(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        build_id = self._holder_id or int(self.hit.source_id)
+        if self._load_build is None or self._render_build is None:
+            return sl.section(sl.heading(self.hit.title), sl.paragraph(_detail_text(self.hit)))
+        build = await self._load_build(build_id)
+        if build is None or build.submission_status is not Status.CONFIRMED:
+            return sl.note(tr(t"build-search-build-unavailable = That build is no longer available."))
+        return await self._render_build(build)
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        if self._show_records and self._holder_id is None:
+            return (
+                self._records,
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"search-grouped-build-details = Build details"),
+                        self._back_to_build,
+                        key="search-build-details",
+                    ),
+                    key="search-build-detail-actions",
+                ),
+            )
+        state = self.card.status
+        if isinstance(state, sl.resources.Ready):
+            node = state.value
+        elif isinstance(state, sl.resources.Failed):
+            node = sl.stack(
+                sl.note(tr(t"build-search-build-unavailable = That build is no longer available.")),
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"bot-submission-search-view-retry = Retry"), self._retry, key="search-build-retry"
+                    ),
+                    key="search-build-retry-actions",
+                ),
+            )
+        else:
+            node = sl.note(tr(t"search-grouped-loading-build = Loading build…"))
+        if self._holder_id is not None:
+            return (
+                node,
+                sl.action_controls(
+                    sl.action_control(
+                        self._records_label,
+                        self._back_to_records,
+                        key="search-back-records",
+                    ),
+                    key="search-holder-actions",
+                ),
+            )
+        if self.hit.records:
+            return (
+                node,
+                sl.action_controls(
+                    sl.action_control(
+                        self._records_label,
+                        self._back_to_records,
+                        key="search-show-records",
+                    ),
+                    key="search-record-actions",
+                ),
+            )
+        return (node,)
+
+    def _record_detail(
+        self, record: RecordSearchHit
+    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        others = tuple(build_id for build_id in record.holder_build_ids if build_id != int(self.hit.source_id))
+        metrics = ", ".join(f"{key}: {value}" for key, value in record.metrics.items())
+        return sl.section(
+            sl.heading(record.title),
+            sl.paragraph(record.subtitle) if record.subtitle else None,
+            sl.note(record.version_scope.replace("_", " ")),
+            sl.paragraph(metrics) if metrics else None,
+            sl.note(tr(t"search-grouped-tied-holders = Tied holders")) if others else None,
+            sl.action_controls(
+                *(
+                    sl.action_control(
+                        tr(t"search-grouped-open-holder = View build #{build_id!s}"),
+                        partial(self._open_holder, build_id),
+                        key=f"search-holder-{build_id}",
+                    )
+                    for build_id in others
+                ),
+                key="search-tied-holders",
+            )
+            if others
+            else None,
+        )
+
+    async def _open_holder(self, build_id: int, _event: sl.ActionEvent) -> None:
+        self._holder_id = build_id
+
+    async def _back_to_records(self, _event: sl.ActionEvent) -> None:
+        self._holder_id = None
+        self._show_records = True
+
+    async def _back_to_build(self, _event: sl.ActionEvent) -> None:
+        self._show_records = False
+
+    async def _retry(self, _event: sl.ActionEvent) -> None:
+        self.card.invalidate()
+
+
 class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A resource-backed search workspace that ends when replaced or timed out."""
 
@@ -158,8 +311,8 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._source,
             key="search",
             identity=_hit_identity,
-            label=lambda hit: truncate_display_text(hit.title, 80),
-            summary=_result_description,
+            label=lambda hit: _result_label(hit, request.scope),
+            summary=lambda hit: _result_description(hit, request.scope),
             detail=self._detail,
             overview=self._overview,
             page_size=request.page_size,
@@ -206,7 +359,14 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             raise sl.errors.LayoutInvariantError(message)
         return current.loaded
 
-    def _detail(self, hit: SearchHit) -> _SearchDetail:
+    def _detail(self, hit: SearchHit) -> _SearchDetail | _GroupedBuildDetail:
+        if isinstance(hit, BuildSearchHit) and hit.grouped:
+            # The nested browser owns its state; reading it while constructing the
+            # detail must not make the outer browser recreate it on navigation.
+            with untracked():
+                return _GroupedBuildDetail(
+                    hit, self._source.base_request.scope, load_build=self._load_build, render_build=self._render_build
+                )
         return _SearchDetail(
             hit,
             load_build=self._load_build,
@@ -216,10 +376,17 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
     def _overview(
         self, loaded: sl.sources.LoadedWindow[SearchHit]
     ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | tuple[()]:
-        warnings = self._source.page_for(loaded).warnings
-        if not warnings:
-            return ()
-        return sl.note("\n".join(f"⚠ {item}" for item in warnings))
+        page = self._source.page_for(loaded)
+        notes: list[sl.TextLike] = []
+        if self.request.group_by_build:
+            total = page.total
+            notes.append(
+                tr(t"search-grouped-build-count = {total} builds")
+                if self.request.scope in {SearchScope.BUILDS, SearchScope.RECORDS}
+                else tr(t"search-grouped-result-count = {total} results")
+            )
+        notes.extend(f"⚠ {item}" for item in page.warnings)
+        return sl.note(Text.join("\n", notes)) if notes else ()
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
@@ -252,14 +419,55 @@ def _metadata_label(kind: str) -> sl.TextLike:
             return kind
 
 
-def _result_description(hit: SearchHit) -> sl.TextLike:
+def _result_title(hit: SearchHit, scope: SearchScope) -> SearchText:
+    if isinstance(hit, BuildSearchHit) and hit.grouped and scope is SearchScope.RECORDS and hit.records:
+        record = hit.records[0]
+        return record.title_match or SearchText(record.title)
+    return hit.title_match or SearchText(hit.title)
+
+
+def _result_label(hit: SearchHit, scope: SearchScope) -> str:
+    title = _result_title(hit, scope).text
+    if isinstance(hit, BuildSearchHit) and hit.grouped:
+        # Tied holders can share the same heading; keep their picker labels distinct.
+        suffix = f" · #{hit.source_id}"
+        return truncate_display_text(title, 80 - len(suffix)) + suffix
+    return truncate_display_text(title, 80)
+
+
+def _highlighted(value: SearchText) -> Text:
+    parts: list[sl.TextLike] = []
+    position = 0
+    for start, end in value.spans:
+        parts.extend((value.text[position:start], strong(value.text[start:end])))
+        position = end
+    parts.append(value.text[position:])
+    return Text.join("", parts)
+
+
+def _result_description(hit: SearchHit, scope: SearchScope = SearchScope.RECORDS) -> sl.TextLike:
+    if isinstance(hit, BuildSearchHit) and hit.grouped:
+        title = _result_title(hit, scope)
+        build_id = hit.source_id
+        identity = tr(t"search-grouped-build-identity = Build #{build_id}")
+        if scope is SearchScope.RECORDS and hit.title != title.text:
+            identity += " · " + _highlighted(hit.title_match or SearchText(hit.title))
+        records = hit.records[1:] if scope is SearchScope.RECORDS else hit.records
+        if scope in {SearchScope.BUILDS, SearchScope.ALL} and len(records) == 1 and records[0].title == title.text:
+            records = ()
+        lines: list[sl.TextLike] = [_highlighted(title), identity]
+        lines.extend(_highlighted(record.title_match or SearchText(record.title)) for record in records[:2])
+        if len(records) > 2:
+            count = len(records) - 2
+            lines.append(tr(t"search-grouped-more-records = +{count} more records"))
+        return Text.join("\n", lines)
     if isinstance(hit, RecordSearchHit):
         build_title = hit.build_title
         return sl.md(t"**{hit.title}** — {build_title}")
     if isinstance(hit, BuildSearchHit):
         status = hit.status
         return sl.md(t"**{hit.title}** · {status}")
-    return _metadata_label(hit.metadata_kind)
+    return Text.join("\n", (_highlighted(hit.title_match or SearchText(hit.title)), _metadata_label(hit.metadata_kind)))
 
 
 def _detail_text(hit: SearchHit) -> sl.TextLike:

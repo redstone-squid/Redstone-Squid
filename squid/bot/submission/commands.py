@@ -158,6 +158,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             scope=search_scope,
             mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
             sort=SearchSort.parse(sort),
+            group_by_build=True,
         )
         page = await self.search.search(request)
         return SearchScreen(

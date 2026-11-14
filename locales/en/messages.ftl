@@ -1312,68 +1312,68 @@ bot-submission-schematics-signs = **Signs**: { $text }
 # squid/bot/submission/schematics.py:108
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/commands.py:179
+# squid/bot/submission/commands.py:180
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/submission/search_view.py:272
+# squid/bot/submission/search_view.py:471
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Base title**
     { $base_title } · { $version_scope }
 
-# squid/bot/submission/search_view.py:246
+# squid/bot/submission/search_view.py:413
 bot-submission-search-view-creator = Creator
 
-# squid/bot/submission/search_view.py:306
+# squid/bot/submission/search_view.py:505
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/submission/search_view.py:283
+# squid/bot/submission/search_view.py:482
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/submission/search_view.py:242
+# squid/bot/submission/search_view.py:409
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/submission/search_view.py:240
+# squid/bot/submission/search_view.py:407
 bot-submission-search-view-restriction = Restriction
 
-# squid/bot/submission/search_view.py:171
+# squid/bot/submission/search_view.py:218, squid/bot/submission/search_view.py:324
 bot-submission-search-view-retry = Retry
 
-# squid/bot/submission/search_view.py:166
+# squid/bot/submission/search_view.py:319
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/submission/search_view.py:244
+# squid/bot/submission/search_view.py:411
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/submission/search_view.py:295
+# squid/bot/submission/search_view.py:494
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/submission/search_view.py:250
+# squid/bot/submission/search_view.py:417
 bot-submission-search-view-tag = Tag
 
-# squid/bot/submission/search_view.py:315
+# squid/bot/submission/search_view.py:514
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/submission/search_view.py:323
+# squid/bot/submission/search_view.py:522
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/submission/search_view.py:248
+# squid/bot/submission/search_view.py:415
 bot-submission-search-view-version = Version
 
-# squid/bot/submission/search_view.py:114
+# squid/bot/submission/search_view.py:125
 bot-submission-search-view-view-build = View build
 
 # squid/bot/submission/submit.py:432
@@ -2003,19 +2003,19 @@ build-schematic-tools-hide = Hide schematic tools
 # squid/bot/submission/build_browse.py:293
 build-schematic-tools-show = Schematic tools
 
-# squid/bot/submission/search_view.py:129, squid/bot/submission/search_view.py:133
+# squid/bot/submission/search_view.py:140, squid/bot/submission/search_view.py:144, squid/bot/submission/search_view.py:193, squid/bot/submission/search_view.py:215
 build-search-build-unavailable = That build is no longer available.
 
-# squid/bot/submission/search_view.py:170
+# squid/bot/submission/search_view.py:323
 build-search-load-failed = Could not load search results.
 
-# squid/bot/submission/search_view.py:169
+# squid/bot/submission/search_view.py:322
 build-search-loading = Loading search results…
 
 # squid/bot/submission/commands.py:120
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
-# squid/bot/submission/search_view.py:167
+# squid/bot/submission/search_view.py:320
 build-search-no-results = No results match this query.
 
 # squid/bot/submission/commands.py:130
@@ -2216,13 +2216,13 @@ command-account-user-name = user
 # squid/bot/admin.py:102
 command-archive-message-name = Archive Message
 
-# squid/bot/submission/commands.py:178
+# squid/bot/submission/commands.py:179
 command-build-browse-build-id-name = id
 
-# squid/bot/submission/commands.py:175
+# squid/bot/submission/commands.py:176
 command-build-browse-help = Browse builds and record holders.
 
-# squid/bot/submission/commands.py:174
+# squid/bot/submission/commands.py:175
 command-build-browse-name = browse
 
 # squid/bot/submission/submit.py:316
@@ -2384,13 +2384,13 @@ command-poll-name = poll
 # squid/bot/submission/submit.py:411
 command-recalculate-build-name = Scan Build Message
 
-# squid/bot/submission/commands.py:190
+# squid/bot/submission/commands.py:191
 command-records-browse-help = Browse records and their holder builds
 
-# squid/bot/submission/commands.py:189
+# squid/bot/submission/commands.py:190
 command-records-name = records
 
-# squid/bot/submission/commands.py:193
+# squid/bot/submission/commands.py:194
 command-records-query-name = query
 
 # squid/bot/recount.py:54
@@ -4215,7 +4215,7 @@ record-browser-smallest = Smallest
 # squid/bot/submission/build_browse.py:592
 record-filter-hint = Toggle any record types; none selected means all types. Search keeps your selection.
 
-# squid/bot/submission/commands.py:194
+# squid/bot/submission/commands.py:195
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
 # squid/records/application/services.py:585, squid/records/application/services.py:616
@@ -4564,7 +4564,7 @@ search-align-increments = { $field_name } must align to increments of { $step }
 # squid/search/domain/query.py:81
 search-boolean-minimum-operands = Boolean expressions require at least two operands
 
-# squid/search/application/ranking.py:80
+# squid/search/application/ranking.py:81
 search-branch-limit-positive = branch_limit must be positive
 
 # squid/search/application/fields.py:63
@@ -4606,7 +4606,37 @@ search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 # squid/search/application/fields.py:96
 search-expects-number = { $field_name } expects a number
 
-# squid/search/application/ranking.py:78
+# squid/bot/submission/search_view.py:384
+search-grouped-build-count = { $total } builds
+
+# squid/bot/submission/search_view.py:203
+search-grouped-build-details = Build details
+
+# squid/bot/submission/search_view.py:443
+search-grouped-build-identity = Build #{ $build_id }
+
+# squid/bot/submission/search_view.py:224
+search-grouped-loading-build = Loading build…
+
+# squid/bot/submission/search_view.py:165
+search-grouped-matching-records = Matching records
+
+# squid/bot/submission/search_view.py:453
+search-grouped-more-records = +{ $count } more records
+
+# squid/bot/submission/search_view.py:265
+search-grouped-open-holder = View build #{ $build_id }
+
+# squid/bot/submission/search_view.py:167
+search-grouped-records = Records
+
+# squid/bot/submission/search_view.py:386
+search-grouped-result-count = { $total } results
+
+# squid/bot/submission/search_view.py:261
+search-grouped-tied-holders = Tied holders
+
+# squid/search/application/ranking.py:79
 search-k-positive = k must be positive
 
 # squid/bot/submission/search_help.py:138
@@ -4669,10 +4699,10 @@ search-reference-try = Try this search
 # squid/search/application/fields.py:179
 search-search-numbers-finite = Search numbers must be finite
 
-# squid/search/infrastructure/repository.py:88
+# squid/search/infrastructure/repository.py:86
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
-# squid/search/application/ranking.py:87
+# squid/search/application/ranking.py:89
 search-weight-negative = weight for { $branch_name } cannot be negative
 
 # squid/bot/settings_view.py:196
