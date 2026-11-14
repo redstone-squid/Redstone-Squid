@@ -12,7 +12,7 @@ from squid.config import _INFRASTRUCTURE_ENVIRONMENT_KEYS, _known_environment_ke
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
-COMPOSE_FILES = ("compose.yml", "compose.override.yml", "deploy/compose.production.yml")
+COMPOSE_FILES = ("compose.yml", "compose.override.yml", "deploy/compose.production.yml", "deploy/compose.edge.yml")
 
 
 def _interpolated_squid_keys(text: str) -> set[str]:

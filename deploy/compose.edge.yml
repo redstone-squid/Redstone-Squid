@@ -1,0 +1,43 @@
+# Application services exposed through the host's shared Caddy gateway.
+# Paths are relative to compose.yml, the first file in COMPOSE_FILE.
+services:
+  api:
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases:
+          - redstone-api
+
+  web:
+    build:
+      context: ./web
+    image: ${WEB_IMAGE:-redstone-squid-web:local}
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-${SITE_URL:?SITE_URL must be the public catalogue origin}}
+      SITE_URL: ${SITE_URL:?SITE_URL must be the public catalogue origin}
+      DISCORD_COMMUNITY_URL: ${DISCORD_COMMUNITY_URL:-https://discord.gg/redstone}
+      BOT_INVITE_URL: ${BOT_INVITE_URL:-https://discord.com/oauth2/authorize?client_id=528946065668308992&scope=bot%20applications.commands}
+    networks:
+      edge:
+        aliases:
+          - redstone-web
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4321/about').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  pgweb:
+    profiles: !reset []
+
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-edge}

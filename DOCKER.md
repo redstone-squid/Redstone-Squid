@@ -50,6 +50,41 @@ docker build --build-arg WITH_MEDIA=1 --build-arg WITH_SCHEMATICS=1 -t redstone-
 See [Media normalization deployment](docs/media-normalization.md) before setting `SQUID_MEDIA_ENABLED=true`; it
 documents the required paths, shared object storage, scratch-space arithmetic, and subprocess/container limits.
 
+## Shared gateway hosts
+
+The app repository owns the API, bot, worker, and website. Host infrastructure owns
+Caddy, TLS, DNS, and the shared external `edge` network. Caddy routes API paths to
+`redstone-api:8000` and catalogue pages to `redstone-web:4321`.
+
+Set these values in this checkout's ignored `.env` once:
+
+```dotenv
+COMPOSE_PROJECT_NAME=redstone-squid
+COMPOSE_FILE=compose.yml:compose.override.yml:deploy/compose.edge.yml
+SITE_URL=https://squid.your-domain.com
+```
+
+If this host needs `compose.render.yml`, insert it before `deploy/compose.edge.yml`
+in `COMPOSE_FILE`. Create the shared network with `docker network create edge` if
+the host infrastructure has not already created it. Then run:
+
+```sh
+docker compose up -d --build --wait
+```
+
+The edge configuration starts the website and loopback-only pgweb, connects the API
+to Caddy, and removes the API's host port. Website settings come from the same
+`.env`; `API_BASE_URL` defaults to `SITE_URL` for same-origin browser authentication.
+See `.env.example` for optional website and network settings.
+
+Compose reads `COMPOSE_FILE` from `.env` for ordinary `up`, `logs`, and `ps`
+commands. Explicit `-f` arguments replace that selection, so use plain commands on
+configured hosts. See [Docker's Compose environment reference](https://docs.docker.com/compose/how-tos/environment-variables/envvars/#compose_file).
+
+`scripts/deploy.sh` also preserves this file selection when appending its immutable
+image configuration. Release cutover and rollback target the API, bot, worker, and
+Redis; rebuild the website separately with `docker compose up -d --build --wait web`.
+
 ## Updating
 
 To update the bot:

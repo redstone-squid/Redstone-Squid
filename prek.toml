@@ -6,7 +6,8 @@ repo = "builtin"
 hooks = [
     { id = "check-merge-conflict" },
     { id = "check-toml" },
-    { id = "check-yaml" },
+    # Compose validates its own !reset tags in the deployment tests.
+    { id = "check-yaml", exclude = "^deploy/compose\\.edge\\.yml$" },
     { id = "end-of-file-fixer", exclude = "^(alembic/sql/|schema/|schema_dump\\.sql$|tests/fuzz/corpus/)" },
     { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"], exclude = "^(alembic/sql/|schema/|schema_dump\\.sql$|tests/fuzz/corpus/)" },
 ]
