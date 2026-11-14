@@ -133,6 +133,12 @@ def test_unsupported_or_ambiguous_mapping_is_reported(opening: dict[str, object]
     assert any(d.code == "ambiguous_mapping" for d in result.diagnostics)
 
 
+def test_omitted_opening_depth_means_one_block() -> None:
+    normalized = normalize_expansion(family(opening_depth=None))
+    assert evaluate_expansion(normalized, (6, 3, 1)).configurations[0].status is PointStatus.SUPPORTED
+    assert evaluate_expansion(normalized, (6, 3, 2)).configurations[0].status is PointStatus.OUTSIDE_DOMAIN
+
+
 def test_branch_without_an_opening_expression_makes_no_claim() -> None:
     result = evaluate_expansion(normalize_expansion(family(opening_width=None)), (6, 3, 1)).configurations[0]
     assert result.status is PointStatus.UNMAPPED

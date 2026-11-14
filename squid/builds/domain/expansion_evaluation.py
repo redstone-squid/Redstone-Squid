@@ -30,7 +30,7 @@ class PointStatus(StrEnum):
 
     UNRESOLVED means the source makes a claim that does not settle this size:
     the size lies beyond an unknown bound, or the opening expressions use syntax
-    the normalizer cannot invert. UNMAPPED means an opening expression is absent,
+    the normalizer cannot invert. UNMAPPED means the opening width or height is absent,
     so the source never says which sizes the configuration has. An unresolved
     configuration might hold a record and blocks an official result; an unmapped
     one makes no claim and cannot compete anywhere.
@@ -62,8 +62,8 @@ class NormalizedBranch:
     index: int
     source: ExpansionBranch
     opening: tuple[Formula, ...]
-    # False when the source omits an opening expression, as opposed to stating
-    # one the normalizer cannot use.
+    # False when the source omits the opening width or height, as opposed to
+    # stating one the normalizer cannot use. An omitted depth means one block.
     opening_stated: bool
     inverse: tuple[tuple[Fraction, ...], ...] | None
     domain: Predicate | None
@@ -180,10 +180,16 @@ def _normalize_branch(parser: ExpressionParser, source: ExpansionBranch, index: 
 
     opening = tuple(
         parsed
-        for field in ("opening_width", "opening_height", "opening_depth")
+        for field in ("opening_width", "opening_height")
         if (parsed := formula(getattr(source, field), field)) is not None
     )
-    opening_stated = None not in (source.opening_width, source.opening_height, source.opening_depth)
+    if source.opening_depth is None:
+        # Sizes written as "n x 3" leave depth out. Read them as one block deep,
+        # as fixed doors without a stored opening depth are.
+        opening += (Polynomial.constant(parser.variables, Fraction(1)),)
+    elif (depth := formula(source.opening_depth, "opening_depth")) is not None:
+        opening += (depth,)
+    opening_stated = source.opening_width is not None and source.opening_height is not None
     inverse = None
     try:
         inverse = _inverse(opening, len(parser.variables))
@@ -273,7 +279,7 @@ def evaluate_expansion(expansion: NormalizedExpansion, opening: tuple[int, int, 
     """Evaluate each branch at a positive integer opening, without enumerating sizes.
 
     Unknown domains produce unresolved membership. Outside branches do not
-    compete, and neither do unmapped ones, which lack an opening expression. Supported branches may still have unknown volume or
+    compete, and neither do unmapped ones, which lack an opening width or height. Supported branches may still have unknown volume or
     timings; callers must inspect metrics and diagnostics before ranking configurations.
     """
     if len(opening) != 3 or any(
