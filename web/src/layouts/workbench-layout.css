@@ -51,7 +51,7 @@
   .sq-sidebar-note {
     margin-top: var(--space-8);
     color: var(--text-muted);
-    font: 0.75rem/1.8 var(--font-mono);
+    font: 0.75rem/1.8 var(--font-sans);
   }
   .sq-main {
     width: 100%;

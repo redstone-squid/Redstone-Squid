@@ -32,7 +32,6 @@
     border-radius: var(--radius-sm);
     color: var(--on-accent);
     background: var(--accent);
-    font-family: var(--font-mono);
   }
   .catalogue-nav nav {
     display: flex;

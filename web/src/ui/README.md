@@ -31,6 +31,10 @@ UI code knows neither locale catalogs nor API routes. Guided forms submit named
 fields with `mode=guided`, and the server composes their query. Mode links also
 work without JavaScript; hydrated switches retain both drafts and sort selection.
 
+Use sentence case and the sans-serif font for headings, labels, and badges.
+Do not use all-caps styling or widely spaced monospace labels. Reserve monospace
+for code and technical values such as dimensions and timings.
+
 ## Localization
 
 Keep product copy factual and concise; avoid slogans and promotional labels.

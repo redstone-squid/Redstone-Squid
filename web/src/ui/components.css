@@ -11,8 +11,7 @@
   }
   .sq-kicker {
     color: var(--text-muted);
-    font: 600 0.6875rem var(--font-mono);
-    letter-spacing: 0.12em;
+    font: 600 0.875rem var(--font-sans);
     margin-bottom: var(--space-3);
   }
   .sq-panel {

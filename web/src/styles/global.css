@@ -155,7 +155,6 @@ textarea {
   border: 1px solid var(--copper);
   background: linear-gradient(135deg, var(--redstone-dark), var(--deepslate-800) 60%);
   box-shadow: 3px 3px 0 var(--copper-dark);
-  font-family: var(--mono);
   font-size: 0.72rem;
   font-weight: 600;
 }
@@ -172,10 +171,7 @@ textarea {
 .brand-copy small {
   margin-top: 0.24rem;
   color: var(--ink-muted);
-  font-family: var(--mono);
   font-size: 0.62rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .main-nav {
@@ -205,7 +201,6 @@ textarea {
 .language-link {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  font-family: var(--mono);
 }
 
 main {
@@ -250,11 +245,8 @@ main {
 .result-kind,
 .kicker {
   color: var(--copper);
-  font-family: var(--mono);
   font-size: 0.73rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
 h1,
@@ -380,7 +372,6 @@ h3 {
   place-items: center;
   padding: 1rem;
   color: var(--ink-faint);
-  font-family: var(--mono);
   font-size: 0.75rem;
   text-align: center;
 }
@@ -430,7 +421,6 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   color: var(--ink-muted);
-  font-family: var(--mono);
   font-size: 0.72rem;
   gap: 0.45rem 0.8rem;
 }
@@ -461,7 +451,6 @@ h3 {
 .record-card .holder-count {
   margin-top: 1.2rem;
   color: var(--success);
-  font-family: var(--mono);
   font-size: 0.75rem;
 }
 
@@ -488,7 +477,6 @@ h3 {
   border-radius: var(--radius-sm);
   color: var(--ink);
   background: var(--deepslate-800);
-  font-family: var(--mono);
   font-size: 0.77rem;
   font-weight: 600;
   text-decoration: none;
@@ -527,10 +515,7 @@ h3 {
 .field label,
 .field-label {
   color: var(--ink-muted);
-  font-family: var(--mono);
   font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .field input,
@@ -623,8 +608,6 @@ textarea:disabled {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .cli-device-preview dd {
@@ -661,7 +644,6 @@ textarea:disabled {
 .submission-limit,
 .submission-status {
   color: var(--ink-muted);
-  font-family: var(--mono);
   font-size: 0.72rem;
 }
 
@@ -690,10 +672,7 @@ textarea:disabled {
 .submission-field label,
 .submission-field legend {
   color: var(--ink-muted);
-  font-family: var(--mono);
   font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .submission-field label small,
@@ -822,14 +801,12 @@ textarea:disabled {
 .submission-media-list small {
   flex-basis: 100%;
   color: var(--ink-faint);
-  font-family: var(--mono);
 }
 
 .submission-status {
   padding: 0.15rem 0.4rem;
   border: 1px solid var(--line-strong);
   border-radius: 99px;
-  text-transform: uppercase;
 }
 
 .submission-status--completed {
@@ -908,7 +885,6 @@ textarea:disabled {
   border-radius: 99px;
   color: var(--copper-soft);
   background: rgb(112 67 40 / 16%);
-  font-family: var(--mono);
   font-size: 0.7rem;
 }
 
@@ -963,9 +939,7 @@ textarea:disabled {
 .spec-list dt {
   margin-bottom: 0.3rem;
   color: var(--ink-muted);
-  font-family: var(--mono);
   font-size: 0.69rem;
-  text-transform: uppercase;
 }
 
 .spec-list dd {
@@ -1012,7 +986,6 @@ textarea:disabled {
 
 .gallery-status {
   color: var(--ink-muted);
-  font-family: var(--mono);
   font-size: 0.72rem;
 }
 
@@ -1049,7 +1022,6 @@ textarea:disabled {
 
 .error-code {
   color: var(--danger);
-  font-family: var(--mono);
 }
 
 .error-detail {
