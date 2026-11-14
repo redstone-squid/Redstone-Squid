@@ -1492,7 +1492,7 @@ activation normally; rerendering does not restart it. Render initial/loading sta
 setup completes. Data required before first delivery belongs in `on_load()` or an atomic resource.
 
 The diagnostics report browser is a production example in
-`squid/bot/diagnostics_view.py`. Its update panel owns `ErrorReportRefresh`, which awaits an
+`squid/bot/diagnostics/screen.py`. Its update panel owns `ErrorReportRefresh`, which awaits an
 initial comparison before signalling readiness and then schedules periodic checks. The notice
 and refresh controls inject the same monitor. Its resource is declared directly on the service, and
 each child observes that resource directly. The same observation works for a resource declared

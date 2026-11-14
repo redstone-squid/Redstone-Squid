@@ -122,7 +122,7 @@ and inspects `row.id`, raising `AttributeError: 'ServerSetting' object has no at
 Advanced-Alchemy wraps and re-raises as `advanced_alchemy.exceptions.RepositoryError: There was an error during data processing`.
 
 Caught in production on 2026-08-19 04:30:30 UTC (reference `e6125caaa758`) when changing a setting channel
-via `SettingChannelSelect` (`squid/bot/settings_view.py:363`). Any update to existing server settings or
+via `SettingChannelSelect` (`squid/bot/settings/screen.py:363`). Any update to existing server settings or
 locale configuration fails. Fix by setting `id_attribute = "server_id"` on `_ServerSettingModelRepository`.
 
 ## `/search query:...` autocomplete only suggests build search syntax and is unaware of `scope`

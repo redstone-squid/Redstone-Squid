@@ -11,9 +11,9 @@ from squid.bot.accounts.cog import VerifyCog
 from squid.bot.admin import Admin
 from squid.bot.diagnostics.cog import Diagnostics
 from squid.bot.give_redstoner import GiveRedstoner
-from squid.bot.layout_showcase import LayoutShowcaseCog
 from squid.bot.permissions import PermissionCog
 from squid.bot.settings.cog import SettingsCog
+from squid.bot.showcase.cog import LayoutShowcaseCog
 from squid.bot.starboard import StarboardCog
 from squid.bot.submission.commands import BuildCommands
 from squid.bot.version_tracking import VersionTracker

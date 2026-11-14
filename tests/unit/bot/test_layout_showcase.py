@@ -8,7 +8,7 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.layout_showcase import LayoutShowcaseCog
+from squid.bot.showcase.cog import LayoutShowcaseCog
 from squid_ui_discord.testing import ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 

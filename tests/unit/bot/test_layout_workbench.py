@@ -8,7 +8,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.layout_workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
+from squid.bot.showcase.workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
 from squid_i18n import source_text
 from squid_reactivity import transaction
 from squid_replication import LoroBackend, Replica
@@ -127,7 +127,7 @@ async def test_inspector_captures_committed_report_and_refreshes() -> None:
         inspection = source_text(preview.inspection)
         assert "oversized" in inspection
         assert any(code in inspection for code in codes)
-        assert "`squid/bot/layout_workbench.py`" in inspection
+        assert "`squid/bot/showcase/workbench.py`" in inspection
         assert_within_limits(commit_render(ui.root))
     async with sd.testing.stage(editor, owner=object()) as ui:
         await ui.press("small")

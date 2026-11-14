@@ -11,7 +11,7 @@ import anyio
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_history import history_controls
-from squid.bot.layout_inspector import InspectablePanel
+from squid.bot.showcase.inspector import InspectablePanel
 from squid.bot.ui import tr
 from squid_i18n import md_tr
 from squid_reactivity import transaction

@@ -138,8 +138,8 @@ async def test_the_error_browser_is_app_only(loaded_bot: commands.Bot) -> None:
 
 
 def test_layout_showcase_is_development_only() -> None:
-    assert "squid.bot.layout_showcase" not in EXTENSIONS
-    assert "squid.bot.layout_showcase" in DEVELOPMENT_EXTENSIONS
+    assert "squid.bot.showcase.cog" not in EXTENSIONS
+    assert "squid.bot.showcase.cog" in DEVELOPMENT_EXTENSIONS
 
 
 async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands.Bot) -> None:

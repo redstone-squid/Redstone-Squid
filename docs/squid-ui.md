@@ -56,4 +56,4 @@ owner-controlled reviewer panel. The host closes the room and its attached panel
 
 Both apps use disposable in-memory data. **Inspect** captures application state and the
 latest committed layout report; refresh it after an action to compare. Start reading the
-examples in `squid/bot/layout_workbench.py` and `squid/bot/layout_review.py`.
+examples in `squid/bot/showcase/workbench.py` and `squid/bot/showcase/review.py`.

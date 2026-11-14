@@ -93,7 +93,7 @@ EXTENSIONS = (
 )
 """Production extensions in load order. Tests load this same set to detect registration conflicts."""
 
-DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.layout_showcase")
+DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.showcase.cog")
 """Additional extensions loaded only in development mode."""
 
 

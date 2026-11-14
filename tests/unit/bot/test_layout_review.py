@@ -1,7 +1,7 @@
 """Review histories must never undo another seat's contribution."""
 
 import squid_ui as sl
-from squid.bot.layout_review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
+from squid.bot.showcase.review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner
 from squid_ui_discord.testing import (
     assert_within_limits,

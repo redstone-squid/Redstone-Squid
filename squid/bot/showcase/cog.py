@@ -8,8 +8,8 @@ from discord.ext import commands
 from discord.ext.commands import Context
 
 import squid_ui_discord as sd
-from squid.bot.layout_review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
-from squid.bot.layout_workbench import BuildDraft, BuildPreview, Workbench
+from squid.bot.showcase.review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
+from squid.bot.showcase.workbench import BuildDraft, BuildPreview, Workbench
 from squid_i18n import tr
 from squid_ui_discord.i18n import to_locale_str
 

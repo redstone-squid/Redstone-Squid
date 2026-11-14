@@ -5,8 +5,8 @@ from typing import Literal, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.layout_inspector import InspectablePanel
-from squid.bot.layout_workbench import history_outcome
+from squid.bot.showcase.inspector import InspectablePanel
+from squid.bot.showcase.workbench import history_outcome
 from squid.bot.ui import tr
 
 
