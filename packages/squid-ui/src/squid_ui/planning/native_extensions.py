@@ -26,8 +26,8 @@ class NativeComposition:
     ``measure`` validates the prepared scene payload and native resource, then
     returns its additive cost. Row and accessory declarations promise one legal
     widget in that slot. Shared resources are declared attachments; the planner
-    adds the widget's own renderer resource separately. Hidden controls need
-    typed realization rules instead, so their bindings can be checked.
+    adds the widget's own renderer resource separately. Native callbacks remain
+    on that resource; Squid-managed bindings need typed control offers.
     """
 
     contract: AtomicContract

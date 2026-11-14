@@ -9,7 +9,8 @@ import discord
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from squid_ui.errors import LayoutInvariantError
+from squid_ui import scene
+from squid_ui.errors import DrawInvariantError, LayoutInvariantError
 from squid_ui.extensions import ExtensionKind
 from squid_ui.forms import FormSpec
 from squid_ui.planning.adapter import (
@@ -18,11 +19,16 @@ from squid_ui.planning.adapter import (
     ExtensionAdapter,
     PreparedExtension,
 )
+from squid_ui.planning.composition import AtomicContract, PlanningContext, ResourceIdentity, SharedUse
+from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
+from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import AnyTarget
+from squid_ui.primitives.nodes import RawItem
 from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.text import Localization
 from squid_ui_discord.form_planning import DiscordFormPlan, plan_form
-from squid_ui_discord.inspection import cost
+from squid_ui_discord.inspection import _walk, audit_items, cost
 
 type ItemFactory = Callable[[], discord.ui.Item[Any]]
 
@@ -46,6 +52,74 @@ class _DiscordItemExtension:
             message = "discord.item factory did not return a discord.ui.Item"
             raise LayoutInvariantError(message)
         return PreparedExtension(cost(item), {"native_kind": type(item).__name__}, item)
+
+    def compose(self, payload: ItemFactory, *, context: PlanningContext) -> RawItem:
+        prepared = self.prepare(payload)
+        item = prepared.resource
+        context.work.consume(1 + prepared.cost.get(Axis.COMPONENTS))
+        placements: frozenset[NativePlacement] = (
+            frozenset({"root"})
+            if isinstance(item, discord.ui.Container)
+            else frozenset({"row", "accessory"})
+            if isinstance(item, discord.ui.Button)
+            else frozenset({"accessory"})
+            if isinstance(item, discord.ui.Thumbnail)
+            else frozenset({"root", "panel"})
+        )
+        text = []
+        assets = {}
+        declared = {asset.name: asset for asset in context.assets}
+        for child, path in _walk((item,)):
+            if isinstance(child, discord.ui.Container) and len(path) > 1:
+                message = "native Components V2 containers cannot nest"
+                raise LayoutInvariantError(message)
+            if isinstance(child, discord.ui.TextDisplay):
+                text.append(child.content)
+            urls = (
+                (child.media.url,)
+                if isinstance(child, discord.ui.File | discord.ui.Thumbnail)
+                else tuple(entry.media.url for entry in child.items)
+                if isinstance(child, discord.ui.MediaGallery)
+                else ()
+            )
+            for url in urls:
+                if url.startswith("attachment://"):
+                    name = url.removeprefix("attachment://")
+                    if name not in declared:
+                        message = f"native attachment {name!r} must be declared in the document"
+                        raise LayoutInvariantError(message)
+                    asset = declared[name]
+                    assets[asset.key] = asset
+        uses = tuple(
+            SharedUse(ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1}))
+            for asset in assets.values()
+        )
+        return RawItem(
+            lambda: item,
+            text_cost=prepared.cost.get(Axis.DISPLAY_TEXT),
+            component_cost=prepared.cost.get(Axis.COMPONENTS),
+            kind=DISCORD_ITEM.name,
+            version=1,
+            payload=prepared.scene_payload,
+            composition=NativeComposition(
+                AtomicContract(prepared.cost, {use.identity: use.cost for use in uses}),
+                _measure_native_item,
+                placements,
+                tuple(text),
+                uses,
+            ),
+        )
+
+
+def _measure_native_item(node: scene.Extension, resource: object, context: PlanningContext) -> ResourceCost:
+    if not isinstance(resource, discord.ui.Item) or node.payload.get("native_kind") != type(resource).__name__:
+        message = "native item disagrees with its declared extension payload"
+        raise DrawInvariantError(message)
+    limits = context.limits if isinstance(context.limits, V2Limits) else V2Limits()
+    audit_items((resource,), limits=limits).raise_if_invalid()
+    measured = cost(resource)
+    context.work.consume(1 + measured.get(Axis.COMPONENTS))
+    return measured
 
 
 DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(AdapterCapability)

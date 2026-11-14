@@ -78,6 +78,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,
         extensions=request.target.extensions,
+        limits=request.target.reserve(request.reservation).limits,
     )
 
 

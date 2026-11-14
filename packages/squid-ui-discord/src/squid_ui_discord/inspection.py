@@ -336,12 +336,19 @@ def audit(
     limits: V2Limits = LIMITS,
 ) -> AuditReport:
     """Report the structural and size violations covered by this view audit without repairing them."""
+    return audit_items(view.children, attachments=attachments, limits=limits)
+
+
+def audit_items(
+    items: Sequence[discord.ui.Item[Any]], *, attachments: int = 0, limits: V2Limits = LIMITS
+) -> AuditReport:
+    """Audit detached native items without attaching them to a temporary view."""
     violations: list[Violation] = []
     text_total = 0
     seen_ids: dict[str, Path] = {}
     components = 0
 
-    for item, path in _walk(view.children):
+    for item, path in _walk(items):
         components += 1
         _audit_custom_id(item, path, limits.components, seen_ids, violations)
         match item:

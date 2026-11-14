@@ -35,7 +35,7 @@ from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Paginate
 from squid_ui.rosters import RosterEntry, RosterSlot
 from squid_ui.target_types import Renderable
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 
 
 class UnsupportedSemanticError(LayoutInvariantError):
@@ -770,6 +770,8 @@ def source_text[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, Con
             | primitive.Code()
         ):
             return value.content
+        case primitive.Lines(overflow=Alts()):
+            return Text.join(value.join, (line.primary if isinstance(line, Alt) else line for line in value.lines))
         case sem.Column():
             return value.heading
         case _:

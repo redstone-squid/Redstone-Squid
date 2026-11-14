@@ -17,7 +17,7 @@ from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.navigation import PagerNav
-from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLimits
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantics import SemanticGraph, SemanticValue, SourceScope, budget_floor
 from squid_ui.presentation import PresentationState
@@ -313,6 +313,7 @@ class PlanningContext:
     escape_text: Callable[[str], str] | None = None
     presentation: PresentationState = field(default_factory=PresentationState)
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
+    limits: TargetLimits | None = None
 
 
 @dataclass(frozen=True, slots=True)

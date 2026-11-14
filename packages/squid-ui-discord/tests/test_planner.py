@@ -309,8 +309,8 @@ def test_native_nested_component_cost_can_make_a_document_unsolvable() -> None:
         fallback=Text("fallback"),
     )
 
-    with pytest.raises(UnsolvableLayoutError, match="41 components"):
-        plan((native, Text("outside")), target=DISCORD_V2_DPY27)
+    with pytest.raises(UnsolvableLayoutError, match="no declared joint allocation"):
+        plan((native, Text("outside", overflow=Never())), target=DISCORD_V2_DPY27)
 
 
 def test_unsupported_native_extension_uses_its_portable_fallback_without_building() -> None:

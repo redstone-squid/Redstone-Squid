@@ -223,3 +223,15 @@ def test_collection_replacement_has_one_source_without_inventing_line_correspond
     assert len({event.path for event in result.report.events}) == 1
     with pytest.raises(JointInfeasibleError):
         plan(node, target=target, strict=True)
+
+
+def test_collection_replacement_source_can_be_referenced_as_one_text_unit() -> None:
+    source = native.Lines(("one", "two"), overflow=alts("short"))
+    node = sl.alternatives(
+        sl.alternative(sl.present_text(sl.ref("@0"), key="copy"), key="copy", fidelity=sl.equivalent()),
+        content=source,
+        key="collection",
+    )
+    result = plan(node, target=TARGETS[0], strict=True)
+    assert "one\\ntwo" in scene.Codec.dumps(result.scene)
+    assert not result.report.events
