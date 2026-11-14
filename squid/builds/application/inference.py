@@ -40,10 +40,21 @@ _TIMING_CONTEXT = re.compile(
     r"\b(?:open(?:ing)?|clos(?:e|es|ing)|extension|retraction|seamless|reset|clockable|speed|instant)\b", re.IGNORECASE
 )
 _SOURCE_QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
+_SOURCE_EMPHASIS = re.compile(r"(?<!\\)(?P<marker>\*\*|__)(?P<body>\S(?:.*?\S)?)(?<!\\)(?P=marker)")
+
+
+def _without_source_emphasis(text: str) -> tuple[str, list[int]]:
+    """Remove paired emphasis markers while retaining each character's source position."""
+    skipped: set[int] = set()
+    for match in _SOURCE_EMPHASIS.finditer(text):
+        skipped.update(range(match.start(), match.start("body")))
+        skipped.update(range(match.end("body"), match.end()))
+    positions = [index for index in range(len(text)) if index not in skipped]
+    return "".join(text[index] for index in positions), positions
 
 
 def _source_excerpt(text: str, source: str) -> str | None:
-    """Recover an original source span after transport escaping or quote-style changes."""
+    """Recover an original source span after escaping, quote-style, or paired emphasis changes."""
     excerpt = " ".join(text.split())
     for candidate in (excerpt, " ".join(unescape(text).split())):
         if not candidate:
@@ -54,6 +65,13 @@ def _source_excerpt(text: str, source: str) -> str | None:
         if start >= 0:
             # Quote folding preserves character positions; publish the source's original punctuation.
             return source[start : start + len(candidate)]
+        plain_source, positions = _without_source_emphasis(source)
+        plain_candidate, _ = _without_source_emphasis(candidate)
+        if not plain_candidate:
+            continue
+        start = plain_source.translate(_SOURCE_QUOTES).find(plain_candidate.translate(_SOURCE_QUOTES))
+        if start >= 0:
+            return source[positions[start] : positions[start + len(plain_candidate) - 1] + 1]
     return None
 
 

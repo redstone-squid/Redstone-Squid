@@ -436,9 +436,21 @@ async def test_author_notes_require_an_excerpt_from_this_builds_selected_sources
         ("Keep &#x27; literal.", "Keep &amp;#x27; literal.", "Keep &#x27; literal."),
         ("Keep &#x27; literal.", "Keep ' literal.", None),
         ("Keep ' literal.", "Keep &amp;#x27; literal.", None),
+        (
+            "Smallest one is unreliable **only on paper** due to the armour stand in bottom.",
+            "unreliable only on paper due to the armour stand in bottom",
+            "unreliable **only on paper** due to the armour stand in bottom",
+        ),
+        ("It's __not reliable__ on Paper.", "It\u2019s not reliable on Paper.", "It's __not reliable__ on Paper."),
+        ("Requires **Carpet** and __Fabric__.", "Requires Carpet and Fabric.", "Requires **Carpet** and __Fabric__."),
+        ("Keep a**2 + b.", "Keep a2 + b.", None),
+        ("Requires *Carpet and Fabric.", "Requires Carpet and Fabric.", None),
+        ("Works **only on Paper**.", "Works on Paper.", None),
+        ("Does **not work** on Paper.", "Does work on Paper.", None),
+        ("Uses **noteblocks**.", "Uses observers.", None),
     ],
 )
-async def test_author_notes_recover_transport_escaping_without_rewriting_source(
+async def test_author_notes_recover_formatting_without_rewriting_source(
     content: str, excerpt: str, expected: str | None
 ) -> None:
     inputs = BuildInferenceInput.from_single_message(
