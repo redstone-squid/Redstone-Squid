@@ -7,7 +7,7 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import grids, scene, testing
-from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
+from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.forms import (
     BoolField,
     ChoiceField,
@@ -363,8 +363,8 @@ def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
 
 
 def test_html_paging_honors_min_fill() -> None:
-    # Four 4-character paragraphs balance to 8/8 under a 12-character page budget.
-    # A 9-character minimum forbids that first page and forces 12/4; the last page is exempt.
+    # Shared search prefers fewer pages, then the requested minimum fill.
+    # Exact cuts without that preference need not balance the page lengths.
     def build(min_fill: int) -> sl.semantic.Paged:
         return sl.semantic.Paged(
             sl.stack(sl.paragraph("aaaa"), sl.paragraph("bbbb"), sl.paragraph("cccc"), sl.paragraph("dddd")),
@@ -379,14 +379,43 @@ def test_html_paging_honors_min_fill() -> None:
             for node in testing.walk(result.scene.body.children)
             if isinstance(node, scene.HtmlElement) and node.tag is scene.HtmlTag.P
             for child in node.children
-            if isinstance(child, scene.HtmlText)
+            if isinstance(child, scene.HtmlText) and child.content in {"aaaa", "bbbb", "cccc", "dddd"}
         )
 
-    balanced = sl.planning.plan(build(0), target=sl.html.target())
-    assert first_page_text(balanced) == "aaaabbbb"
+    default = sl.planning.plan(build(0), target=sl.html.target())
+    assert default.allocation is not None
+    assert default.report.legacy_pagination is None
+    assert default.scene.pagers[0].pages == 2
 
     filled = sl.planning.plan(build(9), target=sl.html.target())
     assert first_page_text(filled) == "aaaabbbbcccc"
+
+
+def test_html_character_pages_reconstruct_styled_prose_without_counting_chrome() -> None:
+    result = sl.planning.plan(
+        sl.paged(sl.paragraph(sl.strong("x" * 90)), key="body", chars=30), target=sl.html.target(), strict=True
+    )
+    assert result.allocation is not None
+    identity = next(iter(result.allocation.regions))
+    fragments: list[str] = []
+    for index in range(len(result.allocation.regions[identity].cuts)):
+        page = result.for_page({identity: index})
+        strong = [
+            node
+            for node in testing.walk(page.scene.body.children)
+            if isinstance(node, scene.HtmlElement) and node.tag is scene.HtmlTag.STRONG
+        ]
+        text = "".join(part.content for node in strong for part in node.children if isinstance(part, scene.HtmlText))
+        assert 0 < len(text) <= 30
+        assert not page.report.events
+        fragments.append(text)
+    assert "".join(fragments) == "x" * 90
+
+
+def test_html_character_pages_keep_unbreakable_groups_intact() -> None:
+    document = sl.paged(sl.unbreakable(sl.group(sl.paragraph("a" * 4), sl.paragraph("b" * 4))), key="body", chars=5)
+    with pytest.raises(UnsolvableLayoutError):
+        sl.planning.plan(document, target=sl.html.target())
 
 
 async def test_html_list_page_ownership_drives_navigation_without_cursor_writes() -> None:

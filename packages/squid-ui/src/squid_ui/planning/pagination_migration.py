@@ -60,7 +60,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation():
                 pageable = True
                 if isinstance(node, sem.Paged):
-                    if not isinstance(limits, V2Limits):
+                    if not isinstance(limits, V2Limits | HtmlLimits):
                         msg = "Paged requires one shared character axis; use regions with this target's resource limits"
                         raise UnsupportedSemanticError(msg)
                     return replace(node, node=visit(node.node))

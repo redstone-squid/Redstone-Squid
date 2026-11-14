@@ -52,7 +52,7 @@ regions still uses its existing target fitter; the report names that route.
 | --- | --- | --- |
 | Discord V2 | Regions, root pages, lists, character-based `Paged`, and keyed primitive `Paginate`; component, text, and attachment capacities. | Explicit nested blocks cannot become nested V2 containers. Nested semantic sections retain headings inside the enclosing panel. |
 | Classic Discord | Regions, root pages, lists, count-based keyed primitive `Paginate`; independent content, embed text, embed count, row, control, and attachment capacities. Blocks become embeds; loose prose uses message content. | Character grants have no single text pool. Inline download widgets and spoiler embed images have no classic representation; document attachments remain available. |
-| HTML | Regions, root pages, lists; visible text is measured for authored budgets, with no global message budget. | Character-based `Paged` still uses its compatibility path. Native extensions need typed target rules. |
+| HTML | Regions, root pages, lists and character-based `Paged`; visible text is measured for authored budgets, with no global message budget. | Native extensions need typed target rules. |
 | Slack message | Regions, root pages, lists; block capacity, local text/control limits, and message fallback-text capacity. | No disabled buttons/selects, inline attachments, spoiler images, or accent-bearing panels. Images require public URLs. |
 | Slack Home | Same direct block composition and navigation as messages, using Home's block capacity. | Same block vocabulary constraints; no message fallback-text budget. |
 | Slack modal | Existing form planner and modal limits. | The surface requires one top-level form trigger. Region navigation is rejected with this reason; it cannot preserve a submitted form's ownership contract. |
@@ -295,3 +295,12 @@ tests assert shared allocation for help beside a selected build and crowded
 catalogue/search results, without refetching application-owned pages.
 
 Both UI suites pass (3,245 tests), as do the build-browser and search-help tests.
+
+## Continuation: HTML character pages
+
+HTML `Paged` now uses the shared visible-text resource contract. Authored character
+caps exclude navigation chrome; rich prose can split without losing styling, and
+unbreakable groups remain intact. Minimum-fill preferences and routed page
+ownership use the same allocation rules as the other document targets. Exact cuts
+may differ from the former HTML balancer. The HTML, shared-search and target
+composition tests pass, and whole-project Pyrefly reports zero errors.
