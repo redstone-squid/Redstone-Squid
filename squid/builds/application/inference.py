@@ -42,9 +42,14 @@ _TIMING_CONTEXT = re.compile(
 
 
 def _inferred_ticks(value: str | None) -> int | None:
-    """Accept explicit instant measurements as zero without interpreting other prose."""
-    if value is not None and value.strip().casefold() in {"instant", "instantly", "instantaneous"}:
-        return 0
+    """Read instant measurements and numeric op/cl shorthand without interpreting other prose."""
+    if value is not None:
+        normalized = value.strip().casefold()
+        if normalized in {"instant", "instantly", "instantaneous"}:
+            return 0
+        # Discord titles sometimes attach an edge label to a bare duration in seconds.
+        if match := re.fullmatch(r"([~≈]?\s*(?:\d+(?:\.\d+)?|\.\d+))\s*(?:op|cl)", normalized):
+            return parse_time_string(match[1])
     return parse_time_string(value)
 
 
@@ -101,24 +106,43 @@ class InferredBuild(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_message_ids: list[int]
-    build_category: Literal["Piston Door", "Entrance", "Piston Extender", "Utility"] | None
-    component_restrictions: list[str]
-    wiring_placement_restrictions: list[str]
+    build_category: Literal["Piston Door", "Entrance", "Piston Extender", "Utility"] | None = Field(
+        description="Identified build category, including Utility for mechanisms such as lever breakers. "
+        "Terse posts can still describe builds. Null when the mechanism cannot be identified."
+    )
+    component_restrictions: list[str] = Field(
+        description="Verbatim source component constraints. Contained alone does not claim contained slime blocks; "
+        "non-sticky piston-less does not mean no sticky pistons."
+    )
+    wiring_placement_restrictions: list[str] = Field(
+        description="Verbatim source wiring constraints. Never strengthen bare seamless or hipster "
+        "to full seamless or full wall hipster."
+    )
     animated_restrictions: list[str]
     miscellaneous_restrictions: list[str]
     door_type: list[str]
     door_orientation: Literal["Normal", "Skydoor", "Trapdoor"] | None
-    door_width: int | None
-    door_height: int | None
+    door_width: int | None = Field(description="Opening width, including the horizontal opening plane of a trapdoor.")
+    door_height: int | None = Field(
+        description="Opening height (second opening dimension for a trapdoor), never the enclosing circuit height."
+    )
     door_depth: int | None
     build_width: int | None = Field(description="Enclosing width, including an explicit WxHxD on a Volume line.")
-    build_height: int | None = Field(description="Enclosing height, including an explicit WxHxD on a Volume line.")
+    build_height: int | None = Field(
+        description="Enclosing circuit height, including a trapdoor stated to be 3 blocks high despite a 2x2 opening."
+    )
     build_depth: int | None = Field(description="Enclosing depth, including an explicit WxHxD on a Volume line.")
     opening_time: InferredTiming | None = Field(
-        description="Full/true opening duration; never substitute a visible duration."
+        description=(
+            "Full/true opening movement duration; never a reset, input delay, or visible duration. "
+            "For a reset-only measurement, leave value null and preserve its text in qualifier."
+        )
     )
     closing_time: InferredTiming | None = Field(
-        description="Full/true closing duration; never substitute a visible duration."
+        description=(
+            "Full/true closing movement duration; never a reset, input delay, or visible duration. "
+            "For a reset-only measurement, leave value null and preserve its text in qualifier."
+        )
     )
     visible_opening_time: InferredTiming | None = Field(
         description="Explicitly stated visible opening duration, separately from full/true duration."
@@ -136,7 +160,10 @@ class InferredBuild(BaseModel):
         description="Every explicit attribution, including MC Username or IGN labels."
     )
     version_spec: str | None = Field(
-        description="Claimed working Minecraft versions, not a duration, count, or component's introduction version."
+        description=(
+            "Claimed working Minecraft releases; retain explicit incompatibilities with exclusions, "
+            "e.g. 1.8+, !1.16+ when it breaks in 1.16+. Never infer compatibility from component availability."
+        )
     )
     edition: Literal["Java", "Bedrock"] | None = Field(
         default=None, description="Explicit Minecraft edition, even when no release number is stated."

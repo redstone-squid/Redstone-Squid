@@ -911,3 +911,53 @@ async def test_incomplete_expansion_bounds_do_not_discard_a_message_group() -> N
     assert builds[0].door_expansion is not None
     assert builds[0].door_expansion.parameters[0].maximum_kind == "unknown"
     assert builds[0].door_expansion.branches[0].domain == "x=1-14 wide"
+
+
+async def test_inference_keeps_explicit_version_exclusions() -> None:
+    versions = FakeVersions()
+    versions.resolve_spec = AsyncMock(return_value=["Java 1.8.0", "Java 1.15.2"])
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(version_spec="1.8+, !1.16+")])),
+        FakeTaxonomy(),
+        versions,
+        "system prompt",
+    )
+
+    (build,) = await service.infer(source(), model="test")
+
+    assert build.version_spec == "1.8+, !1.16+"
+    assert build.versions == ["Java 1.8.0", "Java 1.15.2"]
+    versions.resolve_spec.assert_awaited_once_with("1.8+, !1.16+")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(".25 op", 5), ("0cl", 0), ("~0.4op", 8), (".25 op + .8 reset", None), ("0cl/0.3seam", None)],
+)
+async def test_numeric_edge_shorthand_is_seconds_without_combining_reset(value: str, expected: int | None) -> None:
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(opening_time={"value": value, "qualifier": None})])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system prompt",
+    )
+
+    (build,) = await service.infer(source(), model="test")
+
+    assert build.normal_opening_time == expected
+
+
+async def test_reset_only_qualification_does_not_become_a_movement_duration() -> None:
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(builds=[inferred(closing_time={"value": None, "qualifier": "10s reset on closing"})])
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system prompt",
+    )
+
+    (build,) = await service.infer(source(), model="test")
+
+    assert build.normal_closing_time is None
+    assert "10s reset on closing" in (build.description or "")
