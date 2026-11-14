@@ -11,6 +11,8 @@ from types import MappingProxyType
 from typing import Protocol
 
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
+from squid_ui.forms import FormBinding
+from squid_ui.interactions import ActionBinding, PressEvent
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.semantics import SemanticGraph, SourceScope
@@ -65,6 +67,9 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     children: tuple[SemanticOccurrence[RenderTargetT, ContextT], ...] = ()
     effects: tuple[FidelityEffect, ...] = ()
     preference: int = 0
+    interaction: bool = False
+    binding: ActionBinding[PressEvent[ContextT]] | None = None
+    form: FormBinding[ContextT] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +133,7 @@ class PlanningContext:
     localization: Localization = NEUTRAL
     strict: bool = True
     palette: Palette = DEFAULT_PALETTE
+    capabilities: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,21 +258,26 @@ class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparati
 
 
 @dataclass(frozen=True, slots=True)
-class BuiltComposition[ResourceT, BodyT, PreparationT = None]:
+class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]:
     body: BodyT
     evaluation: Evaluation[ResourceT, PreparationT]
+    bindings: Mapping[str, ActionBinding[PressEvent[ContextT]]] = field(default_factory=dict)
+    forms: Mapping[str, FormBinding[ContextT]] = field(default_factory=dict)
 
 
 def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
     candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT],
     rules: TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT],
     context: PlanningContext,
-) -> BuiltComposition[ResourceT, BodyT, PreparationT] | Evaluation[ResourceT, PreparationT]:
+) -> BuiltComposition[ResourceT, BodyT, PreparationT, ContextT] | Evaluation[ResourceT, PreparationT]:
     """Evaluate and validate a fixed selection without publishing state or retrying it."""
     allowed: set[FidelityEffect] = set()
     pending = [candidate]
     seen: set[OccurrenceId] = set()
     budgets: dict[OccurrenceId, Mapping[Axis, int]] = {}
+    bindings: dict[str, ActionBinding[PressEvent[ContextT]]] = {}
+    forms: dict[str, FormBinding[ContextT]] = {}
+    interactions: set[SemanticRef] = set()
     while pending:
         context.work.consume()
         part = pending.pop()
@@ -276,6 +287,18 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
             raise LayoutInvariantError(message)
         seen.add(identity)
         allowed.update(part.offer.effects)
+        if part.offer.interaction:
+            interactions.update(part.offer.occurrence.sources)
+        if (binding := part.offer.binding) is not None:
+            if binding.key in bindings:
+                message = f"duplicate visible interaction binding {binding.key!r}"
+                raise LayoutInvariantError(message)
+            bindings[binding.key] = binding
+        if (form := part.offer.form) is not None:
+            if form.key in forms:
+                message = f"duplicate visible form binding {form.key!r}"
+                raise LayoutInvariantError(message)
+            forms[form.key] = form
         semantic = part.offer.occurrence.graph.units[part.offer.occurrence.reference].value
         if isinstance(semantic, Budget) and semantic.limits:
             budgets[identity] = semantic.limits
@@ -283,6 +306,9 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
     evaluation = rules.evaluate(candidate, context)
     if set(evaluation.effects) - allowed:
         message = "target evaluation introduced an undeclared fidelity effect"
+        raise DrawInvariantError(message)
+    if evaluation.feasible and (set(evaluation.effects) != allowed or evaluation.interactions != interactions):
+        message = "target evaluation lost declared effects or visible interaction references"
         raise DrawInvariantError(message)
     if context.strict and evaluation.effects:
         violation = ConstraintViolation(candidate.offer.occurrence.identity, "strict preservation")
@@ -314,4 +340,4 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
     body = rules.build(evaluation.preparation, context)
     context.work.consume()
     rules.validate(body, evaluation, context)
-    return BuiltComposition(body, evaluation)
+    return BuiltComposition(body, evaluation, MappingProxyType(bindings), MappingProxyType(forms))

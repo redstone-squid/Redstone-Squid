@@ -13,6 +13,7 @@ from squid_ui.planning.composition import (
     CapacityExceeded,
     ConstraintViolation,
     Evaluation,
+    LocalCapacityExceeded,
     OccurrenceId,
     PlanningContext,
     RealizationOffer,
@@ -24,6 +25,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.realizations import (
+    ControlRealization,
     DownloadRealization,
     FlowRealization,
     PanelRealization,
@@ -35,7 +37,7 @@ from squid_ui.planning.realizations import (
     semantic_offers,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.presentations import FidelityEffect
+from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.text import Markup
 
 
@@ -61,6 +63,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         uses: list[SharedUse[Asset]] = []
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
+        interactions: set[SemanticRef] = set()
         components = 0
 
         def text(nodes: tuple[tree.Node, ...]) -> tuple[scene.Node, ...]:
@@ -79,7 +82,33 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             nonlocal components
             context.work.consume()
             effects.extend(part.offer.effects)
+            if part.offer.interaction:
+                interactions.update(part.offer.occurrence.sources)
             match part.offer.payload:
+                case ControlRealization() as control:
+                    identity = part.offer.occurrence.identity
+                    for name, used, capacity in (
+                        ("button.label", len(control.label), self.limits.components.button_label),
+                        ("button.url", len(control.url or ""), self.limits.components.link_url),
+                        ("button.id", len(control.action or control.route or ""), self.limits.components.custom_id),
+                        ("row.buttons", 1, self.limits.components.row_buttons),
+                    ):
+                        if used > capacity:
+                            violations.append(LocalCapacityExceeded(identity, name, used, capacity))
+                    if not control.label:
+                        violations.append(ConstraintViolation(identity, "button needs a label"))
+                    components += 2
+                    if control.action is not None:
+                        button = scene.Button(
+                            control.label, control.action, control.style, disabled=control.disabled, mode=control.mode
+                        )
+                    elif control.route is not None:
+                        button = scene.RoutedButton(
+                            control.label, control.route, control.style, disabled=control.disabled
+                        )
+                    else:
+                        button = scene.Link(control.label, control.url or "", disabled=control.disabled)
+                    return (scene.Row((button,)),)
                 case TextRealization(nodes=nodes):
                     return text(nodes)
                 case TableRealization() as table:
@@ -140,6 +169,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             resources,
             tuple(violations),
             tuple(effects),
+            interactions=frozenset(interactions),
             preparation=preparation,
             text=tuple(texts),
             resource_axes=frozenset({Axis.COMPONENTS, Axis.DISPLAY_TEXT, Axis.ATTACHMENTS}),
@@ -162,6 +192,28 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             context.work.consume()
             components += 1
             match node:
+                case scene.Row(items=items):
+                    if len(items) > self.limits.components.row_buttons:
+                        msg = "built V2 action row exceeds its limit"
+                        raise DrawInvariantError(msg)
+                    for item in items:
+                        visit(item, in_panel=in_panel)
+                case scene.Button() | scene.RoutedButton() | scene.Link():
+                    if not node.label or len(node.label) > self.limits.components.button_label:
+                        msg = "built V2 button violates its label limit"
+                        raise DrawInvariantError(msg)
+                    identifier = (
+                        node.action
+                        if isinstance(node, scene.Button)
+                        else node.route_id
+                        if isinstance(node, scene.RoutedButton)
+                        else ""
+                    )
+                    if len(identifier) > self.limits.components.custom_id or (
+                        isinstance(node, scene.Link) and len(node.url) > self.limits.components.link_url
+                    ):
+                        msg = "built V2 button violates its destination limit"
+                        raise DrawInvariantError(msg)
                 case scene.Text(content=content):
                     texts.append(content)
                 case scene.File():

@@ -20,6 +20,7 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.realizations import (
+    ControlRealization,
     DownloadRealization,
     FlowRealization,
     PanelRealization,
@@ -32,7 +33,7 @@ from squid_ui.planning.realizations import (
 )
 from squid_ui.planning.resources import EMPTY_COST
 from squid_ui.planning.text_nodes import html_text
-from squid_ui.presentations import FidelityEffect
+from squid_ui.presentations import FidelityEffect, SemanticRef
 
 _INLINE = frozenset(
     {"text", "inline", "sequence", "strong", "em", "s", "code_inline", "link", "softbreak", "hardbreak"}
@@ -69,10 +70,13 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
         uses: list[SharedUse[Asset]] = []
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
+        interactions: set[SemanticRef] = set()
 
         def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> tuple[scene.HtmlNode, ...]:
             context.work.consume()
             effects.extend(part.offer.effects)
+            if part.offer.interaction:
+                interactions.update(part.offer.occurrence.sources)
 
             def text(nodes: tuple[tree.Node, ...]) -> scene.HtmlNode:
                 if not _inline_supported(nodes, context):
@@ -85,6 +89,23 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                 return result
 
             match part.offer.payload:
+                case ControlRealization() as control:
+                    texts.append(control.label)
+                    attributes = (
+                        (scene.HtmlAttribute(scene.HtmlAttributeName.DISABLED, "disabled"),) if control.disabled else ()
+                    )
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.A if control.url is not None else scene.HtmlTag.BUTTON,
+                            (scene.HtmlText(control.label),),
+                            attributes=attributes,
+                            action=scene.HtmlActionRef(control.action, control.mode)
+                            if control.action is not None
+                            else None,
+                            route=scene.HtmlRouteRef(control.route) if control.route is not None else None,
+                            url=scene.HtmlUrlRef(control.url) if control.url is not None else None,
+                        ),
+                    )
                 case TextRealization(nodes=nodes):
                     return (scene.HtmlElement(scene.HtmlTag.P, (text(nodes),)),)
                 case TableRealization() as table:
@@ -145,6 +166,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
             resources=SharedResources.combine(uses),
             violations=tuple(violations),
             effects=tuple(effects),
+            interactions=frozenset(interactions),
             preparation=body,
             text=tuple(texts),
         )

@@ -10,6 +10,7 @@ from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
     CapacityExceeded,
+    ConstraintViolation,
     Evaluation,
     LocalCapacityExceeded,
     OccurrenceId,
@@ -19,6 +20,7 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.realizations import (
+    ControlRealization,
     FlowRealization,
     Realization,
     TableForm,
@@ -28,7 +30,8 @@ from squid_ui.planning.realizations import (
     semantic_offers,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.presentations import FidelityEffect
+from squid_ui.presentations import FidelityEffect, SemanticRef
+from squid_ui.primitives.styles import ActionStyle
 from squid_ui.slack.target import SlackMessageLimits
 
 
@@ -66,6 +69,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
         scopes: dict[OccurrenceId, ResourceCost] = {}
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
+        interactions: set[SemanticRef] = set()
         blocks = 0
         prepared_blocks: list[scene.SlackBlock] = []
 
@@ -74,6 +78,8 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
             context.work.consume()
             identity = part.offer.occurrence.identity
             effects.extend(part.offer.effects)
+            if part.offer.interaction:
+                interactions.update(part.offer.occurrence.sources)
 
             def limit(name: str, used: int, capacity: int) -> None:
                 if used > capacity:
@@ -89,6 +95,39 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                 return value
 
             match part.offer.payload:
+                case ControlRealization() as control:
+                    if control.disabled:
+                        violations.append(UnsupportedCapability(identity, "disabled Slack button"))
+                    if not control.label:
+                        violations.append(ConstraintViolation(identity, "button needs a label"))
+                    limit("button.label", len(control.label), self.limits.components.button_label)
+                    limit("button.url", len(control.url or ""), self.limits.components.url)
+                    limit("button.id", len(control.action or control.route or ""), self.limits.components.action_id)
+                    limit("actions.elements", 1, self.limits.components.actions_elements)
+                    style = (
+                        scene.SlackButtonStyle.DANGER
+                        if control.style == ActionStyle.DANGER
+                        else scene.SlackButtonStyle.PRIMARY
+                        if control.style in (ActionStyle.PRIMARY, ActionStyle.SUCCESS)
+                        else scene.SlackButtonStyle.DEFAULT
+                    )
+                    prepared_blocks.append(
+                        scene.SlackActions(
+                            (
+                                scene.SlackButton(
+                                    scene.SlackText(control.label, scene.SlackTextKind.PLAIN, emoji=False),
+                                    action=scene.SlackActionRef(control.action, control.mode)
+                                    if control.action is not None
+                                    else None,
+                                    route=scene.SlackRouteRef(control.route) if control.route is not None else None,
+                                    url=control.url,
+                                    style=style,
+                                ),
+                            )
+                        )
+                    )
+                    texts.append(control.label)
+                    blocks += 1
                 case TextRealization(nodes=nodes):
                     rendered = text(nodes, capacity=self.limits.components.section_text, name="section.text")
                     blocks += int(bool(rendered))
@@ -156,6 +195,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
             cost,
             violations=tuple(violations),
             effects=tuple(effects),
+            interactions=frozenset(interactions),
             preparation=scene.SlackMessage("\n".join(texts), tuple(prepared_blocks)),
             text=tuple(texts),
             resource_axes=frozenset({Axis.BLOCKS}),
@@ -180,6 +220,28 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
         for block in body.blocks:
             context.work.consume()
             match block:
+                case scene.SlackActions(elements=elements):
+                    if len(elements) > self.limits.components.actions_elements:
+                        msg = "built Slack actions exceed their limit"
+                        raise DrawInvariantError(msg)
+                    for element in elements:
+                        if not isinstance(element, scene.SlackButton) or not element.label.content:
+                            msg = "unexpected Slack action element"
+                            raise DrawInvariantError(msg)
+                        text(element.label, self.limits.components.button_label)
+                        identifier = (
+                            element.action.action
+                            if element.action is not None
+                            else element.route.route_id
+                            if element.route is not None
+                            else ""
+                        )
+                        if (
+                            len(identifier) > self.limits.components.action_id
+                            or len(element.url or "") > self.limits.components.url
+                        ):
+                            msg = "built Slack button violates its destination limit"
+                            raise DrawInvariantError(msg)
                 case scene.SlackSection(text=value) if value is not None:
                     text(value, self.limits.components.section_text)
                     if block.fields or block.accessory is not None:

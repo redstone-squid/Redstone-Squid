@@ -8,7 +8,7 @@ adapters with the current render's callbacks and state.
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Self, override
+from typing import TYPE_CHECKING, Self, cast, override
 
 from squid_ui.entity import EntityRef
 from squid_ui.forms import FormSpec, SubmitHandler
@@ -46,10 +46,10 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class PresentForm(GeneratedHandler[PressEvent]):
-    spec: FormSpec
+class PresentForm[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+    spec: FormSpec[ContextT]
     key: str
-    on_submit: SubmitHandler
+    on_submit: SubmitHandler[ContextT]
     mode: ActionMode
     label: TextLike
     record: History | None
@@ -65,11 +65,12 @@ class PresentForm(GeneratedHandler[PressEvent]):
         )
 
     @override
-    async def __call__(self, event: PressEvent) -> None:
+    async def __call__(self, event: PressEvent[ContextT]) -> None:
+        # The responder API erases invocation context at the frontend boundary.
         await event.present_form(
-            self.spec,
+            cast(FormSpec, self.spec),
             key=self.key,
-            on_submit=self.on_submit,
+            on_submit=cast(SubmitHandler, self.on_submit),
             mode=self.mode,
             label=self.label,
             record=self.record,

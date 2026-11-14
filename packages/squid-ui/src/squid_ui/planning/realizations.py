@@ -4,14 +4,19 @@ Tables retain keyed columns and cells until a target draws the selected form.
 This module offers representations; it does not fit or paginate them.
 """
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from hashlib import sha256
 
 from squid_i18n import tree
 from squid_ui import semantic as sem
 from squid_ui.assets import Asset
+from squid_ui.capabilities import Capability
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.forms import FormBinding
+from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.planning.composition import (
     CandidateComposition,
     OccurrenceId,
@@ -22,11 +27,13 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
+from squid_ui.planning.semantic_adaptation.common import _button_style
+from squid_ui.planning.semantic_adaptation.handlers import PresentForm
 from squid_ui.planning.semantics import SourceScope, StructuralGroup, check_alternative
 from squid_ui.planning.structure import resolve_accent
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
-from squid_ui.primitives.styles import Color
+from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.text import resolve_text
 
 
@@ -78,7 +85,20 @@ class DownloadRealization:
     spoiler: bool
 
 
-type Realization = TextRealization | FlowRealization | PanelRealization | TableRealization | DownloadRealization
+@dataclass(frozen=True, slots=True)
+class ControlRealization:
+    label: str
+    action: str | None = None
+    route: str | None = None
+    url: str | None = None
+    style: ActionStyle = ActionStyle.SECONDARY
+    disabled: bool = False
+    mode: ActionMode = ActionMode.EXCLUSIVE
+
+
+type Realization = (
+    TextRealization | FlowRealization | PanelRealization | TableRealization | DownloadRealization | ControlRealization
+)
 
 
 def semantic_offers[RenderTargetT, ContextT](
@@ -125,6 +145,55 @@ def semantic_offers[RenderTargetT, ContextT](
         if isinstance(resolved, UnsupportedText):
             return ()
         return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
+    if isinstance(value, sem.ActionControl | sem.RoutedActionControl | sem.Link | sem.FormTrigger):
+        # Wire IDs follow semantic ownership, independently of presentation keys.
+        encoded = json.dumps(sorted(ref.keys for ref in occurrence.sources), ensure_ascii=True)
+        key = "composition." + sha256(encoded.encode()).hexdigest()[:32]
+        label = "".join(tree.plain(node) for node in resolve_text(value.label, context.localization).nodes)
+        binding = None
+        form = None
+        match value:
+            case sem.ActionControl():
+                payload = ControlRealization(
+                    label,
+                    action=key,
+                    style=_button_style(value.tone, value.emphasis),
+                    disabled=not value.available,
+                    mode=value.mode,
+                )
+                binding = ActionBinding(
+                    key,
+                    value.on_trigger,
+                    value.mode,
+                    guard=value.guard,
+                    busy=value.busy,
+                    label=value.label,
+                    record=value.record,
+                )
+            case sem.FormTrigger():
+                if Capability.FORMS_MODAL not in context.capabilities:
+                    return ()
+                form = FormBinding(key, value.spec, value.on_submit, value.mode, value.label, value.record)
+                binding = ActionBinding(
+                    key,
+                    PresentForm(value.spec, key, value.on_submit, value.mode, value.label, value.record),
+                    value.mode,
+                    guard=value.guard,
+                    label=value.label,
+                )
+                payload = ControlRealization(
+                    label, action=key, style=_button_style(value.tone, value.emphasis), mode=value.mode
+                )
+            case sem.RoutedActionControl():
+                payload = ControlRealization(
+                    label,
+                    route=value.route_id,
+                    style=_button_style(value.tone, value.emphasis),
+                    disabled=not value.available,
+                )
+            case sem.Link():
+                payload = ControlRealization(label, url=value.url)
+        return (RealizationOffer(occurrence, "button", payload, interaction=True, binding=binding, form=form),)
     if isinstance(value, sem.Paragraph):
         return (
             RealizationOffer(
@@ -133,7 +202,19 @@ def semantic_offers[RenderTargetT, ContextT](
         )
     if isinstance(value, sem.Block) and not panels:
         return ()
-    if isinstance(value, sem.Group | sem.Stack | sem.Region | StructuralGroup | sem.Block | Budget):
+    if isinstance(
+        value,
+        sem.Group
+        | sem.Stack
+        | sem.ActionControls
+        | sem.ControlGroup
+        | sem.Region
+        | StructuralGroup
+        | sem.Block
+        | Budget
+        | sem.Unbreakable
+        | sem.KeepWithNext,
+    ):
         refs = [ref for ref, unit in occurrence.graph.units.items() if unit.parent == occurrence.reference]
         if isinstance(value, sem.Region):
             refs.sort(key=lambda ref: -1 if ref.keys[-1] == "@header" else 1 if ref.keys[-1] == "@footer" else 0)
