@@ -89,7 +89,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     def _set_clauses(self, clauses: tuple[QueryExpression, ...]) -> None:
         self.query = " AND ".join(f"({render_expression(item)})" for item in clauses)
         self.query = self.parser.parse(self.query).normalized
-        self.clause_page = min(self.clause_page, max(0, (len(clauses) - 1) // 5))
+        self.clause_page = min(self.clause_page, max(0, (len(clauses) - 1) // 2))
 
     def _append(self, item: Filter) -> None:
         expression = self.parser.parse(item.query).expression
@@ -103,57 +103,85 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
             return (
                 sl.heading(self.picker_title),
                 self.picker,
-                sl.action_control("Use relevance", self._relevance, key="relevance", available=self.picking_sort),
-                sl.action_control("Back to query", self._back_to_query, key="picker-back"),
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"guided-search-relevance = Use relevance"),
+                        self._relevance,
+                        key="relevance",
+                        available=self.picking_sort,
+                    ),
+                    sl.action_control(
+                        tr(t"guided-search-back-query = Back to query"), self._back_to_query, key="picker-back"
+                    ),
+                    key="picker-actions",
+                ),
             )
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.heading(tr(t"guided-search-title = Search and filters")),
-            sl.paragraph(self.query or ("All builds" if self.scope == "builds" else "All records")),
-            sl.note("Edit the query or build it with filters. Both edit the same search."),
+            sl.paragraph(
+                self.query
+                or (
+                    tr(t"guided-search-all-builds = All builds")
+                    if self.scope == "builds"
+                    else tr(t"guided-search-all-records = All records")
+                )
+            ),
+            sl.note(
+                tr(
+                    t"guided-search-shared-query-help = Edit the query or build it with filters. Both edit the same search."
+                )
+            ),
             sl.action_controls(
                 sl.form(
-                    "Edit query",
+                    tr(t"guided-search-edit-query = Edit query"),
                     self._query_form(self.query),
                     key="advanced",
                     on_submit=self._advanced,
                 ),
-                sl.action_control("Add filter", self._choose_field, key="field"),
-                sl.action_control("Sorting", self._choose_sort, key="sort"),
-                sl.action_control("Reset", self._reset, key="reset"),
+                sl.action_control(tr(t"guided-search-add-filter = Add filter"), self._choose_field, key="field"),
+                sl.action_control(tr(t"guided-search-sorting = Sorting"), self._choose_sort, key="sort"),
+                sl.action_control(tr(t"guided-search-reset = Reset"), self._reset, key="reset"),
                 key="search-controls",
             ),
-            sl.note(f"Sort: {self.sort or 'Relevance'}"),
+            sl.note(self.sort or tr(t"guided-search-sort-relevance = Sort: Relevance")),
         ]
         clauses = self.clauses
-        start = self.clause_page * 5
-        for index, item in enumerate(clauses[start : start + 5], start):
+        start = self.clause_page * 2
+        for index, item in enumerate(clauses[start : start + 2], start):
             clause = render_expression(item)
             nodes.append(
                 sl.stack(
                     sl.paragraph(clause),
                     sl.action_controls(
                         sl.form(
-                            "Edit",
+                            tr(t"guided-search-edit-clause = Edit"),
                             self._query_form(clause),
                             key=f"edit-{index}",
                             on_submit=partial(self._edit_clause, index),
                         ),
-                        sl.action_control("Remove", partial(self._remove, index), key=f"remove-{index}"),
+                        sl.action_control(
+                            tr(t"guided-search-remove-clause = Remove"),
+                            partial(self._remove, index),
+                            key=f"remove-{index}",
+                        ),
                         key=f"clause-{index}",
                     ),
                 )
             )
-        if len(clauses) > 5:
+        if len(clauses) > 2:
             nodes.append(
                 sl.action_controls(
                     sl.action_control(
-                        "Previous filters",
+                        tr(t"guided-search-previous-filters = Previous filters"),
                         partial(self._page, -1),
                         key="previous-clauses",
                         available=self.clause_page > 0,
                     ),
                     sl.action_control(
-                        "Next filters", partial(self._page, 1), key="next-clauses", available=start + 5 < len(clauses)
+                        tr(t"guided-search-next-filters = Next filters"),
+                        partial(self._page, 1),
+                        key="next-clauses",
+                        available=start + 2 < len(clauses),
                     ),
                     key="clause-pages",
                 )
@@ -222,7 +250,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
             )
         nodes.append(
             sl.action_controls(
-                sl.action_control("Back to catalogue", self._cancel, key="cancel"),
+                sl.action_control(tr(t"guided-search-back-catalogue = Back to catalogue"), self._cancel, key="cancel"),
                 key="search-actions",
             )
         )
@@ -230,7 +258,16 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
 
     def _query_form(self, query: str) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
         return sl.forms.FormSpec(
-            "Edit query", (sl.forms.TextField(key="query", label="Query", default=query, required=False, maximum=1000),)
+            tr(t"guided-search-edit-query = Edit query"),
+            (
+                sl.forms.TextField(
+                    key="query",
+                    label=tr(t"guided-search-query-label = Query"),
+                    default=query,
+                    required=False,
+                    maximum=1000,
+                ),
+            ),
         )
 
     async def _advanced(self, event: sd.SubmitEvent) -> None:
@@ -302,7 +339,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         await self._pick(
             event,
             "search_fields",
-            tr(t"guided-search-add-filter = Choose filter"),
+            tr(t"guided-search-add-filter = Add filter"),
             self._field_picked,
             context={"scope": self.scope},
         )
@@ -339,7 +376,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self.sort = item.value
         await self._refresh()
 
-    async def _relevance(self, _event: sd.PressEvent) -> None:
+    async def _relevance(self, _event: sd.PressEvent[RedstoneSquid]) -> None:
         self.sort = ""
         self.picker = None
         await self._refresh()

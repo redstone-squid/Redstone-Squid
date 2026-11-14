@@ -449,7 +449,7 @@ async def test_search_help_preserves_results_without_refetching(records: bool) -
         await ui.press(ui.key_for("search-help"))
         assert "## Search results" in ui.texts()
         assert "## Search help" not in ui.texts()
-        service.search.assert_awaited_once()
+        assert service.search.await_count == 2
         ui.assert_within_limits()
 
 
@@ -605,7 +605,7 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
             ui.assert_within_limits()
         await ui.press(ui.key_for("search-help"))
         assert "## Search results" in ui.texts()
-        service.search.assert_awaited_once()
+        assert service.search.await_count == 2
 
 
 async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
@@ -648,3 +648,41 @@ async def test_numeric_conversion_versions_are_only_in_maintenance() -> None:
         await ui.press(ui.key_for("back-to-tools"))
         ui.control(ui.key_for("convert"))
         assert "Convert by data version" not in ui.texts()
+
+
+async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> None:
+    screen = _screen(initial_id=None)
+    service = cast(AsyncMock, screen._search_service)
+    async with stage(screen, owner=object()) as ui:
+        interaction = await ui.press(ui.key_for("guided-search"))
+        assert not interaction.sends
+        editor = screen._guided
+        assert editor is not None
+        assert service.search.call_args.args[0].page_size == 4
+        for query in ("width:3 AND height:5", "width:7"):
+            form = await ui.press_for_form(ui.key_for("advanced"))
+            await form.submit({"query": query})
+            assert screen._guided is editor
+            assert screen._query == query
+            assert service.search.call_args.args[0].query == query
+            assert not ui.root.finished
+            assert "## Search results" in ui.texts()
+        await ui.press(ui.key_for("remove-0"))
+        assert screen._query == ""
+        assert screen._guided is editor
+        ui.assert_within_limits()
+
+
+async def test_failed_live_search_preserves_query_and_results() -> None:
+    screen = _screen(initial_id=None)
+    service = cast(AsyncMock, screen._search_service)
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("guided-search"))
+        results = screen._results
+        service.search.side_effect = RuntimeError("search unavailable")
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "width:3"})
+        assert screen._guided is not None
+        assert screen._guided.query == screen._query == ""
+        assert screen._results is results
+        assert not ui.root.finished

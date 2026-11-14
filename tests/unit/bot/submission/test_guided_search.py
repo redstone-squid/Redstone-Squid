@@ -1,13 +1,20 @@
 """Query text and builder controls edit the same expression."""
 
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
+
+import anyio
+import pytest
 
 from squid.bot.submission.guided_search import Filter, GuidedSearch, SearchSelection
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import BooleanExpression, BooleanOperator, FieldExpression
+from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
+from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid_ui_discord.testing import stage
+from tests.unit.suggestions.test_services import RecordingProvider
 
 
 def editor(query: str = "") -> GuidedSearch:
@@ -72,9 +79,38 @@ async def test_edit_boolean_group_preserves_other_clauses() -> None:
 async def test_long_queries_paginate_removable_clauses() -> None:
     screen = editor(" AND ".join(f"width:{index}" for index in range(8)))
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("next-clauses"))
+        for _ in range(3):
+            await ui.press(ui.key_for("next-clauses"))
         await ui.press(ui.key_for("remove-7"))
         assert len(screen.clauses) == 7
         await ui.press(ui.key_for("reset"))
         assert screen.query == ""
         assert screen.clause_page == 0
+
+
+async def test_field_and_sort_pickers_stay_in_the_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = SuggestionService(
+        SuggestionRegistry.of(
+            (
+                RegisteredSource("search_fields", RecordingProvider((Candidate.create("width", "Width"),))),
+                RegisteredSource("search_sorts", RecordingProvider((Candidate.create("-width", "Widest first"),))),
+            )
+        )
+    )
+    screen = editor()
+    async with stage(screen, owner=object()) as ui:
+        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
+        monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
+        for control, value in (("field", "width"), ("sort", "-width")):
+            interaction = await ui.press(ui.key_for(control))
+            assert not interaction.sends
+            with anyio.fail_after(2):
+                while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
+                    await anyio.sleep(0.01)
+            await ui.select(ui.key_for("search-lookup.results"), [value])
+            assert screen.picker is None
+            assert not ui.root.finished
+        assert screen.selected is not None
+        assert screen.selected.name == "width"
+        assert screen.sort == "-width"
+        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection("", "-width"))
