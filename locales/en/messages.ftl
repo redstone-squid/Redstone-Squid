@@ -433,7 +433,7 @@ accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers
 # squid/accounts/errors.py:370
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/accounts/infrastructure/repository.py:628
+# squid/accounts/infrastructure/repository.py:659
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
 # squid/accounts/errors.py:330
@@ -2033,13 +2033,13 @@ builds-alias-restriction = That alias is already on this restriction.
 # squid/builds/errors.py:126
 builds-alias-used = That alias is already used by another restriction.
 
-# squid/builds/domain/models.py:140
+# squid/builds/domain/models.py:141
 builds-attribute-immutable = Attribute `{ $name }` is immutable!
 
 # squid/builds/errors.py:11
 builds-build-data-invalid = The build data is invalid.
 
-# squid/builds/models.py:221
+# squid/builds/models.py:222
 builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildDraft.
 
 # squid/builds/errors.py:22
@@ -2078,7 +2078,7 @@ builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to fin
 # squid/builds/errors.py:55
 builds-if-match-build = An If-Match build revision is required for this operation.
 
-# squid/builds/domain/models.py:164
+# squid/builds/domain/models.py:165
 builds-not-dataclass = { $class_name } is not a dataclass
 
 # squid/builds/errors.py:99
