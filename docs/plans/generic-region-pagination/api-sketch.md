@@ -1,6 +1,6 @@
 # Shared planner API sketch
 
-Status: proposed Phase 2 design for review. All new API names and types below are illustrative;
+Status: working Phase 2 design. All new API names and types below are illustrative;
 the examples are not executable against the current package. This sketch applies the agreed
 policies in [the Phase 2 draft](02-composition.md), without fixing the solver algorithm.
 
@@ -13,13 +13,15 @@ widgets. Existing APIs may change where the new model calls for it.
 
 Use one entry point for authored alternatives, with the same shape for every candidate. All
 presentations declare fidelity and preference relative to shared semantic meaning. The first
-candidate has no special authority. How the shared semantic reference is supplied remains open:
+candidate has no special authority. Shared authored content supplies the semantic reference,
+independently of which presentation is selected:
 
 ```python
-full = sl.stack(
+content = sl.stack(
     sl.paragraph("Length: 10 blocks; width: 5 blocks", key="dimensions"),
     sl.paragraph("Valid only in Java edition", key="edition"),
 )
+full = content  # One candidate directly presents the shared semantic content.
 compact = sl.stack(
     sl.paragraph("10 × 5 blocks", key="dimensions"),
     sl.paragraph("Java edition only", key="edition"),
@@ -44,6 +46,7 @@ summary = sl.alternatives(
         fidelity=sl.losses(sl.omit("edition")),
         preference=20,
     ),
+    content=content,
     key="build-summary",
 )
 ```
@@ -68,12 +71,18 @@ Proposed defaults and interpretation:
 - An alternative's own key identifies the choice. Content keys identify semantic units across
   choices. Switching from `full` to `compact` must not make `dimensions` a new logical item.
 
-The shared semantic reference must be independent of candidate order and selection. For built-in
-representations, the authored semantic node already supplies it. For arbitrary authored alternatives,
-we still need to design how authors supply or establish that common meaning and correspondence.
-An explicit shared content source and declarations relating peer presentations are possibilities.
-Simply taking the first candidate, or unioning keys from all candidates, does not establish the
-contract. The example illustrates the symmetric candidate API; it does not settle that reference API.
+The shared semantic reference is independent of candidate order and selection. For built-in
+representations, the authored semantic node already supplies it. Custom alternative groups supply
+that content explicitly, using the existing semantic vocabulary. A presentation may directly reuse
+the content node, as `full` does here, without becoming privileged among the candidates.
+`content=` establishes the reference; it is not rendered alongside the selected alternative.
+Display and resource accounting follow the selected presentation and persistent surrounding content.
+
+Helpers should carry semantic references automatically when presenting shared content. Reusing
+semantic units and their identities permits structural checks; combining or splitting them requires
+an explicit correspondence. An arbitrary paraphrase still relies on an author assertion of
+preservation. The core records that distinction and rejects known omissions even when a candidate
+claims equivalence. It does not try to prove natural-language meaning from text similarity.
 
 ## Regions and identity
 
@@ -99,7 +108,8 @@ Separate semantic identity, occurrence identity, representation choice, and page
 planning model. Occurrences carry inherited policies and placement context. Representation changes
 retain semantic identity where meaning is retained. Combining several semantic units into one
 visual element will require an explicit correspondence; a single rendered key cannot stand in for
-all of them. The exact reference and correspondence API is an open review point.
+all of them. The first implementation step will establish typed references and correspondence
+helpers against these cases; the ownership and preservation rules are already settled.
 
 ## Information the core retains
 
@@ -194,18 +204,17 @@ For HTML, target rules can expose an unbounded full-content realization. Explici
 and constraints still apply, but the core does not invent a global message budget. Slack receives
 the same semantic information directly and contributes its own realizations and constraints.
 
-## Review points before implementation
+## Details to validate during implementation
 
-1. How arbitrary authored alternatives establish a shared semantic reference without privileging
-   one presentation, and how combined or split presentations map their units to that reference.
+1. How typed references and correspondence helpers carry semantic units through combined or split
+   presentations of the explicit shared content source.
 2. Which fidelity effects and reference helpers make common loss declarations concise and precise.
 3. Whether the four target operations expose enough structure for contextual composition without
    encouraging another hidden backend search.
 4. Where incremental measurement and native extension preparation fit without retaining stale
    bindings or losing the shared work-budget contract.
 
-Resolve these against the table, shared-resource, and persistent-content examples before fixing
-interfaces. Then write the implementation sequence in the Phase 2 plan: introduce the model and
-contracts, integrate V2 and Slack examples directly, check HTML, and migrate affected author APIs
-and callers. Full joint search, state integration, cache optimization, and remaining target coverage
+Validate these details against the table, shared-resource, and persistent-content examples in
+the implementation sequence recorded in the Phase 2 plan. Concrete types and names may change
+as those examples exercise the contracts. Full joint search, state integration, cache optimization, and remaining target coverage
 continue in their assigned roadmap phases.
