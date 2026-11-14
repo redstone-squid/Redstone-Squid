@@ -13,12 +13,14 @@ presentation session, or the application through `Controlled.on_change`.
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import Self, override
+from typing import Self, cast, override
 
-from squid_ui.chrome import Chrome
+from squid_i18n import md_tr, tr
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.context import ContextKey
+from squid_ui.forms import FormBinding, FormSpec, IntField
 from squid_ui.handlers import _HandlerBinder, _HandlerComposition
-from squid_ui.interactions import ActionEvent, PressEvent, SelectionEvent
+from squid_ui.interactions import ActionEvent, ActionMode, PressEvent, SelectionEvent, SubmitEvent
 from squid_ui.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
 from squid_ui.pages import PagePosition
 from squid_ui.planning.generated import GeneratedHandler
@@ -26,6 +28,7 @@ from squid_ui.presentation import PresentationState
 from squid_ui.primitives.constraints import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
 from squid_ui.primitives.nodes import (
     Button,
+    FormButton,
     Gallery,
     Option,
     RawItem,
@@ -118,6 +121,42 @@ class _SeekSelection(GeneratedHandler[SelectionEvent]):
     async def __call__(self, event: SelectionEvent) -> None:
         if event.values:
             await self.seek(event, int(event.values[0]))
+
+
+@dataclass(frozen=True, slots=True)
+class _JumpSubmit(GeneratedHandler[SubmitEvent]):
+    seek: Callable[[ActionEvent, int], Awaitable[None]]
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        if isinstance(self.seek, _HandlerComposition):
+            seek = binder.composition(self.seek)
+            return replace(self, seek=seek) if seek is not self.seek else self
+        return self
+
+    @override
+    async def __call__(self, event: SubmitEvent) -> None:
+        await self.seek(event, cast(int, event.values["page"]) - 1)
+
+
+@dataclass(frozen=True, slots=True)
+class _PresentJump(GeneratedHandler[PressEvent]):
+    form: FormBinding
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        form = binder.form(self.form)
+        return replace(self, form=form) if form is not self.form else self
+
+    @override
+    async def __call__(self, event: PressEvent) -> None:
+        await event.present_form(
+            self.form.spec,
+            key=self.form.key,
+            on_submit=self.form.on_submit,
+            mode=self.form.mode,
+            label=self.form.label,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +300,54 @@ def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     return (navigation_controls(context),) if control is None else (navigation_controls(context), control)
 
 
+def page_jump_form(page: int, pages: int, *, title: TextLike = DEFAULT_CHROME.jump_to_page) -> FormSpec:
+    """Ask for a 1-based page number; ``page`` is the zero-based current page.
+
+    Routed hosts can present this schema and pass the parsed ``page`` minus one
+    to their existing seek transition. Revalidate against current data on submit.
+    """
+    if pages < 1 or not 0 <= page < pages:
+        msg = "page must address one of the available pages"
+        raise ValueError(msg)
+    return FormSpec(
+        title,
+        (
+            IntField(
+                key="page",
+                label=tr(t"ui-page-jump-number = Page number"),
+                description=md_tr(t"ui-page-jump-range = Enter a page from 1 to {pages}."),
+                minimum=1,
+                maximum=pages,
+                default=page + 1,
+            ),
+        ),
+    )
+
+
+def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
+    """Previous/Next plus a form-opening button for an addressable pager.
+
+    Opt in with ``MessageRoot(..., nav=page_jump_nav)``. The form accepts every
+    page, including pages beyond a select menu's option limit.
+    """
+    row = navigation_controls(context)
+    state = context.state
+    seek = context.on_seek
+    if not callable(seek) or state.page is None or state.extent is None or state.extent < 2:
+        return (row,)
+    label = state.seek_label or DEFAULT_CHROME.jump_to_page
+    form = FormBinding(
+        f"{state.seek_key}.jump",
+        page_jump_form(state.page, state.extent, title=label),
+        _JumpSubmit(seek),
+        ActionMode.REBASE,
+        label,
+        unavailable=tr(t"ui-page-jump-unavailable = This pager is no longer available."),
+    )
+    button = FormButton(label, _PresentJump(form), form.key, mode=form.mode, form=form)
+    return (Row((*row.items, button)),)
+
+
 def materialized_navigation_state(key: str, position: PagePosition, extent: int, chrome: Chrome) -> NavigationState:
     """Build the navigation facts shared by every materialized slicer."""
     return NavigationState(
@@ -323,6 +410,8 @@ __all__ = [
     "default_nav",
     "materialized_navigation_state",
     "navigation_controls",
+    "page_jump_form",
+    "page_jump_nav",
     "page_select_nav",
     "seek_control",
 ]

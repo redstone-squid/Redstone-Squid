@@ -1077,6 +1077,12 @@ class FormBinding[ContextT = object]:
     label: TextLike = ""
     record: History | None = None
 
+    unavailable: TextLike | None = None
+    """Reject a rebased submission with this notice if its current binding disappeared.
+
+    None keeps the original form submittable after its trigger is removed.
+    """
+
 
 type FormLike[ContextT = object] = FormSpec[ContextT] | Form[ContextT]
 

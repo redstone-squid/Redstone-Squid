@@ -84,7 +84,18 @@ class ActionResponder:
         """Present a portable form and route its submission back through this mount."""
         spec, handler, default_mode = bind_form(form, on_submit)
         selected_mode = mode or default_mode
-        modal = self._form_modal(spec, key, handler, selected_mode, self.message_root.generation, label, record)
+        current = self.message_root.plan
+        binding = None if current is None else current.form_bindings.get(key)
+        modal = self._form_modal(
+            spec,
+            key,
+            handler,
+            selected_mode,
+            self.message_root.generation,
+            label,
+            record,
+            unavailable=None if binding is None else binding.unavailable,
+        )
         await self.send_modal(modal)
 
     def _form_modal(
@@ -96,6 +107,8 @@ class ActionResponder:
         generation: int,
         label: TextLike,
         record: History | None,
+        *,
+        unavailable: TextLike | None = None,
     ) -> discord.ui.Modal:
         async def submit(interaction: discord.Interaction, values: dict[str, object]) -> None:
             await self.message_root.dispatch_submit(
@@ -108,6 +121,7 @@ class ActionResponder:
                 generation=generation,
                 label=label,
                 record=record,
+                unavailable=unavailable,
             )
 
         current = self.message_root.plan
@@ -142,6 +156,7 @@ class ActionResponder:
         actor_id: int,
         label: TextLike,
         record: History | None,
+        unavailable: TextLike | None = None,
     ) -> None:
         """Render validation errors with a button that reopens the attempted form."""
         lines: list[str] = []
@@ -168,6 +183,7 @@ class ActionResponder:
                 generation,
                 label,
                 record,
+                unavailable=unavailable,
             ),
         )
         view = discord.ui.LayoutView(timeout=300)

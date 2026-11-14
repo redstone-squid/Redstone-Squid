@@ -51,6 +51,7 @@ class _SubmitBinding(ActionBinding):
     """A form submission's binding, carrying the schema its values must be parsed against."""
 
     spec: FormSpec | None = None
+    unavailable: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)

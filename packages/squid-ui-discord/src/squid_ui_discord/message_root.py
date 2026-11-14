@@ -1850,6 +1850,7 @@ class MessageRoot[
         generation: int | None = None,
         label: TextLike = "",
         record: History | None = None,
+        unavailable: TextLike | None = None,
     ) -> None:
         """Route a modal submission through the same stale, action-policy, access, and flush funnel.
 
@@ -1858,7 +1859,8 @@ class MessageRoot[
         schema that has since changed shape cannot read what the reader actually typed. A form
         presented ad hoc from a handler has no render-time binding, and a trigger the newest
         render dropped has no newer one; both run what the reader submitted, because
-        discarding a filled-in form is the worse of the two surprises.
+        discarding a filled-in form is the worse of the two surprises. Supplying `unavailable`
+        instead rejects a rebased submission whose current binding is missing or incompatible.
         """
         with (
             localization_scope(self.localization),
@@ -1881,12 +1883,24 @@ class MessageRoot[
             try:
                 if not await self._begin_dispatch(interaction, profile):
                     return
-                binding = _SubmitBinding(key, handler, mode, label=label, record=record, spec=spec)
+                binding = _SubmitBinding(
+                    key,
+                    handler,
+                    mode,
+                    label=label,
+                    record=record,
+                    spec=spec,
+                    unavailable=unavailable,
+                )
+                missing = False
 
                 def rebase() -> ActionBinding | None:
+                    nonlocal missing
                     newest = self._candidates.form_bindings.get(key)
-                    if newest is None or newest.spec.field_keys != spec.field_keys:
+                    missing = newest is None or newest.spec.field_keys != spec.field_keys
+                    if missing:
                         return binding
+                    assert newest is not None
                     return _SubmitBinding(
                         key,
                         newest.on_submit,
@@ -1894,11 +1908,22 @@ class MessageRoot[
                         label=newest.label,
                         record=newest.record,
                         spec=newest.spec,
+                        unavailable=newest.unavailable,
                     )
 
                 async def invoke(
                     current: ActionBinding, rebased: bool, active_generation: int, release: Callable[[], None]
                 ) -> None:
+                    if missing and unavailable is not None:
+                        await deliver.respond_text(
+                            interaction,
+                            self._chrome_text(unavailable),
+                            ephemeral=True,
+                        )
+                        profile.acknowledge("form_unavailable")
+                        profile.presentation = PresentationStatus.WRITTEN
+                        profile.finish(DispatchDisposition.STALE)
+                        return
                     resolved = (
                         current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
                     )
@@ -2365,6 +2390,7 @@ class MessageRoot[
                         actor_id=interaction.user.id,
                         label=binding.label,
                         record=binding.record,
+                        unavailable=binding.unavailable if isinstance(binding, _SubmitBinding) else None,
                     )
 
                 if evaluation.errors and spec.on_invalid is not None:
