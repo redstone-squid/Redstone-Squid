@@ -1,7 +1,7 @@
 # Generic region pagination roadmap
 
-Status: phases 1 and 2 complete. Phase 3 joint search is the next task and needs its own
-detailed plan.
+Status: phases 1 and 2 complete. Phase 3 joint search is planned in
+[Shared allocation search](03-joint-search.md); implementation has not started.
 
 Make joint region pagination part of the generic planning architecture. Sibling and nested
 regions should share target limits while preserving content, navigation, and reading position.
@@ -92,6 +92,9 @@ without inspecting their concrete scene bodies, with explicit cost and capabilit
 Depends on phase 1.
 
 ## Phase 3 Build the shared allocation search
+
+Implementation plan: [Shared allocation search](03-joint-search.md), including the agreed
+preference, allocation stability, and search exhaustion policies.
 
 Implement joint allocation using the established contracts. Account for persistent content,
 navigation, legal breaks, nested regions, and authored alternatives. Determine the optimization
