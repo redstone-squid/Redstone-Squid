@@ -14,7 +14,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity.addresses import CellAddress, publish
+from squid_reactivity.addresses import CellAddress, CellOwner, SubscriberRegistry, publish
 
 if TYPE_CHECKING:
     from squid_reactivity.transactions import _Transaction
@@ -28,7 +28,7 @@ _MISSING = object()
 """A cell that has never been assigned. Distinct from ``None``, which is a real value."""
 
 
-class ReactiveOwner(Protocol):
+class ReactiveOwner(CellOwner, Protocol):
     """Hooks called when an owner's state commits or rolls back.
 
     State descriptors also require an instance dictionary for cell storage.
@@ -185,6 +185,7 @@ class _Signal:
     """
 
     def __init__(self) -> None:
+        self._reactive_subscribers: SubscriberRegistry = {}
         self.address = CellAddress(self, "revision")
         self.version = 0
 

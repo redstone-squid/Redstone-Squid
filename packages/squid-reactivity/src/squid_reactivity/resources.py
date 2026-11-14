@@ -27,7 +27,7 @@ from squid_reactivity.actions import (
     ExceptionReport,
     current_causality,
 )
-from squid_reactivity.addresses import CellAddress, publish
+from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.async_values import (
     AsyncBinding as AsyncBinding,
 )
@@ -283,6 +283,7 @@ class Resource[ValueT](AsyncBinding):
         self._loader = loader
         self._label = name
         self.pending_mode = pending_mode
+        self._reactive_subscribers: SubscriberRegistry = {}
         self.address = address if address is not None else CellAddress(self, "status")
         self._status: ResourceStatus[ValueT] = Pending()
         self._loading: _Load[ValueT] | None = None

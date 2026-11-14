@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Self, overload, override
 
 import squid_reactivity.tracking as tracking
-from squid_reactivity.addresses import CellAddress, publish
+from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.tracking import (
     _CONSUMER,
     _CURRENT,
@@ -517,6 +517,7 @@ class Reactive:
     """
 
     _reactive_commit_listeners: set[Callable[[], None]]
+    _reactive_subscribers: SubscriberRegistry
 
     _state_names: ClassVar[frozenset[str]] = frozenset()
     _state_descriptors: ClassVar[dict[str, _State]] = {}
@@ -538,6 +539,7 @@ class Reactive:
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         instance = super().__new__(cls)
         # Subclasses can initialize their own inputs without calling a base initializer.
+        object.__setattr__(instance, "_reactive_subscribers", {})
         object.__setattr__(instance, "_reactive_commit_listeners", set())
         object.__setattr__(instance, "_reactive_initialization", _READ_ONLY.get())
         if current := _CURRENT.get():

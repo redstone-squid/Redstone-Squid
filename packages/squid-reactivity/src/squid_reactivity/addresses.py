@@ -8,16 +8,25 @@ import logging
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import override
+from typing import Protocol, override
 
 _logger = logging.getLogger(__name__)
+
+
+type SubscriberRegistry = dict[str, list[weakref.ReferenceType[_Subscription]]]
+
+
+class CellOwner(Protocol):
+    """Store weak subscriptions to an object's reactive fields."""
+
+    _reactive_subscribers: SubscriberRegistry
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class CellAddress:
     """Identify a reactive field by owner identity and field name."""
 
-    owner: object
+    owner: CellOwner
     name: str
 
     @override
@@ -44,7 +53,7 @@ class _Subscription:
 
 def subscribe(address: CellAddress, callback: Callable[[CellAddress], None]) -> Callable[[], None]:
     """Subscribe until the returned callable is called or released."""
-    subscribers = vars(address.owner).setdefault("_reactive_subscribers", {})
+    subscribers = address.owner._reactive_subscribers
     name = address.name
     entries = subscribers.setdefault(name, [])
     subscription = _Subscription(callback)
@@ -63,7 +72,7 @@ def subscribe(address: CellAddress, callback: Callable[[CellAddress], None]) -> 
 
 def publish(address: CellAddress) -> None:
     """Notify current consumers, isolating failures and pruning expired handles."""
-    subscribers = vars(address.owner).get("_reactive_subscribers", {})
+    subscribers = address.owner._reactive_subscribers
     entries = subscribers.get(address.name, [])
     for reference in tuple(entries):
         subscription = reference()
