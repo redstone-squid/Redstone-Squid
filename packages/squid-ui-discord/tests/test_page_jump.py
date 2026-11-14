@@ -1,14 +1,19 @@
 """Page-number forms use the latest pager without bypassing normal dispatch."""
 
+from dataclasses import replace
 from typing import override
 
 import discord
 import pytest
 
 import squid_ui as sl
+from squid_ui import testing as engine
+from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.forms import IntField
-from squid_ui.planning.navigation import page_jump_nav
-from squid_ui.primitives import Lines, Paginate, Text
+from squid_ui.pages import PagePosition
+from squid_ui.planning import PlanCache, plan
+from squid_ui.planning.navigation import NavigationContext, materialized_navigation_state, page_jump_nav
+from squid_ui.primitives import Lines, Paginate, Row, Text
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
 from squid_ui_discord.testing import commit_classic_render, commit_render, interaction_harness
 
@@ -165,3 +170,65 @@ def test_jump_stays_in_navigation_row_and_has_current_form_binding() -> None:
     field = root.plan.form_bindings["__cursor_seek.entries.jump"].spec.items[0]
     assert isinstance(field, IntField)
     assert (field.minimum, field.maximum, field.default) == (1, 100, 1)
+
+
+async def test_two_pagers_keep_separate_forms_and_positions() -> None:
+    class TwoPagers(sl.Component[sl.ComponentsV2Target]):
+        @override
+        def render(self):
+            return sl.stack(
+                Lines(tuple(f"Left {index}" for index in range(100)), overflow=Paginate(key="left", per=1)),
+                Lines(tuple(f"Right {index}" for index in range(100)), overflow=Paginate(key="right", per=1)),
+            )
+
+    root = MessageRoot(TwoPagers(), access=Everyone(), timeout=None, nav=page_jump_nav)
+    commit_render(root)
+    left = await open_jump(root, "__cursor_seek.left.jump")
+    right = await open_jump(root, "__cursor_seek.right.jump")
+    page_input(left)._value = "73"
+    await left.on_submit(interaction_harness())
+    page_input(right)._value = "42"
+    await right.on_submit(interaction_harness())
+    assert root.presentation.cursor("left").position.page == 72
+    assert root.presentation.cursor("right").position.page == 41
+
+
+@pytest.mark.parametrize("page,pages,seekable", [(None, 100, True), (0, None, True), (0, 1, True), (0, 100, False)])
+def test_jump_is_omitted_without_an_addressable_range(page, pages, seekable: bool) -> None:
+    state = replace(materialized_navigation_state("rows", PagePosition(), 100, DEFAULT_CHROME), page=page, extent=pages)
+
+    async def turn(_event) -> None:
+        pass
+
+    async def seek(_event, _page: int) -> None:
+        pass
+
+    rows = page_jump_nav(NavigationContext(state, turn, turn, seek if seekable else None))
+    assert len(rows) == 1
+    assert isinstance(rows[0], Row)
+    assert len(rows[0].items) == 2
+
+
+async def test_cached_jump_form_calls_the_current_page_owner() -> None:
+    cache = PlanCache()
+    seen: list[tuple[str, int]] = []
+
+    async def first(event: sl.PageEvent) -> None:
+        seen.append(("first", event.page))
+
+    async def second(event: sl.PageEvent) -> None:
+        seen.append(("second", event.page))
+
+    for handler in (first, second):
+        result = plan(
+            Lines(
+                tuple(str(index) for index in range(100)),
+                overflow=Paginate(key="entries", per=1, page=sl.controlled(0, handler)),
+            ),
+            target=DISCORD_V2_DPY27,
+            nav=page_jump_nav,
+            cache=cache,
+        )
+    assert result.metrics.cache_hit
+    await result.form_bindings["__cursor_seek.entries.jump"].on_submit(engine.submit_event({"page": 73}))
+    assert seen == [("second", 72)]

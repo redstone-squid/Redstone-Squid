@@ -1120,6 +1120,8 @@ def _collect_cached_bindings(
         )
         for key, binding in generated.bindings.items():
             collected.bindings.setdefault(key, binding)
+        for key, form in generated.form_bindings.items():
+            collected.form_bindings.setdefault(key, form)
     return collected
 
 
