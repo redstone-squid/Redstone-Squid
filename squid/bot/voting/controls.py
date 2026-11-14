@@ -90,7 +90,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
 
 
 async def _authorize(
-    request: sd.Request[squid.bot.app.RedstoneSquid],
+    request: sd.Request[Any, squid.bot.app.RedstoneSquid],
 ) -> tuple[VoteSessionSnapshot, Actor] | None:
     """The session and actor behind a click, or `None` once the click has been refused.
 
@@ -119,7 +119,7 @@ async def _authorize(
     return snapshot, actor
 
 
-async def _refuse(request: sd.Request[Any], rejection: VoteRejection) -> None:
+async def _refuse(request: sd.Request[Any, Any], rejection: VoteRejection) -> None:
     await request.respond(
         text_node(describe_rejection(rejection)),
         audience="personal",

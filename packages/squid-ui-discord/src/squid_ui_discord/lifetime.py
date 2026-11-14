@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class Lifetime:
-    def __init__(self, *, root: AnyMessageRoot | None = None, scope: Scope[Any] | None = None) -> None:
+    def __init__(self, *, root: AnyMessageRoot | None = None, scope: Scope[Any, Any] | None = None) -> None:
         self.root = root
         self.scope = scope
         self.parent: Lifetime | None = None
@@ -27,7 +27,7 @@ class Lifetime:
     def closed(self) -> bool:
         return self.root.finished if self.root is not None else self.closing
 
-    def scope_owner(self) -> Scope[Any] | None:
+    def scope_owner(self) -> Scope[Any, Any] | None:
         node: Lifetime | None = self
         while node is not None:
             if node.scope is not None:

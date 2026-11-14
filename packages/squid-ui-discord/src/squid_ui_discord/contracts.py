@@ -1,7 +1,7 @@
 """Static contracts shared by the owner-scoped Discord facade."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from squid_ui_discord.request import Request
@@ -23,13 +23,17 @@ type RequestSource = InteractionSource | CommandSource | discord.Message
 type ResponseSource = RequestSource
 type LocalizationSource = ResponseSource | Replyable
 
-type DocumentContent = (
-    Document[ComponentsV2Target, Request]
-    | LayoutNode[ComponentsV2Target, Request]
-    | Sequence[LayoutNode[ComponentsV2Target, Request]]
+type DocumentContent[ClientT: discord.Client = discord.Client] = (
+    Document[ComponentsV2Target, Request[Any, ClientT]]
+    | LayoutNode[ComponentsV2Target, Request[Any, ClientT]]
+    | Sequence[LayoutNode[ComponentsV2Target, Request[Any, ClientT]]]
 )
-type StaticContent = MessagePayload | str | discord.Embed | discord.ui.View | DocumentContent
-type FacadeContent = StaticContent | Component[ComponentsV2Target, Request]
+type StaticContent[ClientT: discord.Client = discord.Client] = (
+    MessagePayload | str | discord.Embed | discord.ui.View | DocumentContent[ClientT]
+)
+type FacadeContent[ClientT: discord.Client = discord.Client] = (
+    StaticContent[ClientT] | Component[ComponentsV2Target, Request[Any, ClientT]]
+)
 # Both halves for the same reason `send_to` has two overloads: discord.py's overloaded `send`
 # does not structurally satisfy the protocol, so a real channel needs naming on its own.
 type SendDestination = discord.abc.Messageable | Messageable

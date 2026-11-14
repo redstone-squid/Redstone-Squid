@@ -5,6 +5,8 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack, cast
 
+import discord
+
 from squid_reactivity.completion import Completion
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.transactions import (
@@ -32,11 +34,11 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class _Flow[ResultT, OwnerT]:
-    scope: Scope[OwnerT] | None = None
-    opening: Request[OwnerT] | None = None
+class _Flow[ResultT, OwnerT, ClientT: discord.Client]:
+    scope: Scope[OwnerT, ClientT] | None = None
+    opening: Request[OwnerT, ClientT] | None = None
     root: MessageRoot | None = None
-    parent: Screen[Any, Any] | None = None
+    parent: Screen[Any, Any, Any] | None = None
     on_result: Callable[[ScreenResultEvent[ResultT]], Awaitable[None]] | None = None
     on_cancel: Callable[[Cancelled], Awaitable[None]] | None = None
     outcome: Completed[ResultT] | Cancelled | None = None
@@ -48,7 +50,9 @@ class _Flow[ResultT, OwnerT]:
     closing_task: int | None = None
 
 
-class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request[Any]]):
+class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Client](
+    Component[ComponentsV2Target, Request[Any, ClientT]]
+):
     """A single presentation whose outcome and children end with its owning scope.
 
     Declare reusable delivery settings in ``policy``. Operational settings omitted there
@@ -86,11 +90,11 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         return policy
 
     @property
-    def _screen_flow(self) -> _Flow[ResultT, OwnerT]:
+    def _screen_flow(self) -> _Flow[ResultT, OwnerT, ClientT]:
         # Subclasses need no super().__init__ call, as with Component's own state.
         state = self.__dict__.get("_screen_flow")
         if state is None:
-            state = _Flow[ResultT, OwnerT]()
+            state = _Flow[ResultT, OwnerT, ClientT]()
             self.__dict__["_screen_flow"] = state
         return state
 
@@ -103,12 +107,12 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         return scope.owner
 
     @property
-    def opening(self) -> Request[OwnerT] | None:
+    def opening(self) -> Request[OwnerT, ClientT] | None:
         """The opening request, or None for out-of-band delivery."""
         return self._screen_flow.opening
 
     @property
-    def parent(self) -> Screen[Any, Any] | None:
+    def parent(self) -> Screen[Any, Any, Any] | None:
         return self._screen_flow.parent
 
     @property
@@ -154,7 +158,7 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
     async def on_close(self, outcome: Completed[ResultT] | Cancelled) -> None:
         """Run once after owned children close; failures join supervised shutdown."""
 
-    def _screen_claim(self, scope: Scope[OwnerT], opening: Request[OwnerT] | None) -> None:
+    def _screen_claim(self, scope: Scope[OwnerT, ClientT], opening: Request[OwnerT, ClientT] | None) -> None:
         state = self._screen_flow
         if state.claimed or state.closing:
             msg = "this Screen instance has already been presented; use one presentation attempt per instance"
@@ -204,7 +208,7 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
             raise RuntimeError(msg)
         return root
 
-    def _screen_validate_event(self, event: ActionEvent) -> ActionResponder:
+    def _screen_validate_event(self, event: ActionEvent[ClientT]) -> ActionResponder:
         state = self._screen_flow
         root = self._screen_require_root()
         responder = event.responder
@@ -221,15 +225,15 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
             raise RuntimeError(msg)
         return responder
 
-    def complete(self, event: ActionEvent, value: ResultT) -> None:
+    def complete(self, event: ActionEvent[ClientT], value: ResultT) -> None:
         """Stage a result; publish it only after the action and parent callback succeed."""
         self._screen_stage_outcome(event, Completed(value))
 
-    def cancel(self, event: ActionEvent) -> None:
+    def cancel(self, event: ActionEvent[ClientT]) -> None:
         """Stage user cancellation after this action commits."""
         self._screen_stage_outcome(event, Cancelled(ScreenCancelReason.USER))
 
-    def _screen_stage_outcome(self, event: ActionEvent, outcome: Completed[ResultT] | Cancelled) -> None:
+    def _screen_stage_outcome(self, event: ActionEvent[ClientT], outcome: Completed[ResultT] | Cancelled) -> None:
         responder = self._screen_validate_event(event)
         state = self._screen_flow
         if state.pending or state.outcome is not None:
@@ -297,7 +301,7 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
 
     async def open_child[ChildResultT](
         self,
-        event: ActionEvent,
+        event: ActionEvent[ClientT],
         child: Screen[ChildResultT, Any],
         *,
         on_result: Callable[[ScreenResultEvent[ChildResultT]], Awaitable[None]],

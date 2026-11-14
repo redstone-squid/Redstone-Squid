@@ -31,7 +31,9 @@ from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.request import Deferral, Request, _request_for_binding
 from squid_ui_discord.response import Abandoned, Presented, Rejected, Response, ResponseResult, Sent
 
-type CommandResult = FacadeContent | Response[Any] | FormSpec | ModalSpec | discord.ui.Modal | ResponseResult | None
+type CommandResult = (
+    FacadeContent[Any] | Response[Any] | FormSpec | ModalSpec | discord.ui.Modal | ResponseResult | None
+)
 type ChoiceValue = str | int | float
 type AutocompleteItem = app_commands.Choice[ChoiceValue] | tuple[str, ChoiceValue]
 type AsyncHandler = Callable[..., Awaitable[object]]
@@ -111,15 +113,15 @@ class CommandDecorator(Protocol):
     """What `sd.command(...)` returns; a method's `Request` is typed by its binding."""
 
     @overload
-    def __call__[OwnerT: _Binding, **P](
+    def __call__[OwnerT: _Binding, ClientT: discord.Client, **P](
         self,
-        callback: Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[CommandResult]],
+        callback: Callable[Concatenate[OwnerT, Request[OwnerT, ClientT], P], Awaitable[CommandResult]],
         /,
     ) -> app_commands.Command[OwnerT, P, None]: ...
     @overload
-    def __call__[**P](
+    def __call__[ClientT: discord.Client, **P](
         self,
-        callback: Callable[Concatenate[Request[Any], P], Awaitable[CommandResult]],
+        callback: Callable[Concatenate[Request[Any, ClientT], P], Awaitable[CommandResult]],
         /,
     ) -> app_commands.Command[Any, P, None]: ...
 
@@ -128,15 +130,15 @@ class HybridCommandDecorator(Protocol):
     """What `sd.hybrid_command(...)` returns."""
 
     @overload
-    def __call__[OwnerT: commands.Cog, **P](
+    def __call__[OwnerT: commands.Cog, ClientT: discord.Client, **P](
         self,
-        callback: Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[CommandResult]],
+        callback: Callable[Concatenate[OwnerT, Request[OwnerT, ClientT], P], Awaitable[CommandResult]],
         /,
     ) -> commands.HybridCommand[OwnerT, P, None]: ...
     @overload
-    def __call__[**P](
+    def __call__[ClientT: discord.Client, **P](
         self,
-        callback: Callable[Concatenate[Request[Any], P], Awaitable[CommandResult]],
+        callback: Callable[Concatenate[Request[Any, ClientT], P], Awaitable[CommandResult]],
         /,
     ) -> commands.HybridCommand[Any, P, None]: ...
 
@@ -145,15 +147,15 @@ class PrefixCommandDecorator(Protocol):
     """What `sd.prefix_command(...)` returns."""
 
     @overload
-    def __call__[OwnerT: commands.Cog, **P](
+    def __call__[OwnerT: commands.Cog, ClientT: discord.Client, **P](
         self,
-        callback: Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[CommandResult]],
+        callback: Callable[Concatenate[OwnerT, Request[OwnerT, ClientT], P], Awaitable[CommandResult]],
         /,
     ) -> commands.Command[OwnerT, P, None]: ...
     @overload
-    def __call__[**P](
+    def __call__[ClientT: discord.Client, **P](
         self,
-        callback: Callable[Concatenate[Request[Any], P], Awaitable[CommandResult]],
+        callback: Callable[Concatenate[Request[Any, ClientT], P], Awaitable[CommandResult]],
         /,
     ) -> commands.Command[Any, P, None]: ...
 
@@ -232,7 +234,7 @@ def _as_request_source(value: object) -> RequestSource:
     raise TypeError(message)
 
 
-def _group_policy(req: Request[Any]) -> CommandPolicy:
+def _group_policy(req: Request[Any, Any]) -> CommandPolicy:
     """The policy inherited down the invoked command's parent chain, outermost first."""
     chain: list[CommandPolicy] = []
     node: object = req.command
@@ -247,7 +249,7 @@ def _group_policy(req: Request[Any]) -> CommandPolicy:
     return inherited
 
 
-async def present_return(req: Request[Any], result: CommandResult) -> ResponseResult | None:
+async def present_return(req: Request[Any, Any], result: CommandResult) -> ResponseResult | None:
     """Present a handler's content unless it already returned a settled outcome or None.
 
     Returning new content after responding through the request raises instead of sending
@@ -264,7 +266,7 @@ async def present_return(req: Request[Any], result: CommandResult) -> ResponseRe
     return await req.respond(result)
 
 
-async def _run_pending(req: Request[Any], card: PendingCard, work: Callable[[], Awaitable[object]]) -> None:
+async def _run_pending(req: Request[Any, Any], card: PendingCard, work: Callable[[], Awaitable[object]]) -> None:
     """Show `card` at once, run `work` behind it, and replace it with the returned document.
 
     The error policy from `Config.errors` renders and observes a failure; the failure is
@@ -551,8 +553,8 @@ def bind_context_menu(
     return menu
 
 
-def autocomplete[OwnerT, **P]() -> Callable[
-    [Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[Sequence[AutocompleteItem]]]],
+def autocomplete[OwnerT, ClientT: discord.Client, **P]() -> Callable[
+    [Callable[Concatenate[OwnerT, Request[OwnerT, ClientT], P], Awaitable[Sequence[AutocompleteItem]]]],
     Callable[
         Concatenate[OwnerT, discord.Interaction[discord.Client], P],
         Coroutine[None, None, list[app_commands.Choice[ChoiceValue]]],
@@ -565,7 +567,7 @@ def autocomplete[OwnerT, **P]() -> Callable[
     """
 
     def decorate(
-        callback: Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[Sequence[AutocompleteItem]]],
+        callback: Callable[Concatenate[OwnerT, Request[OwnerT, ClientT], P], Awaitable[Sequence[AutocompleteItem]]],
     ) -> Callable[
         Concatenate[OwnerT, discord.Interaction[discord.Client], P],
         Coroutine[None, None, list[app_commands.Choice[ChoiceValue]]],

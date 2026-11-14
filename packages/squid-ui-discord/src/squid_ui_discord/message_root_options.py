@@ -1,7 +1,7 @@
 """Reusable host defaults for Discord message roots."""
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Unpack
+from typing import TYPE_CHECKING, Any, Unpack
 
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
@@ -33,7 +33,7 @@ class MessageRootDefaults[
 
     def mount(
         self,
-        component: Component[RenderTargetT, Request],
+        component: Component[RenderTargetT, Request[Any, Any]],
         *,
         access: AccessPolicy,
         **overrides: Unpack[MessageRootBehaviorOptions],

@@ -79,7 +79,7 @@ class RenderedMessage[ViewT: (discord.ui.LayoutView, discord.ui.View | None), Bo
 
 
 def render_message(
-    rendered: DocumentLike[ComponentsV2Target, Request],
+    rendered: DocumentLike[ComponentsV2Target, Request[Any, Any]],
     *,
     wire: Wire | None = None,
     renderer: V2Renderer | None = None,
@@ -104,7 +104,7 @@ def render_message(
 
 
 def render_static(
-    nodes: DocumentLike[ComponentsV2Target, Request] | Component[ComponentsV2Target, Request],
+    nodes: DocumentLike[ComponentsV2Target, Request[Any, Any]] | Component[ComponentsV2Target, Request[Any, Any]],
     *,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     **options: Unpack[StaticPlanOptions],
@@ -118,7 +118,7 @@ def render_static(
 
 
 def render_item(
-    node: LayoutNode[ComponentsV2Target, Request],
+    node: LayoutNode[ComponentsV2Target, Request[Any, Any]],
     *,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,

@@ -54,7 +54,7 @@ type RequestOrigin = ResponseSource | ActionEvent
 """Anything a request can be resolved from: a native source, or a component event."""
 
 _MEMO_KEY = "squid_ui_discord.request"
-_MEMO: weakref.WeakKeyDictionary[Any, Request[Any]] = weakref.WeakKeyDictionary()
+_MEMO: weakref.WeakKeyDictionary[Any, Request[Any, Any]] = weakref.WeakKeyDictionary()
 """Requests for sources without an `extras` mapping (command contexts, messages, test doubles)."""
 
 
@@ -73,7 +73,7 @@ def _kind(source: object) -> SourceKind:
     raise TypeError(message)
 
 
-def _memo_get(source: object) -> Request[Any] | None:
+def _memo_get(source: object) -> Request[Any, Any] | None:
     extras = getattr(source, "extras", None)
     if isinstance(extras, dict):
         found = extras.get(_MEMO_KEY)
@@ -84,7 +84,7 @@ def _memo_get(source: object) -> Request[Any] | None:
         return None
 
 
-def _memo_set(source: object, request: Request[Any]) -> None:
+def _memo_set(source: object, request: Request[Any, Any]) -> None:
     extras = getattr(source, "extras", None)
     if isinstance(extras, dict):
         extras[_MEMO_KEY] = request
@@ -95,15 +95,15 @@ def _memo_set(source: object, request: Request[Any]) -> None:
 
 
 @dataclass(slots=True, eq=False)
-class Request[OwnerT = Any]:
+class Request[OwnerT = Any, ClientT: discord.Client = discord.Client]:
     """One Discord source, its resolved owner and locale, and its facade response ledger.
 
     The native source determines how long delivery credentials remain usable. Native sends
     made outside this facade do not update the ledger.
     """
 
-    runtime: DiscordUIRuntime[Any]
-    scope: Scope[OwnerT]
+    _runtime: DiscordUIRuntime[ClientT]
+    _scope: Scope[OwnerT, ClientT]
     source: ResponseSource
     kind: SourceKind
     localization: Localization
@@ -117,12 +117,20 @@ class Request[OwnerT = Any]:
     _audience: Visibility | None = None
 
     @property
+    def runtime(self) -> DiscordUIRuntime[ClientT]:
+        return self._runtime
+
+    @property
+    def scope(self) -> Scope[OwnerT, ClientT]:
+        return self._scope
+
+    @property
     def owner(self) -> OwnerT:
         """The application object whose scope tracks what this request opens."""
         return self.scope.owner
 
     @property
-    def client(self) -> discord.Client:
+    def client(self) -> ClientT:
         """The Discord client that owns this dispatch."""
         return self.runtime.client
 
@@ -142,12 +150,12 @@ class Request[OwnerT = Any]:
         return cast(discord.abc.Messageable | None, getattr(self.source, "channel", None))
 
     @property
-    def interaction(self) -> discord.Interaction[Any] | None:
+    def interaction(self) -> discord.Interaction[ClientT] | None:
         """The native interaction, including one carried by a hybrid context."""
         if self.kind == "interaction":
-            return cast(discord.Interaction[Any], self.source)
+            return cast(discord.Interaction[ClientT], self.source)
         if self.kind == "context":
-            return cast(discord.Interaction[Any] | None, getattr(self.source, "interaction", None))
+            return cast(discord.Interaction[ClientT] | None, getattr(self.source, "interaction", None))
         return None
 
     @property
@@ -307,7 +315,7 @@ class Request[OwnerT = Any]:
         return deliver
 
     @overload
-    async def respond[ComponentT: Component[ComponentsV2Target, Request]](
+    async def respond[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]](
         self,
         content: ComponentT | Response[ComponentT],
         *,
@@ -320,7 +328,7 @@ class Request[OwnerT = Any]:
     @overload
     async def respond(
         self,
-        content: FacadeContent | Response,
+        content: FacadeContent[ClientT] | Response,
         *,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
@@ -333,7 +341,7 @@ class Request[OwnerT = Any]:
     # is the reason this ladder exists: it is what gives a component response its own type back.
     async def respond(  # pyright: ignore[reportInconsistentOverload]
         self,
-        content: FacadeContent | Response[Any],
+        content: FacadeContent[ClientT] | Response[Any],
         *,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
@@ -349,7 +357,7 @@ class Request[OwnerT = Any]:
         if self._form_opened:
             message = "a form response cannot be followed by message content in the same dispatch"
             raise RuntimeError(message)
-        resolved: FacadeContent
+        resolved: FacadeContent[ClientT]
         if isinstance(content, Response):
             overrides = {**content._options, **overrides}
             resolved = content.content
@@ -431,7 +439,19 @@ class Request[OwnerT = Any]:
         self._form_opened = True
 
 
-async def request(source: RequestOrigin) -> Request[Any]:
+@overload
+async def request[ClientT: discord.Client](source: discord.Interaction[ClientT]) -> Request[Any, ClientT]: ...
+
+
+@overload
+async def request[BotT: commands.Bot](source: commands.Context[BotT]) -> Request[Any, BotT]: ...
+
+
+@overload
+async def request(source: RequestOrigin) -> Request[Any]: ...
+
+
+async def request(source: RequestOrigin) -> Request[Any, Any]:
     """Resolve the one request for a source, inferring its owner from Discord dispatch.
 
     Commands inherit their binding's registered scope; component events inherit their root's
@@ -452,12 +472,12 @@ def _command_binding(source: object) -> object | None:
     return None
 
 
-def _binding_scope(runtime: DiscordUIRuntime[Any], binding: object) -> Scope[Any]:
+def _binding_scope(runtime: DiscordUIRuntime[Any], binding: object) -> Scope[Any, Any]:
     # Class-body groups organize commands but do not own panel lifetimes.
     return runtime.app if isinstance(binding, app_commands.Group) else runtime.scope_for(binding)
 
 
-async def _request_for_binding(source: RequestOrigin, binding: object | None) -> Request[Any]:
+async def _request_for_binding(source: RequestOrigin, binding: object | None) -> Request[Any, Any]:
     """Apply the wrapper's actual binding, including context-menu and autocomplete callbacks."""
     # Runtime constructs scopes, whose request method imports this resolver.
     from squid_ui_discord.runtime import DiscordUIRuntime
@@ -467,9 +487,21 @@ async def _request_for_binding(source: RequestOrigin, binding: object | None) ->
     return await _resolve_request(source, scope=scope)
 
 
+@overload
+async def _resolve_request[OwnerT, ClientT: discord.Client](
+    source: RequestOrigin, *, scope: Scope[OwnerT, ClientT], root: MessageRoot | None = None
+) -> Request[OwnerT, ClientT]: ...
+
+
+@overload
 async def _resolve_request(
-    source: RequestOrigin, *, scope: Scope[Any] | None = None, root: MessageRoot | None = None
-) -> Request[Any]:
+    source: RequestOrigin, *, scope: None = None, root: MessageRoot | None = None
+) -> Request[Any, Any]: ...
+
+
+async def _resolve_request(
+    source: RequestOrigin, *, scope: Scope[Any, Any] | None = None, root: MessageRoot | None = None
+) -> Request[Any, Any]:
     """Share source normalization and memoization between inferred and bound resolution."""
     # Runtime imports Scope, and Scope imports this module.
     from squid_ui_discord.runtime import DiscordUIRuntime
@@ -491,7 +523,7 @@ async def _resolve_request(
         if scope.runtime is not runtime:
             message = "the request source belongs to a different Discord runtime"
             raise ValueError(message)
-    inferred: Scope[Any] | None = None
+    inferred: Scope[Any, Any] | None = None
     if root is not None:
         inferred = runtime.scope_of_root(root)
     elif (binding := _command_binding(native)) is not None:
@@ -507,7 +539,7 @@ async def _resolve_request(
             if found.scope is not runtime.app or found.responded or found._form_opened:
                 message = "the request already belongs to a different UI scope"
                 raise ValueError(message)
-            found.scope = selected
+            found._scope = selected
         if root is not None and found.root is None:
             found.root = root
             found.localization = root.localization
@@ -523,7 +555,7 @@ async def _resolve_request(
         raise TypeError(message)
     selected = runtime.app if selected is None else selected
     selected._require_live()
-    resolved = Request[Any](
+    resolved = Request[Any, Any](
         runtime,
         selected,
         cast(ResponseSource, native),

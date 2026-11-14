@@ -33,7 +33,7 @@ class Cog[BotT: commands.Bot](commands.Cog):
         super().__init__()
         self.bot = bot
         runtime = DiscordUIRuntime.of(bot)
-        self.ui: Scope[Self] = runtime.scope(self)
+        self.ui: Scope[Self, BotT] = runtime.scope(self)
         self._squid_context_menus: list[app_commands.ContextMenu] = []
 
     async def ui_load(self) -> None:

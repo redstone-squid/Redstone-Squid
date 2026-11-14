@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from squid_ui_discord.runtime import DiscordUIRuntime
 
 
-class Scope[OwnerT = Any]:
+class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
     """Apply response policies and own the lifetime of one application object's panels.
 
     A request carries the scope of the cog (or app) it was dispatched to, so replies go
@@ -58,13 +58,13 @@ class Scope[OwnerT = Any]:
     Calling close finishes tracked roots and unregisters the scope.
     """
 
-    def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT) -> None:
+    def __init__(self, runtime: DiscordUIRuntime[ClientT], owner: OwnerT) -> None:
         self._runtime = runtime
         self._owner = owner
         self._lifetime = Lifetime(scope=self)
 
     @property
-    def runtime(self) -> DiscordUIRuntime[discord.Client]:
+    def runtime(self) -> DiscordUIRuntime[ClientT]:
         """The process UI runtime that created this scope."""
         return self._runtime
 
@@ -84,7 +84,7 @@ class Scope[OwnerT = Any]:
             raise RuntimeError(message)
 
     def _policy(
-        self, content: FacadeContent, overrides: ResponseOverrides, actor_id: int | None = None
+        self, content: FacadeContent[ClientT], overrides: ResponseOverrides, actor_id: int | None = None
     ) -> ResolvedResponse:
         policy = self._runtime.response_defaults
         screen_spec = getattr(type(content), "__response_spec__", None)
@@ -92,7 +92,7 @@ class Scope[OwnerT = Any]:
             policy = policy.overlay(screen_spec)
         return policy.overlay(None, **overrides).resolve(actor_id)
 
-    async def request(self, source: RequestOrigin) -> Request[OwnerT]:
+    async def request(self, source: RequestOrigin) -> Request[OwnerT, ClientT]:
         """Resolve this owner's request, sharing the source's existing acknowledgement ledger.
 
         Use this in listeners and native callbacks whose source carries no command binding.
@@ -100,9 +100,9 @@ class Scope[OwnerT = Any]:
         raises instead of opening a panel with a different lifetime.
         """
         self._require_live()
-        return cast(Request[OwnerT], await _resolve_request(source, scope=self))
+        return await _resolve_request(source, scope=self)
 
-    def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
+    def render(self, content: FacadeContent[ClientT], *, localization: Localization | None = None) -> MessagePayload:
         """Render static content using the installed defaults.
 
         A Component is rendered once without loading, mounting, or starting its services.
@@ -122,7 +122,7 @@ class Scope[OwnerT = Any]:
             return MessagePayload.classic(view=content)
         rendered = content.render() if isinstance(content, Component) else content
         return render_static(
-            cast(DocumentContent, rendered),
+            cast(DocumentContent[ClientT], rendered),
             target=defaults.target,
             chrome=defaults.chrome,
             localization=selected,
@@ -133,7 +133,7 @@ class Scope[OwnerT = Any]:
     async def send(
         self,
         destination: SendDestination,
-        content: FacadeContent,
+        content: FacadeContent[ClientT],
         *,
         locale: str | None = None,
         files: Sequence[discord.File] = (),
@@ -164,7 +164,7 @@ class Scope[OwnerT = Any]:
     async def edit(
         self,
         target: discord.Message,
-        content: FacadeContent,
+        content: FacadeContent[ClientT],
         *,
         files: Sequence[discord.File] = (),
         **overrides: Unpack[ResponseOverrides],
@@ -186,8 +186,8 @@ class Scope[OwnerT = Any]:
 
     async def _respond_resolved(
         self,
-        request: Request[Any],
-        content: FacadeContent,
+        request: Request[Any, Any],
+        content: FacadeContent[ClientT],
         *,
         overrides: ResponseOverrides,
         files: Sequence[discord.File],
@@ -214,7 +214,7 @@ class Scope[OwnerT = Any]:
 
     async def _present(
         self,
-        content: FacadeContent,
+        content: FacadeContent[ClientT],
         *,
         destination: MessageDestination,
         policy: ResolvedResponse,
@@ -223,7 +223,7 @@ class Scope[OwnerT = Any]:
         actor_id: int | None,
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
-        opening: Request[Any] | None = None,
+        opening: Request[Any, Any] | None = None,
     ) -> ResponseResult:
         screen = content if isinstance(content, Screen) else None
         if screen is not None:
@@ -257,7 +257,7 @@ class Scope[OwnerT = Any]:
 
     async def _deliver(
         self,
-        content: FacadeContent,
+        content: FacadeContent[ClientT],
         *,
         destination: MessageDestination,
         policy: ResolvedResponse,

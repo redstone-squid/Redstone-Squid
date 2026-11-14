@@ -22,7 +22,7 @@ class Builds(sd.Cog[commands.Bot]):
     @sd.command(defer="private", description="Show a build")
     async def build(self, request: sd.Request[Self], build_id: int) -> Panel:
         assert_type(request.owner, Self)
-        assert_type(request.interaction, discord.Interaction[Any] | None)
+        assert_type(request.interaction, discord.Interaction[discord.Client] | None)
         return Panel()
 
     @tools.command(name="ping")
@@ -65,10 +65,10 @@ async def facade_inference(
     event: sl.PressEvent,
 ) -> None:
     ui = runtime.scope(cog)
-    assert_type(ui, sd.Scope[Builds])
+    assert_type(ui, sd.Scope[Builds, commands.Bot])
 
     request = await ui.request(interaction)
-    assert_type(request, sd.Request[Builds])
+    assert_type(request, sd.Request[Builds, commands.Bot])
     assert_type(request.owner, Builds)
 
     outcome = await request.respond(Panel())

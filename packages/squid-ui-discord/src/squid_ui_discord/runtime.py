@@ -17,6 +17,7 @@ from typing import Any, Never, Unpack, cast, overload
 import anyio
 import discord
 from anyio.abc import TaskStatus
+from discord.ext import commands
 
 from squid_ui.errors import SquidUiError
 from squid_ui.interactions import ActionEvent
@@ -96,7 +97,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         response_defaults: ResponseSpec,
         config: Config,
     ) -> None:
-        self.client = client
+        self._client = client
         self.sessions = sessions
         self.challenges = challenges
         self.scheduler = scheduler
@@ -106,6 +107,11 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.execution_host = sessions.defaults.execution_host
         self._lifetime = Lifetime()
         self._lifetime.adopt(sessions._lifetime)
+
+    @property
+    def client(self) -> ClientT:
+        """The client this runtime was installed on."""
+        return self._client
 
     @property
     def defaults(self) -> MessageRootDefaults:
@@ -118,7 +124,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     def mount(
         self,
-        component: Component[ComponentsV2Target, Request],
+        component: Component[ComponentsV2Target, Request[Any, ClientT]],
         *,
         access: AccessPolicy,
         **overrides: Unpack[MessageRootBehaviorOptions],
@@ -170,6 +176,20 @@ class DiscordUIRuntime[ClientT: discord.Client]:
             raise ExceptionGroup(message, errors)
 
     @classmethod
+    @overload
+    def of[SourceClientT: discord.Client](
+        cls, source: SourceClientT | discord.Interaction[SourceClientT]
+    ) -> DiscordUIRuntime[SourceClientT]: ...
+
+    @classmethod
+    @overload
+    def of[BotT: commands.Bot](cls, source: commands.Context[BotT]) -> DiscordUIRuntime[BotT]: ...
+
+    @classmethod
+    @overload
+    def of(cls, source: RuntimeSource) -> DiscordUIRuntime[discord.Client]: ...
+
+    @classmethod
     def of(cls, source: RuntimeSource) -> DiscordUIRuntime[Any]:
         """The host installed on the client `source` names.
 
@@ -193,9 +213,9 @@ class DiscordUIRuntime[ClientT: discord.Client]:
     def scope(self, owner: None) -> Never: ...
 
     @overload
-    def scope[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]: ...
+    def scope[OwnerT](self, owner: OwnerT) -> Scope[OwnerT, ClientT]: ...
 
-    def scope[OwnerT](self, owner: OwnerT | None) -> Scope[OwnerT]:
+    def scope[OwnerT](self, owner: OwnerT | None) -> Scope[OwnerT, ClientT]:
         """Return the one live scope registered for ``owner`` by exact identity."""
         if owner is None:
             message = "None cannot own a Discord UI scope"
@@ -205,28 +225,28 @@ class DiscordUIRuntime[ClientT: discord.Client]:
             if scope is None:
                 continue
             if scope.owner is owner and not scope.closed:
-                return cast(Scope[OwnerT], scope)
-        scope = Scope(cast(DiscordUIRuntime[discord.Client], self), owner)
+                return cast(Scope[OwnerT, ClientT], scope)
+        scope = Scope(self, owner)
         self._lifetime.adopt(scope._lifetime)
         return scope
 
     @property
-    def app(self) -> Scope[ClientT]:
+    def app(self) -> Scope[ClientT, ClientT]:
         """The scope owned by the client itself, where unowned requests land."""
         return self.scope(self.client)
 
-    def scope_for[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]:
+    def scope_for[OwnerT](self, owner: OwnerT) -> Scope[OwnerT, ClientT]:
         """Return an owner's registered live scope, raising if it is missing or closed."""
         for node in self._lifetime.children:
             scope = node.scope
             if scope is None:
                 continue
             if scope.owner is owner and not scope.closed:
-                return cast(Scope[OwnerT], scope)
+                return cast(Scope[OwnerT, ClientT], scope)
         message = f"{type(owner).__name__} has no live UI scope; register it before dispatch"
         raise RuntimeError(message)
 
-    def scope_of_root(self, root: MessageRoot | None) -> Scope[Any]:
+    def scope_of_root(self, root: MessageRoot | None) -> Scope[Any, ClientT]:
         """Find invocation authority through the presentation's lifetime owner."""
         if root is not None:
             if root.finished:
@@ -234,10 +254,13 @@ class DiscordUIRuntime[ClientT: discord.Client]:
                 raise RuntimeError(message)
             scope = root._lifetime.scope_owner()
             if scope is not None:
-                return scope
+                if scope.runtime is not self:
+                    message = "the component belongs to a different Discord runtime"
+                    raise ValueError(message)
+                return cast(Scope[Any, ClientT], scope)
         return self.app
 
-    def _track[OwnerT](self, scope: Scope[OwnerT], message_root: MessageRoot) -> None:
+    def _track[OwnerT](self, scope: Scope[OwnerT, Any], message_root: MessageRoot) -> None:
         existing = message_root._lifetime.scope_owner()
         if existing is not None:
             if existing is not scope:
@@ -265,7 +288,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
             if policy.observe is not None:
                 await policy.observe(req, error, delivery)
 
-    async def _close_scope[OwnerT](self, scope: Scope[OwnerT], *, reason: CloseReason) -> None:
+    async def _close_scope[OwnerT](self, scope: Scope[OwnerT, Any], *, reason: CloseReason) -> None:
         try:
             await scope._lifetime.close_children(reason=reason)
         finally:

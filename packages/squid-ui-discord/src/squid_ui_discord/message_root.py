@@ -353,7 +353,7 @@ class MessageRoot[
     @overload
     def __init__(
         self: MessageRoot[ComponentsV2Target, DiscordPy27Adapter],
-        component: Component[ComponentsV2Target, Request],
+        component: Component[ComponentsV2Target, Request[Any, Any]],
         *,
         access: AccessPolicy,
         config: None = None,
@@ -364,7 +364,7 @@ class MessageRoot[
     @overload
     def __init__(
         self,
-        component: Component[RenderTargetT, Request],
+        component: Component[RenderTargetT, Request[Any, Any]],
         *,
         access: AccessPolicy,
         target: Target[Any, Any, RenderTargetT, AdapterT],
@@ -375,7 +375,7 @@ class MessageRoot[
     @overload
     def __init__(
         self,
-        component: Component[RenderTargetT, Request],
+        component: Component[RenderTargetT, Request[Any, Any]],
         *,
         access: AccessPolicy,
         config: MessageRootConfig[RenderTargetT, AdapterT],
@@ -1998,7 +1998,7 @@ class MessageRoot[
             return replace(
                 request,
                 root=cast(MessageRoot, self),
-                scope=request.runtime.scope_of_root(cast(MessageRoot, self)),
+                _scope=request.runtime.scope_of_root(cast(MessageRoot, self)),
                 localization=self.localization,
             )
         return request
@@ -3050,7 +3050,7 @@ class MessageRoot[
 
 
 def owner_message_root(
-    component: Component[ComponentsV2Target, Request],
+    component: Component[ComponentsV2Target, Request[Any, Any]],
     user_id: int,
     **options: Unpack[MessageRootBehaviorOptions],
 ) -> MessageRoot:

@@ -92,3 +92,17 @@ def test_runtime_has_no_delivery_methods() -> None:
     assert not hasattr(installed, "respond")
     assert not hasattr(installed, "send")
     assert not hasattr(installed, "edit")
+
+
+async def test_component_scope_cannot_supply_another_runtimes_client() -> None:
+    installed = runtime()
+    other = runtime()
+    root = installed.mount(Panel(), access=sd.Everyone())
+    installed._track(installed.app, root)
+    try:
+        assert installed.scope_of_root(root) is installed.app
+        with pytest.raises(ValueError, match="different Discord runtime"):
+            other.scope_of_root(root)
+    finally:
+        await installed.close()
+        await other.close()

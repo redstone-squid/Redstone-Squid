@@ -693,7 +693,7 @@ def _sequence(value: object) -> Sequence[object]:
     return (value,)
 
 
-class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
+class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
     """A facade-presented component; the stage context ends its root."""
 
     def __init__(
@@ -831,7 +831,7 @@ def _interaction(client: discord.Client, user_id: int) -> InteractionHarness:
 
 
 @asynccontextmanager
-async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request]](
+async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request[Any, Any]]](
     content: ComponentT,
     *,
     owner: OwnerT,
