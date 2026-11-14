@@ -25,7 +25,7 @@ from squid.records.application.services import RecordComputationService
 from squid.records.domain.regions import RegionAnalysisStatus
 from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.records.infrastructure.range_wire import failed_analysis
-from squid.records.models import DoorRangeSnapshot, RulesRevision
+from squid.records.models import DoorRangeSnapshot, RecordRecomputeQueueItem, RulesRevision
 from tests.support.build_edits import build_edit_session
 from tests.unit.records.application.test_expansion_regions import branch, family
 
@@ -151,6 +151,19 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         session.add(door)
         await session.flush()
         build_id = door.id
+        fixed = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=Status.CONFIRMED,
+            orientation="Door",
+            door_width=6,
+            door_height=3,
+            width=10,
+            height=10,
+            depth=1,
+        )
+        session.add(fixed)
+        await session.flush()
+        fixed_id = fixed.id
 
     class EditingAnalyzer:
         edited = False
@@ -175,6 +188,12 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
     first = await publisher.publish(DoorRangeQuery(height=3))
     assert first.active is not None
     first_run_id = first.active.id
+    point = await publisher.get_point(first.query_id, 6)
+    assert point is not None
+    assert point.region is not None
+    assert point.region.resolution.holder_ids == (build_id,)
+    assert point.publication is not None
+    assert point.publication.id == first_run_id
     async with factory() as uow:
         saved = await uow.record_ranges.get_snapshot(first_run_id)
         assert saved is not None
@@ -186,6 +205,12 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
     assert refreshed is not None
     assert refreshed.active is not None
     assert refreshed.active.id != first_run_id
+    point = await publisher.get_point(first.query_id, 6)
+    assert point is not None
+    assert point.region is not None
+    assert point.region.resolution.holder_ids == (fixed_id,)
+    assert point.publication is not None
+    assert point.publication.id == refreshed.active.id
     async with factory() as uow:
         old = await uow.record_ranges.get_snapshot(first_run_id)
         new = await uow.record_ranges.get_snapshot(refreshed.active.id)
@@ -258,3 +283,36 @@ async def test_new_rules_revision_prevents_old_attempt_activation(
         assert state.latest is not None
         assert state.latest.result is not None
         assert state.latest.result.analysis.status is RegionAnalysisStatus.EXACT
+
+
+async def test_registration_deduplicates_and_refresh_preserves_new_queue_work(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+    )
+    query = DoorRangeQuery(
+        height=3, restriction_ids=frozenset({7, 8}), restriction_values=((7, "exact", "3"), (8, "at_most", "4"))
+    )
+    query_id = await publisher.register(query)
+    async with factory() as uow:
+        lease = await uow.records.claim_recompute_kinds(limit=10)
+        await uow.commit()
+    reordered = query.model_copy(update={"restriction_values": tuple(reversed(query.restriction_values))})
+    assert await publisher.register(reordered) == query_id
+    async with migrated_session_factory() as session:
+        token = await session.scalar(select(RecordRecomputeQueueItem.claim_token))
+        assert token in lease.claim_tokens
+    assert not await publisher.request_refresh(query_id + 999)
+    assert await publisher.request_refresh(query_id)
+    async with factory() as uow:
+        await uow.records.complete_recompute(lease)
+        await uow.commit()
+    async with factory() as uow:
+        replacement = await uow.records.claim_recompute_kinds(limit=10)
+        assert replacement
+        assert set(replacement.claim_tokens).isdisjoint(lease.claim_tokens)
+        await uow.commit()
+    analyzer.analyze.assert_not_called()

@@ -49,13 +49,26 @@ class PostgresRangePublicationRepository:
             return (
                 await session.execute(select(DoorRangeRegistration.id).where(DoorRangeRegistration.query_key == key))
             ).scalar_one()
-        await session.execute(
+        await self._enqueue("range_registration")
+        return query_id
+
+    async def request_refresh(self, query_id: int) -> bool:
+        exists = await self._session().scalar(
+            select(DoorRangeRegistration.id).where(DoorRangeRegistration.id == query_id)
+        )
+        if exists is None:
+            return False
+        await self._enqueue("range_refresh")
+        return True
+
+    async def _enqueue(self, reason: str) -> None:
+        await self._session().execute(
             insert(RecordRecomputeQueueItem)
-            .values(scope_key="door", build_kind=BuildKind.DOOR, reasons=["range_registration"])
+            .values(scope_key="door", build_kind=BuildKind.DOOR, reasons=[reason])
             .on_conflict_do_update(
                 index_elements=[RecordRecomputeQueueItem.scope_key],
                 set_={
-                    "reasons": ["range_registration"],
+                    "reasons": [reason],
                     "enqueued_at": Instant.now(),
                     "available_at": Instant.now(),
                     "attempts": 0,
@@ -65,7 +78,6 @@ class PostgresRangePublicationRepository:
                 },
             )
         )
-        return query_id
 
     async def list_registered(self) -> Sequence[tuple[int, DoorRangeQuery]]:
         rows = await self._session().execute(select(DoorRangeRegistration).order_by(DoorRangeRegistration.id))

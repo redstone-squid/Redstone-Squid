@@ -4353,6 +4353,9 @@ records-no-maintenance-actions = No maintenance actions are available.
 # squid/bot/submission/records.py:139
 records-no-titles-need-review = No active record titles require taxonomy review.
 
+# squid/records/application/published_points.py:69
+records-opening-width-invalid = Opening width must be a positive 32-bit integer.
+
 # squid/bot/submission/records.py:122
 records-no-unresolved-categories = No unresolved active record categories.
 

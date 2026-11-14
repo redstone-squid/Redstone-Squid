@@ -14176,6 +14176,15 @@
       "squid/bot/submission/records.py:139"
     ]
   },
+  "records-opening-width-invalid": {
+    "fingerprint": "32896b85506d3caef55f9fe77c29cc78b065f429684f0b287ab0f972db1b8a02",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/records/application/published_points.py:69"
+    ]
+  },
   "records-no-unresolved-categories": {
     "fingerprint": "8136cff1ddc78ab652fd014416c935e8ddfa6544e90b69d814f9bfe8d21549f0",
     "attributes": [],
