@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from typing import Any, assert_type, override
 
+import squid_ui as sl
 from squid_reactivity.topics import LocalTopicBus
 from squid_ui import Component, ContextKey, Reactive, paragraph, resource, state
 from squid_ui.runtime import (
@@ -36,6 +37,9 @@ assert_type(state(("a",)), tuple[str])  # pyright: ignore[reportAssertTypeFailur
 assert_type(state(frozenset({"a"})), frozenset[str])
 assert_type(state(0), int)
 assert_type(state(factory=int), int)
+assert_type(sl.state(True), bool)
+assert_type(state(False), bool)
+assert_type(state(True, persist=False, opaque=True), bool)
 
 assert_type(state({"a": 1}), Mapping[str, int])
 assert_type(state(["a"]), Sequence[str])

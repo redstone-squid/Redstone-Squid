@@ -193,6 +193,10 @@ ignore = [
     "FBT002",
 ]
 
+[tool.ruff.lint.flake8-boolean-trap]
+# State defaults are values, not boolean options; Ruff does not inspect overloads at call sites.
+extend-allowed-calls = ["squid_reactivity.state", "squid_ui.state"]
+
 [tool.ruff.lint.isort]
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
 known-first-party = [
