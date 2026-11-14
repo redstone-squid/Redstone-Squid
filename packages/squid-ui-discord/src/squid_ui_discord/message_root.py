@@ -41,7 +41,7 @@ from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
 from squid_ui.document import Document
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.forms import FormSpec, FormValidationMode, SubmitHandler
+from squid_ui.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
 from squid_ui.guards import Challenge, GuardLedger, approvals
 from squid_ui.interactions import (
     ActionBinding,
@@ -68,7 +68,9 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.planning.planner import plan as plan_document
+from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult, PlanSeverity
+from squid_ui.planning.spread import plan_spread
 from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
@@ -110,9 +112,11 @@ from squid_ui_discord.message_root_candidates import (
     _Candidate,
     _DispatchProfile,
     _drawn,
+    _DrawnContinuation,
     _LifecycleCandidate,
     _PlanEnvironment,
     _PlannedCandidate,
+    _PlannedContinuation,
     _RenewalBinding,
     _scene_action_keys,
     _SubmitBinding,
@@ -135,6 +139,7 @@ from squid_ui_discord.message_root_contracts import (
     TopicScheduler,
 )
 from squid_ui_discord.message_root_lifecycle import _CandidateLifecycle
+from squid_ui_discord.message_root_spread import _Continuations
 from squid_ui_discord.message_root_wiring import (
     AnyMountedView,
     ClassicMountedView,
@@ -203,6 +208,10 @@ def _binding_for(target: AnyTarget) -> _DiscordBinding:
 _NOOP_PROFILER = NoOpProfiler()
 
 _MAX_LOAD_PASSES = 16
+
+# What `_deliver` returns when a spread render reached some message, but not through the
+# handle the caller passed. Callers only test the result against None and that handle.
+_WROTE_ELSEWHERE = cast(deliver.EditHandle, object())
 """Maximum discovery passes for component loads and atomic resources per delivery.
 
 Each loaded tier can reveal another, so very deep finite trees and recursive loading
@@ -465,6 +474,10 @@ class MessageRoot[
         self.strict = config.strict
         self.timeout = config.timeout
         self.retain_routed_on_timeout = config.retain_routed_on_timeout
+        if config.max_messages < 1:
+            message = "max_messages must be at least 1"
+            raise ValueError(message)
+        self.max_messages = config.max_messages
         self.access = access
         self.on_error = config.on_error
         self._middleware = _unique_by_identity(config.middleware)
@@ -514,6 +527,7 @@ class MessageRoot[
         """What last changed outside this message's interactions and has not been drawn yet."""
         self._delete_handle: deliver.DeleteHandle | None = None
         self._ephemeral: bool | None = None
+        self._continuations = _Continuations(self.id)
         self._unwatch_expiry: Callable[[], None] | None = None
         self._expiry_arm_requested: deliver.EditHandle | None = None
         self._action_lock = asyncio.Lock()
@@ -833,20 +847,50 @@ class MessageRoot[
                 message = f"{type(component).__name__} requires frontend {component.event_frontend!r}, got {frontend!r}"
                 raise TypeError(message)
         context = profile.span("planner") if profile is not None else nullcontext(None)
+        later: tuple[PlanResult, ...] = ()
+        anchors: tuple[str | None, ...] = ()
         with context as planner_span:
             try:
-                result = plan_document(
-                    cast(Document[RenderTargetT, Any], self._document_for(tree)),
-                    target=self.target,
-                    chrome=self._chrome,
-                    localization=self.localization,
-                    palette=self.palette,
-                    strict=self.strict,
-                    nav=self.nav,
-                    session=self.presentation,
-                    cache=self.runtime.plan_cache,
-                    memo=self.runtime.plan_memo,
-                )
+                if self.max_messages > 1:
+                    spread = plan_spread(
+                        cast(Document[RenderTargetT, Any], self._document_for(tree)),
+                        PlanRequest(
+                            target=self.target,
+                            chrome=self._chrome,
+                            localization=self.localization,
+                            palette=self.palette,
+                            strict=self.strict,
+                            nav=self.nav,
+                            session=self.presentation,
+                        ),
+                        max_messages=self.max_messages,
+                        retained=self._candidates.anchors,
+                        cache=self.runtime.plan_cache,
+                        memo=self.runtime.plan_memo,
+                    )
+                    result, *rest = spread.messages
+                    later, anchors = tuple(rest), spread.anchors
+                    # One commit applies every message's writes, so they travel on the first plan.
+                    result = replace(
+                        result,
+                        session_updates=(
+                            *(update for message in spread.messages for update in message.session_updates),
+                            *spread.session_updates,
+                        ),
+                    )
+                else:
+                    result = plan_document(
+                        cast(Document[RenderTargetT, Any], self._document_for(tree)),
+                        target=self.target,
+                        chrome=self._chrome,
+                        localization=self.localization,
+                        palette=self.palette,
+                        strict=self.strict,
+                        nav=self.nav,
+                        session=self.presentation,
+                        cache=self.runtime.plan_cache,
+                        memo=self.runtime.plan_memo,
+                    )
             except (UnsolvableLayoutError, LayoutSearchExhaustedError) as error:
                 error.context["screen"] = f"{type(self.component).__module__}.{type(self.component).__qualname__}"
                 raise
@@ -862,23 +906,37 @@ class MessageRoot[
             profile.increment("planner.states_explored", result.metrics.states_explored)
         # Adaptation events record ordinary layout choices, such as showing actions as buttons.
         # Only lost content or a warning is worth logging.
-        degraded = tuple(event for event in result.report.events if event.severity != PlanSeverity.ADAPTATION)
+        degraded = tuple(
+            event
+            for message in (result, *later)
+            for event in message.report.events
+            if event.severity != PlanSeverity.ADAPTATION
+        )
         if degraded:
             logger.warning("layout degraded: %s", "; ".join(event.message for event in degraded))
         handlers: dict[str, ActionBinding] = {}
-        for key in _scene_action_keys(result.scene):
-            binding = result.bindings.get(key)
-            if binding is None:
-                message = f"scene action {key!r} has no binding"
-                raise LayoutInvariantError(message)
-            handlers[key] = binding
+        form_bindings: dict[str, FormBinding] = dict(result.form_bindings)
+        continuations: list[_PlannedContinuation] = []
+        for message in (result, *later):
+            keys = tuple(_scene_action_keys(message.scene))
+            for key in keys:
+                binding = message.bindings.get(key)
+                if binding is None:
+                    text = f"scene action {key!r} has no binding"
+                    raise LayoutInvariantError(text)
+                handlers[key] = binding
+            if message is not result:
+                form_bindings.update(message.form_bindings)
+                continuations.append(_PlannedContinuation(message, frozenset(keys), attachment_assets(message)))
         return _PlannedCandidate(
             result,
             self.runtime.stage(tree),
             handlers,
-            result.form_bindings,
+            form_bindings,
             attachment_assets(result),
             result.session_updates,
+            tuple(continuations),
+            anchors,
         )
 
     def _warn_unwatched_topics(self, tree: ComponentTree[RenderTargetT, Any]) -> None:
@@ -913,24 +971,23 @@ class MessageRoot[
         generation = self._candidates.issue_generation()
         handlers: dict[str, ActionBinding] = {}
 
+        def wire(
+            node: scene.Button | scene.Select | scene.EntitySelect, binding: ActionBinding
+        ) -> discord.ui.Item[Any]:
+            key = binding.key
+            handlers[key] = binding
+            if isinstance(node, scene.Button):
+                item: discord.ui.Item[Any] = _WiredButton(node, self, key, generation)
+            elif isinstance(node, scene.EntitySelect):
+                item = _wired_entity_select(node, self, key, generation)
+            else:
+                item = _WiredSelect(node, self, key, generation)
+            if disabled:
+                item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
+            return item
+
         def draw() -> tuple[AnyMountedView, RenderedMessage[Any, Any]]:
             handlers.clear()
-
-            def wire(
-                node: scene.Button | scene.Select | scene.EntitySelect, binding: ActionBinding
-            ) -> discord.ui.Item[Any]:
-                key = binding.key
-                handlers[key] = binding
-                if isinstance(node, scene.Button):
-                    item: discord.ui.Item[Any] = _WiredButton(node, self, key, generation)
-                elif isinstance(node, scene.EntitySelect):
-                    item = _wired_entity_select(node, self, key, generation)
-                else:
-                    item = _WiredSelect(node, self, key, generation)
-                if disabled:
-                    item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
-                return item
-
             renderer = self._renderer(self._remaining_timeout())
             before = self.render_cache.snapshot()
             context = profile.span("renderer") if profile is not None else nullcontext(None)
@@ -950,15 +1007,33 @@ class MessageRoot[
                 raise TypeError(message)
             return view, rendered
 
+        def draw_continuation(planned: _PlannedContinuation) -> _DrawnContinuation:
+            # No timeout of its own: the first message's view owns the root's idle timer.
+            presentation = self._renderer(None).draw(planned.plan.scene, plan=planned.plan, wire=wire)
+            later = RenderedMessage(presentation, planned.plan)
+            later_view = later.payload.view
+            if not isinstance(later_view, MountedView | ClassicMountedView):
+                message = "mounted Discord renderer returned the wrong view type"
+                raise TypeError(message)
+            if disabled:
+                _disable_all(later_view)
+            return _DrawnContinuation(planned, later_view, later)
+
+        continuations: list[_DrawnContinuation] = []
         try:
             view, rendered = draw()
+            continuations.extend(draw_continuation(planned) for planned in staged.continuations)
         except BaseException:
             self.runtime.discard()
+            for drawn in continuations:
+                drawn.view.stop()
             raise
         assets = rendered.assets
         if handlers.keys() != staged.handlers.keys() or assets != staged.assets:
             self.runtime.discard()
             view.stop()
+            for drawn in continuations:
+                drawn.view.stop()
             message = "Discord drawing changed the planned action or attachment shape"
             raise LayoutInvariantError(message)
         if disabled:
@@ -968,10 +1043,12 @@ class MessageRoot[
             rendered,
             staged.render,
             handlers,
-            rendered.plan.form_bindings,
+            staged.form_bindings,
             generation,
             assets,
             rendered.plan.session_updates,
+            tuple(continuations),
+            staged.anchors,
         )
 
     def _preflight(
@@ -987,6 +1064,8 @@ class MessageRoot[
             and self._candidates.plan is not None
             and self._candidates.status is MessageRootStatus.ACTIVE
             and self._candidates.planned_environment == self._plan_environment()
+            # A message that missed the committed render still has to be drawn and written.
+            and not self._candidates.stale
         ):
             if profile is not None:
                 profile.increment("planner.owner_hits")
@@ -997,6 +1076,8 @@ class MessageRoot[
                 self._candidates.form_bindings,
                 self._candidates.assets,
                 (),
+                tuple(live.planned for live in self._candidates.continuations),
+                self._candidates.anchors,
             )
         try:
             planned = self._plan_tree(tree, profile)
@@ -1119,6 +1200,10 @@ class MessageRoot[
                 return None
             plan = self._candidates.plan
             if plan is None:
+                return None
+            if through is not None and self._continuations.index_of(getattr(through, "message_id", None)):
+                # The press came from a later message. Painting the first message's scene
+                # through its handle would put that scene on the wrong message.
                 return None
             generation = self._candidates.generation
             busy = busy_key is not None
@@ -1539,8 +1624,14 @@ class MessageRoot[
                     self._handle = result.handle
                     self._delete_handle = result.delete_handle
                     self._ephemeral = result.ephemeral
+                    self._continuations.follow_up = result.follow_up
                     if result.message is not None:
                         self._note_address(result.message)
+                    for drawn in candidate.continuations:
+                        # A message that cannot be sent now is sent by the next press.
+                        if not await self._continuations.create(drawn.payload, result.follow_up):
+                            break
+                        drawn.written = True
                     self._active = self.clock()
                     with profile.span("commit"):
                         self._candidates.commit_presented(candidate)
@@ -1558,6 +1649,8 @@ class MessageRoot[
         through: deliver.EditHandle | None = None,
         files: bool = True,
         profile: OperationRecorder | None = None,
+        interaction: discord.Interaction | None = None,
+        everything: bool = False,
     ) -> deliver.EditHandle | None:
         """Show a staged render, through `through` when it is usable and the standing handle otherwise.
 
@@ -1571,9 +1664,88 @@ class MessageRoot[
 
         A failed or cancelled write of an application render marks the message as behind its
         state; see `_CandidateLifecycle.behind`.
+
+        A render spread over several messages goes through `_deliver_spread`, which skips
+        messages that already show it. `interaction` lets it send a message the spread newly
+        needs, and `everything` writes every message regardless, for the terminal edit whose
+        disabled controls look like the live scene.
         """
         with self._candidates.delivery(candidate):
+            if isinstance(candidate, _Candidate) and (
+                candidate.continuations or self._candidates.continuations or self._candidates.stale
+            ):
+                return await self._deliver_spread(
+                    candidate,
+                    through=through,
+                    keep_attachments=not files,
+                    profile=profile,
+                    interaction=interaction,
+                    everything=everything,
+                )
             return await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
+
+    async def _deliver_spread(
+        self,
+        candidate: _Candidate[RenderTargetT],
+        *,
+        through: deliver.EditHandle | None,
+        keep_attachments: bool,
+        profile: OperationRecorder | None,
+        interaction: discord.Interaction | None,
+        everything: bool,
+    ) -> deliver.EditHandle | None:
+        """Write the messages of a spread render that do not already show it.
+
+        Marks on the candidate which messages were reached, for the commit to publish.
+        Returns `through` when a write went through it, which answers the press it came
+        from, and another non-None value otherwise.
+
+        The result is never None, so the caller commits even when no message could be
+        reached. The commit then records each missed message as stale. Rolling back
+        instead would leave the reachable messages unable to act: every later press
+        would find the root behind its state and only try the same repaint again.
+
+        The message `through` addresses is written first, so the press is answered before
+        the slower edits. New messages are sent last: a follow-up needs the interaction
+        to have been answered, and is acknowledged here when no write did so.
+        """
+        needed = (True,) * (1 + len(candidate.continuations)) if everything else self._candidates.needs_write(candidate)
+        source = None if through is None else self._continuations.index_of(getattr(through, "message_id", None))
+        delivered = len(self._continuations.slots)
+        wrote: deliver.EditHandle | None = None
+        answered = False
+        candidate.primary_written = False
+        for index in sorted(range(len(needed)), key=lambda index: index != source):
+            if not needed[index] or index > delivered:
+                continue
+            own = through if index == source else None
+            if index == 0:
+                handle = await self._write(
+                    candidate.payload, keep_attachments=keep_attachments, through=own, profile=profile
+                )
+                candidate.primary_written = handle is not None
+            else:
+                drawn = candidate.continuations[index - 1]
+                handle = await self._continuations.write(
+                    index, drawn.payload, keep_attachments=keep_attachments, through=own
+                )
+                drawn.written = handle is not None
+            if handle is not None:
+                wrote = handle
+                answered = answered or handle is through
+        for drawn in candidate.continuations[delivered:]:
+            destination = self._continuations.follow_up
+            if interaction is not None and not interaction.is_expired():
+                if not interaction.response.is_done():
+                    await self._acknowledge(interaction)
+                destination = deliver.respond_to(interaction, ephemeral=bool(self._ephemeral), wait=True)
+            if not await self._continuations.create(drawn.payload, destination):
+                # Later messages must follow this one, so they wait for it too.
+                break
+            drawn.written = True
+        if len(self._continuations.slots) > len(candidate.continuations):
+            await self._continuations.trim(len(candidate.continuations))
+        return through if answered else wrote or _WROTE_ELSEWHERE
 
     async def _write(
         self,
@@ -1627,10 +1799,19 @@ class MessageRoot[
         A resumed press trades nothing: taking the handle would re-address the mount to
         wherever the question was answered, permanently, and outlive the press that did it.
         """
+        fresher = self._source(interaction, resumed=resumed)
+        if fresher is not None and (index := self._message_index(interaction)):
+            self._continuations.renew(index, fresher)
+            return
         if self._handle is not None and self._handle.permanent:
             return
-        if (fresher := self._source(interaction, resumed=resumed)) is not None:
+        if fresher is not None:
             self._handle = fresher
+
+    def _message_index(self, interaction: discord.Interaction) -> int:
+        """Which of this root's messages a press came from; 0 is the first."""
+        message = interaction.message
+        return self._continuations.index_of(None if message is None else message.id)
 
     async def dispatch(
         self,
@@ -1649,6 +1830,7 @@ class MessageRoot[
         against current truth.
         """
         kind = InteractionKind.PRESS if values is None else InteractionKind.SELECTION
+        generation = self._candidates.current_generation(generation)
         self._report_missed_redraw("pressed")
         with (
             localization_scope(self.localization),
@@ -1865,6 +2047,7 @@ class MessageRoot[
         discarding a filled-in form is the worse of the two surprises. Supplying `unavailable`
         instead rejects a rebased submission whose current binding is missing or incompatible.
         """
+        generation = self._candidates.current_generation(generation)
         with (
             localization_scope(self.localization),
             self.profiler.operation(
@@ -2006,6 +2189,10 @@ class MessageRoot[
             profile.finish(DispatchDisposition.ACCESS_FAILED, error)
             return False
         self._active = self.clock()
+        if self._message_index(interaction) and self._candidates.view is not None:
+            # discord.py restarts a view's idle timer only for presses on that view, and
+            # the first message's view is the one that times this root out.
+            self._candidates.view.timeout = self._remaining_timeout()
         if self.status is not None:
             self.status = None
             self.invalidate()
@@ -2230,7 +2417,9 @@ class MessageRoot[
                 profile.presentation = PresentationStatus.ACKNOWLEDGED
                 profile.finish(DispatchDisposition.STALE)
                 return
-            if binding.mode is ActionMode.EXCLUSIVE and self._candidates.behind:
+            if binding.mode is ActionMode.EXCLUSIVE and (
+                self._candidates.behind or self._message_index(interaction) in self._candidates.stale
+            ):
                 # The reader pressed a control on a message older than the state it would act
                 # on, for example a "Delete" whose "Really delete?" repaint Discord refused.
                 # Show them the current state instead; their next press acts on what they see.
@@ -2674,7 +2863,9 @@ class MessageRoot[
                     else:
                         candidate = _drawn(candidate)
                         try:
-                            wrote = await self._deliver(candidate, through=source, profile=operation)
+                            wrote = await self._deliver(
+                                candidate, through=source, profile=operation, interaction=interaction
+                            )
                         except Exception:
                             with operation.span("rollback"):
                                 self._rollback(candidate)
@@ -2966,19 +3157,24 @@ class MessageRoot[
                         if delete:
                             if self._delete_handle is not None:
                                 await self._delete_handle.delete()
+                            await self._continuations.trim(0)
                         elif candidate is not None:
                             if retain_routed:
-                                children = (
-                                    candidate.view.walk_children()
-                                    if isinstance(candidate.view, discord.ui.LayoutView)
-                                    else candidate.view.children
-                                )
-                                for item in children:
-                                    target = item.item if isinstance(item, discord.ui.DynamicItem) else item
-                                    if isinstance(target, RoutedItem | RoutedSelectItem):
-                                        target.disabled = False
+                                views = [candidate.view]
+                                if isinstance(candidate, _Candidate):
+                                    views.extend(drawn.view for drawn in candidate.continuations)
+                                for view in views:
+                                    children = (
+                                        view.walk_children()
+                                        if isinstance(view, discord.ui.LayoutView)
+                                        else view.children
+                                    )
+                                    for item in children:
+                                        target = item.item if isinstance(item, discord.ui.DynamicItem) else item
+                                        if isinstance(target, RoutedItem | RoutedSelectItem):
+                                            target.disabled = False
                             source = None if interaction is None else deliver.handle_from(interaction)
-                            wrote = await self._deliver(candidate, through=source, files=False)
+                            wrote = await self._deliver(candidate, through=source, files=False, everything=True)
                             if interaction is not None and (wrote is None or wrote is not source):
                                 await self._acknowledge(interaction)
                     except discord.NotFound:

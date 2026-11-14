@@ -13,12 +13,13 @@ not re-export testing helpers.
 import asyncio
 import hashlib
 import inspect
+import itertools
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from copy import copy
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, Self, Unpack, cast
+from typing import Any, Literal, Self, Unpack, cast, override
 
 import anyio
 import discord
@@ -275,9 +276,27 @@ class _InteractionResponseHarness:
         return endpoint
 
 
+_FOLLOW_UP_IDS = itertools.count(1_000)
+
+
+class _FollowupSend(AsyncCallRecorder):
+    """A follow-up endpoint that, like discord.py, returns the new message only when asked to wait.
+
+    A configured result or callback still decides the answer; this supplies a fresh message
+    only where the recorder would have returned None for a waited send.
+    """
+
+    @override
+    async def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        result = await super().__call__(*args, **kwargs)
+        if result is None and self.callback is None and kwargs.get("wait"):
+            return MessageHarness(message_id=next(_FOLLOW_UP_IDS))
+        return result
+
+
 @dataclass(slots=True)
 class _FollowupHarness:
-    send: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+    send: AsyncCallRecorder = field(default_factory=_FollowupSend)
     edit_message: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
     delete_message: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
 
@@ -719,8 +738,11 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
         self._user_id = user_id
 
     def texts(self) -> list[str]:
-        """Return display texts from the current serialized Discord payload."""
-        return payload_texts(self._view())
+        """Return display texts from the current serialized Discord payload.
+
+        A root that spread over several messages returns their texts in reading order.
+        """
+        return [text for view, _, _ in self._views() for text in payload_texts(view)]
 
     def key_for(self, local_key: str) -> str:
         """Resolve a unique local control key without depending on component namespaces.
@@ -738,26 +760,37 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
 
     def control(self, key: str) -> StagedControl:
         """Select one currently rendered control by stable semantic key."""
-        expected = _custom_id(self.root, key)
-        payloads = iter_component_payloads(self._view().to_components())
-        payload = next((candidate for candidate in payloads if candidate.get("custom_id") == expected), None)
-        if payload is None:
-            available = ", ".join(self.root.snapshot().handler_keys)
-            message = f"no rendered control {key!r}; available semantic keys: {available}"
-            raise KeyError(message)
-        return StagedControl(key, expected, payload)
+        return self._located(key)[0]
+
+    def _located(self, key: str) -> tuple[StagedControl, int, int | None]:
+        """A control with the generation and message id a press on it would carry."""
+        for view, generation, message_id in self._views():
+            expected = _custom_id(self.root, key, generation)
+            payloads = iter_component_payloads(view.to_components())
+            payload = next((candidate for candidate in payloads if candidate.get("custom_id") == expected), None)
+            if payload is not None:
+                return StagedControl(key, expected, payload), generation, message_id
+        available = ", ".join(self.root.snapshot().handler_keys)
+        message = f"no rendered control {key!r}; available semantic keys: {available}"
+        raise KeyError(message)
+
+    def _press_source(self, message_id: int | None, user_id: int | None) -> InteractionHarness:
+        actor = self._user_id if user_id is None else user_id
+        if message_id is None:
+            return _interaction(self._client, actor)
+        return InteractionHarness(user_id=actor, client=self._client, message_id=message_id)
 
     async def press(self, key: str, *, user_id: int | None = None) -> InteractionHarness:
         """Dispatch one button or form trigger through ``MessageRoot.dispatch``."""
-        control = self.control(key)
+        control, generation, message_id = self._located(key)
         if control.payload.get("type") != 2:
             message = f"control {key!r} is not a button"
             raise TypeError(message)
-        interaction = _interaction(self._client, self._user_id if user_id is None else user_id)
+        interaction = self._press_source(message_id, user_id)
         await self.root.dispatch(
             key,
             cast(discord.Interaction, interaction.source),
-            generation=self.root.generation,
+            generation=generation,
         )
         self.assert_within_limits()
         return interaction
@@ -770,16 +803,16 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
         user_id: int | None = None,
     ) -> InteractionHarness:
         """Dispatch string choices through ``MessageRoot.dispatch``."""
-        control = self.control(key)
+        control, generation, message_id = self._located(key)
         if control.payload.get("type") not in {3, 5, 6, 7, 8}:
             message = f"control {key!r} is not a select"
             raise TypeError(message)
-        interaction = _interaction(self._client, self._user_id if user_id is None else user_id)
+        interaction = self._press_source(message_id, user_id)
         await self.root.dispatch(
             key,
             cast(discord.Interaction, interaction.source),
             list(values),
-            generation=self.root.generation,
+            generation=generation,
         )
         self.assert_within_limits()
         return interaction
@@ -800,7 +833,8 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
             error = self._layout_errors.pop(0)
             raise error
         if not self.root.finished:
-            assert_within_limits(self._view())
+            for view, _, _ in self._views():
+                assert_within_limits(view)
 
     def _view(self) -> discord.ui.LayoutView:
         view = self.root._candidates.view  # pyrefly: ignore[missing-attribute]
@@ -809,9 +843,18 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
             raise TypeError(message)
         return view
 
+    def _views(self) -> list[tuple[discord.ui.LayoutView, int, int | None]]:
+        """Each message's live view, with its generation and, after the first, its message id."""
+        views: list[tuple[discord.ui.LayoutView, int, int | None]] = [(self._view(), self.root.generation, None)]
+        slots = self.root._continuations.slots
+        for live, slot in zip(self.root._candidates.continuations, slots, strict=False):
+            if isinstance(live.view, discord.ui.LayoutView):
+                views.append((live.view, live.generation, slot.message_id))
+        return views
 
-def _custom_id(root: MessageRoot, key: str) -> str:
-    prefix = f"ctl:{root.id}:{root.generation}:"
+
+def _custom_id(root: MessageRoot, key: str, generation: int) -> str:
+    prefix = f"ctl:{root.id}:{generation}:"
     candidate = f"{prefix}{key}"
     if len(candidate) <= 100:
         return candidate

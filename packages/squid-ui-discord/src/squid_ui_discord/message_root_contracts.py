@@ -212,6 +212,7 @@ class MessageRootBehaviorOptions(TypedDict, total=False):
     strict: bool
     timeout: float | None
     retain_routed_on_timeout: bool
+    max_messages: int
     on_error: ErrorHook | None
     middleware: Sequence[ActionMiddleware]
     profiler: Profiler | None
@@ -263,6 +264,15 @@ class MessageRootConfig[
     timeout: float | None = 900
     """Idle seconds since initial delivery or accepted interaction; None disables the timer."""
     retain_routed_on_timeout: bool = False
+    max_messages: int = 1
+    """The most messages this root may occupy. Above 1, a document too large for one
+    message is cut between its top-level children and continued in follow-up messages.
+
+    All messages show one component tree, and a press on any of them reaches it. A message
+    the root cannot currently edit, such as an ephemeral one nobody has pressed for 15
+    minutes, catches up when it is next pressed. Durable recovery restores only the first
+    message, so leave this at 1 for durable sessions.
+    """
     on_error: ErrorHook | None = None
     middleware: Sequence[ActionMiddleware] = ()
     profiler: Profiler | None = None

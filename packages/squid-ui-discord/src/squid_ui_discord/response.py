@@ -61,6 +61,7 @@ class ResponseOverrides(TypedDict, total=False):
     expiry: ExpiryPolicy | None
     live_updates: bool
     retain_routed_on_timeout: bool
+    max_messages: int
     session: SessionSpec | None
     allowed_mentions: discord.AllowedMentions | None
     chrome: Chrome | None
@@ -83,6 +84,12 @@ class ResponseSpec:
     before an outside change logs a warning naming the screen.
     """
     retain_routed_on_timeout: Setting[bool] = UNSET
+    max_messages: Setting[int] = UNSET
+    """The most messages one presentation may occupy; the default of 1 never splits it.
+
+    A screen too large for one message is then continued in follow-up messages instead of
+    failing to lay out. See MessageRootConfig.max_messages for what that changes.
+    """
     session: Setting[SessionSpec | None] = UNSET
     allowed_mentions: Setting[discord.AllowedMentions | None] = UNSET
     chrome: Setting[Chrome | None] = UNSET
@@ -115,6 +122,7 @@ class ResponseSpec:
             expiry=value(self.expiry, fallback=None),
             live_updates=value(self.live_updates, fallback=False),
             retain_routed_on_timeout=value(self.retain_routed_on_timeout, fallback=False),
+            max_messages=value(self.max_messages, fallback=1),
             session=value(self.session, fallback=None),
             allowed_mentions=value(self.allowed_mentions, fallback=None),
             chrome=value(self.chrome, fallback=None),
@@ -132,6 +140,7 @@ class ResolvedResponse:
     expiry: ExpiryPolicy | None
     live_updates: bool
     retain_routed_on_timeout: bool
+    max_messages: int
     session: SessionSpec | None
     allowed_mentions: discord.AllowedMentions | None
     chrome: Chrome | None

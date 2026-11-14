@@ -365,6 +365,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         if policy.nav is not None:
             options["nav"] = policy.nav
         options["retain_routed_on_timeout"] = policy.retain_routed_on_timeout
+        options["max_messages"] = policy.max_messages
         options["timeout"] = policy.timeout
         options["localization"] = localization
         scheduler = self._runtime.scheduler if policy.live_updates else None

@@ -206,6 +206,11 @@ class _WebhookMessageHandle:
         self.expires_at: datetime | None = interaction.expires_at
         self.mode = mode
 
+    @property
+    def message_id(self) -> int:
+        """The message this handle edits, so a root with several messages can tell which."""
+        return self._message_id
+
     def expired(self) -> bool:
         return self._interaction.is_expired()
 
@@ -324,6 +329,12 @@ class DeliveryResult:
     message_id: int | None = None
     ephemeral: bool | None = None
     delete_handle: DeleteHandle | None = None
+    follow_up: MessageDestination | None = None
+    """Sends another message next to this one, with the same audience.
+
+    A root that spreads over several messages uses it for the messages after the first.
+    None when the destination has no such place, as when it edited an existing message.
+    """
 
     @classmethod
     def from_callback(
@@ -332,11 +343,12 @@ class DeliveryResult:
         handle: EditHandle,
         *,
         fallback: discord.Message | None = None,
+        follow_up: MessageDestination | None = None,
     ) -> DeliveryResult:
         """Keep callback metadata, using the fallback when Discord returns no message."""
         resource = response.resource
         message = resource if isinstance(resource, discord.Message) else fallback
-        return cls(message, handle, response.message_id, response.is_ephemeral())
+        return cls(message, handle, response.message_id, response.is_ephemeral(), follow_up=follow_up)
 
     def __post_init__(self) -> None:
         """Fill metadata available on ordinary message-returning delivery paths."""
@@ -460,11 +472,13 @@ def reply_to(
             **payload._send_fields(),
         )
         mode = payload.mode
+        again = reply_to(ctx, ephemeral=ephemeral, allowed_mentions=allowed_mentions, adapter=adapter)
         if active is None:
-            return DeliveryResult(message, handle_for(message, mode=mode))
+            return DeliveryResult(message, handle_for(message, mode=mode), follow_up=again)
         if response_done:
-            return DeliveryResult(message, _WebhookMessageHandle(active, message.id, message, mode=mode))
-        return DeliveryResult(message, _OriginalResponseHandle(active, message, mode=mode))
+            handle = _WebhookMessageHandle(active, message.id, message, mode=mode)
+            return DeliveryResult(message, handle, follow_up=again)
+        return DeliveryResult(message, _OriginalResponseHandle(active, message, mode=mode), follow_up=again)
 
     return send
 
@@ -517,7 +531,8 @@ def send_to(
             allowed_mentions=mentions,
             **fields,
         )
-        return DeliveryResult(message, handle_for(message, mode=payload.mode))
+        again = send_to(target, allowed_mentions=allowed_mentions, delete_after=delete_after)
+        return DeliveryResult(message, handle_for(message, mode=payload.mode), follow_up=again)
 
     return send
 
@@ -547,11 +562,15 @@ def respond_to(
     async def send(payload: MessagePayload) -> DeliveryResult:
         merged_files = await _merged_files(files, payload)
         mode = payload.mode
+        # A follow-up waits for its message: without it the next message has no edit handle.
+        again = respond_to(
+            interaction, ephemeral=ephemeral, wait=True, allowed_mentions=allowed_mentions, adapter=adapter
+        )
         if complete_deferred:
             fields = payload._send_fields()
             fields["attachments"] = merged_files
             message = await interaction.edit_original_response(**fields)
-            return DeliveryResult(message, _OriginalResponseHandle(interaction, message, mode=mode))
+            return DeliveryResult(message, _OriginalResponseHandle(interaction, message, mode=mode), follow_up=again)
         if not interaction.response.is_done():
             try:
                 response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
@@ -570,7 +589,7 @@ def respond_to(
                     await interaction.original_response() if wait and callback_message is None else callback_message
                 )
                 handle = _OriginalResponseHandle(interaction, message, mode=mode)
-                return DeliveryResult.from_callback(response, handle, fallback=message)
+                return DeliveryResult.from_callback(response, handle, fallback=message, follow_up=again)
             for file in merged_files:
                 file.reset()
         message = await interaction.followup.send(
@@ -581,8 +600,9 @@ def respond_to(
             **payload._send_fields(),
         )
         if message is None:
-            return DeliveryResult(None, None)
-        return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
+            return DeliveryResult(None, None, follow_up=again)
+        handle = _WebhookMessageHandle(interaction, message.id, message, mode=mode)
+        return DeliveryResult(message, handle, follow_up=again)
 
     return send
 

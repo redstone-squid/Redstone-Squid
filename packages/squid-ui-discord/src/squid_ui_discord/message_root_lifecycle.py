@@ -9,6 +9,7 @@ tree. Renewal and terminal views never commit application component state.
 import logging
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any
 
 from squid_ui.document import Asset
@@ -26,6 +27,7 @@ from squid_ui_discord.message_root_candidates import (
     _LifecycleCandidate,
     _PlanEnvironment,
     _PlannedCandidate,
+    _PlannedContinuation,
 )
 from squid_ui_discord.message_root_contracts import MessageRootStatus
 from squid_ui_discord.message_root_wiring import AnyMountedView
@@ -33,6 +35,20 @@ from squid_ui_discord.message_root_wiring import AnyMountedView
 logger = logging.getLogger(__name__)
 
 type _SettlementCandidate[RenderTargetT: DiscordTarget] = _ApplicationCandidate[RenderTargetT] | _LifecycleCandidate
+
+
+@dataclass(frozen=True, slots=True)
+class _LiveContinuation:
+    """The committed plan of one continuation, and the view its message shows.
+
+    `view` is None until a delivery first reaches the message. Its generation can be older
+    than the root's: a continuation that a render left unchanged is not rewritten, so it
+    keeps the controls of the generation that last wrote it.
+    """
+
+    planned: _PlannedContinuation
+    view: AnyMountedView | None
+    generation: int
 
 
 class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
@@ -81,6 +97,15 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self.plan: PlanResult | None = None
         self.planned_tree: ComponentTree[RenderTargetT, Any] | None = None
         self.planned_environment: _PlanEnvironment | None = None
+        self.continuations: tuple[_LiveContinuation, ...] = ()
+        """The messages after the first, when the committed render spread over several."""
+        self.anchors: tuple[str | None, ...] = ()
+        self.stale: frozenset[int] = frozenset()
+        """Messages, counted from 0, that do not show the committed plan.
+
+        Delivery could not reach them, so they still show an earlier render. The root
+        stays dirty while any exist, and a press on one repaints it before acting.
+        """
 
     def issue_generation(self) -> int:
         """Reserve control ids that will never be reused, even if delivery fails."""
@@ -131,13 +156,50 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self.plan = candidate.plan
         self.planned_tree = candidate.tree
         self.planned_environment = self._environment()
+        self.anchors = candidate.anchors
         self.dirty = self._runtime.dirty
 
     def commit(self, candidate: _Candidate[RenderTargetT]) -> None:
-        """Commit application state, then publish the successfully delivered controls."""
+        """Commit application state, then publish the successfully delivered controls.
+
+        A spread delivery may have written only some messages. Each message it skipped
+        keeps its live view; one that needed the write and did not get it becomes stale.
+        """
+        needed = self.needs_write(candidate)
         self._commit_application(candidate)
-        self.assets = candidate.assets
-        self._publish(candidate, MessageRootStatus.ACTIVE)
+        stale: set[int] = set()
+        if candidate.primary_written:
+            self.assets = candidate.assets
+            self._publish(candidate, MessageRootStatus.ACTIVE)
+        else:
+            candidate.view.stop()
+            if needed[0]:
+                stale.add(0)
+        live: list[_LiveContinuation] = []
+        for index, drawn in enumerate(candidate.continuations, start=1):
+            previous = self.continuations[index - 1] if index <= len(self.continuations) else None
+            if drawn.written:
+                if previous is not None and previous.view is not None and previous.view is not drawn.view:
+                    previous.view.stop()
+                live.append(_LiveContinuation(drawn.planned, drawn.view, candidate.generation))
+                continue
+            drawn.view.stop()
+            if needed[index]:
+                stale.add(index)
+            live.append(
+                _LiveContinuation(
+                    drawn.planned,
+                    None if previous is None else previous.view,
+                    0 if previous is None else previous.generation,
+                )
+            )
+        for dropped in self.continuations[len(candidate.continuations) :]:
+            if dropped.view is not None:
+                dropped.view.stop()
+        self.continuations = tuple(live)
+        self.stale = frozenset(stale)
+        if stale:
+            self.dirty = True
 
     def commit_presented(self, candidate: _Candidate[RenderTargetT]) -> None:
         self.commit(candidate)
@@ -157,13 +219,62 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
             return False
         if candidate.assets != self.assets:
             return False
-        return candidate.handlers.keys() == self.handlers.keys()
+        if candidate.handlers.keys() != self.handlers.keys():
+            return False
+        planned = candidate.planned_continuations
+        return (
+            not self.stale
+            and len(planned) == len(self.continuations)
+            and all(new.shows(live.planned) for new, live in zip(planned, self.continuations, strict=True))
+        )
+
+    def needs_write(self, candidate: _Candidate[RenderTargetT]) -> tuple[bool, ...]:
+        """For each message of `candidate`, whether its message must be written to show it.
+
+        Index 0 is the first message. A message needs no write when it already shows the
+        same scene, files and action keys; its live controls then keep working, because
+        handlers are looked up by key when pressed.
+        """
+        plan = self.plan
+        continued = frozenset[str]().union(*(live.planned.keys for live in self.continuations))
+        staged = frozenset[str]().union(*(drawn.planned.keys for drawn in candidate.continuations))
+        first = (
+            0 in self.stale
+            or plan is None
+            or self.status is not MessageRootStatus.ACTIVE
+            or candidate.plan.report.scene_fingerprint != plan.report.scene_fingerprint
+            or candidate.assets != self.assets
+            or candidate.handlers.keys() - staged != self.handlers.keys() - continued
+        )
+        rest = tuple(
+            index in self.stale
+            or index > len(self.continuations)
+            or self.continuations[index - 1].view is None
+            or not drawn.planned.shows(self.continuations[index - 1].planned)
+            for index, drawn in enumerate(candidate.continuations, start=1)
+        )
+        return (first, *rest)
+
+    def current_generation(self, generation: int | None) -> int | None:
+        """Translate a pressed control's generation into the root's terms.
+
+        A continuation left unchanged by later renders still carries the generation that
+        last wrote it. Its controls are current, so their presses count as coming from the
+        live generation.
+        """
+        if generation is not None and any(
+            live.view is not None and live.generation == generation for live in self.continuations
+        ):
+            return self.generation
+        return generation
 
     def suppress(self, candidate: _ApplicationCandidate[RenderTargetT], profile: OperationRecorder | None) -> None:
         """Commit application state while retaining the visible generation and view."""
         self._commit_application(candidate)
         if isinstance(candidate, _Candidate):
             candidate.view.stop()
+            for drawn in candidate.continuations:
+                drawn.view.stop()
         self._committed()
         self.suppressed += 1
         if profile is not None:
@@ -184,6 +295,9 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self._settle(candidate, "roll back")
         if not isinstance(candidate, _PlannedCandidate):
             candidate.view.stop()
+        if isinstance(candidate, _Candidate):
+            for drawn in candidate.continuations:
+                drawn.view.stop()
         if not isinstance(candidate, _LifecycleCandidate):
             candidate.render.discard()
         self.mark_dirty()
@@ -215,3 +329,6 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         if self.view is not None:
             view, self.view = self.view, None
             view.stop()
+        for live in self.continuations:
+            if live.view is not None:
+                live.view.stop()

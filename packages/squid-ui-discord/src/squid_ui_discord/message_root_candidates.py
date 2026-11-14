@@ -59,6 +59,42 @@ class _RenewalBinding(ActionBinding):
     """Framework lifecycle action kept out of application dispatch policy."""
 
 
+@dataclass(frozen=True, slots=True)
+class _PlannedContinuation:
+    """One message after the first, for a render that max_messages let spread out.
+
+    The first message stays on the candidate itself; these are the others in reading order.
+    `keys` are the action keys drawn in this message, which is how a press is traced back
+    to the message it came from.
+    """
+
+    plan: PlanResult
+    keys: frozenset[str]
+    assets: tuple[Asset, ...]
+
+    def shows(self, other: _PlannedContinuation) -> bool:
+        """Whether a message showing `other` already looks and responds like this one."""
+        return (
+            self.plan.report.scene_fingerprint == other.plan.report.scene_fingerprint
+            and self.assets == other.assets
+            and self.keys == other.keys
+        )
+
+
+@dataclass(slots=True)
+class _DrawnContinuation:
+    """A planned continuation drawn into a view, and whether delivery reached its message."""
+
+    planned: _PlannedContinuation
+    view: AnyMountedView
+    rendered: RenderedMessage[Any, Any]
+    written: bool = False
+
+    @property
+    def payload(self) -> MessagePayload:
+        return self.rendered.payload
+
+
 @dataclass(slots=True)
 class _Candidate[RenderTargetT: DiscordTarget]:
     """One staged render generation, which becomes the mount's state only when committed."""
@@ -72,6 +108,12 @@ class _Candidate[RenderTargetT: DiscordTarget]:
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
     session_updates: tuple[SessionUpdate, ...]
+    continuations: tuple[_DrawnContinuation, ...] = ()
+    anchors: tuple[str | None, ...] = ()
+    """What starts each continuation; see `squid_ui.planning.spread`."""
+    primary_written: bool = True
+    """Whether delivery wrote the first message. A spread delivery can leave it untouched
+    when only a later message changed, or when no live handle reaches it."""
 
     @property
     def tree(self) -> ComponentTree[RenderTargetT, Any]:
@@ -80,6 +122,10 @@ class _Candidate[RenderTargetT: DiscordTarget]:
     @property
     def settled(self) -> bool:
         return self.render.settled
+
+    @property
+    def planned_continuations(self) -> tuple[_PlannedContinuation, ...]:
+        return tuple(continuation.planned for continuation in self.continuations)
 
     @property
     def payload(self) -> MessagePayload:
@@ -106,6 +152,8 @@ class _PlannedCandidate[RenderTargetT: DiscordTarget]:
     form_bindings: Mapping[str, FormBinding]
     assets: tuple[Asset, ...]
     session_updates: tuple[SessionUpdate, ...]
+    continuations: tuple[_PlannedContinuation, ...] = ()
+    anchors: tuple[str | None, ...] = ()
 
     @property
     def tree(self) -> ComponentTree[RenderTargetT, Any]:
@@ -114,6 +162,10 @@ class _PlannedCandidate[RenderTargetT: DiscordTarget]:
     @property
     def settled(self) -> bool:
         return self.render.settled
+
+    @property
+    def planned_continuations(self) -> tuple[_PlannedContinuation, ...]:
+        return self.continuations
 
 
 type _ApplicationCandidate[RenderTargetT: DiscordTarget] = _Candidate[RenderTargetT] | _PlannedCandidate[RenderTargetT]
