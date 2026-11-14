@@ -26,9 +26,11 @@ from squid_ui.planning.realizations import (
     FlowRealization,
     ImageRealization,
     PanelRealization,
+    ProgressRealization,
     Realization,
     RowRealization,
     SelectRealization,
+    StatusRealization,
     TableForm,
     TableRealization,
     TextRealization,
@@ -203,6 +205,35 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                     return (
                         scene.HtmlElement(scene.HtmlTag.P, (text(rendered),)),
                         *(node for child in part.children for node in visit(child)),
+                    )
+                case StatusRealization() as status:
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.DIV,
+                            (text(status.nodes),),
+                            attributes=(
+                                scene.HtmlAttribute(scene.HtmlAttributeName.ROLE, "status"),
+                                scene.HtmlAttribute(scene.HtmlAttributeName.TONE, status.tone),
+                                scene.HtmlAttribute(scene.HtmlAttributeName.EMPHASIS, status.emphasis),
+                            ),
+                            colour=scene.HtmlColourRef(status.colour) if status.colour is not None else None,
+                        ),
+                    )
+                case ProgressRealization() as progress:
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.PROGRESS,
+                            (text(progress.nodes),),
+                            attributes=(
+                                scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, progress.value),
+                                scene.HtmlAttribute(scene.HtmlAttributeName.MAX, progress.maximum),
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.ARIA_LABEL, progress.label),)
+                                    if progress.label is not None
+                                    else ()
+                                ),
+                            ),
+                        ),
                     )
                 case TextRealization() as payload:
                     if payload.role == "code":

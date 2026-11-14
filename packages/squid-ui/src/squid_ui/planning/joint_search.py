@@ -319,7 +319,10 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     occurrence, *rest = task.pending
                     seen_occurrences.add(occurrence.identity)
                     context.work.consume()
-                    discovery = rules.offers(occurrence, context)
+                    discovery = rules.offers(
+                        occurrence,
+                        replace(context, palette=occurrence.palette) if occurrence.palette is not None else context,
+                    )
                     if isinstance(discovery, OfferDiscovery):
                         offers = discovery.offers
                         if discovery.completion == DiscoveryCompletion.EXHAUSTED:

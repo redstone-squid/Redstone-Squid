@@ -113,6 +113,8 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
     placement: Placement = Placement.CONTENT
     origin: SourceScope[RenderTargetT, ContextT] | None = None
     fragment: FragmentCoverage | None = None
+    palette: Palette | None = None
+    """Inherited palette for this presentation, including across alternative graphs."""
 
     def __post_init__(self) -> None:
         if self.reference not in self.graph.units:

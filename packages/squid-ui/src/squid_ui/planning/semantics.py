@@ -265,6 +265,8 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Note()
                 | sem.Code()
                 | sem.Quote()
+                | sem.Status()
+                | sem.ProgressBar()
                 | sem.Download()
                 | TextPresentation()
                 | AtomicNode()

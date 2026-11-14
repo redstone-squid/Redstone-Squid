@@ -93,8 +93,8 @@ arbitrary replacement text. Native extensions are usable through explicit custom
 composition rules, rather than an opaque production backend probe.
 
 Stateful semantic widgets beyond choices/toggles (such as disclosure/item navigation
-and native entity discovery), palette overrides, status/progress structures, and
-section thumbnails also retain their non-region planners. Their current adapters
+and native entity discovery), and section thumbnails still retain their non-region
+planners. Palette overrides and status/progress content now use shared composition. Their current adapters
 combine state selection, adaptation, and target lowering; migrating them requires
 explicit offers that preserve those contracts. This is a consciously deferred
 vocabulary extension, not a claim that the underlying platforms lack these features.
@@ -135,3 +135,22 @@ accepted reductions of scope. The original completion claim was too broad.
    remove each remaining pagination compatibility route once its contracts pass.
 5. Re-run target and application conformance and reconcile the final matrix before
    marking phase 6 complete. Platform limits remain distinct from implementation gaps.
+
+
+## Continuation: palette and status/progress integration
+
+Palette overrides now travel with semantic occurrences into fixed and automatic
+search, including when an alternative introduces a separate presentation graph.
+Nested overrides restore the enclosing palette for subsequent siblings. Production
+migration accepts themed containers, and retained allocations compare their
+palettes so a changed theme is certified again before delivery.
+
+Status and progress are shared atomic realizations. HTML retains status roles,
+tone/emphasis and resolved colour, and native progress values, maxima and accessible
+labels. Text-only targets display the authored progress quantities instead of
+rounding them to a percentage. These nodes do not authorize truncation.
+
+The core UI suite and focused Discord region/pressure suites pass (1,164 tests).
+Whole-project type checking found no errors in these changes, but currently fails
+on an unrelated in-progress range-publication test comparing an optional SQL scalar
+to an integer. Phase 6 remains open for the other integration work above.

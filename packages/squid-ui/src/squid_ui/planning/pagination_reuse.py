@@ -65,8 +65,8 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                 right, page=_page_configuration(right.page)
             )
         case (
-            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster()),
-            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster()),
+            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster() | sem.Themed()),
+            (sem.Group() | sem.Stack() | sem.Block() | sem.Section() | sem.Article() | sem.Cluster() | sem.Themed()),
         ):
             return replace(left, children=()) == replace(right, children=()) and _same_children(
                 left.children, right.children
@@ -104,6 +104,8 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             | sem.Note()
             | sem.Code()
             | sem.Quote()
+            | sem.Status()
+            | sem.ProgressBar()
             | sem.Fields()
             | sem.Media()
             | sem.Figure()

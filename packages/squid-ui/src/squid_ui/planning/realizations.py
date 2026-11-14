@@ -70,6 +70,20 @@ class TextRealization:
 
 
 @dataclass(frozen=True, slots=True)
+class StatusRealization(TextRealization):
+    colour: Color | None = None
+    tone: str = "neutral"
+    emphasis: str = "normal"
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressRealization(TextRealization):
+    value: float = 0
+    maximum: float = 1
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FlowRealization:
     pass
 
@@ -412,6 +426,8 @@ def semantic_offers[RenderTargetT, ContextT](
 ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
     context.work.consume()
     value = occurrence.graph.units[occurrence.reference].value
+    if isinstance(value, sem.Themed):
+        context = replace(context, palette=value.palette)
     text_capacity = context.capacities.get(Axis.DISPLAY_TEXT, text_limit)
     parent = occurrence.graph.units[occurrence.reference].parent
     inside_panel = False
@@ -436,6 +452,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 root,
                 occurrence.placement,
                 origin,
+                palette=context.palette,
             )
             effects = tuple(
                 replace(effect, source=source)
@@ -632,6 +649,36 @@ def semantic_offers[RenderTargetT, ContextT](
             case sem.Link():
                 payload = ControlRealization(label, url=value.url)
         return (RealizationOffer(occurrence, "button", payload, interaction=True, binding=binding, form=form),)
+    if isinstance(value, sem.Status):
+        nodes = (tree.literal(value.tone.status_marker), *resolve_text(value.content, context.localization).nodes)
+        return (
+            RealizationOffer(
+                occurrence,
+                "status",
+                StatusRealization(
+                    nodes,
+                    colour=context.palette.tone(value.tone),
+                    tone=value.tone.base.value,
+                    emphasis=value.emphasis.value,
+                ),
+            ),
+        )
+    if isinstance(value, sem.ProgressBar):
+        label = (
+            "".join(tree.plain(node) for node in resolve_text(value.label, context.localization).nodes)
+            if value.label is not None
+            else None
+        )
+        # Text-only targets retain the authored quantities, not just a rounded percentage.
+        text = f"{label}: " if label is not None else ""
+        text += f"{value.value}/{value.maximum}"
+        return (
+            RealizationOffer(
+                occurrence,
+                "progress",
+                ProgressRealization((tree.literal(text),), value=value.value, maximum=value.maximum, label=label),
+            ),
+        )
     if isinstance(value, sem.Heading | sem.Note | sem.Code | sem.Quote):
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)
         if isinstance(value, sem.Heading):
@@ -684,6 +731,7 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.Media
         | sem.Figure
         | sem.Cluster
+        | sem.Themed
         | sem.ActionControls
         | sem.ControlGroup
         | sem.Region
@@ -719,6 +767,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 if isinstance(value, sem.Region) and ref.keys[-1] == "@footer"
                 else placement,
                 occurrence.origin,
+                palette=context.palette,
             )
             for ref in refs
         )
@@ -913,6 +962,7 @@ def select_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     An occurrence with one offer needs no selection entry. Every choice among
     multiple offers must be explicit until the joint solver takes over selection.
     """
+    context = replace(context, palette=occurrence.palette) if occurrence.palette is not None else context
     offers = rules.offers(occurrence, context)
     if isinstance(offers, OfferDiscovery):
         offers = offers.offers
