@@ -86,6 +86,8 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             )
         case ((sem.Choices() | sem.Entities()), (sem.Choices() | sem.Entities())):
             return isinstance(left.selection, Controlled) and left == right
+        case sem.Items(), sem.Items():
+            return isinstance(left.opened, Controlled) and left == right
         case sem.Details(), sem.Details():
             return (
                 isinstance(left.open, Controlled)

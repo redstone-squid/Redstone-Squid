@@ -95,14 +95,12 @@ or typed atomic target rules inside regions. No equivalence is inferred from
 arbitrary replacement text. Native extensions are usable through explicit custom
 composition rules, rather than an opaque production backend probe.
 
-Item selection still retains its non-region planner. Disclosures now expose only
-their open content to shared allocation. Navigation now uses shared
+Item browsers and disclosures now expose only their open content to shared
+allocation, retaining hidden layout cursors until that content reopens. Navigation now uses shared
 offers with destination ownership separate from layout page coordinates. Palette overrides,
-status/progress content and section thumbnails now use shared composition. The
-remaining widget adapters combine state selection, adaptation, and target lowering; migrating them requires
-explicit offers that preserve those contracts. This is a consciously deferred
-vocabulary extension, not a claim that the underlying platforms lack these features.
-The retained fitters remain active machinery and are not removed as dead code.
+status/progress content and section thumbnails now use shared composition. The retained
+fitters still serve legacy adaptation permissions and native extensions; they are
+active machinery, not dead code.
 
 ## Application outcome and validation
 
@@ -194,3 +192,17 @@ so reopening restores the remembered page. HTML keeps native details/summary
 markup but now materializes body content only while open, matching mounted state
 ownership across targets. Public disclosure and navigation control keys remain
 stable where their source identity is unambiguous.
+
+## Continuation: item browsers
+
+Item overviews and opened details now use shared allocation. The overview retains
+its keyed item anchors and summaries, and the opened detail repeats its heading
+and back control. Overview, detail and nested content cursors remain independent;
+opening another item retains the hidden cursor without publishing a new position.
+Controlled callbacks and initial opened displays preserve their existing ownership.
+Local item and destination pagers retain default navigation when a mount supplies
+no factory. All targets now compose select-page chrome as part of the selected page.
+Progress text retains both exact quantities and the percentage bars used by tallies.
+
+Both complete UI package suites pass after these changes (3,132 tests with
+`--no-cov`). Whole-project Pyrefly reports zero errors.

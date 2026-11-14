@@ -202,8 +202,8 @@ class SelectEntityFallback[ContextT = object](GeneratedHandler[ChoiceEvent[Conte
 
 
 @dataclass(frozen=True, slots=True)
-class ItemCommit(_HandlerComposition):
-    ownership: ItemOwnership
+class ItemCommit[ContextT = object](_HandlerComposition):
+    ownership: ItemOwnership[ContextT]
     key: str
     session: PresentationState
 
@@ -212,7 +212,7 @@ class ItemCommit(_HandlerComposition):
         ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
-    async def commit(self, event: ActionEvent, opened: str | None) -> None:
+    async def commit(self, event: ActionEvent[ContextT], opened: str | None) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
                 await on_change(
@@ -227,8 +227,8 @@ class ItemCommit(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class CloseItem(GeneratedHandler[PressEvent]):
-    commit: ItemCommit
+class CloseItem[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+    commit: ItemCommit[ContextT]
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -236,13 +236,13 @@ class CloseItem(GeneratedHandler[PressEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: PressEvent) -> None:
+    async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.commit.commit(event, None)
 
 
 @dataclass(frozen=True, slots=True)
-class FocusItem(GeneratedHandler[SelectionEvent]):
-    commit: ItemCommit
+class FocusItem[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]]):
+    commit: ItemCommit[ContextT]
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -250,7 +250,7 @@ class FocusItem(GeneratedHandler[SelectionEvent]):
         return replace(self, commit=commit) if commit is not self.commit else self
 
     @override
-    async def __call__(self, event: SelectionEvent) -> None:
+    async def __call__(self, event: SelectionEvent[ContextT]) -> None:
         await self.commit.commit(event, event.values[0] if event.values else None)
 
 

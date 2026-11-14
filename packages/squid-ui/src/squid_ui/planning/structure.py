@@ -6,12 +6,12 @@ read state or select a representation for the same semantic occurrence.
 
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from typing import Any, Protocol
+from typing import Protocol
 
 from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Role, Tone
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.styles import Color
-from squid_ui.semantic import Controlled, Details, Items, Navigation, Toggle, Uncontrolled
+from squid_ui.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Toggle, Uncontrolled
 
 
 def indexed_children[T](children: Sequence[T], path: str) -> Iterator[tuple[T, str]]:
@@ -80,7 +80,9 @@ def toggle_state(node: Toggle, session: PresentationState) -> bool:
             return session.toggle(node.key, initial=initial).on
 
 
-def item_state(node: Items[Any], session: PresentationState) -> tuple[str | None, bool]:
+def item_state[RenderTargetT, ContextT](
+    node: Items[RenderTargetT, ContextT], session: PresentationState
+) -> tuple[str | None, bool]:
     """The opened entry key and whether it is fixed, validated against the entries that exist.
 
     A remembered key whose entry has since disappeared is the engine's own stale data, so it
@@ -95,6 +97,16 @@ def item_state(node: Items[Any], session: PresentationState) -> tuple[str | None
             remembered = session.selection(node.key, initial=seed).selected
             opened = remembered[0] if remembered and remembered[0] in keys else None
             return opened, node.key in session.selections or initial is not None
+
+
+def opened_item[RenderTargetT, ContextT](
+    node: Items[RenderTargetT, ContextT], session: PresentationState
+) -> str | None:
+    """Apply an initial opened display only before the reader or owner has selected a state."""
+    opened, fixed = item_state(node, session)
+    if opened is None and not fixed and node.display == ItemDisplay.OPENED and node.items:
+        return node.items[0].key
+    return opened
 
 
 def navigation_current[ContextT](node: Navigation[ContextT], session: PresentationState) -> str | None:

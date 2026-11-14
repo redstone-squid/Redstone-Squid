@@ -15,14 +15,15 @@ from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
+from squid_ui.planning.interaction_semantics import ItemSummary
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.planning.pagination_reuse import same_allocation_document
 from squid_ui.planning.realizations import region_cursor_key
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
-from squid_ui.planning.semantics import semantic_graph
-from squid_ui.planning.structure import disclosure_state
+from squid_ui.planning.semantics import ItemBranch, semantic_graph
+from squid_ui.planning.structure import disclosure_state, opened_item
 from squid_ui.presentation import (
     ActivePagers,
     RegionAllocation,
@@ -32,7 +33,7 @@ from squid_ui.presentation import (
 )
 from squid_ui.presentations import SemanticRef
 from squid_ui.primitives.constraints import FIRST_PAGE, RoutedPage
-from squid_ui.semantic import Details, Group, List, Navigation, Paged, Region
+from squid_ui.semantic import Details, Group, Items, List, Navigation, Paged, Region
 
 
 def _navigation_version(nav: PlannedNav | None) -> int | None:
@@ -98,15 +99,22 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
             raise LayoutInvariantError(msg)
         seen.add(key)
 
+        def keyed(ref: SemanticRef) -> bool:
+            unit = graph.units.get(ref)
+            return not ref.keys[-1].startswith("@") or (unit is not None and isinstance(unit.value, ItemSummary))
+
         def anchor(ref: tuple[str, ...], prefix: tuple[str, ...] = region.source_prefix) -> str:
+            unit = graph.units.get(SemanticRef(ref))
+            if unit is not None and isinstance(unit.value, ItemSummary):
+                ref = ref[:-1]
             return "/".join(quote(part, safe="") for part in ref[len(prefix) :])
 
         anchors: dict[str, int] = {}
         for page, sources in enumerate(region.anchors):
             for source in sources:
-                if not source.keys[-1].startswith("@"):
+                if keyed(source):
                     anchors.setdefault(anchor(source.keys), page)
-        order = tuple(anchor(ref.keys) for ref in region.source_order if not ref.keys[-1].startswith("@"))
+        order = tuple(anchor(ref.keys) for ref in region.source_order if keyed(ref))
         authored = graph.units.get(SemanticRef(region.source_prefix))
         owner = (
             authored.value.page
@@ -161,6 +169,9 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
     # A closed disclosure hides its layout scopes without deleting their delivered cursors.
     # Hidden pagers receive no new position or allocation until the reader opens them.
     for reference, unit in graph.units.items():
+        if isinstance(unit.value, Items):
+            keys = (f"{unit.value.key}.items", *(f"{unit.value.key}.{item.key}.detail" for item in unit.value.items))
+            retained.update(key for key in keys if key in request.presentation.cursors)
         if not isinstance(unit.value, Region | Paged | List | Navigation | TextPages):
             continue
         parent = unit.parent
@@ -168,6 +179,8 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
         while parent is not None:
             ancestor = graph.units[parent]
             hidden |= isinstance(ancestor.value, Details) and not disclosure_state(ancestor.value, request.presentation)
+            if isinstance(ancestor.value, ItemBranch):
+                hidden |= opened_item(ancestor.value.items, request.presentation) != ancestor.value.item.key
             nested_region |= isinstance(ancestor.value, Region)
             parent = ancestor.parent
         if hidden:

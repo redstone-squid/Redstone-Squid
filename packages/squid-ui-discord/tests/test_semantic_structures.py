@@ -111,7 +111,15 @@ def test_large_semantic_pickers_keep_keyed_pages_within_native_limits() -> None:
     navigation_select = next(
         node for node in navigation_plan.scene.components_v2.children if isinstance(node, scene.Select)
     )
-    assert [len(choice_select.options), len(item_select.options)] == [11, 11]
+    assert len(choice_select.options) == 11
+    assert 1 <= len(item_select.options) <= 25
+    first_items = plan(items, target=DISCORD_V2_DPY27)
+    first_item_select = next(
+        node for node in first_items.scene.components_v2.children if isinstance(node, scene.Select)
+    )
+    assert [option.value for option in (*first_item_select.options, *item_select.options)] == [
+        str(i) for i in range(36)
+    ]
     assert 1 <= len(navigation_select.options) <= 25
     first_navigation = plan(navigation, target=DISCORD_V2_DPY27)
     first_select = next(
@@ -137,12 +145,12 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     session.move_cursor("catalog.items", PagePosition(page=1))
     second_page = plan(Items("catalog", original), target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(second_page.session_updates)
-    assert (
-        "25"
-        in next(node for node in second_page.scene.components_v2.children if isinstance(node, scene.Select))
+    anchor = (
+        next(node for node in second_page.scene.components_v2.children if isinstance(node, scene.Select))
         .options[0]
         .value
     )
+    assert session.cursor("catalog.items").position.anchor == anchor
 
     inserted = (Item("new", sl.semantic.ItemLabel("New"), (Paragraph("detail"),)), *original)
     replanned = plan(Items("catalog", inserted), target=DISCORD_V2_DPY27, session=session)
@@ -152,7 +160,7 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
         if isinstance(node, scene.Select)
         for option in node.options
     }
-    assert "25" in values
+    assert anchor in values
 
 
 def test_choices_minimum_zero_allows_deselecting_all() -> None:

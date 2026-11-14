@@ -62,6 +62,11 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 if isinstance(node, sem.List) and node.page_size is not None:
                     combinations *= max(1, (len(node.items) + node.page_size - 1) // node.page_size)
                 return node
+            case sem.Items():
+                pageable = True
+                return replace(
+                    node, items=tuple(replace(item, children=tuple(map(visit, item.children))) for item in node.items)
+                )
             case sem.Details():
                 pageable = True
                 return replace(node, children=tuple(map(visit, node.children)))

@@ -202,7 +202,19 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             form=scene.HtmlFormRef(control.action, control.action),
                         ),
                     )
-                case SelectRealization(node=control, navigation=navigation):
+                case SelectRealization(node=control, navigation=navigation, summaries=summaries):
+                    overview = (
+                        (
+                            scene.HtmlElement(
+                                scene.HtmlTag.UL,
+                                tuple(
+                                    scene.HtmlElement(scene.HtmlTag.LI, (text(summary.nodes),)) for summary in summaries
+                                ),
+                            ),
+                        )
+                        if summaries is not None
+                        else ()
+                    )
                     if not 0 <= control.min_values <= control.max_values <= len(control.options):
                         violations.append(ConstraintViolation(part.offer.occurrence.identity, "select cardinality"))
                     texts.extend(option.label for option in control.options)
@@ -227,6 +239,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         for option in control.options
                     )
                     result = (
+                        *overview,
                         scene.HtmlElement(
                             scene.HtmlTag.SELECT,
                             options,
@@ -247,6 +260,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             else None,
                         ),
                     )
+                    result += tuple(node for child in part.children for node in visit(child))
                     return (scene.HtmlElement(scene.HtmlTag.NAV, result),) if navigation else result
                 case TextSequenceRealization() as sequence:
                     if sequence.list_ordered is not None:

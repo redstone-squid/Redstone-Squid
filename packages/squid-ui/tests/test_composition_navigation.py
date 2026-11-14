@@ -119,6 +119,7 @@ def test_grouped_navigation_paginates_at_the_native_option_limit(target: Target[
     result = plan(node, target=limited)
     assert result.allocation is not None
     assert result.scene.pagers[0].pages == 3
+    assert "__cursor_next.destinations.destinations" in result.bindings
 
 
 def test_alternatives_cannot_change_destination_ownership_without_permission() -> None:

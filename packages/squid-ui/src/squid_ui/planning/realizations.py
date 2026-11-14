@@ -38,15 +38,19 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
-from squid_ui.planning.interaction_semantics import DisclosureToggle, NavigationChoice
+from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
+from squid_ui.planning.navigation import PagerNav, default_nav
 from squid_ui.planning.pagination_content import RootRegion, TextPages
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_adaptation.common import _button_style
 from squid_ui.planning.semantic_adaptation.handlers import (
     ChoiceCommit,
+    CloseItem,
     EntityCommit,
     FlipToggle,
+    FocusItem,
     GoToDestination,
+    ItemCommit,
     NavigationCommit,
     PresentForm,
     RouteSelection,
@@ -56,8 +60,14 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectEntityFallback,
     ToggleDetails,
 )
-from squid_ui.planning.semantics import SourceScope, StructuralGroup, UnsupportedSemanticError, check_alternative
-from squid_ui.planning.structure import disclosure_state, navigation_current, resolve_accent, toggle_state
+from squid_ui.planning.semantics import (
+    ItemBranch,
+    SourceScope,
+    StructuralGroup,
+    UnsupportedSemanticError,
+    check_alternative,
+)
+from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, resolve_accent, toggle_state
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
@@ -198,9 +208,14 @@ class ActionsRealization:
 class SelectRealization:
     node: scene.Select | scene.RoutedSelect
     navigation: bool = False
+    summaries: tuple[ReferencedText, ...] | None = None
 
     def fragment(self, start: int, end: int) -> Realization:
-        return replace(self, node=replace(self.node, options=self.node.options[start:end]))
+        return replace(
+            self,
+            node=replace(self.node, options=self.node.options[start:end]),
+            summaries=self.summaries[start:end] if self.summaries is not None else None,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,6 +247,7 @@ class RegionNavigation[RenderTargetT, ContextT]:
     footer: Callable[[int, int], TextLike] | None = None
     owner: PageOwnership = FIRST_PAGE
     cursor_key: str = ""
+    default_controls: bool = False
 
     def __call__(
         self, page: int, pages: int, context: PlanningContext
@@ -254,10 +270,11 @@ class RegionNavigation[RenderTargetT, ContextT]:
                     TextRealization(resolve_text(label, context.localization).nodes),
                 )
             )
+            navigation = context.navigation
+            if navigation is None and self.default_controls:
+                navigation = PagerNav(default_nav, context.presentation, staged=True)
             controls = (
-                ()
-                if context.navigation is None
-                else context.navigation(self.cursor_key, page, pages, context.chrome, self.owner)
+                () if navigation is None else navigation(self.cursor_key, page, pages, context.chrome, self.owner)
             )
             if not self.disabled_controls:
                 controls = tuple(
@@ -432,7 +449,9 @@ def _control_key[RenderTargetT, ContextT](
     occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
 ) -> str:
     sources = occurrence.sources
-    if occurrence.origin is None and isinstance(occurrence.graph.units[occurrence.reference].value, sem.Navigation):
+    if occurrence.origin is None and isinstance(
+        occurrence.graph.units[occurrence.reference].value, sem.Navigation | sem.Items
+    ):
         sources = frozenset({occurrence.reference})
     if len(sources) == 1 and occurrence.origin is None:
         source = next(iter(sources))
@@ -445,6 +464,11 @@ def _control_key[RenderTargetT, ContextT](
         elif isinstance(value, NavigationChoice):
             source_key = value.navigation.key
             key = f"{source_key}.{value.option.key}"
+        elif isinstance(value, ItemBack):
+            source_key = value.items.key
+            key = f"{source_key}.back"
+        elif isinstance(value, sem.Items):
+            key += ".focus"
         context.work.consume(len(occurrence.graph.units))
         if (
             not key.startswith("@")
@@ -586,6 +610,111 @@ def semantic_offers[RenderTargetT, ContextT](
         if isinstance(resolved, UnsupportedText):
             return ()
         return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
+    if isinstance(value, ItemSummary):
+        return (
+            RealizationOffer(
+                occurrence,
+                "item-heading",
+                TextRealization(
+                    resolve_text(value.item.label.content, context.localization).nodes, role="heading", level=3
+                ),
+            ),
+        )
+    if isinstance(value, ItemBack):
+        key = _control_key(occurrence, context)
+        label = "".join(tree.plain(node) for node in resolve_text(context.chrome.back, context.localization).nodes)
+        return (
+            RealizationOffer(
+                occurrence,
+                "item-back",
+                ControlRealization(label, action=key),
+                interaction=True,
+                binding=ActionBinding(
+                    key, CloseItem(ItemCommit(value.items.opened, value.items.key, context.presentation))
+                ),
+            ),
+        )
+    if isinstance(value, ItemBranch):
+        refs = occurrence.graph.children.get(occurrence.reference, ())
+        children = tuple(
+            SemanticOccurrence(
+                OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                occurrence.graph,
+                ref,
+                Placement.HEADER if index == 0 and len(refs) > 1 else occurrence.placement,
+                occurrence.origin,
+                palette=context.palette,
+            )
+            for index, ref in enumerate(refs)
+        )
+        return (RealizationOffer(occurrence, "item-detail", FlowRealization(), children, flow=True),)
+    if isinstance(value, sem.Items):
+        opened = opened_item(value, context.presentation)
+        refs = occurrence.graph.children.get(occurrence.reference, ())
+        context.work.consume(len(refs))
+        if opened is not None:
+            visible = tuple(ref for ref in refs if ref.keys[-1] in (opened, "@back"))
+            children = tuple(
+                SemanticOccurrence(
+                    OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                    occurrence.graph,
+                    ref,
+                    Placement.FOOTER if ref.keys[-1] == "@back" else occurrence.placement,
+                    occurrence.origin,
+                    palette=context.palette,
+                )
+                for ref in visible
+            )
+            cursor_key = f"{value.key}.{opened}.detail"
+            return (
+                RealizationOffer(
+                    occurrence,
+                    "items.opened",
+                    FlowRealization(),
+                    children,
+                    flow=True,
+                    region=RegionContract(
+                        cursor_key,
+                        RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key, default_controls=True),
+                        cursor_key=cursor_key,
+                    ),
+                ),
+            )
+        if not value.items:
+            return (RealizationOffer(occurrence, "items.empty", FlowRealization(), flow=True),)
+        key = _control_key(occurrence, context)
+        summaries: list[ReferencedText] = []
+        item_options: list[scene.Option] = []
+        for item, ref in zip(value.items, refs[:-1], strict=True):
+            label = resolve_text(item.label.content, context.localization).nodes
+            nodes = label
+            if item.summary is not None:
+                nodes += (tree.literal(" — "), *resolve_text(item.summary, context.localization).nodes)
+            summaries.append(ReferencedText(SemanticRef((*ref.keys, "@summary")), nodes))
+            item_options.append(scene.Option("".join(tree.plain(node) for node in label), item.key))
+        payload = SelectRealization(
+            scene.Select(tuple(item_options), key, "Choose an item"), summaries=tuple(summaries)
+        )
+        cursor_key = f"{value.key}.items"
+        return (
+            RealizationOffer(
+                occurrence,
+                "items.overview",
+                payload,
+                interaction=True,
+                binding=ActionBinding(key, FocusItem(ItemCommit(value.opened, value.key, context.presentation))),
+                fragments=FragmentContract(
+                    tuple(frozenset({summary.reference}) for summary in summaries),
+                    tuple(range(1, len(summaries) + 1)),
+                    payload.fragment,
+                ),
+                region=RegionContract(
+                    cursor_key,
+                    RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key, default_controls=True),
+                    cursor_key=cursor_key,
+                ),
+            ),
+        )
     if isinstance(value, DisclosureToggle):
         details = value.details
         open_ = disclosure_state(details, context.presentation)
@@ -648,7 +777,9 @@ def semantic_offers[RenderTargetT, ContextT](
         context.work.consume(len(refs))
         cursor_key = f"{value.key}.destinations"
         contract = RegionContract(
-            cursor_key, RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key), cursor_key=cursor_key
+            cursor_key,
+            RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key, default_controls=True),
+            cursor_key=cursor_key,
         )
         individual = RealizationOffer(
             occurrence,
@@ -907,7 +1038,9 @@ def semantic_offers[RenderTargetT, ContextT](
         )
         # Text-only targets retain the authored quantities, not just a rounded percentage.
         text = f"{label}: " if label is not None else ""
-        text += f"{value.value}/{value.maximum}"
+        ratio = 0.0 if value.maximum <= 0 else max(0.0, min(1.0, value.value / value.maximum))
+        filled = round(ratio * 10)
+        text += f"{value.value}/{value.maximum} {'█' * filled}{'░' * (10 - filled)} {ratio:.0%}"
         return (
             RealizationOffer(
                 occurrence,

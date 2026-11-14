@@ -227,7 +227,23 @@ class SlackCompositionRules[
                     )
                     prepared_blocks.append(scene.SlackActions((selector,)))
                     blocks += 1
-                case SelectRealization(node=control):
+                case SelectRealization(node=control, summaries=summaries):
+                    if summaries is not None:
+                        nodes = tuple(
+                            node
+                            for index, summary in enumerate(summaries)
+                            for node in ((tree.literal("\n"),) if index else ()) + summary.nodes
+                        )
+                        overview = _mrkdwn(nodes)
+                        if overview is None:
+                            violations.append(UnsupportedCapability(identity, "Slack item summary text"))
+                            overview = ""
+                        limit("section.text", len(overview), self.limits.components.section_text)
+                        texts.append(overview)
+                        prepared_blocks.append(
+                            scene.SlackSection(scene.SlackText(overview, scene.SlackTextKind.MARKDOWN))
+                        )
+                        blocks += 1
                     if control.disabled:
                         violations.append(UnsupportedCapability(identity, "disabled Slack select"))
                     if not 0 <= control.min_values <= control.max_values <= len(control.options):
@@ -274,6 +290,8 @@ class SlackCompositionRules[
                     texts.extend(option.label for option in control.options)
                     prepared_blocks.append(scene.SlackActions((selector,)))
                     blocks += 1
+                    for child in part.children:
+                        visit(child)
                 case TextSequenceRealization() as sequence:
                     nodes = (
                         *tuple(

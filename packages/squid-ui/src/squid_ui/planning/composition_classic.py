@@ -193,12 +193,16 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         for detail in select_violations(node, self.limits.components)
                     )
                     rows.append(scene.ClassicRow((node,)))
-                case SelectRealization(node=node):
+                case SelectRealization(node=node, summaries=summaries):
+                    if summaries is not None:
+                        text("\n".join(markdown(item.nodes) for item in summaries))
                     violations.extend(
                         ConstraintViolation(identity, detail)
                         for detail in select_violations(node, self.limits.components)
                     )
                     rows.append(scene.ClassicRow((node,)))
+                    for child in part.children:
+                        visit(child, output, embedded=embedded)
                 case ActionsRealization():
                     controls: list[scene.Control] = []
                     size = max(1, self.limits.components.row_buttons)

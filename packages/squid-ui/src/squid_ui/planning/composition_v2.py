@@ -189,13 +189,27 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     )
                     components += 2
                     return (node,)
-                case SelectRealization(node=node):
+                case SelectRealization(node=node, summaries=summaries):
+                    overview = (
+                        rendered_text(
+                            "\n".join(
+                                tree.markdown(item.nodes, discord=True, escape=context.escape_text)
+                                for item in summaries
+                            )
+                        )
+                        if summaries is not None
+                        else ()
+                    )
                     components += 2
                     violations.extend(
                         ConstraintViolation(part.offer.occurrence.identity, detail)
                         for detail in select_violations(node, self.limits.components)
                     )
-                    return (node,)
+                    return (
+                        *overview,
+                        node,
+                        *(node for child in part.children for node in visit(child, in_panel=in_panel)),
+                    )
                 case TextSequenceRealization() as sequence:
                     rendered = (
                         sequence.prefix

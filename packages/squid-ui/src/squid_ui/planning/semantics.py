@@ -7,7 +7,14 @@ from typing import Literal
 
 from squid_ui import semantic as sem
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.interaction_semantics import DisclosureToggle, Interaction, NavigationChoice, interaction_changes
+from squid_ui.planning.interaction_semantics import (
+    DisclosureToggle,
+    Interaction,
+    ItemBack,
+    ItemSummary,
+    NavigationChoice,
+    interaction_changes,
+)
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import (
     Alternative,
@@ -50,6 +57,12 @@ class StructuralGroup:
     part: Literal["columns", "rows", "header", "footer"]
 
 
+@dataclass(frozen=True, slots=True)
+class ItemBranch[RenderTargetT, ContextT]:
+    items: sem.Items[RenderTargetT, ContextT]
+    item: sem.Item[RenderTargetT, ContextT]
+
+
 type EmbeddedValue[ContextT] = (
     sem.Column
     | sem.TableRow
@@ -71,6 +84,7 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | TextPresentation
     | StructuralGroup
     | TextPages[RenderTargetT]
+    | ItemBranch[RenderTargetT, ContextT]
 )
 
 
@@ -132,6 +146,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Entities()
             | sem.Navigation()
             | sem.Details()
+            | sem.Items()
             | sem.Toggle()
             | sem.RoutedChoices()
             | sem.Region()
@@ -235,6 +250,14 @@ def semantic_graph[RenderTargetT, ContextT](
                 add(DisclosureToggle(value), (*path, "@toggle"), root, atomic=True)
                 for i, child in enumerate(value.children):
                     visit(child, root, i)
+            case sem.Items():
+                root = add(value, path, parent, atomic=False)
+                for item in value.items:
+                    branch = add(ItemBranch(value, item), (*path, item.key), root, atomic=False)
+                    add(ItemSummary(value, item), (*branch.keys, "@summary"), branch, atomic=True)
+                    for i, child in enumerate(item.children):
+                        visit(child, branch, i)
+                add(ItemBack(value), (*path, "@back"), root, atomic=True)
             case sem.ActionControls():
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
@@ -320,6 +343,8 @@ def interaction[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, Con
             | sem.Entities()
             | NavigationChoice()
             | DisclosureToggle()
+            | ItemSummary()
+            | ItemBack()
             | sem.RoutedChoices()
         ):
             return value
@@ -485,7 +510,7 @@ class SourceScope[RenderTargetT, ContextT]:
     def page_boundary(self, presentation: SemanticRef) -> SemanticRef:
         """Locate a preserved pager in the authored graph, across nested alternatives."""
         value = self.checked.presentation.units[presentation].value
-        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | TextPages):
+        if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | TextPages):
             message = "page boundary resolution needs a pagination scope"
             raise LayoutInvariantError(message)
         covered = frozenset(
@@ -497,7 +522,7 @@ class SourceScope[RenderTargetT, ContextT]:
         matches = [
             reference
             for reference, unit in self.checked.source.units.items()
-            if isinstance(unit.value, sem.Region | sem.Paged | sem.List | sem.Navigation | TextPages)
+            if isinstance(unit.value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | TextPages)
             and type(unit.value) is type(value)
             and unit.value.key == value.key
             and covered <= self.checked.source.atoms(reference)
@@ -567,6 +592,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.header,
                         other.footer,
                     )
+                case sem.Items(), sem.Items():
+                    preserved = (constraint.key, constraint.opened) == (other.key, other.opened)
                 case sem.Navigation(), sem.Navigation():
                     preserved = (constraint.key, constraint.current) == (other.key, other.current)
                 case sem.List(), sem.List():

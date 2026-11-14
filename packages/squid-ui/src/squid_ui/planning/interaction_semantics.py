@@ -21,6 +21,17 @@ class DisclosureToggle[ContextT]:
     details: sem.Details[Any, ContextT]
 
 
+@dataclass(frozen=True, slots=True)
+class ItemSummary[ContextT]:
+    items: sem.Items[Any, ContextT]
+    item: sem.Item[Any, ContextT]
+
+
+@dataclass(frozen=True, slots=True)
+class ItemBack[ContextT]:
+    items: sem.Items[Any, ContextT]
+
+
 type Interaction[ContextT] = (
     sem.ActionControl[ContextT]
     | sem.RoutedActionControl
@@ -32,6 +43,8 @@ type Interaction[ContextT] = (
     | sem.Toggle[ContextT]
     | NavigationChoice[ContextT]
     | DisclosureToggle[ContextT]
+    | ItemSummary[ContextT]
+    | ItemBack[ContextT]
 )
 
 
@@ -47,6 +60,15 @@ def interaction_changes[ContextT](
     if source is None:
         return frozenset() if target is None else interaction_changes(target, None)
     match source:
+        case ItemSummary():
+            other = target if isinstance(target, ItemSummary) else None
+            changes = (
+                ("opened", other is None or source.items.opened != other.items.opened),
+                ("item", other is None or source.item.key != other.item.key),
+            )
+        case ItemBack():
+            other = target if isinstance(target, ItemBack) else None
+            changes = (("opened", other is None or source.items.opened != other.items.opened),)
         case DisclosureToggle():
             other = target if isinstance(target, DisclosureToggle) else None
             changes = (("open", other is None or source.details.open != other.details.open),)
