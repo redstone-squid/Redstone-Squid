@@ -296,7 +296,7 @@ class Workbench(InspectablePanel):
 
         self.draft.publication = sl.operations.OperationDefinition(
             publish, name="Publish sample build", initial="queued"
-        ).start()
+        ).start(caused_by=event.transaction.context)
 
 
 class BuildPreview(InspectablePanel):

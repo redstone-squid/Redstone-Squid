@@ -30,7 +30,6 @@ from squid_reactivity.transaction_context import (
     TransactionId,
     TransactionPurpose,
     causal_scope,
-    current_transaction_context,
 )
 from squid_reactivity.transactions import (
     fresh_transaction,
@@ -248,18 +247,22 @@ class OperationDefinition[ValueT, ProgressT]:
     def start(
         self,
         *,
+        caused_by: TransactionContext | OperationContext | None = None,
         cause: CausalRef | None = None,
         root_transaction_id: TransactionId | None = None,
     ) -> OperationExecution[ValueT, ProgressT]:
         """Create an execution without running its loader.
 
-        Omitted cause and root identifiers come from the current transaction, if any.
+        Pass caused_by to link this execution to a transaction or another operation.
+        Without it, cause and root_transaction_id describe an optional external origin.
         Await the returned execution, or let the host settle it during rendering.
         """
-        origin = current_transaction_context()
-        if origin is not None:
-            cause = cause or origin.causal_ref()
-            root_transaction_id = root_transaction_id or origin.root_transaction_id
+        if caused_by is not None:
+            if cause is not None or root_transaction_id is not None:
+                message = "supply either caused_by or explicit cause and root identifiers"
+                raise ValueError(message)
+            cause = caused_by.causal_ref()
+            root_transaction_id = caused_by.root_transaction_id
         context = OperationContext(uuid.uuid7(), cause, root_transaction_id, self.name)
         execution = OperationExecution(self._loader, context=context, initial=self.initial)
         execution._emit("started")

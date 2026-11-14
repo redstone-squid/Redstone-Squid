@@ -12,7 +12,6 @@ from squid_reactivity import (
     observe_events,
     state,
     transaction,
-    transaction_context_scope,
 )
 from squid_reactivity.operations import Cancelled, Failed, Pending, ProgressReporter, Succeeded, operation
 from squid_reactivity.resources import resource
@@ -128,8 +127,7 @@ async def test_operation_start_and_terminal_state_form_causal_ledger_nodes() -> 
     ledger = EventLedger()
     with observe_events(ledger):
         action = TransactionContext.create("publish")
-        with transaction_context_scope(action):
-            execution = owner.work.start()
+        execution = owner.work.start(caused_by=action)
         await execution
 
         events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
@@ -178,7 +176,7 @@ async def test_action_operation_response_and_resource_generation_form_one_graph(
     ledger = EventLedger(limit=20)
     with observe_events(ledger):
         with transaction(transaction_context=root):
-            execution = owner.fetch.start()
+            execution = owner.fetch.start(caused_by=root)
         result = await execution
         with execution.start_transaction("publish response") as response:
             owner.value = result
@@ -196,3 +194,16 @@ async def test_action_operation_response_and_resource_generation_form_one_graph(
             response_outcome.root_transaction_id,
             resource_event.root_transaction_id,
         } == {str(root.transaction_id)}
+
+
+async def test_operation_origin_is_explicit_even_inside_an_unrelated_transaction() -> None:
+    owner = Owner()
+    origin = TransactionContext.create("original request")
+    with transaction("unrelated"):
+        detached = owner.work.start()
+        linked = owner.work.start(caused_by=origin)
+    assert detached.context.cause is None
+    assert detached.context.root_transaction_id is None
+    assert linked.context.cause == origin.causal_ref()
+    assert linked.context.root_transaction_id == origin.root_transaction_id
+    assert await linked == 42

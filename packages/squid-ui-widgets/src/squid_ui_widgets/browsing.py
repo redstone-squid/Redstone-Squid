@@ -161,7 +161,7 @@ class BrowseSession[ItemT](Reactive):
             self._request = None
 
     def _start(self, request: _Request[ItemT]) -> None:
-        with transaction():
+        with transaction() as tx:
             self.revision += 1
             revision = self.revision
 
@@ -171,7 +171,7 @@ class BrowseSession[ItemT](Reactive):
                     if self.revision == revision:
                         self._publish(candidate)
 
-            execution = OperationDefinition(resolve, name="browse.move", initial=None).start()
+            execution = OperationDefinition(resolve, name="browse.move", initial=None).start(caused_by=tx.context)
             self._request = request
             self.operation = execution
 
