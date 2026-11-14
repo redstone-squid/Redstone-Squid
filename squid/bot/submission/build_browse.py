@@ -393,8 +393,14 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
 class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A live build workspace that ends when replaced or timed out."""
 
+    # An open build with its schematic tools and the search reference needs more components
+    # than one message holds, so the workspace may continue in a second message.
     policy = sd.ResponseSpec(
-        nav=sd.navigation_controls.page_jump_nav, timeout=300, live_updates=True, session=sd.SessionSpec("build-browse")
+        nav=sd.navigation_controls.page_jump_nav,
+        timeout=300,
+        live_updates=True,
+        session=sd.SessionSpec("build-browse"),
+        max_messages=2,
     )
 
     _results: SearchScreen | None = sl.state(None, opaque=True)
@@ -479,10 +485,13 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._selected is not None:
             nodes.extend(
                 (
-                    sl.action_controls(
-                        sl.action_control(tr(t"build-browse-list = List view"), self._back, key="back"),
-                        key="selected-actions",
-                        display=sl.semantic.ControlDisplay.INDIVIDUAL,
+                    # "List view" closes the build below it, so the two stay in one message.
+                    sl.keep_with_next(
+                        sl.action_controls(
+                            sl.action_control(tr(t"build-browse-list = List view"), self._back, key="back"),
+                            key="selected-actions",
+                            display=sl.semantic.ControlDisplay.INDIVIDUAL,
+                        )
                     ),
                     self._selected,
                 )

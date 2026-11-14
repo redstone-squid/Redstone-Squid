@@ -587,6 +587,23 @@ async def test_search_help_appends_to_selected_build() -> None:
         ui.assert_within_limits()
 
 
+async def test_a_build_with_tools_and_help_continues_in_a_second_message() -> None:
+    screen = _screen(status=Status.PENDING, schematics_available=True, video_enabled=True)
+    screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
+    async with stage(screen, owner=object()) as ui:
+        await toggle_help(ui)
+        # Together these need more components than one message holds.
+        await ui.press(ui.key_for("schematic-tools"))
+        continuations = ui.root._candidates.continuations
+        assert len(continuations) == 1
+        # "List view" moves with the build it closes.
+        assert "back" in continuations[0].planned.keys
+        ui.assert_within_limits()
+
+        await ui.press(ui.key_for("schematic-info"))
+        ui.control(ui.key_for("all-builds"))
+
+
 @pytest.mark.parametrize("records", [False, True])
 async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
     screen = _screen(initial_id=None)
