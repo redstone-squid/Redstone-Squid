@@ -188,5 +188,5 @@ def _reference(entries: tuple[Fields | Paragraph, ...]) -> sl.LayoutNode[sl.Comp
         if isinstance(entry, Paragraph):
             lines.append(entry.content)
         else:
-            lines.extend(Text.join(": ", (field.label, field.value)) for field in entry.fields)
+            lines.extend(Text(t"{field.label}: {field.value}") for field in entry.fields)
     return sl.fallback(sl.stack(*entries), sl.paragraph(Text.join("\n\n", lines)))

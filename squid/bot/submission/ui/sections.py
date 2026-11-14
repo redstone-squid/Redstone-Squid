@@ -180,7 +180,7 @@ class SectionEditorScreen(sd.Screen[None]):
         answers = ws.answers
         children: list[Any] = [sd.v2.heading(md(t"{section.title}"))]
         if ws.notice:
-            children.append(sd.v2.text(Text.join("", ("⚠️ ", ws.notice))))
+            children.append(sd.v2.text(Text(t"⚠️ {ws.notice}")))
         # Follow the form's field order: a picker where its field is, and each modal group where it starts.
         chunks = {chunk.fields[0].id: chunk for chunk in modal_chunks(section)}
         for field in section.fields:
@@ -357,7 +357,7 @@ def _answer_lines(
         if field.id in grouped:
             continue
         value = answers.get(field.id)
-        label = Text.join("", (field.label, ": "))
+        label = Text(t"{field.label}: ")
         if is_empty(value):
             if field.required:
                 lines.append(label + md_tr(t"draft-editor-required = ⚠️ *Required*"))
@@ -366,7 +366,7 @@ def _answer_lines(
             continue
         line = label + _value_text(ws, field, value)
         if (reason := errors.get(field.id)) is not None:
-            line = Text.join("", (line, " — ⚠️ ", problem_text(reason)))
+            line = Text(t"{line} — ⚠️ {problem_text(reason)}")
         lines.append(line)
     return lines
 
@@ -380,15 +380,15 @@ def _dimensions_line(
     optional fields.
     """
     values = tuple(answers.get(field_id) for field_id in group.field_ids)
-    label = Text.join("", (group.label, ": "))
+    label = Text(t"{group.label}: ")
     reason = next((errors[field_id] for field_id in group.field_ids if field_id in errors), None)
     if all(value is None for value in values):
         if reason is not None:
             return label + md_tr(t"draft-editor-required = ⚠️ *Required*")
         return label + md_tr(t"draft-editor-not-set = *Not set*") if show_empty else None
     size = format_dimensions(tuple(value if isinstance(value, int) else None for value in values))
-    line = label + md(t"{size}")
-    return line if reason is None else Text.join("", (line, " — ⚠️ ", problem_text(reason)))
+    line = Text(t"{label}{size}")
+    return line if reason is None else Text(t"{line} — ⚠️ {problem_text(reason)}")
 
 
 def _value_text(ws: AnswerWorkspace, field: FormField, value: JSONValue) -> TextLike:
@@ -402,7 +402,7 @@ def _value_text(ws: AnswerWorkspace, field: FormField, value: JSONValue) -> Text
         joined = ", ".join(labels.get(str(item), str(item)) for item in value)
         return md(t"{joined}")
     if field.value_kind is ValueKind.GAME_TICKS and isinstance(value, int):
-        return md(t"{_seconds(value)}")
+        return Text(t"{_seconds(value)}")
     text = labels.get(str(value), str(value)).replace("\n", " ")
     if len(text) > _VALUE_PREVIEW_LENGTH:
         text = text[: _VALUE_PREVIEW_LENGTH - 1].rstrip() + "…"

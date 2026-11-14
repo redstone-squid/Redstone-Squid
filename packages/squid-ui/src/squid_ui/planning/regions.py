@@ -458,8 +458,8 @@ class _Solver:
         results: list[_Layout] = []
         chrome = replace(
             self.request.chrome,
-            previous=Text.join(" — ", (self.request.chrome.previous, region.title)),
-            next=Text.join(" — ", (self.request.chrome.next, region.title)),
+            previous=Text(t"{self.request.chrome.previous} — {region.title}"),
+            next=Text(t"{self.request.chrome.next} — {region.title}"),
         )
         if not region.title:
             chrome = self.request.chrome

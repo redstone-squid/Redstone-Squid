@@ -305,7 +305,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 t"be discarded."
             )
         elif ws.notice:
-            description = Text.join("", ("⚠️ ", ws.notice))
+            description = Text(t"⚠️ {ws.notice}")
         elif self.confirming:
             description = tr(t"build-editor-review-hint = Review the changed values below, then apply them.")
         else:

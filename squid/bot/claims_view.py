@@ -196,7 +196,7 @@ def _claim_entry(claim: AliasClaim) -> sl.TextLike:
     name = claim.alias_name
     heading = md_tr(t"claims-view-claim = Claim #{claim_id!s} — {name}")
     claimant = present_claimant(claim)
-    age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
+    age = sl.text.Text(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
     detail = md_tr(t"claims-view-opened = {claimant} — opened {age}")
     return md_tr(
         t"""

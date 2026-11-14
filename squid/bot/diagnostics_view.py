@@ -373,9 +373,9 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
     entries = [
         sl.field(
             tr(t"diagnostics-view-when = When"),
-            sl.md(t"{report.occurred_at.to_stdlib()}"),
+            sl.text.Text(t"{report.occurred_at.to_stdlib()}"),
         ),
-        sl.field(tr(t"diagnostics-view-where = Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
+        sl.field(tr(t"diagnostics-view-where = Where"), sl.text.Text(t"{report.surface} — {report.origin or '—'}")),
         sl.field(tr(t"diagnostics-view-exception = Exception"), sl.md(t"{report.exception_type}")),
         sl.field(tr(t"diagnostics-view-full-id = Full ID"), sl.md(t"{identifier}")),
     ]

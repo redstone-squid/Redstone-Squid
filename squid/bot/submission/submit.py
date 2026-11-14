@@ -500,7 +500,8 @@ def _draft_line(draft: StoredDraft) -> Text:
         case _:
             state = tr(t"build-drafts-state-editing = In progress")
     updated = draft.updated_at.to_stdlib()
-    return Text.join("\n", (title, Text.join(" · ", (state, md_tr(t"build-drafts-edited = Edited {updated}")))))
+    edited = md_tr(t"build-drafts-edited = Edited {updated}")
+    return Text(t"{title}\n{state} · {edited}")
 
 
 def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest, category: str) -> sl.TextLike:

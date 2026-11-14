@@ -593,7 +593,7 @@ def _tally_label(option: TallyOption) -> Text:
     label = strong(option.label) if option.mine else option.label
     count = option.count
     result = md_tr(t"ui-tally-option = {label} — {NUMBER(count)}")
-    return Text.join(" ", (plain(option.emoji), result)) if option.emoji is not None else result
+    return Text(t"{option.emoji} {result}") if option.emoji is not None else result
 
 
 def tally[ContextT = object](

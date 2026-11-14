@@ -577,7 +577,7 @@ class FilesEditorScreen(sd.Screen[None]):
         selected = next((item for item in files if str(item.id) == self.selected_file), None)
         children: list[Any] = [sd.v2.heading(tr(t"draft-editor-files-heading = Files"))]
         if ws.notice:
-            children.append(sd.v2.text(Text.join("", ("⚠️ ", ws.notice))))
+            children.append(sd.v2.text(Text(t"⚠️ {ws.notice}")))
         children.append(sd.v2.text(_files_text(ws, heading=False)))
         schematic_count = sum(item.kind == "schematic" for item in files)
         if schematic_count > 1:
@@ -795,9 +795,9 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
     ]
     if phase in {Phase.NEEDS_CHANGES, Phase.WAITING_FOR_FILES} and issues:
         labels = {field.id: field.label for field in ws.manifest.fields_for(ws.category)}
-        lines.extend(Text.join("", ("- ", _issue_text(issue, labels))) for issue in issues)
+        lines.extend(Text(t"- {_issue_text(issue, labels)}") for issue in issues)
     if ws.notice:
-        lines.append(Text.join("", ("⚠️ ", ws.notice)))
+        lines.append(Text(t"⚠️ {ws.notice}"))
     return sd.v2.text(Text.join("\n", lines))
 
 
@@ -910,7 +910,7 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
     """
     if issue.reason in _FIELD_REASONS:
         label = labels.get(issue.field_id, issue.field_id)
-        return Text.join("", (label, ": ", problem_text(issue.reason)))
+        return Text(t"{label}: {problem_text(issue.reason)}")
     match issue.reason:
         case SubmissionAttentionReason.SCHEMA_UNSUPPORTED:
             return md_tr(
