@@ -10,6 +10,7 @@ import squid_ui_widgets as sp
 from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
+from squid_i18n import discord_markup
 
 
 def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: int | None = None) -> str:
@@ -38,8 +39,8 @@ def render_build_review(
         }[snapshot.result]
         vote_text = sl.md(t"### Vote closed — {result_label}\n**Final score:** {snapshot.net_votes:g}")
     else:
-        approve = primary_emoji(snapshot, VoteChoice.APPROVE, guild_id)
-        deny = primary_emoji(snapshot, VoteChoice.DENY, guild_id)
+        approve = sl.emoji_text(primary_emoji(snapshot, VoteChoice.APPROVE, guild_id))
+        deny = sl.emoji_text(primary_emoji(snapshot, VoteChoice.DENY, guild_id))
         # A build review always threshold-closes, so both thresholds are set; the
         # nullable ones belong to generic polls, which never reach this renderer.
         assert snapshot.pass_threshold is not None
@@ -77,8 +78,8 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
     match snapshot.result if snapshot.status is VoteStatus.CLOSED else VoteSessionResult.PENDING:
         case VoteSessionResult.PENDING:
             title = "Vote to Delete Log"
-            approve = primary_emoji(snapshot, VoteChoice.APPROVE)
-            deny = primary_emoji(snapshot, VoteChoice.DENY)
+            approve = sl.emoji_text(primary_emoji(snapshot, VoteChoice.APPROVE))
+            deny = sl.emoji_text(primary_emoji(snapshot, VoteChoice.DENY))
             action = sl.md(t"React with {approve} to upvote or {deny} to downvote.")
             accent_colour = sl.Tone.WARNING
         case VoteSessionResult.APPROVED:
@@ -94,10 +95,8 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
             action = sl.text.Text("")
             accent_colour = sl.Tone.WARNING
 
-    # target_content is a logged user message, so it stays literal rather than being read as Markdown.
-    description = sl.text.Text.join(
-        "\n\n", [part for part in (action, sl.md(t"**Log content**\n{target_content}")) if part]
-    )
+    content = discord_markup(target_content)
+    description = sl.text.Text.join("\n\n", [part for part in (action, sl.md(t"**Log content**\n{content}")) if part])
     return render_payload(
         [
             card_node(
@@ -172,7 +171,9 @@ def _generic_poll_nodes(
         nodes.append(
             sl.bullets(
                 *(
-                    sl.bullet(sl.md(t"{option.emoji} {option.label}"), key=option.identifier or option.emoji)
+                    sl.bullet(
+                        sl.md(t"{sl.emoji_text(option.emoji)} {option.label}"), key=option.identifier or option.emoji
+                    )
                     for option in options
                 ),
                 key="poll.options",

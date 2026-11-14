@@ -31,7 +31,7 @@ from squid.starboard.application.edits import (
 from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
-from squid_i18n import md_tr
+from squid_i18n import Text, emoji_text, md_tr
 
 type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ChannelValidator = Callable[[int], Awaitable[None]]
@@ -352,7 +352,12 @@ class StarboardScreen(sd.Screen):
 
 
 def _board_detail(board: StarboardConfig) -> sl.semantic.Fields:
-    emojis = " ".join(f"{item.emoji} ({item.direction}, {item.multiplier:g}x)" for item in board.emojis) or "—"
+    emojis = (
+        Text.join(
+            " ", (Text(t"{emoji_text(item.emoji)} ({item.direction}, {item.multiplier:g}x)") for item in board.emojis)
+        )
+        or "—"
+    )
     return sl.fields(
         sl.field(tr(t"bot-starboard-screen-channel = Channel"), str(board.channel_id)),
         sl.field(tr(t"bot-starboard-screen-post-threshold = Post threshold"), f"{board.required:g}"),

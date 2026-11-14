@@ -24,7 +24,7 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
-from squid_i18n import NUMBER, Text, md_tr, strong
+from squid_i18n import NUMBER, Text, emoji_text, md_tr, strong
 from squid_ui.assets import FileInput, file
 from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
@@ -606,7 +606,7 @@ def _tally_label(option: TallyOption) -> Text:
     label = strong(option.label) if option.mine else option.label
     count = option.count
     result = md_tr(t"ui-tally-option = {label} — {NUMBER(count)}")
-    return Text(t"{option.emoji} {result}") if option.emoji is not None else result
+    return Text(t"{emoji_text(option.emoji)} {result}") if option.emoji is not None else result
 
 
 def tally[ContextT = object](

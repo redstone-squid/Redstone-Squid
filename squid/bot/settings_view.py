@@ -23,7 +23,7 @@ from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
 from squid.voting.domain.models import VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_i18n import NUMBER, Text, md_tr
+from squid_i18n import NUMBER, Text, emoji_text, md_tr
 
 if TYPE_CHECKING:
     from squid.settings.application import SettingsService
@@ -553,7 +553,7 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def _voting_fields(self) -> list[CardField]:
         preset = self.configuration.preset
         emojis = (
-            "\n".join(f"{option.emoji} — {option.choice.value}" for option in preset.options)
+            Text.join("\n", (Text(t"{emoji_text(option.emoji)} — {option.choice.value}") for option in preset.options))
             if preset is not None and preset.options
             else tr(t"bot-settings-view-none = _None_")
         )
