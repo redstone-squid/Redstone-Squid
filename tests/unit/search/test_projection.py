@@ -7,6 +7,7 @@ from whenever import Instant
 
 from squid.search.infrastructure.projection import (
     ProjectionFacet,
+    RecordHolderProjectionSource,
     RecordProjectionSource,
     SearchProjection,
     TagProjectionSource,
@@ -45,6 +46,19 @@ def test_record_documents_carry_titles_not_category_keys() -> None:
     assert projection.subtitle == "All-time"
     assert projection.tags == ("fastest", "door", "all_time")
     assert projection.document_data["category_key"] == source.category_key
+
+    held = build_record_projection(
+        source,
+        (
+            RecordHolderProjectionSource(42, "2x2 Seamless Door", "Specific build", {"opening": 4}),
+            RecordHolderProjectionSource(57, "2x2 Compact Door", None, {"opening": 4}),
+        ),
+    )
+    assert held.title == source.title
+    assert held.subtitle == source.subtitle
+    assert held.document_data["holder_build_ids"] == (42, 57)
+    assert held.document_data["build_title"] == "2x2 Seamless Door"
+    assert held.document_data["holder_metrics"] == {"42": {"opening": 4}, "57": {"opening": 4}}
 
 
 def test_normalize_collapses_case_and_whitespace() -> None:

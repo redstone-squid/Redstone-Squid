@@ -636,19 +636,15 @@ def build_record_projection(
     source: RecordProjectionSource,
     holders: Sequence[RecordHolderProjectionSource] = (),
 ) -> SearchProjection:
-    """Build a record document using the first holder's title and metrics.
-
-    Holders must be ordered by rank. With no holders, use the record rule's title
-    and subtitle instead.
-    """
+    """Index the record title and retain its ranked holders separately."""
     first_holder = holders[0] if holders else None
     holder_ids = tuple(holder.build_id for holder in holders)
     tags = (source.base_title, source.build_kind, source.version_scope)
     return SearchProjection(
         resource_kind="record",
         source_key=f"result:{source.result_id}",
-        title=first_holder.title if first_holder is not None else source.title,
-        subtitle=first_holder.subtitle if first_holder is not None else source.subtitle,
+        title=source.title,
+        subtitle=source.subtitle,
         status=source.status,
         tags=tags,
         document_data={
@@ -659,6 +655,8 @@ def build_record_projection(
             "version_scope": source.version_scope,
             "category_key": source.category_key,
             "holder_build_ids": holder_ids,
+            "build_title": first_holder.title if first_holder is not None else source.title,
+            "holder_metrics": {str(holder.build_id): holder.metric for holder in holders},
             "metric": first_holder.metric if first_holder is not None else {},
             "history_complete": source.history_complete,
             "gap_reasons": source.gap_reasons,

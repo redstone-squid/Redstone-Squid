@@ -42,6 +42,7 @@ class RankedCandidate:
     resource_kind: Literal["record", "build", "metadata"]
     normalized_title: str
     score: float = 0
+    branches: tuple[RankingBranch, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +81,7 @@ def reciprocal_rank_fusion(
         raise ValidationError(tr(t"search-branch-limit-positive = branch_limit must be positive"))
     scores: defaultdict[tuple[str, str], float] = defaultdict(float)
     documents: dict[tuple[str, str], RankedCandidate] = {}
+    contributions: defaultdict[tuple[str, str], list[RankingBranch]] = defaultdict(list)
     for branch, candidates in branches.items():
         weight = weights.get(branch, 0)
         if weight < 0:
@@ -94,6 +96,7 @@ def reciprocal_rank_fusion(
             seen.add(key)
             rank += 1
             documents[key] = candidate
+            contributions[key].append(branch)
             scores[key] += weight / (k + rank)
     fused = (
         RankedCandidate(
@@ -101,6 +104,7 @@ def reciprocal_rank_fusion(
             resource_kind=document.resource_kind,
             normalized_title=document.normalized_title,
             score=scores[key],
+            branches=tuple(contributions[key]),
         )
         for key, document in documents.items()
     )

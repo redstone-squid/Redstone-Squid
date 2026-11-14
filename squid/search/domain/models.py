@@ -67,6 +67,7 @@ class SearchRequest:
     offset: int = 0
     sort: SearchSort | None = None
     visible_statuses: frozenset[str] | None = None
+    group_by_build: bool = False
 
     def __post_init__(self) -> None:
         if not 1 <= self.page_size <= 50:
@@ -77,6 +78,27 @@ class SearchRequest:
         if not 0 <= self.offset <= MAX_PAGE_OFFSET:
             msg = f"offset must be between 0 and {MAX_PAGE_OFFSET}"
             raise ValidationError(msg, public_context={"field": "offset", "minimum": 0, "maximum": MAX_PAGE_OFFSET})
+
+
+@dataclass(frozen=True, slots=True)
+class SearchText:
+    """Display text with best-effort literal spans, using Python character offsets.
+
+    Spans are half-open and refer to this exact text, not a subsequently hydrated
+    title. An empty tuple means no reliable word-level highlight is available.
+    """
+
+    text: str
+    spans: tuple[tuple[int, int], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SearchMatch:
+    """A contributing document and its ranking branches, if relevance was used."""
+
+    resource_kind: Literal["build", "record", "metadata"]
+    source_id: str
+    branches: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +115,9 @@ class RecordSearchHit:
     score: float | None = None
     tags: tuple[str, ...] = ()
     metrics: dict[str, str | int | float | bool] = field(default_factory=dict)
+    holder_build_ids: tuple[int, ...] = ()
+    matched: bool = True
+    title_match: SearchText | None = None
     resource_kind: Literal["record"] = field(default="record", init=False)
 
 
@@ -106,6 +131,10 @@ class BuildSearchHit:
     description: str | None = None
     score: float | None = None
     tags: tuple[str, ...] = ()
+    grouped: bool = False
+    records: tuple[RecordSearchHit, ...] = ()
+    matches: tuple[SearchMatch, ...] = ()
+    title_match: SearchText | None = None
     resource_kind: Literal["build"] = field(default="build", init=False)
 
 
@@ -119,6 +148,8 @@ class MetadataSearchHit:
     description: str | None = None
     score: float | None = None
     aliases: tuple[str, ...] = ()
+    matches: tuple[SearchMatch, ...] = ()
+    title_match: SearchText | None = None
     resource_kind: Literal["metadata"] = field(default="metadata", init=False)
 
 

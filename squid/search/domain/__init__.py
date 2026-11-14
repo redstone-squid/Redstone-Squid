@@ -5,11 +5,13 @@ from squid.search.domain.models import (
     MetadataSearchHit,
     RecordSearchHit,
     SearchHit,
+    SearchMatch,
     SearchMode,
     SearchPage,
     SearchRequest,
     SearchScope,
     SearchSort,
+    SearchText,
     SortDirection,
 )
 from squid.search.domain.query import (
@@ -36,12 +38,14 @@ __all__ = [
     "RangeValue",
     "RecordSearchHit",
     "SearchHit",
+    "SearchMatch",
     "SearchMode",
     "SearchPage",
     "SearchQuery",
     "SearchRequest",
     "SearchScope",
     "SearchSort",
+    "SearchText",
     "SortDirection",
     "TextExpression",
 ]

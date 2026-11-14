@@ -29,6 +29,8 @@ def test_rrf_combines_branches_and_deduplicates_within_each_branch() -> None:
     assert [candidate.source_id for candidate in ranked] == ["door", "extender"]
     assert ranked[0].score == pytest.approx(4 / 61 + 2 / 62)
     assert ranked[1].score == pytest.approx(2 / 61)
+    assert ranked[0].branches == (RankingBranch.EXACT, RankingBranch.FULL_TEXT)
+    assert ranked[1].branches == (RankingBranch.FULL_TEXT,)
 
 
 def test_rrf_applies_branch_limit_before_fusion() -> None:
