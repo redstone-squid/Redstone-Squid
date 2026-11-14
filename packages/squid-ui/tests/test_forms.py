@@ -47,9 +47,9 @@ def test_descriptor_form_compiles_keys_labels_and_prefill() -> None:
     spec = form.spec()
     fields = [item for item in spec.items if isinstance(item, sl.forms.FormField)]
 
-    assert spec.title == "Edit profile"
+    assert spec.title == sl.plain("Edit profile")
     assert [field.key for field in fields] == ["name", "age", "public"]
-    assert [field.label for field in fields] == ["Name", "Age", "Public"]
+    assert [field.label for field in fields] == [sl.plain(name) for name in ("Name", "Age", "Public")]
     assert spec.prefill == {"name": "Ada", "age": 36, "public": False}
 
 
@@ -522,9 +522,9 @@ def test_scale_field_rejects_values_outside_its_span() -> None:
 def test_scale_field_labels_named_points_and_numbers_the_rest() -> None:
     field = sl.forms.ScaleField(key="score", labels={1: "Poor", 5: "Excellent"})
 
-    assert field.label_for(1) == "Poor"
+    assert field.label_for(1) == sl.plain("Poor")
     assert field.label_for(3) == "3"
-    assert field.label_for(5) == "Excellent"
+    assert field.label_for(5) == sl.plain("Excellent")
 
 
 def test_scale_field_prefill_is_the_option_key() -> None:
@@ -556,7 +556,7 @@ async def test_shared_field_error_resolves_inherited_declarations_and_deduplicat
     (error,) = result.errors
     assert isinstance(error, sl.forms.FieldError)
     assert error.fields == spec.items
-    assert error.message == "Bad order"
+    assert error.message == sl.plain("Bad order")
 
 
 async def test_field_error_rejects_a_foreign_field_even_with_the_same_key() -> None:

@@ -13,7 +13,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from squid_ui.palette import Role, Tone
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +26,7 @@ class RosterSlot:
     tone: Tone | Role = Tone.NEUTRAL
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "label", Text(self.label))
         if not self.key:
             message = "roster slot key must not be empty"
             raise ValueError(message)
@@ -51,6 +52,7 @@ class RosterEntry:
     joined_at: datetime | None = None
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "display", Text(self.display))
         if not self.actor_id:
             message = "roster actor id must not be empty"
             raise ValueError(message)

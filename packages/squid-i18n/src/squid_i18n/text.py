@@ -113,7 +113,14 @@ class Text:
 
     _parts: tuple[_Part, ...]
 
+    def __new__(cls, value: TextLike, /) -> Self:
+        if isinstance(value, cls):
+            return value
+        return object.__new__(cls)
+
     def __init__(self, value: TextLike, /) -> None:
+        if value is self:
+            return
         if isinstance(value, Text):
             parts = value._parts
         elif isinstance(value, str):

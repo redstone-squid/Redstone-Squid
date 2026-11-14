@@ -8,7 +8,7 @@ and transport packages import `squid_ui.grids` directly.
 from dataclasses import dataclass
 
 from squid_ui.palette import Role, Tone
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +21,7 @@ class GridCell:
     tone: Tone | Role = Tone.NEUTRAL
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "label", Text(self.label))
         if not self.key:
             message = "grid cell key must not be empty"
             raise ValueError(message)

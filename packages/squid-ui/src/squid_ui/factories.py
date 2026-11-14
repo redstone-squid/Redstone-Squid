@@ -24,7 +24,7 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
-from squid_i18n import NUMBER, Text, md_tr, plain, strong
+from squid_i18n import NUMBER, Text, md_tr, strong
 from squid_ui.assets import FileInput, file
 from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
@@ -127,7 +127,7 @@ from squid_ui.text import TextLike
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
-type TextValue = TextLike | Template
+type TextValue = TextLike
 """Author text: literal strings and t-strings, or explicitly formatted text."""
 
 type Conditional[ItemT] = ItemT | Literal[False] | None
@@ -203,14 +203,6 @@ def is_portable_node(value: object) -> TypeIs[PortableNode[Any]]:
     return isinstance(value, _PORTABLE_TYPES)
 
 
-def _text(value: TextValue) -> TextLike:
-    return plain(value) if isinstance(value, Template) else value
-
-
-def _opt_text(value: TextValue | None) -> TextLike | None:
-    return None if value is None else _text(value)
-
-
 def _reject(value: object, origin: str, index: int) -> NoReturn:
     if value is True:
         detail = (
@@ -240,7 +232,7 @@ def _children[RenderTargetT = RenderTarget, ContextT = object](
         if isinstance(value, str | Text | Template):
             # A paragraph renders on every target, but its own annotation names the base
             # `RenderTarget`, so it cannot be spelled as satisfying an arbitrary one.
-            collected.append(cast(LayoutNode[RenderTargetT, ContextT], Paragraph(_text(value))))
+            collected.append(cast(LayoutNode[RenderTargetT, ContextT], Paragraph(value)))
         elif is_layout_node(value):
             collected.append(value)
         else:
@@ -359,7 +351,7 @@ def details[RenderTargetT = RenderTarget, ContextT = object](
 
 def summary(content: TextValue) -> Summary:
     """The control text that identifies a `details` region."""
-    return Summary(_text(content))
+    return Summary(content)
 
 
 def form[ContextT = object](
@@ -384,19 +376,19 @@ def form[ContextT = object](
     if record is not None and selected_mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read form submission changes nothing, so it has nothing to record"
         raise ValueError(message)
-    return FormTrigger(key, _text(label), resolved, handler, selected_mode, tone, emphasis, guard, record)
+    return FormTrigger(key, label, resolved, handler, selected_mode, tone, emphasis, guard, record)
 
 
 def item[RenderTargetT = RenderTarget, ContextT = object](
     label: ItemLabel, *children: ChildLike[RenderTargetT, ContextT], key: str, summary: TextValue | None = None
 ) -> Item[RenderTargetT, ContextT]:
     """One entry of an `items` collection."""
-    return Item(key, label, _children(children, "sl.item()"), _opt_text(summary))
+    return Item(key, label, _children(children, "sl.item()"), summary)
 
 
 def item_label(content: TextValue) -> ItemLabel:
     """The identity shown for one `items` entry."""
-    return ItemLabel(_text(content))
+    return ItemLabel(content)
 
 
 def items[RenderTargetT = RenderTarget, ContextT = object](
@@ -415,22 +407,22 @@ def items[RenderTargetT = RenderTarget, ContextT = object](
 
 def heading(content: TextValue, *, level: int = 2, importance: Importance = Importance.HIGH) -> Heading:
     """A standalone heading."""
-    return Heading(_text(content), level, importance)
+    return Heading(content, level, importance)
 
 
 def paragraph(content: TextValue, *, importance: Importance = Importance.NORMAL, key: str | None = None) -> Paragraph:
     """A block of prose."""
-    return Paragraph(_text(content), importance, key)
+    return Paragraph(content, importance, key)
 
 
 def status(content: TextValue, *, tone: Tone | Role = Tone.NEUTRAL, emphasis: Emphasis = Emphasis.NORMAL) -> Status:
     """A short outcome or state message."""
-    return Status(_text(content), tone, emphasis)
+    return Status(content, tone, emphasis)
 
 
 def note(content: TextValue, *, importance: Importance = Importance.LOW) -> Note:
     """Small print: an id, a timestamp, a caveat the reader may skip."""
-    return Note(_text(content), importance)
+    return Note(content, importance)
 
 
 def code(content: str, *, language: str = "") -> Code:
@@ -440,17 +432,17 @@ def code(content: str, *, language: str = "") -> Code:
 
 def quote(content: TextValue, *, attribution: TextValue | None = None) -> Quote:
     """Quoted text with optional attribution."""
-    return Quote(_text(content), _opt_text(attribution))
+    return Quote(content, attribution)
 
 
 def progress(value: float, *, label: TextValue | None = None, maximum: float = 1.0) -> ProgressBar:
     """Completion of a known-length task."""
-    return ProgressBar(value, _opt_text(label), maximum)
+    return ProgressBar(value, label, maximum)
 
 
 def metric(value: int | float | str, label: TextValue, *, unit: str | None = None) -> Metric:
     """A single labelled quantity."""
-    return Metric(value, _text(label), unit)
+    return Metric(value, label, unit)
 
 
 def timestamp(
@@ -463,12 +455,12 @@ def timestamp(
     if instant.tzinfo is None or instant.utcoffset() is None:
         message = "sl.timestamp() requires an aware datetime"
         raise ValueError(message)
-    return Timestamp(instant, style, _opt_text(label))
+    return Timestamp(instant, style, label)
 
 
 def zoned_timestamp(value: ZonedDateTime, *, label: TextValue | None = None) -> ZonedTimestamp:
     """An exact instant displayed with its IANA timezone identity."""
-    return ZonedTimestamp(value, _opt_text(label))
+    return ZonedTimestamp(value, label)
 
 
 def figure(
@@ -483,7 +475,7 @@ def figure(
         message = "figure file metadata belongs on its media_item()"
         raise ValueError(message)
     resolved = source if isinstance(source, MediaItem) else media_item(source, filename=filename, media_type=media_type)
-    return Figure(resolved, _opt_text(caption))
+    return Figure(resolved, caption)
 
 
 # --- records and their collections ---------------------------------------------------------
@@ -498,7 +490,7 @@ def field(
     fallbacks: Iterable[TextValue] = (),
 ) -> Field:
     """One labelled value; ``fallbacks`` are shorter forms tried under budget pressure."""
-    return Field(key, _text(label), _text(value), importance, tuple(_text(item) for item in fallbacks))
+    return Field(key, label, value, importance, tuple(fallbacks))
 
 
 def fields(*entries: Conditional[Field]) -> Fields:
@@ -508,7 +500,7 @@ def fields(*entries: Conditional[Field]) -> Fields:
 
 def bullet(content: TextValue, *, key: str = "", importance: Importance = Importance.NORMAL) -> ListItem:
     """One entry of a `bullets` list."""
-    return ListItem(key, _text(content), importance)
+    return ListItem(key, content, importance)
 
 
 def bullets(
@@ -531,7 +523,7 @@ def bullets(
 
 def column(heading: TextValue, *, key: str = "") -> Column:
     """One column of a `table`."""
-    return Column(key, _text(heading))
+    return Column(key, heading)
 
 
 def columns(*entries: Conditional[Column]) -> Columns:
@@ -545,7 +537,7 @@ def columns(*entries: Conditional[Column]) -> Columns:
 
 def table_row(*cells: TextValue, key: str = "") -> TableRow:
     """One row of a `table`; cells are positional, in column order."""
-    return TableRow(key, tuple(_text(cell) for cell in cells))
+    return TableRow(key, tuple(cells))
 
 
 def table(
@@ -656,7 +648,7 @@ def media_item(
 ) -> MediaItem:
     """Describe one gallery entry. Use this for per-item metadata in a gallery."""
     asset = file(source, filename=filename, media_type=media_type)
-    return MediaItem(key, asset.url or asset, _opt_text(description), spoiler)
+    return MediaItem(key, asset.url or asset, description, spoiler)
 
 
 def media(
@@ -729,9 +721,7 @@ def action_control[ContextT = object](
     if record is not None and mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
         raise ValueError(message)
-    return ActionControl(
-        key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, mode, guard, busy, record
-    )
+    return ActionControl(key, label, on_trigger, tone, emphasis, available, allow_grouping, mode, guard, busy, record)
 
 
 def toggle[ContextT = object](
@@ -745,7 +735,7 @@ def toggle[ContextT = object](
     available: bool = True,
 ) -> Toggle[ContextT]:
     """A boolean control; ``on`` declares whether the author or session owns its state."""
-    return Toggle(key, _text(label), on, _opt_text(on_label), _opt_text(off_label), tone, available)
+    return Toggle(key, label, on, on_label, off_label, tone, available)
 
 
 def download(
@@ -766,9 +756,9 @@ def download(
     """
     return Download(
         key,
-        _opt_text(label),
+        label,
         file(source, filename=filename, media_type=media_type),
-        _opt_text(description),
+        description,
         emphasis,
         spoiler,
     )
@@ -776,7 +766,7 @@ def download(
 
 def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.NORMAL) -> Link:
     """A control that opens ``url``."""
-    return Link(key, _text(label), url, emphasis)
+    return Link(key, label, url, emphasis)
 
 
 def routed_action_control(
@@ -793,7 +783,7 @@ def routed_action_control(
     Build ``route_id`` with a `squid_ui.routing.Route` rather than by hand, so an id
     over Discord's budget fails here and not at send time.
     """
-    return RoutedActionControl(key, _text(label), route_id, tone, emphasis, available)
+    return RoutedActionControl(key, label, route_id, tone, emphasis, available)
 
 
 def control_group[ContextT = object](
@@ -802,9 +792,7 @@ def control_group[ContextT = object](
     label: TextValue | None = None,
 ) -> ControlGroup[ContextT]:
     """Controls that belong together and degrade together."""
-    return ControlGroup(
-        key, _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.control_group()"), _opt_text(label)
-    )
+    return ControlGroup(key, _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.control_group()"), label)
 
 
 def action_controls[ContextT = object](
@@ -835,7 +823,7 @@ def action_controls[ContextT = object](
 
 def choice(label: TextValue, *, key: str, description: TextValue | None = None, available: bool = True) -> Choice:
     """One option of a `choices` control; ``key`` is the value it submits."""
-    return Choice(key, _text(label), _opt_text(description), available)
+    return Choice(key, label, description, available)
 
 
 def choices[ContextT = object](
@@ -865,7 +853,7 @@ def entity_choice(
     available: bool = True,
 ) -> EntityChoice:
     """One enumerated fallback for an entity picker."""
-    return EntityChoice(ref, _text(label), _opt_text(description), available)
+    return EntityChoice(ref, label, description, available)
 
 
 def entities[ContextT = object](
@@ -888,7 +876,7 @@ def entities[ContextT = object](
         minimum,
         maximum,
         conversation_types,
-        _opt_text(placeholder),
+        placeholder,
         flexibility,
     )
 
@@ -911,9 +899,7 @@ def rating[ContextT = object](
         raise ValueError(message)
     points = range(1, maximum + 1)
     named = {} if labels is None else labels
-    entries = tuple(
-        Choice(str(point), _text(named[point]) if point in named else _text(_stars(point, maximum))) for point in points
-    )
+    entries = tuple(Choice(str(point), named[point] if point in named else _stars(point, maximum)) for point in points)
     if isinstance(value, Uncontrolled):
         selection: ChoiceOwnership[ContextT] = Uncontrolled(() if value.initial is None else (str(value.initial),))
     else:
@@ -950,7 +936,7 @@ def routed_choices(
         key,
         _collect(entries, (Choice,), "sl.routed_choices()"),
         route_id,
-        _opt_text(placeholder),
+        placeholder,
         minimum,
         maximum,
         available,
@@ -960,7 +946,7 @@ def routed_choices(
 
 def nav_option(label: TextValue, *, key: str, available: bool = True) -> NavOption:
     """One place `navigation` can go."""
-    return NavOption(key, _text(label), available)
+    return NavOption(key, label, available)
 
 
 def navigation[ContextT = object](
@@ -1083,4 +1069,4 @@ def region[RenderTargetT = RenderTarget, ContextT = object](
     page: PageOwnership = FIRST_PAGE,
 ) -> Region[RenderTargetT, ContextT]:
     """Let the planner allocate space jointly with sibling and nested regions."""
-    return Region(_children(children, "sl.region()"), key, _text(title), tuple(header), tuple(footer), page)
+    return Region(_children(children, "sl.region()"), key, title, tuple(header), tuple(footer), page)

@@ -246,7 +246,7 @@ def test_html_planner_renders_portable_forms_inline_with_prefill() -> None:
     assert set(spec.field_keys) == names
     portable = result.form_bindings["edit"].spec.items[-1]
     assert isinstance(portable, TextField)
-    assert portable.label == "Portable fallback"
+    assert portable.label == sl.plain("Portable fallback")
     assert result.bindings["edit"].mode.value == "exclusive"
     assert all(element.form is not None for element in controls)
     published = next(

@@ -57,7 +57,7 @@ class TestQueries:
     def test_find_narrows_by_key_and_returns_the_node(self) -> None:
         tree = sl.stack(_controls("save", "close"))
 
-        assert st.find(tree, ActionControl, key="close").label == "Close"
+        assert st.find(tree, ActionControl, key="close").label == sl.plain("Close")
 
     def test_find_names_the_available_keys_when_there_is_no_match(self) -> None:
         with pytest.raises(AssertionError, match=r"no Choices keyed 'gone'.*'bar', 'save'"):

@@ -78,7 +78,7 @@ def test_urls_and_paths_are_unambiguous() -> None:
 
 def test_media_metadata_belongs_to_a_single_entry() -> None:
     preview = sl.media(b"image", filename="image.png", description="A door", spoiler=True, key="preview")
-    assert preview.items[0].description == "A door"
+    assert preview.items[0].description == sl.plain("A door")
     assert preview.items[0].spoiler
     with pytest.raises(ValueError, match="one bare source"):
         sl.media(Path("one.png"), Path("two.png"), filename="image.png", key="gallery")

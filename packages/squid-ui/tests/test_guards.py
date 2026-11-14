@@ -111,7 +111,7 @@ async def test_when_takes_synchronous_and_awaitable_predicates() -> None:
 
     synchronous = guards.when(lambda event: event.actor.id == "7", reason="Not you.")
     assert (await _decision(synchronous, _event("7"), ledger)).allowed
-    assert (await _decision(synchronous, _event("8"), ledger)).reason == "Not you."
+    assert (await _decision(synchronous, _event("8"), ledger)).reason == sl.plain("Not you.")
 
     asynchronous = guards.when(eventually, reason="Not yet.")
     assert not (await _decision(asynchronous, _event(), ledger)).allowed
@@ -129,7 +129,9 @@ async def test_permission_defaults_to_chromeless_denial() -> None:
     verdict = await _decision(guards.permission(never), _event(), ledger)
     assert not verdict.allowed
     assert verdict.reason is None
-    assert (await _decision(guards.permission(never, reason="Mods only."), _event(), ledger)).reason == "Mods only."
+    assert (await _decision(guards.permission(never, reason="Mods only."), _event(), ledger)).reason == sl.plain(
+        "Mods only."
+    )
 
 
 async def test_until_reads_the_wall_clock_and_refuses_a_naive_deadline() -> None:
@@ -140,7 +142,7 @@ async def test_until_reads_the_wall_clock_and_refuses_a_naive_deadline() -> None
     assert (await _decision(open_guard, _event(), ledger)).allowed
     verdict = await _decision(closed, _event(), ledger)
     assert not verdict.allowed
-    assert verdict.reason == "Voting closed."
+    assert verdict.reason == sl.plain("Voting closed.")
     assert verdict.retry_after is None
 
     with pytest.raises(ValueError, match="aware deadline"):
@@ -154,10 +156,10 @@ async def test_all_of_reports_the_first_denial_and_any_of_the_last() -> None:
     no_second = guards.when(lambda event: False, reason="second")
 
     assert (await _decision(guards.all_of(yes, yes), _event(), ledger)).allowed
-    assert (await _decision(guards.all_of(yes, no_first, no_second), _event(), ledger)).reason == "first"
+    assert (await _decision(guards.all_of(yes, no_first, no_second), _event(), ledger)).reason == sl.plain("first")
 
     assert (await _decision(guards.any_of(no_first, yes), _event(), ledger)).allowed
-    assert (await _decision(guards.any_of(no_first, no_second), _event(), ledger)).reason == "second"
+    assert (await _decision(guards.any_of(no_first, no_second), _event(), ledger)).reason == sl.plain("second")
 
 
 async def test_a_ledger_view_shares_entries_with_the_message_root_wide_store() -> None:

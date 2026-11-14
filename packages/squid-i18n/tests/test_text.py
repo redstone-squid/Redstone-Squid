@@ -97,7 +97,7 @@ def test_plain_preserves_its_conversions() -> None:
 def test_existing_text_is_captured_without_resolving_it() -> None:
     original = tr("Hello", key="greeting")
     captured = Text(original)
-    assert captured == original
+    assert captured is original
     assert captured.declaration is original.declaration
     assert captured.bindings is original.bindings
     with localization_scope(Localization("fr", ("greeting = Bonjour",))):

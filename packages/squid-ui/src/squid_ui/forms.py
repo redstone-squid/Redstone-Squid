@@ -39,7 +39,7 @@ from squid_ui.temporal import (
     resolve_offset_datetime,
     timezone_from_name,
 )
-from squid_ui.text import TextLike
+from squid_ui.text import Text, TextLike
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
@@ -58,7 +58,7 @@ class FieldError:
             raise TypeError(error)
         unique = tuple({id(field): field for field in fields}.values())
         object.__setattr__(self, "fields", unique)
-        object.__setattr__(self, "message", message)
+        object.__setattr__(self, "message", Text(message))
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +66,9 @@ class FormError:
     """A validation error concerning the form as a whole."""
 
     message: TextLike
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "message", Text(self.message))
 
 
 type FormIssue = FieldError | FormError
@@ -91,7 +94,7 @@ class FormValueError(SquidUiError, ValueError):
     """
 
     def __init__(self, message: TextLike) -> None:
-        self.message = message
+        self.message = Text(message)
         super().__init__(source_text(message, format="plain"))
 
 
@@ -100,6 +103,9 @@ class FormText:
     """Static text placed in a form's declaration order."""
 
     content: TextLike
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "content", Text(self.content))
 
 
 def _invalid(message: TextLike) -> NoReturn:
@@ -135,6 +141,10 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
     default: ValueT | None = None
     _name: str = dataclass_field(default="", init=False, repr=False, compare=False)
     _declaration: FormField[Any] | None = dataclass_field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "label", None if self.label is None else Text(self.label))
+        object.__setattr__(self, "description", None if self.description is None else Text(self.description))
 
     def __set_name__(self, owner: type[Form], name: str) -> None:
         del owner
@@ -207,6 +217,10 @@ class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
     maximum: int | None = None
     strip: bool = True
 
+    def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
+
     @override
     def parse(self, raw: object) -> str | None:
         if self._optional(raw):
@@ -242,6 +256,10 @@ class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormF
     maximum: int | None = None
     placeholder: TextLike | None = None
 
+    def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
+
     @override
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
@@ -274,6 +292,10 @@ class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
     minimum: float | None = None
     maximum: float | None = None
     placeholder: TextLike | None = None
+
+    def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
 
     @override
     def parse(self, raw: object) -> float | None:
@@ -320,6 +342,10 @@ class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     placeholder: TextLike | None = None
     parser: Callable[[str], int] | None = dataclass_field(default=None, repr=False, compare=False)
     """Replaces the compact-duration grammar; signals bad input with `ValueError`."""
+
+    def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
 
     @override
     def parse(self, raw: object) -> int | None:
@@ -372,6 +398,10 @@ class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
     maximum: date | None = None
     placeholder: TextLike | None = "YYYY-MM-DD"
 
+    def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
+
     @override
     def parse(self, raw: object) -> date | None:
         if self._optional(raw):
@@ -408,6 +438,10 @@ class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
     minimum: TimeValue | None = None
     maximum: TimeValue | None = None
     placeholder: TextLike | None = "HH:MM"
+
+    def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
 
     @override
     def parse(self, raw: object) -> TimeValue | None:
@@ -454,6 +488,8 @@ class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     nonexistent: NonexistentTimeMode = NonexistentTimeMode.REJECT
 
     def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
         if not isinstance(self.ambiguous, AmbiguousTimeMode):
             message = "DateTimeField ambiguous must be an AmbiguousTimeMode"
             raise TypeError(message)
@@ -527,6 +563,8 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
     nonexistent: NonexistentTimeMode = NonexistentTimeMode.REJECT
 
     def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(self, "placeholder", None if self.placeholder is None else Text(self.placeholder))
         timezone_from_name(self.timezone)
         if not isinstance(self.ambiguous, AmbiguousTimeMode):
             message = "ZonedDateTimeField ambiguous must be an AmbiguousTimeMode"
@@ -608,6 +646,10 @@ class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
     labels: Mapping[int, TextLike] | None = None
 
     def __post_init__(self) -> None:
+        FormField.__post_init__(self)
+        object.__setattr__(
+            self, "labels", None if self.labels is None else {key: Text(item) for key, item in self.labels.items()}
+        )
         if self.maximum <= self.minimum:
             message = f"ScaleField {self.key!r} needs maximum greater than minimum"
             raise ValueError(message)
@@ -663,6 +705,8 @@ class ChoiceOption[ValueT]:
     emoji: EmojiLike | None = None
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "label", Text(self.label))
+        object.__setattr__(self, "description", None if self.description is None else Text(self.description))
         object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
@@ -673,6 +717,7 @@ class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[T
     options: tuple[ChoiceOption[ValueT], ...] = ()
 
     def __post_init__(self) -> None:
+        FormField.__post_init__(self)
         keys = [option.key for option in self.options]
         if len(set(keys)) != len(keys):
             message = f"ChoiceField option keys must be unique: {keys!r}"
@@ -709,6 +754,7 @@ class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Lite
     maximum: int | None = None
 
     def __post_init__(self) -> None:
+        FormField.__post_init__(self)
         keys = [option.key for option in self.options]
         if len(set(keys)) != len(keys):
             message = f"MultiChoiceField option keys must be unique: {keys!r}"
@@ -829,6 +875,7 @@ class FormSpec[ContextT = object]:
     )
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "title", Text(self.title))
         normalized = tuple(self.items)
         fields = tuple(item for item in normalized if isinstance(item, FormField))
         if not fields:
@@ -1076,6 +1123,9 @@ class FormBinding[ContextT = object]:
     mode: ActionMode = ActionMode.EXCLUSIVE
     label: TextLike = ""
     record: History | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "label", Text(self.label))
 
 
 type FormLike[ContextT = object] = FormSpec[ContextT] | Form[ContextT]

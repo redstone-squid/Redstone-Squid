@@ -94,7 +94,7 @@ from squid_ui.primitives.nodes import Heading as PrimitiveHeading
 from squid_ui.primitives.nodes import Text as PrimitiveText
 from squid_ui.semantic import Code as SemanticCode
 from squid_ui.semantic import Paragraph as SemanticParagraph
-from squid_ui.text import Localization
+from squid_ui.text import Localization, Text
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,8 +103,8 @@ class _DynamicSlot:
 
 
 @dataclass(frozen=True, slots=True)
-class _GeneratedHandlerTemplate:
-    handler_type: type[GeneratedHandler[Any]]
+class _DataclassTemplate:
+    value_type: type[Any]
     values: tuple[tuple[str, object], ...]
 
 
@@ -187,8 +187,10 @@ def _dynamic_index(value: object, dynamic: tuple[object, ...]) -> int | None:
 def _template(value: object, dynamic: tuple[object, ...]) -> object:
     if (index := _dynamic_index(value, dynamic)) is not None:
         return _DynamicSlot(index)
+    if isinstance(value, Text):
+        return value
     if isinstance(value, GeneratedHandler):
-        return _GeneratedHandlerTemplate(
+        return _DataclassTemplate(
             type(value),
             tuple(
                 (item.name, _template(getattr(value, item.name), dynamic))
@@ -205,8 +207,11 @@ def _template(value: object, dynamic: tuple[object, ...]) -> object:
     if isinstance(value, Enum | str | bytes | int | float | bool) or value is None:
         return value
     if is_dataclass(value) and not isinstance(value, type):
-        changes = {item.name: _template(getattr(value, item.name), dynamic) for item in fields(value) if item.init}
-        return replace(value, **changes)
+        # Placeholders are not valid model inputs; normalize only after rebinding them.
+        return _DataclassTemplate(
+            type(value),
+            tuple((item.name, _template(getattr(value, item.name), dynamic)) for item in fields(value) if item.init),
+        )
     if isinstance(value, Mapping):
         return {_template(key, dynamic): _template(item, dynamic) for key, item in value.items()}
     if isinstance(value, Sequence):
@@ -217,10 +222,8 @@ def _template(value: object, dynamic: tuple[object, ...]) -> object:
 def _materialize(value: object, dynamic: tuple[object, ...]) -> object:
     if isinstance(value, _DynamicSlot):
         return dynamic[value.index]
-    if isinstance(value, _GeneratedHandlerTemplate):
-        return value.handler_type(
-            **{name: _materialize(item, dynamic) for name, item in value.values},
-        )
+    if isinstance(value, _DataclassTemplate):
+        return value.value_type(**{name: _materialize(item, dynamic) for name, item in value.values})
     if isinstance(value, Enum | str | bytes | int | float | bool) or value is None:
         return value
     if is_dataclass(value) and not isinstance(value, type):
