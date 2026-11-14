@@ -48,6 +48,7 @@ from squid_ui.planning.search import (
     choose_strategy,
     iter_assignments,
 )
+from squid_ui.planning.spread import MessageSpread, plan_spread
 from squid_ui.planning.target import PreparedExtension, Target
 from squid_ui.target_types import (
     ClassicTarget,
@@ -94,6 +95,7 @@ __all__ = [
     "JointUnsupportedError",
     "LayoutOverflowError",
     "MeasuredLayout",
+    "MessageSpread",
     "NativeComposition",
     "OccurrenceId",
     "PagePosition",
@@ -136,5 +138,6 @@ __all__ = [
     "iter_assignments",
     "measure",
     "plan",
+    "plan_spread",
     "resolve_page_position",
 ]
