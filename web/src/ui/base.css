@@ -1,0 +1,69 @@
+@layer tokens, base, components;
+@import "./tokens.css";
+@import "./components.css";
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    background: var(--canvas);
+    font-family: var(--font-sans);
+    color: var(--text);
+  }
+  body {
+    margin: 0;
+    line-height: 1.55;
+  }
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.045em;
+  }
+  h2 {
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+  h3 {
+    font-size: 1rem;
+  }
+  a {
+    color: inherit;
+    text-underline-offset: 0.2em;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 3px;
+  }
+  img {
+    display: block;
+    max-width: 100%;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

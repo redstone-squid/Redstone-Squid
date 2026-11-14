@@ -1,0 +1,156 @@
+---
+import WorkbenchLayout from "../layouts/WorkbenchLayout.astro";
+import Panel from "../ui/astro/Panel.astro";
+import LinkButton from "../ui/astro/LinkButton.astro";
+import { Controls } from "../features/workbench/Controls";
+import { buildFixtures } from "../features/workbench/fixtures";
+const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
+const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
+const locale = chinese ? "zh-CN" : "en";
+const t = (en: string, zh: string): string => (chinese ? zh : en);
+---
+
+<WorkbenchLayout title="Design system" locale={locale} theme={theme}>
+  <header class="sq-page-heading">
+    <div>
+      <p class="sq-kicker">{t("THE FOUNDATION", "设计基础")}</p>
+      <h1>{t("Built to build on.", "为创造而构建。")}</h1>
+      <p class="sq-lede">
+        {t(
+          "One visual language for the redstone community. Components, patterns, and the states in between.",
+          "为红石社区打造统一的视觉语言。从组件、页面模式到每一种交互状态。",
+        )}
+      </p>
+    </div>
+    <div class="sq-row">
+      <LinkButton href={`?lang=${chinese ? "en" : "zh-CN"}&theme=${theme}`}>
+        {chinese ? "English" : "中文"}
+      </LinkButton>
+      <LinkButton href={`?lang=${locale}&theme=${theme === "light" ? "dark" : "light"}`}>
+        {theme === "light" ? t("Dark theme", "深色主题") : t("Light theme", "浅色主题")}
+      </LinkButton>
+    </div>
+  </header>
+  <Panel
+    id="foundations"
+    title={t("01 / Foundations", "01 / 基础规范")}
+    description={t(
+      "Quiet surfaces. Clear hierarchy. A redstone accent with purpose.",
+      "克制的表面、清晰的层级，以及有意义的红石强调色。",
+    )}
+  >
+    <div class="sq-swatches">
+      {["canvas", "surface", "accent", "success", "warning", "text"].map((token) => (
+        <div>
+          <div class={`sq-swatch sq-swatch--${token}`}></div>
+          <code>{token}</code>
+        </div>
+      ))}
+    </div>
+    <div class="sq-token-footer">
+      <span>{t("System typography · 4px spacing scale", "系统字体 · 4px 间距比例")}</span>
+      <span>{t("Light + dark · English + 中文", "浅色 + 深色 · English + 中文")}</span>
+    </div>
+  </Panel>
+  <Panel
+    id="components"
+    title={t("02 / Components", "02 / 组件")}
+    description={t(
+      "Shared controls with accessible behavior built in.",
+      "内置无障碍交互的共享控件。",
+    )}
+  >
+    {" "}
+    <Controls client:load chinese={chinese} />
+  </Panel>
+  <section id="patterns" class="sq-stack" aria-labelledby="patterns-title">
+    <div class="sq-section-heading">
+      <div>
+        <p class="sq-kicker">{t("03 / PAGE PATTERNS", "03 / 页面模式")}</p>
+        <h2 id="patterns-title">{t("Made by the community", "社区创作")}</h2>
+      </div>
+      <span class="sq-muted">{t("Example catalogue · fixture data", "目录示例 · 测试数据")}</span>
+    </div>
+    <div class="sq-build-grid">
+      {buildFixtures.map((build) => (
+        <article class="sq-build-card">
+          <div class="sq-build-image">
+            {build.image ? (
+              <img
+                src={build.image}
+                width="640"
+                height="400"
+                alt={t(`Illustrated ${build.title} fixture`, `${build.title} 示意图`)}
+              />
+            ) : (
+              <div class="sq-image-placeholder">
+                <span aria-hidden="true">◇</span>
+                {t("No preview available", "暂无预览")}
+              </div>
+            )}
+          </div>
+          <div class="sq-build-body">
+            <span class="sq-badge">{chinese ? build.categoryZh : build.category}</span>
+            <h3>{build.title}</h3>
+            <p class="sq-muted">{build.creator}</p>
+            <dl class="sq-metrics">
+              <div>
+                <dt>{t("Dimensions", "尺寸")}</dt>
+                <dd>{build.dimensions}</dd>
+              </div>
+              <div>
+                <dt>{t("Opening", "开启时间")}</dt>
+                <dd>{build.timing}</dd>
+              </div>
+            </dl>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+  <Panel
+    id="states"
+    title={t("04 / Feedback states", "04 / 反馈状态")}
+    description={t("Give every outcome a clear next step.", "为每种结果提供清晰的后续步骤。")}
+  >
+    <div class="sq-state-grid">
+      <div class="sq-state">
+        <span class="sq-badge sq-badge--success">{t("Confirmed", "已确认")}</span>
+        <h3>{t("Ready to explore", "可以开始探索")}</h3>
+        <p class="sq-muted">{t("The community has verified this build.", "社区已验证此作品。")}</p>
+      </div>
+      <div class="sq-state">
+        <span class="sq-badge">{t("Empty", "空状态")}</span>
+        <h3>{t("No matching builds", "没有匹配的作品")}</h3>
+        <p class="sq-muted">
+          {t(
+            "Try a broader size or another Minecraft version.",
+            "尝试更宽泛的尺寸或其他 Minecraft 版本。",
+          )}
+        </p>
+      </div>
+      <div class="sq-state">
+        <span class="sq-badge sq-badge--warning">{t("Unavailable", "暂不可用")}</span>
+        <h3>{t("Couldn’t load builds", "无法加载作品")}</h3>
+        <p class="sq-muted">
+          {t("Your filters are preserved. Try again shortly.", "筛选条件已保留。请稍后重试。")}
+        </p>
+      </div>
+      <div class="sq-state" aria-label={t("Loading example", "加载示例")}>
+        <span class="sq-badge">{t("Loading", "加载中")}</span>
+        <div class="sq-skeleton"></div>
+        <div class="sq-skeleton sq-skeleton--short"></div>
+        <span class="sq-muted">{t("Fetching builds…", "正在获取作品…")}</span>
+      </div>
+    </div>
+  </Panel>
+  <footer class="sq-workbench-footer">
+    {t("Redstone Squid / Design foundations", "Redstone Squid / 设计基础")}
+    <span>
+      {t(
+        "Fixture illustrations, not real build schematics.",
+        "示意图为测试素材，并非真实作品结构。",
+      )}
+    </span>
+  </footer>
+</WorkbenchLayout>

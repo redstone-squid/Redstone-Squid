@@ -1,0 +1,49 @@
+---
+import "../ui/base.css";
+type Props = { title: string; locale: "en" | "zh-CN"; theme: "light" | "dark" };
+const { title, locale, theme } = Astro.props;
+---
+
+<!doctype html>
+<html lang={locale} data-theme={theme}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>{title} · Redstone Squid</title>
+    <link rel="icon" href="/favicon.svg" />
+  </head>
+  <body>
+    <a class="sq-skip" href="#main">
+      {locale === "en" ? "Skip to content" : "跳至内容"}
+    </a>
+    <header class="sq-topbar">
+      <a class="sq-brand" href="/">
+        <span class="sq-brand-mark" aria-hidden="true">
+          R
+        </span>{" "}
+        Redstone Squid
+      </a>
+      <span class="sq-badge">{locale === "en" ? "Design system / 01" : "设计系统 / 01"}</span>
+    </header>
+    <div class="sq-shell">
+      <aside class="sq-sidebar">
+        <p class="sq-kicker">{locale === "en" ? "WORKBENCH" : "组件工作台"}</p>
+        <nav aria-label={locale === "en" ? "Workbench" : "组件工作台"}>
+          <a href="#foundations">{locale === "en" ? "Foundations" : "基础规范"}</a>
+          <a href="#components">{locale === "en" ? "Components" : "组件"}</a>
+          <a href="#patterns">{locale === "en" ? "Page patterns" : "页面模式"}</a>
+          <a href="#states">{locale === "en" ? "Feedback states" : "反馈状态"}</a>
+        </nav>
+        <p class="sq-sidebar-note">
+          Astro + React
+          <br />
+          Radix primitives
+        </p>
+      </aside>
+      <main id="main" class="sq-main">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

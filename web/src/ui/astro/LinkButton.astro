@@ -1,0 +1,10 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { buttonStyles, type ButtonVariants } from "../variants";
+type Props = HTMLAttributes<"a"> & ButtonVariants;
+const { variant, size, class: className, ...props } = Astro.props;
+---
+
+<a class={buttonStyles({ variant, size, className })} {...props}>
+  <slot />
+</a>

@@ -1,0 +1,32 @@
+export const buildFixtures = [
+  {
+    id: "copper",
+    title: "Copper Bolt 5×5",
+    creator: "CircuitSage · 红石猫",
+    dimensions: "9 × 7 × 4",
+    image: "/fixtures/copper-door.svg",
+    category: "Piston door",
+    categoryZh: "活塞门",
+    timing: "8 gt",
+  },
+  {
+    id: "iris",
+    title: "Observerless Iris / 无侦测器全隐藏虹膜门",
+    creator: "Space Builder",
+    dimensions: "12 × 12 × 5",
+    image: "/fixtures/iris-door.svg",
+    category: "Seamless door",
+    categoryZh: "无缝门",
+    timing: "12 gt",
+  },
+  {
+    id: "extender",
+    title: "Slim Piston Extender",
+    creator: "CircuitSage",
+    dimensions: "3 × 5 × 8",
+    image: null,
+    category: "Extender",
+    categoryZh: "活塞扩展器",
+    timing: "—",
+  },
+] as const;

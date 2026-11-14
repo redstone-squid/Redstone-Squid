@@ -1,0 +1,12 @@
+---
+type Props = { title: string; description?: string; id: string };
+const { title, description, id } = Astro.props;
+---
+
+<section class="sq-panel" aria-labelledby={id}>
+  <header class="sq-panel-heading">
+    <h2 id={id}>{title}</h2>
+    {description && <p class="sq-muted">{description}</p>}
+  </header>
+  <slot />
+</section>
