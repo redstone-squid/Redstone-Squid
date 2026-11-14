@@ -101,7 +101,7 @@ async def test_welcome_relay_forwards_once_in_either_event_order_without_cache_o
         return send
 
     mocker.patch.object(welcome_relay, "send_to", side_effect=send_to)
-    mocker.patch.object(welcome_relay, "text_node", side_effect=lambda content: content)
+    mocker.patch.object(welcome_relay, "text_node", side_effect=lambda content: content.resolve())
     mocker.patch.object(welcome_relay, "render_payload", side_effect=lambda nodes: nodes)
 
     with anyio.fail_after(0.2):

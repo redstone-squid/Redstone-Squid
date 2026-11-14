@@ -29,7 +29,7 @@ from squid.notifications.edits import (
     notification_target,
 )
 from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid_i18n import md_tr
+from squid_i18n import inline_code, md_tr
 
 if TYPE_CHECKING:
     from squid.notifications.application import NotificationService
@@ -442,10 +442,10 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
         return _kind_label(subscription.kind)
 
-    def detail(self, subscription: NotificationSubscription) -> str:
+    def detail(self, subscription: NotificationSubscription) -> sl.TextLike:
         if subscription.record_filter is not None:
             return _filter_text(subscription.record_filter)
-        return f"\x60{subscription.subject_id}\x60"
+        return inline_code(subscription.subject_id)
 
 
 class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):

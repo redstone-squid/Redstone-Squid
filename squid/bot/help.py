@@ -14,7 +14,7 @@ import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.suggestions.application import Candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
-from squid_i18n import md_tr
+from squid_i18n import inline_code, md_tr
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
@@ -93,7 +93,7 @@ class HelpScreen(sd.Screen):
             key="commands",
             identity=lambda item: item.qualified_name,
             label=lambda item: f"/{item.qualified_name}",
-            summary=lambda item: sl.text.Text(t"`/{item.qualified_name}` — {_summary(item)}"),
+            summary=lambda item: sl.text.Text(t"{inline_code(f'/{item.qualified_name}')} — {_summary(item)}"),
             detail=self._detail,
             page_size=10,
             title=tr(t"help-redstone-squid-help = Redstone Squid help"),

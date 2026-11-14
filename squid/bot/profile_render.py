@@ -8,7 +8,7 @@ from squid.accounts.application.presentation import claimant_label
 from squid.accounts.domain import IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile, avatar_url_for
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
-from squid_i18n import Text, md_tr
+from squid_i18n import Text, md_tr, text_link
 from squid_ui.text import TextLike
 from squid_ui.text import mention as text_mention
 
@@ -38,9 +38,9 @@ def identity_label(identity: AccountIdentity) -> Text:
     return md_tr(t"bot-profile-render-value = {provider} — {name}")
 
 
-def render_links(links: tuple[ProfileLink, ...]) -> str:
-    """Render links as markdown, one per line."""
-    return "\n".join(f"[{link.label}]({link.url})" for link in links)
+def render_links(links: tuple[ProfileLink, ...]) -> Text:
+    """Render links as text links, one per line."""
+    return Text.join("\n", (text_link(link.label, link.url) for link in links))
 
 
 def own_profile_fields(profile: AccountProfile) -> list[CardField]:
