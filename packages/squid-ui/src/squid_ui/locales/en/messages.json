@@ -1002,7 +1002,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/planning/navigation.py:320"
+      "packages/squid-ui/src/squid_ui/planning/navigation.py:324"
     ]
   },
   "ui-page-jump-range": {
@@ -1017,7 +1017,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/planning/navigation.py:321"
+      "packages/squid-ui/src/squid_ui/planning/navigation.py:325"
     ]
   },
   "ui-page-jump-unavailable": {
@@ -1026,7 +1026,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/planning/navigation.py:352"
+      "packages/squid-ui/src/squid_ui/planning/navigation.py:356"
     ]
   },
   "ui-tally-option": {

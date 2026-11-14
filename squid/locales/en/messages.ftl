@@ -3466,16 +3466,16 @@ layout-workbench-toggle-tags = Add or remove tags
 # squid/bot/layout_workbench.py:226
 layout-workbench-undo = Undo
 
-# squid/bot/lookup.py:104
+# squid/bot/lookup.py:107
 lookup-bounded = Up to 25 matches are shown. Search by name to narrow the results.
 
-# squid/bot/lookup.py:110
+# squid/bot/lookup.py:113
 lookup-cancel = Cancel
 
-# squid/bot/lookup.py:106
+# squid/bot/lookup.py:109
 lookup-catalogue = Browse or search by name.
 
-# squid/bot/lookup.py:139
+# squid/bot/lookup.py:142
 lookup-use-selection = Use selection
 
 # squid/media/application/jobs.py:189

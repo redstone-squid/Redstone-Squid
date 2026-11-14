@@ -11346,7 +11346,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/lookup.py:104"
+      "squid/bot/lookup.py:107"
     ]
   },
   "lookup-cancel": {
@@ -11355,7 +11355,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/lookup.py:110"
+      "squid/bot/lookup.py:113"
     ]
   },
   "lookup-catalogue": {
@@ -11364,7 +11364,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/lookup.py:106"
+      "squid/bot/lookup.py:109"
     ]
   },
   "lookup-use-selection": {
@@ -11373,7 +11373,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/lookup.py:139"
+      "squid/bot/lookup.py:142"
     ]
   },
   "media-artifact-dimensions-either": {

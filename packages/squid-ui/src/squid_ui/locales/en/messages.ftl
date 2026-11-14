@@ -257,13 +257,13 @@ ui-form-time-nonexistent = This local time does not exist in the selected timezo
 # packages/squid-ui/src/squid_ui/forms.py:567
 ui-form-timezone-offset-mismatch = The UTC offset does not match this local time in the selected timezone.
 
-# packages/squid-ui/src/squid_ui/planning/navigation.py:320
+# packages/squid-ui/src/squid_ui/planning/navigation.py:324
 ui-page-jump-number = Page number
 
-# packages/squid-ui/src/squid_ui/planning/navigation.py:321
+# packages/squid-ui/src/squid_ui/planning/navigation.py:325
 ui-page-jump-range = Enter a page from 1 to { $pages }.
 
-# packages/squid-ui/src/squid_ui/planning/navigation.py:352
+# packages/squid-ui/src/squid_ui/planning/navigation.py:356
 ui-page-jump-unavailable = This pager is no longer available.
 
 # packages/squid-ui/src/squid_ui/factories.py:608
