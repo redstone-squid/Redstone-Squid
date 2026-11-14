@@ -13,6 +13,8 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.consent import with_consented_account
 from squid.bot.edit_controller import BoundEdit, EditController
+from squid.bot.navigation.destinations import BuildDetail, BuildIndex
+from squid.bot.navigation.router import screen_route
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
 from squid.bot.submission.record_browser import record_browser
 from squid.bot.submission.records import RecordsScreen
@@ -386,6 +388,8 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         return False
 
 
+@screen_route("/builds", destination=BuildIndex)
+@screen_route("/builds/{build_id}", destination=BuildDetail)
 class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A live build workspace that ends when replaced or timed out."""
 

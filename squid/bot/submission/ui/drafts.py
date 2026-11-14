@@ -34,6 +34,8 @@ from uuid import UUID, uuid4
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
+from squid.bot.navigation.destinations import DraftDetail
+from squid.bot.navigation.router import screen_route
 from squid.bot.submission import draft_intake
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
@@ -405,6 +407,7 @@ class DraftWorkspace(sl.Reactive):
         return replacement.source_id
 
 
+@screen_route("/drafts/{draft_id}", destination=DraftDetail)
 class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
     """The draft panel: an overview of every section, then Submit.
 

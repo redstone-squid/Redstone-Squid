@@ -31,6 +31,7 @@ from squid.bot.account_presentation import refresh_message
 from squid.bot.account_view import AccountOverview, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import ConsentPrompt, request_consent
+from squid.bot.follows import FollowCard
 from squid.bot.profile_editor import ProfileEditor
 from squid.bot.verify import VerifyCog
 from squid.core.actors import Actor
@@ -320,7 +321,8 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
 
     card = await cog._public_profile_card(page, "Someone")
 
-    assert "Someone" in str(card)
+    assert isinstance(card, FollowCard)
+    assert "Someone" in str(card.render())
 
 
 async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:

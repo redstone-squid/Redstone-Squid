@@ -12,6 +12,7 @@ from squid.accounts.application import AccountService
 from squid.bot.actors import DiscordActorResolver
 from squid.bot.errors import UI_ERRORS
 from squid.bot.i18n import localization_resolver
+from squid.bot.navigation.assembly import build_screen_router
 from squid.bot.ui import HOST_DEFAULTS
 from squid.core.actors import Actor
 from squid.diagnostics.application import ErrorReportService
@@ -373,6 +374,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(
+        screen_router=build_screen_router(),
         ui=runtime,
         sessions=runtime.sessions,
         actors=DiscordActorResolver(cast("squid.bot.app.RedstoneSquid", client)),

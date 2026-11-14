@@ -8,6 +8,8 @@ from discord.ext import commands
 from discord.ext.commands import Context, when_mentioned
 
 import squid_ui_discord as sd
+from squid.bot.navigation.destinations import BuildDetail, BuildIndex
+from squid.bot.navigation.router import NavigationRequest
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
@@ -182,9 +184,10 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             ),
         },
     )
-    async def browse_builds(self, request: sd.Request[Self, BotT], build_id: int | None = None) -> BuildBrowseScreen:
+    async def browse_builds(self, request: sd.Request[Self, BotT], build_id: int | None = None) -> sd.CommandResult:
         """Browse builds and record holders."""
-        return await self._catalogue(request, build_id=build_id)
+        destination = BuildIndex() if build_id is None else BuildDetail(build_id)
+        return await request.client.screen_router.open(request, destination)
 
     @sd.command(
         name=tr(t"command-records-name = records"),
@@ -201,72 +204,10 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
     )
     async def records_workspace(self, request: sd.Request[Self, BotT], query: str | None = None) -> BuildBrowseScreen:
         """Open the shared catalogue at its record standings."""
-        screen = await self._catalogue(request, initial_records=True)
+        screen = await make_catalogue(request, initial_records=True)
         if query is not None:
             await screen._run_search(query, "")
         return screen
-
-    async def _catalogue(
-        self,
-        request: sd.Request[Self, BotT],
-        *,
-        build_id: int | None = None,
-        initial_records: bool = False,
-    ) -> BuildBrowseScreen:
-        subject = await request.client.actors.resolve(request)
-        permissions = self.bot.services.permissions
-
-        async def held(node: PermissionNode) -> bool:
-            return (await permissions.check(subject, node)).allowed
-
-        capabilities = BuildCapabilities(
-            view_pending=await held(BUILD_SUBMISSION_VIEW_PENDING),
-            approve=await held(BUILD_SUBMISSION_APPROVE),
-            reject=await held(BUILD_SUBMISSION_REJECT),
-            debug=await held(BUILD_SUBMISSION_DEBUG),
-            edit=await held(BUILD_SUBMISSION_EDIT),
-        )
-
-        async def authorize(node: PermissionNode) -> bool:
-            return await allows(request, node)
-
-        async def refresh_posts(build_id: int) -> None:
-            await self.bot.refresh_posts("build", str(build_id))
-
-        can_inspect = request.guild is not None and await held(RECORD_ENTRY_INSPECT)
-        can_rebuild = request.guild is not None and await held(RECORD_ENTRY_REBUILD)
-        record_tools = (
-            RecordsScreen(
-                self.bot.services.records,
-                self.bot.services.record_computation,
-                can_inspect=can_inspect,
-                can_rebuild=can_rebuild,
-                authorize=authorize,
-            )
-            if can_inspect or can_rebuild
-            else None
-        )
-
-        return BuildBrowseScreen(
-            self.queries,
-            self.builds,
-            self.bot.services.edits,
-            lambda: request.client.actors.resolve(request, refresh=True),
-            self.bot.services.schematics,
-            topics=self.bot.topic_bus,
-            initial_id=build_id,
-            render_build=lambda build: render_build_card(
-                build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
-            ),
-            capabilities=capabilities,
-            actor_account_id=subject.account_id,
-            authorize=authorize,
-            refresh_posts=refresh_posts,
-            records=self.bot.services.records,
-            search=self.search,
-            record_tools=record_tools,
-            initial_records=initial_records,
-        )
 
     @sd.Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
@@ -293,3 +234,65 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load search and build commands."""
     await bot.add_cog(BuildCommands(bot))
+
+
+async def make_catalogue(
+    request: NavigationRequest,
+    *,
+    build_id: int | None = None,
+    initial_records: bool = False,
+) -> BuildBrowseScreen:
+    subject = await request.client.actors.resolve(request)
+    permissions = request.client.services.permissions
+
+    async def held(node: PermissionNode) -> bool:
+        return (await permissions.check(subject, node)).allowed
+
+    capabilities = BuildCapabilities(
+        view_pending=await held(BUILD_SUBMISSION_VIEW_PENDING),
+        approve=await held(BUILD_SUBMISSION_APPROVE),
+        reject=await held(BUILD_SUBMISSION_REJECT),
+        debug=await held(BUILD_SUBMISSION_DEBUG),
+        edit=await held(BUILD_SUBMISSION_EDIT),
+    )
+
+    async def authorize(node: PermissionNode) -> bool:
+        return await allows(request, node)
+
+    async def refresh_posts(build_id: int) -> None:
+        await request.client.refresh_posts("build", str(build_id))
+
+    can_inspect = request.guild is not None and await held(RECORD_ENTRY_INSPECT)
+    can_rebuild = request.guild is not None and await held(RECORD_ENTRY_REBUILD)
+    record_tools = (
+        RecordsScreen(
+            request.client.services.records,
+            request.client.services.record_computation,
+            can_inspect=can_inspect,
+            can_rebuild=can_rebuild,
+            authorize=authorize,
+        )
+        if can_inspect or can_rebuild
+        else None
+    )
+
+    return BuildBrowseScreen(
+        request.client.services.build_queries,
+        request.client.services.builds,
+        request.client.services.edits,
+        lambda: request.client.actors.resolve(request, refresh=True),
+        request.client.services.schematics,
+        topics=request.client.topic_bus,
+        initial_id=build_id,
+        render_build=lambda build: render_build_card(
+            build, request.client.media_previews, schematic_summaries=request.client.services.schematic_summaries
+        ),
+        capabilities=capabilities,
+        actor_account_id=subject.account_id,
+        authorize=authorize,
+        refresh_posts=refresh_posts,
+        records=request.client.services.records,
+        search=request.client.services.search,
+        record_tools=record_tools,
+        initial_records=initial_records,
+    )

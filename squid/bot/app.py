@@ -22,6 +22,7 @@ from squid.bot._types import MessageableChannel
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.errors import UI_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
+from squid.bot.navigation.router import ScreenRouter
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
@@ -88,6 +89,7 @@ EXTENSIONS = (
     "squid.bot.give_redstoner",
     "squid.bot.version_tracking",
     "squid.bot.welcome_relay",
+    "squid.bot.navigation.commands",
 )
 """Production extensions in load order. Tests load this same set to detect registration conflicts."""
 
@@ -125,6 +127,7 @@ class RedstoneSquid(Bot):
         inference_reasoning_effort: str = "low",
         development_mode: bool = False,
     ):
+        self.screen_router = ScreenRouter()
         self.services = services
         self.build_config = build_config
         self.database_config = database_config

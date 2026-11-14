@@ -18,6 +18,8 @@ from squid.bot.account_presentation import link_conflict, link_message, refresh_
 from squid.bot.account_view import AccountOverview, ConsentRequest
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
+from squid.bot.navigation.destinations import AccountDestination, AccountTab
+from squid.bot.navigation.router import screen_route
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -29,6 +31,7 @@ from squid_ui_discord.modal import EntityField
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
+@screen_route("/account", destination=AccountDestination, query=("tab",))
 class AccountWorkspace(sd.Screen):
     """Combine account linking, profile controls, creator claims, and account merges.
 
@@ -55,6 +58,7 @@ class AccountWorkspace(sd.Screen):
         can_refresh_any: bool = False,
         can_refresh_identity: bool = False,
     ) -> None:
+        self.initial_tab: AccountTab | None = None
         self._accounts = accounts
         self._edits = edits
         self._edit_actor = actor
@@ -72,6 +76,15 @@ class AccountWorkspace(sd.Screen):
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
         self._merge_code: str | None = None
         self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
+
+    @property
+    def available_tabs(self) -> frozenset[str]:
+        tabs = {"identity"}
+        if self._account is not None and self._account.id is not None:
+            tabs.update(("overview", "claims", "merge"))
+        if self._can_review_claims:
+            tabs.add("review")
+        return frozenset(tabs)
 
     @override
     async def on_load(self) -> None:
@@ -118,7 +131,11 @@ class AccountWorkspace(sd.Screen):
             tabs.append(sp.Tab("merge", tr(t"account-workspace-merge-accounts = Merge accounts"), self._merge_nodes()))
         if self._claims is not None:
             tabs.append(sp.Tab("review", tr(t"account-workspace-review-claims = Review claims"), self._claims))
-        self._tabs = sp.Tabs(tabs, key="account-tabs", title=tr(t"account-workspace-account = Account"))
+        initial = self.initial_tab if self.initial_tab in {tab.key for tab in tabs} else None
+        self.initial_tab = None
+        self._tabs = sp.Tabs(
+            tabs, initial=initial, key="account-tabs", title=tr(t"account-workspace-account = Account")
+        )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

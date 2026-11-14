@@ -29,7 +29,7 @@ class InvalidAddress(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ScreenOpening:
-    response: sd.Response
+    response: sd.Response[Any]
     session_key: Hashable | None = None
 
 
@@ -44,13 +44,13 @@ class ScreenRoute[D: Destination]:
 
 
 class ScreenDecorator(Protocol):
-    def __call__[S: sd.Screen](self, screen: type[S], /) -> type[S]: ...
+    def __call__[S: sd.Screen[Any, Any, Any]](self, screen: type[S], /) -> type[S]: ...
 
 
 def screen_route[D: Destination](path: str, *, destination: type[D], query: tuple[str, ...] = ()) -> ScreenDecorator:
     """Attach a declaration to this exact Screen class without registering a handler."""
 
-    def decorate[S: sd.Screen](screen: type[S]) -> type[S]:
+    def decorate[S: sd.Screen[Any, Any, Any]](screen: type[S]) -> type[S]:
         declarations = screen.__dict__.get("__screen_routes__", ())
         cast(Any, screen).__screen_routes__ = *declarations, ScreenRoute(path, destination, query)
         return screen
@@ -121,7 +121,7 @@ class ScreenRouter:
         self._frozen = False
 
     def register[D: Destination](
-        self, screen: type[sd.Screen], *, destination: type[D], factory: ScreenFactory[D]
+        self, screen: type[sd.Screen[Any, Any, Any]], *, destination: type[D], factory: ScreenFactory[D]
     ) -> None:
         if self._frozen:
             msg = "Screen routes are frozen"
@@ -184,6 +184,9 @@ class ScreenRouter:
         if any(character.isspace() for character in address) or "#" in address or "%" in address:
             msg = "Expected a relative screen address"
             raise InvalidAddress(msg)
+        if not address.startswith("/") or address.startswith("//"):
+            message = "Expected a relative screen address"
+            raise InvalidAddress(message)
         parsed = urlsplit(address)
         if parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
             msg = "Expected a relative screen address"

@@ -15,6 +15,7 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, Ident
 from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache
 from squid.bot.errors import build_error_notice
+from squid.bot.navigation.controls import open_address
 from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
@@ -334,7 +335,7 @@ async def test_saved_drafts_paginate_all_entries(
     screen = _screen(harness)
     assert isinstance(screen, SavedDraftsScreen)
     expected = {
-        *(build_controls.reopen_draft.id(draft_id=str(draft.snapshot.id)) for draft in drafts),
+        *(open_address.id(address=f"/drafts/{draft.snapshot.id}") for draft in drafts),
         *(build_controls.reopen_inference.id(run_id=str(run_id)) for run_id in runs),
     }
     seen: list[str] = []

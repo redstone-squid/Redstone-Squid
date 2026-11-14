@@ -65,6 +65,7 @@ def test_route_namespace_is_an_ordinary_root_group() -> None:
 def test_production_route_table_has_one_feature_owned_registration_per_identity() -> None:
     for module in (
         "squid.bot.voting.controls",
+        "squid.bot.navigation.controls",
         "squid.bot.submission.ui.controls",
         "squid.bot.submission.consent_banner",
         "squid.bot.give_redstoner",
@@ -75,6 +76,8 @@ def test_production_route_table_has_one_feature_owned_registration_per_identity(
     assert {route.format for route in descriptions} == {
         "r:polls:close",
         "r:polls:refresh",
+        "r:navigation:open:{address}",
+        "r:builds:{build_id:int}:tags",
         "r:builds:{build_id:int}:edit",
         "r:builds:{build_id:int}:edit:recover",
         "r:builds:draft:{draft_id}:reopen",
@@ -83,7 +86,7 @@ def test_production_route_table_has_one_feature_owned_registration_per_identity(
         "r:build-log-consents:new",
         "r:redstoner-roles:self:remove",
     }
-    assert len(descriptions) == 9
+    assert len(descriptions) == 11
     assert all(route.middleware[0].endswith(".TraceRoutes") for route in descriptions)
     redstoner = next(route for route in descriptions if route.group_prefix == "r:redstoner-roles")
     assert redstoner.middleware[1].endswith(".OwnerGuildOnly")

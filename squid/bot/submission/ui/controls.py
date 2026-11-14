@@ -8,9 +8,9 @@ from discord import Interaction
 
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
+from squid.bot.navigation.destinations import DraftDetail
 from squid.bot.routes._root import _feature_group
-from squid.bot.submission.build_card import render_build_card
-from squid.bot.submission.ui import drafts, inference, opening, recalculation
+from squid.bot.submission.ui import inference, opening, recalculation
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import allows
@@ -101,22 +101,7 @@ async def recover_build_editor(interaction: Interaction[RedstoneSquid], build_id
 async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -> None:
     """Resolve durable identity and current authority before reopening a private draft."""
     request = await sd.request(interaction)
-    if await ensure_consented_account(request, interaction.client.services.accounts) is None:
-        return
-    screen = await drafts.draft_editor(
-        interaction.client.services,
-        UUID(draft_id),
-        changes=interaction.client.topic_bus.topic("submission_draft", draft_id),
-        resolve_actor=partial(request.client.actors.resolve, request, refresh=True),
-        render_card=lambda build: render_build_card(
-            build,
-            interaction.client.media_previews,
-            schematic_summaries=interaction.client.services.schematic_summaries,
-        ),
-    )
-    await request.respond(
-        screen, audience="personal", session_key=sd.SessionKey.custom("draft", (interaction.user.id, draft_id))
-    )
+    await request.client.screen_router.open(request, DraftDetail(UUID(draft_id)))
 
 
 @builds.route("revision:{proposal_id}:reopen")

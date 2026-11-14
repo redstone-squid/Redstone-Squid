@@ -19,6 +19,9 @@ import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
+from squid.bot.navigation.controls import destination_button
+from squid.bot.navigation.destinations import DraftDetail, DraftIndex
+from squid.bot.navigation.router import NavigationRequest, screen_route
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.draft_intake import receive_attachments
 from squid.bot.submission.groups import BuildCommandGroup
@@ -67,6 +70,7 @@ logger = logging.getLogger(__name__)
 CONSENT_STICKY_ENABLED: bool = False
 
 
+@screen_route("/drafts", destination=DraftIndex, query=("inbox",))
 class SavedDraftsScreen(sd.Screen):
     """Keep saved drafts and inference runs reachable across Discord message pages."""
 
@@ -325,43 +329,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     )
     async def saved_drafts(self, request: sd.Request[Self, BotT], *, inbox: bool = False) -> sd.CommandResult:
         """Reopen saved drafts, or browse the staff correction inbox."""
-        account_id = await ensure_consented_account(request, self.bot.services.accounts)
-        if account_id is None:
-            return None
-        actor = await request.client.actors.resolve(request)
-        drafts = (
-            await self.bot.services.submission_drafts.attention_inbox(actor, limit=10)
-            if inbox
-            else await self.bot.services.submission_drafts.list_active(account_id)
-        )
-        runs = await self.bot.services.submission_inference.list_active(actor, inbox=inbox)
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sl.primitives.Section(
-                (sl.primitives.Text(_draft_line(draft)),),
-                sl.primitives.RoutedButton(
-                    tr(t"build-drafts-open = Open"), build_controls.reopen_draft.id(draft_id=str(draft.snapshot.id))
-                ),
-            )
-            for draft in drafts
-        ]
-        nodes.extend(
-            sl.primitives.Section(
-                (sl.primitives.Text(md_tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
-                sl.primitives.RoutedButton(
-                    tr(t"build-drafts-review = Review"), build_controls.reopen_inference.id(run_id=str(run_id))
-                ),
-            )
-            for run_id in runs
-        )
-        if nodes:
-            return SavedDraftsScreen(nodes)
-        if inbox:
-            return text_node(tr(t"build-drafts-inbox-empty = No drafts are waiting for staff correction."))
-        return text_node(
-            md_tr(
-                t"build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.",
-            )
-        )
+        return await request.client.screen_router.open(request, DraftIndex(inbox=inbox))
 
     async def _is_build_log_message(self, message: discord.Message) -> bool:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
@@ -518,4 +486,46 @@ def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest, cate
     fields = field_names(manifest, category, field_ids)
     return md_tr(
         t"draft-editor-unused-options = Some values from the command could not be used: {fields}. Fill them in below.",
+    )
+
+
+async def make_saved_drafts(
+    request: NavigationRequest, *, inbox: bool = False
+) -> SavedDraftsScreen | sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None:
+    account_id = await ensure_consented_account(request, request.client.services.accounts)
+    if account_id is None:
+        return None
+    actor = await request.client.actors.resolve(request)
+    drafts = (
+        await request.client.services.submission_drafts.attention_inbox(actor, limit=10)
+        if inbox
+        else await request.client.services.submission_drafts.list_active(account_id)
+    )
+    runs = await request.client.services.submission_inference.list_active(actor, inbox=inbox)
+    nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+        sl.primitives.Section(
+            (sl.primitives.Text(_draft_line(draft)),),
+            destination_button(
+                request.client.screen_router, tr(t"build-drafts-open = Open"), DraftDetail(draft.snapshot.id)
+            ),
+        )
+        for draft in drafts
+    ]
+    nodes.extend(
+        sl.primitives.Section(
+            (sl.primitives.Text(md_tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
+            sl.primitives.RoutedButton(
+                tr(t"build-drafts-review = Review"), build_controls.reopen_inference.id(run_id=str(run_id))
+            ),
+        )
+        for run_id in runs
+    )
+    if nodes:
+        return SavedDraftsScreen(nodes)
+    if inbox:
+        return text_node(tr(t"build-drafts-inbox-empty = No drafts are waiting for staff correction."))
+    return text_node(
+        md_tr(
+            t"build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.",
+        )
     )

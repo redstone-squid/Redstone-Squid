@@ -13,6 +13,8 @@ from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
 from squid.bot.follows import FollowCard
+from squid.bot.navigation.destinations import AccountDestination
+from squid.bot.navigation.router import NavigationRequest
 from squid.bot.profile_render import (
     public_profile_fields,
 )
@@ -21,6 +23,7 @@ from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
 from squid.core.i18n import tr
 from squid.notifications.domain import SubscriptionKind
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -60,56 +63,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         if user is not None and user.id != actor.id:
             return await self._creator_page(request, user)
 
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(actor.id))
-        if account is not None:
-            await self._refresh_discord_avatar_key(account, actor)
-
-        async def open_consent(
-            event: sd.ActionEvent,
-            answered: ConsentAnswer,
-            *,
-            preview: LinkPreview | None = None,
-            on_abandon: Callable[[], Awaitable[None]] | None = None,
-            timeout: float = 120.0,
-        ) -> bool:
-            press = event.context
-            message_root = press.root
-            assert message_root is not None, "a press always arrives from a mounted message"
-
-            async def completed(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
-                await answered(prompt, consent)
-                if consent is not None:
-                    await message_root.schedule()
-
-            return await request_consent(
-                event,
-                user_id=actor.id,
-                on_answer=completed,
-                preview=preview,
-                on_abandon=on_abandon,
-                timeout=timeout,
-            )
-
-        async def authorize_claim(node) -> bool:
-            return await allows(request, node)
-
-        async def edit_actor() -> Actor:
-            return await request.client.actors.resolve(request, refresh=True)
-
-        return AccountWorkspace(
-            accounts=self.account_service,
-            edits=self.bot.services.edits,
-            actor=edit_actor,
-            actor_id=actor.id,
-            account=account,
-            request_consent=open_consent,
-            can_review_claims=await allows(request, ACCOUNT_CLAIM_LIST),
-            can_approve_claims=await allows(request, ACCOUNT_CLAIM_APPROVE),
-            can_reject_claims=await allows(request, ACCOUNT_CLAIM_REJECT),
-            authorize_claim=authorize_claim,
-            can_refresh_any=await allows(request, ACCOUNT_IDENTITY_REFRESH_ANY),
-            can_refresh_identity=await allows(request, ACCOUNT_IDENTITY_REFRESH),
-        )
+        return await request.client.screen_router.open(request, AccountDestination())
 
     async def _creator_page(
         self, request: sd.Request[Self, BotT], user: discord.Member | discord.User
@@ -150,19 +104,6 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
             public_id,
         )
 
-    async def _refresh_discord_avatar_key(self, account: Account, user: discord.Member | discord.User) -> None:
-        """Persist the supplied Discord user's avatar hash when it differs from the stored identity.
-
-        Opening the owner's account provides both the linked identity and a Discord
-        user object; public profile rendering can then use the stored hash.
-        """
-        identity = account.identity_for(IdentityProvider.DISCORD, str(user.id))
-        if account.id is None or identity is None or identity.id is None:
-            return
-        key = user.avatar.key if user.avatar is not None else None
-        if key != identity.avatar_key:
-            await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
-
 
 def _missing_creator_page(user: str) -> Text:
     return md_tr(t"bot-verify-doesn-t-have-a-creator-page = {user} doesn't have a creator page.")
@@ -171,3 +112,73 @@ def _missing_creator_page(user: str) -> Text:
 async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VerifyCog(bot))
+
+
+async def make_account_workspace(request: NavigationRequest) -> AccountWorkspace:
+    actor = request.user
+    account = await request.client.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(actor.id))
+    if account is not None:
+        await refresh_discord_avatar_key(request, account, actor)
+
+    async def open_consent(
+        event: sd.ActionEvent,
+        answered: ConsentAnswer,
+        *,
+        preview: LinkPreview | None = None,
+        on_abandon: Callable[[], Awaitable[None]] | None = None,
+        timeout: float = 120.0,
+    ) -> bool:
+        press = event.context
+        message_root = press.root
+        assert message_root is not None, "a press always arrives from a mounted message"
+
+        async def completed(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
+            await answered(prompt, consent)
+            if consent is not None:
+                await message_root.schedule()
+
+        return await request_consent(
+            event,
+            user_id=actor.id,
+            on_answer=completed,
+            preview=preview,
+            on_abandon=on_abandon,
+            timeout=timeout,
+        )
+
+    async def authorize_claim(node: PermissionNode) -> bool:
+        return await allows(request, node)
+
+    async def edit_actor() -> Actor:
+        return await request.client.actors.resolve(request, refresh=True)
+
+    return AccountWorkspace(
+        accounts=request.client.services.accounts,
+        edits=request.client.services.edits,
+        actor=edit_actor,
+        actor_id=actor.id,
+        account=account,
+        request_consent=open_consent,
+        can_review_claims=await allows(request, ACCOUNT_CLAIM_LIST),
+        can_approve_claims=await allows(request, ACCOUNT_CLAIM_APPROVE),
+        can_reject_claims=await allows(request, ACCOUNT_CLAIM_REJECT),
+        authorize_claim=authorize_claim,
+        can_refresh_any=await allows(request, ACCOUNT_IDENTITY_REFRESH_ANY),
+        can_refresh_identity=await allows(request, ACCOUNT_IDENTITY_REFRESH),
+    )
+
+
+async def refresh_discord_avatar_key(
+    request: NavigationRequest, account: Account, user: discord.Member | discord.User
+) -> None:
+    """Persist the supplied Discord user's avatar hash when it differs from the stored identity.
+
+    Opening the owner's account provides both the linked identity and a Discord
+    user object; public profile rendering can then use the stored hash.
+    """
+    identity = account.identity_for(IdentityProvider.DISCORD, str(user.id))
+    if account.id is None or identity is None or identity.id is None:
+        return
+    key = user.avatar.key if user.avatar is not None else None
+    if key != identity.avatar_key:
+        await request.client.services.accounts.record_identity_avatar_key(account.id, identity.id, key)
