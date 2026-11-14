@@ -271,7 +271,17 @@ def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
     assert not result.report.search.optimal
     assert result.metrics.work_used <= 100_000
     assert any(event.message == "Shortening" for event in result.report.events)
-    assert len(result.bindings) == 5
+    labels: set[str] = set()
+    for node in result.scene.components_v2.children:
+        if isinstance(node, scene.Select):
+            labels.update(option.label for option in node.options)
+            assert node.action in result.bindings
+        elif isinstance(node, scene.Row):
+            for button in node.items:
+                assert isinstance(button, scene.Button)
+                labels.add(button.label or "")
+                assert button.action in result.bindings
+    assert labels == {f"Action {index + 1}" for index in range(5)}
 
 
 def test_a_provably_optimal_first_candidate_reports_no_fallback() -> None:

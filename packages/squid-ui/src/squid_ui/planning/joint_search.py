@@ -313,7 +313,9 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         ranks = tuple(sorted((rank for _, rank in task.choices if rank), reverse=True))
         turns = sum(len(cuts) - 1 for cuts in task.cuts) if isinstance(task, _Partitions) else 0
         probe = task.probe
-        heappush(queue, (0 if probe else 1, ranks, turns, -len(task.choices), next(serials), task))
+        # Finish a probe before discovering every other probe's large offer ladder.
+        # Candidate quality still compares the original preferences after certification.
+        heappush(queue, (0 if probe else 1, () if probe else ranks, turns, -len(task.choices), next(serials), task))
 
     def expand(task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
         for index, node in enumerate(task.regions):
