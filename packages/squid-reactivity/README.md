@@ -1,12 +1,12 @@
 # squid-reactivity
 
-Reactive Python models with transactions, cached computations, and asynchronous values.
-The package has no required dependencies and starts no background tasks. Its API is still
-in alpha and may change before 1.0.
+State that knows who is reading it. You declare fields on a model, the package records which
+fields a piece of code read, and it tells that code when one of them changes. A transaction
+groups related writes so that all of them publish or none do.
 
-## Models and transactions
+There are no required dependencies. The API is alpha and may change before 1.0.
 
-Declare writable fields with `state()` and derived values with `@computed`:
+## Models
 
 ```python
 from squid_reactivity import Reactive, computed, observe_reads, state, transaction
@@ -28,43 +28,64 @@ with observe_reads() as dependencies:
     assert counter.doubled == 2
 ```
 
-A `Reactive` model needs no special constructor or rendering method. Share an instance by
-passing it to consumers. `squid_ui.Component` extends `Reactive`; its renderer automatically
-tracks fields read through models and computed values.
+`state()` declares a field you can assign. `@computed` declares a derived value, which is
+cached until something it read changes.
 
-Outside a transaction, assignments publish immediately. Inside one, writes are staged until
-commit. Failure before publication discards them. Nested transaction blocks share the outer
-transaction and its result.
+Otherwise a model is a plain object: write any `__init__` you like, and share an instance by
+passing it around. `squid_ui.Component` is a `Reactive` too, and its renderer tracks what
+each render reads.
 
-A publishing transaction checks the versions of strongly read cells before committing. A read
-is strong when the transaction also writes that cell, when it occurs inside `strong_read()`, or
-when its version is explicitly required with `require_version()`. Other reads do not block commit
-by default. `relaxed_read()` opts out of read validation; `untracked()` separately disables
-reactive dependency capture.
+## Transactions
 
-## Reading and subscribing
+A bare assignment takes effect immediately. Inside `with transaction(...)`, the block sees
+its own writes but nothing is published until it exits. If it raises, the writes are
+discarded. A nested block is part of the outer transaction, not a savepoint.
 
-`observe_reads()` records dependencies and runs the block read-only. It rejects changes to
-existing state but allows a new reactive object to initialize until its constructor returns.
-Computed functions also run read-only. Use `capture_reads()` alone when writes should be allowed.
+A commit fails with `ReactiveConflictError`, publishing nothing, if a field it depended on
+changed in the meantime. A transaction depends on the fields it both read and wrote, so
+`counter.count += 1` is protected and a field you only looked at is not. To adjust that:
 
-`dependencies.current()` checks whether the observed result is still valid.
-`dependencies.addresses()` finds the fields to subscribe to through the current dependency graph.
-These are separate checks: a computed value can switch dependencies without changing its result.
+- Read inside `strong_read()` to depend on a field you do not write.
+- Read inside `relaxed_read()` to not depend on a field you do write.
 
-Outside the UI runtime, pass those addresses to `SubscriptionReconciler(None, callback)`.
-Retain the reconciler and close it when finished. Model fields have identity-based addresses
-and need no topic bus. Sources hold subscriptions weakly, so they do not keep abandoned
-consumers alive. Keep models in application-owned attributes or dictionaries when they need
-to outlive a consumer. For saving and restoration across restarts, use
-`squid_storage.PersistentStatePool`.
+A write with no read overwrites: the last commit wins.
 
-## Results and diagnostics
+## Reacting to changes
 
-`ActionContext` identifies why work ran and what caused it. A transaction's result describes
-what it published or discarded: `TransactionCommit` or `TransactionRollback`, together named
-`TransactionResult`. The yielded handle exposes its context immediately and its result after
-the outer block finishes, even when the block raises.
+`observe_reads()`, used above, records every field its block reads, directly or through
+computed values. The result answers two questions:
+
+- `dependencies.addresses()`: which fields should I listen to?
+- `dependencies.current()`: is what I computed still right?
+
+These differ. If the block read a computed `parity` of `count`, changing `count` from 1 to 3
+notifies you, but `current()` is still true and there is nothing to redo.
+
+To listen, give the addresses to a `SubscriptionReconciler`:
+
+```python
+from squid_reactivity import SubscriptionReconciler
+
+subscriptions = SubscriptionReconciler(None, lambda address: print("changed:", address))
+subscriptions.stage(dependencies.addresses())
+subscriptions.commit()
+...
+subscriptions.close()
+```
+
+`stage` subscribes to a new set of addresses while keeping the old set, and `commit` drops
+the old set, so no notification is missed while you recompute. Models hold subscribers
+weakly, so keep the reconciler for as long as you want callbacks. The UI runtime does all of
+this for component renders.
+
+The block under `observe_reads()` is read-only, as are computed functions: assigning to
+existing state raises `ReactiveWriteError`, though an object created there may still set up
+its own fields. `capture_reads()` records without that restriction, and `untracked()` hides
+reads from the recording.
+
+To save and restore state across restarts, see `squid_storage.PersistentStatePool`.
+
+## Finding out what happened
 
 ```python
 from squid_reactivity import EventLedger, TransactionCommit, observe_events
@@ -83,35 +104,51 @@ with observe_events(ledger):
 assert isinstance(tx.result, TransactionCommit)
 ```
 
-`after_commit`, `after_rollback`, and `after_result` receive the completed result. Callback
-failures cannot change it. A callback that writes must open a new transaction; use
-`transaction("Follow up", caused_by=result.context)` to preserve the causal link.
-`ActionRelation` identifies the earlier action targeted by undo, redo, or compensation.
+`tx.context` is the transaction's `ActionContext`: its name, its actor, and the earlier
+action that caused it. `tx.result` is set once the outermost block exits, even if it raised.
+It is a `TransactionCommit` listing what was published, or a `TransactionRollback` saying
+what was discarded and why.
 
-`observe_events(sink, redaction=RedactionPolicy(...))` collects transaction results, operation
-and resource transitions, and callback failures. Child tasks inherit the registration, but
-collection stops when the scope exits, including in those children. Independent scopes remain
-isolated. Metadata is omitted and exception messages are redacted by default.
+`after_commit`, `after_rollback`, and `after_result` run a callback with that result. A
+callback cannot change the result, even by raising. To write from one, open a new
+transaction with `caused_by=result.context` so the two stay linked. `ActionRelation` marks a
+transaction as the undo, redo, or compensation of an earlier action.
 
-`EventLedger` retains recent snapshots without retaining live models. It only collects while
-registered with `observe_events`. For logging or persistence, implement `EventSink.accept(event)`;
-it receives typed, redacted snapshots. Your application owns serialization, storage, and retention.
-Transaction callers can still access their full results independently of these observers.
+`observe_events(sink)` is for code that did not start the work. While the block is open, and
+in tasks started inside it, the sink receives a snapshot of each transaction result, resource
+or operation change, and callback failure. Snapshots omit metadata and exception messages
+unless you pass a `RedactionPolicy`. `EventLedger` keeps the most recent ones. For logs or
+storage, write your own sink: any object with `accept(event)`.
 
-## Asynchronous work
+## Asynchronous values
 
-Import `squid_reactivity.resources` for asynchronous values whose loaders track dependencies.
-Loads run in the caller's task. The host controls cancellation: install a scope factory with
-`abandon_superseded_loads` to stop superseded loads; `anyio.CancelScope` implements the required
-`LoadScope` protocol. Without a factory, obsolete loads finish but their results are discarded.
-The UI decides when to load and display pending values through `squid_ui.runtime.async_bindings`.
+```python
+from squid_reactivity.resources import resource
 
-`squid_reactivity.operations` provides repeatable operation definitions. Each invocation creates
-one execution with its own causal ID, progress, and terminal status. A retry creates a new execution.
 
-## External changes and topics
+class BuildPage(Reactive):
+    build_id: int = state(42)
 
-Use a topic when a dependency lives outside a reactive model, such as a database record:
+    @resource
+    async def title(self) -> str:
+        return await fetch_title(self.build_id)
+```
+
+`page.title.status` is `Pending`, `Ready`, or `Failed`. Reading it never starts I/O;
+`await page.title` runs the loader in your task. Changing `build_id` makes the resource
+pending again. In the UI, `squid_ui.runtime.async_bindings` decides when to load.
+
+A loader can run several times and an outdated result is thrown away, so keep side effects
+out of it. An outdated load still runs to the end unless you load inside
+`abandon_superseded_loads(anyio.CancelScope)`, which cancels it.
+
+For work with side effects, declare an `@operation` from `squid_reactivity.operations`. Each
+`start()` creates a separate execution with its own progress, outcome, and causal ID.
+
+## Things outside your models
+
+A topic stands for something reactive code depends on but cannot read as a field, such as a
+database row:
 
 ```python
 from squid_reactivity import LocalTopicBus
@@ -122,18 +159,17 @@ build_changes.watch()    # Read inside a render, computed function, or resource 
 build_changes.publish()  # Notify after a database change or incoming bridge message.
 ```
 
-Looking up a handle does not record a read; `watch()` does. Handles carry their owning bus and
-work with `SubscriptionReconciler(None, callback)`. Equal topic names on different buses are
-independent. Bridges use portable `Topic` names: `bus.publish(Topic("build", "42"))` publishes
-the same dependency as the handle above. The bus keeps handles weakly.
+`watch()` records the dependency; fetching the handle does not. Handles appear in
+`dependencies.addresses()` and go to a `SubscriptionReconciler` like fields do. The same
+name on two buses is two topics. A bridge that only has the name can call
+`bus.publish(Topic("build", "42"))` to the same effect.
 
-`LocalTopicBus` delivers synchronously in registration order. Subscriber failures go to
-`on_subscriber_error` and do not stop other subscribers; the default handler logs them.
-The host owns queues, networking, persistence, and scheduling through the `TopicBus` protocol.
+`LocalTopicBus` calls subscribers synchronously, in subscription order. If one raises, the
+rest still run and the error goes to `on_subscriber_error`, which logs by default. For
+queues or network delivery, implement the `TopicBus` protocol.
 
 ## Code layout
 
-`core` declares models; `tracking` records dependencies; `transactions` stages and publishes
-changes. `transaction_results` defines outcomes and reversible changes, while `actions` owns
-causal identity. `diagnostics` observes work, and `topics` connects external dependencies.
-`resources` and `operations` provide asynchronous values and executions.
+`core` declares models, `tracking` records reads, and `transactions` stages and publishes
+writes. `transaction_results` defines results, `actions` defines contexts, and `diagnostics`
+delivers events. `topics`, `resources`, and `operations` cover the last two sections.
