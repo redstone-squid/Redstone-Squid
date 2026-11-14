@@ -72,7 +72,13 @@ for (const locale of ["en", "zh-CN"]) {
     await page.goto(`${prefix}/builds`);
     await page.getByLabel(locale === "en" ? "Keywords" : "关键词", { exact: true }).fill("do");
     const input = page.getByLabel(locale === "en" ? "Keywords" : "关键词", { exact: true });
-    await expect(page.getByRole("option", { name: "door", exact: true })).toBeVisible();
+    const suggestion = page.getByRole("option", { name: "door", exact: true });
+    await expect(suggestion).toBeVisible();
+    if (info.project.name === "mobile") await suggestion.tap();
+    else await suggestion.click();
+    await expect(input).toHaveValue("door");
+    await input.fill("do");
+    await expect(suggestion).toBeVisible();
     await input.press("ArrowDown");
     await input.press("Escape");
     await expect(page.getByRole("listbox")).toHaveCount(0);
