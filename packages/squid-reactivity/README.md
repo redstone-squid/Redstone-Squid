@@ -46,7 +46,7 @@ The package is layered:
 - `squid_reactivity.actions` provides sortable action IDs, causal contexts, immutable terminal
   outcomes, and the current causal context.
 - `squid_reactivity.diagnostics` provides scoped diagnostic observers, redaction, event
-  ledgers, and portable event encoding.
+  ledgers, and application-defined sinks.
 - `squid_reactivity.core` provides state and computed descriptors, the reusable `Reactive`
   owner, inspection, and state export/restore.
 - `squid_reactivity.tracking` owns versioned cells, dependency capture, and read scopes.
@@ -106,10 +106,10 @@ leaving the scope disables it in those tasks too. Independent scopes do not see 
 work. The observer applies its policy before delivery, omitting metadata and redacting exception messages
 by default. Rich transaction results remain available to their caller independently of observers.
 
-`EventLedger` stores recent events without registering itself. `EncodedEventSink(EventCodec(), append)`
-encodes every event variant and calls an application-owned writer; the application controls storage
-and retention. Every event uses the same envelope; an action carries its history relation
-as one optional `relation` object.
+`EventLedger` stores a bounded set of recent events without registering itself. For logging or
+persistence, implement `EventSink.accept(event)` and register the sink with `observe_events`.
+The sink receives typed, redacted snapshots; the application owns serialization, schema
+versioning, storage, and retention. Action snapshots include their history relation.
 
 `LocalTopicBus.publish()` delivers synchronously in registration order. If a subscriber raises,
 the bus reports it through `on_subscriber_error`, continues delivering to the remaining

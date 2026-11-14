@@ -17,9 +17,8 @@ from squid_reactivity import (
     ActionRollback,
     ActionValidationError,
     ActorRef,
+    CausalEventSnapshot,
     ContinuationFailureSnapshot,
-    EncodedEventSink,
-    EventCodec,
     EventLedger,
     Reactive,
     ReactiveConflictError,
@@ -439,12 +438,17 @@ def test_each_result_sink_receives_its_declared_redaction_projection() -> None:
         assert privileged.results[0].exception.message == "failure detail"
 
 
-def test_encoded_sink_receives_only_explicitly_observed_work() -> None:
-    encoded: list[bytes] = []
-    sink = EncodedEventSink(EventCodec(), encoded.append)
+def test_custom_sink_receives_only_explicitly_observed_work() -> None:
+    events: list[CausalEventSnapshot] = []
+
+    class Sink:
+        def accept(self, event: CausalEventSnapshot, /) -> None:
+            events.append(event)
+
+    sink = Sink()
     with transaction():
         pass
-    assert encoded == []
+    assert events == []
     with (
         observe_events(sink, redaction=RedactionPolicy(include_actor=False)),
         transaction(actor=ActorRef("user", "42")),
@@ -452,8 +456,8 @@ def test_encoded_sink_receives_only_explicitly_observed_work() -> None:
         pass
     with transaction():
         pass
-    assert len(encoded) == 1
-    snapshot = sink.codec.decode(encoded[0])
+    assert len(events) == 1
+    snapshot = events[0]
     assert isinstance(snapshot, ActionResultSnapshot)
     assert snapshot.actor is None
 

@@ -1,6 +1,5 @@
 """Transaction outcomes remain accessible independently of diagnostic observers."""
 
-import json
 from typing import Literal
 
 import pytest
@@ -12,7 +11,6 @@ from squid_reactivity import (
     ActionResultSnapshot,
     ActionRollback,
     ActorRef,
-    EventCodec,
     FrameworkIntegrityError,
     Reactive,
     StaleReactiveContextError,
@@ -145,7 +143,7 @@ def test_rollback_notifies_each_owner_once_and_preserves_the_original_error() ->
 
 
 @pytest.mark.parametrize("kind", ["reverses", "reapplies", "compensates"])
-def test_history_relation_survives_snapshot_encoding(kind: Literal["reverses", "reapplies", "compensates"]) -> None:
+def test_history_relation_survives_snapshot_conversion(kind: Literal["reverses", "reapplies", "compensates"]) -> None:
     with transaction("original") as original:
         pass
     relation = ActionRelation(kind, original.context.action_id)
@@ -153,18 +151,4 @@ def test_history_relation_survives_snapshot_encoding(kind: Literal["reverses", "
         pass
     assert isinstance(tx.result, ActionCommit)
     snapshot = ActionResultSnapshot.from_result(tx.result)
-    codec = EventCodec()
-    decoded = codec.decode(codec.encode(snapshot))
-    assert isinstance(decoded, ActionResultSnapshot)
-    assert decoded.relation == relation
-
-
-def test_decoding_rejects_unknown_history_relations() -> None:
-    with transaction() as tx:
-        pass
-    assert isinstance(tx.result, ActionCommit)
-    codec = EventCodec()
-    payload = json.loads(codec.encode(ActionResultSnapshot.from_result(tx.result)))
-    payload["data"]["relation"] = {"kind": "unknown", "action_id": str(tx.context.action_id)}
-    with pytest.raises(ValueError, match="schema"):
-        codec.decode(json.dumps(payload).encode())
+    assert snapshot.relation == relation

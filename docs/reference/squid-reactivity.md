@@ -151,8 +151,8 @@ block finishes. Nested blocks share the handle. Callbacks receive the completed 
 
 Observer scopes deliver diagnostic snapshots for actions, operations, resource loads, and
 callback failures. Each scope owns its registration and redaction policy. Tasks inherit active
-registrations, but delivery stops when the owning scope exits. Ledgers and encoded sinks do
-not register themselves; applications own their storage and retention.
+registrations, but delivery stops when the owning scope exits. Ledgers and application-defined
+sinks do not register themselves; applications own serialization, storage, and retention.
 
 ::: squid_reactivity.observe_events
 
@@ -171,10 +171,6 @@ not register themselves; applications own their storage and retention.
 ::: squid_reactivity.EventLedger
 
 ::: squid_reactivity.RedactionPolicy
-
-::: squid_reactivity.EventCodec
-
-::: squid_reactivity.EncodedEventSink
 
 ::: squid_reactivity.CausalEventSnapshot
 
