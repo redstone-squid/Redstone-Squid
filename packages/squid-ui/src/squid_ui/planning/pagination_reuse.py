@@ -84,7 +84,7 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             return replace(left, controls=()) == replace(right, controls=()) and _same_children(
                 left.controls, right.controls
             )
-        case sem.Choices(), sem.Choices():
+        case ((sem.Choices() | sem.Entities()), (sem.Choices() | sem.Entities())):
             return isinstance(left.selection, Controlled) and left == right
         case sem.Toggle(), sem.Toggle():
             # Session-owned values can change without changing the authored node.

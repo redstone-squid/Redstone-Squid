@@ -6,6 +6,8 @@ from typing import cast
 from squid_i18n import tree
 from squid_ui import scene
 from squid_ui.assets import Asset
+from squid_ui.capabilities import Capability
+from squid_ui.entity import ConversationType, EntityType
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.composition import (
     CandidateComposition,
@@ -23,6 +25,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
+    EntityRealization,
     FlowRealization,
     ImageRealization,
     PanelRealization,
@@ -182,6 +185,47 @@ class SlackCompositionRules[
                         )
                     )
                     texts.append(control.label)
+                    blocks += 1
+                case EntityRealization(node=control):
+                    if Capability.ACTIONS_ENTITY not in context.capabilities:
+                        violations.append(UnsupportedCapability(identity, "native entity discovery"))
+                    supported_conversations = frozenset(
+                        (
+                            ConversationType.WORKSPACE_PUBLIC,
+                            ConversationType.WORKSPACE_PRIVATE,
+                            ConversationType.DIRECT,
+                            ConversationType.GROUP_DIRECT,
+                        )
+                    )
+                    if control.entity_type not in (EntityType.USER, EntityType.CONVERSATION):
+                        violations.append(
+                            UnsupportedCapability(identity, f"Slack {control.entity_type.value} discovery")
+                        )
+                    if not set(control.conversation_types) <= supported_conversations:
+                        violations.append(UnsupportedCapability(identity, "Slack conversation family"))
+                    if not 0 <= control.min_values <= control.max_values or control.max_values < 1:
+                        violations.append(ConstraintViolation(identity, "entity select cardinality"))
+                    if len(control.default_values) > control.max_values:
+                        violations.append(ConstraintViolation(identity, "entity select default count"))
+                    if any(not control.entity_type.supports(value.kind) for value in control.default_values):
+                        violations.append(ConstraintViolation(identity, "entity select default kind"))
+                    limit("select.values", control.max_values, self.limits.components.select_options)
+                    limit("select.placeholder", len(control.placeholder or ""), self.limits.components.placeholder)
+                    limit("select.id", len(control.action), self.limits.components.action_id)
+                    selector = scene.SlackSelect(
+                        action=scene.SlackActionRef(control.action, control.mode),
+                        kind=scene.SlackSelectKind.CONVERSATIONS
+                        if control.entity_type == EntityType.CONVERSATION
+                        else scene.SlackSelectKind.USERS,
+                        placeholder=scene.SlackText(control.placeholder, scene.SlackTextKind.PLAIN, emoji=False)
+                        if control.placeholder
+                        else None,
+                        initial_values=tuple(str(value.id) for value in control.default_values),
+                        conversation_types=control.conversation_types,
+                        minimum=control.min_values,
+                        maximum=control.max_values,
+                    )
+                    prepared_blocks.append(scene.SlackActions((selector,)))
                     blocks += 1
                 case SelectRealization(node=control):
                     if control.disabled:

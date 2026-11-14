@@ -18,6 +18,7 @@ from squid_ui import semantic as sem
 from squid_ui.assets import Asset
 from squid_ui.capabilities import Capability
 from squid_ui.emoji import Emoji, normalize_emoji
+from squid_ui.entity import EntityRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
@@ -42,10 +43,13 @@ from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_adaptation.common import _button_style
 from squid_ui.planning.semantic_adaptation.handlers import (
     ChoiceCommit,
+    EntityCommit,
     FlipToggle,
     PresentForm,
     RouteSelection,
     SelectChoices,
+    SelectEntities,
+    SelectEntityFallback,
 )
 from squid_ui.planning.semantics import SourceScope, StructuralGroup, UnsupportedSemanticError, check_alternative
 from squid_ui.planning.structure import resolve_accent, toggle_state
@@ -182,11 +186,18 @@ class SelectRealization:
     node: scene.Select | scene.RoutedSelect
 
 
+@dataclass(frozen=True, slots=True)
+class EntityRealization:
+    node: scene.EntitySelect
+    choices: tuple[scene.Option, ...] = ()
+
+
 type Realization = (
     TextSequenceRealization
     | ActionsRealization
     | RowRealization
     | SelectRealization
+    | EntityRealization
     | TextRealization
     | FlowRealization
     | PanelRealization
@@ -547,6 +558,78 @@ def semantic_offers[RenderTargetT, ContextT](
         if isinstance(resolved, UnsupportedText):
             return ()
         return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
+    if isinstance(value, sem.Entities):
+        previous = (
+            value.selection.value
+            if isinstance(value.selection, Controlled)
+            else tuple(
+                EntityRef.decode(key)
+                for key in context.presentation.selection(
+                    value.key, initial=tuple(ref.encode() for ref in value.selection.initial)
+                ).selected
+            )
+        )
+        key = _control_key(occurrence, context)
+        commit = EntityCommit(value.selection, value.key, previous, context.presentation)
+        options = tuple(
+            scene.Option(
+                "".join(tree.plain(node) for node in resolve_text(choice.label, context.localization).nodes),
+                choice.ref.encode(),
+                "".join(tree.plain(node) for node in resolve_text(choice.description, context.localization).nodes)
+                if choice.description is not None
+                else None,
+                choice.ref in previous,
+            )
+            for choice in value.choices
+            if choice.available
+        )
+        placeholder = (
+            "".join(tree.plain(node) for node in resolve_text(value.placeholder, context.localization).nodes)
+            if value.placeholder is not None
+            else None
+        )
+        native = RealizationOffer(
+            occurrence,
+            "entity",
+            EntityRealization(
+                scene.EntitySelect(
+                    value.entity_type,
+                    key,
+                    placeholder,
+                    previous,
+                    value.conversation_types,
+                    value.minimum,
+                    value.maximum,
+                ),
+                options,
+            ),
+            interaction=True,
+            binding=ActionBinding(key, SelectEntities(commit), ActionMode.EXCLUSIVE),
+        )
+        if not value.choices:
+            return (native,)
+        by_key = {choice.ref.encode(): choice.ref for choice in value.choices if choice.available}
+        selected = tuple(ref.encode() for ref in previous if ref.encode() in by_key)
+        fallback = RealizationOffer(
+            occurrence,
+            "entity-choices",
+            SelectRealization(scene.Select(options, key, placeholder, value.minimum, value.maximum)),
+            preference=1,
+            interaction=True,
+            binding=ActionBinding(
+                key,
+                SelectChoices(
+                    ChoiceCommit(
+                        Controlled(selected, SelectEntityFallback(commit, by_key)),
+                        value.key,
+                        selected,
+                        context.presentation,
+                    )
+                ),
+                ActionMode.EXCLUSIVE,
+            ),
+        )
+        return (native, fallback)
     if isinstance(value, sem.Choices | sem.RoutedChoices):
         previous = (
             value.selected

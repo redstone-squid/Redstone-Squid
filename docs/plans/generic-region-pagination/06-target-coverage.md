@@ -95,8 +95,8 @@ or typed atomic target rules inside regions. No equivalence is inferred from
 arbitrary replacement text. Native extensions are usable through explicit custom
 composition rules, rather than an opaque production backend probe.
 
-Stateful semantic widgets beyond choices/toggles (such as disclosure/item navigation
-and native entity discovery) still retain their non-region planners. Palette overrides,
+Stateful semantic widgets beyond choices/toggles/entities (such as disclosure and
+item navigation) still retain their non-region planners. Palette overrides,
 status/progress content and section thumbnails now use shared composition. The
 remaining widget adapters combine state selection, adaptation, and target lowering; migrating them requires
 explicit offers that preserve those contracts. This is a consciously deferred
@@ -164,3 +164,13 @@ Thumbnail placement and costs now participate in shared composition. Tests cover
 repeated headings, reserved capacity, nested V2 sections, explicit classic/Slack
 limitations, and retained-allocation invalidation when an image changes. The core
 UI suite passes (1,143 tests), and whole-project Pyrefly reports zero errors.
+
+## Continuation: native entity controls
+
+Entity selection now uses shared offers, including typed defaults, ownership
+callbacks, conversation filters and target cardinality limits. Unsupported native
+families can use explicitly authored enumerated choices. Slack reports missing
+role/mentionable discovery or incompatible conversation filters directly. Controls
+on other pages produce no live bindings; session selection changes rebuild output.
+The core UI and focused Discord entity/region suites pass (1,207 tests), and
+whole-project Pyrefly reports zero errors.

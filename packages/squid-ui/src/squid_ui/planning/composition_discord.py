@@ -4,12 +4,38 @@ from collections.abc import Callable
 
 from squid_i18n import tree
 from squid_ui import scene
+from squid_ui.entity import ConversationType
 from squid_ui.planning.limits import ComponentLimits
 from squid_ui.planning.realizations import TextRealization
 
 
-def select_violations(node: scene.Select | scene.RoutedSelect, component: ComponentLimits) -> tuple[str, ...]:
+def select_violations(
+    node: scene.Select | scene.RoutedSelect | scene.EntitySelect, component: ComponentLimits
+) -> tuple[str, ...]:
     errors: list[str] = []
+    if isinstance(node, scene.EntitySelect):
+        if not 0 <= node.min_values <= node.max_values <= component.select_options or node.max_values < 1:
+            errors.append("entity select cardinality")
+        if len(node.default_values) > node.max_values:
+            errors.append("entity select default count")
+        if any(not node.entity_type.supports(value.kind) for value in node.default_values):
+            errors.append("entity select default kind")
+        if any(
+            value
+            in (
+                ConversationType.WORKSPACE_PUBLIC,
+                ConversationType.WORKSPACE_PRIVATE,
+                ConversationType.DIRECT,
+                ConversationType.GROUP_DIRECT,
+            )
+            for value in node.conversation_types
+        ):
+            errors.append("Discord conversation family")
+        if len(node.placeholder or "") > component.select_placeholder:
+            errors.append("select placeholder")
+        if len(node.action) > component.custom_id:
+            errors.append("select identifier")
+        return tuple(errors)
     if not 1 <= len(node.options) <= component.select_options:
         errors.append("select option count")
     if not 0 <= node.min_values <= node.max_values <= len(node.options):

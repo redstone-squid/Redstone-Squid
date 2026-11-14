@@ -6,6 +6,7 @@ from typing import assert_never
 from squid_i18n import tree
 from squid_ui import scene
 from squid_ui.assets import Asset
+from squid_ui.capabilities import Capability
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.composition import (
     CandidateComposition,
@@ -29,6 +30,7 @@ from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
     DownloadRealization,
+    EntityRealization,
     FlowRealization,
     ImageRealization,
     PanelRealization,
@@ -176,6 +178,17 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                                 raise DrawInvariantError(message)
                             items.append(item)
                     return (scene.Row(tuple(items)),)
+                case EntityRealization(node=node):
+                    if Capability.ACTIONS_ENTITY not in context.capabilities:
+                        violations.append(
+                            UnsupportedCapability(part.offer.occurrence.identity, "native entity discovery")
+                        )
+                    violations.extend(
+                        ConstraintViolation(part.offer.occurrence.identity, detail)
+                        for detail in select_violations(node, self.limits.components)
+                    )
+                    components += 2
+                    return (node,)
                 case SelectRealization(node=node):
                     components += 2
                     violations.extend(
@@ -363,7 +376,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     ):
                         msg = "built V2 button violates its destination limit"
                         raise DrawInvariantError(msg)
-                case scene.Select() | scene.RoutedSelect():
+                case scene.Select() | scene.RoutedSelect() | scene.EntitySelect():
                     components += 1  # Selects occupy an implicit action row.
                     if select_violations(node, self.limits.components):
                         msg_0 = "built V2 select violates its limits"

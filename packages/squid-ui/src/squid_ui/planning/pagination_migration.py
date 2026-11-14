@@ -145,6 +145,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 | sem.FormTrigger()
                 | sem.Toggle()
                 | sem.Choices()
+                | sem.Entities()
                 | sem.RoutedChoices()
                 | sem.ControlGroup()
                 | TextPresentation()

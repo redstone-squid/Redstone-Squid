@@ -23,6 +23,7 @@ from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
     DownloadRealization,
+    EntityRealization,
     FlowRealization,
     ImageRealization,
     PanelRealization,
@@ -128,6 +129,74 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             else None,
                             route=scene.HtmlRouteRef(control.route) if control.route is not None else None,
                             url=scene.HtmlUrlRef(control.url) if control.url is not None else None,
+                        ),
+                    )
+                case EntityRealization(node=control, choices=choices):
+                    identity = part.offer.occurrence.identity
+                    if not 0 <= control.min_values <= control.max_values or control.max_values < 1:
+                        violations.append(ConstraintViolation(identity, "entity select cardinality"))
+                    if len(control.default_values) > control.max_values:
+                        violations.append(ConstraintViolation(identity, "entity select default count"))
+                    if any(not control.entity_type.supports(value.kind) for value in control.default_values):
+                        violations.append(ConstraintViolation(identity, "entity select default kind"))
+                    metadata = (
+                        scene.HtmlAttribute(scene.HtmlAttributeName.NAME, control.action),
+                        scene.HtmlAttribute(scene.HtmlAttributeName.ENTITY_TYPE, control.entity_type.value),
+                        scene.HtmlAttribute(
+                            scene.HtmlAttributeName.CONVERSATION_TYPES,
+                            ",".join(value.value for value in control.conversation_types),
+                        ),
+                        scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MIN, control.min_values),
+                        scene.HtmlAttribute(scene.HtmlAttributeName.SELECTION_MAX, control.max_values),
+                        scene.HtmlAttribute(scene.HtmlAttributeName.ARIA_LABEL, control.placeholder or control.action),
+                    )
+                    children = tuple(
+                        scene.HtmlElement(
+                            scene.HtmlTag.OPTION,
+                            (text((tree.literal(option.label),)),),
+                            attributes=(
+                                scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, option.value),
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.SELECTED, value=True),)
+                                    if option.default
+                                    else ()
+                                ),
+                                *(
+                                    (scene.HtmlAttribute(scene.HtmlAttributeName.TITLE, option.description),)
+                                    if option.description is not None
+                                    else ()
+                                ),
+                            ),
+                        )
+                        for option in choices
+                    )
+                    attributes = (
+                        (
+                            (scene.HtmlAttribute(scene.HtmlAttributeName.MULTIPLE, value=True),)
+                            if control.max_values > 1
+                            else ()
+                        )
+                        if choices
+                        else (
+                            scene.HtmlAttribute(scene.HtmlAttributeName.TYPE, "text"),
+                            scene.HtmlAttribute(
+                                scene.HtmlAttributeName.VALUE,
+                                ",".join(value.encode() for value in control.default_values),
+                            ),
+                            *(
+                                (scene.HtmlAttribute(scene.HtmlAttributeName.PLACEHOLDER, control.placeholder),)
+                                if control.placeholder is not None
+                                else ()
+                            ),
+                        )
+                    )
+                    return (
+                        scene.HtmlElement(
+                            scene.HtmlTag.SELECT if choices else scene.HtmlTag.INPUT,
+                            children,
+                            attributes=metadata + attributes,
+                            action=scene.HtmlActionRef(control.action, control.mode),
+                            form=scene.HtmlFormRef(control.action, control.action),
                         ),
                     )
                 case SelectRealization(node=control):

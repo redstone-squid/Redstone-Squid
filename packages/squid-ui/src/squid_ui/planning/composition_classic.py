@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from squid_i18n import tree
 from squid_ui import scene
 from squid_ui.assets import Asset
+from squid_ui.capabilities import Capability
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.composition import (
     CandidateComposition,
@@ -28,6 +29,7 @@ from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
     DownloadRealization,
+    EntityRealization,
     FlowRealization,
     ImageRealization,
     PanelRealization,
@@ -181,6 +183,16 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         rows.append(scene.ClassicRow((button,)))
                     else:
                         row.append(button)
+                case EntityRealization(node=node):
+                    if Capability.ACTIONS_ENTITY not in context.capabilities:
+                        violations.append(
+                            UnsupportedCapability(part.offer.occurrence.identity, "native entity discovery")
+                        )
+                    violations.extend(
+                        ConstraintViolation(part.offer.occurrence.identity, detail)
+                        for detail in select_violations(node, self.limits.components)
+                    )
+                    rows.append(scene.ClassicRow((node,)))
                 case SelectRealization(node=node):
                     violations.extend(
                         ConstraintViolation(identity, detail)
