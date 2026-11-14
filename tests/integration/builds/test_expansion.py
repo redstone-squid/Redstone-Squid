@@ -57,7 +57,12 @@ async def test_expansion_round_trip_history_and_record_exclusion(
         door = snapshot.snapshot["doors"]
         assert isinstance(door, dict)
         assert door["expansion"] == document.model_dump(mode="json")
-        assert await PostgresRecordRepository(lambda: session).list_confirmed(BuildKind.DOOR) == ()
+        # The loader keeps the family but none of its sample measurements.
+        [candidate] = await PostgresRecordRepository(lambda: session).list_confirmed(BuildKind.DOOR)
+        assert candidate.expansion == document
+        assert candidate.candidate.fixed_volume is None
+        assert candidate.candidate.timing_variants == ()
+        assert candidate.door_opening is None
     async with SqlAlchemyUnitOfWork(sessions) as uow, uow.builds.editing(actor="test", source="test"):
         loaded = await uow.builds.get_for_update(build_id)
         assert isinstance(loaded, DoorBuild)
