@@ -19,7 +19,7 @@ from squid.bot.submission.schematic_tools import SchematicTools
 from squid.bot.submission.search_help import search_help
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui import controls as build_controls
-from squid.bot.ui import tr
+from squid.bot.ui import tr, truncate_display_text
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.builds.domain import Status
@@ -443,7 +443,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             _BuildSource(queries, frozenset(statuses)),
             key="builds",
             identity=lambda build: str(build.id),
-            label=lambda build: f"#{build.id} {build.title}",
+            label=lambda build: truncate_display_text(f"#{build.id} {build.title}", 100),
             # `_BuildSource` filters on `submission_status`, so every listed build carries one; the
             # domain type stays optional only for a build that has not been submitted yet.
             summary=_build_summary,
@@ -647,7 +647,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         browser = sp.Browser(
             session,
             key="linked-build",
-            label=lambda item: f"#{item.id} {item.title}",
+            label=lambda item: truncate_display_text(f"#{item.id} {item.title}", 100),
             detail=self._detail,
             chronology=sl.sources.Chronology.NEWEST_FIRST,
         )
