@@ -45,6 +45,7 @@ from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, 
 from squid_ui.planning.navigation import PagerNav, default_nav
 from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.resources import Axis
+from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.planning.semantic_adaptation.common import _button_style
 from squid_ui.planning.semantic_adaptation.handlers import (
     ChoiceCommit,
@@ -1252,6 +1253,26 @@ def semantic_offers[RenderTargetT, ContextT](
                 )
             )
         return tuple(choices)
+    if isinstance(value, RosterLabel):
+        if value.full:
+            label_nodes = resolve_text(context.chrome.full, context.localization).nodes
+        elif value.section.slot is None:
+            label_nodes = resolve_text(context.chrome.waitlist, context.localization).nodes
+        else:
+            label_nodes = (
+                *resolve_text(value.section.slot.label, context.localization).nodes,
+                tree.literal(" — "),
+                *resolve_text(
+                    context.chrome.slot_count(value.section.count, value.section.slot.capacity), context.localization
+                ).nodes,
+            )
+        return (
+            RealizationOffer(
+                occurrence,
+                "roster-label",
+                TextRealization(label_nodes, role="paragraph" if value.full else "heading", level=3),
+            ),
+        )
     if isinstance(value, sem.List):
         items = tuple(
             ReferencedText(
@@ -1307,8 +1328,14 @@ def semantic_offers[RenderTargetT, ContextT](
             cursor_key=value.key,
             required_ends=tuple(required),
         )
-        complete = RealizationOffer(occurrence, "text-pages", payload, fragments=fragments, region=contract)
-        if not spill or not value.items:
+        complete = RealizationOffer(
+            occurrence,
+            "member-lines" if isinstance(value, RosterMembers) else "text-pages",
+            payload,
+            fragments=fragments,
+            region=None if isinstance(value, RosterMembers) else contract,
+        )
+        if (not spill and not isinstance(value, RosterMembers)) or not value.items:
             return (complete,)
         originals = tuple(
             ReferencedText(
@@ -1350,7 +1377,9 @@ def semantic_offers[RenderTargetT, ContextT](
                     else None,
                     region=replace(
                         contract, required_ends=tuple(range(per, len(retained) + 1, per)) if per is not None else ()
-                    ),
+                    )
+                    if not isinstance(value, RosterMembers)
+                    else None,
                 )
             )
         spilled_lists.append(
@@ -2024,6 +2053,8 @@ def semantic_offers[RenderTargetT, ContextT](
     if isinstance(
         value,
         sem.Group
+        | sem.Roster
+        | RosterSection
         | sem.Stack
         | sem.Section
         | sem.Article
@@ -2066,9 +2097,10 @@ def semantic_offers[RenderTargetT, ContextT](
                 ref,
                 Placement.HEADER
                 if (isinstance(value, sem.Region) and ref.keys[-1] == "@header")
-                or (isinstance(value, sem.Section | sem.Article) and ref.keys[-1] == "@heading")
+                or (isinstance(value, sem.Section | sem.Article | RosterSection) and ref.keys[-1] == "@heading")
                 else Placement.FOOTER
-                if isinstance(value, sem.Region) and ref.keys[-1] == "@footer"
+                if (isinstance(value, sem.Region) and ref.keys[-1] == "@footer")
+                or (isinstance(value, RosterSection) and ref.keys[-1] != "@members")
                 else placement,
                 occurrence.origin,
                 palette=context.palette,
@@ -2134,6 +2166,7 @@ def semantic_offers[RenderTargetT, ContextT](
             children,
             flow=not (
                 isinstance(value, sem.Unbreakable | sem.Figure)
+                or (isinstance(value, RosterSection) and value.count == 0)
                 or (isinstance(value, primitive.Break) and value.unbreakable)
             ),
             keep_with_next=isinstance(value, sem.KeepWithNext)

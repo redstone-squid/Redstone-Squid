@@ -83,6 +83,14 @@ and only visible controls publish bindings. Checked alternatives preserve the ce
 order and column count. Unchanged grids reuse their certified allocation; changing
 their shape recomputes the presentation instead of retaining a legacy strategy ID.
 
+Rosters retain slot counts, waitlists, member identities and join availability in
+shared composition. Enclosing regions may split member lines; slot headings and
+join controls repeat on continuations. Rosters do not introduce separate member
+pagers. Existing spill permission reports omitted members, and strict mode requires
+all displayed membership to survive. Full slots disable joining only when overflow
+is rejected; a waitlisted slot remains joinable. Slack rejects disabled join
+controls with its concrete capability reason.
+
 Actions keep ordered button rows and may offer a select when every action permits
 grouping. A select must fit the target's option and cardinality limits; cross-page
 multi-selection is deliberately not invented. Mixed groups retain their buttons.

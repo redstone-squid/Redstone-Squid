@@ -15,6 +15,7 @@ from squid_ui.planning.interaction_semantics import (
     NavigationChoice,
     interaction_changes,
 )
+from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.planning.semantic_adaptation.handlers import ForwardSelection
 from squid_ui.presentations import (
     Alternative,
@@ -30,6 +31,7 @@ from squid_ui.presentations import (
 )
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Paginate
+from squid_ui.rosters import RosterEntry, RosterSlot
 from squid_ui.target_types import Renderable
 from squid_ui.text import TextLike
 
@@ -72,6 +74,7 @@ type EmbeddedValue[ContextT] = (
     | sem.Field
     | sem.ListItem
     | sem.MediaItem
+    | RosterMembers
     | primitive.GalleryItem
     | sem.ControlGroup[ContextT]
     | Interaction[ContextT]
@@ -84,6 +87,8 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | Budget[RenderTargetT, ContextT]
     | Alternatives[RenderTargetT, ContextT]
     | AtomicNode[RenderTargetT, ContextT]
+    | RosterSection
+    | RosterLabel
     | TableCell
     | FieldPart
     | TextPresentation
@@ -153,6 +158,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Paragraph()
             | sem.Table()
             | sem.Grid()
+            | sem.Roster()
             | sem.List()
             | sem.ListItem()
             | sem.Column()
@@ -255,6 +261,56 @@ def semantic_graph[RenderTargetT, ContextT](
             ):
                 root = add(value, path, parent, atomic=False)
                 visit(value.node, root, 0)
+            case sem.Roster():
+                root = add(value, path, parent, atomic=False)
+                roster_groups: list[tuple[RosterSlot | None, tuple[RosterEntry, ...]]] = [
+                    (group.slot, group.members) for group in value.placement.groups
+                ]
+                if value.show_waitlist and value.placement.waitlist:
+                    roster_groups.append((None, value.placement.waitlist))
+                for slot, members in roster_groups:
+                    full = slot is not None and slot.capacity is not None and len(members) >= slot.capacity
+                    section = RosterSection(slot, len(members), full and value.placement.rejects_overflow)
+                    section_key = slot.key if slot is not None else "@waitlist"
+                    group = add(section, (*path, section_key), root, atomic=False)
+                    add(RosterLabel(section), (*group.keys, "@heading"), group, atomic=True)
+                    if members:
+                        visit(
+                            RosterMembers(
+                                tuple(sem.ListItem(member.actor_id, member.display) for member in members),
+                                key="@members",
+                            ),
+                            group,
+                            0,
+                        )
+                    if section.full:
+                        add(RosterLabel(section, full=True), (*group.keys, "@full"), group, atomic=True)
+                    if slot is not None:
+                        available = not value.locked and not section.full
+                        if value.on_join is not None:
+                            visit(
+                                sem.ActionControl(
+                                    f"{value.key}.{slot.key}",
+                                    slot.label,
+                                    ForwardSelection(value.on_join, slot.key),
+                                    available=available,
+                                    tone=slot.tone,
+                                ),
+                                group,
+                                1,
+                            )
+                        elif value.routes is not None:
+                            visit(
+                                sem.RoutedActionControl(
+                                    f"{value.key}.{slot.key}",
+                                    slot.label,
+                                    value.routes[slot.key],
+                                    available=available,
+                                    tone=slot.tone,
+                                ),
+                                group,
+                                1,
+                            )
             case sem.Grid():
                 root = add(value, path, parent, atomic=False)
                 for i, cell in enumerate(value.cells):
@@ -717,6 +773,7 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | primitive.Section
             | primitive.Panel
             | primitive.Gallery
+            | RosterSection
             | primitive.Budget
             | primitive.Break,
         ) and not (
@@ -810,6 +867,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     preserved = True
                 case primitive.Section(), primitive.Section():
                     preserved = len(constraint.texts) == len(other.texts)
+                case RosterSection(), RosterSection():
+                    preserved = constraint == other
                 case primitive.Gallery(), primitive.Gallery():
                     preserved = len(constraint.items) == len(other.items)
                 case primitive.Panel(), primitive.Panel():

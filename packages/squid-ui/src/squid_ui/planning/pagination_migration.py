@@ -77,6 +77,13 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 if isinstance(node, sem.List) and node.page_size is not None:
                     combinations *= max(1, (len(node.items) + node.page_size - 1) // node.page_size)
                 return node
+            case sem.Roster():
+                pageable = True
+                combinations = max(
+                    combinations,
+                    sum(len(group.members) for group in node.placement.groups) + len(node.placement.waitlist),
+                )
+                return node
             case sem.Items():
                 pageable = True
                 return replace(
