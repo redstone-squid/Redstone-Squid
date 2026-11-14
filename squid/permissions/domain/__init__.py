@@ -22,8 +22,10 @@ from squid.permissions.domain.models import (
 )
 from squid.permissions.domain.resolution import (
     MAX_ROLE_DEPTH,
+    CheckMode,
     Decision,
     Origin,
+    PermissionCheck,
     Reason,
     RoleExpansion,
     RoleSpec,
@@ -45,6 +47,7 @@ __all__ = [
     "Catalogue",
     "CatalogueBuilder",
     "CatalogueError",
+    "CheckMode",
     "Decision",
     "Default",
     "Effect",
@@ -52,6 +55,7 @@ __all__ = [
     "NodeScope",
     "Origin",
     "Pattern",
+    "PermissionCheck",
     "PermissionNode",
     "Reason",
     "RoleDefinition",

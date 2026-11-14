@@ -39,6 +39,7 @@ one implementation.
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
+from typing import Literal
 
 from whenever import Instant
 
@@ -46,6 +47,8 @@ from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import CATALOGUE, Catalogue
 from squid.permissions.domain.matching import Pattern
 from squid.permissions.domain.models import Default, Effect, NodeScope, PermissionNode
+
+type CheckMode = Literal["all", "any"]
 
 MAX_ROLE_DEPTH = 8
 """Maximum roles visited along a composition path, including the starting role."""
@@ -157,6 +160,30 @@ class Decision:
     def decisive_rule(self) -> Rule | None:
         """The rule that decided this, if a rule did."""
         return next((step.rule for step in self.trace if step.decisive), None)
+
+
+@dataclass(frozen=True, slots=True)
+class PermissionCheck:
+    """One evaluation of the requested nodes, including their individual reasons.
+
+    `allowed` applies the requested all-or-any mode. `allowed_nodes` always
+    contains every granted node, even when the overall requirement fails.
+    """
+
+    decisions: tuple[Decision, ...]
+    mode: CheckMode = "all"
+
+    @property
+    def allowed(self) -> bool:
+        return (
+            any(item.allowed for item in self.decisions)
+            if self.mode == "any"
+            else all(item.allowed for item in self.decisions)
+        )
+
+    @property
+    def allowed_nodes(self) -> frozenset[str]:
+        return frozenset(item.node for item in self.decisions if item.allowed)
 
 
 @dataclass(frozen=True, slots=True)
