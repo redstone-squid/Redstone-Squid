@@ -222,7 +222,13 @@ def semantic_graph[RenderTargetT, ContextT](
                 for i, branch in enumerate((value.primary, *value.alternates)):
                     visit(sem.Group((branch,), key=f"@fallback-{i}"), root, i)
             case (
-                sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.Paged() | sem.OptionalContent() | Budget()
+                sem.Unbreakable()
+                | sem.KeepWithNext()
+                | sem.Budgeted()
+                | sem.Paged()
+                | sem.OptionalContent()
+                | sem.Truncated()
+                | Budget()
             ):
                 root = add(value, path, parent, atomic=False)
                 visit(value.node, root, 0)

@@ -333,6 +333,8 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                             exhausted = True
                         elif discovery.completion == DiscoveryCompletion.UNSUPPORTED:
                             unsupported.add(occurrence.identity)
+                            if discovery.limitation is not None:
+                                violations.append(UnsupportedCapability(occurrence.identity, discovery.limitation))
                     else:
                         offers = discovery
                         if not offers:
@@ -357,6 +359,8 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         ordered = eligible[-1:]
                     for offer, rank in ordered:
                         if occurrence.identity in selected and selected[occurrence.identity] != offer.key:
+                            continue
+                        if context.strict and offer.effects:
                             continue
                         context.work.consume(len(task.choices))
                         if any(previous.occurrence.identity == occurrence.identity for previous, _ in task.choices):

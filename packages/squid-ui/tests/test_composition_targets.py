@@ -311,6 +311,7 @@ def test_representation_preference_does_not_forbid_lossless_alternatives() -> No
     rules, context = HtmlCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
     occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("table"))
     offers = rules.offers(occurrence, context)
+    assert isinstance(offers, tuple)
     assert {offer.key: offer.preference for offer in offers} == {"table": 1, "records": 0}
     candidate = select_composition(occurrence, rules, context, selections={occurrence.identity: "table"})
     assert isinstance(candidate, CandidateComposition)

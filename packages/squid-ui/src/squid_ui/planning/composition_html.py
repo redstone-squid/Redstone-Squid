@@ -12,6 +12,7 @@ from squid_ui.planning.composition import (
     ConstraintViolation,
     Evaluation,
     OccurrenceId,
+    OfferDiscovery,
     PlanningContext,
     RealizationOffer,
     ResourceIdentity,
@@ -85,7 +86,10 @@ def _text_leaves(node: scene.HtmlNode) -> tuple[str, ...]:
 class HtmlCompositionRules[RenderTargetT, ContextT]:
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
-    ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
+    ) -> (
+        tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
+        | OfferDiscovery[RenderTargetT, ContextT, Realization]
+    ):
         return semantic_offers(
             occurrence, context, table_forms=(TableForm.NATIVE, TableForm.RECORDS), panels=True, character_budgets=True
         )
@@ -334,8 +338,10 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         ),
                     )
                 case TextRealization() as payload:
+                    if payload.shortening is not None and not payload.visible_nodes:
+                        return ()
                     if payload.role == "code":
-                        value = "".join(tree.plain(node) for node in payload.nodes)
+                        value = "".join(tree.plain(node) for node in payload.visible_nodes)
                         texts.append(value)
                         return (
                             scene.HtmlElement(
@@ -351,7 +357,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         if payload.role == "quote"
                         else scene.HtmlTag.P
                     )
-                    return (scene.HtmlElement(tag, (text(payload.nodes),)),)
+                    return (scene.HtmlElement(tag, (text(payload.visible_nodes),)),)
                 case TableRealization() as table:
                     context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
                     if table.form == TableForm.RECORDS:

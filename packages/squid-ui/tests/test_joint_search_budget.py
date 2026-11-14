@@ -62,7 +62,9 @@ class FaultRules(V2CompositionRules[RenderTarget, object]):
     ) -> tuple[RealizationOffer[RenderTarget, object, Realization], ...]:
         if isinstance(occurrence.graph.units[occurrence.reference].value, Paragraph):
             self.checkpoint("offers", context)
-        return super().offers(occurrence, context)
+        offers = super().offers(occurrence, context)
+        assert isinstance(offers, tuple)
+        return offers
 
     @override
     def evaluate(
@@ -169,9 +171,15 @@ def test_empty_discovery_preserves_its_reason(completion: DiscoveryCompletion, e
 
 def test_partial_discovery_can_return_output_without_claiming_optimality() -> None:
     target = V2CompositionRules[RenderTarget, object]()
-    rules = DiscoveryRules(
-        lambda occurrence, context: OfferDiscovery(target.offers(occurrence, context), DiscoveryCompletion.EXHAUSTED)
-    )
+
+    def partial_offers(
+        occurrence: SemanticOccurrence[RenderTarget, object], context: PlanningContext
+    ) -> OfferDiscovery[RenderTarget, object, Realization]:
+        offers = target.offers(occurrence, context)
+        assert isinstance(offers, tuple)
+        return OfferDiscovery(offers, DiscoveryCompletion.EXHAUSTED)
+
+    rules = DiscoveryRules(partial_offers)
     result = search_composition(
         occurrence(sl.paragraph("Body")), rules, PlanningContext(WorkBudget(1000)), finalize=finish
     )

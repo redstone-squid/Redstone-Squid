@@ -25,6 +25,7 @@ from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.ownership import Controlled
 from squid_ui.planning.composition import (
     CandidateComposition,
+    DiscoveryCompletion,
     FragmentContract,
     FragmentCoverage,
     NavigationInput,
@@ -68,10 +69,24 @@ from squid_ui.planning.semantics import (
     check_alternative,
 )
 from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, resolve_accent, toggle_state
-from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
-from squid_ui.presentations import Alternatives, Budget, Omission, Replacement, SemanticRef, TextPresentation
+from squid_ui.planning.text_presentations import (
+    ResolvedText,
+    UnsupportedText,
+    _slice,
+    _unsupported,
+    resolve_presentation_text,
+)
+from squid_ui.presentations import (
+    Alternatives,
+    Budget,
+    Omission,
+    Replacement,
+    SemanticRef,
+    Shortening,
+    TextPresentation,
+)
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership
+from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.text import TextLike, resolve_text
 
@@ -83,6 +98,19 @@ class TextRealization:
     role: Literal["paragraph", "heading", "note", "code", "quote"] = "paragraph"
     level: int = 2
     language: str = ""
+    shortening: Shortening | None = None
+    ellipsis: bool = True
+
+    @property
+    def visible_nodes(self) -> tuple[tree.Node, ...]:
+        if self.shortening is None:
+            return self.nodes
+        operation = self.shortening
+        length = sum(len(tree.plain(node)) for node in self.nodes)
+        marker = (tree.literal("…"),) if self.ellipsis else ()
+        if operation.keep == "head":
+            return (*_slice(self.nodes, 0, operation.max_chars), *marker)
+        return (*marker, *_slice(self.nodes, length - operation.max_chars, length))
 
     def fragment(self, start: int, end: int) -> Realization:
         return replace(self, nodes=_slice(self.nodes, start, end))
@@ -464,7 +492,7 @@ def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[Re
     while ref is not None:
         unit = occurrence.graph.units[ref]
         if unit.parent is not None and not isinstance(
-            unit.value, sem.Budgeted | sem.KeepWithNext | sem.Unbreakable | Budget | RootRegion
+            unit.value, sem.Budgeted | sem.KeepWithNext | sem.Unbreakable | sem.Truncated | Budget | RootRegion
         ):
             parts.append(quote(ref.keys[-1], safe=""))
         ref = unit.parent
@@ -517,11 +545,93 @@ def semantic_offers[RenderTargetT, ContextT](
     character_budgets: bool = False,
     text_limit: int | None = None,
     native_controls: bool = False,
-) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
+    panel_text_limit: int | None = None,
+    heading_limit: int | None = None,
+) -> (
+    tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
+    | OfferDiscovery[RenderTargetT, ContextT, Realization]
+):
     context.work.consume()
     value = occurrence.graph.units[occurrence.reference].value
+    text_capacity = context.capacities.get(Axis.DISPLAY_TEXT, text_limit)
+    keep: Literal["head", "tail"] | None = None
+    parent = occurrence.graph.units[occurrence.reference].parent
+    inside_panel = False
+    while parent is not None:
+        ancestor = occurrence.graph.units[parent]
+        inside_panel |= isinstance(ancestor.value, sem.Block | sem.Section | sem.Article)
+        if isinstance(ancestor.value, sem.Truncated):
+            keep = ancestor.value.keep
+        parent = ancestor.parent
+    if inside_panel and panel_text_limit is not None:
+        text_capacity = panel_text_limit
+    parent = occurrence.graph.units[occurrence.reference].parent
+    while parent is not None:
+        ancestor = occurrence.graph.units[parent]
+        cap = (
+            ancestor.value.chars
+            if isinstance(ancestor.value, sem.Paged)
+            else ancestor.value.preferred
+            if isinstance(ancestor.value, sem.Budgeted) and not ancestor.value.stretch
+            else ancestor.value.limits.get(Axis.DISPLAY_TEXT)
+            if isinstance(ancestor.value, Budget)
+            else None
+        )
+        if cap is not None:
+            text_capacity = min(text_capacity, cap) if text_capacity is not None else cap
+        parent = ancestor.parent
+
+    def text_offers(
+        full: RealizationOffer[RenderTargetT, ContextT, Realization],
+        payload: TextRealization,
+        permission: Literal["head", "tail"] | None = keep,
+        priority: int = 0,
+    ) -> (
+        tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
+        | OfferDiscovery[RenderTargetT, ContextT, Realization]
+    ):
+        if permission is None or text_capacity is None:
+            return (full,)
+        if feature := _unsupported(payload.nodes):
+            return OfferDiscovery((full,), DiscoveryCompletion.UNSUPPORTED, f"shortening inline {feature}")
+        length = sum(len(tree.plain(node)) for node in payload.nodes)
+        if not length:
+            return (full,)
+        cap = (
+            min(text_capacity, heading_limit)
+            if payload.role == "heading" and heading_limit is not None
+            else text_capacity
+        )
+        upper = min(length - 1, max(0, cap - 1))
+        context.work.consume(length + max(0, upper + 1))
+        return (
+            replace(full, preference_priority=priority),
+            *(
+                replace(
+                    full,
+                    key=f"shorten-{retained}",
+                    payload=replace(payload, shortening=operation),
+                    preference=length - retained,
+                    effects=occurrence.scope_effects((operation,)),
+                    fragments=None,
+                    preference_priority=priority,
+                )
+                for retained in range(upper, -1, -1)
+                for operation in (Shortening(occurrence.reference, retained, permission),)
+            ),
+            replace(
+                full,
+                key="shorten-empty",
+                payload=replace(payload, shortening=Shortening(occurrence.reference, 0, permission), ellipsis=False),
+                preference=length + 1,
+                effects=occurrence.scope_effects((Shortening(occurrence.reference, 0, permission),)),
+                fragments=None,
+                preference_priority=priority,
+            ),
+        )
+
     if isinstance(value, primitive.Text | primitive.Heading | primitive.Footer | primitive.Code):
-        if not native_controls or not isinstance(value.overflow, Never):
+        if not native_controls or not isinstance(value.overflow, Never | Truncate):
             return ()
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)
         if isinstance(value, primitive.Heading):
@@ -530,7 +640,12 @@ def semantic_offers[RenderTargetT, ContextT](
             payload = replace(payload, role="note")
         elif isinstance(value, primitive.Code):
             payload = replace(payload, role="code", language=value.lang)
-        return (RealizationOffer(occurrence, "native-text", payload),)
+        return text_offers(
+            RealizationOffer(occurrence, "native-text", payload),
+            payload,
+            keep or (value.overflow.keep if isinstance(value.overflow, Truncate) else None),
+            value.priority,
+        )
     if isinstance(value, primitive.Row | primitive.ControlGroup):
         if not native_controls:
             return ()
@@ -569,15 +684,6 @@ def semantic_offers[RenderTargetT, ContextT](
         return (replace(candidate.offer, key="native-control", interaction=True),)
     if isinstance(value, sem.Themed):
         context = replace(context, palette=value.palette)
-    text_capacity = context.capacities.get(Axis.DISPLAY_TEXT, text_limit)
-    parent = occurrence.graph.units[occurrence.reference].parent
-    inside_panel = False
-    while parent is not None:
-        ancestor = occurrence.graph.units[parent]
-        inside_panel |= isinstance(ancestor.value, sem.Block | sem.Section | sem.Article)
-        if isinstance(ancestor.value, sem.Paged):
-            text_capacity = min(text_capacity, ancestor.value.chars) if text_capacity else ancestor.value.chars
-        parent = ancestor.parent
     if isinstance(value, sem.Budgeted | sem.Paged) and not character_budgets:
         return ()
     if isinstance(value, sem.FallbackContent):
@@ -1196,7 +1302,11 @@ def semantic_offers[RenderTargetT, ContextT](
                     ),
                 )
             payload = replace(payload, role="quote")
-        return (RealizationOffer(occurrence, "text", payload),)
+        return text_offers(
+            RealizationOffer(occurrence, "text", payload),
+            payload,
+            priority=value.importance if isinstance(value, sem.Heading | sem.Note) else sem.Importance.NORMAL,
+        )
     if isinstance(value, sem.Field):
         label = resolve_text(value.label, context.localization).nodes
         effects = occurrence.scope_effects((Replacement(SemanticRef((*occurrence.reference.keys, "value"))),))
@@ -1225,7 +1335,9 @@ def semantic_offers[RenderTargetT, ContextT](
                 payload.fragment,
                 continuations=True,
             )
-        return (RealizationOffer(occurrence, "text", payload, fragments=fragments),)
+        return text_offers(
+            RealizationOffer(occurrence, "text", payload, fragments=fragments), payload, priority=value.importance
+        )
     if isinstance(value, sem.Block) and not panels:
         return ()
     if isinstance(
@@ -1241,6 +1353,7 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.Themed
         | sem.ActionControls
         | sem.ControlGroup
+        | sem.Truncated
         | sem.Region
         | sem.Paged
         | sem.Budgeted

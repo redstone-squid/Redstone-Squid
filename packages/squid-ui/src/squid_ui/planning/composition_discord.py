@@ -56,10 +56,12 @@ def select_violations(
 
 
 def discord_text(payload: TextRealization, escape: Callable[[str], str] | None = None) -> str:
+    if payload.shortening is not None and not payload.visible_nodes:
+        return ""
     if payload.role == "code":
-        content = "".join(tree.plain(node) for node in payload.nodes).replace("```", "``\u200b`")
+        content = "".join(tree.plain(node) for node in payload.visible_nodes).replace("```", "``\u200b`")
         return f"```{payload.language}\n{content}\n```"
-    content = tree.markdown(payload.nodes, discord=True, escape=escape)
+    content = tree.markdown(payload.visible_nodes, discord=True, escape=escape)
     if payload.role == "heading":
         return "#" * payload.level + " " + content
     if payload.role == "note":

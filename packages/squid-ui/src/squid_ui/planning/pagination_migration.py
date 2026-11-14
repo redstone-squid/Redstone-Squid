@@ -13,12 +13,14 @@ from squid_ui.html.target import HtmlLimits
 from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.pagination_content import RootRegion, TextPages
 from squid_ui.planning.request import PlanRequest
+from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import UnsupportedSemanticError
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import Alt, Never, Paginate
+from squid_ui.primitives.constraints import Alt, Never, Paginate, Truncate
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import Renderable
+from squid_ui.text import resolve_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,9 +43,19 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
         return PaginationMigration(document, enabled=False, limitation="target has no shared composition rules")
     pageable = False
     combinations = 1
+    shortening_depth = 0
+    text_ladder = (
+        limits.total_text
+        if isinstance(limits, V2Limits)
+        else max(limits.content, limits.embeds.description)
+        if isinstance(limits, ClassicLimits)
+        else limits.components.section_text
+        if isinstance(limits, SlackMessageLimits | SlackHomeLimits)
+        else 1
+    )
 
     def visit(node: Renderable[RenderTargetT]) -> Renderable[RenderTargetT]:
-        nonlocal pageable, combinations
+        nonlocal pageable, combinations, shortening_depth
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation():
                 pageable = True
@@ -75,6 +87,13 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.OptionalContent():
                 pageable = True
                 return replace(node, node=visit(node.node))
+            case sem.Truncated():
+                pageable = True
+                shortening_depth += 1
+                try:
+                    return replace(node, node=visit(node.node))
+                finally:
+                    shortening_depth -= 1
             case sem.Fields():
                 pageable |= any(entry.fallbacks for entry in node.fields)
                 return node
@@ -99,13 +118,21 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     raise UnsupportedSemanticError(msg)
                 return node
             case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | Budget():
+                if isinstance(limits, HtmlLimits):
+                    if isinstance(node, sem.Budgeted):
+                        combinations = max(combinations, node.preferred)
+                    elif isinstance(node, Budget):
+                        combinations = max(combinations, node.limits.get(Axis.DISPLAY_TEXT, 1))
                 return replace(node, node=visit(node.node))
             case primitive.Text() | primitive.Code() | primitive.Lines() | primitive.Heading() | primitive.Footer():
                 if not isinstance(limits, V2Limits | ClassicLimits):
                     msg = "Discord text primitives on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 overflow = node.overflow
-                if isinstance(overflow, Never) and not isinstance(node, primitive.Lines):
+                if isinstance(overflow, Never | Truncate) and not isinstance(node, primitive.Lines):
+                    if isinstance(overflow, Truncate) or shortening_depth:
+                        length = len(resolve_text(node.content, request.localization).plain())
+                        combinations = max(combinations, min(text_ladder, length))
                     return node
                 if not isinstance(overflow, Paginate):
                     msg = "primitive text overflow alternatives"
@@ -185,6 +212,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 | sem.ControlGroup()
                 | TextPresentation()
             ):
+                if shortening_depth and isinstance(node, sem.Paragraph | sem.Heading | sem.Note | sem.Code | sem.Quote):
+                    length = len(resolve_text(node.content, request.localization).plain())
+                    combinations = max(combinations, min(text_ladder, length))
                 return node
             case sem.ActionControls():
                 return node

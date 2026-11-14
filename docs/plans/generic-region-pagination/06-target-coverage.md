@@ -87,7 +87,7 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Primitive truncation/spill/condensation ladders, line alternatives,
+Primitive spill/condensation ladders, line alternatives,
 and rich primitive text fragmentation retain their existing non-region paths.
 They do not declare the source correspondence and permitted fragments required
 for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
@@ -101,6 +101,11 @@ offers with destination ownership separate from layout page coordinates. Palette
 status/progress content and section thumbnails now use shared composition. The retained
 fitters still serve legacy adaptation permissions and native extensions; they are
 active machinery, not dead code.
+
+Explicit prose truncation and native `Truncate` text now offer shared shortening
+effects. Head/tail retention and importance survive migration, while strict mode
+requires lossless output. Styling remains balanced and controls are never shortened.
+Rich inline links and entities still report a concrete shortening limitation.
 
 ## Application outcome and validation
 
@@ -247,3 +252,16 @@ strict mode refuses it. Lossless page families precede omission. All five docume
 targets share these rules, while unsupported children still identify the remaining
 compatibility route. The core UI suite passes (1,266 tests with `--no-cov`), and
 whole-project Pyrefly reports zero errors.
+
+## Continuation: prose truncation
+
+Semantic truncation and native Discord `Truncate` text now participate in shared
+search across the five document targets. Shortening preserves the requested end,
+balanced styling and authored importance; it reports source-specific effects.
+Lossless page families remain preferable, strict mode rejects shortening, and
+zero-character grants remove prose without leaving formatting behind. Control
+labels and behavior remain unchanged. Rich inline shortening still identifies
+the unsupported feature rather than flattening it.
+
+Both UI suites pass (3,226 tests with `--no-cov`), with three additional zero-grant
+regressions passing afterward. Whole-project Pyrefly reports zero errors.

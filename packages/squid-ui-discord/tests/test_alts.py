@@ -167,7 +167,7 @@ class TestCardFieldLadders:
         )
         view = sd.static_view([node])
         text = "\n".join(sd.payload_texts(view))
-        assert "**Videos:**" in text
+        assert "Videos:" in text
         assert "150 links" in text
         assert_within_limits(view)
         assert conform(view) == []

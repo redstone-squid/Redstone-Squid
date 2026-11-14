@@ -15,6 +15,7 @@ from squid_ui.planning.composition import (
     Evaluation,
     LocalCapacityExceeded,
     OccurrenceId,
+    OfferDiscovery,
     PlanningContext,
     RealizationOffer,
     ResourceIdentity,
@@ -55,7 +56,10 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
 
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
-    ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
+    ) -> (
+        tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
+        | OfferDiscovery[RenderTargetT, ContextT, Realization]
+    ):
         return semantic_offers(
             occurrence,
             context,
@@ -64,6 +68,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             nested_panels=False,
             text_limit=min(self.limits.content, self.limits.embeds.description),
             native_controls=True,
+            panel_text_limit=self.limits.embeds.description,
         )
 
     def evaluate(

@@ -10,6 +10,8 @@ from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.allocation import CertifiedAllocation
+from squid_ui.planning.allocation_policy import SearchCompletion
+from squid_ui.planning.joint_search import JointExhaustedError
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.presentation_state import StrategyState
@@ -255,16 +257,20 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
 
 
 def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
-    # The incumbent fits but loses text, so a cheaper representation could still have won.
-    # The budget stops the search before it can rule one out, which is what it reports.
     document = (truncate(Paragraph("x" * 5000)), ActionControls(_actions(5), key="demo"))
 
-    result = plan(document, target=DISCORD_V2_DPY27, search_budget=1)
+    with pytest.raises(JointExhaustedError):
+        plan(document, target=DISCORD_V2_DPY27, search_budget=1)
 
-    assert result.metrics.search_fallback
-    assert result.metrics.states_explored == 1
-    assert result.report.events[0].code == "planner.search_fallback"
-    assert result.report.events[0].severity.value == "warning"
+    # Shared budgets charge discovery and certification as well as candidate selection.
+    result = plan(document, target=DISCORD_V2_DPY27, search_budget=100_000)
+
+    assert result.allocation is not None
+    assert result.report.search is not None
+    assert result.report.search.completion == SearchCompletion.EXHAUSTED
+    assert not result.report.search.optimal
+    assert result.metrics.work_used <= 100_000
+    assert any(event.message == "Shortening" for event in result.report.events)
     assert len(result.bindings) == 5
 
 

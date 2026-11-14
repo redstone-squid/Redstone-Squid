@@ -73,8 +73,22 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                 left.children, right.children
             )
         case (
-            (sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.OptionalContent() | Budget()),
-            (sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | sem.OptionalContent() | Budget()),
+            (
+                sem.Unbreakable()
+                | sem.KeepWithNext()
+                | sem.Budgeted()
+                | sem.OptionalContent()
+                | sem.Truncated()
+                | Budget()
+            ),
+            (
+                sem.Unbreakable()
+                | sem.KeepWithNext()
+                | sem.Budgeted()
+                | sem.OptionalContent()
+                | sem.Truncated()
+                | Budget()
+            ),
         ):
             return replace(left, node=sem.Group(())) == replace(right, node=sem.Group(())) and _same_node(
                 left.node, right.node

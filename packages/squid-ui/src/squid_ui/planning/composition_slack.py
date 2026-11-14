@@ -17,6 +17,7 @@ from squid_ui.planning.composition import (
     Evaluation,
     LocalCapacityExceeded,
     OccurrenceId,
+    OfferDiscovery,
     PlanningContext,
     RealizationOffer,
     SemanticOccurrence,
@@ -106,7 +107,10 @@ class SlackCompositionRules[
 
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
-    ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
+    ) -> (
+        tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
+        | OfferDiscovery[RenderTargetT, ContextT, Realization]
+    ):
         return semantic_offers(
             occurrence,
             context,
@@ -114,6 +118,7 @@ class SlackCompositionRules[
             panels=False,
             disabled_controls=False,
             text_limit=self.limits.components.section_text,
+            heading_limit=self.limits.components.header_text,
         )
 
     def evaluate(
@@ -335,8 +340,11 @@ class SlackCompositionRules[
                     for child in part.children:
                         visit(child)
                 case TextRealization() as payload:
-                    plain = _plain(payload.nodes)
-                    rendered = plain if plain is not None else _mrkdwn(payload.nodes)
+                    nodes = payload.visible_nodes
+                    if payload.shortening is not None and not nodes:
+                        return
+                    plain = _plain(nodes)
+                    rendered = plain if plain is not None else _mrkdwn(nodes)
                     kind = scene.SlackTextKind.PLAIN if plain is not None else scene.SlackTextKind.MARKDOWN
                     capacity = self.limits.components.section_text
                     if payload.role == "heading":
@@ -344,13 +352,13 @@ class SlackCompositionRules[
                         if plain is None:
                             violations.append(UnsupportedCapability(identity, "Slack headers require plain text"))
                     elif payload.role == "code":
-                        code = "".join(tree.plain(node) for node in payload.nodes)
+                        code = "".join(tree.plain(node) for node in nodes)
                         if "```" in code:
                             violations.append(UnsupportedCapability(identity, "embedded Slack code fence"))
                         rendered = "```\n" + code + "\n```"
                         kind = scene.SlackTextKind.MARKDOWN
                     elif payload.role == "quote":
-                        quoted = _mrkdwn(payload.nodes)
+                        quoted = _mrkdwn(nodes)
                         rendered = (
                             "\n".join("> " + line for line in quoted.splitlines()) if quoted is not None else None
                         )

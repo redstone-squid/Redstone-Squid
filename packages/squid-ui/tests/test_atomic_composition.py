@@ -88,7 +88,9 @@ class BadgeRules(V2CompositionRules[ComponentsV2Target, object]):
                     ),
                 ),
             )
-        return super().offers(occurrence, context)
+        offers = super().offers(occurrence, context)
+        assert isinstance(offers, tuple)
+        return offers
 
     @override
     def evaluate(

@@ -213,6 +213,7 @@ class OfferDiscovery[RenderTargetT, ContextT, PayloadT]:
 
     offers: tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]
     completion: DiscoveryCompletion = DiscoveryCompletion.COMPLETE
+    limitation: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
