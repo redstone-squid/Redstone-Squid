@@ -20,6 +20,7 @@ class CursorState:
     extent: int = 1
     fingerprint: str = ""
     reveal_request: str | None = None
+    source_order: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +100,7 @@ class PresentationState:
             extent=current.extent,
             fingerprint=current.fingerprint,
             reveal_request=current.reveal_request,
+            source_order=current.source_order,
         )
         if updated != current:
             self.cursors[key] = updated

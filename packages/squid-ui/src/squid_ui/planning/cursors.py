@@ -38,6 +38,21 @@ class MaterializedCursorRequest:
     fingerprint: str
     anchors: Mapping[str, int] | None = None
     owner: PageOwnership = FIRST_PAGE
+    source_order: tuple[str, ...] = ()
+
+
+def recover_anchor(anchor: str | None, previous: tuple[str, ...], available: Mapping[str, int]) -> str | None:
+    """Follow an anchor or its nearest old neighbor, preferring the successor on ties."""
+    if anchor in available:
+        return anchor
+    if anchor is None or anchor not in previous:
+        return None
+    center = previous.index(anchor)
+    for distance in range(1, max(center + 1, len(previous) - center)):
+        for index in (center + distance, center - distance):
+            if 0 <= index < len(previous) and previous[index] in available:
+                return previous[index]
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +98,7 @@ class CursorCoordinator:
         if isinstance(owner, Controlled | RoutedPage):
             return CursorGrant(PagePosition(page=resolve_page(owner.value, extent)), extent)
         cursor = self.session.cursor(request.key)
-        anchor = cursor.position.anchor
+        anchor = recover_anchor(cursor.position.anchor, cursor.source_order, request.anchors or {})
         anchored_page = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
         override = None if self.overrides is None else self.overrides.get(request.key)
         if isinstance(owner, RevealPage) and owner.request != cursor.reveal_request and request.anchors is not None:
@@ -113,7 +128,7 @@ class CursorCoordinator:
             raise LayoutInvariantError(message)
         self._granted.add(request.key)
         extent = max(1, request.extent)
-        if extent <= 1 and not isinstance(request.owner, RevealPage):
+        if extent <= 1 and not isinstance(request.owner, RevealPage) and not request.source_order:
             return
         resolved = PagePosition(anchor, position.page)
         if extent > 1:
@@ -127,6 +142,7 @@ class CursorCoordinator:
                         extent,
                         request.fingerprint,
                         request.owner.request if isinstance(request.owner, RevealPage) else None,
+                        request.source_order,
                     ),
                 )
             )

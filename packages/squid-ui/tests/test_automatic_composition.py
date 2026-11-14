@@ -61,6 +61,9 @@ def test_public_automatic_planning_and_page_selection(
     assert result.allocation is not None
     assert result.allocation.regions[identity].cuts == (1, 3)
     assert result.allocation.regions[identity].anchors[0] != result.allocation.regions[identity].anchors[1]
+    region = result.allocation.regions[identity]
+    assert [ref.keys[-2] for ref in region.source_order] == ["0", "1", "2"]
+    assert {ref.keys[-2] for ref in region.anchors[1]} == {"1", "2"}
     assert "Row 1" in scene.Codec.dumps(result.scene)
     first = result.for_page({identity: 0})
     assert "Row 0" in scene.Codec.dumps(first.scene)

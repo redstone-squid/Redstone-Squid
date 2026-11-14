@@ -27,6 +27,7 @@ class RegionAllocation[RenderTargetT, ContextT, PayloadT]:
     pages: tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...]
     anchors: tuple[frozenset[SemanticRef], ...]
     allocation: ResourceCost = EMPTY_COST
+    source_order: tuple[SemanticRef, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,10 +108,12 @@ def allocate_family[RenderTargetT, ContextT, PayloadT](
                     replace(fragment.offer, children=tuple(child.offer.occurrence for child in children)), children
                 )
             )
-            anchors.append(node.units[start] if node.units else frozenset())
+            anchors.append(frozenset(source for unit in node.units[start:end] for source in unit))
             start = end
+        sources = frozenset(source for unit in node.units for source in unit)
+        ordered = tuple(ref for ref in root.offer.occurrence.graph.units if ref in sources)
         allocated[offer.occurrence.identity] = RegionAllocation(
-            offer.occurrence.identity, offer.region.key, ends, tuple(pages), tuple(anchors)
+            offer.occurrence.identity, offer.region.key, ends, tuple(pages), tuple(anchors), source_order=ordered
         )
     return PageFamily(root, allocated)
 
@@ -128,6 +131,7 @@ class RegionPages:
     anchors: tuple[frozenset[SemanticRef], ...]
     allocation: ResourceCost
     navigation: tuple[tuple[NavigationInput, ...], ...]
+    source_order: tuple[SemanticRef, ...] = ()
 
 
 class AllocationSelection[OutputT](Protocol):
@@ -173,6 +177,7 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
                             )
                             for page in region.pages
                         ),
+                        region.source_order,
                     )
                     for identity, region in self.family.regions.items()
                 }
