@@ -21,10 +21,6 @@ from squid.search.application import (
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.search.application.ports import QueryEmbedding
 from squid.search.domain import (
-    BuildSearchHit,
-    MetadataSearchHit,
-    RecordSearchHit,
-    SearchHit,
     SearchMode,
     SearchQuery,
     SearchRequest,
@@ -33,6 +29,8 @@ from squid.search.domain import (
     TextExpression,
 )
 from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler
+from squid.search.infrastructure.grouping import GroupedSearch
+from squid.search.infrastructure.hits import document_hit as _to_hit
 from squid.search.models import SearchDocument, SearchDocumentFacet
 from squid_i18n import md_tr
 
@@ -91,10 +89,18 @@ class PostgresSearchBackend(SearchBackend):
                     code=ErrorCode.INVALID_QUERY,
                     public_context={"field": "sort", "value": request.sort.field},
                 )
+            if request.group_by_build:
+                return await GroupedSearch(session, request, query).search(
+                    predicate, compiler.compile(query), offset=offset, field=field
+                )
             return await self._sorted(session, request, predicate, offset, field)
         if is_filter_only(query):
+            if request.group_by_build:
+                return await GroupedSearch(session, request, query).search(
+                    predicate, compiler.compile(query), offset=offset
+                )
             return await self._filter_only(session, request, predicate, offset)
-        return await self._ranked(session, request, query, predicate, offset, query_embedding)
+        return await self._ranked(session, request, query, predicate, offset, query_embedding, compiler.compile(query))
 
     def compile_predicate(
         self,
@@ -190,6 +196,7 @@ class PostgresSearchBackend(SearchBackend):
         predicate: ColumnElement[bool],
         offset: int,
         query_embedding: QueryEmbedding | None,
+        query_predicate: ColumnElement[bool],
     ) -> SearchSlice:
         """Combine the ranking branches and return one page of candidates.
 
@@ -218,6 +225,16 @@ class PostgresSearchBackend(SearchBackend):
                     logger.exception("Semantic search candidate lookup failed")
                     warnings = (_SEMANTIC_WARNING,)
         ranked = reciprocal_rank_fusion(branches)
+        if request.group_by_build:
+            documents = await self._documents_by_candidate(session, ranked)
+            candidates = {
+                documents[(candidate.resource_kind, candidate.source_id)].id: candidate
+                for candidate in ranked
+                if (candidate.resource_kind, candidate.source_id) in documents
+            }
+            return await GroupedSearch(session, request, query).search(
+                predicate, query_predicate, offset=offset, ranked=candidates, warnings=warnings
+            )
         page_candidates = ranked[offset : offset + request.page_size]
         documents = await self._documents_by_candidate(session, page_candidates)
         hits = tuple(
@@ -404,61 +421,3 @@ def _raw_identity(resource_kind: ResourceKind, source_id: str) -> tuple[str, str
         return resource_kind, source_id
     raw_kind, separator, source_key = source_id.partition(":")
     return (raw_kind, source_key) if separator else ("metadata", source_id)
-
-
-def _to_hit(document: SearchDocument, score: float | None) -> SearchHit:
-    data = document.document_data
-    tags = tuple(document.tags)
-    if document.resource_kind == "record":
-        metrics = data.get("metrics", data.get("metric", {}))
-        holder_ids = data.get("holder_build_ids", ())
-        build_id = _integer(data, "build_id")
-        if not build_id and isinstance(holder_ids, list | tuple) and holder_ids:
-            first_holder = holder_ids[0]
-            if isinstance(first_holder, int) and not isinstance(first_holder, bool):
-                build_id = first_holder
-        if not isinstance(metrics, dict):
-            metrics = {}
-        return RecordSearchHit(
-            source_id=document.source_key,
-            title=document.title,
-            subtitle=document.subtitle,
-            build_id=build_id,
-            build_title=_string(data, "build_title", document.title),
-            base_title=_string(data, "base_title", "unknown"),
-            version_scope=_string(data, "version_scope", "all-time"),
-            score=score,
-            tags=tags,
-            metrics=cast(dict[str, str | int | float | bool], metrics),
-        )
-    if document.resource_kind == "build":
-        return BuildSearchHit(
-            source_id=document.source_key,
-            title=document.title,
-            status=document.status or "unknown",
-            description=document.description,
-            score=score,
-            tags=tags,
-        )
-    aliases = data.get("aliases", ())
-    if not isinstance(aliases, list | tuple):
-        aliases = ()
-    typed_aliases = cast(list[object] | tuple[object, ...], aliases)
-    return MetadataSearchHit(
-        source_id=_public_source_id(document.resource_kind, document.source_key),
-        title=document.title,
-        metadata_kind=_string(data, "metadata_kind", document.resource_kind),
-        description=document.description,
-        score=score,
-        aliases=tuple(str(alias) for alias in typed_aliases),
-    )
-
-
-def _string(data: dict[str, object], key: str, default: str) -> str:
-    value = data.get(key)
-    return value if isinstance(value, str) else default
-
-
-def _integer(data: dict[str, object], key: str) -> int:
-    value = data.get(key)
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0

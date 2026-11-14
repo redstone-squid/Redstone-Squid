@@ -107,6 +107,7 @@ class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
                 facet.field_name == storage_field,
                 comparison,
             )
+            .correlate(SearchDocument)
             .exists()
         )
 

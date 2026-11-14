@@ -12,10 +12,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+import squid.search.infrastructure.repository as search_repository
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.search.application import SearchQueryParser
-from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
+from squid.search.domain import BuildSearchHit, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 from squid.search.models import SearchDocument, SearchDocumentFacet
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
@@ -67,6 +68,181 @@ async def seed_builds(
                         numeric_value=Decimal(width),
                     )
                 )
+
+
+async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    await seed_builds(session_factory, ["Alpha door", "Bravo door", "Charlie door", "Pending door"])
+    async with session_factory.begin() as session:
+        await session.execute(text("UPDATE search_documents SET status = 'pending' WHERE source_key = '4'"))
+        for result_id, title, holders, width in (
+            (101, "Smallest door", [1, 2, 4], 2),
+            (102, "Fastest door", [1], 9),
+            (103, "Pending holder door", [4], 1),
+            (104, "Holderless door", [], 1),
+            (105, "Narrowest door", [2], 1),
+        ):
+            document = SearchDocument(
+                resource_kind="record",
+                source_key=f"result:{result_id}",
+                title=title,
+                normalized_title=title.casefold(),
+                fuzzy_text=title.casefold(),
+                source_hash=f"record-{result_id}",
+                document_data={
+                    "holder_build_ids": holders,
+                    "base_title": title.split()[0].casefold(),
+                    "version_scope": "all_time",
+                    "metric": {"volume": 24},
+                    "holder_metrics": {str(holder): {"volume": 24, "width": width} for holder in holders},
+                },
+            )
+            session.add(document)
+            await session.flush()
+            session.add(
+                SearchDocumentFacet(
+                    document_id=document.id, field_name="width", ordinal=0, numeric_value=Decimal(width)
+                )
+            )
+            session.add(
+                SearchDocumentFacet(
+                    document_id=document.id,
+                    field_name="base_title",
+                    ordinal=0,
+                    text_value=title.split()[0].casefold(),
+                )
+            )
+            for ordinal, holder in enumerate(holders):
+                session.add(
+                    SearchDocumentFacet(
+                        document_id=document.id,
+                        field_name="holder",
+                        ordinal=ordinal,
+                        text_value=str(holder),
+                    )
+                )
+        session.add(
+            SearchDocument(
+                resource_kind="pattern",
+                source_key="tag:1",
+                title="Door pattern",
+                normalized_title="door pattern",
+                fuzzy_text="door pattern",
+                source_hash="pattern",
+            )
+        )
+
+
+@pytest.mark.parametrize("query", ["", "door"])
+@pytest.mark.parametrize(
+    ("scope", "expected"), [(SearchScope.RECORDS, 2), (SearchScope.BUILDS, 3), (SearchScope.ALL, 4)]
+)
+async def test_grouping_precedes_pagination_and_keeps_all_visible_holders(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    query: str,
+    scope: SearchScope,
+    expected: int,
+) -> None:
+    await seed_grouped_records(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    hits = []
+    for offset in range(expected + 1):
+        page = await search(backend, SearchRequest(query, scope=scope, group_by_build=True, page_size=1, offset=offset))
+        assert page.total == expected
+        hits.extend(page.hits)
+    assert len(hits) == expected
+    assert len({(hit.resource_kind, hit.source_id) for hit in hits}) == expected
+    builds = {hit.source_id: hit for hit in hits if isinstance(hit, BuildSearchHit)}
+    assert "4" not in builds
+    assert {record.source_id for record in builds["1"].records} == {"result:101", "result:102"}
+    assert builds["2"].records[0].holder_build_ids == (1, 2)
+    assert builds["2"].records[0].metrics == {"volume": 24, "width": 2}
+    assert builds["1"].grouped
+    if scope is SearchScope.ALL:
+        assert {(source.resource_kind, source.source_id) for source in builds["1"].matches} == {
+            ("build", "1"),
+            ("record", "result:101"),
+            ("record", "result:102"),
+        }
+    if scope is SearchScope.BUILDS:
+        assert all(not record.matched for record in builds["1"].records)
+    if query:
+        assert any(source.branches for hit in hits if isinstance(hit, BuildSearchHit) for source in hit.matches)
+
+
+@pytest.mark.parametrize(("direction", "first"), [(SortDirection.ASCENDING, "2"), (SortDirection.DESCENDING, "1")])
+async def test_grouped_sort_aggregates_record_values_before_paging(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    direction: SortDirection,
+    first: str,
+) -> None:
+    await seed_grouped_records(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    page = await search(
+        backend,
+        SearchRequest(
+            "",
+            scope=SearchScope.RECORDS,
+            group_by_build=True,
+            page_size=1,
+            sort=SearchSort("width", direction),
+        ),
+    )
+    assert page.total == 2
+    assert page.hits[0].source_id == first
+    assert isinstance(page.hits[0], BuildSearchHit)
+    assert len(page.hits[0].records) == 2
+
+
+async def test_record_scope_includes_only_matching_records(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await seed_grouped_records(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    page = await search(backend, SearchRequest("base_title:smallest", group_by_build=True))
+    assert page.total == 2
+    for hit in page.hits:
+        assert isinstance(hit, BuildSearchHit)
+        assert [record.source_id for record in hit.records] == ["result:101"]
+
+
+async def test_grouped_rank_limit_does_not_truncate_record_details(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await seed_grouped_records(async_session_factory)
+    monkeypatch.setattr(search_repository, "_CANDIDATE_LIMIT", 1)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    page = await search(backend, SearchRequest("door", scope=SearchScope.ALL, group_by_build=True))
+    assert page.total == 1
+    hit = page.hits[0]
+    assert isinstance(hit, BuildSearchHit)
+    assert hit.source_id == "1"
+    assert {record.source_id for record in hit.records} == {"result:101", "result:102"}
+    assert len(hit.matches) == 3
+    empty = await search(backend, SearchRequest("xyzzyq", group_by_build=True))
+    assert empty.total == 0
+    assert empty.hits == ()
+
+
+async def test_grouped_visibility_applies_to_each_holder_and_supports_an_empty_set(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await seed_grouped_records(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    page = await search(backend, SearchRequest("", group_by_build=True, visible_statuses=frozenset({"pending"})))
+    assert page.total == 1
+    hit = page.hits[0]
+    assert isinstance(hit, BuildSearchHit)
+    assert hit.source_id == "4"
+    assert all(record.holder_build_ids == (4,) for record in hit.records)
+    empty = await search(backend, SearchRequest("", group_by_build=True, visible_statuses=frozenset()))
+    assert empty.total == 0
+    assert empty.hits == ()
 
 
 def request(query: str, *, offset: int = 0, page_size: int = 2, sort: SearchSort | None = None) -> SearchRequest:
