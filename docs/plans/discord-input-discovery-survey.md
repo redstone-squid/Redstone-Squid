@@ -24,8 +24,8 @@ polish work. Each row describes current behavior before proposing a change.
 
 ### Notifications
 
-Source: [notifications_view.py](../../squid/bot/notifications_view.py),
-`NotificationSubscriptions`.
+Sources: [notifications_view.py](../../squid/bot/notifications_view.py),
+`NotificationSubscriptions`, and [notifications.py](../../squid/bot/notifications.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -33,6 +33,7 @@ Source: [notifications_view.py](../../squid/bot/notifications_view.py),
 | Follow record | Required **Record title ID** text field; also UUID-only. | Search stable record titles or follow directly from a record detail. Keep the stable title UUID, which survives rebuilds. | 1 |
 | Follow matching records | Build kind, base title, and version scope are free text despite finite vocabularies. Showcase tag is a numeric ID; exact tag value is untyped text. | Named choices for enums; searchable tag selector; value control based on the selected tag's type; readable filter preview. | 1 |
 | Inspect/unfollow subscriptions | Selector exists, but labels are just Creator/Record and descriptions expose subject UUIDs. Only the first 25 subscriptions are offered. | Resolve names and meaningful summaries, with pagination/search. A later subscription must be reachable without removing earlier ones. | 1 |
+| Staff review DM | Provides a filled `/build browse id:…` instruction to copy; public notifications can include a website link. | Add a context-carrying Open build control for staff review, retaining visibility checks. | 2 |
 
 Delivery preferences already use toggles. Inbox actions select existing items;
 they do not require entering notification IDs. Their bounded listing is a
@@ -172,3 +173,160 @@ Account/settings sources: [account_workspace.py](../../squid/bot/account_workspa
 [profile_editor.py](../../squid/bot/profile_editor.py),
 [settings_view.py](../../squid/bot/settings_view.py). Remaining entries are rooted
 in the production extension list in [app.py](../../squid/bot/app.py).
+
+## Interaction design
+
+Use the smallest control that expresses the task:
+
+| What the user needs to supply | Preferred interaction |
+| --- | --- |
+| An object already being viewed | Carry its identity into a contextual action; do not ask again. |
+| A Discord member, role, or channel | Native entity selector. |
+| A small finite vocabulary | Labeled choice, radio group, or toggle. |
+| An object in a large domain catalogue | Search by words, then select a labeled result. |
+| Several existing objects | Searchable selection with a visible list of retained picks and individual removal. |
+| New content or a new name | Text entry with a relevant example and validation. |
+| A structured collection | Add/edit/remove rows with typed fields. |
+| Query syntax, raw IDs, or bulk input | Explicit advanced mode or optional shortcut. |
+
+For example, Follow creator should work as follows. Searching and choosing are
+separate interactions, but users never transcribe the UUID:
+
+```mermaid
+flowchart LR
+    A[Follow creator] --> B[Enter a name]
+    B --> C[Select a labeled result]
+    C --> D[Show selected creator]
+    D --> E[Follow]
+    F[Creator detail] --> E
+    E --> G[Subscription shown by name]
+```
+
+An ordinary low-impact follow need not gain a separate confirmation dialog.
+The explicit Follow button can be on the result/detail itself. Destructive
+actions should retain their existing confirmation and authorization checks.
+
+### What Discord permits
+
+The current component reference supports string, user, role, and channel
+selects in modals. String selects contain at most 25 options. Consequently,
+modal limitations do not justify asking for a channel snowflake or typing an
+enum. See the official [component reference](https://docs.discord.com/developers/components/reference).
+
+Text inputs have no custom autocomplete interaction. Application-command
+autocomplete and modal submission are distinct interaction types. A modal
+submit cannot directly open another modal, and a modal contains at most five
+top-level components. A search submit should therefore update/show a message
+with results; a subsequent selection or button can open the next form. See
+Discord's [interaction reference](https://docs.discord.com/developers/interactions/receiving-and-responding).
+
+Do not design a single modal whose later fields dynamically change when the
+user selects an earlier field. Choose the object/setting on the message first,
+then open its typed value form. This also gives room for explanations and
+previews without overfilling the modal.
+
+## Reuse and missing infrastructure
+
+Most controls already exist. The main additions belong in feature workflows
+and in a small adapter between domain lookups and shared widgets.
+
+- [form_planning.py](../../packages/squid-ui-discord/src/squid_ui_discord/form_planning.py)
+  already renders choice, boolean, and native entity fields.
+  [EntityField](../../packages/squid-ui-discord/src/squid_ui_discord/form_fields.py)
+  handles users, roles, channels, and mentionables. It currently lacks a
+  channel-type filter property; use the message selector pattern from settings
+  for restricted destinations, or extend that field deliberately.
+- [SearchPicker](../../packages/squid-ui-widgets/src/squid_ui_widgets/search_picker.py)
+  already supports search-then-select, retained picks, removal, and windowed
+  results. No production `squid/bot` call site currently uses it. It needs a
+  domain source and host-owned save/cancel behavior, not another widget rewrite.
+- `Browser`, `MultiChoice`, and `CollectionEditor` already cover contextual
+  detail, paged choices, and structured collections. The profile link editor
+  demonstrates a collection editor; submission sections demonstrate retaining
+  selections across pages.
+- [The suggestion registry](../../squid/suggestions/infrastructure/catalogue.py)
+  already provides `creator_profiles`, `record_titles`, `showcase_tag_ids`,
+  `restriction_ids`, `permission_roles`, `permission_nodes`,
+  `permission_patterns`, `starboard_names`, `version_ids`, `title_definitions`,
+  `build_kinds`, `base_titles`, `version_scopes`, `search_fields`, and
+  `search_sorts`. Bootstrap supplies the optional role/starboard services.
+  These sources cover many identifiers currently typed into forms.
+
+Two gaps need explicit treatment before adopting those sources broadly:
+
+1. **Suggestions are not a paginated catalogue API.** Nonzero limits are capped
+   at 25, and `SuggestionResult` has no cursor, total, or `has_more`. Enumerable
+   public sources can be loaded completely and paged locally. Queried sources
+   need a real windowed domain query for exhaustive browsing, or a clearly
+   bounded “refine your search” picker. Do not invent a Next button over the same
+   25 suggestions. Start with bounded search where appropriate and add paging
+   where full reachability matters, especially subscription management.
+2. **Autocomplete failure behavior is wrong for a persistent search screen.**
+   `SuggestionService` returns an empty result for provider timeouts/failures,
+   as well as some access/context failures. A picker must distinguish failed
+   loading from a successful search with no matches. Add a suitable result
+   contract or use a domain source that reports errors to the widget. Existing
+   loading/retry controls cannot recover information the service discards.
+
+For every lookup, carry locale, viewer, and required guild/category context;
+keep pending/private visibility rules. Native selections and autocomplete
+suggestions do not authorize a later write. Resolve the stored identity again
+when applying it, recheck permission, and preserve the revision the user
+actually edited. Offer a readable unavailable/deleted state instead of silently
+substituting another object with the same name.
+
+## Suggested delivery order
+
+Implement this as independent changes with an observable completion condition:
+
+1. **Starboards and finite choices.** Reuse settings' native channel/role
+   controls, retain the selected board, and replace notification filter enums
+   with choices. Add `/records` query suggestions and meaningful option help.
+   This is the smallest useful slice and exercises no new large-catalogue API.
+2. **Domain lookup and notifications.** Integrate `SearchPicker` with labeled,
+   visibility-aware creator/record/tag sources; handle bounded results and
+   failures honestly. Replace follow UUID forms, resolve subscription labels,
+   and make every subscription reachable. Add contextual Follow actions.
+3. **Tag and access workflows.** Apply tags from a build/tag detail, choose
+   restrictions for aliases, and make role/rule editing act on selected
+   objects. Split generic Value fields into operation-specific forms. Reuse
+   existing service authorization and edit history.
+4. **Guided search and record tools.** Introduce keyword input, filter rows, and
+   sort choices. Render selected filters in plain language with individual
+   removal. Scope available fields to builds or records. Keep advanced query
+   entry; do not silently discard expressions the guided editor cannot
+   represent. Separate definition selection from category construction and
+   use named versions/restrictions in maintenance tools.
+5. **Structured credits and specialist polish.** Add a credit collection editor
+   without losing typed identity evidence. Improve video activations, voting
+   emoji rows, large submission catalogues, and runtime-setting entry. Preserve
+   useful compact formats as optional advanced paths.
+
+Steps 1–3 address the sharpest identifier barriers. Step 4 is the larger search
+design project and should not delay native selector fixes. There is no need to
+move ordinary users to the website or rebuild the whole UI framework first.
+
+## Acceptance and verification
+
+The core acceptance test is behavioral: a person starting from an empty command
+can follow a creator/record, apply a tag, configure a starboard, and assign a
+role without obtaining an ID/slug elsewhere. Existing-object actions preserve
+their context; only creation and advanced entry ask for new identifiers.
+
+Test each changed flow with empty results, duplicate names, more than 25 items,
+selection across pages/searches, a removed object, revoked permission, a stale
+revision, retry, cancellation, and timeout where relevant. Check labels and
+disambiguating details on mobile and in a long-label locale. Preserve other
+answers when changing a selected object or correcting an invalid value.
+
+For search, test that selected filters and advanced expressions retain their
+meaning, including OR grouping and record visibility restrictions. For credits,
+test that changing a role or adding another credit preserves the evidence of
+unchanged entries. Native entity selection must still pass existing guild and
+destination checks.
+
+This survey changes documentation only. Repository checks and focused existing
+tests support the source inventory; they do not establish live-client usability.
+Before rollout, exercise representative flows in an actual Discord server on
+desktop and mobile. No usage telemetry or live database catalogue sizes were
+available for this assessment.
