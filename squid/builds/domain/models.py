@@ -458,6 +458,11 @@ _TICKS_PER_UNIT: Mapping[str, float] = {
     "secs": 20,
     "second": 20,
     "seconds": 20,
+    "m": 1200,
+    "min": 1200,
+    "mins": 1200,
+    "minute": 1200,
+    "minutes": 1200,
     "t": 1,
     "gt": 1,
     "tick": 1,
@@ -473,7 +478,7 @@ _TICKS_PER_UNIT: Mapping[str, float] = {
 def parse_time_string(time_string: str | None) -> int | None:
     """Convert a time string to game ticks, or return None for unrecognized input.
 
-    A bare number means seconds; one second is 20 game ticks and one redstone
+    A bare number means seconds; one minute is 1200 game ticks, one second is 20, and one redstone
     tick is two game ticks. For example, "1.5s" gives 30 and "3 redstone ticks"
     gives 6. Approximation markers such as "~" are ignored. Fractional ticks
     use Python's round(), which rounds exact halves to the nearest even integer.

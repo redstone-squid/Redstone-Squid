@@ -1,6 +1,7 @@
 """Infer build submissions from messages, context, and attached images."""
 
 import logging
+import re
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from html import escape
@@ -88,14 +89,25 @@ class InferredBuild(BaseModel):
     build_width: int | None = Field(description="Enclosing width, including an explicit WxHxD on a Volume line.")
     build_height: int | None = Field(description="Enclosing height, including an explicit WxHxD on a Volume line.")
     build_depth: int | None = Field(description="Enclosing depth, including an explicit WxHxD on a Volume line.")
-    opening_time: InferredTiming | None
-    closing_time: InferredTiming | None
+    opening_time: InferredTiming | None = Field(
+        description="Full/true opening duration; never substitute a visible duration."
+    )
+    closing_time: InferredTiming | None = Field(
+        description="Full/true closing duration; never substitute a visible duration."
+    )
+    visible_opening_time: InferredTiming | None = Field(
+        description="Explicitly stated visible opening duration, separately from full/true duration."
+    )
+    visible_closing_time: InferredTiming | None = Field(
+        description="Explicitly stated visible closing duration, separately from full/true duration."
+    )
     credits: list[InferredCredit]
     version_spec: str | None
     author_notes: list[InferredAuthorNote] = Field(
         description=(
             "Verbatim primary-message excerpts containing additional concrete facts, such as operating requirements, "
-            "limitations, explicit revision changes, or credits. Never write your own prose, compare posts, "
+            "limitations, measurement qualifications (including/excluding floor), record-width ranges, "
+            "explicit revision changes, or credits. Never write your own prose, compare posts, "
             "or calculate changes. Omit facts captured elsewhere and promotional text. Empty when none."
         )
     )
@@ -439,12 +451,15 @@ class BuildInferenceService:
         for label, timing, attribute in (
             ("Opening", inferred.opening_time, "normal_opening_time"),
             ("Closing", inferred.closing_time, "normal_closing_time"),
+            ("Visible opening", inferred.visible_opening_time, "visible_opening_time"),
+            ("Visible closing", inferred.visible_closing_time, "visible_closing_time"),
         ):
             if timing is None:
                 continue
             parsed = parse_time_string(timing.value)
             setattr(build, attribute, parsed)
-            if timing.qualifier or (timing.value is not None and parsed is None):
+            approximate = timing.value is not None and re.match(r"\s*[~≈]", timing.value) is not None
+            if timing.qualifier or approximate or (timing.value is not None and parsed is None):
                 # Keep qualifications and unparseable measurements through form prefill,
                 # which carries the description but not arbitrary extra_info metadata.
                 notes.append(f"{label}: {'; '.join(part for part in (timing.value, timing.qualifier) if part)}")

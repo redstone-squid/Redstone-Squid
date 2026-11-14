@@ -25,6 +25,9 @@
   ],
   "python_only": [
     { "input": "~2s", "ticks": 40 },
+    { "input": "~42 minutes", "ticks": 50400 },
+    { "input": "0.5min", "ticks": 600 },
+    { "input": "2 mins", "ticks": 2400 },
     { "input": "~ 1.05 sec", "ticks": 21 },
     { "input": "2 seconds", "ticks": 40 },
     { "input": "16 ticks", "ticks": 16 },

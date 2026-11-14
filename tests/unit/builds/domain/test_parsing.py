@@ -13,7 +13,10 @@ from squid.builds.domain import parse_time_string
     [
         (None, None),
         ("40game-ticks", 40),
-        ("8 minutes", None),
+        ("8 minutes", 9600),
+        ("~42 minutes", 50400),
+        ("0.5min", 600),
+        ("2 mins", 2400),
         ("8s 40ms", None),
         ("1.16+", None),
     ],

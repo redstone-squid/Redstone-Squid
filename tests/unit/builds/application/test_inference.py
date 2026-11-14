@@ -42,6 +42,8 @@ def inferred(**overrides: Any) -> InferredBuild:
         "build_depth": 10,
         "opening_time": {"value": "1.0s", "qualifier": None},
         "closing_time": {"value": "0.5s", "qualifier": None},
+        "visible_opening_time": None,
+        "visible_closing_time": None,
         "credits": [
             {"name": name, "kind": "name", "role": "creator", "source_message_id": 10}
             for name in ["BuilderOne", "BuilderTwo"]
@@ -518,3 +520,54 @@ def test_contributor_only_keeps_the_sender_assumption_and_other_build_sources_ar
     credits = BuildInferenceService._credits(value, source().primary)
     assert [credit.name for credit in credits] == ["Builder", "Bob"]
     assert credits[0].attribution is CreditAttribution.ASSUMED_SENDER
+
+
+async def test_visible_and_true_timings_are_kept_separately_through_prefill() -> None:
+    value = inferred(
+        opening_time={"value": "1.35s", "qualifier": None},
+        closing_time={"value": "1.35s", "qualifier": None},
+        visible_opening_time={"value": "1.25s", "qualifier": None},
+        visible_closing_time={"value": "1.25s", "qualifier": None},
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    [build] = await service.infer(source(), model="test")
+    assert (build.normal_opening_time, build.normal_closing_time) == (27, 27)
+    assert (build.visible_opening_time, build.visible_closing_time) == (25, 25)
+    projected = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+    assert [
+        projected.answers[field]
+        for field in ("opening_time", "closing_time", "visible_opening_time", "visible_closing_time")
+    ] == [27, 27, 25, 25]
+
+
+async def test_approximate_minutes_keep_both_ticks_and_the_qualification() -> None:
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(opening_time={"value": "~42 minutes", "qualifier": None})])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+    [build] = await service.infer(source(), model="test")
+    assert build.normal_opening_time == 50400
+    assert build.description is not None
+    assert "~42 minutes" in build.description
+
+
+async def test_measurement_qualifications_and_variant_ranges_remain_source_excerpts() -> None:
+    message = ContextMessage(
+        10, "Builder", 20, "Volume: 4992 blocks (including floor)\nbreaks record at: n=5-14 wide", "", "primary"
+    )
+    value = inferred(
+        author_notes=[
+            {"source_message_id": 10, "text": "(including floor)"},
+            {"source_message_id": 10, "text": "breaks record at: n=5-14 wide"},
+            {"source_message_id": 10, "text": "The build counts its floor and breaks several records."},
+        ]
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert build.description == "(including floor)\nbreaks record at: n=5-14 wide"
