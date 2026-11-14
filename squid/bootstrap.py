@@ -105,6 +105,7 @@ from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.persistence.wake_listener import PostgresWakeListener
 from squid.posts.application import PostService
 from squid.records.application import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.records.application.range_publication import RangePublicationService
 from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
 from squid.schematics.application import (
@@ -415,7 +416,17 @@ class _ServiceGraph:
 
     @cached_property
     def record_computation(self) -> RecordComputationService:
-        return RecordComputationService(uow_factory=self.uow_factory)
+        return RecordComputationService(
+            uow_factory=self.uow_factory, refresh_ranges=self.range_publication.refresh_registered
+        )
+
+    @cached_property
+    def range_publication(self) -> RangePublicationService:
+        return RangePublicationService(
+            RecordComputationService(uow_factory=self.uow_factory),
+            uow_factory=self.uow_factory,
+            analyzer=SubprocessRangeAnalyzer(),
+        )
 
     @cached_property
     def records(self) -> RecordService:
@@ -801,6 +812,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         permission_epoch=graph.permission_epoch,
         records=graph.records,
         public_records=graph.public_records,
+        range_publication=graph.range_publication,
         schematics=graph.schematics,
         search=graph.search,
         tags=graph.tags,

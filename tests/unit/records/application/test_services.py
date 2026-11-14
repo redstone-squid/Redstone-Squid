@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import create_autospec
+from unittest.mock import AsyncMock, create_autospec
 
 import anyio
 import pytest
@@ -829,3 +829,20 @@ async def test_range_admission_precedes_loading_and_releases_on_cancellation() -
     assert result.analysis.status is RegionAnalysisStatus.EXACT
     assert candidates.list_for_door_widths.await_count == 2
     assert runs.batches == []
+
+
+async def test_queue_acknowledges_only_after_range_refresh_succeeds() -> None:
+    runs = FakeRuns()
+    runs.queued = (BuildKind.DOOR,)
+    refresh = AsyncMock(side_effect=RuntimeError("worker unavailable"))
+    computation = RecordComputationService(
+        uow_factory=lambda: RecordScope(FakeCandidates(()), runs), refresh_ranges=refresh
+    )
+    with pytest.raises(RuntimeError, match="worker unavailable"):
+        await computation.process_queue()
+    refresh.assert_awaited_once()
+    assert runs.completed == ()
+    assert runs.failed == ((BuildKind.DOOR,), "worker unavailable")
+    refresh.side_effect = None
+    await computation.process_queue()
+    assert runs.completed == (BuildKind.DOOR,)

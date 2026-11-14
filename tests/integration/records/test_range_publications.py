@@ -1,20 +1,32 @@
 """Range publication preserves old evidence and fences out-of-order workers."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from functools import partial
+from unittest.mock import create_autospec
 
+import anyio
 import pytest
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.accounts.models import Account
+from squid.builds.domain import Status
+from squid.builds.models import DoorBuild
 from squid.core.errors import InvalidStateError
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
+from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.records.application.models import CandidateBuild
+from squid.records.application.ports import DoorRangeAnalyzer
+from squid.records.application.range_publication import RangePublicationService
 from squid.records.application.range_snapshots import RangeSnapshotDocument, RangeSource
+from squid.records.application.services import RecordComputationService
 from squid.records.domain.regions import RegionAnalysisStatus
+from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.records.infrastructure.range_wire import failed_analysis
-from squid.records.models import DoorRangeSnapshot
+from squid.records.models import DoorRangeSnapshot, RulesRevision
+from tests.support.build_edits import build_edit_session
 from tests.unit.records.application.test_expansion_regions import branch, family
 
 
@@ -119,3 +131,130 @@ async def test_failed_attempt_without_snapshot_does_not_publish(
         assert publication.latest.snapshot_hash is None
     async with migrated_session_factory() as session:
         assert (await session.execute(select(DoorRangeSnapshot))).scalars().all() == []
+
+
+async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refreshes_them(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    async with build_edit_session(sessions) as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        door = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=Status.CONFIRMED,
+            orientation="Door",
+            expansion=family(branch(volume="10n")).expansion,
+        )
+        session.add(door)
+        await session.flush()
+        build_id = door.id
+
+    class EditingAnalyzer:
+        edited = False
+
+        async def analyze(self, sources: Sequence[CandidateBuild], query: DoorRangeQuery) -> DoorRangeAnalysis:
+            # The saved snapshot is visible before computation starts. Editing a
+            # source now must only affect the next attempt.
+            async with sessions() as session:
+                count = (await session.execute(select(func.count()).select_from(DoorRangeSnapshot))).scalar_one()
+                assert count >= 1
+            if not self.edited:
+                async with build_edit_session(sessions) as session:
+                    door = await session.get(DoorBuild, build_id)
+                    assert door is not None
+                    door.expansion = family(branch(volume="100n")).expansion
+                self.edited = True
+            return await SubprocessRangeAnalyzer().analyze(sources, query)
+
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=EditingAnalyzer()
+    )
+    first = await publisher.publish(DoorRangeQuery(height=3))
+    assert first.active is not None
+    first_run_id = first.active.id
+    async with factory() as uow:
+        saved = await uow.record_ranges.get_snapshot(first_run_id)
+        assert saved is not None
+        assert saved.sources[0].expansion is not None
+        assert saved.sources[0].expansion.branches[0].volume == "10n"
+    computation = RecordComputationService(uow_factory=factory, refresh_ranges=publisher.refresh_registered)
+    await computation.process_queue()
+    refreshed = await publisher.get(first.query_id)
+    assert refreshed is not None
+    assert refreshed.active is not None
+    assert refreshed.active.id != first_run_id
+    async with factory() as uow:
+        old = await uow.record_ranges.get_snapshot(first_run_id)
+        new = await uow.record_ranges.get_snapshot(refreshed.active.id)
+        assert old == saved
+        assert new is not None
+        assert new.sources[0].expansion is not None
+        assert new.sources[0].expansion.branches[0].volume == "100n"
+
+
+async def test_cancelled_publication_records_failure_and_preserves_previous_result(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
+    analyzer.analyze.return_value = analyze_door_widths((), height=3)
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+    )
+    query = DoorRangeQuery(height=3)
+    first = await publisher.publish(query)
+    assert first.active is not None
+    started = anyio.Event()
+
+    async def block(sources: Sequence[CandidateBuild], query: DoorRangeQuery) -> DoorRangeAnalysis:
+        started.set()
+        await anyio.sleep_forever()
+        raise AssertionError("Cancelled analysis returned")
+
+    analyzer.analyze.side_effect = block
+    with anyio.fail_after(10):
+        async with anyio.create_task_group() as group:
+            group.start_soon(publisher.publish, query)
+            await started.wait()
+            group.cancel_scope.cancel()
+    state = await publisher.get(first.query_id)
+    assert state is not None
+    assert state.active is not None
+    assert state.latest is not None
+    assert state.active.id == first.active.id
+    assert state.latest.error == "cancelled"
+    analyzer.analyze.side_effect = None
+    replacement = await publisher.publish(query)
+    assert replacement.active is not None
+    assert replacement.active.id != first.active.id
+
+
+async def test_new_rules_revision_prevents_old_attempt_activation(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    query = DoorRangeQuery(height=3)
+    async with factory() as uow:
+        revision = await uow.records.active_rules_revision_id()
+        query_id = await uow.record_ranges.register(query)
+        attempt = await uow.record_ranges.begin(query_id, revision)
+        await uow.record_ranges.save_snapshot(
+            attempt.id, RangeSnapshotDocument(query=query, sources=(), captured_at=datetime.now(UTC))
+        )
+        await uow.commit()
+    async with migrated_session_factory() as session:
+        await session.execute(update(RulesRevision).where(RulesRevision.id == revision).values(activated_at=None))
+        await session.commit()
+    async with factory() as uow:
+        await uow.record_ranges.finish(attempt.id, analyze_door_widths((), height=3))
+        await uow.commit()
+    async with factory() as uow:
+        state = await uow.record_ranges.get(query_id)
+        assert state is not None
+        assert state.active is None
+        assert state.latest is not None
+        assert state.latest.result is not None
+        assert state.latest.result.analysis.status is RegionAnalysisStatus.EXACT

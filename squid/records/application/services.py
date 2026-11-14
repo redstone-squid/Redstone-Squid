@@ -1,7 +1,7 @@
 """Record computation orchestration."""
 
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -81,10 +81,12 @@ class RecordComputationService:
         uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
         formatter: TitleFormatter | None = None,
         category_limit: int = 8,
+        refresh_ranges: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._formatter = formatter or RulesTitleFormatter()
         self._category_limit = category_limit
+        self._refresh_ranges = refresh_ranges
 
     async def rebuild(
         self,
@@ -92,11 +94,13 @@ class RecordComputationService:
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
-        """Publish all requested kinds and scopes together."""
+        """Publish fixed-title runs together, then refresh registered door ranges."""
         async with self._uow_factory() as uow:
             result = await self.rebuild_in(uow, current_version_id=current_version_id, kinds=kinds)
             await uow.commit()
-            return result
+        if BuildKind.DOOR in kinds and self._refresh_ranges is not None:
+            await self._refresh_ranges()
+        return result
 
     async def rebuild_in(
         self,
@@ -235,6 +239,20 @@ class RecordComputationService:
                 identity = _category_identity(kind, _base_key(source), selected)
                 grouped[identity.key].append((source, selected))
         return {key: self._make_category(items, source=MaterializationSource.EAGER) for key, items in grouped.items()}
+
+    def door_range_candidates(
+        self, request: DoorRangeQuery, sources: Sequence[CandidateBuild]
+    ) -> tuple[CandidateBuild, ...]:
+        """Apply point-lookup taxonomy rules while retaining real opening domains."""
+        size = f"{request.minimum}x{request.height}" + (f"x{request.depth}" if request.depth != 1 else "")
+        category_sources = tuple(
+            replace(source, door=replace(source.door, size=size)) for source in sources if source.door is not None
+        )
+        category = self.requested_category(
+            request.identity_for_opening((request.minimum, request.height, request.depth)), category_sources
+        )
+        matched_ids = {candidate.build_id for candidate in category.candidates} if category is not None else set()
+        return tuple(source for source in sources if source.candidate.build_id in matched_ids)
 
     def requested_category(
         self,
@@ -408,18 +426,8 @@ class RecordService:
                         maximum=request.maximum,
                     )
                 )
-            # Compare taxonomy at a common size; the adapter retains each source's
-            # real opening domain for the subsequent arithmetic.
-            size = f"{request.minimum}x{request.height}" + (f"x{request.depth}" if request.depth != 1 else "")
-            category_sources = tuple(
-                replace(source, door=replace(source.door, size=size)) for source in sources if source.door is not None
-            )
-            category = self._computation.requested_category(
-                request.identity_for_opening((request.minimum, request.height, request.depth)), category_sources
-            )
-            matched_ids = {candidate.build_id for candidate in category.candidates} if category is not None else set()
             result = await self._range_analyzer.analyze(
-                tuple(source for source in sources if source.candidate.build_id in matched_ids), request
+                self._computation.door_range_candidates(request, sources), request
             )
             return DoorRangeResult(request, datetime.now(UTC), result.analysis, result.configurations)
         finally:

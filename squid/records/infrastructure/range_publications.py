@@ -75,7 +75,10 @@ class PostgresRangePublicationRepository:
         session = self._session()
         registration = (
             await session.execute(
-                select(DoorRangeRegistration).where(DoorRangeRegistration.id == query_id).with_for_update()
+                select(DoorRangeRegistration)
+                .where(DoorRangeRegistration.id == query_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one()
         registration.generation += 1
@@ -117,7 +120,10 @@ class PostgresRangePublicationRepository:
         # workers. Finishing an older attempt cannot regress the active result.
         registration = (
             await session.execute(
-                select(DoorRangeRegistration).where(DoorRangeRegistration.id == run.query_id).with_for_update()
+                select(DoorRangeRegistration)
+                .where(DoorRangeRegistration.id == run.query_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one()
         await session.refresh(run, with_for_update=True)

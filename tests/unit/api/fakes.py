@@ -69,6 +69,8 @@ from squid.permissions.application.epoch import PermissionEpochWatcher, WakeList
 from squid.permissions.domain import Pattern
 from squid.records.application import PublicRecordQueryService, RecordService
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.records.application.range_publication import RangePublicationService
+from squid.records.application.range_snapshots import RangePublication
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
@@ -488,6 +490,14 @@ class MockVotes(VoteService):
         return None
 
 
+class MockRangePublication(RangePublicationService):
+    def __init__(self) -> None:
+        pass
+
+    async def get(self, query_id: int) -> RangePublication | None:
+        return None
+
+
 class MockRecords(RecordService):
     def __init__(self) -> None:
         """Publish no records."""
@@ -817,6 +827,7 @@ def build_services(
         vote_members=None,
         records=MockRecords(),
         public_records=MockPublicRecords(),
+        range_publication=MockRangePublication(),
         submission_forms=MockSubmissionForms(),
         submission_drafts=MockSubmissionDrafts(),
         submission_finalization=MockSubmissionFinalization(),
