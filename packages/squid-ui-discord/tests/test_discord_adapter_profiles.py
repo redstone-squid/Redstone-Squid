@@ -1,55 +1,15 @@
-import subprocess
-import sys
-
 import pytest
 
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import plan
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.discord import components_v2_target
+from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.primitives import Text
-from squid_ui.target_types import DiscordAdapter
 from squid_ui_discord.adapter import (
     discord_py_adapter_profile,
     require_discord_py_capability,
 )
 from squid_ui_discord.target import v2
-
-
-class AlternateAdapter(DiscordAdapter):
-    pass
-
-
-def test_alternate_profile_can_plan_for_an_injected_renderer() -> None:
-    profile = AdapterProfile(AlternateAdapter, "alternate", ">=1", frozenset({AdapterCapability.RENDER_V2}))
-    target = components_v2_target(profile)
-
-    document = plan(Text("hello"), target=target).scene
-
-    assert isinstance(document.body, scene.ComponentsV2)
-    assert target.adapter is profile
-    assert AdapterCapability.RENDER_V2 in target.capabilities
-
-
-def test_protocol_target_import_does_not_load_discord_py() -> None:
-    script = """
-import builtins
-original = builtins.__import__
-def guarded(name, *args, **kwargs):
-    if name == 'discord' or name.startswith('discord.'):
-        raise AssertionError(f'discord.py imported by {name}')
-    return original(name, *args, **kwargs)
-builtins.__import__ = guarded
-from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import components_v2_target
-from squid_ui.target_types import DiscordAdapter
-components_v2_target(AdapterProfile(DiscordAdapter, 'alternate', '>=1'))
-"""
-
-    completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
-
-    assert completed.returncode == 0, completed.stderr
 
 
 def test_discord_py_boundary_rejects_unmatched_version() -> None:

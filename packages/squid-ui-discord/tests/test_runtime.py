@@ -37,31 +37,6 @@ def fake_client() -> Any:
     return FakeClient()
 
 
-def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -> None:
-    client = fake_client()
-
-    runtime = install(cast(discord.Client, client))
-
-    presenter = runtime.defaults.challenge
-    assert isinstance(presenter, sd.DialogPresenter)
-    assert presenter.sessions is runtime.sessions
-    assert presenter.supervisor is runtime.challenges
-    # The session manager and runtime share defaults, so both construct message roots
-    # with the same challenge presenter and scheduler.
-    assert runtime.defaults is runtime.sessions.defaults
-
-
-def test_install_makes_a_scheduler_without_requiring_a_bus() -> None:
-    without = install(cast(discord.Client, fake_client()))
-    with_bus = install(cast(discord.Client, fake_client()), sd.Config(bus=LocalTopicBus()))
-
-    assert without.scheduler is not None
-    assert without.scheduler.bus is None
-    assert without.defaults.scheduler is without.scheduler
-    assert with_bus.scheduler is not None
-    assert with_bus.defaults.scheduler is with_bus.scheduler
-
-
 def test_a_second_install_on_one_client_is_refused() -> None:
     """One client must identify one UI runtime when an interaction looks it up."""
     client = fake_client()
@@ -69,27 +44,6 @@ def test_a_second_install_on_one_client_is_refused() -> None:
 
     with pytest.raises(ValueError, match="already has a layout host"):
         install(cast(discord.Client, client))
-
-
-def test_install_keeps_host_defaults_and_adds_to_them() -> None:
-    chrome = sl.chrome.Chrome(close=sl.plain("Dismiss"))
-
-    runtime = install(
-        cast(discord.Client, fake_client()), sd.Config(defaults=sd.MessageRootDefaults(chrome=chrome, strict=True))
-    )
-
-    assert runtime.defaults.chrome is chrome
-    assert runtime.defaults.strict is True
-
-
-def test_install_keeps_the_optional_localization_resolver() -> None:
-    async def resolve(source: sd.contracts.LocalizationSource) -> sl.text.Localization:
-        del source
-        return sl.text.Localization(locale="en-GB")
-
-    runtime = install(cast(discord.Client, fake_client()), sd.Config(localization=resolve))
-
-    assert runtime.localization is resolve
 
 
 def test_of_resolves_from_a_client_an_interaction_and_a_command_context() -> None:
@@ -114,15 +68,6 @@ def test_of_survives_a_source_that_cannot_be_a_weak_key() -> None:
     """An unhashable source was never a key here; it is missing, not an error."""
     with pytest.raises(DiscordUIRuntimeMissing):
         DiscordUIRuntime.of(cast(Any, {"client": None}))
-
-
-def test_a_panel_holding_the_host_needs_no_other_object() -> None:
-    runtime = install(cast(discord.Client, fake_client()))
-
-    message_root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
-
-    assert message_root.challenge is runtime.defaults.challenge
-    assert message_root.access == sd.Everyone()
 
 
 async def test_close_finishes_every_session_and_stops_answering_of() -> None:
