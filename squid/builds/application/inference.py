@@ -170,7 +170,8 @@ class InferredBuild(BaseModel):
     )
     author_notes: list[InferredAuthorNote] = Field(
         description=(
-            "Verbatim primary-message excerpts containing additional concrete facts, such as operating requirements, "
+            "Verbatim primary-message excerpts containing additional concrete facts, such as required mods/plugins, "
+            "other operating requirements, "
             "limitations, measurement qualifications (including/excluding floor), record-width ranges, "
             "explicit revision changes, or credits. Never write your own prose, compare posts, "
             "or calculate changes. Omit facts captured elsewhere and promotional text. Empty when none."
