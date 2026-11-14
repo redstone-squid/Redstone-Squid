@@ -16,7 +16,6 @@ from squid_i18n import (
     localization_scope,
     md,
     md_tr,
-    plain,
     resolve_text,
     source_text,
     tr,
@@ -70,7 +69,7 @@ def test_walrus_binding_and_nested_messages() -> None:
     assert count == 2
     message = tr(t"outer = [{caption}]")
     assert source_text(message) == "[2 items]"
-    assert source_text(Text.join(" / ", [caption, plain("*literal*")])) == "2 items / *literal*"
+    assert source_text(Text.join(" / ", [caption, Text("*literal*")])) == "2 items / *literal*"
     trusted = md("**safe**")
     assert source_text(tr(t"trusted = {trusted}")) == "**safe**"
 

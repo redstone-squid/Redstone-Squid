@@ -24,7 +24,7 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
-from squid_i18n import NUMBER, Text, md_tr, plain, strong
+from squid_i18n import NUMBER, Text, md_tr, strong
 from squid_ui.assets import FileInput, file
 from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
@@ -204,7 +204,7 @@ def is_portable_node(value: object) -> TypeIs[PortableNode[Any]]:
 
 
 def _text(value: TextValue) -> TextLike:
-    return plain(value) if isinstance(value, Template) else value
+    return Text(value) if isinstance(value, Template) else value
 
 
 def _opt_text(value: TextValue | None) -> TextLike | None:
@@ -593,7 +593,7 @@ def _tally_label(option: TallyOption) -> Text:
     label = strong(option.label) if option.mine else option.label
     count = option.count
     result = md_tr(t"ui-tally-option = {label} — {NUMBER(count)}")
-    return Text.join(" ", (plain(option.emoji), result)) if option.emoji is not None else result
+    return Text.join(" ", (option.emoji, result)) if option.emoji is not None else result
 
 
 def tally[ContextT = object](

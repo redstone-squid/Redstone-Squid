@@ -142,7 +142,7 @@ def _generic_poll_nodes(
     closed = snapshot.status is VoteStatus.CLOSED
     show_totals = poll.visibility != "anonymous_hidden" or closed
     options = snapshot.options_for_guild(poll.guild_id or 0)
-    nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [sl.heading(sl.plain(poll.question))]
+    nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [sl.heading(sl.text.Text(poll.question))]
 
     if show_totals:
         raw = snapshot.raw_tallies()
@@ -252,7 +252,7 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
     else:
         deadline = sl.text.discord_text(
             sl.text.resolve_text(
-                sl.plain(t"{sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}"),
+                sl.text.Text(t"{sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}"),
                 sl.text.current_localization(),
             )
         )
