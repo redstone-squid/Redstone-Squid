@@ -1,6 +1,6 @@
 """Compare discord.py LayoutView construction with Squid's warmed render paths.
 
-Run with ``uv run python benchmarks/plan72_discordpy_comparison.py``. Construction comparisons
+Run with ``uv run python scripts/benchmarks/plan72_discordpy_comparison.py``. Construction comparisons
 use prebuilt classes and scenes with warmed render programs. The pipeline comparison also times
 component expansion and preflight, including planning. State mutation, commit, and network delivery
 are outside its timed region. Each construction returns a fresh mutable LayoutView.

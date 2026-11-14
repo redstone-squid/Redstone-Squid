@@ -8,7 +8,7 @@ Environment for both runs: Windows 11, Python 3.14.7, discord.py 2.7.1. Network 
 
 ## Incremental mount pipeline
 
-Run with `uv run python benchmarks/plan72_render_caching.py`. The representative-change cases use a
+Run with `uv run python scripts/benchmarks/plan72_render_caching.py`. The representative-change cases use a
 warmed 1,000-component tree and 50 samples.
 
 | Change | p50 | p95 |
@@ -48,7 +48,7 @@ of tree size in this fixture.
 
 ## Fresh LayoutView construction
 
-Run with `uv run python benchmarks/plan72_discordpy_comparison.py`. Renderer/construction lanes use
+Run with `uv run python scripts/benchmarks/plan72_discordpy_comparison.py`. Renderer/construction lanes use
 1,000 samples; the full Squid pipeline uses 200. Class declaration, scene construction, initial
 planning/program compilation, state mutation and network delivery are excluded. Every sample creates
 fresh Discord objects. Ratios use imperative discord.py p95 as 1.00x.

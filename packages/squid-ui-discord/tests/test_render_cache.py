@@ -199,7 +199,7 @@ async def test_explicit_render_cache_shares_programs_without_sharing_frontend_ob
 
 
 def test_100_component_unchanged_hot_path_meets_latency_budget() -> None:
-    from benchmarks.plan72_render_caching import measure_case
+    from scripts.benchmarks.plan72_render_caching import measure_case
 
     result = measure_case(100, cold_samples=10, unchanged_samples=50)
 
@@ -208,7 +208,7 @@ def test_100_component_unchanged_hot_path_meets_latency_budget() -> None:
 
 
 async def test_representative_change_benchmarks_exercise_their_expected_paths() -> None:
-    from benchmarks.plan72_render_caching import measure_change_scenarios
+    from scripts.benchmarks.plan72_render_caching import measure_change_scenarios
 
     results = await measure_change_scenarios(20, samples=2)
 
@@ -226,7 +226,7 @@ async def test_representative_change_benchmarks_exercise_their_expected_paths() 
 
 
 async def test_atomic_resource_pipeline_benchmark_reports_separate_phase_evidence() -> None:
-    from benchmarks.plan72_render_caching import measure_resource_pipeline
+    from scripts.benchmarks.plan72_render_caching import measure_resource_pipeline
 
     result = await measure_resource_pipeline(20, samples=2)
 
@@ -243,7 +243,7 @@ async def test_atomic_resource_pipeline_benchmark_reports_separate_phase_evidenc
 
 
 def test_discordpy_comparison_benchmarks_equivalent_fresh_layouts() -> None:
-    from benchmarks.plan72_discordpy_comparison import measure_comparison
+    from scripts.benchmarks.plan72_discordpy_comparison import measure_comparison
 
     results = measure_comparison(sizes=(1, 5), samples=2, pipeline_samples=2)
 

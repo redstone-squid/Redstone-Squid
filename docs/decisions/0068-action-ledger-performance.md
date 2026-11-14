@@ -8,7 +8,7 @@ Plan 68 requires every admitted transaction, including a no-op, to allocate a gl
 immutable terminal outcome. Publishing transactions also freeze their complete read set and stable, weakly held slot
 lineage. Those guarantees add work that the reviewed commit did not perform.
 
-The reproducible microbenchmark is `benchmarks/plan68.py`. It uses neither pytest nor coverage and measures the median
+The reproducible microbenchmark is `scripts/benchmarks/plan68.py`. It uses neither pytest nor coverage and measures the median
 of seven batches with garbage collection disabled during timing. The reviewed baseline was run from commit
 `13ce58a3755d3629e916c40cbe1d87200f5d8a31`; the new results were run from this branch on CPython 3.14.6, Linux x86-64.
 

@@ -1,6 +1,6 @@
 """Measure cold renders, unchanged output, and incremental refreshes with fixed fixtures.
 
-Run with ``uv run python benchmarks/plan72_render_caching.py``. The benchmark uses the
+Run with ``uv run python scripts/benchmarks/plan72_render_caching.py``. The benchmark uses the
 Discord test adapter so it measures component expansion, planning, constructor programs and
 mount preflight without network latency or a live Discord process.
 """

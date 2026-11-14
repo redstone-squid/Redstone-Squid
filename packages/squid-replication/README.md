@@ -63,4 +63,4 @@ adapter.
 The host still owns transport, authentication, authorization, durable storage, and task lifetime. Incoming
 envelopes and tokens are schema-checked and size-bounded, but the payload hash is an integrity checksum, not
 an authentication mechanism. Representative p50/p95/p99 fixtures and generous regression ceilings live in
-`benchmarks/fixtures/loro_document_v1.json`.
+`scripts/benchmarks/fixtures/loro_document_v1.json`.

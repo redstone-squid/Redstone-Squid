@@ -1,6 +1,6 @@
 """Measure the production Loro adapter against versioned representative fixtures.
 
-Run with ``uv run --package squid-replication --extra loro python benchmarks/plan68_loro_production.py``.
+Run with ``uv run --package squid-replication --extra loro python scripts/benchmarks/plan68_loro_production.py``.
 The fixture ceilings are regression tripwires, not latency objectives; they intentionally leave substantial
 headroom for slower CI hosts.
 """
