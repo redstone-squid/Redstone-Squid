@@ -160,6 +160,14 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             _,
         ):
             return left == right
+        case primitive.Panel(), primitive.Panel():
+            return replace(left, children=()) == replace(right, children=()) and _same_children(
+                left.children, right.children
+            )
+        case primitive.Section(), primitive.Section():
+            return _same_children(left.texts, right.texts) and _same_node(left.accessory, right.accessory)
+        case ((primitive.Thumbnail() | primitive.Sep()), _):
+            return left == right
         case (
             primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code(),
             _,

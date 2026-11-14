@@ -308,6 +308,8 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                 case FlowRealization():
                     for child in part.children:
                         visit(child, output, embedded=embedded, row=row)
+                case unknown:
+                    violations.append(UnsupportedCapability(identity, type(unknown).__name__))
             shared = SharedResources.combine(uses[use_start:])
             scoped_resources[identity] = frozenset(shared.uses)
             scopes[identity] = (

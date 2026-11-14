@@ -158,6 +158,22 @@ class PanelRealization:
     thumbnail: str | None = None
     heading: str = ""
     kind: Literal["block", "section", "article"] = "block"
+    spoiler: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class NativeSectionRealization:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class ThumbnailRealization:
+    node: scene.Thumbnail
+
+
+@dataclass(frozen=True, slots=True)
+class SeparatorRealization:
+    node: scene.Separator
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +288,9 @@ type Realization = (
     | TextRealization
     | FlowRealization
     | PanelRealization
+    | NativeSectionRealization
+    | ThumbnailRealization
+    | SeparatorRealization
     | TableRealization
     | ImageRealization
     | DownloadRealization
@@ -547,6 +566,7 @@ def semantic_offers[RenderTargetT, ContextT](
     native_controls: bool = False,
     panel_text_limit: int | None = None,
     heading_limit: int | None = None,
+    native_v2: bool = False,
 ) -> (
     tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
     | OfferDiscovery[RenderTargetT, ContextT, Realization]
@@ -559,7 +579,7 @@ def semantic_offers[RenderTargetT, ContextT](
     inside_panel = False
     while parent is not None:
         ancestor = occurrence.graph.units[parent]
-        inside_panel |= isinstance(ancestor.value, sem.Block | sem.Section | sem.Article)
+        inside_panel |= isinstance(ancestor.value, sem.Block | sem.Section | sem.Article | primitive.Panel)
         if isinstance(ancestor.value, sem.Truncated):
             keep = ancestor.value.keep
         parent = ancestor.parent
@@ -646,8 +666,27 @@ def semantic_offers[RenderTargetT, ContextT](
             keep or (value.overflow.keep if isinstance(value.overflow, Truncate) else None),
             value.priority,
         )
-    if isinstance(value, primitive.Row | primitive.ControlGroup):
-        if not native_controls:
+    if isinstance(value, primitive.Thumbnail):
+        if not native_v2:
+            return ()
+        description = resolve_text(value.description, context.localization).plain() if value.description else None
+        return (
+            RealizationOffer(
+                occurrence, "thumbnail", ThumbnailRealization(scene.Thumbnail(value.url, description, value.spoiler))
+            ),
+        )
+    if isinstance(value, primitive.Sep):
+        return (
+            (
+                RealizationOffer(
+                    occurrence, "separator", SeparatorRealization(scene.Separator(value.large, value.visible))
+                ),
+            )
+            if native_v2
+            else ()
+        )
+    if isinstance(value, primitive.Row | primitive.ControlGroup | primitive.Section | primitive.Panel):
+        if not native_controls or (isinstance(value, primitive.Section | primitive.Panel) and not native_v2):
             return ()
         children = tuple(
             SemanticOccurrence(
@@ -663,10 +702,16 @@ def semantic_offers[RenderTargetT, ContextT](
         return (
             RealizationOffer(
                 occurrence,
-                "native-controls",
-                RowRealization() if isinstance(value, primitive.Row) else ActionsRealization(),
+                "native-layout",
+                RowRealization()
+                if isinstance(value, primitive.Row)
+                else ActionsRealization()
+                if isinstance(value, primitive.ControlGroup)
+                else NativeSectionRealization()
+                if isinstance(value, primitive.Section)
+                else PanelRealization(value.accent, spoiler=value.spoiler),
                 children,
-                flow=isinstance(value, primitive.ControlGroup),
+                flow=isinstance(value, primitive.ControlGroup | primitive.Panel),
             ),
         )
     if isinstance(

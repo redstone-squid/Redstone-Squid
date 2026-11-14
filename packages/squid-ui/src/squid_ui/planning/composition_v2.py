@@ -34,19 +34,23 @@ from squid_ui.planning.realizations import (
     EntityRealization,
     FlowRealization,
     ImageRealization,
+    NativeSectionRealization,
     PanelRealization,
     Realization,
     RowRealization,
     SelectRealization,
+    SeparatorRealization,
     TableForm,
     TableRealization,
     TextRealization,
     TextSequenceRealization,
+    ThumbnailRealization,
     record_text,
     semantic_offers,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import FidelityEffect, SemanticRef
+from squid_ui.primitives import nodes as primitive
 from squid_ui.text import Markup
 
 
@@ -60,6 +64,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
         | OfferDiscovery[RenderTargetT, ContextT, Realization]
     ):
+        value = occurrence.graph.units[occurrence.reference].value
+        if isinstance(value, primitive.Section) and not 1 <= len(value.texts) <= self.limits.section_texts:
+            context.work.consume()
+            return OfferDiscovery(())
         return semantic_offers(
             occurrence,
             context,
@@ -68,6 +76,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             nested_panels=False,
             character_budgets=True,
             native_controls=True,
+            native_v2=True,
         )
 
     def evaluate(
@@ -108,6 +117,44 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             if part.offer.interaction:
                 interactions.update(part.offer.occurrence.sources)
             match part.offer.payload:
+                case NativeSectionRealization():
+                    identity = part.offer.occurrence.identity
+                    components += 1
+                    children = tuple(node for child in part.children[:-1] for node in visit(child, in_panel=in_panel))
+                    accessories = visit(part.children[-1], in_panel=in_panel, in_row=True)
+                    if (
+                        not 1 <= len(children) <= self.limits.section_texts
+                        or len(part.children) - 1 > self.limits.section_texts
+                        or any(not isinstance(node, scene.Text) for node in children)
+                    ):
+                        violations.append(ConstraintViolation(identity, "section text slots exceed native limits"))
+                    if len(accessories) != 1 or not isinstance(
+                        accessories[0], scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link
+                    ):
+                        violations.append(ConstraintViolation(identity, "section needs one accessory"))
+                        return ()
+                    return (
+                        scene.Section(tuple(node for node in children if isinstance(node, scene.Text)), accessories[0]),
+                    )
+                case ThumbnailRealization(node=node):
+                    components += 1
+                    if not in_row:
+                        violations.append(
+                            ConstraintViolation(part.offer.occurrence.identity, "thumbnail needs a section")
+                        )
+                    if len(node.description or "") > self.limits.gallery_item_description:
+                        violations.append(
+                            LocalCapacityExceeded(
+                                part.offer.occurrence.identity,
+                                "thumbnail.description",
+                                len(node.description or ""),
+                                self.limits.gallery_item_description,
+                            )
+                        )
+                    return (node,)
+                case SeparatorRealization(node=node):
+                    components += 1
+                    return (node,)
                 case ControlRealization() as control:
                     identity = part.offer.occurrence.identity
                     for name, used, capacity in (
@@ -317,7 +364,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                                     )
                                 )
                             children = (scene.Section((children[0],), scene.Thumbnail(panel.thumbnail)), *children[1:])
-                    return (scene.Panel(children, panel.accent),) if panel.framed else children
+                    return (scene.Panel(children, panel.accent, panel.spoiler),) if panel.framed else children
                 case FlowRealization():
                     return tuple(node for child in part.children for node in visit(child, in_panel=in_panel))
                 case unknown:
@@ -431,7 +478,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         raise DrawInvariantError(message)
                 case scene.Section(texts=children, accessory=accessory):
                     if not 1 <= len(children) <= self.limits.section_texts or not isinstance(
-                        accessory, scene.Thumbnail
+                        accessory, scene.Thumbnail | scene.Button | scene.RoutedButton | scene.Link
                     ):
                         message = "built thumbnail section violates its structure"
                         raise DrawInvariantError(message)
@@ -439,6 +486,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         visit(child, in_panel=in_panel)
                     visit(accessory, in_panel=in_panel)
                 case scene.Thumbnail():
+                    if len(node.description or "") > self.limits.gallery_item_description:
+                        message = "built thumbnail description exceeds its limit"
+                        raise DrawInvariantError(message)
+                case scene.Separator():
                     pass
                 case scene.Panel():
                     if in_panel:

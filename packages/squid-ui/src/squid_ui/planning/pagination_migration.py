@@ -54,7 +54,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
         else 1
     )
 
-    def visit(node: Renderable[RenderTargetT]) -> Renderable[RenderTargetT]:
+    def visit[NodeTargetT](node: Renderable[NodeTargetT]) -> Renderable[NodeTargetT]:
         nonlocal pageable, combinations, shortening_depth
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation():
@@ -96,6 +96,18 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     shortening_depth -= 1
             case sem.Fields():
                 pageable |= any(entry.fallbacks for entry in node.fields)
+                return node
+            case primitive.Panel() | primitive.Section() | primitive.Thumbnail() | primitive.Sep():
+                if not isinstance(limits, V2Limits):
+                    message = "native Components V2 layout on another target"
+                    raise UnsupportedSemanticError(message)
+                if isinstance(node, primitive.Panel):
+                    return replace(node, children=tuple(map(visit, node.children)))
+                if isinstance(node, primitive.Section):
+                    if any(isinstance(text.overflow, Paginate) for text in node.texts):
+                        message = "pagination cannot be nested in a Section; paginate its enclosing region"
+                        raise UnsupportedSemanticError(message)
+                    return replace(node, texts=tuple(map(visit, node.texts)), accessory=visit(node.accessory))
                 return node
             case primitive.Row() | primitive.ControlGroup():
                 if not isinstance(limits, V2Limits | ClassicLimits):
@@ -176,7 +188,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     else ""
                 )
                 suffix = "\n```" if isinstance(node, primitive.Code) else ""
-                return TextPages[RenderTargetT](
+                return TextPages[NodeTargetT](
                     items,
                     overflow.key,
                     overflow.page,

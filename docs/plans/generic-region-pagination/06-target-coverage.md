@@ -76,6 +76,13 @@ Session-owned choices and toggles are rebuilt after state changes rather than
 replaying their old certified values. Unambiguous short public control keys remain
 stable; scoped or long identities use derived wire keys.
 
+Native V2 sections, panels, thumbnails and separators now participate directly.
+Sections retain their exact text slots and accessory; panels may continue across
+pages while retaining accent and spoiler settings. Thumbnail descriptions and
+accessory controls count against native limits, and only visible accessories
+publish bindings. A section text slot cannot host a pager's controls; paginate the
+enclosing region instead. Other native extensions still need explicit composition rules.
+
 ## Compatibility and deferred contracts
 
 `regions.py` and its backend-probing frontier search are removed. Discovery lives
@@ -265,3 +272,15 @@ the unsupported feature rather than flattening it.
 
 Both UI suites pass (3,226 tests with `--no-cov`), with three additional zero-grant
 regressions passing afterward. Whole-project Pyrefly reports zero errors.
+
+## Continuation: native V2 layouts
+
+Native sections, panels, thumbnails and separators now have shared offers and
+independently validated costs. Exact section boundaries survive checked
+alternatives, while panel continuations retain their metadata and only publish
+visible accessory bindings. Invalid native structure is refused, including
+nested containers and pagination inside a section's text slots.
+
+Both UI suites were exercised; the section-pagination regression found there was
+fixed and its focused suite passes. Build-browser and search-help application
+tests pass, and whole-project Pyrefly reports zero errors.

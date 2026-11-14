@@ -94,6 +94,10 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | primitive.Heading
     | primitive.Footer
     | primitive.Code
+    | primitive.Section[ContextT]
+    | primitive.Panel[ContextT]
+    | primitive.Thumbnail
+    | primitive.Sep
 )
 
 
@@ -290,6 +294,15 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
                     visit(control, root, i)
+            case primitive.Section():
+                root = add(value, path, parent, atomic=False)
+                for i, child in enumerate(value.texts):
+                    visit(child, root, i)
+                visit(value.accessory, root, len(value.texts), name="@accessory")
+            case primitive.Panel():
+                root = add(value, path, parent, atomic=False)
+                for i, child in enumerate(value.children):
+                    visit(child, root, i)
             case sem.ControlGroup():
                 root = add(value, path, parent, atomic=False)
                 if value.label is not None:
@@ -352,6 +365,8 @@ def semantic_graph[RenderTargetT, ContextT](
                 | primitive.Heading()
                 | primitive.Footer()
                 | primitive.Code()
+                | primitive.Thumbnail()
+                | primitive.Sep()
             ):
                 add(value, path, parent, atomic=True)
             case _:
@@ -611,6 +626,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | sem.Navigation
             | sem.Items
             | primitive.Row
+            | primitive.Section
+            | primitive.Panel
             | TextPages,
         ):
             continue
@@ -678,6 +695,10 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     preserved = True
                 case primitive.Row(), primitive.Row():
                     preserved = True
+                case primitive.Section(), primitive.Section():
+                    preserved = len(constraint.texts) == len(other.texts)
+                case primitive.Panel(), primitive.Panel():
+                    preserved = (constraint.accent, constraint.spoiler) == (other.accent, other.spoiler)
             if preserved:
                 break
         if not preserved:
