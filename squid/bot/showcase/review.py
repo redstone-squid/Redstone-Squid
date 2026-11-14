@@ -79,8 +79,8 @@ class ReviewForm(sl.forms.Form):
             await event.notice(tr(t"layout-review-this-review-room-has-closed = This review room has closed."))
             return
         self.panel.seat.review = Review(self.decision, self.comment or "")
-        self.panel.history.record(tr(t"layout-review-edit-review = Edit review"))
-        self.panel.record_activity(f"{self.panel.seat.name}: {self.decision}")
+        self.panel.history.record(event.transaction, tr(t"layout-review-edit-review = Edit review"))
+        self.panel.record_activity(event.transaction, f"{self.panel.seat.name}: {self.decision}")
 
 
 class ReviewerPanel(InspectablePanel):
@@ -140,30 +140,30 @@ class ReviewerPanel(InspectablePanel):
             "Each seat owns a separate shared cell. Undo records that seat, not the room totals."
         )
 
-    def record_activity(self, line: str) -> None:
+    def record_activity(self, transaction: sl.runtime.Transaction, line: str) -> None:
         # Activity is an audit of actions, not part of a reviewer's undoable contribution.
         def committed(commit: sl.runtime.TransactionCommit) -> None:
             with sl.runtime.transaction("Log review activity", caused_by=commit.context):
                 self.room.log(line)
 
-        sl.runtime.on_transaction_commit(committed)
+        transaction.after_commit(committed)
 
     async def _approve(self, event: sl.PressEvent[sd.Request]) -> None:
         if self.room.closed:
             return
         self.seat.review = replace(self.seat.review, decision="Approved")
-        self.history.record(tr(t"layout-review-approve-build = Approve build"))
-        self.record_activity(f"{self.seat.name}: Approved")
+        self.history.record(event.transaction, tr(t"layout-review-approve-build = Approve build"))
+        self.record_activity(event.transaction, f"{self.seat.name}: Approved")
 
     async def _undo(self, event: sl.PressEvent[sd.Request]) -> None:
         if not self.room.closed:
             self.notice = history_outcome("Undo", await self.history.undo())
-            self.record_activity(f"{self.seat.name}: {self.notice}")
+            self.record_activity(event.transaction, f"{self.seat.name}: {self.notice}")
 
     async def _redo(self, event: sl.PressEvent[sd.Request]) -> None:
         if not self.room.closed:
             self.notice = history_outcome("Redo", await self.history.redo())
-            self.record_activity(f"{self.seat.name}: {self.notice}")
+            self.record_activity(event.transaction, f"{self.seat.name}: {self.notice}")
 
 
 class ReviewSummary(InspectablePanel):

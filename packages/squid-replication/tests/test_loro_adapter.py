@@ -6,7 +6,11 @@ from typing import Any, cast
 
 import pytest
 
-from squid_reactivity import ConflictDetail, TransactionCommit, on_transaction_commit, transaction
+from squid_reactivity import (
+    ConflictDetail,
+    TransactionCommit,
+    transaction,
+)
 from squid_replication import (
     LoroBackend,
     Replica,
@@ -24,8 +28,8 @@ def _replica(name: str, peer_id: int) -> Replica:
 
 def _record(callback: Callable[[], object]) -> ReplicationChangeToken:
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         callback()
     token = commits[0].participant_changes[0].token
     assert isinstance(token, ReplicationChangeToken)
@@ -312,8 +316,8 @@ def test_compaction_preserves_leased_tokens_and_expires_released_tokens() -> Non
 async def test_history_automatically_leases_and_releases_replication_tokens() -> None:
     document = _replica("a", 1).open("project")
     history = History(limit=1)
-    with transaction():
-        history.record("insert")
+    with transaction() as tx:
+        history.record(tx, "insert")
         document.text("title").insert(0, "A")
 
     document.compact_history()

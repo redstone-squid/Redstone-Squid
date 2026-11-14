@@ -22,8 +22,7 @@ from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
 from squid_reactivity.transactions import (
-    on_transaction_commit,
-    on_transaction_rollback,
+    Transaction,
 )
 from squid_ui.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
 from squid_ui.interactions import ActionEvent, ActionMode, Visibility
@@ -52,6 +51,7 @@ class ActionResponder:
         self.selected_entities = selected_entities
         self._action_active = False
         self._action_context: ActionContext | None = None
+        self._transaction: Transaction | None = None
         self._finish_requested = False
         self._finish_accepted = False
         self._after_commit: list[PostCommitOperation[Any]] = []
@@ -237,8 +237,9 @@ class ActionResponder:
             callback,
             name=name or getattr(callback, "__qualname__", type(callback).__qualname__),
         )
-        on_transaction_commit(self._record_commit)
-        on_transaction_rollback(operation._discard)
+        assert self._transaction is not None
+        self._transaction.after_commit(self._record_commit)
+        self._transaction.after_rollback(operation._discard)
         self._after_commit.append(operation)
         return operation
 

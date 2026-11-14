@@ -20,7 +20,6 @@ from squid_reactivity import (
     ReactiveConflictError,
     TransactionCommit,
     observe_events,
-    on_transaction_commit,
     state,
     strong_read,
     transaction,
@@ -247,8 +246,8 @@ def test_action_token_selectively_inverts_counter_and_add_after_remote_work() ->
     local = Replica("a").open("project")
     remote = Replica("b").open("project")
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         local.counter("votes").increment(2)
         local.set("tags").add("mine")
     remote.import_update(local.export_since())
@@ -274,12 +273,12 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
         local.set("tags").add("shared")
     remote.import_update(local.export_since())
     history = History()
-    with transaction():
-        history.record("drop the tag")
+    with transaction() as tx:
+        history.record(tx, "drop the tag")
         local.set("tags").discard("shared")
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         remote.set("tags").discard("shared")
     local.import_update(remote.export_since())
 
@@ -301,8 +300,8 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
 async def test_undoing_a_discard_of_an_absent_value_adds_nothing() -> None:
     document = Replica("a").open("project")
     history = History()
-    with transaction():
-        history.record("drop a value that was never there")
+    with transaction() as tx:
+        history.record(tx, "drop a value that was never there")
         document.set("tags").discard("absent")
 
     result = await history.undo()
@@ -317,8 +316,8 @@ async def test_undo_and_redo_of_a_discard_round_trip() -> None:
     with transaction():
         tags.add("mine")
     history = History()
-    with transaction():
-        history.record("drop the tag")
+    with transaction() as tx:
+        history.record(tx, "drop the tag")
         tags.discard("mine")
     assert tags.value == frozenset()
 
@@ -338,8 +337,8 @@ async def test_undo_and_redo_of_a_discard_round_trip() -> None:
 def test_action_token_reloads_against_a_recreated_document() -> None:
     source = Replica("a").open("project")
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         source.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
     assert isinstance(token, ReplicationChangeToken)
@@ -405,8 +404,8 @@ def test_applying_a_reused_identity_with_different_content_records_nothing() -> 
 def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> None:
     document = Replica("a").open("project")
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         document.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
 
@@ -421,8 +420,8 @@ def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> 
 def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
     document = Replica("a").open("project")
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         document.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
@@ -438,8 +437,8 @@ def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
 def test_durable_history_token_rejects_wrong_document_and_schema() -> None:
     source = Replica("a").open("source")
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         source.counter("votes").increment(1)
     token = commits[0].participant_changes[0].token
     assert isinstance(token, ReplicationChangeToken)
@@ -640,8 +639,8 @@ async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> Non
     remote = Replica("b").open("project")
     model = LocalModel()
     history = History()
-    with transaction():
-        history.record("vote and select")
+    with transaction() as tx:
+        history.record(tx, "vote and select")
         model.selected = True
         local.counter("votes").increment(2)
         local.set("tags").add("mine")
@@ -663,8 +662,8 @@ async def test_replicated_redo_and_second_undo_follow_fresh_semantic_tokens() ->
     local = Replica("a").open("project")
     remote = Replica("b").open("project")
     history = History()
-    with transaction():
-        history.record("vote and tag")
+    with transaction() as tx:
+        history.record(tx, "vote and tag")
         local.counter("votes").increment(2)
         local.set("tags").add("mine")
     remote.import_update(local.export_since())

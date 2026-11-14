@@ -159,11 +159,11 @@ sinks do not register themselves; applications own serialization, storage, and r
 
 ::: squid_reactivity.EventSink
 
-::: squid_reactivity.on_transaction_commit
+::: squid_reactivity.Transaction.after_commit
 
-::: squid_reactivity.on_transaction_rollback
+::: squid_reactivity.Transaction.after_rollback
 
-::: squid_reactivity.on_transaction_result
+::: squid_reactivity.Transaction.after_result
 
 ::: squid_reactivity.TransactionResult
 

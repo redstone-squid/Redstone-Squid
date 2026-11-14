@@ -40,7 +40,7 @@ from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
 from squid_reactivity.transactions import (
-    on_transaction_commit,
+    Transaction,
     readonly_transaction,
     transaction,
 )
@@ -1163,15 +1163,15 @@ class MessageRoot[
         return _LifecycleCandidate(view, rendered, handlers, generation)
 
     @contextmanager
-    def _action_transaction(self, mode: ActionMode, context: ActionContext) -> Iterator[None]:
+    def _action_transaction(self, mode: ActionMode, context: ActionContext) -> Iterator[Transaction]:
         """Run a handler and preserve application commits even for unrendered writes."""
         if mode is ActionMode.PARALLEL_READ:
-            with readonly_transaction(action_context=context):
-                yield
+            with readonly_transaction(action_context=context) as tx:
+                yield tx
             return
-        with transaction(action_context=context):
-            on_transaction_commit(self._note_action_commit, key=self)
-            yield
+        with transaction(action_context=context) as tx:
+            tx.after_commit(self._note_action_commit, key=self)
+            yield tx
 
     def _note_action_commit(self, commit: TransactionCommit) -> None:
         # Direct subscriptions already invalidate every affected render cache. A write to
@@ -2713,12 +2713,21 @@ class MessageRoot[
         adapter = event.responder
         assert isinstance(adapter, ActionResponder)
         locked = False
+        # Request imports MessageRoot, so resolve this reverse dependency at dispatch time.
+        from squid_ui_discord.request import Request
+
+        request = event.context if isinstance(event.context, Request) else None
+        previous_transaction = None if request is None else request._transaction
         try:
-            with self._action_transaction(binding.mode, context):
+            with self._action_transaction(binding.mode, context) as tx:
+                event = replace(event, _transaction=tx)
+                adapter._transaction = tx
+                if request is not None:
+                    request._transaction = tx
                 adapter._action_active = True
                 adapter._action_context = context
                 if binding.record is not None:
-                    binding.record.record(binding.label)
+                    binding.record.record(tx, binding.label)
                 await binding.handler(event)
                 adapter._action_active = False
                 if adapter._finish_requested or adapter._after_commit:
@@ -2746,6 +2755,9 @@ class MessageRoot[
         finally:
             adapter._action_active = False
             adapter._action_context = None
+            adapter._transaction = None
+            if request is not None:
+                request._transaction = previous_transaction
             if locked:
                 self._render_lock.release()
 

@@ -289,7 +289,9 @@ class DraftWorkspace(sl.Reactive):
             loaded[source] = (await self.services.submission_forms.options(source, self.category, locale=None)).options
         self.option_sets = loaded
 
-    async def save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
+    async def save_values(
+        self, transaction: sl.runtime.Transaction, values: Mapping[str, JSONValue], *, base_revision: int | None = None
+    ) -> None:
         """Save several answers as one change; a failure saves none of them and sets the notice."""
         if not values:
             return

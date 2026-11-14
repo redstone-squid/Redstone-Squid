@@ -24,8 +24,7 @@ from uuid import uuid4
 
 import anyio
 
-from squid_reactivity import on_transaction_commit
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.transactions import Transaction
 from squid_ui.text import TextLike
 from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.delivery import Abandoned, Delivered, DeliveryResult, MessageDestination
@@ -683,6 +682,7 @@ class SessionManager:
         message_root: MessageRoot,
         message_destination: MessageDestination,
         *,
+        transaction: Transaction | None = None,
         key: Hashable | None = None,
         admission: AdmissionSpec = DEFAULT_ADMISSION,
         actor_id: int | None = None,
@@ -701,7 +701,9 @@ class SessionManager:
         this session rather than of the key contest, so it is not part of ``admission``.
 
         Once registered, the newcomer is admitted. Every selected incumbent is retired;
-        cleanup failures are logged and remain available through its ``wait()``, without
+        Pass the handler transaction to defer retirement until it commits. Otherwise,
+        retirement completes before this call returns. Cleanup failures are logged and
+        remain available through the incumbent's ``wait()``, without
         changing the successful admission result.
         """
         if not isinstance(message_root, MessageRoot):
@@ -724,6 +726,7 @@ class SessionManager:
                 remote_occupants=(),
                 before_registration=None,
                 session_type=Session,
+                transaction=transaction,
             )
 
     async def _open_coordinated[SessionT: Session](
@@ -731,6 +734,7 @@ class SessionManager:
         message_root: MessageRoot,
         message_destination: MessageDestination,
         *,
+        transaction: Transaction | None = None,
         key: SessionKey,
         admission: AdmissionSpec,
         actor_id: int | None,
@@ -763,6 +767,7 @@ class SessionManager:
                 remote_occupants=remote_occupants,
                 before_registration=before_registration,
                 session_type=session_type,
+                transaction=transaction,
             )
 
     def _register_recovered[SessionT: Session](
@@ -870,6 +875,7 @@ class SessionManager:
         message_root: MessageRoot,
         message_destination: MessageDestination,
         *,
+        transaction: Transaction | None = None,
         key: Hashable | None,
         admission: AdmissionSpec,
         actor_id: int | None,
@@ -963,13 +969,12 @@ class SessionManager:
             if newcomer not in self._sessions:
                 self._unindex_root(newcomer, message_root)
 
-        current = CURRENT_TRANSACTION.get()
         host = message_root.config.execution_host
-        if victims and current is not None and not current.closed and host is not None:
+        if victims and transaction is not None and host is not None:
             # A panel cannot close inside an action's transaction, so an open from a button
             # press retires the sessions it replaces once that action commits. If the action
             # rolls back, the opener discards the newcomer and the replaced sessions stay open.
-            on_transaction_commit(lambda _commit: host.start_cleanup(partial(self._retire, victims, newcomer)))
+            transaction.after_commit(lambda _commit: host.start_cleanup(partial(self._retire, victims, newcomer)))
         else:
             await self._retire(victims, newcomer)
         return Opened(newcomer)

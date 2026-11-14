@@ -41,7 +41,7 @@ from squid_reactivity.errors import (
     ReactiveConflictError,
     ReactiveWriteError,
 )
-from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
+from squid_reactivity.internals import Signal
 from squid_reactivity.operations import OperationContext
 from squid_reactivity.transaction_results import (
     ChangeToken,
@@ -52,13 +52,12 @@ from squid_reactivity.transaction_results import (
 from squid_reactivity.transactions import (
     CellPatchSet,
     ConditionalCellPatch,
+    Transaction,
     TransactionParticipant,
     TransactionView,
     apply_conditional_patches,
     enlist,
     fresh_action_transaction,
-    has_transaction_hook,
-    on_transaction_commit,
 )
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import SquidUiError
@@ -576,11 +575,12 @@ class History:
 
     def record(
         self,
+        transaction: Transaction,
         label: TextLike,
         *,
         compensate: CompensationSpec | None = None,
     ) -> None:
-        """Reserve this history's entry for the current writable action.
+        """Reserve this history's entry for the supplied active transaction.
 
         The hook captures the whole successful action, including changes made before this
         call. Only one operation may reserve this history in an action. Undo and redo
@@ -600,16 +600,17 @@ class History:
                 )
             )
 
-        self._reserve(committed)
+        self._reserve(transaction, committed)
 
-    def record_operation(self, label: TextLike, operation: ReversibleOperation) -> None:
+    def record_operation(self, transaction: Transaction, label: TextLike, operation: ReversibleOperation) -> None:
         """Record a saved change without capturing incidental UI state.
 
-        Call in the action that successfully saved the change. The operation owns
+        Pass the active transaction that successfully saved the change. The operation owns
         authorization, concurrency checks, and its inverse receipt.
         """
         self._reserve(
-            lambda commit: self._push(HistoryEntry(label, commit.context.action_id, UndoPlan(()), operation=operation))
+            transaction,
+            lambda commit: self._push(HistoryEntry(label, commit.context.action_id, UndoPlan(()), operation=operation)),
         )
 
     def accept_committed(
@@ -755,7 +756,7 @@ class History:
             relation=ActionRelation("reverses", entry.original_action_id),
         )
         try:
-            with fresh_action_transaction(action_context=context):
+            with fresh_action_transaction(action_context=context) as tx:
                 planned: list[tuple[ChangeToken[Any], object]] = []
                 for change in entry.undo_plan.participants:
                     inverse = change.token.plan_inverse()
@@ -782,7 +783,7 @@ class History:
                         self._redoable.append(entry)
                     self._signal.notify()
 
-                on_transaction_commit(committed, key=self)
+                tx.after_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
@@ -969,7 +970,7 @@ class History:
             relation=ActionRelation("reapplies", entry.original_action_id),
         )
         try:
-            with fresh_action_transaction(action_context=context):
+            with fresh_action_transaction(action_context=context) as tx:
                 planned: list[tuple[ChangeToken[Any], object]] = []
                 for change in entry.redo_plan.participants:
                     inverse = change.token.plan_inverse()
@@ -994,7 +995,7 @@ class History:
                     self._undone.append(entry)
                     self._signal.notify()
 
-                on_transaction_commit(committed, key=self)
+                tx.after_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
@@ -1039,15 +1040,14 @@ class History:
         self._redoable.clear()
         self._signal.notify()
 
-    def _reserve(self, callback: Callable[[TransactionCommit], None]) -> None:
-        current = CURRENT_TRANSACTION.get()
-        if current is not None and current.readonly:
+    def _reserve(self, transaction: Transaction, callback: Callable[[TransactionCommit], None]) -> None:
+        if transaction.readonly:
             message = "a read-only action changed nothing, so it has nothing to record"
             raise ReactiveWriteError(message)
-        if has_transaction_hook(self):
+        if transaction.has_hook(self):
             message = "this action already used this history; only one history operation is allowed"
             raise HistoryError(message)
-        on_transaction_commit(callback, key=self)
+        transaction.after_commit(callback, key=self)
 
     def _push(self, entry: HistoryEntry) -> None:
         entry.retentions = self._retain_plan(entry.undo_plan)

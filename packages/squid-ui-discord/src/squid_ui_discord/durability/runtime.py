@@ -26,6 +26,7 @@ from uuid import uuid4
 import anyio
 from anyio.abc import TaskStatus
 
+from squid_reactivity import Transaction
 from squid_storage import ClaimToken, DurableSessionStore, SessionRecord
 from squid_ui_discord.delivery import Abandoned, Delivered, MessageDestination
 from squid_ui_discord.message_root import MessageRoot
@@ -334,6 +335,7 @@ class DurableSessionRuntime:
         message_root: MessageRoot,
         message_destination: MessageDestination,
         *,
+        transaction: Transaction | None = None,
         recipe: str,
         key: SessionKey,
         admission: AdmissionSpec = DEFAULT_ADMISSION,
@@ -347,7 +349,8 @@ class DurableSessionRuntime:
 
         Existing occupants remain live until the new record is saved. Discord delivery and
         storage are separate operations: failure after delivery requests cleanup of the new
-        mount, but cannot make its message never have appeared.
+        mount, but cannot make its message never have appeared. Pass the handler transaction
+        to defer retirement of local incumbents until it commits.
         """
         self._require_running()
         if not self.components.has(recipe):

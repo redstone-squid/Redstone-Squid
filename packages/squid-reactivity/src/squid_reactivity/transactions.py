@@ -927,43 +927,6 @@ def readonly_transaction(*, action_context: ActionContext | None = None) -> Iter
         yield handle
 
 
-def on_transaction_commit(callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
-    """Register a synchronous callback for a successful commit.
-
-    Call inside a transaction. Callback failures are reported without changing
-    the result. Open a new transaction for writes; caused_by=result.context links it to this action.
-    """
-    _add_transaction_hook("commit", callback, key=key)
-
-
-def on_transaction_rollback(callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
-    """Register a synchronous callback after rollback; its errors are reported."""
-    _add_transaction_hook("rollback", callback, key=key)
-
-
-def on_transaction_result(callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
-    """Register a synchronous callback for either commit or rollback."""
-    _add_transaction_hook("result", callback, key=key)
-
-
-def _add_transaction_hook(kind: str, callback: Callable[..., None], *, key: object | None) -> None:
-    current = _CURRENT.get()
-    if current is None:
-        message = "commit hooks are only available inside an action's transaction"
-        raise RuntimeError(message)
-    if not current.writable():
-        current.reject_stale("a commit hook")
-    if key is not None and has_transaction_hook(key):
-        message = f"{key!r} already registered a commit hook for this action"
-        raise RuntimeError(message)
-    hooks = {
-        "commit": current.commit_hooks,
-        "rollback": current.rollback_hooks,
-        "result": current.result_hooks,
-    }[kind]
-    hooks.append((key, callback))
-
-
 def enlist[ParticipantT: TransactionParticipant[Any]](
     key: object, factory: Callable[[], ParticipantT]
 ) -> ParticipantT | None:
@@ -984,18 +947,6 @@ def transaction_participant(key: object) -> TransactionParticipant[Any] | None:
     """Return the participant already registered for ``key``, without creating one."""
     current = _CURRENT.get()
     return None if current is None else current.participants.get(key)
-
-
-def has_transaction_hook(key: object) -> bool:
-    """Whether `key` already registered any result hook for the transaction in flight."""
-    current = _CURRENT.get()
-    if current is None:
-        return False
-    return any(
-        registered is key
-        for hooks in (current.commit_hooks, current.rollback_hooks, current.result_hooks)
-        for registered, _ in hooks
-    )
 
 
 @contextmanager

@@ -10,7 +10,9 @@ import anyio
 import pytest
 
 import squid_ui as sl
-from squid_reactivity import on_transaction_commit, on_transaction_rollback, transaction
+from squid_reactivity import (
+    transaction,
+)
 from squid_reactivity.operations import OperationDefinition, Pending, ProgressReporter, Succeeded
 from squid_ui.primitives import Text
 from squid_ui.runtime import History, PostCommitOperation, UIExecutionHost, history
@@ -92,8 +94,8 @@ async def test_model_history_updates_readers_without_a_component_owner() -> None
 
     model = Model()
     runtimes = [mount(lambda: model.label), mount(lambda: model.label)]
-    with transaction():
-        model.edits.record("Increment")
+    with transaction() as tx:
+        model.edits.record(tx, "Increment")
         model.count = 1
     for runtime in runtimes:
         assert runtime.dirty
@@ -121,8 +123,8 @@ async def test_model_history_updates_readers_without_a_component_owner() -> None
 def test_failed_recording_does_not_notify_history_readers() -> None:
     stack = History()
     runtime = mount(lambda: str(stack.can_undo))
-    with pytest.raises(ValueError), transaction():
-        stack.record("Failed")
+    with pytest.raises(ValueError), transaction() as tx:
+        stack.record(tx, "Failed")
         raise ValueError("abort")
     assert not runtime.dirty
     runtime.finish()
@@ -152,8 +154,8 @@ async def test_post_commit_status_is_observable_without_starting_work_from_rende
     async with anyio.create_task_group() as tasks:
         host = UIExecutionHost()
         await tasks.start(host.run)
-        with transaction():
-            on_transaction_commit(lambda commit: handle._commit(commit, host))
+        with transaction() as tx:
+            tx.after_commit(lambda commit: handle._commit(commit, host))
         await started.wait()
         assert runtime.dirty
         tree = runtime.render(reuse_committed=True)
@@ -173,8 +175,8 @@ def test_post_commit_rollback_notifies_status_readers() -> None:
 
     handle = PostCommitOperation(work, name="discard")
     runtime = mount(lambda: str(handle.status))
-    with pytest.raises(ValueError), transaction():
-        on_transaction_rollback(handle._discard)
+    with pytest.raises(ValueError), transaction() as tx:
+        tx.after_rollback(handle._discard)
         raise ValueError("abort")
     assert runtime.dirty
     assert runtime.render(reuse_committed=True).nodes == (Text("Discarded()"),)

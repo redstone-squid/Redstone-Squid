@@ -85,8 +85,8 @@ explicitly removed with `delete_conflicted()`.
 A sibling write to a `Shared` register demonstrates the conditional rule directly:
 
 ```python
-with transaction():
-    history.record("Select project")
+with transaction() as tx:
+    history.record(tx, "Select project")
     workspace.selected = "a"
 
 with transaction():
@@ -106,8 +106,8 @@ immutable snapshots plus semantic methods:
 scope = ReplicatedScope("replica-a")
 document = scope.open("project-7")
 
-with transaction():
-    history.record("vote and tag")
+with transaction() as tx:
+    history.record(tx, "vote and tag")
     document.counter("votes").increment(2)
     document.set("tags").add("mine")
 
@@ -191,6 +191,7 @@ Record an idempotent compensator instead:
 
 ```python
 history.record(
+    event.transaction,
     "Create channel",
     compensate=sl.runtime.CompensationSpec(
         operation=delete_channel,
@@ -218,13 +219,13 @@ Hooks observe an outcome after the transaction is closed. Direct reactive mutati
 recovery is another causally linked action:
 
 ```python
-def present_error(rollback, aftermath) -> None:
-    with aftermath.start_action("Present conflict"):
+def present_error(rollback: TransactionRollback) -> None:
+    with transaction("Present conflict", caused_by=rollback.context):
         panel.error = rollback.reason.value
 
 
-with transaction():
-    on_transaction_rollback(present_error)
+with transaction() as tx:
+    tx.after_rollback(present_error)
     change_project()
 ```
 

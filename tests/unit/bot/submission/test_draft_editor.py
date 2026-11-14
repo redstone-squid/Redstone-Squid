@@ -215,8 +215,8 @@ async def submit_modal(event: Mock, values: dict[str, Any]) -> None:
 async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
     services, drafts = setup()
     first = await open_editor(services, drafts)
-    with transaction():
-        await first.workspace.save_values({"display_name": "Saved name"})
+    with transaction() as tx:
+        await first.workspace.save_values(tx, {"display_name": "Saved name"})
     reopened = await open_editor(services, drafts)
     assert reopened.workspace is not first.workspace
     assert reopened.workspace.draft.snapshot.answers["display_name"] == "Saved name"
@@ -254,8 +254,8 @@ async def test_staff_authority_survives_open_refresh_save_and_submit(
     ws = editor.workspace
     await ws.projection.reload()
     assert await ws.may_edit()
-    with transaction():
-        await ws.save_values({"description": "Staff correction"})
+    with transaction() as tx:
+        await ws.save_values(tx, {"description": "Staff correction"})
     await ws.projection.reload()
     await ws.submit()
 
@@ -273,7 +273,8 @@ async def test_staff_authority_survives_open_refresh_save_and_submit(
     with pytest.raises(DraftAccessDeniedError):
         await ws.reload()
     revision = drafts.current.snapshot.revision
-    await ws.save_values({"description": "No longer authorized"})
+    with sl.runtime.transaction() as tx:
+        await ws.save_values(tx, {"description": "No longer authorized"})
     assert drafts.current.snapshot.revision == revision
 
 
@@ -287,8 +288,8 @@ async def test_undo_resolves_the_current_actor() -> None:
         resolve_actor=resolve_actor,
     )
     await editor.workspace.projection.reload()
-    with transaction():
-        await editor.workspace.save_values({"description": "Correction"})
+    with transaction() as tx:
+        await editor.workspace.save_values(tx, {"description": "Correction"})
     resolve_actor.return_value = Actor(account_id=99)
     drafts.actors.clear()
     with transaction():
@@ -302,10 +303,10 @@ async def test_stale_modal_does_not_overwrite_a_newer_edit() -> None:
     services, drafts = setup()
     ws = (await open_editor(services, drafts)).workspace
     base_revision = ws.draft.snapshot.revision
-    with transaction():
-        await ws.save_values({"display_name": "Newer value"})
-    with transaction():
-        await ws.save_values({"display_name": "Stale modal"}, base_revision=base_revision)
+    with transaction() as tx:
+        await ws.save_values(tx, {"display_name": "Newer value"})
+    with transaction() as tx:
+        await ws.save_values(tx, {"display_name": "Stale modal"}, base_revision=base_revision)
     assert ws.draft.snapshot.answers["display_name"] == "Newer value"
     assert (
         source_text(ws.notice)
@@ -352,15 +353,16 @@ async def test_required_fields_are_counted_until_the_draft_is_ready() -> None:
     assert "Build size" not in text
     assert not find(editor.render(), sl.semantic.ActionControl, key="submit").available
 
-    with transaction():
+    with transaction() as tx:
         await editor.workspace.save_values(
+            tx,
             {
                 "credits": [{"name": "Alice"}],
                 "schematic_visibility": "reviewer_only",
                 "opening_width": 2,
                 "opening_height": 2,
                 "door_orientation": "door",
-            }
+            },
         )
     assert "Ready to submit." in rendered_text(editor)
     assert find(editor.render(), sl.semantic.ActionControl, key="submit").available
@@ -415,8 +417,8 @@ async def test_a_choice_in_an_editor_message_redraws_the_panel() -> None:
 
     assert not panel.runtime.dirty
 
-    with transaction():
-        await child._select_value("patterns", Mock(spec=sd.SelectionEvent, values=("full_lamp",)))
+    with transaction() as tx:
+        await child._select_value("patterns", Mock(spec=sd.SelectionEvent, transaction=tx, values=("full_lamp",)))
 
     # The save went through the shared workspace, so the panel's message is scheduled to redraw.
     assert panel.runtime.dirty
@@ -462,8 +464,8 @@ def test_timings_reject_missing_units_and_nonsense(text: str) -> None:
 async def test_saved_ticks_show_as_seconds_and_prefill_the_modal_losslessly() -> None:
     services, drafts = setup("door")
     editor = await open_editor(services, drafts)
-    with transaction():
-        await editor.workspace.save_values({"opening_time": 7})
+    with transaction() as tx:
+        await editor.workspace.save_values(tx, {"opening_time": 7})
     assert "Opening time: 0.35s" in rendered_text(editor)
     event = press()
     await editor._edit_section("door_timing", event)
@@ -478,8 +480,8 @@ async def test_public_visibility_reveals_required_license_and_permission() -> No
     rights = ws.section("rights_privacy")
     assert rights is not None
     assert [field.id for field in rights.fields] == ["schematic_visibility"]
-    with transaction():
-        await ws.save_values({"schematic_visibility": "public_download"})
+    with transaction() as tx:
+        await ws.save_values(tx, {"schematic_visibility": "public_download"})
     rights = ws.section("rights_privacy")
     assert rights is not None
     assert [field.id for field in rights.fields] == ["schematic_visibility", "schematic_license", "rights_attestation"]
@@ -491,16 +493,16 @@ async def test_picker_opens_on_the_page_of_the_current_choice() -> None:
     drafts.current = replace(drafts.current, origin=SubmissionOrigin.WEB)
     editor = await open_editor(services, drafts)
     # The stub catalogue lists Java 1.30 down to 1.1, so 1.2 is on the second page.
-    with transaction():
-        await editor.workspace.save_values({"source_version": "Java 1.2"})
+    with transaction() as tx:
+        await editor.workspace.save_values(tx, {"source_version": "Java 1.2"})
     child = SectionEditorScreen(editor.workspace, "dimensions_versions")
     text = rendered_text(child)
     assert "Page 2 of 2." in text
     assert "Choices on other pages are kept" not in text
     (select,) = find_all(child.render(), SelectMenu)
     assert [source_text(option.label) for option in select.options if option.default] == ["Java 1.2"]
-    with transaction():
-        await child._select_value("source_version", Mock(spec=sd.SelectionEvent, values=("Java 1.1",)))
+    with transaction() as tx:
+        await child._select_value("source_version", Mock(spec=sd.SelectionEvent, transaction=tx, values=("Java 1.1",)))
     assert editor.workspace.draft.snapshot.answers["source_version"] == "Java 1.1"
     assert "Minecraft version: Java 1.1" in rendered_text(editor)
 
@@ -551,9 +553,9 @@ async def test_preview_draws_partial_facts_and_updates_as_they_are_filled() -> N
     assert isinstance(drawn[-1], DoorBuild)
     assert drawn[-1].orientation is None
 
-    with transaction():
+    with transaction() as tx:
         await editor.workspace.save_values(
-            {"opening_width": 2, "opening_height": 3, "door_orientation": "trapdoor", "patterns": ["full_lamp"]}
+            tx, {"opening_width": 2, "opening_height": 3, "door_orientation": "trapdoor", "patterns": ["full_lamp"]}
         )
     await preview.card.reload()
     assert "card" in rendered_text(preview)
@@ -649,8 +651,8 @@ async def test_changes_made_elsewhere_redraw_the_panel_message() -> None:
     services, drafts = setup("door")
     editor = await open_editor(services, drafts)
     async with sd.testing.stage(editor, owner=object()) as ui:
-        with transaction():
-            await editor.workspace.save_values({"display_name": "Changed elsewhere"})
+        with transaction() as tx:
+            await editor.workspace.save_values(tx, {"display_name": "Changed elsewhere"})
         assert isinstance(ui.root.scheduler, sd.MessageRootScheduler)
         with anyio.fail_after(2):
             await ui.root.scheduler.wait_idle()
@@ -690,8 +692,8 @@ async def test_an_expired_panel_offers_to_reopen_the_draft(monkeypatch: pytest.M
 async def test_answer_history_reverses_saved_values_without_reverting_other_fields() -> None:
     services, drafts = setup()
     editor = await open_editor(services, drafts)
-    with transaction():
-        await editor.workspace.save_values({"display_name": "Saved name"})
+    with transaction() as tx:
+        await editor.workspace.save_values(tx, {"display_name": "Saved name"})
     assert len(editor.workspace.edits.undoable) == 1
     assert await editor.workspace.edits.undo() is not None
     assert drafts.current.snapshot.answers.get("display_name") is None
@@ -751,15 +753,15 @@ async def test_catalogue_search_keeps_selections_outside_the_results() -> None:
     services, drafts = setup()
     editor = await open_editor(services, drafts)
     ws = editor.workspace
-    with transaction():
-        await ws.save_values({"restrictions": ["funnel"]})
+    with transaction() as tx:
+        await ws.save_values(tx, {"restrictions": ["funnel"]})
     child = SectionEditorScreen(ws, "taxonomy")
-    with transaction():
+    with transaction() as tx:
         await child._search_options("restrictions", Mock(spec=sd.SubmitEvent, values={"query": "lamp"}))
-        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, values=("full_lamp",)))
+        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, transaction=tx, values=("full_lamp",)))
     assert ws.stored_answers["restrictions"] == ["funnel", "full_lamp"]
-    with transaction():
-        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, values=()))
+    with transaction() as tx:
+        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, transaction=tx, values=()))
     assert ws.stored_answers["restrictions"] == ["funnel"]
 
 
@@ -775,8 +777,8 @@ async def test_credit_row_edit_keeps_provider_identity_and_evidence() -> None:
         attribution=CreditAttribution.CONFIRMED,
         source_message_id=456,
     )
-    with transaction():
-        await ws.save_values({"credits": [original.to_json()]})
+    with transaction() as tx:
+        await ws.save_values(tx, {"credits": [original.to_json()]})
     child = SectionEditorScreen(ws, "identity")
     revision = ws.revision
     async with stage(child, owner=object()) as ui:
@@ -805,8 +807,8 @@ async def test_credit_reference_form_preserves_existing_evidence(
     editor = await open_editor(services, drafts)
     ws = editor.workspace
     existing = Credit(name="Existing", kind=CreditKind.DISCORD, subject="456", attribution=CreditAttribution.CONFIRMED)
-    with transaction():
-        await ws.save_values({"credits": [existing.to_json()]})
+    with transaction() as tx:
+        await ws.save_values(tx, {"credits": [existing.to_json()]})
     revision = ws.revision
     child = SectionEditorScreen(ws, "identity")
     async with stage(child, owner=object()) as ui:

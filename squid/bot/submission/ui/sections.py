@@ -152,7 +152,9 @@ class AnswerWorkspace(Protocol):
 
     async def load_options(self, fields: Iterable[FormField]) -> None: ...
 
-    async def save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
+    async def save_values(
+        self, transaction: sl.runtime.Transaction, values: Mapping[str, JSONValue], *, base_revision: int | None = None
+    ) -> None:
         """Change several answers as one step; a failure changes none of them and sets `notice`."""
         ...
 
@@ -332,7 +334,7 @@ class SectionEditorScreen(sd.Screen[None]):
             value = [*retained, *event.values]
         else:
             value = event.values[0] if event.values else None
-        await ws.save_values({field.id: value})
+        await ws.save_values(event.transaction, {field.id: value})
 
     async def _turn_page(self, field_id: str, current: int, step: int, event: sd.PressEvent) -> None:
         self.picker_pages = {**self.picker_pages, field_id: max(0, current + step)}
@@ -486,7 +488,7 @@ async def present_chunk_form(ws: AnswerWorkspace, chunk: FormSection, event: sd.
                 values[field.id] = [line.strip() for line in str(raw or "").splitlines() if line.strip()]
             else:
                 values[field.id] = cast(JSONValue, raw)
-        await ws.save_values(values, base_revision=base_revision)
+        await ws.save_values(event.transaction, values, base_revision=base_revision)
 
     entries: list[sl.forms.FormField[Any]] = []
     for field in chunk.fields:

@@ -55,10 +55,10 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     build = _door(version_spec="1.20")
     workspace = editor(build).workspace
 
-    with sl.runtime.transaction():
-        await workspace.save_values({"version_compatibility": "1.21"})
-    with sl.runtime.transaction():
-        await workspace.save_values({"credits": [credit.to_json() for credit in name_credits(["Alice", "Bob"])]})
+    with sl.runtime.transaction() as tx:
+        await workspace.save_values(tx, {"version_compatibility": "1.21"})
+    with sl.runtime.transaction() as tx:
+        await workspace.save_values(tx, {"credits": [credit.to_json() for credit in name_credits(["Alice", "Bob"])]})
 
     assert workspace.patch().attributes() == {"version_spec": "1.21", "credits": name_credits(["Alice", "Bob"])}
     assert build.version_spec == "1.20"
@@ -70,8 +70,8 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
 async def test_an_invalid_value_stages_nothing_and_says_why() -> None:
     workspace = editor(_door()).workspace
 
-    with sl.runtime.transaction():
-        await workspace.save_values({"display_name": "x" * 500})
+    with sl.runtime.transaction() as tx:
+        await workspace.save_values(tx, {"display_name": "x" * 500})
 
     assert workspace.patch().attributes() == {}
     assert "Too long" in sl.text.source_text(workspace.notice)
@@ -112,12 +112,12 @@ async def test_names_outside_the_catalogue_are_listed_and_can_only_be_removed() 
 
     assert "Not in the catalogue: Hand-wired" in rendered(screen)
     # Kept names are written back, so an unrelated save never drops them.
-    with sl.runtime.transaction():
-        await workspace.save_values({"display_name": "Door"})
+    with sl.runtime.transaction() as tx:
+        await workspace.save_values(tx, {"display_name": "Door"})
     assert workspace.patch().miscellaneous_restrictions is UNSET
 
-    with sl.runtime.transaction():
-        workspace.remove_unresolved({"Hand-wired"})
+    with sl.runtime.transaction() as tx:
+        workspace.remove_unresolved(tx, {"Hand-wired"})
 
     assert workspace.unresolved == UnresolvedTaxonomy()
     assert workspace.patch().miscellaneous_restrictions == ["Observerless"]

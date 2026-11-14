@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Unpack, cast
 import anyio
 import discord
 
+from squid_reactivity.transactions import Transaction
 from squid_ui import paragraph
 from squid_ui.runtime.component import Component
 from squid_ui.text import Localization
@@ -238,6 +239,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
                 actor_id=actor_id,
                 parent=parent,
                 session_key=session_key,
+                transaction=None if opening is None else opening._transaction,
             )
             if screen is not None:
                 if isinstance(result, Presented):
@@ -266,6 +268,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         actor_id: int | None,
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
+        transaction: Transaction | None = None,
     ) -> ResponseResult:
         if parent is not None and session_key is not None:
             message = "parent= attaches to an existing session and cannot be combined with session_key="
@@ -323,6 +326,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
                     capture,
                     key=session_key,
                     admission=session_spec.admission,
+                    transaction=transaction,
                     actor_id=actor_id,
                     capacity=session_spec.capacity,
                     quota=session_spec.quota,

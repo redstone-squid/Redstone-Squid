@@ -134,7 +134,9 @@ class BuildEditWorkspace(sl.Reactive):
         if missing:
             self.option_sets = {**self.option_sets, **{source: await self._load_options(source) for source in missing}}
 
-    async def save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
+    async def save_values(
+        self, transaction: sl.runtime.Transaction, values: Mapping[str, JSONValue], *, base_revision: int | None = None
+    ) -> None:
         """Stage several answers as one undoable step; invalid values stage nothing and set `notice`.
 
         Must run inside a UI action, which records the step in `history`.
@@ -148,7 +150,7 @@ class BuildEditWorkspace(sl.Reactive):
         self.staged = {**self.staged, **values}
         self.revision += 1
         self.notice = ""
-        self.history.record(tr(t"build-edit-history-fields = Edit build fields"))
+        self.history.record(transaction, tr(t"build-edit-history-fields = Edit build fields"))
 
     def prefill(self, values: Mapping[str, JSONValue]) -> TextLike | None:
         """Stage answers before the editor is shown, outside history; return why they are invalid, if they are."""
@@ -170,7 +172,7 @@ class BuildEditWorkspace(sl.Reactive):
         ]
         return Text.join("\n", problems) if problems else None
 
-    def remove_unresolved(self, names: Collection[str]) -> None:
+    def remove_unresolved(self, transaction: sl.runtime.Transaction, names: Collection[str]) -> None:
         """Remove names that match no catalogue entry, as one undoable step; must run inside a UI action."""
         current = self.unresolved
         self.unresolved = UnresolvedTaxonomy(
@@ -178,7 +180,7 @@ class BuildEditWorkspace(sl.Reactive):
             patterns=tuple(name for name in current.patterns if name not in names),
         )
         self.revision += 1
-        self.history.record(tr(t"build-edit-history-unlisted = Remove names not in the catalogue"))
+        self.history.record(transaction, tr(t"build-edit-history-unlisted = Remove names not in the catalogue"))
 
     def changed_fields(self) -> frozenset[str]:
         """IDs of fields whose staged answer differs from the saved one."""
@@ -439,7 +441,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
 
     async def _remove_unlisted(self, event: sd.SelectionEvent) -> None:
         if await self._may_event(event):
-            self.workspace.remove_unresolved(event.values)
+            self.workspace.remove_unresolved(event.transaction, event.values)
 
     async def _preview(self, event: sd.PressEvent) -> None:
         preview = deepcopy(self.build)

@@ -16,7 +16,6 @@ from squid_reactivity import (
     TransactionContribution,
     enlist,
     observe_events,
-    on_transaction_commit,
 )
 from squid_reactivity.operations import OperationContext
 from squid_reactivity.transaction_results import (
@@ -96,18 +95,20 @@ def controls(stack: History) -> tuple[ActionControl, ActionControl]:
     return undo, redo
 
 
-def test_record_requires_an_action_and_rejects_old_inverse_shape() -> None:
+def test_record_requires_an_active_handle_and_rejects_old_inverse_shape() -> None:
     subject, _ = panel()
-    with pytest.raises(RuntimeError, match="inside an action"):
-        subject.history.record("nothing")
-    with transaction(), pytest.raises(TypeError):
-        subject.history.record("old", undo=lambda: None)  # type: ignore[call-arg]
+    with transaction() as completed:
+        pass
+    with pytest.raises(RuntimeError, match="inside their transaction"):
+        subject.history.record(completed, "nothing")
+    with transaction() as tx, pytest.raises(TypeError):
+        subject.history.record(tx, "old", undo=lambda: None)  # type: ignore[call-arg]
 
 
 def test_one_entry_captures_the_whole_committed_action() -> None:
     subject, workspace = panel()
-    with transaction():
-        subject.history.record("select")
+    with transaction() as tx:
+        subject.history.record(tx, "select")
         subject.open = True
         workspace.selected = 7
 
@@ -118,16 +119,16 @@ def test_one_entry_captures_the_whole_committed_action() -> None:
 
 def test_one_history_may_only_record_once_per_action() -> None:
     subject, _ = panel()
-    with transaction():
-        subject.history.record("first")
+    with transaction() as tx:
+        subject.history.record(tx, "first")
         with pytest.raises(HistoryError, match="already used"):
-            subject.history.record("second")
+            subject.history.record(tx, "second")
 
 
 async def test_undo_preserves_unrelated_later_work() -> None:
     subject, workspace = panel()
-    with transaction():
-        subject.history.record("select")
+    with transaction() as tx:
+        subject.history.record(tx, "select")
         workspace.selected = 7
     with transaction():
         subject.page = 4
@@ -142,8 +143,8 @@ async def test_undo_preserves_unrelated_later_work() -> None:
 
 async def test_mounted_handler_envelope_starts_a_fresh_undo_action() -> None:
     subject, _ = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 4
 
     with transaction():
@@ -155,8 +156,8 @@ async def test_mounted_handler_envelope_starts_a_fresh_undo_action() -> None:
 
 async def test_fresh_undo_is_rejected_after_outer_handler_staged_work() -> None:
     subject, _ = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 4
 
     with pytest.raises(RuntimeError, match="staged changes"), transaction():
@@ -177,8 +178,8 @@ async def test_fresh_undo_is_rejected_after_outer_handler_staged_work() -> None:
 
 async def test_fresh_redo_is_rejected_after_outer_handler_staged_work() -> None:
     subject, _ = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 4
     assert (await subject.history.undo()).applied
 
@@ -199,8 +200,8 @@ async def test_fresh_redo_is_rejected_after_outer_handler_staged_work() -> None:
 
 async def test_later_same_target_write_conflicts_without_clobbering() -> None:
     subject, workspace = panel()
-    with transaction():
-        subject.history.record("select")
+    with transaction() as tx:
+        subject.history.record(tx, "select")
         workspace.selected = 7
     with transaction():
         workspace.selected = 9
@@ -216,8 +217,8 @@ async def test_later_same_target_write_conflicts_without_clobbering() -> None:
 
 async def test_component_state_undo_checks_intervening_writes() -> None:
     subject, _ = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 4
     with transaction():
         subject.page = 8
@@ -230,8 +231,8 @@ async def test_component_state_undo_checks_intervening_writes() -> None:
 
 async def test_model_state_undo_checks_intervening_writes() -> None:
     subject, workspace = panel()
-    with transaction():
-        subject.history.record("select")
+    with transaction() as tx:
+        subject.history.record(tx, "select")
         workspace.selected = 7
     with transaction():
         workspace.selected = 9
@@ -244,8 +245,8 @@ async def test_model_state_undo_checks_intervening_writes() -> None:
 
 async def test_mixed_inverse_is_all_or_nothing() -> None:
     subject, workspace = panel()
-    with transaction():
-        subject.history.record("open selection")
+    with transaction() as tx:
+        subject.history.record(tx, "open selection")
         subject.open = True
         workspace.selected = 7
     with transaction():
@@ -260,8 +261,8 @@ async def test_mixed_inverse_is_all_or_nothing() -> None:
 
 async def test_redo_is_based_on_the_actual_undo_commit() -> None:
     subject, _ = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 4
 
     undo = await subject.history.undo()
@@ -277,8 +278,8 @@ async def test_redo_is_based_on_the_actual_undo_commit() -> None:
 
 async def test_intervening_write_makes_redo_conflict() -> None:
     subject, _ = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 4
     assert (await subject.history.undo()).applied
     with transaction():
@@ -294,8 +295,8 @@ async def test_absent_slot_keeps_lineage_across_undo_and_reassignment() -> None:
     subject = UnassignedPanel()
     ComponentRuntime(subject)
     # Reading the default here would materialize the cell and lose the absent-slot case.
-    with transaction():
-        subject.history.record("assign")
+    with transaction() as tx:
+        subject.history.record(tx, "assign")
         subject.value = 7
     with transaction():
         subject.value = 9
@@ -309,8 +310,8 @@ async def test_absent_slot_keeps_lineage_across_undo_and_reassignment() -> None:
 async def test_absent_slot_undo_and_redo_use_fresh_versions() -> None:
     subject = UnassignedPanel()
     ComponentRuntime(subject)
-    with transaction():
-        subject.history.record("assign")
+    with transaction() as tx:
+        subject.history.record(tx, "assign")
         subject.value = 7
 
     assert (await subject.history.undo()).applied
@@ -322,12 +323,12 @@ async def test_absent_slot_undo_and_redo_use_fresh_versions() -> None:
 
 async def test_selective_targeting_uses_action_identity() -> None:
     subject, workspace = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 2
     first_id = subject.history.entries[-1].original_action_id
-    with transaction():
-        subject.history.record("select")
+    with transaction() as tx:
+        subject.history.record(tx, "select")
         workspace.selected = 7
 
     result = await subject.history.undo(first_id)
@@ -340,8 +341,8 @@ async def test_selective_targeting_uses_action_identity() -> None:
 def test_limit_snapshot_and_controls_follow_retained_entries() -> None:
     subject, _ = panel()
     for page in range(2, 7):
-        with transaction():
-            subject.history.record(f"page {page}")
+        with transaction() as tx:
+            subject.history.record(tx, f"page {page}")
             subject.page = page
 
     assert [entry.label for entry in subject.history.entries] == ["page 4", "page 5", "page 6"]
@@ -374,8 +375,8 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
             pass
 
     subject, _ = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 4
         enlist(object(), Participant)
 
@@ -388,8 +389,8 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
 
 def test_retained_history_does_not_pin_its_component_owner_graph() -> None:
     subject, workspace = panel()
-    with transaction():
-        subject.history.record("page")
+    with transaction() as tx:
+        subject.history.record(tx, "page")
         subject.page = 2
         workspace.selected = 7
     owner_ref = weakref.ref(subject)
@@ -411,8 +412,9 @@ async def test_failed_compensation_is_truthful_and_retry_gets_new_execution() ->
         if len(calls) == 1:
             raise RuntimeError("service unavailable")
 
-    with transaction():
+    with transaction() as tx:
         subject.history.record(
+            tx,
             "page",
             compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.action_id}"),
         )
@@ -437,8 +439,9 @@ async def test_external_success_then_local_conflict_needs_reconciliation_without
     async def compensate(key: str) -> None:
         calls.append(key)
 
-    with transaction():
+    with transaction() as tx:
         subject.history.record(
+            tx,
             "page",
             compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.action_id}"),
         )
@@ -465,8 +468,8 @@ async def test_compensation_intent_and_local_inverse_are_causal_actions() -> Non
         async def compensate(key: str) -> None:
             pass
 
-        with transaction():
-            subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "page"))
+        with transaction() as tx:
+            subject.history.record(tx, "page", compensate=CompensationSpec(compensate, lambda commit: "page"))
             subject.page = 4
         original = ledger.results[-1]
 
@@ -487,8 +490,8 @@ async def test_fresh_compensation_is_rejected_after_outer_handler_staged_work() 
     async def compensate(key: str) -> None:
         calls.append(key)
 
-    with transaction():
-        subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "page"))
+    with transaction() as tx:
+        subject.history.record(tx, "page", compensate=CompensationSpec(compensate, lambda commit: "page"))
         subject.page = 4
 
     with pytest.raises(RuntimeError, match="staged changes"), transaction():
@@ -513,8 +516,8 @@ async def test_compensation_cancellation_is_retained_and_propagated() -> None:
         started.set()
         await anyio.sleep_forever()
 
-    with transaction():
-        subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "cancel"))
+    with transaction() as tx:
+        subject.history.record(tx, "page", compensate=CompensationSpec(compensate, lambda commit: "cancel"))
         subject.page = 4
 
     async def run() -> None:
@@ -539,8 +542,9 @@ async def test_compensation_retry_policy_stops_new_external_attempts() -> None:
         calls += 1
         raise RuntimeError("unavailable")
 
-    with transaction():
+    with transaction() as tx:
         subject.history.record(
+            tx,
             "page",
             compensate=CompensationSpec(
                 compensate,
@@ -615,10 +619,10 @@ def test_memory_outbox_persists_first_intent_at_the_commit_point() -> None:
     intent = CompensationIntent(context, uuid.uuid7(), "undo:channel", datetime.now(UTC))
     visible_at_commit: list[tuple] = []
 
-    with transaction():
+    with transaction() as tx:
         joined = enlist(outbox, lambda: outbox.participant(intent))
         assert joined is not None
-        on_transaction_commit(lambda commit: visible_at_commit.append(outbox.records))
+        tx.after_commit(lambda commit: visible_at_commit.append(outbox.records))
 
     assert visible_at_commit[0][0].intent == intent
     assert visible_at_commit[0][0].attempts == 0
@@ -649,8 +653,8 @@ async def test_outbox_claim_failure_is_a_truthful_compensation_failure() -> None
         raise AssertionError("claim failed, so external work must not start")
 
     stack = History(compensation_outbox=BrokenOutbox())
-    with transaction():
-        stack.record("page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
+    with transaction() as tx:
+        stack.record(tx, "page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
         subject.page = 4
 
     result = await stack.undo()
@@ -676,8 +680,8 @@ async def test_outbox_failure_after_external_success_needs_reconciliation_before
         calls.append(key)
 
     stack = History(compensation_outbox=BrokenUpdateOutbox())
-    with transaction():
-        stack.record("page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
+    with transaction() as tx:
+        stack.record(tx, "page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
         subject.page = 4
 
     result = await stack.undo()
@@ -691,8 +695,8 @@ async def test_outbox_failure_after_external_success_needs_reconciliation_before
 
 def test_readonly_action_cannot_record_history() -> None:
     subject, _ = panel()
-    with readonly_transaction(), pytest.raises(ReactiveWriteError, match="nothing to record"):
-        subject.history.record("read")
+    with readonly_transaction() as tx, pytest.raises(ReactiveWriteError, match="nothing to record"):
+        subject.history.record(tx, "read")
     assert not subject.history.entries
 
 
@@ -709,9 +713,9 @@ async def test_saved_operation_redoes_actual_inverse_without_restoring_ui_state(
             return Operation(previous)
 
     subject, _ = panel()
-    with transaction():
+    with transaction() as tx:
         subject.page = 3
-        subject.history.record_operation("Save", Operation(1))
+        subject.history.record_operation(tx, "Save", Operation(1))
     assert (await subject.history.undo()).applied
     assert values == [1]
     assert subject.page == 3
@@ -730,8 +734,8 @@ async def test_uncertain_saved_operation_is_not_retried() -> None:
             raise RuntimeError("connection lost after commit")
 
     stack = History()
-    with transaction():
-        stack.record_operation("Save", Operation())
+    with transaction() as tx:
+        stack.record_operation(tx, "Save", Operation())
     result = await stack.undo()
     assert result.status is HistoryResultStatus.NEEDS_RECONCILIATION
     assert await stack.undo() is result

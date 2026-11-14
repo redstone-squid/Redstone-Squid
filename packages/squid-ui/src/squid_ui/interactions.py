@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_reactivity.actions import ActionContext
+from squid_reactivity.transactions import Transaction
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.entity import EntityRef
 from squid_ui.text import TextLike
@@ -110,6 +111,15 @@ class ActionEvent[ContextT = object]:
     locale: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
     context: ContextT = field(kw_only=True)
+    _transaction: Transaction | None = field(default=None, kw_only=True, repr=False)
+
+    @property
+    def transaction(self) -> Transaction:
+        """The handler's transaction, supplied by the dispatcher when it starts the handler."""
+        if self._transaction is None:
+            message = "this event has no handler transaction"
+            raise RuntimeError(message)
+        return self._transaction
 
     async def acknowledge(self) -> None:
         await self.responder.acknowledge()

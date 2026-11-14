@@ -9,10 +9,6 @@ import discord
 
 from squid_reactivity.completion import Completion
 from squid_reactivity.internals import CURRENT_TRANSACTION
-from squid_reactivity.transactions import (
-    on_transaction_commit,
-    on_transaction_rollback,
-)
 from squid_ui.interactions import ActionEvent as PortableActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.tasks import anyio, task_is_within
@@ -263,6 +259,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                                 metadata=fresh.metadata,
                                 context=fresh.context,
                                 value=outcome.value,
+                                _transaction=fresh.transaction,
                             )
                         )
 
@@ -272,7 +269,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                             if not state.closing:
                                 state.outcome = outcome
 
-                        on_transaction_commit(committed)
+                        fresh.transaction.after_commit(committed)
 
                     parent_root = parent._screen_require_root()
                     try:
@@ -293,7 +290,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                 state.pending = False
 
         try:
-            on_transaction_rollback(rolled_back)
+            event.transaction.after_rollback(rolled_back)
             responder.on_success(accept, name=f"{type(self).__qualname__}.resolve")
         except BaseException:
             state.pending = False
@@ -328,7 +325,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
         async def rollback_child() -> None:
             await child._screen_close(ScreenCancelReason.CLOSED)
 
-        on_transaction_rollback(lambda *_args: host.start_cleanup(rollback_child))
+        event.transaction.after_rollback(lambda *_args: host.start_cleanup(rollback_child))
         try:
             result = await event.context.respond(child, **overrides)
         except BaseException as error:

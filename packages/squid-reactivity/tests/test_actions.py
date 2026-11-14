@@ -28,8 +28,6 @@ from squid_reactivity import (
     computed,
     enlist,
     observe_events,
-    on_transaction_commit,
-    on_transaction_rollback,
     readonly_transaction,
     relaxed_read,
     state,
@@ -91,13 +89,13 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
     preferences = Preferences()
     seen: list[tuple[str, str]] = []
 
-    with pytest.raises(RuntimeError, match="failed"), transaction():
+    with pytest.raises(RuntimeError, match="failed"), transaction() as tx:
         preferences.theme = "dark"
 
         def observe(rollback) -> None:
             seen.append((rollback.reason.value, preferences.theme))
 
-        on_transaction_rollback(observe)
+        tx.after_rollback(observe)
         raise RuntimeError("failed")
 
     assert seen == [("handler_exception", "system")]
@@ -157,8 +155,8 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
     assume(later_value is None or later_value != committed_value)
     counter = Counter()
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         counter.value = committed_value
     inverse = commits[0].patches.inverse()
 
@@ -177,8 +175,8 @@ def test_retained_patch_uses_weak_slot_authority() -> None:
     counter = LocalCounter()
     owner = weakref.ref(counter)
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         counter.value = 1
     inverse = commits[0].patches.inverse()
 
@@ -243,8 +241,8 @@ def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) 
     def fail(commit) -> None:
         raise RuntimeError("hook failed")
 
-    with caplog.at_level(logging.ERROR), transaction():
-        on_transaction_commit(fail)
+    with caplog.at_level(logging.ERROR), transaction() as tx:
+        tx.after_commit(fail)
         preferences.theme = "dark"
 
     assert preferences.theme == "dark"
@@ -258,8 +256,8 @@ def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
         def fail(commit) -> None:
             raise RuntimeError("secret hook detail")
 
-        with transaction():
-            on_transaction_commit(fail)
+        with transaction() as tx:
+            tx.after_commit(fail)
 
         assert len(ledger.results) == 1
         failure = ledger.events[-1]
@@ -343,8 +341,8 @@ def test_continuation_direct_mutation_is_rejected() -> None:
         except Exception as error:
             errors.append(error)
 
-    with transaction():
-        on_transaction_commit(mutate)
+    with transaction() as tx:
+        tx.after_commit(mutate)
         preferences.theme = "dark"
 
     assert len(errors) == 1
@@ -361,8 +359,8 @@ def test_continuation_recovery_is_a_fresh_causally_linked_action() -> None:
             with transaction("present error", caused_by=rollback.context):
                 preferences.theme = "recovered"
 
-        with pytest.raises(RuntimeError), transaction():
-            on_transaction_rollback(recover)
+        with pytest.raises(RuntimeError), transaction() as tx:
+            tx.after_rollback(recover)
             raise RuntimeError("failed")
 
         assert preferences.theme == "recovered"
@@ -399,8 +397,8 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     ledger = EventLedger()
     rollbacks: list[TransactionRollback] = []
     with observe_events(ledger):
-        with pytest.raises(RuntimeError), transaction(action_context=context):
-            on_transaction_rollback(lambda rollback: rollbacks.append(rollback))
+        with pytest.raises(RuntimeError), transaction(action_context=context) as tx:
+            tx.after_rollback(lambda rollback: rollbacks.append(rollback))
             raise RuntimeError("private failure message")
 
         snapshot = ledger.results[0]

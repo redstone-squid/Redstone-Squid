@@ -5,7 +5,11 @@ import uuid
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid_reactivity import ConflictDetail, TransactionCommit, on_transaction_commit, transaction
+from squid_reactivity import (
+    ConflictDetail,
+    TransactionCommit,
+    transaction,
+)
 from squid_replication import LoroBackend, PreparedReplicationInverse, Replica, ReplicatedDocument
 
 
@@ -64,8 +68,8 @@ def test_semantic_inverse_preserves_later_remote_sequence_and_commutative_work(
 ) -> None:
     local, remote, _ = _documents()
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         local.counter("votes").increment(local_amount)
         local.set("tags").add("mine")
         local.text("title").insert(0, "A")
@@ -95,8 +99,8 @@ def test_causally_later_register_write_always_conflicts_the_earlier_action(
 ) -> None:
     local, remote, _ = _documents()
     commits: list[TransactionCommit] = []
-    with transaction():
-        on_transaction_commit(lambda commit: commits.append(commit))
+    with transaction() as tx:
+        tx.after_commit(lambda commit: commits.append(commit))
         local.map("settings").set("mode", local_value)
     remote.import_update(local.export_since())
     with transaction():

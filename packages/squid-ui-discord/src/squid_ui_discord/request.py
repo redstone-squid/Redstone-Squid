@@ -19,6 +19,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid_reactivity.transactions import Transaction
 from squid_ui import paragraph
 from squid_ui.forms import FormSpec
 from squid_ui.interactions import ActionEvent
@@ -111,6 +112,7 @@ class Request[OwnerT = Any, ClientT: discord.Client = discord.Client]:
     _guild: discord.Guild | None
     root: MessageRoot | None = None
     """The message root whose control raised this request, when it came from a click."""
+    _transaction: Transaction | None = None
     _responses: int = 0
     _deferred: Deferral | None = None
     _form_opened: bool = False

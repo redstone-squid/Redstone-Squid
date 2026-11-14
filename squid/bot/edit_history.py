@@ -37,6 +37,7 @@ class _LocalEdit[ValueT]:
 
 def _record_local_edit[ValueT](
     stack: sl.runtime.History,
+    transaction: sl.runtime.Transaction,
     label: sl.TextLike,
     before: ValueT,
     after: ValueT,
@@ -48,7 +49,7 @@ def _record_local_edit[ValueT](
 ) -> None:
     """Capture widget values after a local transition."""
     if before != after:
-        stack.record_operation(label, _LocalEdit(target, after, before, authorize, replace, refresh))
+        stack.record_operation(transaction, label, _LocalEdit(target, after, before, authorize, replace, refresh))
 
 
 async def apply_history(stack: sl.runtime.History, event: sl.PressEvent, *, redo: bool = False) -> None:
@@ -120,6 +121,7 @@ def track_local_edits[StateT, ValueT](
         if enabled():
             _record_local_edit(
                 stack,
+                event.source.transaction,
                 label,
                 select(event.previous),
                 select(event.state),

@@ -148,17 +148,17 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
             )
         return tuple(nodes)
 
-    async def _save(self, credits: tuple[Credit, ...], revision: int) -> None:
+    async def _save(self, transaction: sl.runtime.Transaction, credits: tuple[Credit, ...], revision: int) -> None:
         await self.workspace.save_values(
-            {self.field_id: [credit.to_json() for credit in credits]}, base_revision=revision
+            transaction, {self.field_id: [credit.to_json() for credit in credits]}, base_revision=revision
         )
 
     async def _edit(self, credits: tuple[Credit, ...], index: int, revision: int, event: sd.SubmitEvent) -> None:
         changed = edit_credit(credits[index], str(event.values["name"]), cast(CreditRole, event.values["role"]))
-        await self._save((*credits[:index], changed, *credits[index + 1 :]), revision)
+        await self._save(event.transaction, (*credits[:index], changed, *credits[index + 1 :]), revision)
 
-    async def _remove(self, credits: tuple[Credit, ...], index: int, revision: int, _event: sd.PressEvent) -> None:
-        await self._save((*credits[:index], *credits[index + 1 :]), revision)
+    async def _remove(self, credits: tuple[Credit, ...], index: int, revision: int, event: sd.PressEvent) -> None:
+        await self._save(event.transaction, (*credits[:index], *credits[index + 1 :]), revision)
 
     async def _add(self, credits: tuple[Credit, ...], revision: int, event: sd.SubmitEvent) -> None:
         kind = cast(CreditKind, event.values["kind"])
@@ -169,7 +169,7 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
             username=name if kind is not CreditKind.NAME else None,
             role=cast(CreditRole, event.values["role"]),
         )
-        await self._save((*credits, credit), revision)
+        await self._save(event.transaction, (*credits, credit), revision)
 
     async def _add_discord(self, credits: tuple[Credit, ...], revision: int, event: sd.SubmitEvent) -> None:
         user = cast(discord.User | discord.Member, event.values["user"])
@@ -180,7 +180,7 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
             subject=str(user.id),
             role=cast(CreditRole, event.values["role"]),
         )
-        await self._save((*credits, credit), revision)
+        await self._save(event.transaction, (*credits, credit), revision)
 
     async def _add_reference(self, credits: tuple[Credit, ...], revision: int, event: sd.SubmitEvent) -> None:
         form = _IdentityReferenceForm.from_submission(event)
@@ -192,9 +192,9 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
             subject=None if username else form.reference.strip(),
             role=form.role,
         )
-        await self._save((*credits, credit), revision)
+        await self._save(event.transaction, (*credits, credit), revision)
 
-    async def _page(self, page: int, _event: sd.PressEvent) -> None:
+    async def _page(self, page: int, event: sd.PressEvent) -> None:
         self.page = max(0, page)
 
 

@@ -170,7 +170,7 @@ class BuildForm(sl.forms.Form):
             ticks=self.ticks,
             description=self.description,
         )
-        self.history.record(tr(t"layout-workbench-edit-build = Edit build"))
+        self.history.record(event.transaction, tr(t"layout-workbench-edit-build = Edit build"))
 
 
 class Workbench(InspectablePanel):
@@ -369,10 +369,10 @@ class BuildPreview(InspectablePanel):
         # Preserve the rendered intent if another editor changes the set before this press arrives.
         if selected:
             self.draft.tags.discard(tag)
-            self.history.record(md_tr(t"layout-workbench-remove-tag = Remove {tag}"))
+            self.history.record(event.transaction, md_tr(t"layout-workbench-remove-tag = Remove {tag}"))
         else:
             self.draft.tags.add(tag)
-            self.history.record(md_tr(t"layout-workbench-add-tag = Add {tag}"))
+            self.history.record(event.transaction, md_tr(t"layout-workbench-add-tag = Add {tag}"))
 
 
 def history_outcome(verb: str, result: sl.runtime.HistoryResult) -> str:

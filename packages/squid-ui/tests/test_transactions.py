@@ -16,7 +16,6 @@ from squid_reactivity.transaction_results import (
 )
 from squid_reactivity.transactions import (
     block_writes,
-    on_transaction_commit,
     readonly_transaction,
 )
 from squid_ui import Component, DiscordTarget, computed, state
@@ -187,8 +186,8 @@ class TestStaging:
         panel = attached(Panel(Uncopyable()))
         panel.declared = 1
         seen: list[TransactionCommit] = []
-        with transaction():
-            on_transaction_commit(lambda commit: seen.append(commit))
+        with transaction() as tx:
+            tx.after_commit(lambda commit: seen.append(commit))
             panel.declared = 2
             panel.declared = 3
         (commit,) = seen
@@ -471,8 +470,8 @@ class TestTransactionCommitHooks:
         panel = attached(Panel(Uncopyable()))
         assert panel.declared == 0
         seen: list[TransactionCommit] = []
-        with transaction():
-            on_transaction_commit(lambda commit: seen.append(commit))
+        with transaction() as tx:
+            tx.after_commit(lambda commit: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -482,8 +481,8 @@ class TestTransactionCommitHooks:
         """Its slot is materialized lazily, so restoring it means popping it again."""
         panel = attached(Panel(Uncopyable()))
         seen: list[TransactionCommit] = []
-        with transaction():
-            on_transaction_commit(lambda commit: seen.append(commit))
+        with transaction() as tx:
+            tx.after_commit(lambda commit: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -492,8 +491,8 @@ class TestTransactionCommitHooks:
     def test_a_rollback_runs_no_hooks(self):
         panel = attached(Panel(Uncopyable()))
         seen: list[TransactionCommit] = []
-        with pytest.raises(RuntimeError), transaction():
-            on_transaction_commit(lambda commit: seen.append(commit))
+        with pytest.raises(RuntimeError), transaction() as tx:
+            tx.after_commit(lambda commit: seen.append(commit))
             panel.declared = 7
             message = "the action failed"
             raise RuntimeError(message)
@@ -503,8 +502,8 @@ class TestTransactionCommitHooks:
         service = Uncopyable()
         panel = attached(Panel(service))
         seen: list[TransactionCommit] = []
-        with transaction():
-            on_transaction_commit(lambda commit: seen.append(commit))
+        with transaction() as tx:
+            tx.after_commit(lambda commit: seen.append(commit))
             panel.service = Uncopyable()
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -512,10 +511,10 @@ class TestTransactionCommitHooks:
 
     def test_one_key_registers_once(self):
         key = object()
-        with transaction():
-            on_transaction_commit(lambda commit: None, key=key)
+        with transaction() as tx:
+            tx.after_commit(lambda commit: None, key=key)
             with pytest.raises(RuntimeError, match="already registered"):
-                on_transaction_commit(lambda commit: None, key=key)
+                tx.after_commit(lambda commit: None, key=key)
 
     def test_blocked_writes_name_their_reason(self):
         panel = attached(Panel(Uncopyable()))
@@ -723,8 +722,8 @@ class TestCommitFailures:
             message = "the recorder failed"
             raise RuntimeError(message)
 
-        with transaction():
-            on_transaction_commit(explode)
+        with transaction() as tx:
+            tx.after_commit(explode)
             panel.declared = 7
         assert panel.declared == 7
         assert panel.notified == [frozenset({"__state_declared"})]
@@ -733,8 +732,8 @@ class TestCommitFailures:
         """Hooks run after participant finalization, when published state is already visible."""
         log: list[str] = []
         panel = watched()
-        with transaction():
-            on_transaction_commit(lambda commit: log.append("hook"))
+        with transaction() as tx:
+            tx.after_commit(lambda commit: log.append("hook"))
             enlist(object(), lambda: Recorder(log, "a"))
             panel.declared = 7
         assert log == ["a.prepare", "a.apply", "a.finalize", "hook"]

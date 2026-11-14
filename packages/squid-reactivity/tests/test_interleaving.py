@@ -16,7 +16,6 @@ from squid_reactivity import (
     TransactionParticipant,
     enlist,
     observe_events,
-    on_transaction_commit,
     state,
     strong_read,
     transaction,
@@ -111,8 +110,8 @@ def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> N
         assert schedule.seen.index("commit.before_participant_prepare") < schedule.seen.index("rollback.before_abort")
 
         hook_schedule = InterleavingHarness()
-        with hook_schedule.installed(), transaction():
-            on_transaction_commit(lambda commit: (_ for _ in ()).throw(RuntimeError("hook")))
+        with hook_schedule.installed(), transaction() as tx:
+            tx.after_commit(lambda commit: (_ for _ in ()).throw(RuntimeError("hook")))
         assert "continuation.before_hook" in hook_schedule.seen
 
 

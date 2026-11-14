@@ -143,7 +143,8 @@ async def test_operation_observes_commit_and_shares_history_causality_without_re
 
     async def handler(panel: Panel, event: ActionEvent) -> None:
         events.append(event)
-        panel.history.record("Save")
+        assert event.transaction.result is None
+        panel.history.record(event.transaction, "Save")
         panel.value = 1
 
         async def callback() -> int:
@@ -172,6 +173,7 @@ async def test_operation_observes_commit_and_shares_history_causality_without_re
         assert operation.context is not None
         commit = panel.history.entries[0].original_commit
         assert commit is not None
+        assert events[0].transaction.result is commit
         assert operation.context.cause == commit.context.causal_ref()
         emitted = [item for item in ledger.events if isinstance(item, OperationEventSnapshot)]
         assert [item.status for item in emitted] == ["started", "succeeded"]
