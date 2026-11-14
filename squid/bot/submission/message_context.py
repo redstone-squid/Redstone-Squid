@@ -16,7 +16,7 @@ import discord
 
 from squid.bot.submission.attachments import classify_attachment
 from squid.bot.utils.web import extract_first_frame
-from squid.builds.application import BuildInferenceInput, ContextMessage, InlineImage
+from squid.builds.application import BuildInferenceInput, ContextIdentity, ContextMessage, InlineImage
 from squid.core.errors import SquidError
 
 logger = logging.getLogger(__name__)
@@ -210,7 +210,9 @@ def _normalize(message: discord.Message, kind: Literal["primary", "reply_parent"
         message_id=message.id,
         author_name=message.author.display_name,
         author_id=message.author.id,
-        content=message.clean_content,
+        content=message.content,
+        author_username=message.author.name,
+        mentions=tuple(ContextIdentity(user.id, user.display_name, user.name) for user in message.mentions),
         timestamp=message.created_at.isoformat(),
         kind=kind,
         attachment_summary=_attachment_summary(message),

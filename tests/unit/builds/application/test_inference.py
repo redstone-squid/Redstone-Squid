@@ -10,12 +10,14 @@ from pydantic import BaseModel
 from squid.builds.application import (
     BuildInferenceInput,
     BuildInferenceService,
+    ContextIdentity,
     ContextMessage,
     InferenceResult,
     InferredBuild,
     InlineImage,
 )
 from squid.builds.domain import RestrictionTypeLiteral
+from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
 from squid.submissions.application.forms import build_submission_manifest
 from squid.submissions.application.prefill import project_submission
 from squid.submissions.domain import SubmissionOrigin
@@ -40,7 +42,10 @@ def inferred(**overrides: Any) -> InferredBuild:
         "build_depth": 10,
         "opening_time": {"value": "1.0s", "qualifier": None},
         "closing_time": {"value": "0.5s", "qualifier": None},
-        "creators": ["BuilderOne", "BuilderTwo"],
+        "credits": [
+            {"name": name, "kind": "name", "role": "creator", "source_message_id": 10}
+            for name in ["BuilderOne", "BuilderTwo"]
+        ],
         "version_spec": "1.20+",
         "author_notes": [],
         "confidence": "high",
@@ -452,3 +457,64 @@ async def test_author_notes_preserve_explicit_changes_and_requirements_without_r
 
     assert build.description == f"{change}\n{requirement}\n{fix}"
     assert prefill.answers["description"] == build.description
+
+
+def test_missing_creator_uses_a_marked_discord_sender_credit() -> None:
+    credits = BuildInferenceService._credits(inferred(credits=[]), source().primary)
+    assert credits == [
+        Credit(
+            name="Builder",
+            kind=CreditKind.DISCORD,
+            subject="20",
+            attribution=CreditAttribution.ASSUMED_SENDER,
+            source_message_id=10,
+        )
+    ]
+
+
+def test_explicit_names_and_contributions_do_not_become_minecraft_usernames() -> None:
+    value = inferred(
+        credits=[
+            {"name": "Alice", "kind": "name", "role": "creator", "source_message_id": 10},
+            {"name": "Bob", "kind": "name", "role": "layout", "source_message_id": 10},
+        ]
+    )
+    credits = BuildInferenceService._credits(value, source().primary)
+    assert [(credit.name, credit.kind, credit.role) for credit in credits] == [
+        ("Alice", CreditKind.NAME, CreditRole.CREATOR),
+        ("Bob", CreditKind.NAME, CreditRole.LAYOUT),
+    ]
+    assert all(credit.subject is None and credit.username is None for credit in credits)
+
+
+def test_only_observed_discord_ids_can_resolve_to_an_account() -> None:
+    message = ContextMessage(
+        10,
+        "Poster",
+        20,
+        "By <@30> with help from Else",
+        "",
+        "primary",
+        mentions=(ContextIdentity(30, "Alice", "alice_d"),),
+    )
+    value = inferred(
+        credits=[
+            {"name": "wrong snapshot", "kind": "discord", "subject": "30", "role": "creator", "source_message_id": 10},
+            {"name": "Else", "kind": "discord", "subject": "999", "role": "contributor", "source_message_id": 10},
+        ]
+    )
+    credits = BuildInferenceService._credits(value, [message])
+    assert (credits[0].name, credits[0].username, credits[0].subject) == ("Alice", "alice_d", "30")
+    assert credits[1].subject is None
+
+
+def test_contributor_only_keeps_the_sender_assumption_and_other_build_sources_are_ignored() -> None:
+    value = inferred(
+        credits=[
+            {"name": "Bob", "kind": "name", "role": "contributor", "source_message_id": 10},
+            {"name": "Other build", "kind": "name", "role": "creator", "source_message_id": 999},
+        ]
+    )
+    credits = BuildInferenceService._credits(value, source().primary)
+    assert [credit.name for credit in credits] == ["Builder", "Bob"]
+    assert credits[0].attribution is CreditAttribution.ASSUMED_SENDER

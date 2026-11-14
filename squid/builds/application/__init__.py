@@ -5,6 +5,7 @@ from squid.builds.application.embeddings import BuildEmbeddingService
 from squid.builds.application.inference import (
     BuildInferenceInput,
     BuildInferenceService,
+    ContextIdentity,
     ContextMessage,
     InferenceResult,
     InferredBuild,
@@ -38,6 +39,7 @@ __all__ = [
     "BuildQueryService",
     "BuildService",
     "BuildSortField",
+    "ContextIdentity",
     "ContextMessage",
     "InferenceResult",
     "InferredBuild",

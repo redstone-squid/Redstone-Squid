@@ -18,6 +18,7 @@ from squid.builds.domain import (
     UnresolvedTaxonomy,
     parse_time_string,
 )
+from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
 from squid.builds.models import BuildLink
 from squid.core.concurrency import run_all_awaitables
 from squid.messages.domain import MessageSnapshot
@@ -55,6 +56,19 @@ class InferredAuthorNote(BaseModel):
     text: str = Field(description="A verbatim excerpt from that primary message; never a summary or a computed change.")
 
 
+class InferredCredit(BaseModel):
+    """A source-stated contribution, without guessing the identity's namespace."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    kind: CreditKind
+    role: CreditRole
+    source_message_id: int
+    username: str | None = None
+    subject: str | None = None
+
+
 class InferredBuild(BaseModel):
     """One build described by some of the primary messages in a bundle."""
 
@@ -76,7 +90,7 @@ class InferredBuild(BaseModel):
     build_depth: int | None = Field(description="Enclosing depth, including an explicit WxHxD on a Volume line.")
     opening_time: InferredTiming | None
     closing_time: InferredTiming | None
-    creators: list[str]
+    credits: list[InferredCredit]
     version_spec: str | None
     author_notes: list[InferredAuthorNote] = Field(
         description=(
@@ -108,6 +122,15 @@ class InferenceResult(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
+class ContextIdentity:
+    """Discord identity observed in a message's author or mention metadata."""
+
+    user_id: int
+    name: str
+    username: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ContextMessage:
     """One normalized Discord message supplied to inference."""
 
@@ -118,6 +141,8 @@ class ContextMessage:
     timestamp: str
     kind: Literal["primary", "reply_parent", "preceding"]
     attachment_summary: str = ""
+    author_username: str | None = None
+    mentions: tuple[ContextIdentity, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,8 +299,56 @@ class BuildInferenceService:
             )
             await self._apply_taxonomy(build, inferred)
             await self._apply_fields(build, inferred)
+            build.credits = self._credits(inferred, resolved)
             builds.append(build)
         return builds
+
+    @staticmethod
+    def _credits(inferred: InferredBuild, messages: Sequence[ContextMessage]) -> list[Credit]:
+        by_id = {message.message_id: message for message in messages}
+        credits: list[Credit] = []
+        for value in inferred.credits:
+            message = by_id.get(value.source_message_id)
+            if message is None:
+                continue
+            subject = value.subject
+            name, username = value.name, value.username
+            if value.kind is CreditKind.DISCORD:
+                known = (
+                    ContextIdentity(message.author_id, message.author_name, message.author_username),
+                    *message.mentions,
+                )
+                identity = next((person for person in known if str(person.user_id) == subject), None)
+                if identity is None:
+                    subject = None
+                else:
+                    name, username = identity.name, identity.username
+            elif subject is not None and subject not in message.content:
+                subject = None
+            credit = Credit(
+                name=name,
+                kind=value.kind,
+                role=value.role,
+                username=username,
+                subject=subject,
+                source_message_id=message.message_id,
+            )
+            if credit not in credits:
+                credits.append(credit)
+        if not any(credit.role in {CreditRole.CREATOR, CreditRole.DESIGNER} for credit in credits):
+            sender = messages[0]
+            credits.insert(
+                0,
+                Credit(
+                    name=sender.author_name,
+                    username=sender.author_username,
+                    kind=CreditKind.DISCORD,
+                    subject=str(sender.author_id),
+                    attribution=CreditAttribution.ASSUMED_SENDER,
+                    source_message_id=sender.message_id,
+                ),
+            )
+        return credits
 
     @staticmethod
     def _render_user_message(source: BuildInferenceInput) -> str:
@@ -284,6 +357,10 @@ class BuildInferenceService:
                 "id": str(message.message_id),
                 "author": message.author_name,
                 "author_id": str(message.author_id),
+                "author_username": message.author_username or "",
+                "mentions": "; ".join(
+                    f"{person.user_id}: {person.username or person.name} ({person.name})" for person in message.mentions
+                ),
                 "kind": message.kind,
                 "timestamp": message.timestamp,
                 "attachments": message.attachment_summary,
@@ -371,7 +448,6 @@ class BuildInferenceService:
                 # Keep qualifications and unparseable measurements through form prefill,
                 # which carries the description but not arbitrary extra_info metadata.
                 notes.append(f"{label}: {'; '.join(part for part in (timing.value, timing.qualifier) if part)}")
-        build.creators_ign = inferred.creators
         build.version_spec = (inferred.version_spec or "").strip() or None
         if build.version_spec is not None:
             try:
