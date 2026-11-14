@@ -72,3 +72,28 @@ with their item. The [joint region API](squid-ui-quickstart.md#joint-page-region
 explains identity, page ownership, and allocation diagnostics. Legacy keyed
 `Document` root pagination retains its existing restriction on local pagers;
 a tree of regions supplies the joint alternative.
+
+## Addressable destinations
+
+The bot's `ScreenRouter` resolves a destination into a fresh screen using the opening
+request's identity and services. `/open address` is an unadvertised entrypoint; screens
+have no address-sharing controls. Supported addresses are `/builds`, `/builds/{build_id}`,
+`/drafts`, `/drafts?inbox=true`, `/drafts/{draft_id}`, `/account`, and `/account?tab=claims`
+(or another existing account tab). Account and draft-list addresses refer to the opener.
+
+Declare addresses on Screen classes with `@screen_route`, using a frozen destination
+dataclass. One class may declare several destinations. The decorator preserves the class
+and attaches metadata only; subclasses do not inherit declarations. Bind each destination
+to an async factory in `navigation.assembly.build_screen_router`, then freeze the router.
+
+Factories receive `(request, destination)` and return `ScreenOpening`, containing an
+`sd.Response` and an optional session key. They load current data and check access. They
+may return a static error response, or `None` when an existing consent interaction has
+handled the request. They must construct fresh screens and leave delivery to the caller.
+`resolve` only calls the factory; `open` also delivers through the request's existing scope.
+Existing screen session policies still decide whether an older presentation is replaced.
+
+Persistent destination buttons use the existing Discord control router and delegate to
+`request.client.screen_router`. Keep these component IDs separate from screen addresses:
+old buttons remain compatibility entrypoints, while addresses describe destinations.
+Neither carries permission grants, callbacks, unsaved form state, or navigation history.
