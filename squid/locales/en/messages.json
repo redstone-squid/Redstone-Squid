@@ -3453,7 +3453,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/render.py:25"
+      "squid/bot/starboard/render.py:26"
     ]
   },
   "bot-starboard-render-original-message": {
@@ -3462,7 +3462,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/render.py:48"
+      "squid/bot/starboard/render.py:49"
     ]
   },
   "bot-starboard-render-reactions": {
@@ -3477,7 +3477,7 @@
       }
     ],
     "locations": [
-      "squid/bot/starboard/render.py:54"
+      "squid/bot/starboard/render.py:55"
     ]
   },
   "bot-starboard-render-replying-to-message": {
@@ -3492,7 +3492,7 @@
       }
     ],
     "locations": [
-      "squid/bot/starboard/render.py:36"
+      "squid/bot/starboard/render.py:37"
     ]
   },
   "bot-starboard-screen-add-or-replace": {
@@ -3501,7 +3501,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:417"
+      "squid/bot/starboard/screen.py:422"
     ]
   },
   "bot-starboard-screen-boards": {
@@ -3528,7 +3528,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:357"
+      "squid/bot/starboard/screen.py:362"
     ]
   },
   "bot-starboard-screen-choose-starboard-to-delete": {
@@ -3537,7 +3537,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:405"
+      "squid/bot/starboard/screen.py:410"
     ]
   },
   "bot-starboard-screen-create": {
@@ -3556,7 +3556,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/starboard/screen.py:151",
-      "squid/bot/starboard/screen.py:384"
+      "squid/bot/starboard/screen.py:389"
     ]
   },
   "bot-starboard-screen-created-starboard": {
@@ -3608,7 +3608,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:388"
+      "squid/bot/starboard/screen.py:393"
     ]
   },
   "bot-starboard-screen-direction": {
@@ -3617,7 +3617,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:423"
+      "squid/bot/starboard/screen.py:428"
     ]
   },
   "bot-starboard-screen-down": {
@@ -3626,7 +3626,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:427"
+      "squid/bot/starboard/screen.py:432"
     ]
   },
   "bot-starboard-screen-edit-emoji": {
@@ -3662,7 +3662,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:394"
+      "squid/bot/starboard/screen.py:399"
     ]
   },
   "bot-starboard-screen-emoji": {
@@ -3671,7 +3671,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:421"
+      "squid/bot/starboard/screen.py:426"
     ]
   },
   "bot-starboard-screen-emojis": {
@@ -3681,7 +3681,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/starboard/screen.py:118",
-      "squid/bot/starboard/screen.py:360"
+      "squid/bot/starboard/screen.py:365"
     ]
   },
   "bot-starboard-screen-loading-starboards": {
@@ -3699,7 +3699,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:430"
+      "squid/bot/starboard/screen.py:435"
     ]
   },
   "bot-starboard-screen-name": {
@@ -3708,7 +3708,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:386"
+      "squid/bot/starboard/screen.py:391"
     ]
   },
   "bot-starboard-screen-operation": {
@@ -3717,7 +3717,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:415"
+      "squid/bot/starboard/screen.py:420"
     ]
   },
   "bot-starboard-screen-post-threshold": {
@@ -3726,8 +3726,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:358",
-      "squid/bot/starboard/screen.py:390"
+      "squid/bot/starboard/screen.py:363",
+      "squid/bot/starboard/screen.py:395"
     ]
   },
   "bot-starboard-screen-removal-threshold": {
@@ -3736,7 +3736,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:359"
+      "squid/bot/starboard/screen.py:364"
     ]
   },
   "bot-starboard-screen-remove": {
@@ -3745,7 +3745,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:418"
+      "squid/bot/starboard/screen.py:423"
     ]
   },
   "bot-starboard-screen-role-id": {
@@ -3754,7 +3754,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:437"
+      "squid/bot/starboard/screen.py:442"
     ]
   },
   "bot-starboard-screen-role-weights": {
@@ -3772,7 +3772,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:398"
+      "squid/bot/starboard/screen.py:403"
     ]
   },
   "bot-starboard-screen-settings": {
@@ -3808,10 +3808,10 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:396",
-      "squid/bot/starboard/screen.py:407",
-      "squid/bot/starboard/screen.py:413",
-      "squid/bot/starboard/screen.py:436"
+      "squid/bot/starboard/screen.py:401",
+      "squid/bot/starboard/screen.py:412",
+      "squid/bot/starboard/screen.py:418",
+      "squid/bot/starboard/screen.py:441"
     ]
   },
   "bot-starboard-screen-starboards": {
@@ -3829,7 +3829,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:426"
+      "squid/bot/starboard/screen.py:431"
     ]
   },
   "bot-starboard-screen-value": {
@@ -3838,7 +3838,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:401"
+      "squid/bot/starboard/screen.py:406"
     ]
   },
   "bot-submission-build-browse-approve": {
@@ -10396,7 +10396,7 @@
       }
     ],
     "locations": [
-      "squid/bot/errors.py:244"
+      "squid/bot/errors.py:249"
     ]
   },
   "events-claim-limit-out-of-range": {
@@ -15645,7 +15645,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:411"
+      "squid/bot/starboard/screen.py:416"
     ]
   },
   "starboard-history-create": {
@@ -15718,7 +15718,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:434"
+      "squid/bot/starboard/screen.py:439"
     ]
   },
   "starboard-role-multiplier-help": {
@@ -15727,7 +15727,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:439"
+      "squid/bot/starboard/screen.py:444"
     ]
   },
   "starboard-starboard-colour-valid": {
