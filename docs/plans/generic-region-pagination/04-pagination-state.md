@@ -12,8 +12,9 @@ includes paragraphs, lists, tables, downloads, checked alternatives, and the sha
 and budget wrappers. Explicit regions retain independent coordinates; nested regions are one
 unit in their parent's allocation.
 
-A keyed document with navigation and no local pager becomes a root region. Existing local
-pagers keep their public keys. Components V2 also translates character-based `Paged` and keyed
+A keyed document with navigation becomes a root region. Phase 6 extends this to documents
+with local pagers, which retain their public keys and independent coordinates. Components V2
+also translates character-based `Paged` and keyed
 primitive `Paginate` on text, code, lines, headings, and footers. Primitive text/code content
 must be a string; lines may contain rich text. List numbering, authored `per` boundaries,
 `min_fill`, `widows`, persistent chrome, grouping, and hard budgets participate in allocation.

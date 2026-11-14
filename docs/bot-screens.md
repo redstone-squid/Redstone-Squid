@@ -58,7 +58,8 @@ Choose overflow behavior where you compose the screen:
   selects the compact form under pressure. Keep necessary information and actions reachable;
   a fallback is a complete replacement, not permission to silently discard content.
 - Return `Document(..., key="screen")` for standalone content that can span message pages.
-  Navigation consumes budget too. This legacy root pager cannot run alongside local pagers.
+  Navigation consumes budget too. Shared root pages can contain local pagers with independent
+  positions. Layouts still using a legacy fitter cannot combine root and local pages.
 
 Search help demonstrates a structured reference with a compact text alternative. Test that
 both representations preserve the content, that the preferred form wins when it fits, and

@@ -16,7 +16,7 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.semantics import UnsupportedSemanticError
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import Alt, Paginate
+from squid_ui.primitives.constraints import Alt, Never, Paginate
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import Renderable
 
@@ -75,6 +75,26 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.OptionalContent():
                 pageable = True
                 return replace(node, node=visit(node.node))
+            case primitive.Row() | primitive.ControlGroup():
+                if not isinstance(limits, V2Limits | ClassicLimits):
+                    msg = "Discord native controls on a non-Discord target"
+                    raise UnsupportedSemanticError(msg)
+                for item in node.items:
+                    if not isinstance(item, primitive.Button | primitive.RoutedButton | primitive.LinkButton):
+                        raise UnsupportedSemanticError(type(item).__name__)
+                return node
+            case (
+                primitive.Button()
+                | primitive.RoutedButton()
+                | primitive.LinkButton()
+                | primitive.SelectMenu()
+                | primitive.RoutedSelect()
+                | primitive.EntitySelect()
+            ):
+                if not isinstance(limits, V2Limits | ClassicLimits):
+                    msg = "Discord native controls on a non-Discord target"
+                    raise UnsupportedSemanticError(msg)
+                return node
             case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | Budget():
                 return replace(node, node=visit(node.node))
             case primitive.Text() | primitive.Code() | primitive.Lines() | primitive.Heading() | primitive.Footer():
@@ -82,6 +102,8 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     msg = "Discord text primitives on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 overflow = node.overflow
+                if isinstance(overflow, Never) and not isinstance(node, primitive.Lines):
+                    return node
                 if not isinstance(overflow, Paginate):
                     msg = "primitive text overflow alternatives"
                     raise UnsupportedSemanticError(msg)
@@ -178,7 +200,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
 
     try:
         children = tuple(map(visit, document.children))
-        if document.key and request.nav is not None and not pageable:
+        if document.key and request.nav is not None:
             children = (RootRegion[RenderTargetT](children, key=document.key, title=""),)
             pageable = True
         prepared = replace(document, children=children)

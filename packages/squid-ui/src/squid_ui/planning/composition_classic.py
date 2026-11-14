@@ -61,6 +61,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             panels=True,
             nested_panels=False,
             text_limit=min(self.limits.content, self.limits.embeds.description),
+            native_controls=True,
         )
 
     def evaluate(
@@ -159,7 +160,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     limit("button.label", len(control.label), self.limits.components.button_label)
                     limit("button.url", len(control.url or ""), self.limits.components.link_url)
                     limit("button.id", len(control.action or control.route or ""), self.limits.components.custom_id)
-                    if not control.label:
+                    if not control.label and control.emoji is None:
                         violations.append(ConstraintViolation(identity, "button needs a label"))
                     button = (
                         scene.Button(
@@ -226,6 +227,8 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     for child in part.children:
                         visit(child, output, embedded=embedded, row=controls)
                     limit("row.buttons", len(controls), self.limits.components.row_buttons)
+                    if not controls:
+                        violations.append(ConstraintViolation(identity, "row needs a button"))
                     if controls:
                         rows.append(scene.ClassicRow(tuple(controls)))
                 case ImageRealization() as media:

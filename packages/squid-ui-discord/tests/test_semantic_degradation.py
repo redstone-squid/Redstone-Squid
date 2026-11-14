@@ -4,7 +4,7 @@ import pytest
 
 from squid_ui import best_effort, optional, truncate
 from squid_ui.errors import UnsolvableLayoutError
-from squid_ui.planning import SolveNoteCode, plan
+from squid_ui.planning import plan
 from squid_ui.semantic import Importance, Paragraph
 from squid_ui_discord import DISCORD_V2_DPY27
 
@@ -25,7 +25,7 @@ def test_optional_explicitly_grants_whole_node_loss() -> None:
     result = plan((Paragraph("x" * 4000), optional(Paragraph("footnote"))), target=DISCORD_V2_DPY27)
 
     assert len(result.scene.components_v2.children) == 1
-    assert any(event.code == f"layout.{SolveNoteCode.OPTIONAL_DROPPED}" for event in result.report.events)
+    assert any(event.code == "composition.effect" and event.message == "Omission" for event in result.report.events)
 
 
 def test_optional_importance_orders_whole_region_loss() -> None:

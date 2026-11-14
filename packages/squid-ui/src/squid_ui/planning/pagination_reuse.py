@@ -13,6 +13,7 @@ from squid_ui.document import Document
 from squid_ui.ownership import Controlled
 from squid_ui.planning.pagination_content import TextPages
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
+from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import PageOwnership
 from squid_ui.target_types import Renderable
 
@@ -128,6 +129,23 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
             | sem.RoutedChoices()
             | sem.FormTrigger()
             | TextPresentation(),
+            _,
+        ):
+            return left == right
+        case (
+            primitive.Row()
+            | primitive.ControlGroup()
+            | primitive.Button()
+            | primitive.RoutedButton()
+            | primitive.LinkButton()
+            | primitive.SelectMenu()
+            | primitive.RoutedSelect()
+            | primitive.EntitySelect(),
+            _,
+        ):
+            return left == right
+        case (
+            primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code(),
             _,
         ):
             return left == right

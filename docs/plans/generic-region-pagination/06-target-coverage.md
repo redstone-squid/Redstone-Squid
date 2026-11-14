@@ -127,15 +127,10 @@ accepted reductions of scope. The original completion claim was too broad.
 
 ## Remaining implementation sequence
 
-1. Carry palette overrides through shared occurrences, including alternative
-   presentations, and verify scope isolation and retained-allocation invalidation.
-2. Integrate status/progress content and section thumbnails with target resource
-   accounting and faithful representations.
-3. Integrate disclosure, item/navigation ownership and native entity controls,
-   including hidden content, delivery staging and changed state.
-4. Translate legacy adaptation permissions and fragment policies explicitly;
+1. Translate the remaining legacy adaptation permissions and fragment policies explicitly;
    remove each remaining pagination compatibility route once its contracts pass.
-5. Re-run target and application conformance and reconcile the final matrix before
+2. Integrate the remaining native layouts and extensions with typed target offers.
+3. Re-run target and application conformance and reconcile the final matrix before
    marking phase 6 complete. Platform limits remain distinct from implementation gaps.
 
 
@@ -173,6 +168,23 @@ role/mentionable discovery or incompatible conversation filters directly. Contro
 on other pages produce no live bindings; session selection changes rebuild output.
 The core UI and focused Discord entity/region suites pass (1,207 tests), and
 whole-project Pyrefly reports zero errors.
+
+## Continuation: native Discord controls
+
+Discord buttons, form triggers, string/entity selectors, exact rows and automatically
+packed control groups now participate directly in shared composition. Exact rows
+cannot split or exceed native limits. Control groups expose legal page boundaries,
+and only visible controls publish callbacks or form bindings. Checked alternatives
+validate native interaction changes and preserve exact row boundaries.
+
+Native text, headings, code and footers with `Never` overflow also compose directly.
+Keyed document roots can now contain local pagers with independent positions; the
+legacy prohibition on simultaneous root and local pages no longer applies to shared
+layouts. A crowded toolbar and long code regression reconstructs all controls and
+all text across the resulting page family. Legacy reports and small choice controls
+may change representation when their enclosing layout first enters shared planning.
+Both UI suites pass (3,173 tests with `--no-cov`), and whole-project Pyrefly reports
+zero errors.
 
 ## Continuation: navigation ownership
 

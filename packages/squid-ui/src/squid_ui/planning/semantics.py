@@ -27,6 +27,7 @@ from squid_ui.presentations import (
     Shortening,
     TextPresentation,
 )
+from squid_ui.primitives import nodes as primitive
 from squid_ui.target_types import Renderable
 from squid_ui.text import TextLike
 
@@ -85,6 +86,12 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | StructuralGroup
     | TextPages[RenderTargetT]
     | ItemBranch[RenderTargetT, ContextT]
+    | primitive.Row[ContextT]
+    | primitive.ControlGroup[ContextT]
+    | primitive.Text
+    | primitive.Heading
+    | primitive.Footer
+    | primitive.Code
 )
 
 
@@ -157,6 +164,9 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | TextPresentation()
             | Alternatives()
             | AtomicNode()
+            | primitive.Button()
+            | primitive.SelectMenu()
+            | primitive.EntitySelect()
         ):
             return value.key
         case _:
@@ -264,6 +274,10 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
                     visit(control, root, i)
+            case primitive.Row() | primitive.ControlGroup():
+                root = add(value, path, parent, atomic=False)
+                for i, control in enumerate(value.items):
+                    visit(control, root, i)
             case sem.ControlGroup():
                 root = add(value, path, parent, atomic=False)
                 if value.label is not None:
@@ -316,6 +330,16 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Choices()
                 | sem.Entities()
                 | sem.RoutedChoices()
+                | primitive.Button()
+                | primitive.RoutedButton()
+                | primitive.LinkButton()
+                | primitive.SelectMenu()
+                | primitive.RoutedSelect()
+                | primitive.EntitySelect()
+                | primitive.Text()
+                | primitive.Heading()
+                | primitive.Footer()
+                | primitive.Code()
             ):
                 add(value, path, parent, atomic=True)
             case _:
@@ -348,6 +372,12 @@ def interaction[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, Con
             | ItemSummary()
             | ItemBack()
             | sem.RoutedChoices()
+            | primitive.Button()
+            | primitive.RoutedButton()
+            | primitive.LinkButton()
+            | primitive.SelectMenu()
+            | primitive.RoutedSelect()
+            | primitive.EntitySelect()
         ):
             return value
         case _:
@@ -479,7 +509,19 @@ def check_alternative[RenderTargetT, ContextT](
 def source_text[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, ContextT]) -> TextLike:
     """Return one source text unit; containers need references to their individual parts."""
     match value:
-        case sem.Paragraph() | sem.Heading() | sem.Note() | sem.Code() | sem.ListItem() | TableCell() | FieldPart():
+        case (
+            sem.Paragraph()
+            | sem.Heading()
+            | sem.Note()
+            | sem.Code()
+            | sem.ListItem()
+            | TableCell()
+            | FieldPart()
+            | primitive.Text()
+            | primitive.Heading()
+            | primitive.Footer()
+            | primitive.Code()
+        ):
             return value.content
         case sem.Column():
             return value.heading
@@ -550,6 +592,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             | sem.Region
             | sem.List
             | sem.Navigation
+            | sem.Items
+            | primitive.Row
             | TextPages,
         ):
             continue
@@ -614,6 +658,8 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         constraint.footer,
                     ) == (other.key, other.page, other.per, other.min_fill, other.widows, other.footer)
                 case (sem.Unbreakable(), sem.Unbreakable()) | (sem.KeepWithNext(), sem.KeepWithNext()):
+                    preserved = True
+                case primitive.Row(), primitive.Row():
                     preserved = True
             if preserved:
                 break

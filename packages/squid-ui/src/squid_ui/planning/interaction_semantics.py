@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, assert_never
 
 from squid_ui import semantic as sem
+from squid_ui.primitives import nodes as primitive
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,12 @@ type Interaction[ContextT] = (
     | DisclosureToggle[ContextT]
     | ItemSummary[ContextT]
     | ItemBack[ContextT]
+    | primitive.Button[ContextT]
+    | primitive.RoutedButton
+    | primitive.LinkButton
+    | primitive.SelectMenu[ContextT]
+    | primitive.RoutedSelect
+    | primitive.EntitySelect[ContextT]
 )
 
 
@@ -60,6 +67,63 @@ def interaction_changes[ContextT](
     if source is None:
         return frozenset() if target is None else interaction_changes(target, None)
     match source:
+        case primitive.Button():
+            other = target if isinstance(target, primitive.Button) else None
+            changes = (
+                ("on_click", other is None or source.on_click != other.on_click),
+                ("disabled", other is None or source.disabled != other.disabled),
+                ("mode", other is None or source.mode != other.mode),
+                ("guard", other is None or source.guard != other.guard),
+                ("busy", other is None or source.busy != other.busy),
+                ("record", other is None or source.record != other.record),
+                (
+                    "form",
+                    (source.form if isinstance(source, primitive.FormButton) else None)
+                    != (other.form if isinstance(other, primitive.FormButton) else None),
+                ),
+            )
+        case primitive.RoutedButton():
+            other = target if isinstance(target, primitive.RoutedButton) else None
+            changes = (
+                ("route_id", other is None or source.route_id != other.route_id),
+                ("disabled", other is None or source.disabled != other.disabled),
+            )
+        case primitive.LinkButton():
+            other = target if isinstance(target, primitive.LinkButton) else None
+            changes = (
+                ("url", other is None or source.url != other.url),
+                ("disabled", other is None or source.disabled != other.disabled),
+            )
+        case primitive.SelectMenu() | primitive.RoutedSelect():
+            other = target if isinstance(target, type(source)) else None
+            changes = (
+                ("options", other is None or source.options != other.options),
+                ("minimum", other is None or source.min_values != other.min_values),
+                ("maximum", other is None or source.max_values != other.max_values),
+                ("disabled", other is None or source.disabled != other.disabled),
+            )
+            if isinstance(source, primitive.SelectMenu):
+                selected = target if isinstance(target, primitive.SelectMenu) else None
+                changes += (
+                    ("on_select", selected is None or source.on_select != selected.on_select),
+                    ("mode", selected is None or source.mode != selected.mode),
+                    ("routes", selected is None or source.routes != selected.routes),
+                )
+            else:
+                routed = target if isinstance(target, primitive.RoutedSelect) else None
+                changes += (("route_id", routed is None or source.route_id != routed.route_id),)
+        case primitive.EntitySelect():
+            other = target if isinstance(target, primitive.EntitySelect) else None
+            changes = (
+                ("entity_type", other is None or source.entity_type != other.entity_type),
+                ("on_select", other is None or source.on_select != other.on_select),
+                ("default_values", other is None or source.default_values != other.default_values),
+                ("conversation_types", other is None or source.conversation_types != other.conversation_types),
+                ("minimum", other is None or source.min_values != other.min_values),
+                ("maximum", other is None or source.max_values != other.max_values),
+                ("disabled", other is None or source.disabled != other.disabled),
+                ("mode", other is None or source.mode != other.mode),
+            )
         case ItemSummary():
             other = target if isinstance(target, ItemSummary) else None
             changes = (

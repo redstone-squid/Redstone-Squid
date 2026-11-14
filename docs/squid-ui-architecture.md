@@ -1164,8 +1164,8 @@ in allocation quality. Section headings repeat with their body on continuation p
 Target fragment contracts retain source identity when long text spans several pages.
 
 Root structural pagination is opt-in: return `Document(..., key="screen")` from the root
-component. Supported content with navigation and no local pager becomes a shared root
-region. Explicit regions and supported local pagers use the same allocation search across
+component. Supported content with navigation becomes a shared root region; local pagers
+retain independent coordinates inside it. Explicit regions and supported local pagers use the same allocation search across
 V2, classic Discord, HTML, Slack messages, and Slack Home. Targets supply realizations,
 resource accounting, and final scene construction; the solver does not inspect their bodies.
 

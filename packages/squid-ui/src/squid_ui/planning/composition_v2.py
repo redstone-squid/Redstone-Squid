@@ -63,6 +63,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             panels=True,
             nested_panels=False,
             character_budgets=True,
+            native_controls=True,
         )
 
     def evaluate(
@@ -113,7 +114,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     ):
                         if used > capacity:
                             violations.append(LocalCapacityExceeded(identity, name, used, capacity))
-                    if not control.label:
+                    if not control.label and control.emoji is None:
                         violations.append(ConstraintViolation(identity, "button needs a label"))
                     components += 1 if in_row else 2
                     if control.action is not None:
@@ -161,6 +162,8 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     return tuple(output)
                 case RowRealization():
                     components += 1
+                    if not part.children:
+                        violations.append(ConstraintViolation(part.offer.occurrence.identity, "row needs a button"))
                     if len(part.children) > self.limits.components.row_buttons:
                         violations.append(
                             LocalCapacityExceeded(
@@ -375,7 +378,9 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     for item in items:
                         visit(item, in_panel=in_panel)
                 case scene.Button() | scene.RoutedButton() | scene.Link():
-                    if not node.label or len(node.label) > self.limits.components.button_label:
+                    if (not node.label and node.emoji is None) or len(
+                        node.label or ""
+                    ) > self.limits.components.button_label:
                         msg = "built V2 button violates its label limit"
                         raise DrawInvariantError(msg)
                     identifier = (

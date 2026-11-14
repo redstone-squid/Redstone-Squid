@@ -71,7 +71,7 @@ from squid_ui.planning.structure import disclosure_state, navigation_current, op
 from squid_ui.planning.text_presentations import ResolvedText, UnsupportedText, _slice, resolve_presentation_text
 from squid_ui.presentations import Alternatives, Budget, Omission, SemanticRef, TextPresentation
 from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
+from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.text import TextLike, resolve_text
 
@@ -413,6 +413,21 @@ def navigation_candidate[RenderTargetT, ContextT](
                         options, node.route_id, label(node.placeholder), node.min_values, node.max_values, node.disabled
                     )
                 )
+        case primitive.EntitySelect():
+            payload = EntityRealization(
+                scene.EntitySelect(
+                    node.entity_type,
+                    node.key,
+                    label(node.placeholder),
+                    node.default_values,
+                    node.conversation_types,
+                    node.min_values,
+                    node.max_values,
+                    node.disabled,
+                    node.mode,
+                )
+            )
+            binding = ActionBinding(node.key, node.on_select, node.mode)
         case _:
             msg = f"navigation {type(node).__name__}"
             raise UnsupportedSemanticError(msg)
@@ -438,7 +453,7 @@ def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[Re
     while ref is not None:
         unit = occurrence.graph.units[ref]
         if unit.parent is not None and not isinstance(
-            unit.value, sem.Budgeted | sem.KeepWithNext | sem.Unbreakable | Budget
+            unit.value, sem.Budgeted | sem.KeepWithNext | sem.Unbreakable | Budget | RootRegion
         ):
             parts.append(quote(ref.keys[-1], safe=""))
         ref = unit.parent
@@ -490,9 +505,57 @@ def semantic_offers[RenderTargetT, ContextT](
     disabled_controls: bool = True,
     character_budgets: bool = False,
     text_limit: int | None = None,
+    native_controls: bool = False,
 ) -> tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]:
     context.work.consume()
     value = occurrence.graph.units[occurrence.reference].value
+    if isinstance(value, primitive.Text | primitive.Heading | primitive.Footer | primitive.Code):
+        if not native_controls or not isinstance(value.overflow, Never):
+            return ()
+        payload = TextRealization(resolve_text(value.content, context.localization).nodes)
+        if isinstance(value, primitive.Heading):
+            payload = replace(payload, role="heading", level=value.level)
+        elif isinstance(value, primitive.Footer):
+            payload = replace(payload, role="note")
+        elif isinstance(value, primitive.Code):
+            payload = replace(payload, role="code", language=value.lang)
+        return (RealizationOffer(occurrence, "native-text", payload),)
+    if isinstance(value, primitive.Row | primitive.ControlGroup):
+        if not native_controls:
+            return ()
+        children = tuple(
+            SemanticOccurrence(
+                OccurrenceId((*occurrence.identity.path, ref.keys[-1])),
+                occurrence.graph,
+                ref,
+                occurrence.placement,
+                occurrence.origin,
+                palette=context.palette,
+            )
+            for ref in occurrence.graph.children.get(occurrence.reference, ())
+        )
+        return (
+            RealizationOffer(
+                occurrence,
+                "native-controls",
+                RowRealization() if isinstance(value, primitive.Row) else ActionsRealization(),
+                children,
+                flow=isinstance(value, primitive.ControlGroup),
+            ),
+        )
+    if isinstance(
+        value,
+        primitive.Button
+        | primitive.RoutedButton
+        | primitive.LinkButton
+        | primitive.SelectMenu
+        | primitive.RoutedSelect
+        | primitive.EntitySelect,
+    ):
+        if not native_controls:
+            return ()
+        candidate = navigation_candidate(value, occurrence, context)
+        return (replace(candidate.offer, key="native-control", interaction=True),)
     if isinstance(value, sem.Themed):
         context = replace(context, palette=value.palette)
     text_capacity = context.capacities.get(Axis.DISPLAY_TEXT, text_limit)
@@ -1186,7 +1249,7 @@ def semantic_offers[RenderTargetT, ContextT](
             nested_region = False
             while parent is not None:
                 unit = occurrence.graph.units[parent]
-                nested_region |= isinstance(unit.value, sem.Region)
+                nested_region |= isinstance(unit.value, sem.Region) and not isinstance(unit.value, RootRegion)
                 parent = unit.parent
             cursor_key = (
                 region_cursor_key(occurrence)

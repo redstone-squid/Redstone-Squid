@@ -125,7 +125,8 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
 
     assert first.scene.pagers[0].key == "toolbar"
     assert first.scene.pagers[0].pages > 1
-    assert first.report.events[0].code == "pagination.root"
+    assert first.report.search is not None
+    assert first.allocation is not None
 
     visible: set[str] = set()
     for page_index in range(first.scene.pagers[0].pages):
@@ -140,11 +141,7 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
 
 
 def test_a_cosmetic_note_does_not_fragment_root_pages() -> None:
-    """Informational notes must not force extra root-page breaks.
-
-    Paginate(per=...) on Text is reported and ignored. Its note must not make each later
-    probe look over budget when the content still fits.
-    """
+    """A one-segment local pager must not add a visible page turn to the toolbar."""
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
 
     def pages_for(overflow) -> int:
@@ -165,18 +162,33 @@ def test_root_paging_requires_an_explicit_document_key() -> None:
     assert caught.value.context["budgets"]
 
 
-def test_local_pagination_precedes_root_pagination_instead_of_nesting() -> None:
+def test_local_pagination_and_root_pagination_share_allocation() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
     document = Document(
         (ControlGroup(buttons), Code("x" * 9000, overflow=Paginate(key="detail"))),
         key="root",
     )
 
-    with pytest.raises(UnsolvableLayoutError, match="Local and root pagination are never simultaneous") as caught:
-        plan(document, target=DISCORD_V2_DPY27, nav=_nav)
-    assert caught.value.context["reason"] == "local_pagination"
-    assert caught.value.context["document_key"] == "root"
-    assert caught.value.context["pager_keys"] == ("detail",)
+    result = plan(document, target=DISCORD_V2_DPY27, nav=_nav)
+    assert result.allocation is not None
+    assert {region.cursor_key for region in result.allocation.regions.values()} == {"root", "detail"}
+    root, detail = (
+        next(identity for identity, region in result.allocation.regions.items() if region.cursor_key == key)
+        for key in ("root", "detail")
+    )
+    visible: set[str] = set()
+    code: list[str] = []
+    for root_page in range(len(result.allocation.regions[root].cuts)):
+        for detail_page in range(len(result.allocation.regions[detail].cuts)):
+            page = result.allocation.select({root: root_page, detail: detail_page})
+            visible.update(key for key in page.bindings if key.startswith("b"))
+            code.extend(
+                node.content[4:-4]
+                for node in page.scene.components_v2.children
+                if isinstance(node, scene.Text) and node.content.startswith("```\n")
+            )
+    assert visible == {f"b{index}" for index in range(41)}
+    assert "".join(code) == "x" * 9000
 
 
 def test_exact_row_overflow_is_a_typed_planning_error() -> None:

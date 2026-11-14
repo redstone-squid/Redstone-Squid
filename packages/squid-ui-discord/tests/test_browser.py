@@ -13,7 +13,7 @@ async def test_detail_steps_cross_windows_and_return_to_the_containing_overview(
         list_source(("a", "b", "c")), identity=str, label=str, detail=lambda item: f"Detail {item}", page_size=2
     )
     async with stage(browser, owner=object()) as ui:
-        await ui.press(ui.key_for("browser.open.b"))
+        await ui.select(ui.key_for("browser.open"), ["b"])
         assert "Detail b" in ui.texts()
         await ui.press(ui.key_for("browser.item-next"))
         assert "Detail c" in ui.texts()
