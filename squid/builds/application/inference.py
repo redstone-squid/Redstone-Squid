@@ -177,7 +177,8 @@ class InferredBuild(BaseModel):
     )
     version_spec: str | None = Field(
         description=(
-            "Claimed working Minecraft releases; retain explicit incompatibilities with exclusions, "
+            "Working Minecraft releases for the build as shown, before any proposed modifications. "
+            "Exclude releases that would require changes to the build. Retain explicit incompatibilities with exclusions, "
             "e.g. 1.8+, !1.16+ when it breaks in 1.16+. Never infer compatibility from component availability."
         )
     )
@@ -187,7 +188,7 @@ class InferredBuild(BaseModel):
     author_notes: list[InferredAuthorNote] = Field(
         description=(
             "Verbatim primary-message excerpts containing additional concrete facts, such as required mods/plugins, "
-            "other operating requirements, "
+            "other operating requirements, modifications needed for other Minecraft versions, "
             "limitations, measurement qualifications (including/excluding floor), record-width ranges, "
             "explicit revision changes, or credits. Never write your own prose, compare posts, "
             "or calculate changes. Omit facts captured elsewhere and promotional text. Empty when none."
