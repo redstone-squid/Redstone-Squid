@@ -65,9 +65,9 @@ from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind
 from squid.tags.models import TagDefinition
 from squid_reactivity import LocalTopicBus
 from squid_ui.forms import FormValueError
-from squid_ui.primitives import Button, RoutedButton, SelectMenu
+from squid_ui.primitives import SelectMenu
 from squid_ui.runtime import transaction
-from squid_ui.testing import find_all, labels, texts
+from squid_ui.testing import find, find_all, labels, texts
 from squid_ui.text import source_text
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.testing import commit_render, payload_problems
@@ -349,8 +349,7 @@ async def test_required_fields_are_counted_until_the_draft_is_ready() -> None:
     assert "4 required fields are empty" in text
     assert "Door size: ⚠️ *Required*" in text
     assert "Build size" not in text
-    (submit,) = (button for button in find_all(editor.render(), Button) if button.key == "submit")
-    assert submit.disabled
+    assert not find(editor.render(), sl.semantic.ActionControl, key="submit").available
 
     with transaction():
         await editor.workspace.save_values(
@@ -363,8 +362,7 @@ async def test_required_fields_are_counted_until_the_draft_is_ready() -> None:
             }
         )
     assert "Ready to submit." in rendered_text(editor)
-    (submit,) = (button for button in find_all(editor.render(), Button) if button.key == "submit")
-    assert not submit.disabled
+    assert find(editor.render(), sl.semantic.ActionControl, key="submit").available
 
 
 async def test_modal_sections_open_in_place_and_keep_the_overview() -> None:
@@ -587,7 +585,7 @@ async def test_live_projection_moves_from_creating_to_done() -> None:
     await editor.workspace.reload()
     assert editor.workspace.phase is Phase.DONE
     assert "saved as **#42**" in rendered_text(editor)
-    (button,) = find_all(editor.render(), RoutedButton)
+    (button,) = find_all(editor.render(), sl.semantic.RoutedActionControl)
     assert button.route_id == "r:builds:42:edit"
 
 

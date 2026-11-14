@@ -473,15 +473,17 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
             )
         )
         children.append(sd.v2.separator())
-        preview = ws.render_card is not None and sd.v2.button(
+        preview = ws.render_card is not None and sl.action_control(
             tr(t"draft-editor-preview = Preview"), self._preview, key="preview"
         )
         if phase is Phase.WAITING_FOR_FILES:
             children.extend(
                 (
-                    sd.v2.text(tr(t"draft-editor-waiting-hint = This message updates when your files are ready.")),
-                    sd.v2.row(
-                        preview, sd.v2.button(tr(t"draft-editor-refresh = Refresh"), self._refresh, key="refresh")
+                    sl.paragraph(tr(t"draft-editor-waiting-hint = This message updates when your files are ready.")),
+                    sl.action_controls(
+                        preview,
+                        sl.action_control(tr(t"draft-editor-refresh = Refresh"), self._refresh, key="refresh"),
+                        key="draft-waiting-actions",
                     ),
                 )
             )
@@ -501,16 +503,17 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         )
         children.extend(
             (
-                sd.v2.text(footer),
-                sd.v2.row(
+                sl.paragraph(footer),
+                sl.action_controls(
                     preview,
-                    sd.v2.button(
+                    sl.action_control(
                         tr(t"draft-editor-submit = Submit"),
                         self._submit,
                         key="submit",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                        disabled=missing > 0,
+                        tone=sl.Tone.SUCCESS,
+                        available=missing == 0,
                     ),
+                    key="draft-submit-actions",
                 ),
             )
         )
@@ -525,18 +528,23 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
             children.extend(
                 (
                     sd.v2.separator(),
-                    sd.v2.row(sd.v2.button(tr(t"draft-editor-refresh = Refresh"), self._refresh, key="refresh")),
+                    sl.action_controls(
+                        sl.action_control(tr(t"draft-editor-refresh = Refresh"), self._refresh, key="refresh"),
+                        key="draft-creating-actions",
+                    ),
                 )
             )
         elif phase is Phase.DONE and ws.result is not None and ws.result.result is not None:
             children.extend(
                 (
                     sd.v2.separator(),
-                    sd.v2.row(
-                        sd.v2.routed_button(
+                    sl.action_controls(
+                        sl.routed_action_control(
                             tr(t"draft-editor-edit-build = Edit build"),
                             build_controls.edit_build.id(build_id=ws.result.result.build_id),
-                        )
+                            key="edit_build",
+                        ),
+                        key="draft-done-actions",
                     ),
                 )
             )
@@ -575,14 +583,14 @@ class FilesEditorScreen(sd.Screen[None]):
             return closed
         files = ws.attachments
         selected = next((item for item in files if str(item.id) == self.selected_file), None)
-        children: list[Any] = [sd.v2.heading(tr(t"draft-editor-files-heading = Files"))]
+        children: list[Any] = [sl.heading(tr(t"draft-editor-files-heading = Files"))]
         if ws.notice:
-            children.append(sd.v2.text(t"⚠️ {ws.notice}"))
+            children.append(sl.paragraph(t"⚠️ {ws.notice}"))
         children.append(sd.v2.text(_files_text(ws, heading=False)))
         schematic_count = sum(item.kind == "schematic" for item in files)
         if schematic_count > 1:
             children.append(
-                sd.v2.text(
+                sl.paragraph(
                     tr(
                         t"draft-editor-main-schematic-help = Choose which schematic to use for this build's preview and schematic tools. Select that file below, then choose Use as main schematic."
                     )
@@ -599,25 +607,28 @@ class FilesEditorScreen(sd.Screen[None]):
             )
         if selected is not None:
             children.append(
-                sd.v2.row(
+                sl.action_controls(
                     selected.source is not None
                     and selected.status is IntakeStatus.PENDING
-                    and sd.v2.button(tr(t"draft-editor-use-file = Use this file"), self._use_file, key="use_file"),
-                    sd.v2.button(tr(t"draft-editor-replace-file = Replace"), self._replace_file, key="replace_file"),
-                    sd.v2.button(
+                    and sl.action_control(tr(t"draft-editor-use-file = Use this file"), self._use_file, key="use_file"),
+                    sl.action_control(
+                        tr(t"draft-editor-replace-file = Replace"), self._replace_file, key="replace_file"
+                    ),
+                    sl.action_control(
                         tr(t"draft-editor-remove-file = Remove"),
                         self._remove_file,
                         key="remove_file",
-                        style=sl.primitives.ActionStyle.DANGER,
+                        tone=sl.Tone.DANGER,
                     ),
                     selected.kind == "schematic"
                     and selected.status is IntakeStatus.READY
                     and schematic_count > 1
-                    and sd.v2.button(
+                    and sl.action_control(
                         tr(t"draft-editor-main-schematic = Use as main schematic"),
                         self._make_main_schematic,
                         key="main_schematic",
                     ),
+                    key="file-actions",
                 )
             )
         children.extend(
@@ -625,7 +636,7 @@ class FilesEditorScreen(sd.Screen[None]):
                 sd.v2.separator(),
                 done_row(
                     self._done,
-                    sd.v2.button(tr(t"draft-editor-add-files = Add files"), self._add_files, key="add_files"),
+                    sl.action_control(tr(t"draft-editor-add-files = Add files"), self._add_files, key="add_files"),
                 ),
             )
         )

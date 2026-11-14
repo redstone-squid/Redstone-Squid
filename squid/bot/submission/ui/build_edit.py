@@ -313,8 +313,8 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 t"build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet."
             )
         children: list[Any] = [
-            sd.v2.heading(tr(t"bot-submission-ui-views-edit-build = Edit build")),
-            sd.v2.text(description),
+            sl.heading(tr(t"bot-submission-ui-views-edit-build = Edit build")),
+            sl.paragraph(description),
             sd.v2.separator(),
             *self.section_overview(self._review_sections() if self.confirming else self._sections()),
         ]
@@ -528,7 +528,9 @@ class BuildEditPreview(sd.Screen[None]):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             self.node,
-            sd.v2.row(sd.v2.button(tr(t"draft-editor-done = Done"), self._done, key="done")),
+            sl.action_controls(
+                sl.action_control(tr(t"draft-editor-done = Done"), self._done, key="done"), key="preview-actions"
+            ),
         )
 
     async def _done(self, event: sd.PressEvent) -> None:

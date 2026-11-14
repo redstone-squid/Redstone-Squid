@@ -180,9 +180,9 @@ class SectionEditorScreen(sd.Screen[None]):
         if section is None:
             return (sl.status(tr(t"draft-editor-section-gone = This section is no longer part of the form.")),)
         answers = ws.answers
-        children: list[Any] = [sd.v2.heading(md(t"{section.title}"))]
+        children: list[Any] = [sl.heading(md(t"{section.title}"))]
         if ws.notice:
-            children.append(sd.v2.text(t"⚠️ {ws.notice}"))
+            children.append(sl.paragraph(t"⚠️ {ws.notice}"))
         # Follow the form's field order: a picker where its field is, and each modal group where it starts.
         chunks = {chunk.fields[0].id: chunk for chunk in modal_chunks(section)}
         for field in section.fields:
@@ -245,19 +245,20 @@ class SectionEditorScreen(sd.Screen[None]):
         ]
         if pages > 1:
             children.append(
-                sd.v2.row(
-                    sd.v2.button(
+                sl.action_controls(
+                    sl.action_control(
                         tr(t"draft-editor-previous-page = Previous page"),
                         partial(self._turn_page, field.id, page, -1),
                         key=f"previous_{field.id}",
-                        disabled=page == 0,
+                        available=page > 0,
                     ),
-                    sd.v2.button(
+                    sl.action_control(
                         tr(t"draft-editor-next-page = Next page"),
                         partial(self._turn_page, field.id, page, 1),
                         key=f"next_{field.id}",
-                        disabled=page == pages - 1,
+                        available=page < pages - 1,
                     ),
+                    key=f"pages_{field.id}",
                 )
             )
         return children
@@ -310,10 +311,14 @@ def closed_detail(
     return None
 
 
-def done_row(on_done: PressHandler[sd.Request], *before: Any) -> Any:
-    return sd.v2.row(
+def done_row(
+    on_done: PressHandler[sd.Request], *before: sl.semantic.ActionControl[sd.Request]
+) -> sl.semantic.ActionControls[sd.Request]:
+    """The closing controls of an editor message: any `before` actions, then a highlighted Done."""
+    return sl.action_controls(
         *before,
-        sd.v2.button(tr(t"draft-editor-done = Done"), on_done, key="done", style=sl.primitives.ActionStyle.PRIMARY),
+        sl.action_control(tr(t"draft-editor-done = Done"), on_done, key="done", emphasis=sl.semantic.Emphasis.STRONG),
+        key="done-row",
     )
 
 
