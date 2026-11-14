@@ -4,21 +4,23 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 
 from squid_reactivity.actions import (
-    ActionCommit,
     ActionRelation,
-    ActionResult,
     ActorRef,
     CausalRef,
+    ExceptionReport,
+)
+from squid_reactivity.transaction_results import (
     ChangeReport,
     CommitSequence,
     ConflictDetail,
-    ExceptionReport,
+    TransactionCommit,
+    TransactionResult,
 )
 
 
 @dataclass(frozen=True, slots=True)
-class ActionResultSnapshot:
-    """A portable action summary containing change counts instead of cell values."""
+class TransactionResultSnapshot:
+    """A transaction summary containing change counts instead of cell values."""
 
     action_id: str
     root_action_id: str
@@ -40,12 +42,12 @@ class ActionResultSnapshot:
     @classmethod
     def from_result(
         cls,
-        result: ActionResult,
+        result: TransactionResult,
         policy: RedactionPolicy | None = None,
-    ) -> ActionResultSnapshot:
+    ) -> TransactionResultSnapshot:
         policy = DEFAULT_REDACTION if policy is None else policy
         context = result.context
-        if isinstance(result, ActionCommit):
+        if isinstance(result, TransactionCommit):
             terminal = "committed"
             timestamp = result.committed_at
             sequence = result.sequence
@@ -94,7 +96,7 @@ class RedactionPolicy:
 
     def redact[SnapshotT: CausalEventSnapshot](self, snapshot: SnapshotT) -> SnapshotT:
         """Return the same event variant with fields restricted by this policy."""
-        if isinstance(snapshot, ActionResultSnapshot):
+        if isinstance(snapshot, TransactionResultSnapshot):
             return replace(
                 snapshot,
                 actor=snapshot.actor if self.include_actor else None,
@@ -156,5 +158,5 @@ class ContinuationFailureSnapshot:
 
 
 type CausalEventSnapshot = (
-    ActionResultSnapshot | OperationEventSnapshot | ResourceEventSnapshot | ContinuationFailureSnapshot
+    TransactionResultSnapshot | OperationEventSnapshot | ResourceEventSnapshot | ContinuationFailureSnapshot
 )

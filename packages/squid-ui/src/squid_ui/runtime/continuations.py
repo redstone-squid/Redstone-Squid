@@ -11,7 +11,6 @@ from collections.abc import Awaitable, Callable, Generator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from squid_reactivity.actions import ActionCommit, ActionRollback
 from squid_reactivity.completion import Completion
 from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_reactivity.operations import (
@@ -22,6 +21,10 @@ from squid_reactivity.operations import (
     OperationStatus,
     Pending,
     ProgressReporter,
+)
+from squid_reactivity.transaction_results import (
+    TransactionCommit,
+    TransactionRollback,
 )
 from squid_ui.errors import SquidUiError
 from squid_ui.runtime.tasks import anyio, task_is_within
@@ -105,7 +108,7 @@ class PostCommitOperation[ValueT]:
         assert self._execution is not None
         return await self._execution
 
-    def _commit(self, commit: ActionCommit, host: UIExecutionHost) -> None:
+    def _commit(self, commit: TransactionCommit, host: UIExecutionHost) -> None:
         definition = OperationDefinition(self._invoke, name=self._name, initial=None)
         self._execution = definition.start(
             cause=commit.context.causal_ref(), root_action_id=commit.context.root_action_id
@@ -121,7 +124,7 @@ class PostCommitOperation[ValueT]:
             self._signal.notify()
             _logger.exception("could not start after-commit operation %s", self._name)
 
-    def _discard(self, rollback: ActionRollback) -> None:
+    def _discard(self, rollback: TransactionRollback) -> None:
         self._discarded = True
         self._signal.notify()
         self._callback = None

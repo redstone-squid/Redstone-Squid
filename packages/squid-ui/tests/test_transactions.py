@@ -7,10 +7,12 @@ from typing import Any, override
 
 import pytest
 
-from squid_reactivity.actions import ActionCommit
 from squid_reactivity.core import (
     export_state,
     restore_state,
+)
+from squid_reactivity.transaction_results import (
+    TransactionCommit,
 )
 from squid_reactivity.transactions import (
     block_writes,
@@ -184,7 +186,7 @@ class TestStaging:
     def test_the_delta_reports_the_first_value_and_the_last(self):
         panel = attached(Panel(Uncopyable()))
         panel.declared = 1
-        seen: list[ActionCommit] = []
+        seen: list[TransactionCommit] = []
         with transaction():
             on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 2
@@ -468,7 +470,7 @@ class TestActionCommitHooks:
     def test_the_delta_carries_both_directions(self):
         panel = attached(Panel(Uncopyable()))
         assert panel.declared == 0
-        seen: list[ActionCommit] = []
+        seen: list[TransactionCommit] = []
         with transaction():
             on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 7
@@ -479,7 +481,7 @@ class TestActionCommitHooks:
     def test_a_field_still_on_its_default_is_recorded_as_unset(self):
         """Its slot is materialized lazily, so restoring it means popping it again."""
         panel = attached(Panel(Uncopyable()))
-        seen: list[ActionCommit] = []
+        seen: list[TransactionCommit] = []
         with transaction():
             on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 7
@@ -489,7 +491,7 @@ class TestActionCommitHooks:
 
     def test_a_rollback_runs_no_hooks(self):
         panel = attached(Panel(Uncopyable()))
-        seen: list[ActionCommit] = []
+        seen: list[TransactionCommit] = []
         with pytest.raises(RuntimeError), transaction():
             on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 7
@@ -500,7 +502,7 @@ class TestActionCommitHooks:
     def test_reference_copied_state_is_not_copied_on_the_way_out(self):
         service = Uncopyable()
         panel = attached(Panel(service))
-        seen: list[ActionCommit] = []
+        seen: list[TransactionCommit] = []
         with transaction():
             on_action_commit(lambda commit: seen.append(commit))
             panel.service = Uncopyable()
@@ -717,7 +719,7 @@ class TestCommitFailures:
         """A failed commit observer must not roll back state or suppress invalidation."""
         panel = watched()
 
-        def explode(commit: ActionCommit) -> None:
+        def explode(commit: TransactionCommit) -> None:
             message = "the recorder failed"
             raise RuntimeError(message)
 

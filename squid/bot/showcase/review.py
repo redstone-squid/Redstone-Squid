@@ -142,7 +142,7 @@ class ReviewerPanel(InspectablePanel):
 
     def record_activity(self, line: str) -> None:
         # Activity is an audit of actions, not part of a reviewer's undoable contribution.
-        def committed(commit: sl.runtime.ActionCommit) -> None:
+        def committed(commit: sl.runtime.TransactionCommit) -> None:
             with sl.runtime.transaction("Log review activity", caused_by=commit.context):
                 self.room.log(line)
 

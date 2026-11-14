@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from squid_reactivity import ActionCommit, ConflictDetail, on_action_commit, transaction
+from squid_reactivity import ConflictDetail, TransactionCommit, on_action_commit, transaction
 from squid_replication import LoroBackend, Replica, ReplicationChangeToken
 
 _FIXTURE = Path(__file__).with_name("fixtures") / "loro_document_v1.json"
@@ -30,7 +30,7 @@ def measure(profile_name: str) -> dict[str, float | int | str]:
     fixture = json.loads(_FIXTURE.read_text(encoding="utf-8"))
     profile: Mapping[str, Any] = fixture["profiles"][profile_name]
     document = Replica("benchmark", backend=LoroBackend(peer_id=1)).open(f"fixture-{profile_name}")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     movable_ids = [
         uuid.uuid5(uuid.NAMESPACE_URL, f"{profile_name}:part:{index}") for index in range(profile["movable_items"])
     ]

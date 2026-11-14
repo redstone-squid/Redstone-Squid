@@ -21,12 +21,12 @@ import squid_ui as sl
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_ui_discord
 from squid_reactivity.diagnostics import (
-    ActionResultSnapshot,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
     EventLedger,
     OperationEventSnapshot,
     ResourceEventSnapshot,
+    TransactionResultSnapshot,
 )
 from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
 from squid_ui_discord.devtools_presentation import recovery_summary, scheduler_summary, topic_summary
@@ -850,7 +850,7 @@ def _trace_summary(trace: RuntimeTrace) -> str:
     return f"{trace.operation.value}:{trace.name} {trace.result.status.value} {duration_ms:.1f}ms id={trace.trace_id}"
 
 
-def _action_text(status: ActionResultSnapshot) -> str:
+def _action_text(status: TransactionResultSnapshot) -> str:
     cause = "root" if status.cause is None else f"{status.cause.kind}:{status.cause.identity}"
     detail = status.terminal if status.reason is None else f"{status.terminal}:{status.reason}"
     relation = "" if status.relation is None else f" {status.relation.kind}={status.relation.action_id}"
@@ -863,7 +863,7 @@ def _action_text(status: ActionResultSnapshot) -> str:
 
 def _event_summary(event: CausalEventSnapshot) -> str:
     match event:
-        case ActionResultSnapshot():
+        case TransactionResultSnapshot():
             return _action_text(event)
         case OperationEventSnapshot():
             cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"

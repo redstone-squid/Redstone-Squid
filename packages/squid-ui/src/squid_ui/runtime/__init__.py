@@ -1,13 +1,9 @@
 """Frontend-neutral component runtime and presentation state."""
 
 from squid_reactivity.actions import (
-    ActionCommit,
     ActionContext,
     ActionPurpose,
     ActionRelation,
-    ActionResult,
-    ActionRollback,
-    RollbackReason,
 )
 from squid_reactivity.core import (
     CellReport,
@@ -62,6 +58,12 @@ from squid_reactivity.tracking import (
     relaxed_read,
     strong_read,
     untracked,
+)
+from squid_reactivity.transaction_results import (
+    RollbackReason,
+    TransactionCommit,
+    TransactionResult,
+    TransactionRollback,
 )
 from squid_reactivity.transactions import (
     CellPatch,
@@ -128,13 +130,10 @@ from squid_ui.runtime.owner import ComponentRuntime, RenderCandidate
 from squid_ui.runtime.services import ManagedService, ServiceOwner, ServiceRun, ServiceRunStatus, UIExecutionHost
 
 __all__ = [
-    "ActionCommit",
     "ActionContext",
     "ActionDiscardedError",
     "ActionPurpose",
     "ActionRelation",
-    "ActionResult",
-    "ActionRollback",
     "ActivePagers",
     "Address",
     "AtomicResource",
@@ -210,7 +209,10 @@ __all__ = [
     "TopicHandle",
     "TopicSnapshot",
     "Transaction",
+    "TransactionCommit",
     "TransactionParticipant",
+    "TransactionResult",
+    "TransactionRollback",
     "TransactionView",
     "TransactionalCompensationOutbox",
     "UIExecutionHost",

@@ -127,9 +127,9 @@ block finishes. Nested blocks share the handle. Callbacks receive the completed 
 
 ::: squid_reactivity.ActionPurpose
 
-::: squid_reactivity.ActionCommit
+::: squid_reactivity.TransactionCommit
 
-::: squid_reactivity.ActionRollback
+::: squid_reactivity.TransactionRollback
 
 ::: squid_reactivity.Transaction
 
@@ -164,9 +164,9 @@ sinks do not register themselves; applications own serialization, storage, and r
 
 ::: squid_reactivity.on_action_result
 
-::: squid_reactivity.ActionResult
+::: squid_reactivity.TransactionResult
 
-::: squid_reactivity.ActionResultSnapshot
+::: squid_reactivity.TransactionResultSnapshot
 
 ::: squid_reactivity.EventLedger
 

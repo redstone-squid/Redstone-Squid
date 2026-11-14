@@ -19,7 +19,7 @@ A Discord dispatch receives an `ActionContext` before middleware. A local transa
    and runs failure-isolated aftermath hooks.
 
 Failure before publication aborts prepared participants in reverse order and emits one
-`ActionRollback`. A handler exception, cancellation, conflict, and prepare failure publish nothing.
+`TransactionRollback`. A handler exception, cancellation, conflict, and prepare failure publish nothing.
 Participant `apply()` is infallible by contract; an exception there is framework-integrity damage,
 is tagged on the committed diagnostic outcome, and fails loudly.
 
@@ -229,8 +229,8 @@ coroutine from a hook is an error.
 
 ## Retention and privacy
 
-`ActionCommit` is an ephemeral in-process event and may carry opaque inverse handles. The bounded
-`ActionResultSnapshot` and JSON schema 1 retain only stable IDs, causality, times, terminal status,
+`TransactionCommit` is an ephemeral in-process event and may carry opaque inverse handles. The bounded
+`TransactionResultSnapshot` and JSON schema 1 retain only stable IDs, causality, times, terminal status,
 safe tags, and change counts. They retain no values, owners, mutable backend objects, closures,
 tracebacks, or arbitrary `repr()`. Unknown schemas are rejected. A durable application must separately
 define codecs, redaction, actor privacy, access, encryption, retention, and deletion policy. Use

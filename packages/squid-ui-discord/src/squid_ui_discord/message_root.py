@@ -27,11 +27,18 @@ from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
 import anyio
 import discord
 
-from squid_reactivity.actions import ActionCommit, ActionContext, ActorRef, current_action
+from squid_reactivity.actions import (
+    ActionContext,
+    ActorRef,
+    current_action,
+)
 from squid_reactivity.addresses import CellAddress
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_reactivity.topics import Address, SubscriptionReconciler, Topic
+from squid_reactivity.transaction_results import (
+    TransactionCommit,
+)
 from squid_reactivity.transactions import (
     on_action_commit,
     readonly_transaction,
@@ -1166,7 +1173,7 @@ class MessageRoot[
             on_action_commit(self._note_action_commit, key=self)
             yield
 
-    def _note_action_commit(self, commit: ActionCommit) -> None:
+    def _note_action_commit(self, commit: TransactionCommit) -> None:
         # Direct subscriptions already invalidate every affected render cache. A write to
         # unrendered state still needs application commit hooks, including persistence,
         # even when the existing tree and visible generation can be reused.

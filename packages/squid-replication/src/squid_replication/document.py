@@ -15,14 +15,16 @@ from squid_reactivity.actions import (
     ActionPurpose,
     ActorRef,
     CausalRef,
-    ChangeReport,
-    ConflictDetail,
-    TransactionContribution,
 )
 from squid_reactivity.errors import (
     ReactiveConflictError,
 )
 from squid_reactivity.internals import Cell as _Cell
+from squid_reactivity.transaction_results import (
+    ChangeReport,
+    ConflictDetail,
+    TransactionContribution,
+)
 from squid_reactivity.transactions import (
     TransactionView,
     action_participant,

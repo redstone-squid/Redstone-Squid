@@ -18,17 +18,16 @@ from squid_reactivity.diagnostics.observers import (
 )
 from squid_reactivity.diagnostics.snapshots import (
     DEFAULT_REDACTION,
-    ActionResultSnapshot,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
     OperationEventSnapshot,
     RedactionPolicy,
     ResourceEventSnapshot,
+    TransactionResultSnapshot,
 )
 
 __all__ = [
     "DEFAULT_REDACTION",
-    "ActionResultSnapshot",
     "CausalEventSnapshot",
     "ContinuationFailureSnapshot",
     "EventLedger",
@@ -36,6 +35,7 @@ __all__ = [
     "OperationEventSnapshot",
     "RedactionPolicy",
     "ResourceEventSnapshot",
+    "TransactionResultSnapshot",
     "copy_event_observers",
     "emit_causal_event",
     "emit_continuation_failure",

@@ -72,7 +72,7 @@ read any caller may take; an `Inspection` is the expensive assembly a tool asks 
 
 `Outcome`, `Verdict`, `Feedback` and `Receipt` retire into these three. This is what
 resolved the former `ActionOutcome` homonym without a coin-flip: the reactive union
-`ActionCommit | ActionRollback` is an `ActionResult`, and profiling uses `ActionStatus`.
+`TransactionCommit | TransactionRollback` is an `TransactionResult`, and profiling uses `ActionStatus`.
 They stopped sharing a word because they were never the same kind of thing.
 
 The ordinary property name `Screen.outcome` distinguishes `Completed(value)` from `Cancelled(reason)`;

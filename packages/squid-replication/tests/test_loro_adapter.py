@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from squid_reactivity import ActionCommit, ConflictDetail, on_action_commit, transaction
+from squid_reactivity import ConflictDetail, TransactionCommit, on_action_commit, transaction
 from squid_replication import (
     LoroBackend,
     Replica,
@@ -23,7 +23,7 @@ def _replica(name: str, peer_id: int) -> Replica:
 
 
 def _record(callback: Callable[[], object]) -> ReplicationChangeToken:
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         callback()

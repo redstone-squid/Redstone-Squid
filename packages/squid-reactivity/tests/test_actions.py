@@ -10,11 +10,8 @@ from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from squid_reactivity import (
-    ActionCommit,
     ActionContext,
     ActionPurpose,
-    ActionResultSnapshot,
-    ActionRollback,
     ActionValidationError,
     ActorRef,
     CausalEventSnapshot,
@@ -24,6 +21,9 @@ from squid_reactivity import (
     ReactiveConflictError,
     ReactiveWriteError,
     RedactionPolicy,
+    TransactionCommit,
+    TransactionResultSnapshot,
+    TransactionRollback,
     apply_conditional_patches,
     computed,
     enlist,
@@ -156,7 +156,7 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
 ) -> None:
     assume(later_value is None or later_value != committed_value)
     counter = Counter()
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         counter.value = committed_value
@@ -176,7 +176,7 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
 def test_retained_patch_uses_weak_slot_authority() -> None:
     counter = LocalCounter()
     owner = weakref.ref(counter)
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         counter.value = 1
@@ -397,7 +397,7 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
         metadata={"tenant": "safe", "token": "secret"},
     )
     ledger = EventLedger()
-    rollbacks: list[ActionRollback] = []
+    rollbacks: list[TransactionRollback] = []
     with observe_events(ledger):
         with pytest.raises(RuntimeError), transaction(action_context=context):
             on_action_rollback(lambda rollback: rollbacks.append(rollback))
@@ -407,7 +407,7 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
         assert snapshot.actor == ActorRef("user", "42")
         assert snapshot.metadata == ()
         assert snapshot.exception is not None and snapshot.exception.message == "[redacted]"
-        opted_in = ActionResultSnapshot.from_result(
+        opted_in = TransactionResultSnapshot.from_result(
             rollbacks[0], RedactionPolicy(include_metadata=True, include_exception_messages=True)
         )
         assert dict(opted_in.metadata) == {"tenant": "safe", "token": "secret"}
@@ -458,7 +458,7 @@ def test_custom_sink_receives_only_explicitly_observed_work() -> None:
         pass
     assert len(events) == 1
     snapshot = events[0]
-    assert isinstance(snapshot, ActionResultSnapshot)
+    assert isinstance(snapshot, TransactionResultSnapshot)
     assert snapshot.actor is None
 
 

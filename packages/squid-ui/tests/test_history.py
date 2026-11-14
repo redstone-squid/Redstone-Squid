@@ -18,8 +18,10 @@ from squid_reactivity import (
     observe_events,
     on_action_commit,
 )
-from squid_reactivity.actions import ChangeToken
 from squid_reactivity.operations import OperationContext
+from squid_reactivity.transaction_results import (
+    ChangeToken,
+)
 from squid_reactivity.transactions import (
     readonly_transaction,
 )

@@ -1,10 +1,9 @@
-"""Describe why a reactive transaction ran and what it committed or rolled back.
+"""Identify the intent and causal context of reactive work.
 
-ActionContext gives the transaction an identity and links it to the event that
-caused it. A completed transaction produces an ActionCommit or ActionRollback;
-history can use the commit's reversible changes, while diagnostic sinks receive
-portable summaries. Operations and resource loads carry causal references so
-their later results can still be traced to the initiating action.
+ActionContext gives a transaction an identity and links it to the event that
+caused it. Operations and resource loads carry causal references so their later
+results can still be traced to the initiating action. Transaction outcomes and
+reversible changes are defined in transaction_results.
 """
 
 import uuid
@@ -12,16 +11,10 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, Protocol
-
-if TYPE_CHECKING:
-    # Transactions import action results at runtime; their patch type is annotation-only here.
-    from squid_reactivity.transactions import (
-        CellPatchSet,
-    )
+from typing import Literal
 
 type ActionId = uuid.UUID
 _EMPTY_METADATA: Mapping[str, str] = MappingProxyType({})
@@ -37,17 +30,6 @@ class ActionPurpose(Enum):
     REMOTE = "remote"
     RECOVERY = "recovery"
     SYSTEM = "system"
-
-
-class RollbackReason(Enum):
-    """Why an admitted action published nothing."""
-
-    HANDLER_EXCEPTION = "handler_exception"
-    CANCELLED = "cancelled"
-    CONFLICT = "conflict"
-    VALIDATION_FAILED = "validation_failed"
-    PARTICIPANT_PREPARE_FAILED = "participant_prepare_failed"
-    FRAMEWORK_INTEGRITY_FAILURE = "framework_integrity_failure"
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,14 +101,6 @@ class ActionContext:
 
 
 @dataclass(frozen=True, slots=True)
-class CommitSequence:
-    """A runtime-local diagnostic order, never comparable across runtimes."""
-
-    runtime_id: uuid.UUID
-    value: int
-
-
-@dataclass(frozen=True, slots=True)
 class ExceptionReport:
     """An exception type and message without references to its traceback.
 
@@ -142,100 +116,11 @@ class ExceptionReport:
         return cls(type(error).__name__, str(error))
 
 
-@dataclass(frozen=True, slots=True)
-class ObservedRead:
-    """The committed version of a shared cell read by an action."""
-
-    target_id: str
-    version: int
-
-
-@dataclass(frozen=True, slots=True)
-class ChangeReport:
-    """A safe count-only projection of staged or committed changes."""
-
-    cells: int = 0
-    participants: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class ConflictDetail:
-    """A target identifier and the versions that caused a conflict."""
-
-    target_id: str
-    expected_version: int
-    actual_version: int
-
-
-class ChangeToken[InverseT = Any](Protocol):
-    """A participant's reversible change.
-
-    The participant defines the inverse type. History first asks plan_inverse
-    whether the change can still be undone, then passes the returned inverse
-    to stage_inverse inside a transaction.
-    """
-
-    def plan_inverse(self) -> InverseT | ConflictDetail: ...
-
-    def stage_inverse(self, inverse: InverseT) -> None: ...
-
-
-@dataclass(frozen=True, slots=True)
-class TransactionContribution:
-    """An opaque reversible participant contribution and its safe report."""
-
-    participant_id: str
-    token: ChangeToken[Any]
-    report: ChangeReport = ChangeReport(participants=1)
-
-
-@dataclass(frozen=True, slots=True)
-class ActionCommit:
-    """The immutable in-process record of an action that crossed the commit point."""
-
-    context: ActionContext
-    sequence: CommitSequence
-    committed_at: datetime
-    duration: timedelta
-    reads: tuple[ObservedRead, ...]
-    patches: CellPatchSet
-    participant_changes: tuple[TransactionContribution, ...] = ()
-    tags: frozenset[str] = frozenset()
-
-
-@dataclass(frozen=True, slots=True)
-class ActionRollback:
-    """The result of an action that discarded its staged writes."""
-
-    context: ActionContext
-    rolled_back_at: datetime
-    duration: timedelta
-    reason: RollbackReason
-    reads: tuple[ObservedRead, ...]
-    conflict: ConflictDetail | None
-    exception: ExceptionReport | None
-    staged_report: ChangeReport
-    cleanup_errors: tuple[ExceptionReport, ...] = ()
-
-
-type ActionResult = ActionCommit | ActionRollback
-
-
-_RUNTIME_ID = uuid.uuid4()
-_sequence = 0
-
-
 _CURRENT_ACTION: ContextVar[ActionContext | None] = ContextVar("squid_reactivity_action", default=None)
 _CURRENT_CAUSALITY: ContextVar[tuple[CausalRef, ActionId | None] | None] = ContextVar(
     "squid_reactivity_causality", default=None
 )
 _continuation_depth: ContextVar[int] = ContextVar("squid_reactivity_continuation_depth", default=0)
-
-
-def next_commit_sequence() -> CommitSequence:
-    global _sequence
-    _sequence += 1
-    return CommitSequence(_RUNTIME_ID, _sequence)
 
 
 def current_action() -> ActionContext | None:

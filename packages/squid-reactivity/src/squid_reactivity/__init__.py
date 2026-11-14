@@ -11,21 +11,12 @@ keeping component renders synchronous.
 """
 
 from squid_reactivity.actions import (
-    ActionCommit,
     ActionContext,
     ActionPurpose,
     ActionRelation,
-    ActionResult,
-    ActionRollback,
     ActorRef,
     CausalRef,
-    ChangeReport,
-    CommitSequence,
-    ConflictDetail,
     ExceptionReport,
-    ObservedRead,
-    RollbackReason,
-    TransactionContribution,
     action_scope,
     current_action,
 )
@@ -41,7 +32,6 @@ from squid_reactivity.core import (
     state,
 )
 from squid_reactivity.diagnostics import (
-    ActionResultSnapshot,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
     EventLedger,
@@ -49,6 +39,7 @@ from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     RedactionPolicy,
     ResourceEventSnapshot,
+    TransactionResultSnapshot,
     observe_events,
 )
 from squid_reactivity.errors import (
@@ -84,6 +75,17 @@ from squid_reactivity.tracking import (
     strong_read,
     untracked,
 )
+from squid_reactivity.transaction_results import (
+    ChangeReport,
+    CommitSequence,
+    ConflictDetail,
+    ObservedRead,
+    RollbackReason,
+    TransactionCommit,
+    TransactionContribution,
+    TransactionResult,
+    TransactionRollback,
+)
 from squid_reactivity.transactions import (
     CellPatch,
     CellPatchSet,
@@ -104,13 +106,9 @@ from squid_reactivity.transactions import (
 )
 
 __all__ = [
-    "ActionCommit",
     "ActionContext",
     "ActionPurpose",
     "ActionRelation",
-    "ActionResult",
-    "ActionResultSnapshot",
-    "ActionRollback",
     "ActionValidationError",
     "ActorRef",
     "Address",
@@ -151,8 +149,12 @@ __all__ = [
     "TopicCodec",
     "TopicHandle",
     "Transaction",
+    "TransactionCommit",
     "TransactionContribution",
     "TransactionParticipant",
+    "TransactionResult",
+    "TransactionResultSnapshot",
+    "TransactionRollback",
     "TransactionView",
     "UndeclaredStateError",
     "action_scope",

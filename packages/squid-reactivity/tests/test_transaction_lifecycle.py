@@ -7,12 +7,12 @@ from typing import override
 import pytest
 
 from squid_reactivity import (
-    ActionCommit,
-    ActionResult,
-    ActionRollback,
     FrameworkIntegrityError,
     Reactive,
     StaleReactiveContextError,
+    TransactionCommit,
+    TransactionResult,
+    TransactionRollback,
     readonly_transaction,
     state,
     transaction,
@@ -35,13 +35,13 @@ def test_cancellation_before_commit_clears_the_transaction_context(readonly: boo
     # A failed entry must also clear its context, allowing an independent action.
     with transaction() as recovery:
         pass
-    assert isinstance(recovery.result, ActionCommit)
+    assert isinstance(recovery.result, TransactionCommit)
 
 
 @pytest.mark.parametrize("readonly", [False, True])
 def test_cancellation_during_notifications_preserves_the_commit_result(readonly: bool) -> None:
     schedule = InterleavingHarness()
-    seen: list[ActionResult] = []
+    seen: list[TransactionResult] = []
 
     def cancel() -> None:
         raise asyncio.CancelledError
@@ -50,7 +50,7 @@ def test_cancellation_during_notifications_preserves_the_commit_result(readonly:
     scope = readonly_transaction if readonly else transaction
     with schedule.installed(), pytest.raises(asyncio.CancelledError), scope() as tx:
         tx.after_result(seen.append)
-    assert isinstance(tx.result, ActionCommit)
+    assert isinstance(tx.result, TransactionCommit)
     assert seen == [tx.result]
 
 
@@ -65,18 +65,18 @@ def test_failure_after_publication_is_a_damaged_commit_in_either_mode(readonly: 
     scope = readonly_transaction if readonly else transaction
     with schedule.installed(), pytest.raises(FrameworkIntegrityError), scope() as tx:
         pass
-    assert isinstance(tx.result, ActionCommit)
+    assert isinstance(tx.result, TransactionCommit)
     assert "framework_integrity_failure" in tx.result.tags
 
 
 @pytest.mark.parametrize("readonly", [False, True])
 def test_body_failure_exposes_rollback_and_delivers_callbacks_once(readonly: bool) -> None:
-    seen: list[ActionResult] = []
+    seen: list[TransactionResult] = []
     scope = readonly_transaction if readonly else transaction
     with pytest.raises(ValueError, match="body failed"), scope() as tx:
         tx.after_result(seen.append)
         raise ValueError("body failed")
-    assert isinstance(tx.result, ActionRollback)
+    assert isinstance(tx.result, TransactionRollback)
     assert seen == [tx.result]
 
 

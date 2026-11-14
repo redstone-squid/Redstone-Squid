@@ -22,16 +22,12 @@ from enum import Enum
 from typing import Any, Protocol, Self, overload
 
 from squid_reactivity.actions import (
-    ActionCommit,
     ActionContext,
     ActionId,
     ActionPurpose,
     ActionRelation,
     CausalRef,
-    ChangeToken,
-    ConflictDetail,
     ExceptionReport,
-    TransactionContribution,
     current_action,
 )
 from squid_reactivity.diagnostics import (
@@ -47,6 +43,12 @@ from squid_reactivity.errors import (
 )
 from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_reactivity.operations import OperationContext
+from squid_reactivity.transaction_results import (
+    ChangeToken,
+    ConflictDetail,
+    TransactionCommit,
+    TransactionContribution,
+)
 from squid_reactivity.transactions import (
     CellPatchSet,
     ConditionalCellPatch,
@@ -114,7 +116,7 @@ class CompensationSpec:
     """
 
     operation: Callable[[str], Awaitable[None]]
-    idempotency_key: Callable[[ActionCommit], str]
+    idempotency_key: Callable[[TransactionCommit], str]
     retry: CompensationRetryPolicy = field(default_factory=lambda: CompensationRetryPolicy())
 
 
@@ -435,7 +437,7 @@ class UndoPlan:
     participants: tuple[TransactionContribution, ...] = ()
 
     @classmethod
-    def from_commit(cls, commit: ActionCommit) -> UndoPlan:
+    def from_commit(cls, commit: TransactionCommit) -> UndoPlan:
         patches: CellPatchSet = commit.patches
         return cls(patches.inverse(), commit.participant_changes)
 
@@ -453,7 +455,7 @@ class HistoryEntry:
     undo_action_id: ActionId | None = None
     redo_plan: UndoPlan | None = None
     compensation: CompensationSpec | None = None
-    original_commit: ActionCommit | None = None
+    original_commit: TransactionCommit | None = None
     compensation_execution: CompensationExecution | None = None
     retentions: tuple[object, ...] = ()
     operation: ReversibleOperation | None = None
@@ -585,7 +587,7 @@ class History:
         commits do not create another normal history entry.
         """
 
-        def committed(commit: ActionCommit) -> None:
+        def committed(commit: TransactionCommit) -> None:
             if commit.context.kind in {ActionPurpose.UNDO, ActionPurpose.REDO}:
                 return
             self._push(
@@ -766,7 +768,7 @@ class History:
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
-                def committed(commit: ActionCommit) -> None:
+                def committed(commit: TransactionCommit) -> None:
                     assert entry is not None
                     self._release_entry(entry)
                     entry.undo_action_id = commit.context.action_id
@@ -980,7 +982,7 @@ class History:
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
-                def committed(commit: ActionCommit) -> None:
+                def committed(commit: TransactionCommit) -> None:
                     assert entry is not None
                     self._release_entry(entry)
                     entry.undo_plan = UndoPlan.from_commit(commit)
@@ -1037,7 +1039,7 @@ class History:
         self._redoable.clear()
         self._signal.notify()
 
-    def _reserve(self, callback: Callable[[ActionCommit], None]) -> None:
+    def _reserve(self, callback: Callable[[TransactionCommit], None]) -> None:
         current = CURRENT_TRANSACTION.get()
         if current is not None and current.readonly:
             message = "a read-only action changed nothing, so it has nothing to record"

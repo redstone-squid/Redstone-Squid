@@ -14,13 +14,20 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
-from squid_reactivity.actions import ActionCommit, ActionResult, ActionRollback, ExceptionReport
+from squid_reactivity.actions import (
+    ExceptionReport,
+)
 from squid_reactivity.diagnostics.snapshots import (
     DEFAULT_REDACTION,
-    ActionResultSnapshot,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
     RedactionPolicy,
+    TransactionResultSnapshot,
+)
+from squid_reactivity.transaction_results import (
+    TransactionCommit,
+    TransactionResult,
+    TransactionRollback,
 )
 
 _log = logging.getLogger(__name__)
@@ -52,8 +59,8 @@ class EventLedger:
         return tuple(self._events)
 
     @property
-    def results(self) -> tuple[ActionResultSnapshot, ...]:
-        return tuple(event for event in self._events if isinstance(event, ActionResultSnapshot))
+    def results(self) -> tuple[TransactionResultSnapshot, ...]:
+        return tuple(event for event in self._events if isinstance(event, TransactionResultSnapshot))
 
 
 @dataclass(slots=True)
@@ -100,7 +107,7 @@ def has_event_observers() -> bool:
     return any(observer.sink is not None for observer in _observers.get())
 
 
-def _deliver(event: ActionResult | CausalEventSnapshot) -> None:
+def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
     seen: set[int] = set()
     snapshots: dict[RedactionPolicy, CausalEventSnapshot] = {}
     failures: list[tuple[str, Exception]] = []
@@ -113,8 +120,8 @@ def _deliver(event: ActionResult | CausalEventSnapshot) -> None:
             snapshot = snapshots.get(observer.redaction)
             if snapshot is None:
                 snapshot = (
-                    ActionResultSnapshot.from_result(event, observer.redaction)
-                    if isinstance(event, (ActionCommit, ActionRollback))
+                    TransactionResultSnapshot.from_result(event, observer.redaction)
+                    if isinstance(event, (TransactionCommit, TransactionRollback))
                     else observer.redaction.redact(event)
                 )
                 snapshots[observer.redaction] = snapshot
@@ -124,12 +131,12 @@ def _deliver(event: ActionResult | CausalEventSnapshot) -> None:
             failures.append((type(sink).__qualname__, error))
     # Only action-result delivery generates failure events. A failed delivery of
     # those diagnostics is logged without producing another diagnostic recursively.
-    if isinstance(event, (ActionCommit, ActionRollback)):
+    if isinstance(event, (TransactionCommit, TransactionRollback)):
         for callback, error in failures:
             emit_continuation_failure(event, "result_sink", callback, error)
 
 
-def emit_result(result: ActionResult) -> None:
+def emit_result(result: TransactionResult) -> None:
     _deliver(result)
 
 
@@ -138,7 +145,7 @@ def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
     _deliver(snapshot)
 
 
-def emit_continuation_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
+def emit_continuation_failure(result: TransactionResult, stage: str, callback: str, error: BaseException) -> None:
     """Report a callback failure linked to its action."""
     if not has_event_observers():
         return

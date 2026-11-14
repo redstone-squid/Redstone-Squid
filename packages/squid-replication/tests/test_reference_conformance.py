@@ -13,12 +13,12 @@ import weakref
 import pytest
 
 from squid_reactivity import (
-    ActionCommit,
     ChangeReport,
     ConflictDetail,
     EventLedger,
     Reactive,
     ReactiveConflictError,
+    TransactionCommit,
     observe_events,
     on_action_commit,
     state,
@@ -246,7 +246,7 @@ def test_a_read_only_replicated_read_does_not_block_an_unrelated_local_write() -
 def test_action_token_selectively_inverts_counter_and_add_after_remote_work() -> None:
     local = Replica("a").open("project")
     remote = Replica("b").open("project")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         local.counter("votes").increment(2)
@@ -277,7 +277,7 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
     with transaction():
         history.record("drop the tag")
         local.set("tags").discard("shared")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         remote.set("tags").discard("shared")
@@ -337,7 +337,7 @@ async def test_undo_and_redo_of_a_discard_round_trip() -> None:
 
 def test_action_token_reloads_against_a_recreated_document() -> None:
     source = Replica("a").open("project")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         source.counter("votes").increment(2)
@@ -404,7 +404,7 @@ def test_applying_a_reused_identity_with_different_content_records_nothing() -> 
 
 def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> None:
     document = Replica("a").open("project")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         document.counter("votes").increment(2)
@@ -420,7 +420,7 @@ def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> 
 
 def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
     document = Replica("a").open("project")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         document.counter("votes").increment(2)
@@ -437,7 +437,7 @@ def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
 
 def test_durable_history_token_rejects_wrong_document_and_schema() -> None:
     source = Replica("a").open("source")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         source.counter("votes").increment(1)

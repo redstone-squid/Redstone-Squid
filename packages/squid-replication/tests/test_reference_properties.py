@@ -3,7 +3,7 @@
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid_reactivity import ActionCommit, on_action_commit, transaction
+from squid_reactivity import TransactionCommit, on_action_commit, transaction
 from squid_replication import (
     PreparedReplicationInverse,
     ReferenceBackend,
@@ -54,7 +54,7 @@ def test_all_delivery_orders_converge(
 def test_semantic_inverse_preserves_later_remote_work(local_amount: int, remote_amount: int) -> None:
     local = Replica("local").open("project")
     remote = Replica("remote").open("project")
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         local.counter("votes").increment(local_amount)
@@ -83,7 +83,7 @@ def _sync(replicas: list[ReplicatedDocument], order: list[int]) -> None:
 
 
 def _discard(document: ReplicatedDocument, value: str) -> ReplicationChangeToken:
-    commits: list[ActionCommit] = []
+    commits: list[TransactionCommit] = []
     with transaction():
         on_action_commit(lambda commit: commits.append(commit))
         document.set("tags").discard(value)

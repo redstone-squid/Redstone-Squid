@@ -8,12 +8,12 @@ import anyio
 import pytest
 
 from squid_reactivity import (
-    ActionCommit,
     EventLedger,
     ExceptionReport,
     OperationEventSnapshot,
     Reactive,
     RedactionPolicy,
+    TransactionCommit,
     observe_events,
     transaction,
 )
@@ -100,7 +100,7 @@ async def test_operation_resource_and_callback_errors_use_each_observers_policy(
         async def data(self) -> None:
             raise ValueError("resource detail")
 
-    def failed_callback(result: ActionCommit) -> None:
+    def failed_callback(result: TransactionCommit) -> None:
         raise ValueError("callback detail")
 
     owner = Owner()

@@ -13,8 +13,14 @@ from typing import TYPE_CHECKING, Any, override
 
 import discord
 
-from squid_reactivity.actions import ActionCommit, ActionContext, current_action
+from squid_reactivity.actions import (
+    ActionContext,
+    current_action,
+)
 from squid_reactivity.operations import Cancelled
+from squid_reactivity.transaction_results import (
+    TransactionCommit,
+)
 from squid_reactivity.transactions import (
     on_action_commit,
     on_action_rollback,
@@ -49,7 +55,7 @@ class ActionResponder:
         self._finish_requested = False
         self._finish_accepted = False
         self._after_commit: list[PostCommitOperation[Any]] = []
-        self._committed: ActionCommit | None = None
+        self._committed: TransactionCommit | None = None
 
     async def acknowledge(self) -> None:
         if not self.interaction.response.is_done():
@@ -236,7 +242,7 @@ class ActionResponder:
         self._after_commit.append(operation)
         return operation
 
-    def _record_commit(self, commit: ActionCommit) -> None:
+    def _record_commit(self, commit: TransactionCommit) -> None:
         self._committed = commit
 
     def _start_after_commit(self) -> None:

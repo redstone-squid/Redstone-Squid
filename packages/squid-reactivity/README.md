@@ -43,8 +43,10 @@ For restoration and saving across restarts, use `squid_storage.PersistentStatePo
 
 The package is layered:
 
-- `squid_reactivity.actions` provides sortable action IDs, causal contexts, immutable terminal
-  outcomes, and the current causal context.
+- `squid_reactivity.actions` provides sortable action IDs, causal contexts, and the current
+  causal context.
+- `squid_reactivity.transaction_results` defines commit and rollback records, observed reads,
+  and reversible participant contributions.
 - `squid_reactivity.diagnostics` provides scoped diagnostic observers, redaction, event
   ledgers, and application-defined sinks.
 - `squid_reactivity.core` provides state and computed descriptors, the reusable `Reactive`
@@ -79,10 +81,10 @@ and its `result` after the outer block finishes, including when the block raises
 transactions share the outer handle.
 
 ```python
-from squid_reactivity import ActionCommit, EventLedger, observe_events
+from squid_reactivity import TransactionCommit, EventLedger, observe_events
 
 
-def record_commit(result: ActionCommit) -> None:
+def record_commit(result: TransactionCommit) -> None:
     print(result.context.name, len(result.patches))
 
 
@@ -92,7 +94,7 @@ with observe_events(ledger):
         tx.after_commit(record_commit)
         counter.count += 1
 
-assert isinstance(tx.result, ActionCommit)
+assert isinstance(tx.result, TransactionCommit)
 ```
 
 `after_commit`, `after_rollback`, and `after_result` receive one completed result. A callback

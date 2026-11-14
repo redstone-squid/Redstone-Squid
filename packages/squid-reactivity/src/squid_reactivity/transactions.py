@@ -9,6 +9,7 @@ import asyncio
 import inspect
 import logging
 import threading
+import uuid
 import weakref
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -18,25 +19,16 @@ from enum import Enum, auto
 from typing import Any, Protocol
 
 from squid_reactivity.actions import (
-    ActionCommit,
     ActionContext,
     ActionPurpose,
     ActionRelation,
-    ActionResult,
-    ActionRollback,
     ActorRef,
-    ChangeReport,
-    ConflictDetail,
     ExceptionReport,
-    ObservedRead,
-    RollbackReason,
-    TransactionContribution,
     action_scope,
     continuation_callback,
     current_action,
     current_causality,
     in_continuation,
-    next_commit_sequence,
 )
 from squid_reactivity.diagnostics import (
     emit_continuation_failure,
@@ -63,8 +55,28 @@ from squid_reactivity.tracking import (
     _current_task,
     relaxed_read,
 )
+from squid_reactivity.transaction_results import (
+    ChangeReport,
+    CommitSequence,
+    ConflictDetail,
+    ObservedRead,
+    RollbackReason,
+    TransactionCommit,
+    TransactionContribution,
+    TransactionResult,
+    TransactionRollback,
+)
 
 _log = logging.getLogger(__name__)
+
+_RUNTIME_ID = uuid.uuid4()
+_sequence = 0
+
+
+def _next_commit_sequence() -> CommitSequence:
+    global _sequence
+    _sequence += 1
+    return CommitSequence(_RUNTIME_ID, _sequence)
 
 
 class TransactionView(Protocol):
@@ -276,25 +288,25 @@ class Transaction:
 
     def __init__(self, context: ActionContext) -> None:
         self._context = context
-        self._result: ActionResult | None = None
+        self._result: TransactionResult | None = None
 
     @property
     def context(self) -> ActionContext:
         return self._context
 
     @property
-    def result(self) -> ActionResult | None:
+    def result(self) -> TransactionResult | None:
         return self._result
 
-    def after_commit(self, callback: Callable[[ActionCommit], None], *, key: object | None = None) -> None:
+    def after_commit(self, callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
         self._check_current()
         on_action_commit(callback, key=key)
 
-    def after_rollback(self, callback: Callable[[ActionRollback], None], *, key: object | None = None) -> None:
+    def after_rollback(self, callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
         self._check_current()
         on_action_rollback(callback, key=key)
 
-    def after_result(self, callback: Callable[[ActionResult], None], *, key: object | None = None) -> None:
+    def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
         self._check_current()
         on_action_result(callback, key=key)
 
@@ -344,16 +356,16 @@ class _Transaction:
     changed: dict[int, tuple[ReactiveOwner, set[str]]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
-    commit_hooks: list[tuple[object | None, Callable[[ActionCommit], None]]] = field(default_factory=list)
-    rollback_hooks: list[tuple[object | None, Callable[[ActionRollback], None]]] = field(default_factory=list)
-    result_hooks: list[tuple[object | None, Callable[[ActionResult], None]]] = field(default_factory=list)
+    commit_hooks: list[tuple[object | None, Callable[[TransactionCommit], None]]] = field(default_factory=list)
+    rollback_hooks: list[tuple[object | None, Callable[[TransactionRollback], None]]] = field(default_factory=list)
+    result_hooks: list[tuple[object | None, Callable[[TransactionResult], None]]] = field(default_factory=list)
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
     cleanup_errors: list[ExceptionReport] = field(default_factory=list)
     prepared_participants: list[tuple[TransactionParticipant[Any], Any]] = field(default_factory=list)
-    commit_record: ActionCommit | None = None
+    commit_record: TransactionCommit | None = None
     handle: Transaction = field(init=False)
 
     def __post_init__(self) -> None:
@@ -532,7 +544,7 @@ class _Transaction:
         ):
             yield
 
-    def commit(self) -> ActionCommit:
+    def commit(self) -> TransactionCommit:
         """Prepare everything, publish synchronously, and return the immutable commit."""
         self.phase = _Phase.PREPARING
         self.check_preconditions()
@@ -548,9 +560,9 @@ class _Transaction:
                 if (change := participant.describe_change(value)) is not None
             )
         committed_at = datetime.now(UTC)
-        commit = ActionCommit(
+        commit = TransactionCommit(
             self.context,
-            next_commit_sequence(),
+            _next_commit_sequence(),
             committed_at,
             committed_at - self.context.started_at,
             self.reads(),
@@ -691,7 +703,7 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
 
 
 def _notify_hooks(
-    result: ActionResult,
+    result: TransactionResult,
     hooks: Sequence[tuple[object | None, Callable[[Any], None]]],
 ) -> None:
     if not hooks:
@@ -716,17 +728,17 @@ def _notify_hooks(
                 )
 
 
-def _emit_commit(current: _Transaction, commit: ActionCommit) -> None:
+def _emit_commit(current: _Transaction, commit: TransactionCommit) -> None:
     current.handle._result = commit
     emit_result(commit)
     _notify_hooks(commit, current.commit_hooks)
     _notify_hooks(commit, current.result_hooks)
 
 
-def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit: bool) -> ActionRollback:
+def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit: bool) -> TransactionRollback:
     cleanup_errors = current.abort(error)
     rolled_back_at = datetime.now(UTC)
-    rollback = ActionRollback(
+    rollback = TransactionRollback(
         current.context,
         rolled_back_at,
         rolled_back_at - current.context.started_at,
@@ -887,7 +899,7 @@ def readonly_transaction(*, action_context: ActionContext | None = None) -> Iter
         yield handle
 
 
-def on_action_commit(callback: Callable[[ActionCommit], None], *, key: object | None = None) -> None:
+def on_action_commit(callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
     """Register a synchronous callback for a successful commit.
 
     Call inside a transaction. Callback failures are reported without changing
@@ -896,12 +908,12 @@ def on_action_commit(callback: Callable[[ActionCommit], None], *, key: object | 
     _add_action_hook("commit", callback, key=key)
 
 
-def on_action_rollback(callback: Callable[[ActionRollback], None], *, key: object | None = None) -> None:
+def on_action_rollback(callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
     """Register a synchronous callback after rollback; its errors are reported."""
     _add_action_hook("rollback", callback, key=key)
 
 
-def on_action_result(callback: Callable[[ActionResult], None], *, key: object | None = None) -> None:
+def on_action_result(callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
     """Register a synchronous callback for either commit or rollback."""
     _add_action_hook("result", callback, key=key)
 

@@ -5,15 +5,15 @@ from typing import Literal
 import pytest
 
 from squid_reactivity import (
-    ActionCommit,
     ActionPurpose,
     ActionRelation,
-    ActionResultSnapshot,
-    ActionRollback,
     ActorRef,
     FrameworkIntegrityError,
     Reactive,
     StaleReactiveContextError,
+    TransactionCommit,
+    TransactionResultSnapshot,
+    TransactionRollback,
     apply_conditional_patches,
     inspect_cells,
     readonly_transaction,
@@ -29,14 +29,14 @@ class Counter(Reactive):
 
 def test_nested_blocks_share_the_result_and_callbacks_see_it() -> None:
     model = Counter()
-    seen: list[ActionCommit] = []
+    seen: list[TransactionCommit] = []
     with transaction("increment", actor=ActorRef("user", "42")) as tx:
         assert tx.result is None
         with transaction() as nested:
             assert nested is tx
             model.value += 1
 
-        def committed(result: ActionCommit) -> None:
+        def committed(result: TransactionCommit) -> None:
             assert tx.result is result
             seen.append(result)
 
@@ -51,7 +51,7 @@ def test_nested_blocks_share_the_result_and_callbacks_see_it() -> None:
 
 def test_rollback_result_survives_the_original_exception_and_can_start_recovery() -> None:
     model = Counter()
-    seen: list[ActionRollback] = []
+    seen: list[TransactionRollback] = []
     with pytest.raises(ValueError, match="failed"), transaction("edit") as tx:
         tx.after_rollback(seen.append)
         model.value = 3
@@ -69,7 +69,7 @@ def test_a_callback_can_open_a_new_identified_transaction() -> None:
     model = Counter()
     children = []
 
-    def follow_up(result: ActionCommit) -> None:
+    def follow_up(result: TransactionCommit) -> None:
         with transaction(caused_by=result.context) as child:
             model.value = 2
         children.append(child)
@@ -85,7 +85,7 @@ def test_a_callback_can_open_a_new_identified_transaction() -> None:
 def test_readonly_transactions_expose_their_result() -> None:
     with readonly_transaction() as tx:
         assert tx.result is None
-    assert isinstance(tx.result, ActionCommit)
+    assert isinstance(tx.result, TransactionCommit)
 
 
 def test_blind_write_records_the_value_it_replaces_and_can_be_undone() -> None:
@@ -94,7 +94,7 @@ def test_blind_write_records_the_value_it_replaces_and_can_be_undone() -> None:
     schedule.at("transaction.close_staging", lambda: setattr(model, "value", 2))
     with schedule.installed(), transaction() as tx:
         model.value = 1
-    assert isinstance(tx.result, ActionCommit)
+    assert isinstance(tx.result, TransactionCommit)
     patch = tx.result.patches.patches[0]
     assert patch.before.value == 2
     assert patch.before_version == 1
@@ -115,7 +115,7 @@ def test_failure_after_cell_publication_preserves_the_commit() -> None:
     schedule.at("commit.after_cell_publication", fail)
     with schedule.installed(), pytest.raises(FrameworkIntegrityError), transaction() as tx:
         model.value = 1
-    assert isinstance(tx.result, ActionCommit)
+    assert isinstance(tx.result, TransactionCommit)
     assert model.value == 1
     assert "framework_integrity_failure" in tx.result.tags
 
@@ -138,7 +138,7 @@ def test_rollback_notifies_each_owner_once_and_preserves_the_original_error() ->
         raise ValueError("handler failed")
     assert calls == ["rollback"]
     assert (model.first, model.second) == (0, 0)
-    assert isinstance(tx.result, ActionRollback)
+    assert isinstance(tx.result, TransactionRollback)
     assert len(tx.result.cleanup_errors) == 1
 
 
@@ -149,6 +149,6 @@ def test_history_relation_survives_snapshot_conversion(kind: Literal["reverses",
     relation = ActionRelation(kind, original.context.action_id)
     with transaction("history", relation=relation) as tx:
         pass
-    assert isinstance(tx.result, ActionCommit)
-    snapshot = ActionResultSnapshot.from_result(tx.result)
+    assert isinstance(tx.result, TransactionCommit)
+    snapshot = TransactionResultSnapshot.from_result(tx.result)
     assert snapshot.relation == relation
