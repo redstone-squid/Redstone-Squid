@@ -135,6 +135,11 @@ with aliases (stable_key, alias) as (
     ('no_flying_machines', 'Flying Machineless'),
     ('redstone_block_only', 'RBO'),
     ('redstone_block_only', 'Redstone Blocks Only'),
+    ('super_seamless', 'Super-seamless'),
+    ('full_seamless', 'Full-seamless'),
+    ('semi_seamless', 'Semi-seamless'),
+    ('quart_seamless', 'Quart-seamless'),
+    ('flush', 'Full-flush'),
     ('flush', 'Full Flush')
 )
 insert into tag_aliases (tag_id, alias, normalized_alias)

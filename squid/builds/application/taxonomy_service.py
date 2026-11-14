@@ -1,6 +1,7 @@
 """Read and validate official build taxonomy in short database scopes."""
 
 import json
+import re
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -90,6 +91,14 @@ class BuildTaxonomyService:
         type: RestrictionTypeLiteral,
     ) -> tuple[list[str], list[str]]:
         """Resolve approved names and aliases, retaining unknown or ambiguous input."""
+        expanded: list[str] = []
+        for value in restrictions:
+            if re.fullmatch(r"(?:non|not)[ -]*loc(?:ational)?\s*/\s*dir(?:ectional)?", value.strip(), re.IGNORECASE):
+                # This common source abbreviation applies the negation to both constraints.
+                expanded.extend(("Not Locational", "Not Directional"))
+            else:
+                expanded.append(value)
+        restrictions = expanded
         resolution = await self.resolve_official(build_kind=None, restrictions=restrictions, patterns=())
         return _validated_names(
             restrictions,

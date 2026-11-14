@@ -2,6 +2,8 @@
 
 from unittest.mock import AsyncMock
 
+import pytest
+
 from squid.builds.application.taxonomy import TaxonomyResolution
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -71,3 +73,36 @@ async def test_pattern_aliases_use_the_door_catalogue() -> None:
     repository.resolve_official.assert_awaited_once_with(
         build_kind="Door", restrictions=(), patterns=["LAMP DOOR", "Glass"]
     )
+
+
+@pytest.mark.parametrize("phrase", ["Non-Loc/Dir", "nonloc/dir", "Not locational / directional"])
+async def test_combined_negative_placement_shorthand_keeps_both_constraints(phrase: str) -> None:
+    nonloc = definition("Not Locational", TagSemanticKind.RESTRICTION, "miscellaneous")
+    nondir = definition("Not Directional", TagSemanticKind.RESTRICTION, "miscellaneous")
+    repository = AsyncMock()
+    repository.resolve_official.return_value = TaxonomyResolution(
+        (TagAssignment(nonloc), TagAssignment(nondir)), frozenset(), frozenset()
+    )
+    scope = AsyncMock(build_taxonomy=repository)
+    scope.__aenter__.return_value = scope
+    service = BuildTaxonomyService(uow_factory=lambda: scope)
+
+    assert await service.validate_restrictions([phrase], "miscellaneous") == (
+        ["Not Locational", "Not Directional"],
+        [],
+    )
+    repository.resolve_official.assert_awaited_once_with(
+        build_kind=None, restrictions=["Not Locational", "Not Directional"], patterns=()
+    )
+
+
+async def test_placement_shorthand_keeps_qualifications_instead_of_claiming_reliability() -> None:
+    phrase = "Non-Loc/Dir with fixes"
+    repository = AsyncMock()
+    repository.resolve_official.return_value = TaxonomyResolution((), frozenset({phrase.casefold()}), frozenset())
+    scope = AsyncMock(build_taxonomy=repository)
+    scope.__aenter__.return_value = scope
+    service = BuildTaxonomyService(uow_factory=lambda: scope)
+
+    assert await service.validate_restrictions([phrase], "miscellaneous") == ([], [phrase])
+    repository.resolve_official.assert_awaited_once_with(build_kind=None, restrictions=[phrase], patterns=())
