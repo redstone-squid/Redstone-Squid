@@ -4,7 +4,8 @@ from functools import partial
 from typing import Any
 
 import squid_ui_discord as sd
-from squid.bot.consent import ensure_consented_account
+from squid.bot.accounts.cog import make_account_workspace
+from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.navigation.destinations import AccountDestination, BuildDetail, BuildIndex, DraftDetail, DraftIndex
 from squid.bot.navigation.router import NavigationRequest, ScreenOpening
 from squid.bot.submission.build_card import render_build_card
@@ -12,7 +13,6 @@ from squid.bot.submission.commands import make_catalogue
 from squid.bot.submission.submit import make_saved_drafts
 from squid.bot.submission.ui.drafts import draft_editor
 from squid.bot.ui import text_node
-from squid.bot.verify import make_account_workspace
 from squid.builds.domain import Status
 from squid.core.i18n import tr
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError

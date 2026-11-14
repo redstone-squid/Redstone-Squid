@@ -8,15 +8,15 @@ import discord
 import pytest
 from whenever import Instant
 
-import squid.bot.claims_view as claims_view
+import squid.bot.accounts.claims as claims_view
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import ClaimStatus
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.accounts.models import Account, AccountIdentity, AliasClaim
-from squid.bot.claims_view import ClaimReviewComponent
-from squid.bot.consent import ConsentedAccountWork
+from squid.bot.accounts.claims import ClaimReviewComponent
+from squid.bot.accounts.consent import ConsentedAccountWork
 from squid.permissions.domain import PermissionNode
 from squid_ui.testing import RecordingResponder, choose, keys, press_event, render_tree
 from squid_ui_discord.testing import (

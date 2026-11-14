@@ -8,7 +8,7 @@ from discord import Interaction, TextChannel
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.bot.consent import ConsentPrompt
+from squid.bot.accounts.consent import ConsentPrompt
 from squid.bot.routes._root import _feature_group
 from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage

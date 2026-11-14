@@ -8,8 +8,8 @@ import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.accounts.models import AliasClaim
-from squid.bot.consent import with_consented_account
-from squid.bot.profile_render import present_claimant
+from squid.bot.accounts.consent import with_consented_account
+from squid.bot.accounts.profile_render import present_claimant
 from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT

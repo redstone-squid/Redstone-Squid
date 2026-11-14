@@ -14,10 +14,10 @@ from squid.accounts.application.edits import account_target
 from squid.accounts.domain import AccountConsent, IdentityProvider
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.accounts.models import Account
-from squid.bot.account_presentation import link_conflict, link_message, refresh_message
-from squid.bot.account_view import AccountOverview, ConsentRequest
-from squid.bot.claims_view import ClaimReviewComponent
-from squid.bot.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
+from squid.bot.accounts.claims import ClaimReviewComponent
+from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
+from squid.bot.accounts.overview import AccountOverview, ConsentRequest
+from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
 from squid.bot.navigation.destinations import AccountDestination, AccountTab
 from squid.bot.navigation.router import screen_route
 from squid.bot.ui import tr

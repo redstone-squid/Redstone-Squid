@@ -9,15 +9,15 @@ import discord
 import squid_ui_discord as sd
 from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
 from squid.accounts.models import Account
-from squid.bot.account_view import ConsentAnswer
-from squid.bot.account_workspace import AccountWorkspace
-from squid.bot.consent import request_consent
+from squid.bot.accounts.consent import request_consent
+from squid.bot.accounts.overview import ConsentAnswer
+from squid.bot.accounts.profile_render import (
+    public_profile_fields,
+)
+from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.follows import FollowCard
 from squid.bot.navigation.destinations import AccountDestination
 from squid.bot.navigation.router import NavigationRequest
-from squid.bot.profile_render import (
-    public_profile_fields,
-)
 from squid.bot.ui import card_node, text_node
 from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor

@@ -22,10 +22,10 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.models import AccountIdentity, AccountProfile
+from squid.bot.accounts.profile_editor import ProfileEditor
+from squid.bot.accounts.profile_render import identity_label as _identity_label
+from squid.bot.accounts.profile_render import own_profile_avatar, own_profile_fields
 from squid.bot.edit_controller import EditController
-from squid.bot.profile_editor import ProfileEditor
-from squid.bot.profile_render import identity_label as _identity_label
-from squid.bot.profile_render import own_profile_avatar, own_profile_fields
 from squid.bot.ui import CardField, tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner

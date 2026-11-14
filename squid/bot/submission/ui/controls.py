@@ -7,7 +7,7 @@ from uuid import UUID
 from discord import Interaction
 
 import squid_ui_discord as sd
-from squid.bot.consent import ensure_consented_account
+from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.navigation.destinations import DraftDetail
 from squid.bot.routes._root import _feature_group
 from squid.bot.submission.ui import inference, opening, recalculation

@@ -17,7 +17,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
-from squid.bot.consent import ensure_consented_account
+from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
 from squid.bot.navigation.controls import destination_button
 from squid.bot.navigation.destinations import DraftDetail, DraftIndex

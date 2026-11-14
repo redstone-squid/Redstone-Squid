@@ -18,8 +18,8 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.models import AccountProfile
+from squid.bot.accounts.profile_render import own_profile_fields
 from squid.bot.edit_history import history_controls, track_local_edits
-from squid.bot.profile_render import own_profile_fields
 from squid.bot.ui import tr
 from squid.core.errors import ValidationError
 from squid_i18n import md_tr

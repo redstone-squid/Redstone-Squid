@@ -82,7 +82,7 @@ EXTENSIONS = (
     "squid.bot.sync",
     "squid.bot.events",
     "squid.bot.notifications",
-    "squid.bot.verify",
+    "squid.bot.accounts.cog",
     "squid.bot.admin",
     "squid.bot.diagnostics",
     "squid.bot.permissions",

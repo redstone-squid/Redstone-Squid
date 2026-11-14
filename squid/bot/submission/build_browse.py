@@ -10,8 +10,8 @@ from typing import Any, Literal, cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.accounts.consent import with_consented_account
 from squid.bot.app import RedstoneSquid
-from squid.bot.consent import with_consented_account
 from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.navigation.destinations import BuildDetail, BuildIndex
 from squid.bot.navigation.router import screen_route

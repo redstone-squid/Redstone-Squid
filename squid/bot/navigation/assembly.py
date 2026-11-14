@@ -1,6 +1,6 @@
 """Explicit registration for the bot's independently openable screens."""
 
-from squid.bot.account_workspace import AccountWorkspace
+from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.navigation.destinations import AccountDestination, BuildDetail, BuildIndex, DraftDetail, DraftIndex
 from squid.bot.navigation.factories import (
     make_account,

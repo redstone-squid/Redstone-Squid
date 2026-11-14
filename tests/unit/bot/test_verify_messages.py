@@ -11,13 +11,13 @@ from whenever import Instant
 from squid.accounts.application.presentation import claimant_label
 from squid.accounts.domain import ClaimStatus, IdentityRefresh, LinkPreview
 from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
-from squid.bot.account_presentation import (
+from squid.bot.accounts.presentation import (
     link_conflict,
     link_message,
     reconciliation_lines,
     refresh_message,
 )
-from squid.bot.profile_render import present_claimant
+from squid.bot.accounts.profile_render import present_claimant
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.providers.records import AliasClaimProvider
 from squid_i18n import NEUTRAL, discord_text, resolve_text

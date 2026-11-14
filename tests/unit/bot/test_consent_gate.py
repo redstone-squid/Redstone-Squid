@@ -25,7 +25,7 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.accounts.models import Account, AccountIdentity
-from squid.bot.consent import (
+from squid.bot.accounts.consent import (
     ConsentPrompt,
     _consent_prompt,
     ensure_consented_account,
@@ -231,7 +231,7 @@ async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: 
     async def prompt(*_args: object, **_kwargs: object) -> object:
         return NOT_ASKED
 
-    monkeypatch.setattr("squid.bot.consent.prompt_for_consent", prompt)
+    monkeypatch.setattr("squid.bot.accounts.consent.prompt_for_consent", prompt)
 
     assert await ensure_consented_account(await gate(ctx), accounts) is None
     assert accounts.identity_creations == []
@@ -302,7 +302,7 @@ def _stub_prompt(monkeypatch: pytest.MonkeyPatch, *, agree: bool) -> None:
     async def prompt(*_args: object, **_kwargs: object) -> AccountConsent | None:
         return AccountConsent.grant_current() if agree else None
 
-    monkeypatch.setattr("squid.bot.consent.prompt_for_consent", prompt)
+    monkeypatch.setattr("squid.bot.accounts.consent.prompt_for_consent", prompt)
 
 
 class _Gate(sd.Screen):

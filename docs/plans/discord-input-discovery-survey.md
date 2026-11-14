@@ -200,9 +200,9 @@ account, a Discord identity, and a name-only credit are not interchangeable.
 | `/runtime-settings` | Setting key, JSON value, optional revision; no suggestions. No arguments dumps settings/revision. JSON can include channel-ID arrays. | Operator priority 3: typed settings browser/editor, or at least setting-name completion, type hints, examples, and descriptions. |
 | Hidden owner sync and development UI | Sync accepts guild objects and terse `~`, `*`, `^` flags. Layout demos are development-only; debug links/error triggers have no discovery need. | Document operator syntax locally; exclude from the ordinary-user redesign. |
 
-Account/settings sources: [account_workspace.py](../../squid/bot/account_workspace.py),
-[account_view.py](../../squid/bot/account_view.py),
-[profile_editor.py](../../squid/bot/profile_editor.py),
+Account/settings sources: [account_workspace.py](../../squid/bot/accounts/workspace.py),
+[account_view.py](../../squid/bot/accounts/overview.py),
+[profile_editor.py](../../squid/bot/accounts/profile_editor.py),
 [settings_view.py](../../squid/bot/settings_view.py). Remaining entries are rooted
 in the production extension list in [app.py](../../squid/bot/app.py).
 

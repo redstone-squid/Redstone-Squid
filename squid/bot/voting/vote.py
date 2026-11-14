@@ -9,7 +9,7 @@ from discord import app_commands
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot._types import GuildMessageable
-from squid.bot.consent import ensure_consented_account
+from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.ui import error_node, info_node, text_node
 from squid.bot.voting.actors import resolve_actor
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen

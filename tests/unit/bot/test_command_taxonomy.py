@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Command
 
+from squid.bot.accounts.cog import VerifyCog
 from squid.bot.admin import Admin
 from squid.bot.diagnostics import Diagnostics
 from squid.bot.give_redstoner import GiveRedstoner
@@ -15,7 +16,6 @@ from squid.bot.permissions import PermissionCog
 from squid.bot.settings import SettingsCog
 from squid.bot.starboard import StarboardCog
 from squid.bot.submission.commands import BuildCommands
-from squid.bot.verify import VerifyCog
 from squid.bot.version_tracking import VersionTracker
 from squid.bot.voting.vote import VoteCog
 

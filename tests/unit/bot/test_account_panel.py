@@ -27,13 +27,13 @@ from squid.accounts.domain import (
 )
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
-from squid.bot.account_presentation import refresh_message
-from squid.bot.account_view import AccountOverview, ConsentAnswer
-from squid.bot.account_workspace import AccountWorkspace
-from squid.bot.consent import ConsentPrompt, request_consent
+from squid.bot.accounts.cog import VerifyCog
+from squid.bot.accounts.consent import ConsentPrompt, request_consent
+from squid.bot.accounts.overview import AccountOverview, ConsentAnswer
+from squid.bot.accounts.presentation import refresh_message
+from squid.bot.accounts.profile_editor import ProfileEditor
+from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.follows import FollowCard
-from squid.bot.profile_editor import ProfileEditor
-from squid.bot.verify import VerifyCog
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH

@@ -6,7 +6,7 @@ from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.consent import with_consented_account
+from squid.bot.accounts.consent import with_consented_account
 from squid.bot.ui import tr
 from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.notifications.domain import SubscriptionKind
