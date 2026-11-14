@@ -1,8 +1,8 @@
 # Generic region pagination roadmap
 
-Status: phases 1–3 complete. [Shared allocation search](03-joint-search.md) documents the implemented
-opt-in solver, validation, and phase 4 handoff. [Pagination and presentation state](04-pagination-state.md)
-plans the next phase, including recovery when a reading anchor disappears.
+Status: phases 1–4 complete. [Shared allocation search](03-joint-search.md) documents the solver.
+[Pagination and presentation state](04-pagination-state.md) records production integration, anchor
+recovery, remaining capability routes, and the handoff to phase 5 reuse and performance work.
 
 Make joint region pagination part of the generic planning architecture. Sibling and nested
 regions should share target limits while preserving content, navigation, and reading position.
@@ -14,8 +14,8 @@ phase may change the scope or order of later phases.
 
 ## Starting point
 
-The current implementation provides `sl.region`, resource-frontier allocation, keyed anchors,
-and staged presentation updates. It also contains assumptions that prevent it from serving as
+The implementation at the start of this roadmap provided `sl.region`, resource-frontier allocation,
+keyed anchors, and staged presentation updates. These assumptions prevented it from serving as
 the generic foundation:
 
 - Scene assembly directly uses Components V2 children and panels.
@@ -113,7 +113,8 @@ Depends on phase 2.
 
 ## Phase 4 Integrate pagination and presentation state
 
-Implementation plan: [Pagination and presentation state](04-pagination-state.md).
+Implemented outcome: [Pagination and presentation state](04-pagination-state.md), including
+committed allocation reuse, nearest-survivor recovery, and capability-based legacy routes.
 
 Bring root pagination, explicit regions, and existing layout-driven local pagers onto the shared
 foundation. Preserve authored policies through wrappers and containers, or make any intentional
@@ -175,4 +176,5 @@ Depends on phases 4 and 5. Target integration can begin earlier where contracts 
 Phase 1 established shared content-loss policy, fidelity-based strictness, a rich semantic core,
 and direct target participation. Phase 2 supplies an opt-in composition entry point, peer alternatives over shared semantic content,
 structural resource budgets, live bindings, and typed atomic extension contracts. Phase 3 adds automatic
-joint search and certified page selection. Mounted ownership and delivery integration remain phase 4.
+joint search and certified page selection. Phase 4 connects supported production pagination to those
+allocations, with mounted ownership, delivery-staged state, and nearest-survivor anchor recovery.

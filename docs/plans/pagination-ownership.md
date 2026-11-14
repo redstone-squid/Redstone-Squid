@@ -14,6 +14,25 @@ Option windows have different requirements. `MultiChoice` needs to know which ch
 rendering so it can calculate selection limits and merge submissions. Its window is a snapshot derived from
 machine state, not another reactive owner. `CollectionEditor` uses the same `OptionWindow` abstraction.
 
+## Reading position and delivery
+
+Supported layout pagination uses certified shared allocations on Components V2, Slack messages,
+and HTML. Page turns select from the mounted owner's committed allocation without changing sibling
+partitions. Content, constraints, callback, or environment changes require reconciliation and may
+require a new allocation. Historical page counts and breaks are not compatibility guarantees.
+The [phase 4 handoff](generic-region-pagination/04-pagination-state.md) lists remaining legacy routes.
+
+An uncontrolled cursor follows its stable source anchor across new page breaks. If that anchor is
+deleted, it chooses the nearest surviving source from the last committed order, preferring the next
+source on a tie. With `a, b, c, d` and anchor `c`, deleting `c` chooses `d` over `b`. If no old source
+survives, changed content resets to page zero. Stable keys are required for this recovery; positional
+identities are not remembered. Explicit navigation and new resolvable reveal requests take precedence.
+
+Shared navigation stages a page request. The displayed cursor, recovered anchor, source order, and
+retained allocation commit only after successful delivery. Failed delivery or cancellation preserves
+the old display and history for retry. Hidden nested regions retain their last displayed positions;
+successful removal collects them. Controlled and routed pages retain application ownership throughout.
+
 ## Selection-window contract
 
 The machine resolves a window after filtering unavailable options. `OptionWindow` owns slicing, clamping,
