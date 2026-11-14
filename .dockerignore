@@ -6,6 +6,7 @@
 **/.classpath
 **/.dockerignore
 **/*.env
+**/.env*
 **/.gradle
 **/.git
 **/.gitignore
@@ -42,6 +43,9 @@ dist/
 site/
 .coverage
 .agents/
+.aws/
+.codex/
+.deploy/
 .cache/
 schema/
 
