@@ -554,7 +554,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._selected = None
         await self._browser._back(_event)
 
-    async def _open_holder(self, build_id: int, event: sl.PressEvent) -> None:
+    async def _open_holder(self, build_id: int, event: sl.ActionEvent) -> None:
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
 
@@ -754,6 +754,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             page,
             load_build=self._queries.get,
             render_build=self._render_build,
+            open_build=self._open_holder,
         )
         self._query = query
         self._sort = sort

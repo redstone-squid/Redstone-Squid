@@ -149,6 +149,33 @@ async def test_find_build_actions_can_select_inside_a_transaction(search: bool) 
     assert screen._results is not None if search else screen._selected is not None
 
 
+@pytest.mark.parametrize("records", [False, True], ids=["build", "record"])
+async def test_search_opens_full_build_and_preserves_results(records: bool) -> None:
+    screen = _screen(initial_id=None)
+    hit = (
+        RecordSearchHit("10", "Fastest door", "Java", 7, "Door", "fastest", "all_time")
+        if records
+        else BuildSearchHit("7", "Door", "confirmed", "A door")
+    )
+    service = cast(AsyncMock, screen._search_service)
+    service.search.return_value = SearchPage(hits=(hit,), total=1, next=None, prev=None)
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, "door", "")
+        results = screen._results
+        await ui.select(ui.key_for("search.open"), [f"{hit.resource_kind}:{hit.source_id}"])
+        await ui.press(ui.key_for("open-build"))
+
+        assert "Build #7" in ui.texts()
+        ui.control(ui.key_for("schematic-tools"))
+        assert not any(key.endswith("open-build") for key in ui.root.snapshot().handler_keys)
+        ui.assert_within_limits()
+
+        await ui.press("back")
+        assert screen._results is results
+        ui.control(ui.key_for("open-build"))
+        assert service.search.await_count == 1
+
+
 @pytest.mark.parametrize("action", ["approve", "reject"])
 async def test_review_confirmation_can_open_and_cancel(action: str) -> None:
     async with stage(_screen(status=Status.PENDING), owner=object()) as ui:

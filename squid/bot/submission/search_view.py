@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
+BuildOpener = Callable[[int, sl.ActionEvent], Awaitable[None]]
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 
 
@@ -103,7 +104,9 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
         *,
         load_build: BuildLoader | None,
         render_build: BuildRenderer | None,
+        open_build: BuildOpener | None = None,
     ) -> None:
+        self._open_full_build = open_build
         self.hit = hit
         self._load_build = load_build
         self._render_build = render_build
@@ -136,6 +139,9 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
 
     async def _open_build(self, event: sl.ActionEvent) -> None:
         build_id = _build_id(self.hit)
+        if build_id is not None and self._open_full_build is not None:
+            await self._open_full_build(build_id, event)
+            return
         if build_id is None or self._load_build is None or self._render_build is None:
             await event.notice(tr(t"build-search-build-unavailable = That build is no longer available."))
             return
@@ -303,7 +309,9 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
         *,
         load_build: BuildLoader | None = None,
         render_build: BuildRenderer | None = None,
+        open_build: BuildOpener | None = None,
     ) -> None:
+        self._open_full_build = open_build
         self._source = _SearchSource(service, request, page)
         self._load_build = load_build
         self._render_build = render_build
@@ -371,6 +379,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             hit,
             load_build=self._load_build,
             render_build=self._render_build,
+            open_build=self._open_full_build,
         )
 
     def _overview(
