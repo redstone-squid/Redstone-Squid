@@ -2,7 +2,10 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import replace
-from typing import Protocol, override
+from functools import partial
+from typing import Any, Protocol, cast, override
+
+import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -32,6 +35,7 @@ from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_i18n import Text, emoji_text, md_tr
+from squid_ui_discord.form_fields import EntityField
 
 type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ChannelValidator = Callable[[int], Awaitable[None]]
@@ -54,14 +58,14 @@ class StarboardScreen(sd.Screen):
     permission when an action is submitted, including deletion confirmation.
     """
 
-    _snapshots: Mapping[str, StarboardSnapshot] = sl.state({}, persist=False)
+    _snapshots: Mapping[int, StarboardSnapshot] = sl.state({}, persist=False)
     _browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
     )
     _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
     )
-    _deleting: str | None = sl.state(default=None, persist=False)
+    _deleting: StarboardSnapshot | None = sl.state(default=None, persist=False)
     _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
     )
@@ -78,12 +82,14 @@ class StarboardScreen(sd.Screen):
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
         validate_channel: ChannelValidator,
+        role_label: Callable[[int], sl.TextLike] | None = None,
     ) -> None:
         self._operations = operations
         self._guild_id = guild_id
         self._capabilities = capabilities
         self._authorize = authorize
         self._validate_channel = validate_channel
+        self._role_label = role_label or (lambda _id: tr(t"starboard-unknown-role = Deleted role"))
         self.edits = EditController(edits, actor, self._refresh)
 
     @override
@@ -91,20 +97,22 @@ class StarboardScreen(sd.Screen):
         await self._refresh()
 
     async def _refresh(self) -> None:
+        focus = self._browser.session.focus if self._browser is not None else None
         snapshots = {}
         for board in await self._operations.list_for_guild(self._guild_id):
             snapshot = await self._operations.snapshot(board.id)
             if snapshot is not None:
-                snapshots[str(dict(snapshot.settings)["name"]).casefold()] = snapshot
+                snapshots[snapshot.id] = snapshot
         self._snapshots = snapshots
         boards = tuple(snapshot.config() for snapshot in snapshots.values())
+        source = sl.sources.list_source(boards)
         self._browser = sp.Browser(
-            sl.sources.list_source(boards),
+            source,
             key="boards",
-            identity=lambda board: board.name,
+            identity=lambda board: str(board.id),
             label=lambda board: board.name,
             summary=lambda board: f"{board.name} · #{board.channel_id} · {board.required:g} votes",
-            detail=_board_detail,
+            detail=self._board_editor,
             page_size=10,
             title=tr(t"bot-starboard-screen-starboards = Starboards"),
             empty=tr(t"starboard-none-configured = No starboards are configured."),
@@ -112,14 +120,13 @@ class StarboardScreen(sd.Screen):
         tabs = [sp.Tab("boards", tr(t"bot-starboard-screen-boards = Boards"), self._browser)]
         if STARBOARD_BOARD_CREATE in self._capabilities:
             tabs.append(sp.Tab("create", tr(t"bot-starboard-screen-create = Create"), self._create_nodes()))
-        if STARBOARD_BOARD_EDIT in self._capabilities or STARBOARD_BOARD_DELETE in self._capabilities:
-            tabs.append(sp.Tab("settings", tr(t"bot-starboard-screen-settings = Settings"), self._settings_nodes()))
-        if STARBOARD_EMOJI_EDIT in self._capabilities:
-            tabs.append(sp.Tab("emojis", tr(t"bot-starboard-screen-emojis = Emojis"), self._emoji_nodes()))
-        if STARBOARD_WEIGHT_EDIT in self._capabilities:
-            tabs.append(
-                sp.Tab("weights", tr(t"bot-starboard-screen-role-weights = Role weights"), self._weight_nodes())
+        if focus is not None:
+            offset = next((index // 10 * 10 for index, board in enumerate(boards) if str(board.id) == focus), 0)
+            window = await source.fetch(sl.sources.Position(offset=offset), 10)
+            self._browser.session.replace(
+                sl.sources.LoadedWindow(window, sl.sources.window_fingerprint(window.items, lambda item: str(item.id)))
             )
+            self._browser.session.open(focus, revision=self._browser.session.revision)
         self._tabs = sp.Tabs(
             tabs,
             key="starboard-tabs",
@@ -129,7 +136,7 @@ class StarboardScreen(sd.Screen):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._deleting is not None and self._decision is not None:
-            board_name = self._deleting
+            board_name = self._deleting.config().name
             return (
                 sl.section(
                     sl.heading(tr(t"bot-starboard-screen-delete-starboard = Delete starboard")),
@@ -155,56 +162,118 @@ class StarboardScreen(sd.Screen):
             ),
         )
 
-    def _settings_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        may_edit = STARBOARD_BOARD_EDIT in self._capabilities
-        may_delete = STARBOARD_BOARD_DELETE in self._capabilities
-        if not (may_edit or may_delete):
-            return ()
+    def _board_editor(self, board: StarboardConfig) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        snapshot = self._snapshots[board.id]
+        sections: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
+        if STARBOARD_BOARD_EDIT in self._capabilities:
+            sections.append(
+                sp.Tab(
+                    "settings",
+                    tr(t"bot-starboard-screen-settings = Settings"),
+                    sl.choices(
+                        *(
+                            sl.choice(key.replace("_", " ").title(), key=key, description=str(value))
+                            for key, value in snapshot.settings
+                        ),
+                        key="setting",
+                        selection=sl.controlled((), partial(self._choose_setting, snapshot)),
+                    ),
+                )
+            )
+        if STARBOARD_EMOJI_EDIT in self._capabilities:
+            sections.append(
+                sp.Tab(
+                    "emojis",
+                    tr(t"bot-starboard-screen-emojis = Emojis"),
+                    (
+                        sl.form(
+                            tr(t"starboard-add-emoji = Add or replace emoji"),
+                            _EditEmojiForm().spec(),
+                            key="edit-emoji",
+                            on_submit=partial(self._edit_emoji, snapshot),
+                        ),
+                        sp.Browser(
+                            sl.sources.list_source(snapshot.aliases()),
+                            key="emojis",
+                            identity=lambda item: item.emoji,
+                            label=lambda item: item.emoji,
+                            detail=lambda item: sl.action_controls(
+                                sl.action_control(
+                                    tr(t"starboard-remove-emoji = Remove emoji"),
+                                    partial(self._remove_emoji, snapshot, item.emoji),
+                                    key="remove-emoji",
+                                    tone=sl.Tone.DANGER,
+                                ),
+                                key="emoji-actions",
+                            ),
+                        ),
+                    ),
+                )
+            )
+        if STARBOARD_WEIGHT_EDIT in self._capabilities:
+            sections.append(
+                sp.Tab(
+                    "weights",
+                    tr(t"bot-starboard-screen-role-weights = Role weights"),
+                    (
+                        sl.form(
+                            tr(t"bot-starboard-screen-edit-role-weight = Edit role weight"),
+                            _EditWeightForm().spec(),
+                            key="edit-weight",
+                            on_submit=partial(self._edit_weight, snapshot),
+                        ),
+                        sp.Browser(
+                            sl.sources.list_source(snapshot.weights),
+                            key="weights",
+                            identity=lambda item: str(item[0]),
+                            label=lambda item: self._role_label(item[0]),
+                            detail=lambda item: sl.stack(
+                                sl.paragraph(f"<@&{item[0]}> · {item[1]:g}x"),
+                                sl.action_controls(
+                                    sl.action_control(
+                                        tr(t"starboard-remove-weight = Remove weight"),
+                                        partial(self._remove_weight, snapshot, item[0]),
+                                        key="remove-weight",
+                                        tone=sl.Tone.DANGER,
+                                    ),
+                                    key="weight-actions",
+                                ),
+                            ),
+                        ),
+                    ),
+                )
+            )
         return (
+            _board_detail(board),
+            sp.Tabs(sections, key="board-editor") if sections else sl.note(tr(t"starboard-read-only = Read only")),
             sl.action_controls(
-                may_edit
-                and sl.form(
-                    tr(t"bot-starboard-screen-edit-setting = Edit setting"),
-                    _EditSettingForm().spec(),
-                    key="edit-setting",
-                    on_submit=self._edit,
-                ),
-                may_delete
-                and sl.form(
+                sl.action_control(
                     tr(t"bot-starboard-screen-delete-board = Delete board"),
-                    _DeleteBoardForm().spec(),
+                    partial(self._request_delete, snapshot),
                     key="delete-board",
-                    on_submit=self._request_delete,
+                    tone=sl.Tone.DANGER,
                 ),
-                key="settings-forms",
-            ),
+                key="board-actions",
+            )
+            if STARBOARD_BOARD_DELETE in self._capabilities
+            else sl.note(""),
         )
 
-    def _emoji_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        return (
-            sl.form(
-                tr(t"bot-starboard-screen-edit-emoji = Edit emoji"),
-                _EditEmojiForm().spec(),
-                key="edit-emoji",
-                on_submit=self._edit_emoji,
-            ),
-        )
-
-    def _weight_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        return (
-            sl.form(
-                tr(t"bot-starboard-screen-edit-role-weight = Edit role weight"),
-                _EditWeightForm().spec(),
-                key="edit-weight",
-                on_submit=self._edit_weight,
-            ),
+    async def _choose_setting(self, snapshot: StarboardSnapshot, event: sl.ChoiceEvent) -> None:
+        if not await self._may(event, STARBOARD_BOARD_EDIT):
+            return
+        setting = event.selected[0]
+        await event.present_form(
+            _setting_form(setting, dict(snapshot.settings)[setting]),
+            key="edit-setting",
+            on_submit=partial(self._edit, snapshot, setting),
         )
 
     async def _create(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_CREATE):
             return
         form = _CreateBoardForm.from_submission(event)
-        channel_id = form.channel_id
+        channel_id = cast(discord.abc.Snowflake, form.channel_id).id
         name = form.name
         required = form.required
         await self._validate_channel(channel_id)
@@ -227,78 +296,61 @@ class StarboardScreen(sd.Screen):
         created_name = created.name
         await event.notice(md_tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
 
-    async def _edit(self, event: sl.SubmitEvent) -> None:
+    async def _edit(self, before: StarboardSnapshot, setting: str, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_EDIT):
             return
-        form = _EditSettingForm.from_submission(event)
-        name = form.name
-        setting = form.setting
-        value = _parse_setting(setting, form.value)
+        value = event.values["value"]
         if setting == "channel_id":
-            assert isinstance(value, int)
+            value = cast(discord.abc.Snowflake, value).id
             await self._validate_channel(value)
-        config = await self._named(event, name)
-        if config is None:
-            return
-        before = self._snapshots[config.name.casefold()]
-        if before is not None:
-            after = replace(
-                before, settings=tuple((key, value if key == setting else old) for key, old in before.settings)
-            )
-            await self._save(before, after)
+        after = replace(before, settings=tuple((key, value if key == setting else old) for key, old in before.settings))
+        await self._save(before, after)
 
     async def _save(self, before: StarboardSnapshot, after: StarboardSnapshot) -> None:
         await self.edits.bind(STARBOARD_EDIT, starboard_target(before.id), before.revision).save(
             BoardValues.capture(after).values(), tr(t"starboard-history-edit = Edit starboard")
         )
 
-    async def _edit_emoji(self, event: sl.SubmitEvent) -> None:
+    async def _edit_emoji(self, before: StarboardSnapshot, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_EMOJI_EDIT):
             return
         form = _EditEmojiForm.from_submission(event)
-
-        config = await self._named(event, form.name)
-        if config is None:
-            return
-        emoji = form.emoji
-        operation = form.operation
-        before = self._snapshots[config.name.casefold()]
-        if before is None:
-            return
-        aliases = tuple(item for item in before.aliases() if item.emoji != emoji)
-        if operation == "add":
-            direction = form.direction
-            multiplier = form.multiplier
-            aliases += (StarboardEmoji(emoji=emoji, direction=direction, multiplier=multiplier, position=len(aliases)),)
-        if before is not None:
-            after = replace(
+        aliases = tuple(item for item in before.aliases() if item.emoji != form.emoji)
+        aliases += (
+            StarboardEmoji(
+                emoji=form.emoji, direction=form.direction, multiplier=form.multiplier, position=len(aliases)
+            ),
+        )
+        await self._save(
+            before,
+            replace(
                 before, emojis=tuple((item.emoji, item.direction, item.multiplier, item.position) for item in aliases)
-            )
-            await self._save(before, after)
+            ),
+        )
 
-    async def _edit_weight(self, event: sl.SubmitEvent) -> None:
+    async def _remove_emoji(self, before: StarboardSnapshot, emoji: str, event: sl.ActionEvent) -> None:
+        if await self._may(event, STARBOARD_EMOJI_EDIT):
+            await self._save(before, replace(before, emojis=tuple(item for item in before.emojis if item[0] != emoji)))
+
+    async def _edit_weight(self, before: StarboardSnapshot, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_WEIGHT_EDIT):
             return
         form = _EditWeightForm.from_submission(event)
-        config = await self._named(event, form.name)
-        if config is None:
-            return
-        role_id = form.role_id
-        multiplier = form.multiplier
-        before = self._snapshots[config.name.casefold()]
-        if before is not None:
-            weights = dict(before.weights)
-            if multiplier is None:
-                weights.pop(role_id, None)
-            else:
-                weights[role_id] = multiplier
-            await self._save(before, replace(before, weights=tuple(sorted(weights.items()))))
+        role_id = cast(discord.abc.Snowflake, form.role_id).id
+        weights = dict(before.weights)
+        weights[role_id] = form.multiplier
+        await self._save(before, replace(before, weights=tuple(sorted(weights.items()))))
 
-    async def _request_delete(self, event: sl.SubmitEvent) -> None:
+    async def _remove_weight(self, before: StarboardSnapshot, role_id: int, event: sl.ActionEvent) -> None:
+        if await self._may(event, STARBOARD_WEIGHT_EDIT):
+            await self._save(
+                before, replace(before, weights=tuple(item for item in before.weights if item[0] != role_id))
+            )
+
+    async def _request_delete(self, snapshot: StarboardSnapshot, event: sl.ActionEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_DELETE):
             return
-        form = _DeleteBoardForm.from_submission(event)
-        self._deleting = form.name
+        self._deleting = snapshot
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
             tr(t"starboard-delete-audit-retention = Deleting a starboard cannot be undone from this session."),
             (
@@ -309,8 +361,8 @@ class StarboardScreen(sd.Screen):
         ).build_component(on_decide=self._delete)
 
     async def _delete(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
-        name = self._deleting
-        if name is None or choice == "cancel":
+        snapshot = self._deleting
+        if snapshot is None or choice == "cancel":
             self._deleting = None
             self._decision = None
             return
@@ -318,26 +370,12 @@ class StarboardScreen(sd.Screen):
             self._deleting = None
             self._decision = None
             return
-        snapshot = self._snapshots.get(name.casefold())
-        deleted = snapshot is not None
-        if snapshot is not None:
-            await self.edits.bind(STARBOARD_DELETE, starboard_target(snapshot.id), snapshot.revision).save(
-                EditValues.of({}), tr(t"bot-starboard-screen-delete-starboard = Delete starboard")
-            )
+        await self.edits.bind(STARBOARD_DELETE, starboard_target(snapshot.id), snapshot.revision).save(
+            EditValues.of({}), tr(t"bot-starboard-screen-delete-starboard = Delete starboard")
+        )
         self._deleting = None
         self._decision = None
-        await event.source.notice(
-            tr(t"bot-starboard-screen-starboard-deleted = Starboard deleted.")
-            if deleted
-            else tr(t"starboard-not-found = No starboard with that name exists.")
-        )
-
-    async def _named(self, event: sl.ActionEvent, name: str) -> StarboardConfig | None:
-        snapshot = self._snapshots.get(name.casefold())
-        config = None if snapshot is None else snapshot.config()
-        if config is None:
-            await event.notice(tr(t"starboard-not-found = No starboard with that name exists."))
-        return config
+        await event.source.notice(tr(t"bot-starboard-screen-starboard-deleted = Starboard deleted."))
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
@@ -359,70 +397,50 @@ def _board_detail(board: StarboardConfig) -> sl.semantic.Fields:
         or "—"
     )
     return sl.fields(
-        sl.field(tr(t"bot-starboard-screen-channel = Channel"), str(board.channel_id)),
+        sl.field(tr(t"bot-starboard-screen-channel = Channel"), f"<#{board.channel_id}>"),
         sl.field(tr(t"bot-starboard-screen-post-threshold = Post threshold"), f"{board.required:g}"),
         sl.field(tr(t"bot-starboard-screen-removal-threshold = Removal threshold"), f"{board.required_remove:g}"),
         sl.field(tr(t"bot-starboard-screen-emojis = Emojis"), emojis),
     )
 
 
-def _parse_setting(setting: str, value: str) -> object:
-    match EDITABLE_SETTINGS.get(setting):
-        case "boolean":
-            normalized = value.casefold()
-            if normalized not in {"true", "false", "on", "off", "yes", "no"}:
-                message = "Boolean settings accept true or false."
-                raise ValueError(message)
-            return normalized in {"true", "on", "yes"}
-        case "threshold":
-            return float(value)
-        case "integer":
-            return int(value, 0)
-        case "text":
-            return value
-        case _:
-            message = f"Unknown starboard setting: {setting}"
-            raise ValueError(message)
+def _setting_form(setting: str, value: object) -> sl.forms.FormSpec:
+    label = setting.replace("_", " ").title()
+    field: sl.forms.FormField[Any]
+    if setting == "channel_id":
+        field = EntityField(
+            key="value",
+            label=label,
+            default=value,
+            entity_type=sl.entity.EntityType.CONVERSATION,
+            channel_types=(discord.ChannelType.text,),
+        )
+    elif EDITABLE_SETTINGS[setting] == "boolean":
+        field = sl.forms.BoolField(key="value", label=label, default=bool(value))
+    elif EDITABLE_SETTINGS[setting] == "threshold":
+        field = sl.forms.FloatField(key="value", label=label, default=cast(float, value))
+    elif EDITABLE_SETTINGS[setting] == "integer":
+        field = sl.forms.IntField(key="value", label=label, default=cast(int, value))
+    else:
+        field = sl.forms.TextField(key="value", label=label, default=str(value), maximum=200)
+    return sl.forms.FormSpec(label, (field,))
 
 
 class _CreateBoardForm(sl.forms.Form):
     title = tr(t"bot-starboard-screen-create-starboard = Create starboard")
 
     name = sl.forms.TextField(label=tr(t"bot-starboard-screen-name = Name"), default="main", maximum=100)
-    channel_id = sl.forms.IntField(
-        label=tr(t"bot-starboard-screen-destination-channel-id = Destination channel ID"), minimum=1
+    channel_id = EntityField(
+        label=tr(t"starboard-destination-channel = Destination channel"),
+        entity_type=sl.entity.EntityType.CONVERSATION,
+        channel_types=(discord.ChannelType.text,),
     )
     required = sl.forms.FloatField(label=tr(t"bot-starboard-screen-post-threshold = Post threshold"), default=3.0)
-
-
-class _EditSettingForm(sl.forms.Form):
-    title = tr(t"bot-starboard-screen-edit-starboard-setting = Edit starboard setting")
-
-    name = sl.forms.TextField(label=tr(t"bot-starboard-screen-starboard-name = Starboard name"), maximum=100)
-    setting = sl.forms.ChoiceField(
-        label=tr(t"bot-starboard-screen-setting = Setting"),
-        options=tuple(sl.forms.ChoiceOption(key, key.replace("_", " ").title(), key) for key in EDITABLE_SETTINGS),
-    )
-    value = sl.forms.TextField(label=tr(t"bot-starboard-screen-value = Value"), maximum=200)
-
-
-class _DeleteBoardForm(sl.forms.Form):
-    title = tr(t"bot-starboard-screen-choose-starboard-to-delete = Choose starboard to delete")
-
-    name = sl.forms.TextField(label=tr(t"bot-starboard-screen-starboard-name = Starboard name"), maximum=100)
 
 
 class _EditEmojiForm(sl.forms.Form):
     title = tr(t"starboard-emoji-editor-title = Add or remove starboard emoji")
 
-    name = sl.forms.TextField(label=tr(t"bot-starboard-screen-starboard-name = Starboard name"), maximum=100)
-    operation = sl.forms.ChoiceField(
-        label=tr(t"bot-starboard-screen-operation = Operation"),
-        options=(
-            sl.forms.ChoiceOption("add", tr(t"bot-starboard-screen-add-or-replace = Add or replace"), "add"),
-            sl.forms.ChoiceOption("remove", tr(t"bot-starboard-screen-remove = Remove"), "remove"),
-        ),
-    )
     emoji = sl.forms.TextField(label=tr(t"bot-starboard-screen-emoji = Emoji"), maximum=100)
     direction = sl.forms.ChoiceField[StarboardDirection](
         label=tr(t"bot-starboard-screen-direction = Direction"),
@@ -438,9 +456,5 @@ class _EditEmojiForm(sl.forms.Form):
 class _EditWeightForm(sl.forms.Form):
     title = tr(t"starboard-role-multiplier-action = Set or remove role multiplier")
 
-    name = sl.forms.TextField(label=tr(t"bot-starboard-screen-starboard-name = Starboard name"), maximum=100)
-    role_id = sl.forms.IntField(label=tr(t"bot-starboard-screen-role-id = Role ID"), minimum=1)
-    multiplier = sl.forms.FloatField(
-        label=tr(t"starboard-role-multiplier-help = Multiplier; leave empty to remove"),
-        required=False,
-    )
+    role_id = EntityField(label=tr(t"starboard-role = Role"), entity_type=sl.entity.EntityType.ROLE)
+    multiplier = sl.forms.FloatField(label=tr(t"bot-starboard-screen-multiplier = Multiplier"), default=1.0)

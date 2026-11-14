@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import ClassVar, Literal, cast, override
 
+import discord
+
 from squid_ui.capabilities import Capability
 from squid_ui.entity import EntityType
 from squid_ui.forms import ChoiceOption, ExtensionField, FormValueError, MultiChoiceField, UploadedFile
@@ -14,6 +16,7 @@ class EntityField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Ex
     """A Discord user, role, channel, or mentionable picker."""
 
     entity_type: EntityType = EntityType.USER
+    channel_types: tuple[discord.ChannelType, ...] = ()
     minimum: int = 1
     maximum: int = 1
     placeholder: TextLike | None = None

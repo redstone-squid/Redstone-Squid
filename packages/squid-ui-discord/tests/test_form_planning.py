@@ -17,7 +17,7 @@ from squid_ui.planning.planner import plan
 from squid_ui.planning.target import AnyTarget
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.actions import ActionResponder
-from squid_ui_discord.form_fields import CheckboxGroupField
+from squid_ui_discord.form_fields import CheckboxGroupField, EntityField
 from squid_ui_discord.form_planning import ChoiceControl, DiscordFormPlan, FieldPlan, TextControl, plan_form
 from squid_ui_discord.modal import render_form_modal
 from squid_ui_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
@@ -218,3 +218,32 @@ def test_native_checkbox_option_limit_belongs_to_planning() -> None:
     assert field.parse(["10"]) == (10,)
     with pytest.raises(LayoutInvariantError, match="1-10"):
         plan_form(FormSpec("Checks", (field,)))
+
+
+async def test_channel_field_filters_reach_the_native_modal() -> None:
+    spec = FormSpec(
+        "Channel",
+        (
+            EntityField(
+                key="channel",
+                label="Channel",
+                entity_type=sl.entity.EntityType.CONVERSATION,
+                channel_types=(discord.ChannelType.text,),
+            ),
+        ),
+    )
+
+    async def submitted(_interaction: discord.Interaction, _values: dict[str, object]) -> None:
+        pass
+
+    modal = render_form_modal(plan_form(spec), on_submit=submitted)
+    label = modal.children[0]
+    assert isinstance(label, discord.ui.Label)
+    assert isinstance(label.component, discord.ui.ChannelSelect)
+    assert label.component.channel_types == [discord.ChannelType.text]
+
+
+def test_channel_filters_cannot_be_applied_to_a_user_picker() -> None:
+    spec = FormSpec("Member", (EntityField(key="member", label="Member", channel_types=(discord.ChannelType.text,)),))
+    with pytest.raises(LayoutInvariantError, match="channel_types"):
+        plan_form(spec)

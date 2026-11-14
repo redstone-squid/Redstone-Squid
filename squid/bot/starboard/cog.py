@@ -248,6 +248,11 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             edits=self.bot.services.edits,
             actor=actor,
             validate_channel=validate_channel,
+            role_label=lambda role_id: (
+                role.name
+                if (role := guild.get_role(role_id)) is not None
+                else tr(t"starboard-unknown-role = Deleted role")
+            ),
         )
 
 

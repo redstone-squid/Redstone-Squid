@@ -2,6 +2,8 @@
 
 from typing import Any, cast, override
 
+import discord
+
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.starboard import StarboardCog
@@ -171,13 +173,15 @@ async def test_starboard_screen_uses_user_guild_tabs_and_browser() -> None:
     assert screen.__response_spec__.session.scope is sd.ScopeKind.USER_GUILD
     assert screen._browser is not None
     assert screen._tabs is not None
-    assert {"Boards", "Create", "Settings", "Emojis", "Role weights"} <= set(labels(screen._tabs.render()))
+    assert {"Boards", "Create"} <= set(labels(screen._tabs.render()))
+    editor = screen._board_editor(board())[1]
+    assert {"Settings", "Emojis", "Role weights"} <= set(labels(cast(Any, editor).render()))
 
 
 async def test_create_uses_injected_discord_operation_and_refreshes() -> None:
     screen, operations, creator = make_screen(capabilities=frozenset({STARBOARD_BOARD_CREATE}))
     await screen.on_load()
-    event = NoticeEvent(channel_id=11, name="main", required=4.0)
+    event = NoticeEvent(channel_id=discord.Object(11), name="main", required=4.0)
 
     with transaction():
         await screen._create(cast(sl.SubmitEvent, event))
@@ -191,7 +195,7 @@ async def test_revoked_delete_permission_prevents_the_decision() -> None:
     screen, _, _ = make_screen(capabilities=frozenset({STARBOARD_BOARD_DELETE}), allowed=False)
     event = NoticeEvent(name="main")
 
-    await screen._request_delete(cast(sl.SubmitEvent, event))
+    await screen._request_delete(StarboardSnapshot.capture(board(), {}), cast(sl.ActionEvent, event))
 
     assert screen._decision is None
     assert len(event.notices) == 1
@@ -201,7 +205,7 @@ async def test_delete_requires_confirmation_and_refreshes() -> None:
     screen, operations, _ = make_screen(capabilities=frozenset({STARBOARD_BOARD_DELETE}))
     await screen.on_load()
     submit = NoticeEvent(name="main")
-    await screen._request_delete(cast(sl.SubmitEvent, submit))
+    await screen._request_delete(screen._snapshots[1], cast(sl.ActionEvent, submit))
     source = NoticeEvent()
 
     await screen._delete(cast(Any, TransitionEvent(source)), "confirm")
@@ -215,3 +219,30 @@ def test_starboard_is_one_app_only_workspace() -> None:
     cog = cast(Any, StarboardCog)
     assert all(command.name != "starboard" for command in cog.__cog_commands__)
     assert "starboard" in {command.name for command in cog.__cog_app_commands__}
+
+
+async def test_edit_retains_the_snapshot_revision_and_validates_the_selected_channel() -> None:
+    screen, operations, validator = make_screen(capabilities=frozenset({STARBOARD_BOARD_EDIT}))
+    await screen.on_load()
+    before = screen._snapshots[1]
+    operations.config.revision = 9
+    await screen._refresh()
+
+    await screen._edit(before, "channel_id", cast(sl.SubmitEvent, NoticeEvent(value=discord.Object(42))))
+
+    assert validator.calls == [42]
+    recorder = cast(EditRecorder, screen.edits._runner)
+    assert bound_revisions(recorder.commands[-1])[0].value == before.revision
+    assert operations.config.channel_id == 42
+
+
+async def test_revoked_edit_permission_prevents_channel_validation_and_mutation() -> None:
+    screen, operations, validator = make_screen(allowed=False)
+    await screen.on_load()
+    event = NoticeEvent(value=discord.Object(42))
+
+    await screen._edit(screen._snapshots[1], "channel_id", cast(sl.SubmitEvent, event))
+
+    assert validator.calls == []
+    assert operations.config.channel_id == 11
+    assert len(event.notices) == 1

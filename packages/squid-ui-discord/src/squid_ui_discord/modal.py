@@ -207,6 +207,8 @@ def _render_control(field: FieldPlan) -> tuple[discord.ui.Item[Any], Callable[[]
             max_values=control.maximum,
             default_values=[discord.SelectDefaultValue(id=key, type=kind) for key, kind in control.defaults],
         )
+        if isinstance(component, discord.ui.ChannelSelect):
+            component.channel_types = list(control.channel_types)
         return component, lambda: component.values
     assert isinstance(control, FileControl)
     component = discord.ui.FileUpload(

@@ -83,6 +83,7 @@ class BooleanControl:
 
 @dataclass(frozen=True, slots=True)
 class EntityControl:
+    channel_types: tuple[discord.ChannelType, ...]
     entity_type: EntityType
     defaults: tuple[tuple[int, discord.SelectDefaultValueType], ...]
     placeholder: str | None
@@ -250,6 +251,9 @@ class _Planner:
         if isinstance(field, BoolField):
             return BooleanControl(bool(prefill))
         if isinstance(field, EntityField):
+            if field.channel_types and field.entity_type is not EntityType.CONVERSATION:
+                msg = f"{path} channel_types requires a channel picker"
+                raise LayoutInvariantError(msg)
             if not 0 <= field.minimum <= field.maximum <= limits.select_options or field.maximum < 1:
                 msg = f"{path} has incompatible entity selection bounds"
                 raise LayoutInvariantError(msg)
@@ -258,6 +262,7 @@ class _Planner:
                 msg = f"{path} has more defaults than max_values"
                 raise LayoutInvariantError(msg)
             return EntityControl(
+                field.channel_types,
                 field.entity_type,
                 tuple((value.id, value.type) for value in defaults),
                 self.optional_text(field.placeholder, limits.select_placeholder, f"{path} placeholder"),

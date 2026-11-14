@@ -1039,116 +1039,80 @@ bot-starboard-render-reactions = { " " }({ $count } reactions)
 # squid/bot/starboard/render.py:37
 bot-starboard-render-replying-to-message = -# Replying to message `{ $message_id }`
 
-# squid/bot/starboard/screen.py:422
-bot-starboard-screen-add-or-replace = Add or replace
-
-# squid/bot/starboard/screen.py:112
+# squid/bot/starboard/screen.py:120
 bot-starboard-screen-boards = Boards
 
-# squid/bot/starboard/screen.py:306
+# squid/bot/starboard/screen.py:358
 bot-starboard-screen-cancel = Cancel
 
-# squid/bot/starboard/screen.py:362
+# squid/bot/starboard/screen.py:400
 bot-starboard-screen-channel = Channel
 
-# squid/bot/starboard/screen.py:410
-bot-starboard-screen-choose-starboard-to-delete = Choose starboard to delete
-
-# squid/bot/starboard/screen.py:114
+# squid/bot/starboard/screen.py:122
 bot-starboard-screen-create = Create
 
-# squid/bot/starboard/screen.py:151, squid/bot/starboard/screen.py:389
+# squid/bot/starboard/screen.py:158, squid/bot/starboard/screen.py:430
 bot-starboard-screen-create-starboard = Create starboard
 
-# squid/bot/starboard/screen.py:228
+# squid/bot/starboard/screen.py:297
 bot-starboard-screen-created-starboard = Created starboard **{ $created_name }**.
 
-# squid/bot/starboard/screen.py:305
+# squid/bot/starboard/screen.py:357
 bot-starboard-screen-delete = Delete
 
-# squid/bot/starboard/screen.py:174
+# squid/bot/starboard/screen.py:251
 bot-starboard-screen-delete-board = Delete board
 
-# squid/bot/starboard/screen.py:135, squid/bot/starboard/screen.py:325
+# squid/bot/starboard/screen.py:142, squid/bot/starboard/screen.py:374
 bot-starboard-screen-delete-starboard = Delete starboard
 
-# squid/bot/starboard/screen.py:393
-bot-starboard-screen-destination-channel-id = Destination channel ID
-
-# squid/bot/starboard/screen.py:428
+# squid/bot/starboard/screen.py:446
 bot-starboard-screen-direction = Direction
 
-# squid/bot/starboard/screen.py:432
+# squid/bot/starboard/screen.py:450
 bot-starboard-screen-down = Down
 
-# squid/bot/starboard/screen.py:186
-bot-starboard-screen-edit-emoji = Edit emoji
-
-# squid/bot/starboard/screen.py:196
+# squid/bot/starboard/screen.py:220
 bot-starboard-screen-edit-role-weight = Edit role weight
 
-# squid/bot/starboard/screen.py:167
-bot-starboard-screen-edit-setting = Edit setting
-
-# squid/bot/starboard/screen.py:399
-bot-starboard-screen-edit-starboard-setting = Edit starboard setting
-
-# squid/bot/starboard/screen.py:426
+# squid/bot/starboard/screen.py:444
 bot-starboard-screen-emoji = Emoji
 
-# squid/bot/starboard/screen.py:118, squid/bot/starboard/screen.py:365
+# squid/bot/starboard/screen.py:187, squid/bot/starboard/screen.py:403
 bot-starboard-screen-emojis = Emojis
 
-# squid/bot/starboard/screen.py:145
+# squid/bot/starboard/screen.py:152
 bot-starboard-screen-loading-starboards = Loading starboards.
 
-# squid/bot/starboard/screen.py:435
+# squid/bot/starboard/screen.py:453, squid/bot/starboard/screen.py:460
 bot-starboard-screen-multiplier = Multiplier
 
-# squid/bot/starboard/screen.py:391
+# squid/bot/starboard/screen.py:432
 bot-starboard-screen-name = Name
 
-# squid/bot/starboard/screen.py:420
-bot-starboard-screen-operation = Operation
-
-# squid/bot/starboard/screen.py:363, squid/bot/starboard/screen.py:395
+# squid/bot/starboard/screen.py:401, squid/bot/starboard/screen.py:438
 bot-starboard-screen-post-threshold = Post threshold
 
-# squid/bot/starboard/screen.py:364
+# squid/bot/starboard/screen.py:402
 bot-starboard-screen-removal-threshold = Removal threshold
 
-# squid/bot/starboard/screen.py:423
-bot-starboard-screen-remove = Remove
-
-# squid/bot/starboard/screen.py:442
-bot-starboard-screen-role-id = Role ID
-
-# squid/bot/starboard/screen.py:121
+# squid/bot/starboard/screen.py:217
 bot-starboard-screen-role-weights = Role weights
 
-# squid/bot/starboard/screen.py:403
-bot-starboard-screen-setting = Setting
-
-# squid/bot/starboard/screen.py:116
+# squid/bot/starboard/screen.py:172
 bot-starboard-screen-settings = Settings
 
-# squid/bot/starboard/screen.py:126
+# squid/bot/starboard/screen.py:133
 bot-starboard-screen-starboard-configuration = Starboard configuration
 
-# squid/bot/starboard/screen.py:330
+# squid/bot/starboard/screen.py:378
 bot-starboard-screen-starboard-deleted = Starboard deleted.
 
-# squid/bot/starboard/screen.py:401, squid/bot/starboard/screen.py:412, squid/bot/starboard/screen.py:418, squid/bot/starboard/screen.py:441
-bot-starboard-screen-starboard-name = Starboard name
-
-# squid/bot/starboard/screen.py:109
+# squid/bot/starboard/screen.py:117
 bot-starboard-screen-starboards = Starboards
 
-# squid/bot/starboard/screen.py:431
+# squid/bot/starboard/screen.py:449
 bot-starboard-screen-up = Up
-
-# squid/bot/starboard/screen.py:406
-bot-starboard-screen-value = Value
 
 # squid/bot/submission/build_browse.py:268
 bot-submission-build-browse-approve = Approve
@@ -3508,6 +3472,15 @@ layout-workbench-toggle-tags = Add or remove tags
 # squid/bot/layout_workbench.py:226
 layout-workbench-undo = Undo
 
+# squid/bot/lookup.py:99
+lookup-bounded = Up to 25 matches are shown. Search by name to narrow the results.
+
+# squid/bot/lookup.py:105
+lookup-cancel = Cancel
+
+# squid/bot/lookup.py:101
+lookup-catalogue = Browse or search by name.
+
 # squid/media/application/jobs.py:189
 media-artifact-dimensions-either = Media artifact dimensions must either both be present or both be absent.
 
@@ -4732,47 +4705,59 @@ settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bi
 # squid/bot/settings_view.py:459
 settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.
 
+# squid/bot/starboard/screen.py:190
+starboard-add-emoji = Add or replace emoji
+
 # squid/bot/starboard/cog.py:234
 starboard-channel-permissions-required = I need View Channel, Send Messages, and Read Message History there.
 
-# squid/bot/starboard/screen.py:303
+# squid/bot/starboard/screen.py:355
 starboard-delete-audit-retention = Deleting a starboard cannot be undone from this session.
 
-# squid/bot/starboard/screen.py:137
+# squid/bot/starboard/screen.py:144
 starboard-delete-confirmation = Delete **{ $board_name }** and stop mirroring new entries?
+
+# squid/bot/starboard/screen.py:434
+starboard-destination-channel = Destination channel
 
 # squid/bot/starboard/cog.py:229
 starboard-destination-must-be-text = That destination is not a text channel in this server.
 
-# squid/bot/starboard/screen.py:416
+# squid/bot/starboard/screen.py:442
 starboard-emoji-editor-title = Add or remove starboard emoji
 
-# squid/bot/starboard/screen.py:225
+# squid/bot/starboard/screen.py:294
 starboard-history-create = Create starboard
 
-# squid/bot/starboard/screen.py:252
+# squid/bot/starboard/screen.py:311
 starboard-history-edit = Edit starboard
 
 # squid/starboard/models.py:130
 starboard-minimum-message-age = The minimum message age cannot exceed the maximum.
 
-# squid/bot/starboard/screen.py:110
+# squid/bot/starboard/screen.py:118
 starboard-none-configured = No starboards are configured.
 
-# squid/bot/starboard/screen.py:332, squid/bot/starboard/screen.py:339
-starboard-not-found = No starboard with that name exists.
-
-# squid/bot/starboard/screen.py:346
+# squid/bot/starboard/screen.py:384
 starboard-operation-permission-denied = You are no longer allowed to perform this starboard operation.
 
 # squid/starboard/models.py:124
 starboard-post-threshold-exceed = The post threshold must exceed the removal threshold.
 
-# squid/bot/starboard/screen.py:439
-starboard-role-multiplier-action = Set or remove role multiplier
+# squid/bot/starboard/screen.py:248
+starboard-read-only = Read only
 
-# squid/bot/starboard/screen.py:444
-starboard-role-multiplier-help = Multiplier; leave empty to remove
+# squid/bot/starboard/screen.py:202
+starboard-remove-emoji = Remove emoji
+
+# squid/bot/starboard/screen.py:234
+starboard-remove-weight = Remove weight
+
+# squid/bot/starboard/screen.py:459
+starboard-role = Role
+
+# squid/bot/starboard/screen.py:457
+starboard-role-multiplier-action = Set or remove role multiplier
 
 # squid/starboard/models.py:133
 starboard-starboard-colour-valid = Starboard colour must be a valid RGB value.
@@ -4800,6 +4785,9 @@ starboard-starboard-name-empty = Starboard name cannot be empty.
 
 # squid/starboard/models.py:121
 starboard-starboard-thresholds-finite = Starboard thresholds must be finite.
+
+# squid/bot/starboard/cog.py:254, squid/bot/starboard/screen.py:92
+starboard-unknown-role = Deleted role
 
 # squid/submissions/application/forms.py:177
 submissions-about-submission = About this submission
@@ -5335,7 +5323,7 @@ submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.
 # squid/suggestions/application/registry.py:82
 suggestions-duplicate-suggestion-source = duplicate suggestion source: { $source_id }
 
-# squid/suggestions/application/services.py:119
+# squid/suggestions/application/services.py:125
 suggestions-enumerated = { $source_id } cannot be enumerated
 
 # squid/suggestions/application/registry.py:55

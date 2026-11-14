@@ -3495,22 +3495,13 @@
       "squid/bot/starboard/render.py:37"
     ]
   },
-  "bot-starboard-screen-add-or-replace": {
-    "fingerprint": "e1d1429a782ecf10a2cdc35b857aea875165023ddcaac48fa9ab9f6714cc2c73",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:422"
-    ]
-  },
   "bot-starboard-screen-boards": {
     "fingerprint": "0303d20ee503c4050d47c9f63024de4a21d2a9485fb1187ac71f42dda9f7bc4c",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:112"
+      "squid/bot/starboard/screen.py:120"
     ]
   },
   "bot-starboard-screen-cancel": {
@@ -3519,7 +3510,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:306"
+      "squid/bot/starboard/screen.py:358"
     ]
   },
   "bot-starboard-screen-channel": {
@@ -3528,16 +3519,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:362"
-    ]
-  },
-  "bot-starboard-screen-choose-starboard-to-delete": {
-    "fingerprint": "2edbf10fa8a63ad6ef875ef5fcb51bad1ce270dd3c99d5f3fe5c2cc7be7e42a0",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:410"
+      "squid/bot/starboard/screen.py:400"
     ]
   },
   "bot-starboard-screen-create": {
@@ -3546,7 +3528,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:114"
+      "squid/bot/starboard/screen.py:122"
     ]
   },
   "bot-starboard-screen-create-starboard": {
@@ -3555,8 +3537,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:151",
-      "squid/bot/starboard/screen.py:389"
+      "squid/bot/starboard/screen.py:158",
+      "squid/bot/starboard/screen.py:430"
     ]
   },
   "bot-starboard-screen-created-starboard": {
@@ -3571,7 +3553,7 @@
       }
     ],
     "locations": [
-      "squid/bot/starboard/screen.py:228"
+      "squid/bot/starboard/screen.py:297"
     ]
   },
   "bot-starboard-screen-delete": {
@@ -3580,7 +3562,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:305"
+      "squid/bot/starboard/screen.py:357"
     ]
   },
   "bot-starboard-screen-delete-board": {
@@ -3589,7 +3571,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:174"
+      "squid/bot/starboard/screen.py:251"
     ]
   },
   "bot-starboard-screen-delete-starboard": {
@@ -3598,17 +3580,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:135",
-      "squid/bot/starboard/screen.py:325"
-    ]
-  },
-  "bot-starboard-screen-destination-channel-id": {
-    "fingerprint": "dcf68c6153f6f54d106e1738db2cdecd0d925eeaa25a63b4012ac0385e4aa6f1",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:393"
+      "squid/bot/starboard/screen.py:142",
+      "squid/bot/starboard/screen.py:374"
     ]
   },
   "bot-starboard-screen-direction": {
@@ -3617,7 +3590,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:428"
+      "squid/bot/starboard/screen.py:446"
     ]
   },
   "bot-starboard-screen-down": {
@@ -3626,16 +3599,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:432"
-    ]
-  },
-  "bot-starboard-screen-edit-emoji": {
-    "fingerprint": "e33856f6ab080d9d52073338c2ac26e97f8e0bb294bd5a3e59eb450b4c12ac38",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:186"
+      "squid/bot/starboard/screen.py:450"
     ]
   },
   "bot-starboard-screen-edit-role-weight": {
@@ -3644,25 +3608,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:196"
-    ]
-  },
-  "bot-starboard-screen-edit-setting": {
-    "fingerprint": "07e4ba0fecb77dd35441c6e828253b2d5a35b0316d2498bb5de593aec26afee8",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:167"
-    ]
-  },
-  "bot-starboard-screen-edit-starboard-setting": {
-    "fingerprint": "2e84d800939fc1d7919410367f92693c94e99445213b751e0e117f4ee3abe17c",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:399"
+      "squid/bot/starboard/screen.py:220"
     ]
   },
   "bot-starboard-screen-emoji": {
@@ -3671,7 +3617,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:426"
+      "squid/bot/starboard/screen.py:444"
     ]
   },
   "bot-starboard-screen-emojis": {
@@ -3680,8 +3626,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:118",
-      "squid/bot/starboard/screen.py:365"
+      "squid/bot/starboard/screen.py:187",
+      "squid/bot/starboard/screen.py:403"
     ]
   },
   "bot-starboard-screen-loading-starboards": {
@@ -3690,7 +3636,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:145"
+      "squid/bot/starboard/screen.py:152"
     ]
   },
   "bot-starboard-screen-multiplier": {
@@ -3699,7 +3645,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:435"
+      "squid/bot/starboard/screen.py:453",
+      "squid/bot/starboard/screen.py:460"
     ]
   },
   "bot-starboard-screen-name": {
@@ -3708,16 +3655,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:391"
-    ]
-  },
-  "bot-starboard-screen-operation": {
-    "fingerprint": "b118180cd6105cf4a9469b9e4d64f8d31607c7192832c7a2c5be78901b3e7a4e",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:420"
+      "squid/bot/starboard/screen.py:432"
     ]
   },
   "bot-starboard-screen-post-threshold": {
@@ -3726,8 +3664,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:363",
-      "squid/bot/starboard/screen.py:395"
+      "squid/bot/starboard/screen.py:401",
+      "squid/bot/starboard/screen.py:438"
     ]
   },
   "bot-starboard-screen-removal-threshold": {
@@ -3736,25 +3674,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:364"
-    ]
-  },
-  "bot-starboard-screen-remove": {
-    "fingerprint": "fee199733532ba55617fe5d4e86ad94a2accc6528765edbc0f192bcfe696d05d",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:423"
-    ]
-  },
-  "bot-starboard-screen-role-id": {
-    "fingerprint": "c6b21fddce8c5d5f3afb75afbf381da6995308672e8d39175a8fa6fbb349a055",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:442"
+      "squid/bot/starboard/screen.py:402"
     ]
   },
   "bot-starboard-screen-role-weights": {
@@ -3763,16 +3683,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:121"
-    ]
-  },
-  "bot-starboard-screen-setting": {
-    "fingerprint": "abdbfc89a115ba0139106d68d7874c3096625197e833e6438f5bb15e97f60d4f",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:403"
+      "squid/bot/starboard/screen.py:217"
     ]
   },
   "bot-starboard-screen-settings": {
@@ -3781,7 +3692,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:116"
+      "squid/bot/starboard/screen.py:172"
     ]
   },
   "bot-starboard-screen-starboard-configuration": {
@@ -3790,7 +3701,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:126"
+      "squid/bot/starboard/screen.py:133"
     ]
   },
   "bot-starboard-screen-starboard-deleted": {
@@ -3799,19 +3710,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:330"
-    ]
-  },
-  "bot-starboard-screen-starboard-name": {
-    "fingerprint": "6da2ca1181b5d95589648e6254a43ade0aeca024edad920f0cefba8e8d961dae",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:401",
-      "squid/bot/starboard/screen.py:412",
-      "squid/bot/starboard/screen.py:418",
-      "squid/bot/starboard/screen.py:441"
+      "squid/bot/starboard/screen.py:378"
     ]
   },
   "bot-starboard-screen-starboards": {
@@ -3820,7 +3719,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:109"
+      "squid/bot/starboard/screen.py:117"
     ]
   },
   "bot-starboard-screen-up": {
@@ -3829,16 +3728,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:431"
-    ]
-  },
-  "bot-starboard-screen-value": {
-    "fingerprint": "e272a8f3a0ca732544afdc852e96d736b504d46f4b148eeeb55084641b4370f4",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:406"
+      "squid/bot/starboard/screen.py:449"
     ]
   },
   "bot-submission-build-browse-approve": {
@@ -11468,6 +11358,33 @@
       "squid/bot/layout_workbench.py:226"
     ]
   },
+  "lookup-bounded": {
+    "fingerprint": "e05759442c546bb71463f288a4045b71c7934d79ad5af9c88f2c50a67f2b51c0",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/lookup.py:99"
+    ]
+  },
+  "lookup-cancel": {
+    "fingerprint": "6d05411a4fdf1cf576b22be784007cb79f2b427281dd6ca1cd6d05ad90f7cbfb",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/lookup.py:105"
+    ]
+  },
+  "lookup-catalogue": {
+    "fingerprint": "da7efa476667d18cf0ed2e4886aecd7aafc4a110fb7df095853f35ab299f44cc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/lookup.py:101"
+    ]
+  },
   "media-artifact-dimensions-either": {
     "fingerprint": "79ac55b39ac7c6a0ec7cbacdcb5ec0ad89196c0509bebc7152d1c419dd5c4316",
     "attributes": [],
@@ -15597,6 +15514,15 @@
       "squid/bot/settings_view.py:459"
     ]
   },
+  "starboard-add-emoji": {
+    "fingerprint": "74429ec518d94b3fc0435e8018810a6e2d66d40c70d3b6df877cf4d5c0e39c1e",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/starboard/screen.py:190"
+    ]
+  },
   "starboard-channel-permissions-required": {
     "fingerprint": "ad8a9e8eb4316f3ccc81ddb27ec48f48af9c9462901477af88f3987f143a6f00",
     "attributes": [],
@@ -15612,7 +15538,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:303"
+      "squid/bot/starboard/screen.py:355"
     ]
   },
   "starboard-delete-confirmation": {
@@ -15627,7 +15553,16 @@
       }
     ],
     "locations": [
-      "squid/bot/starboard/screen.py:137"
+      "squid/bot/starboard/screen.py:144"
+    ]
+  },
+  "starboard-destination-channel": {
+    "fingerprint": "093209666eeb9d7cfe737099fd1ee1beef8713dcb468c98b11d2bcecec7cc1a8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/starboard/screen.py:434"
     ]
   },
   "starboard-destination-must-be-text": {
@@ -15645,7 +15580,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:416"
+      "squid/bot/starboard/screen.py:442"
     ]
   },
   "starboard-history-create": {
@@ -15654,7 +15589,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:225"
+      "squid/bot/starboard/screen.py:294"
     ]
   },
   "starboard-history-edit": {
@@ -15663,7 +15598,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:252"
+      "squid/bot/starboard/screen.py:311"
     ]
   },
   "starboard-minimum-message-age": {
@@ -15681,17 +15616,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:110"
-    ]
-  },
-  "starboard-not-found": {
-    "fingerprint": "2de3028a184e894c68fc8ccec9b3bb7d3ab76a27a7981feeaad9a1f75746ef28",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:332",
-      "squid/bot/starboard/screen.py:339"
+      "squid/bot/starboard/screen.py:118"
     ]
   },
   "starboard-operation-permission-denied": {
@@ -15700,7 +15625,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:346"
+      "squid/bot/starboard/screen.py:384"
     ]
   },
   "starboard-post-threshold-exceed": {
@@ -15712,22 +15637,49 @@
       "squid/starboard/models.py:124"
     ]
   },
+  "starboard-read-only": {
+    "fingerprint": "d57966c074e0b622e4377e82d8f6efb05ffdc79fedb47ef11d20f190e605aac2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/starboard/screen.py:248"
+    ]
+  },
+  "starboard-remove-emoji": {
+    "fingerprint": "d79983864768deff464b08c75e02cb1c4e3fa597601707bd5883cf4e46c697e2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/starboard/screen.py:202"
+    ]
+  },
+  "starboard-remove-weight": {
+    "fingerprint": "0187495a9fc753d0c4372f97a17e6e938b249a0d7b7062db3d7a659c6c45e6a1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/starboard/screen.py:234"
+    ]
+  },
+  "starboard-role": {
+    "fingerprint": "521489d675deb4118136bf148493dd4d304aade0d4b92dd1807c466d4265c8c8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/starboard/screen.py:459"
+    ]
+  },
   "starboard-role-multiplier-action": {
     "fingerprint": "8f80c46c493167fcdb30073804dbb6e66cf51aae64ee29ebca7f830d8d23c2c5",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/screen.py:439"
-    ]
-  },
-  "starboard-role-multiplier-help": {
-    "fingerprint": "e9b7101024afcedaa7cdc5296a5b9eeee4a2ac17c1f7be831ceb47e81c40a797",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/starboard/screen.py:444"
+      "squid/bot/starboard/screen.py:457"
     ]
   },
   "starboard-starboard-colour-valid": {
@@ -15809,6 +15761,16 @@
     "arguments": [],
     "locations": [
       "squid/starboard/models.py:121"
+    ]
+  },
+  "starboard-unknown-role": {
+    "fingerprint": "da8f119c6fe5dd7d6c451acec953a788f1990c3b6efdd2db7657c4f760d8b6c6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/starboard/cog.py:254",
+      "squid/bot/starboard/screen.py:92"
     ]
   },
   "submissions-about-submission": {
@@ -17618,7 +17580,7 @@
       }
     ],
     "locations": [
-      "squid/suggestions/application/services.py:119"
+      "squid/suggestions/application/services.py:125"
     ]
   },
   "suggestions-invalid-suggestion-source": {
