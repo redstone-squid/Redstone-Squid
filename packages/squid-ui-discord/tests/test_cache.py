@@ -7,7 +7,10 @@ grows within the available space. They also cover eviction and representative la
 from dataclasses import replace
 from time import perf_counter
 
-from squid_i18n import tr
+import pytest
+
+from squid_i18n import Text as DeferredText
+from squid_i18n import md, tr
 from squid_ui import Palette, Role, Tone, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.ownership import Controlled
@@ -411,6 +414,44 @@ def test_plan_cache_separates_locales() -> None:
 
     assert not second.metrics.cache_hit
     assert first.scene != second.scene
+
+
+@pytest.mark.parametrize(
+    ("first_text", "second_text"),
+    [
+        (DeferredText("first"), DeferredText("second")),
+        (DeferredText("**literal**"), md("**literal**")),
+        (tr("Hello", key="hello"), tr("Hello", key="other")),
+        (md(t"**{DeferredText('first')}**"), md(t"**{DeferredText('second')}**")),
+    ],
+)
+def test_plan_cache_distinguishes_unresolved_text(first_text: DeferredText, second_text: DeferredText) -> None:
+    cache = PlanCache()
+    plan(Paragraph(first_text), target=DISCORD_V2_DPY27, cache=cache)
+    changed = plan(Paragraph(second_text), target=DISCORD_V2_DPY27, cache=cache)
+    fresh = plan(Paragraph(second_text), target=DISCORD_V2_DPY27)
+
+    assert changed.metrics.reuse is PlanReuse.INCREMENTAL
+    assert changed.scene == fresh.scene
+
+
+def test_plan_cache_reuses_equal_translations_and_invalidates_changed_bindings() -> None:
+    def document(name: str) -> Paragraph:
+        greeting = tr(t"Hello {name}", key="greeting")
+        return Paragraph(DeferredText(t"Notice: {greeting}"))
+
+    cache = PlanCache()
+    localization = Localization("fr", ("greeting = Bonjour { $name }",))
+    first = plan(document("Ann"), target=DISCORD_V2_DPY27, localization=localization, cache=cache)
+    same = plan(document("Ann"), target=DISCORD_V2_DPY27, localization=localization, cache=cache)
+    changed = plan(document("Bob"), target=DISCORD_V2_DPY27, localization=localization, cache=cache)
+    fresh = plan(document("Bob"), target=DISCORD_V2_DPY27, localization=localization)
+
+    assert same.metrics.cache_hit
+    assert same.scene == first.scene
+    assert changed.metrics.reuse is PlanReuse.INCREMENTAL
+    assert changed.scene == fresh.scene
+    assert changed.scene != first.scene
 
 
 def test_realistic_queue_plan_and_draw_meets_latency_budget() -> None:

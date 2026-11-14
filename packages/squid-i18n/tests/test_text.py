@@ -1,10 +1,42 @@
 """Literal construction and deferred template composition."""
 
+from copy import copy, deepcopy
+from dataclasses import is_dataclass
 from datetime import UTC, datetime
 
 import pytest
 
 from squid_i18n import Localization, Text, discord_text, localization_scope, md, plain, resolve_text, source_text, tr
+
+
+def test_text_is_an_immutable_slotted_value() -> None:
+    text = Text("literal")
+    assert not is_dataclass(text)
+    assert not hasattr(text, "__dict__")
+    with pytest.raises(AttributeError, match="immutable"):
+        text._parts = ()
+    with pytest.raises(AttributeError, match="immutable"):
+        del text._parts
+    assert source_text(text) == "literal"
+
+
+def test_equality_and_hashing_follow_authored_structure() -> None:
+    assert Text("literal") == Text("literal")
+    assert Text("literal") != Text("different")
+    assert Text("literal") != "literal"
+    assert Text("literal") != md("literal")
+    assert len({Text("literal"), Text("literal")}) == 1
+    assert tr("Hello", key="greeting") == tr("Hello", key="greeting")
+    assert tr("Hello", key="greeting") != tr("Hello", key="other")
+
+
+def test_copying_preserves_unresolved_structure() -> None:
+    text = Text("literal") + md("**styled**")
+    assert copy(text) == text
+    assert deepcopy(text) == text
+    translated = tr("Hello", key="greeting")
+    assert copy(translated) == translated
+    assert "greeting" in repr(translated)
 
 
 @pytest.mark.parametrize("value", ["", "Hello", "**literal** {name}"])

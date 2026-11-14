@@ -102,13 +102,14 @@ class _Timestamp:
 type _Part = str | _Translation | _Markdown | _Style | _Link | _Code | _Mention | _Timestamp
 
 
-@dataclass(frozen=True, slots=True)
 class Text:
-    """Composable text from a literal string or template.
+    """Immutable, composable text from a literal string or template.
 
     Template strings stay literal; embedded Text retains its structure and deferred
     translations. Use md for Markdown or tr for a translated message.
     """
+
+    __slots__ = ("_parts",)
 
     _parts: tuple[_Part, ...]
 
@@ -132,6 +133,42 @@ class Text:
         text = object.__new__(cls)
         object.__setattr__(text, "_parts", parts)
         return text
+
+    @override
+    def __setattr__(self, name: str, value: object) -> None:
+        msg = "Text is immutable"
+        raise AttributeError(msg)
+
+    @override
+    def __delattr__(self, name: str) -> None:
+        msg = "Text is immutable"
+        raise AttributeError(msg)
+
+    @override
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Text) or type(self) is not type(other):
+            return NotImplemented
+        return self._parts == other._parts
+
+    @override
+    def __hash__(self) -> int:
+        return hash((self._parts,))
+
+    @override
+    def __repr__(self) -> str:
+        return f"{type(self).__qualname__}(_parts={self._parts!r})"
+
+    @override
+    def __reduce__(self) -> tuple[Callable[[tuple[_Part, ...]], Self], tuple[tuple[_Part, ...]]]:
+        return self._from_parts, (self._parts,)
+
+    def structural_key(self) -> tuple[object, ...]:
+        """Return unresolved parts for recursive content fingerprinting, without rendering.
+
+        Parts may contain dataclasses, mappings, and nested Text. This is an in-memory
+        description of the authored structure, not a serialized format or a hashable key.
+        """
+        return self._parts
 
     def __add__(self, other: TextLike) -> Text:
         return Text._from_parts(self._parts + ((other,) if isinstance(other, str) else other._parts))

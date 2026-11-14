@@ -13,6 +13,7 @@ from dataclasses import fields, is_dataclass
 from enum import Enum
 
 from squid_ui.primitives.constraints import RoutedPage
+from squid_ui.text import Text
 
 
 def stable_fingerprint(values: Sequence[object]) -> str:
@@ -27,6 +28,8 @@ def stable_value(value: object) -> object:
         return "<callback>"
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, Text):
+        return {"type": type(value).__qualname__, "fields": {"_parts": stable_value(value.structural_key())}}
     if is_dataclass(value) and not isinstance(value, type):
         return {
             "type": type(value).__qualname__,
