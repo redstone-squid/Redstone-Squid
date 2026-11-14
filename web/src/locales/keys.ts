@@ -112,7 +112,6 @@ export const messageKeys = [
   "gallery.previous",
   "home.communityBody",
   "home.communityTitle",
-  "home.eyebrow",
   "home.intro",
   "home.latest",
   "home.latestIntro",

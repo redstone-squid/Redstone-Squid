@@ -33,6 +33,11 @@ work without JavaScript; hydrated switches retain both drafts and sort selection
 
 ## Localization
 
+Keep product copy factual and concise; avoid slogans and promotional labels.
+Language names, route prefixes, and metadata live in `LOCALES` in `lib/i18n.ts`.
+Both page shells use the same native language dropdown, which works without
+JavaScript and preserves query and pagination state.
+
 All website messages live in `src/locales/en.ftl` and `zh-CN.ftl`. Use Fluent
 variables and selectors for interpolation and pluralization. Call `translate`
 with a message key and variables in Astro, Svelte, or legacy React; do not branch on

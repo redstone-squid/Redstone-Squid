@@ -1,0 +1,84 @@
+---
+import { LOCALES, SUPPORTED_LOCALES, localizePath, translate, type Locale } from "../lib/i18n";
+type Props = { locale: Locale; align?: "start" | "end" };
+const { locale, align = "end" } = Astro.props;
+const path = `${Astro.url.pathname}${Astro.url.search}`;
+---
+
+<details class="language-selector" data-align={align}>
+  <summary aria-label={translate(locale, "nav.language")}>
+    <span lang={locale}>{LOCALES[locale].label}</span>
+    <span aria-hidden="true">⌄</span>
+  </summary>
+  <ul aria-label={translate(locale, "nav.language")}>
+    {SUPPORTED_LOCALES.map((language) => (
+      <li>
+        <a
+          href={localizePath(path, language)}
+          lang={language}
+          hreflang={language}
+          aria-current={language === locale ? "true" : undefined}
+        >
+          {LOCALES[language].label}
+          <span aria-hidden="true">{language === locale ? "✓" : ""}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</details>
+<style>
+  .language-selector {
+    position: relative;
+    color: var(--text, var(--ink));
+    font-size: 0.875rem;
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border, var(--line));
+    border-radius: 0.375rem;
+    cursor: pointer;
+    list-style: none;
+    font-family: inherit;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  ul {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 20;
+    min-width: 11rem;
+    max-width: calc(100vw - 2rem);
+    max-height: 60vh;
+    overflow: auto;
+    margin: 0.375rem 0 0;
+    padding: 0.25rem;
+    list-style: none;
+    border: 1px solid var(--border, var(--line));
+    border-radius: 0.375rem;
+    background: var(--surface, var(--deepslate-900));
+    box-shadow: var(--shadow);
+  }
+  .language-selector[data-align="start"] ul {
+    left: 0;
+    right: auto;
+  }
+  .language-selector ul a {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.625rem 0.75rem;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 0.25rem;
+  }
+  .language-selector a:hover,
+  .language-selector a[aria-current] {
+    background: var(--surface-muted, var(--deepslate-800));
+  }
+</style>

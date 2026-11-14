@@ -28,7 +28,7 @@
     gap: var(--space-5);
   }
   .catalogue-hero {
-    padding-block: var(--space-8);
+    padding-block: var(--space-7);
     border-bottom: 1px solid var(--border);
     background: var(--surface);
   }
@@ -39,11 +39,13 @@
     align-items: center;
   }
   .catalogue-hero h1 {
-    max-width: 14ch;
-    font-size: clamp(2.75rem, 6vw, 5rem);
+    max-width: 22ch;
+    font-size: clamp(2rem, 3.5vw, 3rem);
   }
-  .catalogue-hero .sq-kicker {
-    color: var(--accent);
+  .catalogue-feature-heading {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: var(--space-3);
   }
   .catalogue-hero-links {
     margin-top: var(--space-5);
@@ -60,9 +62,6 @@
   }
   .catalogue-search button {
     align-self: end;
-  }
-  .catalogue-feature {
-    transform: rotate(2deg);
   }
   .catalogue-results {
     display: grid;
@@ -97,7 +96,8 @@
     gap: var(--space-5);
     flex-wrap: wrap;
     padding: var(--space-7);
-    background: var(--accent-soft);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
   }
   .catalogue-community p {
@@ -142,9 +142,6 @@
     }
     .catalogue-hero {
       padding-block: var(--space-7);
-    }
-    .catalogue-feature {
-      transform: none;
     }
     .catalogue-community {
       padding: var(--space-5);

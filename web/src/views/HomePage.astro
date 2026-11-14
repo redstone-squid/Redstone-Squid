@@ -47,7 +47,6 @@ const featured = builds?.items[0];
   <section class="catalogue-hero">
     <div class="catalogue-container catalogue-hero-inner">
       <div>
-        <p class="sq-kicker">{t("home.eyebrow")}</p>
         <h1>{t("home.title")}</h1>
         <p class="sq-lede">{t("home.intro")}</p>
         <form class="catalogue-search" method="get" action={searchAction}>
@@ -67,7 +66,7 @@ const featured = builds?.items[0];
       </div>
       {featured && (
         <div class="catalogue-feature">
-          <h2 class="sq-kicker">{t("catalogue.featured")}</h2>
+          <h2 class="catalogue-feature-heading">{t("catalogue.featured")}</h2>
           <BuildCard build={featured} {locale} eager />
         </div>
       )}
@@ -122,11 +121,11 @@ const featured = builds?.items[0];
         <p>{t("home.communityBody")}</p>
       </div>
       <div class="sq-row">
-        <LinkButton href={config.discordCommunityUrl} variant="primary" rel="noreferrer">
-          {t("footer.discord")}
+        <LinkButton href={localizePath("/submit", locale)} variant="primary">
+          {t("nav.submit")}
         </LinkButton>
-        <LinkButton href={config.botInviteUrl} rel="noreferrer">
-          {t("footer.invite")}
+        <LinkButton href={config.discordCommunityUrl} rel="noreferrer">
+          {t("footer.discord")}
         </LinkButton>
       </div>
     </section>

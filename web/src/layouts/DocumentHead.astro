@@ -1,6 +1,13 @@
 ---
 import { getRuntimeConfig } from "../lib/config";
-import { localeFromPath, localizePath, translate, type Locale } from "../lib/i18n";
+import {
+  LOCALES,
+  SUPPORTED_LOCALES,
+  localeFromPath,
+  localizePath,
+  translate,
+  type Locale,
+} from "../lib/i18n";
 type Props = {
   title: string;
   themeColor?: string;
@@ -19,7 +26,6 @@ const description = Astro.props.description ?? translate(locale, "meta.defaultDe
 const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
 const canonical = new URL(canonicalPath, config.siteUrl).toString();
 const englishUrl = new URL(localizePath(canonicalPath, "en"), config.siteUrl).toString();
-const chineseUrl = new URL(localizePath(canonicalPath, "zh-CN"), config.siteUrl).toString();
 // Escape HTML script delimiters without changing the parsed JSON-LD value.
 const jsonLd = Astro.props.structuredData
   ? JSON.stringify(Astro.props.structuredData).replaceAll("<", "\\u003c")
@@ -32,13 +38,18 @@ const jsonLd = Astro.props.structuredData
 <meta name="theme-color" content={Astro.props.themeColor ?? "#090b0c"} />
 <meta name="robots" content={Astro.props.noindex ? "noindex,follow" : "index,follow"} />
 <link rel="canonical" href={canonical} />
-<link rel="alternate" hreflang="en" href={englishUrl} />
-<link rel="alternate" hreflang="zh-CN" href={chineseUrl} />
+{SUPPORTED_LOCALES.map((language) => (
+  <link
+    rel="alternate"
+    hreflang={language}
+    href={new URL(localizePath(canonicalPath, language), config.siteUrl).toString()}
+  />
+))}
 <link rel="alternate" hreflang="x-default" href={englishUrl} />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content={translate(locale, "site.name")} />
-<meta property="og:locale" content={locale === "en" ? "en_US" : "zh_CN"} />
+<meta property="og:locale" content={LOCALES[locale].openGraph} />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
 <meta property="og:url" content={canonical} />

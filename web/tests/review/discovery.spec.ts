@@ -127,3 +127,41 @@ test("discovery / edits existing guided filters and switches mode without JavaSc
     await context.close();
   }
 });
+
+for (const path of ["/builds?q=door&after_id=2", "/builds/1"]) {
+  test(`language dropdown without JavaScript / ${path}`, async ({ browser }, info) => {
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      viewport: info.project.use.viewport,
+      isMobile: info.project.use.isMobile,
+      hasTouch: info.project.use.hasTouch,
+    });
+    try {
+      const page = await context.newPage();
+      await installDiscoveryMedia(page);
+      await page.goto(`http://127.0.0.1:4321${path}`);
+      const selector = page.locator(".language-selector summary");
+      await selector.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("link", { name: "English", exact: true })).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
+      const chinese = page.getByRole("link", { name: "简体中文", exact: true });
+      await expect(chinese).toHaveAttribute("href", `/zh-cn${path}`);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      const screenshot = info.outputPath("languages.png");
+      await page.screenshot({ path: screenshot });
+      await info.attach("language dropdown", { path: screenshot, contentType: "image/png" });
+      await chinese.click();
+      await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+      await page.locator(".language-selector summary").click();
+      await page.getByRole("link", { name: "English", exact: true }).click();
+      expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe(path);
+    } finally {
+      await context.close();
+    }
+  });
+}

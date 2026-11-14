@@ -1,8 +1,9 @@
 ---
 import type { ComponentProps } from "astro/types";
+import LanguageSelector from "../components/LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
 import { getRuntimeConfig } from "../lib/config";
-import { localizePath, translate, type StaticMessageKey } from "../lib/i18n";
+import { localizePath, translate, type Locale, type StaticMessageKey } from "../lib/i18n";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
@@ -10,12 +11,11 @@ import "@fontsource/noto-sans-sc/600.css";
 import "../ui/base.css";
 import "./catalogue-layout.css";
 import "../features/catalogue/catalogue.css";
-type Props = ComponentProps<typeof DocumentHead> & { locale: "en" | "zh-CN" };
+type Props = ComponentProps<typeof DocumentHead> & { locale: Locale };
 const { locale } = Astro.props;
 const t = (key: StaticMessageKey) => translate(locale, key);
 const config = getRuntimeConfig();
-const otherLocale = locale === "en" ? "zh-CN" : "en";
-const activePath = Astro.url.pathname.replace(/^\/zh-cn(?=\/|$)/, "") || "/";
+const activePath = localizePath(Astro.url.pathname, "en");
 const nav = [
   ["nav.builds", "/builds"],
   ["nav.records", "/records"],
@@ -54,13 +54,7 @@ const nav = [
           ))}
         </nav>
         <div class="catalogue-actions">
-          <a
-            class="sq-button sq-button--quiet"
-            href={localizePath(`${Astro.url.pathname}${Astro.url.search}`, otherLocale)}
-            hreflang={otherLocale}
-          >
-            {t("nav.language")}
-          </a>
+          <LanguageSelector {locale} align="start" />
           <a class="sq-button sq-button--primary" href={localizePath("/submit", locale)}>
             {t("nav.submit")} <span aria-hidden="true">↗</span>
           </a>

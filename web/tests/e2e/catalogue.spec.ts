@@ -9,9 +9,7 @@ test("serves meaningful navigation and catalogue cards without JavaScript", asyn
   const page = await context.newPage();
   await installMediaRoutes(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Redstone engineering, documented.",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Minecraft redstone builds");
   await expect(page.getByRole("link", { name: "Copper Bolt 5×5" })).toBeVisible();
   await page.getByRole("link", { name: "Builds", exact: true }).first().click();
   await expect(page).toHaveURL(/\/builds$/);
@@ -21,7 +19,8 @@ test("serves meaningful navigation and catalogue cards without JavaScript", asyn
 
 test("switches locale while preserving query and page state", async ({ page }) => {
   await page.goto("/builds?q=door&after_id=2");
-  const language = page.getByRole("link", { name: "简体中文" });
+  await page.locator(".language-selector summary").click();
+  const language = page.getByRole("link", { name: "简体中文", exact: true });
   await expect(language).toHaveAttribute("href", "/zh-cn/builds?q=door&after_id=2");
   await language.click();
   await expect(page).toHaveURL(/\/zh-cn\/builds\?q=door&after_id=2/);

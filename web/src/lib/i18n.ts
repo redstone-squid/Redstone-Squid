@@ -9,9 +9,13 @@ import {
 } from "../locales/keys";
 
 export type { MessageKey, StaticMessageKey } from "../locales/keys";
-export const SUPPORTED_LOCALES = ["en", "zh-CN"] as const;
-export type Locale = (typeof SUPPORTED_LOCALES)[number];
-export type RouteLocale = "en" | "zh-cn";
+export const LOCALES = {
+  en: { label: "English", prefix: "", route: "en", openGraph: "en_US" },
+  "zh-CN": { label: "简体中文", prefix: "/zh-cn", route: "zh-cn", openGraph: "zh_CN" },
+} as const;
+export type Locale = keyof typeof LOCALES;
+export type RouteLocale = (typeof LOCALES)[Locale]["route"];
+export const SUPPORTED_LOCALES = Object.keys(LOCALES) as Locale[];
 
 function createBundle(locale: Locale, source: string): FluentBundle {
   const bundle = new FluentBundle(locale, { useIsolating: false });
@@ -19,26 +23,38 @@ function createBundle(locale: Locale, source: string): FluentBundle {
   if (errors.length) throw new AggregateError(errors, `Invalid ${locale} catalog`);
   return bundle;
 }
-const bundles = { en: createBundle("en", english), "zh-CN": createBundle("zh-CN", chinese) };
+const bundles = {
+  en: createBundle("en", english),
+  "zh-CN": createBundle("zh-CN", chinese),
+} satisfies Record<Locale, FluentBundle>;
 const knownKeys = new Set<string>(messageKeys);
 
 export function routeLocaleToApi(locale: RouteLocale): Locale {
-  return locale === "zh-cn" ? "zh-CN" : "en";
+  return SUPPORTED_LOCALES.find((id) => LOCALES[id].route === locale) ?? "en";
 }
 
 export function apiLocaleToRoute(locale: Locale): RouteLocale {
-  return locale === "zh-CN" ? "zh-cn" : "en";
+  return LOCALES[locale].route;
 }
 
 export function localeFromPath(pathname: string): Locale {
-  return pathname === "/zh-cn" || pathname.startsWith("/zh-cn/") ? "zh-CN" : "en";
+  return (
+    SUPPORTED_LOCALES.find((locale) => {
+      const prefix = LOCALES[locale].prefix;
+      return prefix && (pathname === prefix || pathname.startsWith(`${prefix}/`));
+    }) ?? "en"
+  );
 }
 
 /** Replace the locale prefix while preserving the query and fragment; return a path, not an origin. */
 export function localizePath(path: string, locale: Locale): string {
   const url = new URL(path, "https://catalogue.invalid");
-  const unprefixed = url.pathname.replace(/^\/zh-cn(?=\/|$)/, "") || "/";
-  url.pathname = locale === "zh-CN" ? `/zh-cn${unprefixed === "/" ? "" : unprefixed}` : unprefixed;
+  const prefix = LOCALES[localeFromPath(url.pathname)].prefix;
+  const unprefixed = url.pathname.slice(prefix.length) || "/";
+  const targetPrefix = LOCALES[locale].prefix;
+  url.pathname = targetPrefix
+    ? `${targetPrefix}${unprefixed === "/" ? "" : unprefixed}`
+    : unprefixed;
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
