@@ -11,6 +11,9 @@
       font-size: 12px; margin-left: 6px;
     }
     #squid-search-proposal h3 { font-size: 17px; margin: 0 0 6px; }
+    #squid-search-proposal h4 { font-size: 16px; font-weight: 400; margin: 0 0 4px; }
+    #squid-search-proposal .query-match { font-weight: 700; color: light-dark(#232428, #f2f3f5); }
+    #squid-search-proposal .record-titles { margin: 6px 0; padding-left: 20px; }
     #squid-search-proposal p { margin: 4px 0; }
     #squid-search-proposal .secondary { color: light-dark(#555963, #b5bac1); }
     #squid-search-proposal .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -51,7 +54,7 @@
       const scopeInput = root.querySelector('#squid-proposal-scope');
       const builds = {
         42: { title: '2×2 Seamless Door', size: '4 × 3 × 4 blocks', records: ['smallest', 'fastest'] },
-        57: { title: 'Compact 2×2 Door', size: '3 × 4 × 4 blocks', records: ['smallest'] },
+        57: { title: 'Smallest 2×2 piston door', size: '3 × 4 × 4 blocks', records: ['smallest'] },
         83: { title: '2×2 Flush Door', size: '5 × 4 × 4 blocks', records: [] }
       };
       const records = {
@@ -64,11 +67,19 @@
       function entries() {
         return state.scope === 'records' ? [42, 57] : state.scope === 'builds' ? [42, 57, 83] : [42, 57, 83, 'pattern'];
       }
-      function summary(id) {
-        if (state.scope === 'builds') return 'Matches build text';
-        if (id === 42) return 'Matches: Smallest (tied) · Fastest opening';
-        if (id === 57) return 'Matches: Smallest (tied)';
-        return 'Matches build text';
+      function highlighted(title) {
+        return title.replaceAll('2×2', '<strong class="query-match">2×2</strong>');
+      }
+      function result(id) {
+        const build = builds[id];
+        const recordFirst = state.scope === 'records';
+        const title = recordFirst ? records[build.records[0]].title : build.title;
+        const remaining = recordFirst ? build.records.slice(1) : build.records;
+        const identity = `Build #${id}` + (recordFirst && build.title !== title ? ` · ${highlighted(build.title)}` : '');
+        const titles = remaining.map(key => `<li>${highlighted(records[key].title)}</li>`).join('');
+        return `<div class="entry"><h4>${highlighted(title)}</h4><p class="secondary">${identity}</p>` +
+          (titles ? `<ul class="record-titles">${titles}</ul>` : '') +
+          action('View build', `data-open="${id}"`) + '</div>';
       }
       function render() {
         scopeInput.value = state.scope;
@@ -77,8 +88,8 @@
           const count = state.scope === 'everything' ? '4 results · 3 builds, 1 pattern' : `${items.length} builds`;
           content.innerHTML = `<h3>Search results</h3><p class="secondary">${count}</p>` +
             items.slice(state.page * 2, state.page * 2 + 2).map(id => id === 'pattern'
-              ? `<div class="entry"><strong>2×2 piston layout</strong><p class="secondary">Pattern</p>${action('View pattern', 'data-open="pattern"')}</div>`
-              : `<div class="entry"><strong>${builds[id].title}</strong><p class="secondary">Build #${id}</p><p>${summary(id)}</p>${action('View build', `data-open="${id}"`)}</div>`).join('') +
+              ? `<div class="entry"><h4>${highlighted('2×2 piston layout')}</h4><p class="secondary">Pattern</p>${action('View pattern', 'data-open="pattern"')}</div>`
+              : result(id)).join('') +
             `<div class="controls footer">${action('Previous', `data-page="-1" ${state.page === 0 ? 'disabled' : ''}`)}<span>Page ${state.page + 1} of ${Math.ceil(items.length / 2)}</span>${action('Next', `data-page="1" ${state.page === Math.ceil(items.length / 2) - 1 ? 'disabled' : ''}`)}</div>`;
           return;
         }
@@ -93,9 +104,9 @@
         body += `<div class="entry"><h3>${build.title}</h3><p class="secondary">Build #${id} · Confirmed</p>`;
         if (state.detail === 'build') {
           body += `<p class="metric">${build.size}</p><p>Java Edition · Piston door</p>`;
-          if (state.scope !== 'builds' && build.records.length) body += action(`Matching records (${build.records.length})`, 'data-detail="records"', true);
+          if (build.records.length) body += action(`${state.scope === 'records' ? 'Matching records' : 'Records'} (${build.records.length})`, 'data-detail="records"', true);
         } else {
-          body += '<p><strong>Matching records</strong></p>';
+          body += `<p><strong>${state.scope === 'records' ? 'Matching records' : 'Records'}</strong></p>`;
           body += build.records.map(key => {
             const record = records[key];
             const other = record.holders.filter(holder => holder !== id);

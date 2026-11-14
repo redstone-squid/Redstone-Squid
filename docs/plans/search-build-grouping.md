@@ -12,13 +12,33 @@ Keep the existing scope choices. Records finds builds through matching records, 
 directly, and Everything combines those matches with independent metadata results. Changing the default
 scope or renaming the choices is a separate decision; this proposal retains the current Records default.
 
-Each build result shows its title, ID, and a short summary of matching records. Show at most two record
-labels and a remaining count. Selecting the result opens build details, with a separate Matching records
-action. That action shows the complete matching titles, category, version scope, metrics, and tied holders.
-Returning to results preserves the query, scope, and page. Metadata keeps its own result and detail view.
+Use the scope to choose the result heading and supporting titles. Do not prefix the titles with “Matches:”.
 
-Use the authoritative build title for the heading. The current record projection uses the first holder's
-title, so it cannot supply the correct heading for every tied holder.
+| Scope | Main title | Identity line | Record titles below |
+| --- | --- | --- | --- |
+| Records | Best matching record title | Build #ID, followed by the build title only when it differs from the heading | Remaining matching record titles |
+| Builds | Build title | Build #ID | Records held by the build |
+| Everything | Build title | Build #ID | Records held by the build |
+
+In Records, choose the heading from the strongest matching record, with a stable record-ID tie breaker.
+Keep the remaining titles in a compact list, preserving their full names rather than shortening them to
+“Smallest” or “Fastest”. Start with two supporting titles and a remaining count when more are available;
+the detail action exposes the complete list. A build with no records needs no placeholder text.
+
+Bold the query words within displayed titles, including a differing build title on the identity line.
+Keep the rest of each result heading at regular weight so the emphasis remains visible. The mockup
+illustrates `2x2` matching the displayed `2×2`. Production highlighting must use actual match information,
+escape display text, and support normalization without inventing literal matches for semantic results.
+Record titles shown as context in Builds or Everything should not receive emphasis unless they actually
+match. Bold is the initial proposal; color is optional reinforcement where the rendering platform supports it.
+
+Selecting a result opens build details, with a separate record-detail action showing titles, category,
+version scope, metrics, and tied holders. Label this “Matching records” in Records and “Records” in the
+other scopes. Returning to results preserves the query, scope, and page. Metadata keeps its own result
+and detail view.
+
+Load record titles independently of build titles. The current record projection uses the first holder's
+build title, so it cannot supply either a general record heading or every tied holder's build title correctly.
 
 | Situation | Proposed behavior |
 | --- | --- |
@@ -31,13 +51,14 @@ title, so it cannot supply the correct heading for every tied holder.
 
 Counts and pagination describe grouped results. Records and Builds say “builds”; Everything says “results”
 and distinguishes builds from metadata. Opening another holder must not discard the original result-page
-position. Only records matching the query appear under Matching records; do not imply that this lists every
-record the build holds.
+position. Records scope includes only matching records. Builds and Everything also show held records as
+context, even if those records did not cause the build to match; this enrichment does not affect ranking.
 
 ## Implementation sequence after UX review
 
-1. Define a grouped search result containing a build identity and its matching record identities, plus a
-   separate metadata result. Retain all holder identities and their display data rather than taking only
+1. Define a grouped search result containing a build identity, its matching record identities, and match
+   information for highlighting, plus a separate metadata result. Load held-record context for Builds and
+   Everything. Retain all holder identities and their display data rather than taking only
    `holder_build_ids[0]`. Apply build visibility rules to every holder.
 2. Implement grouping before totals and pagination in the shared search backend. Handle relevance,
    filter-only, and explicit-sort paths together. Deduplicating one fetched page cannot provide correct
@@ -51,8 +72,10 @@ record the build holds.
    the shared service currently exposes record results, so changing its return type requires a coordinated
    contract change or an opt-in grouped mode.
 5. Verify duplicate records across page boundaries, tied holders, direct-plus-record matches, metadata,
-   holderless titles, visibility, version scopes, stable ordering, and long summaries. Exercise the actual
-   Discord layout at narrow widths and with enough records to overflow the detail view.
+   holderless titles, visibility, version scopes, stable ordering, and long summaries. Check scope-specific
+   headings, identical versus differing build titles, unmatched contextual titles, and normalized match
+   highlighting. Exercise the actual Discord layout at narrow widths and with enough records to overflow
+   the detail view.
 
 ## Review gate
 
