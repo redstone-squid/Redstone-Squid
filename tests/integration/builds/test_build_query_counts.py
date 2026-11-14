@@ -3,7 +3,7 @@
 from functools import partial
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
@@ -11,6 +11,7 @@ from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
 from squid.builds.domain.credits import Credit, CreditKind, CreditRole, name_credits
 from squid.builds.models import OtherBuild
+from squid.messages.domain import MessageSnapshot
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.models import Version
 from tests.support.build_edits import build_edit_session
@@ -120,11 +121,20 @@ async def test_typed_credits_keep_same_names_separate_and_resolve_verified_subje
     account_id, _ = await _seed(migrated_session_factory, 1)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     credits = [
-        Credit(name="Alex", kind=CreditKind.DISCORD, subject="123456789", username="alex_d"),
+        Credit(
+            name="Alex", kind=CreditKind.DISCORD, subject="123456789", username="alex_d", source_message_id=123456790
+        ),
         Credit(name="Alex", kind=CreditKind.MINECRAFT_JAVA, username="Alex", role=CreditRole.LAYOUT),
         Credit(name="Alex"),
     ]
-    build = OtherBuild(submission_status=Status.PENDING, submitter_account_id=account_id, credits=credits)
+    build = OtherBuild(
+        submission_status=Status.PENDING,
+        submitter_account_id=account_id,
+        credits=credits,
+        source_messages=(
+            MessageSnapshot(id=123456790, channel_id=1, guild_id=None, author_id=123456789, content="By Alex"),
+        ),
+    )
     await transact(repository, lambda uow: uow.builds.save(build), commit=True)
     assert build.id is not None
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
@@ -135,3 +145,31 @@ async def test_typed_credits_keep_same_names_separate_and_resolve_verified_subje
             await session.execute(text("SELECT name, account_id FROM build_credit_accounts(:id)"), {"id": build.id})
         ).all()
     assert resolved == [("Alex", account_id)]
+
+
+async def test_private_provider_identity_does_not_reveal_credit_ownership_on_a_public_profile(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id, _ = await _seed(migrated_session_factory, 1)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    build = OtherBuild(
+        submission_status=Status.PENDING,
+        submitter_account_id=account_id,
+        credits=[Credit(name="Private Discord name", kind=CreditKind.DISCORD, subject="123456789")],
+    )
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
+    async with migrated_session_factory() as session:
+        account = await session.get(Account, account_id)
+        assert account is not None
+        public_id = account.public_creator_id
+    profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(public_id))
+    assert profile is not None
+    assert [alias.name for alias in profile.aliases] == ["Private Discord name"]
+    async with migrated_session_factory() as session:
+        await session.execute(
+            update(AccountIdentity).where(AccountIdentity.account_id == account_id).values(is_public=False)
+        )
+        await session.commit()
+    profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(public_id))
+    assert profile is not None
+    assert profile.aliases == ()

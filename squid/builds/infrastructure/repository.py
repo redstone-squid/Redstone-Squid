@@ -501,9 +501,10 @@ class BuildRepository:
         # Relationship lookups issue SELECTs. Delay autoflush until the build and
         # all its assignments are ready to be written together.
         with session.no_autoflush:
+            await self._store_source_snapshots(build, session)
             await self._setup_relationships(build, session, sql_build)
         await session.flush()
-        await self._sync_source_messages(build, session)
+        await self._sync_source_messages(build, session, store_snapshots=False)
 
     async def _update(self, session: AsyncSession, build: Build) -> None:
         """Update a prepared build and its events within the caller's transaction."""
@@ -514,6 +515,11 @@ class BuildRepository:
         if build.submitter_account_id is None:
             msg = "Submitter account ID must be set for existing builds."
             raise InvalidStateError(msg, context={"build_id": build.id})
+
+        # Child-only edits must capture the old revision before the ORM advances the root.
+        # Otherwise the deferred audit trigger advances it again after edit receipts are written.
+        with session.no_autoflush:
+            await session.execute(select(func.capture_build_edit(build.id)))
 
         statement = (
             select(Build).where(Build.id == build.id).options(*_write_load_options()).with_for_update(of=Build.id)
@@ -737,20 +743,8 @@ class BuildRepository:
         return list(result.scalars().all())
 
     @staticmethod
-    async def _sync_source_messages(build: Build, session: AsyncSession) -> None:
-        """Replace the build's ordered links to its source messages.
-
-        Snapshots, which a new build carries from its draft, are recorded first if
-        the message is not stored yet. An existing row is left alone: it may hold a
-        later edit or deletion, and other features read it too. Plain references must
-        point at stored messages. Write here instead of through MessageService so the
-        messages and the build's links commit together.
-        """
-        assert build.id is not None
-        await session.execute(delete(BuildSourceMessage).where(BuildSourceMessage.build_id == build.id))
-        if not build.source_messages:
-            return
-
+    async def _store_source_snapshots(build: Build, session: AsyncSession) -> None:
+        """Store evidence before inserting credits that reference its message IDs."""
         snapshots = [source for source in build.source_messages if isinstance(source, MessageSnapshot)]
         await ensure_server_settings(session, (snapshot.guild_id for snapshot in snapshots))
         for snapshot in snapshots:
@@ -768,6 +762,24 @@ class BuildRepository:
                 )
                 .on_conflict_do_nothing(index_elements=[Message.id])
             )
+
+    @staticmethod
+    async def _sync_source_messages(build: Build, session: AsyncSession, *, store_snapshots: bool = True) -> None:
+        """Replace the build's ordered links to its source messages.
+
+        Snapshots, which a new build carries from its draft, are recorded first if
+        the message is not stored yet. An existing row is left alone: it may hold a
+        later edit or deletion, and other features read it too. Plain references must
+        point at stored messages. Write here instead of through MessageService so the
+        messages and the build's links commit together.
+        """
+        assert build.id is not None
+        await session.execute(delete(BuildSourceMessage).where(BuildSourceMessage.build_id == build.id))
+        if not build.source_messages:
+            return
+
+        if store_snapshots:
+            await BuildRepository._store_source_snapshots(build, session)
 
         await session.execute(
             pg_insert(BuildSourceMessage).values(

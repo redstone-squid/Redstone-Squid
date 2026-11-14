@@ -57,8 +57,10 @@ from squid.persistence.revisions import flush_revision
 from squid.persistence.types import InstantUTC
 from squid_i18n import md_tr
 
-_BUILD_CREDITS = table("build_credits", column("alias_id"))
-"""A lightweight handle on the one column of `build_credits` this module reads.
+_BUILD_CREDITS = table(
+    "build_credits", column("alias_id"), column("build_id"), column("kind"), column("subject"), column("name")
+)
+"""A lightweight handle for attribution counts and verified provider references.
 
 Deliberately not `squid.builds.models.BuildCredit`: importing that mapper pulls the
 whole `Build` relationship graph into the accounts context, which both couples the two contexts and
@@ -505,12 +507,31 @@ class AccountRepository:
                 .order_by(CreatorAlias.normalized_name)
             )
         ).all()
-        resolved = func.build_credit_accounts().table_valued("build_id", "position", "account_id", "name", "role")
+        provider = case(
+            (_BUILD_CREDITS.c.kind == "discord", "discord"),
+            (_BUILD_CREDITS.c.kind == "minecraft_java", "java"),
+            (_BUILD_CREDITS.c.kind == "minecraft_bedrock", "bedrock"),
+        )
+        # A private login identity must not reveal its association through public build credits.
+        public_references = (
+            select(_BUILD_CREDITS.c.name, _BUILD_CREDITS.c.build_id)
+            .join(
+                AccountIdentity,
+                (AccountIdentity.subject == _BUILD_CREDITS.c.subject) & (AccountIdentity.provider == provider),
+            )
+            .where(AccountIdentity.account_id == account.id, AccountIdentity.is_public.is_(True))
+            .union_all(
+                select(CreatorAlias.name, _BUILD_CREDITS.c.build_id)
+                .join(CreatorAlias, CreatorAlias.id == _BUILD_CREDITS.c.alias_id)
+                .where(CreatorAlias.account_id == account.id)
+            )
+            .subquery()
+        )
         provider_rows = (
             await session.execute(
-                select(resolved.c.name, func.count(func.distinct(resolved.c.build_id)))
-                .where(resolved.c.account_id == account.id)
-                .group_by(resolved.c.name)
+                select(public_references.c.name, func.count(func.distinct(public_references.c.build_id))).group_by(
+                    public_references.c.name
+                )
             )
         ).all()
         counts = {name: count for name, count in alias_rows}

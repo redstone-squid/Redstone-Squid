@@ -41,6 +41,7 @@ _TABLES = [
     # The preview counts build credits, so the association table and its `builds` parent are real
     # here rather than faked; `builds` only depends on `accounts`, which is already above.
     Base.metadata.tables["builds"],
+    Base.metadata.tables["server_settings"],
     Base.metadata.tables["messages"],
     Base.metadata.tables["build_credits"],
 ]
