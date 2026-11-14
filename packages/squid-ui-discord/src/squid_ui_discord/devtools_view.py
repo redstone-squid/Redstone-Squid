@@ -934,10 +934,10 @@ def _access_text(access: squid_ui_discord.AccessPolicy) -> sl.TextLike:
     if isinstance(access, squid_ui_discord.Everyone):
         return "Everyone"
     if isinstance(access, squid_ui_discord.Owner):
-        return sl.text.Text(t"Owner ({sl.mention(access.user_id)})")
+        return sl.plain(t"Owner ({sl.mention(access.user_id)})")
     if isinstance(access, squid_ui_discord.Users):
         users = sl.text.Text.join(", ", (sl.mention(user_id) for user_id in sorted(access.user_ids)))
-        return sl.text.Text(t"Users ({users})")
+        return sl.plain(t"Users ({users})")
     if isinstance(access, squid_ui_discord.access.Check):
         return "Check"
     return type(access).__name__

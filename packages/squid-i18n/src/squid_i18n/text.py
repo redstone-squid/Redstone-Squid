@@ -317,7 +317,7 @@ def _capture(value: object, conversion: str | None = None, spec: str = "") -> Te
         return value
     if conversion:
         value = Formatter().convert_field(value, conversion)
-    return Text(format(value, spec)) if spec else plain(value)
+    return plain(format(value, spec) if spec else value)
 
 
 def md(value: str | Template, /, **values: object) -> Text:

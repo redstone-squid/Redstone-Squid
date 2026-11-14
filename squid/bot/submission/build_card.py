@@ -192,7 +192,7 @@ async def render_build_card(
         group("Credits", credit_names),
         group("Resources", resource_names),
         bool(extra_media) and sl.media(*extra_media, key="media"),
-        sl.note(Text(footer)),
+        sl.note(sl.plain(footer)),
         *rows,
         accent=_status_tone(build.submission_status, build_id=build.id),
         thumbnail=media[0] if media else None,

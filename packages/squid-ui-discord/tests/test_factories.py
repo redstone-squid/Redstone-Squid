@@ -33,16 +33,16 @@ class TestNormalization:
         assert node.children == (sl.semantic.Paragraph("always"),)
 
     def test_text_is_promoted_to_a_paragraph(self) -> None:
-        node = sl.section(sl.heading("H"), "bare markdown", sl.text.Text("literal"))
+        node = sl.section(sl.heading("H"), "bare markdown", sl.plain("literal"))
 
-        assert node.children == (sl.semantic.Paragraph("bare markdown"), sl.semantic.Paragraph(sl.text.Text("literal")))
+        assert node.children == (sl.semantic.Paragraph("bare markdown"), sl.semantic.Paragraph(sl.plain("literal")))
 
     def test_t_strings_remain_literal_until_target_rendering(self) -> None:
         hostile = "*not bold*"
 
         node = sl.section(sl.heading("H"), t"value: {hostile}")
 
-        assert node.children == (sl.semantic.Paragraph(sl.text.Text(t"value: {hostile}")),)
+        assert node.children == (sl.semantic.Paragraph(sl.plain(t"value: {hostile}")),)
         promoted = node.children[0]
         assert isinstance(promoted, sl.semantic.Paragraph)
         assert isinstance(promoted.content, sl.text.Text)
@@ -51,7 +51,7 @@ class TestNormalization:
     def test_t_strings_are_resolved_in_configuration_text_too(self) -> None:
         name = "a_b"
 
-        assert sl.section(sl.heading(t"{name}")).heading == sl.semantic.Heading(sl.text.Text(t"{name}"))
+        assert sl.section(sl.heading(t"{name}")).heading == sl.semantic.Heading(sl.plain(t"{name}"))
 
     def test_an_empty_string_condition_is_skipped_rather_than_promoted(self) -> None:
         description = ""
@@ -254,7 +254,7 @@ class TestParityWithCards:
     def test_field_fallbacks_are_resolved_like_any_other_text(self) -> None:
         node = sl.field("Videos", "a, b, c", fallbacks=(t"{3} videos", "3"))
 
-        assert node.fallbacks == (sl.text.Text(t"{3} videos"), "3")
+        assert node.fallbacks == (sl.plain(t"{3} videos"), "3")
 
     def test_note_is_small_print(self) -> None:
         assert sl.note("Submission ID: 5") == sl.semantic.Note("Submission ID: 5", sl.semantic.Importance.LOW)
@@ -278,7 +278,7 @@ class TestRating:
 
         assert node.choices[0].label == "Poor"
         assert node.choices[1].label == "★★"
-        assert node.choices[4].label == sl.text.Text(t"Excellent")
+        assert node.choices[4].label == sl.plain(t"Excellent")
 
     def test_a_managed_value_seeds_the_selection_as_its_option_key(self) -> None:
         assert sl.rating(key="stars").selection == sl.semantic.Uncontrolled(())
@@ -320,7 +320,7 @@ class TestRating:
 
 
 def test_literal_whitespace_and_mentions_survive_discord_planning() -> None:
-    value = sl.text.Text("  a  b\n@everyone <#123>")
+    value = sl.plain("  a  b\n@everyone <#123>")
     result = sl.planning.plan(sl.paragraph(value), target=DISCORD_V2_DPY27)
     node = result.scene.body.children[0]
     assert isinstance(node, scene.Text)

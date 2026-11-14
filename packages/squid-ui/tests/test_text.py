@@ -13,6 +13,7 @@ from squid_i18n import (
     localization_scope,
     md,
     mention,
+    plain,
     resolve_text,
     source_text,
     strong,
@@ -31,7 +32,7 @@ def french() -> Localization:
 
 
 def test_all_constructors_return_the_same_text_type() -> None:
-    for value in (Text("literal"), md("**formatted**"), tr("Save", key="save"), strong("name")):
+    for value in (plain("literal"), md("**formatted**"), tr("Save", key="save"), strong("name")):
         assert type(value) is Text
 
 
@@ -43,7 +44,7 @@ def test_bindings_are_literal_and_mentions_are_neutralized_at_the_destination() 
 
 
 def test_markdown_interpolation_preserves_existing_text_structure() -> None:
-    title = Text("*Door*")
+    title = plain("*Door*")
     status = md("**Approved**")
     assert discord(md(t"{title}: {status}")) == r"\*Door\*: **Approved**"
     assert discord(md("{title}: {status}", title=title, status=status)) == r"\*Door\*: **Approved**"
@@ -94,7 +95,7 @@ def test_markdown_fragments_cannot_complete_each_others_delimiters() -> None:
 
 
 def test_plain_text_remains_literal_through_composition() -> None:
-    combined = Text("*a*") + " **b**"
+    combined = plain("*a*") + " **b**"
     assert source_text(combined) == "*a* **b**"
     assert discord(combined) == r"\*a\* \*\*b\*\*"
 
@@ -106,7 +107,7 @@ def test_mentions_and_timestamps_are_semantic_values() -> None:
     value = tr(t"{owner} updated {updated}", key="updated")
     assert discord(value) == "<@123> updated <t:1787409000:R>"
     assert source_text(value, format="plain") == "@123 updated 2026-08-22T14:30:00+00:00"
-    assert discord(Text(t"Updated {instant}")) == "Updated <t:1787409000:f>"
+    assert discord(plain(t"Updated {instant}")) == "Updated <t:1787409000:f>"
 
 
 def test_literal_code_and_link_destinations_cannot_inject_structure() -> None:
