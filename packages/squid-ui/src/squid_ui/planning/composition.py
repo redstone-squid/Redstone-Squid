@@ -10,15 +10,18 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Protocol
 
+from squid_ui.assets import Asset
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.forms import FormBinding
-from squid_ui.interactions import ActionBinding, PressEvent
+from squid_ui.interactions import ActionBinding
 from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantics import SemanticGraph, SourceScope
 from squid_ui.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.semantic import Budgeted
 from squid_ui.text import NEUTRAL, Localization
 
@@ -94,6 +97,9 @@ class RegionContract[RenderTargetT, ContextT, PayloadT]:
     chars: int | None = None
     min_fill: int = 0
     widows: int = 1
+    owner: PageOwnership = FIRST_PAGE
+    cursor_key: str | None = None
+    per: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,7 +174,7 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     effects: tuple[FidelityEffect, ...] = ()
     preference: int = 0
     interaction: bool = False
-    binding: ActionBinding[PressEvent[ContextT]] | None = None
+    binding: ActionBinding | None = None
     form: FormBinding[ContextT] | None = None
     atomic: AtomicContract | None = None
     flow: bool = False
@@ -272,6 +278,9 @@ class PlanningContext:
     capabilities: frozenset[str] = frozenset()
     capacities: Mapping[Axis, int] = field(default_factory=dict)
     chrome: Chrome = DEFAULT_CHROME
+    navigation: PagerNav | None = None
+    mounted: bool = False
+    assets: tuple[Asset, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,7 +415,7 @@ class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparati
 class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]:
     body: BodyT
     evaluation: Evaluation[ResourceT, PreparationT]
-    bindings: Mapping[str, ActionBinding[PressEvent[ContextT]]] = field(default_factory=dict)
+    bindings: Mapping[str, ActionBinding] = field(default_factory=dict)
     forms: Mapping[str, FormBinding[ContextT]] = field(default_factory=dict)
 
 
@@ -421,7 +430,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     seen: set[OccurrenceId] = set()
     budgets: dict[OccurrenceId, Mapping[Axis, int]] = {}
     floors: dict[OccurrenceId, int] = {}
-    bindings: dict[str, ActionBinding[PressEvent[ContextT]]] = {}
+    bindings: dict[str, ActionBinding] = {}
     forms: dict[str, FormBinding[ContextT]] = {}
     interactions: set[SemanticRef] = set()
     atoms: dict[OccurrenceId, AtomicContract] = {}
@@ -565,7 +574,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
 @dataclass(frozen=True, slots=True)
 class AdmittedComposition[ResourceT, PreparationT, ContextT]:
     evaluation: Evaluation[ResourceT, PreparationT]
-    bindings: Mapping[str, ActionBinding[PressEvent[ContextT]]]
+    bindings: Mapping[str, ActionBinding]
     forms: Mapping[str, FormBinding[ContextT]]
 
 

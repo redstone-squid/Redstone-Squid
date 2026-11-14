@@ -63,6 +63,7 @@ class PageCommit(_HandlerComposition):
     key: str
     extent: int
     session: PresentationState
+    staged: bool = False
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -79,7 +80,10 @@ class PageCommit(_HandlerComposition):
             case Uncontrolled():
                 # No explicit acknowledgement: the frontend answers the press by editing the
                 # message in place, so a page turn costs one response instead of two.
-                self.session.move_cursor(self.key, PagePosition(page=page))
+                if self.staged:
+                    self.session.request_cursor(self.key, PagePosition(page=page))
+                else:
+                    self.session.move_cursor(self.key, PagePosition(page=page))
                 event.invalidate()
 
 
@@ -380,6 +384,7 @@ class PagerNav:
 
     factory: PlannedNav
     session: PresentationState
+    staged: bool = False
 
     def __call__(
         self, key: str, page: int, extent: int, chrome: Chrome, owner: PageOwnership = FIRST_PAGE
@@ -396,7 +401,7 @@ class PagerNav:
                     owner.jump_route(page, extent) if owner.jump_route is not None else None,
                 )
             )
-        commit = PageCommit(owner, key, extent, self.session)
+        commit = PageCommit(owner, key, extent, self.session, self.staged)
         return self.factory(NavigationContext(state, TurnPage(commit, page - 1), TurnPage(commit, page + 1), commit))
 
 

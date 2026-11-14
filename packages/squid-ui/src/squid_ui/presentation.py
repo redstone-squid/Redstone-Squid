@@ -8,6 +8,10 @@ frontends apply those updates after successful delivery.
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from squid_ui.planning.composition_state import RetainedComposition
 
 from squid_ui.pages import FIRST_POSITION, PagePosition, resolve_page_position
 
@@ -72,6 +76,10 @@ class PresentationState:
     bypasses the check and can leave a previous plan reusable.
     """
 
+    retained_composition: RetainedComposition | None = field(
+        default=None, kw_only=True, repr=False, compare=False, metadata={"stable_identity": False}
+    )
+    pending_positions: dict[str, PagePosition] = field(default_factory=dict, kw_only=True)
     region_layout: RegionLayoutState | None = field(default=None, kw_only=True)
     cursors: dict[str, CursorState] = field(default_factory=dict)
     selections: dict[str, SelectionState] = field(default_factory=dict)
@@ -106,13 +114,21 @@ class PresentationState:
             self.cursors[key] = updated
             self._touch()
 
+    def request_cursor(self, key: str, position: PagePosition) -> None:
+        """Request a page without advancing the position of the committed display."""
+        if self.pending_positions.get(key) != position:
+            self.pending_positions[key] = position
+            self._touch()
+
     def reset_cursor(self, key: str | None = None) -> None:
         if key is None:
+            self.pending_positions.clear()
             if not self.cursors:
                 return
             self.cursors.clear()
             self._touch()
         else:
+            self.pending_positions.pop(key, None)
             if self.cursors.pop(key, None) is not None:
                 self._touch()
 
@@ -171,11 +187,18 @@ class PresentationState:
         changed = False
         for update in updates:
             match update:
+                case RetainedCompositionUpdate(state=state):
+                    if self.retained_composition is not state:
+                        self.retained_composition = state
+                        changed = True
                 case RegionLayoutUpdate(state=state):
                     if self.region_layout != state:
                         self.region_layout = state
                         changed = True
                 case CursorUpdate(key=key, state=cursor):
+                    if key in self.pending_positions:
+                        del self.pending_positions[key]
+                        changed = True
                     if self.cursors.get(key) != cursor:
                         self.cursors[key] = cursor
                         changed = True
@@ -188,6 +211,10 @@ class PresentationState:
                         self.toggles[key] = toggle
                         changed = True
                 case ActivePagers(keys=keys):
+                    for stale in tuple(self.pending_positions):
+                        if stale not in keys:
+                            del self.pending_positions[stale]
+                            changed = True
                     for stale in tuple(self.cursors):
                         if stale not in keys:
                             del self.cursors[stale]
@@ -229,7 +256,14 @@ class RegionLayoutUpdate:
     state: RegionLayoutState
 
 
-type SessionUpdate = CursorUpdate | StrategyUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
+@dataclass(frozen=True, slots=True)
+class RetainedCompositionUpdate:
+    state: RetainedComposition | None
+
+
+type SessionUpdate = (
+    RetainedCompositionUpdate | CursorUpdate | StrategyUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
+)
 """One presentation write that planning decided on but did not perform.
 
 Planning only reads the session, and returns what it would have written. A frontend

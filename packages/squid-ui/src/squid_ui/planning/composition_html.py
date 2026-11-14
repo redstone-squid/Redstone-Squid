@@ -1,7 +1,6 @@
 """Unbounded HTML realization through the shared composition contract."""
 
 from dataclasses import dataclass
-from typing import assert_never
 
 from squid_i18n import tree
 from squid_ui import scene
@@ -25,6 +24,7 @@ from squid_ui.planning.realizations import (
     FlowRealization,
     PanelRealization,
     Realization,
+    RowRealization,
     TableForm,
     TableRealization,
     TextRealization,
@@ -67,7 +67,9 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
     ) -> Evaluation[Asset, scene.HtmlBody]:
         texts: list[str] = []
-        uses: list[SharedUse[Asset]] = []
+        uses: list[SharedUse[Asset]] = [
+            SharedUse(ResourceIdentity("attachment", asset.key), asset, EMPTY_COST) for asset in context.assets
+        ]
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
         interactions: set[SemanticRef] = set()
@@ -132,7 +134,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             ),
                         ),
                     )
-                case FlowRealization():
+                case FlowRealization() | RowRealization():
                     return tuple(node for child in part.children for node in visit(child))
                 case PanelRealization(accent=accent):
                     children = tuple(node for child in part.children for node in visit(child))
@@ -160,7 +162,8 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         else (link,)
                     )
                 case unknown:
-                    assert_never(unknown)
+                    violations.append(UnsupportedCapability(part.offer.occurrence.identity, type(unknown).__name__))
+                    return ()
 
         body = scene.HtmlBody(visit(candidate), locale=context.localization.locale)
         return Evaluation(
@@ -180,7 +183,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
         self, body: scene.HtmlBody, expected: Evaluation[Asset, scene.HtmlBody], context: PlanningContext
     ) -> None:
         texts: list[str] = []
-        assets: set[ResourceIdentity] = set()
+        assets: set[ResourceIdentity] = {ResourceIdentity("attachment", asset.key) for asset in context.assets}
 
         def visit(node: scene.HtmlNode) -> None:
             context.work.consume()

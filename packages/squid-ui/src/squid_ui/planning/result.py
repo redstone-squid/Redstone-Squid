@@ -4,7 +4,7 @@ Only the scene is serializable. Handlers, resources, diagnostics, and presentati
 updates remain here; hosts apply updates only after successfully delivering the scene.
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
@@ -114,8 +114,14 @@ class PlanResult[BodyT = Body]:
 
     allocation: AllocationSelection[PlanResult[BodyT]] | None = field(default=None, kw_only=True)
 
+    page_selector: Callable[[Mapping[OccurrenceId, int]], PlanResult[BodyT]] | None = field(
+        default=None, kw_only=True, repr=False, compare=False
+    )
+
     def for_page(self, coordinates: Mapping[OccurrenceId, int]) -> PlanResult[BodyT]:
         """Select already certified output while retaining allocation diagnostics."""
+        if self.page_selector is not None:
+            return self.page_selector(coordinates)
         if self.allocation is None:
             message = "this result has no joint allocation"
             raise ValueError(message)

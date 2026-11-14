@@ -30,6 +30,8 @@ from squid_ui.planning.realizations import (
     FlowRealization,
     PanelRealization,
     Realization,
+    RowRealization,
+    SelectRealization,
     TableForm,
     TableRealization,
     TextRealization,
@@ -43,6 +45,28 @@ from squid_ui.text import Markup
 
 def _text(nodes: tuple[tree.Node, ...]) -> str:
     return tree.markdown(nodes, discord=True)
+
+
+def _select_violations(node: scene.Select | scene.RoutedSelect, limits: V2Limits) -> tuple[str, ...]:
+    errors: list[str] = []
+    component = limits.components
+    if not 1 <= len(node.options) <= component.select_options:
+        errors.append("select option count")
+    if not 0 <= node.min_values <= node.max_values <= len(node.options):
+        errors.append("select cardinality")
+    if len(node.placeholder or "") > component.select_placeholder:
+        errors.append("select placeholder")
+    identifier = node.action if isinstance(node, scene.Select) else node.route_id
+    if len(identifier) > component.custom_id:
+        errors.append("select identifier")
+    for option in node.options:
+        if not option.label or len(option.label) > component.option_label:
+            errors.append("select option label")
+        if not option.value or len(option.value) > component.option_value:
+            errors.append("select option value")
+        if len(option.description or "") > component.option_description:
+            errors.append("select option description")
+    return tuple(errors)
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +87,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         text_chars = 0
         scopes: dict[OccurrenceId, ResourceCost] = {}
         scoped_resources: dict[OccurrenceId, frozenset[ResourceIdentity]] = {}
-        uses: list[SharedUse[Asset]] = []
+        uses: list[SharedUse[Asset]] = [
+            SharedUse(ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1}))
+            for asset in context.assets
+        ]
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
         interactions: set[SemanticRef] = set()
@@ -80,7 +107,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             return ()
 
         def realize(
-            part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool
+            part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool, in_row: bool = False
         ) -> tuple[scene.Node, ...]:
             nonlocal components
             context.work.consume()
@@ -100,18 +127,51 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                             violations.append(LocalCapacityExceeded(identity, name, used, capacity))
                     if not control.label:
                         violations.append(ConstraintViolation(identity, "button needs a label"))
-                    components += 2
+                    components += 1 if in_row else 2
                     if control.action is not None:
                         button = scene.Button(
-                            control.label, control.action, control.style, disabled=control.disabled, mode=control.mode
+                            control.label,
+                            control.action,
+                            control.style,
+                            emoji=control.emoji,
+                            disabled=control.disabled,
+                            mode=control.mode,
                         )
                     elif control.route is not None:
                         button = scene.RoutedButton(
-                            control.label, control.route, control.style, disabled=control.disabled
+                            control.label, control.route, control.style, emoji=control.emoji, disabled=control.disabled
                         )
                     else:
-                        button = scene.Link(control.label, control.url or "", disabled=control.disabled)
-                    return (scene.Row((button,)),)
+                        button = scene.Link(
+                            control.label, control.url or "", emoji=control.emoji, disabled=control.disabled
+                        )
+                    return (button,) if in_row else (scene.Row((button,)),)
+                case RowRealization():
+                    components += 1
+                    if len(part.children) > self.limits.components.row_buttons:
+                        violations.append(
+                            LocalCapacityExceeded(
+                                part.offer.occurrence.identity,
+                                "row.buttons",
+                                len(part.children),
+                                self.limits.components.row_buttons,
+                            )
+                        )
+                    items: list[scene.Button | scene.RoutedButton | scene.Link] = []
+                    for child in part.children:
+                        for item in visit(child, in_panel=in_panel, in_row=True):
+                            if not isinstance(item, scene.Button | scene.RoutedButton | scene.Link):
+                                message = "navigation row contains a non-button"
+                                raise DrawInvariantError(message)
+                            items.append(item)
+                    return (scene.Row(tuple(items)),)
+                case SelectRealization(node=node):
+                    components += 2
+                    violations.extend(
+                        ConstraintViolation(part.offer.occurrence.identity, detail)
+                        for detail in _select_violations(node, self.limits)
+                    )
+                    return (node,)
                 case TextRealization(nodes=nodes):
                     return text(nodes)
                 case TableRealization() as table:
@@ -147,10 +207,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     assert_never(unknown)
 
         def visit(
-            part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool
+            part: CandidateComposition[RenderTargetT, ContextT, Realization], *, in_panel: bool, in_row: bool = False
         ) -> tuple[scene.Node, ...]:
             components_before, text_before, uses_before = components, text_chars, len(uses)
-            nodes = realize(part, in_panel=in_panel)
+            nodes = realize(part, in_panel=in_panel, in_row=in_row)
             # An asset used by a sibling still counts within this subtree's budget.
             shared = SharedResources.combine(uses[uses_before:])
             scoped_resources[part.offer.occurrence.identity] = frozenset(shared.uses)
@@ -190,7 +250,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         self, body: scene.ComponentsV2, expected: Evaluation[Asset, scene.ComponentsV2], context: PlanningContext
     ) -> None:
         texts: list[str] = []
-        assets: set[str] = set()
+        assets: set[str] = {asset.key for asset in context.assets}
         components = 0
 
         def visit(node: scene.Node, *, in_panel: bool) -> None:
@@ -220,6 +280,11 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     ):
                         msg = "built V2 button violates its destination limit"
                         raise DrawInvariantError(msg)
+                case scene.Select() | scene.RoutedSelect():
+                    components += 1  # Selects occupy an implicit action row.
+                    if _select_violations(node, self.limits):
+                        msg_0 = "built V2 select violates its limits"
+                        raise DrawInvariantError(msg_0)
                 case scene.Text(content=content):
                     texts.append(content)
                 case scene.File():

@@ -23,6 +23,7 @@ from squid_ui.planning.realizations import (
     ControlRealization,
     FlowRealization,
     Realization,
+    RowRealization,
     TableForm,
     TableRealization,
     TextRealization,
@@ -73,7 +74,11 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
     ) -> Evaluation[Asset, scene.SlackMessage]:
         texts: list[str] = []
         scopes: dict[OccurrenceId, ResourceCost] = {}
-        violations: list[CandidateViolation] = []
+        violations: list[CandidateViolation] = (
+            [UnsupportedCapability(candidate.offer.occurrence.identity, "Slack document attachments")]
+            if context.assets
+            else []
+        )
         effects: list[FidelityEffect] = []
         interactions: set[SemanticRef] = set()
         blocks = 0
@@ -174,7 +179,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                                         scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False)
                                     )
                                 )
-                case FlowRealization():
+                case FlowRealization() | RowRealization():
                     for child in part.children:
                         visit(child)
                 case _:

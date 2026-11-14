@@ -28,10 +28,12 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.composition_html import HtmlCompositionRules
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.composition_slack import SlackCompositionRules
+from squid_ui.planning.composition_state import present_composition
 from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.realizations import select_composition
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
@@ -62,6 +64,8 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.target.capabilities,
         request.target.reserve(request.reservation).capacities,
         request.chrome,
+        PagerNav(request.nav, request.presentation, staged=True) if request.nav is not None else None,
+        request.session is not None or request.nav is not None or request.positions is not None,
     )
 
 
@@ -75,7 +79,8 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     automatic = options is not None and options.automatic
     context = _context(request, options.work_limit if options is not None and automatic else None)
     document = as_document(rendered)
-    if document.assets or request.positions or request.nav is not None:
+    context = replace(context, assets=document.assets)
+    if not automatic and (document.assets or (not automatic and (request.positions or request.nav is not None))):
         violation = UnsupportedCapability(
             OccurrenceId(("root",)),
             "composition does not support document assets or mounted pagination inputs; use composition.pages",
@@ -154,7 +159,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 "Joint allocation returned a certified layout with unproven optimality: %s", result.diagnostics
             )
         page = result.allocation.select(options.pages)
-        return replace(
+        planned = replace(
             page,
             allocation=result.allocation,
             report=replace(page.report, search=result.diagnostics),
@@ -165,6 +170,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 certified_combinations=result.diagnostics.certified_combinations,
             ),
         )
+        return present_composition(planned, rendered, request, options)
     candidate = select_composition(
         SemanticOccurrence(OccurrenceId(("root",)), graph, root), rules, context, selections=selections
     )
@@ -272,6 +278,9 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     options: CompositionOptions,
 ) -> PlanResult[BodyT]:
     """Select the built-in rules without routing through a legacy target planner."""
+    retained = request.presentation.retained_composition
+    if options.automatic and retained is not None and retained.matches(as_document(rendered), request, options):
+        return present_composition(retained.result, rendered, request, options)
     effective = request.target.reserve(request.reservation)
     # The public target couples limits and body types; narrow both before bridging
     # its generic parameter to one concrete built-in rules implementation.

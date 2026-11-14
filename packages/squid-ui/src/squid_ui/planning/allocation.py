@@ -13,10 +13,17 @@ from typing import Protocol
 from uuid import uuid4
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.composition import CandidateComposition, NavigationInput, OccurrenceId, PlanningContext
+from squid_ui.planning.composition import (
+    CandidateComposition,
+    NavigationInput,
+    OccurrenceId,
+    PlanningContext,
+    RegionContract,
+)
 from squid_ui.planning.fragments import FragmentTree, slice_fragment
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.presentations import SemanticRef
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +139,9 @@ class RegionPages:
     allocation: ResourceCost
     navigation: tuple[tuple[NavigationInput, ...], ...]
     source_order: tuple[SemanticRef, ...] = ()
+    owner: PageOwnership = FIRST_PAGE
+    cursor_key: str = ""
+    source_prefix: tuple[str, ...] = ()
 
 
 class AllocationSelection[OutputT](Protocol):
@@ -142,6 +152,8 @@ class AllocationSelection[OutputT](Protocol):
     def regions(self) -> Mapping[OccurrenceId, RegionPages]: ...
 
     def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> OutputT: ...
+
+    def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,14 +190,33 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
                             for page in region.pages
                         ),
                         region.source_order,
+                        self._contract(identity).owner,
+                        self._contract(identity).cursor_key or region.key,
+                        region.pages[0].offer.occurrence.reference.keys,
                     )
                     for identity, region in self.family.regions.items()
                 }
             ),
         )
 
+    def _contract(self, identity: OccurrenceId) -> RegionContract[RenderTargetT, ContextT, PayloadT]:
+        pending = [self.family.root]
+        while pending:
+            part = pending.pop()
+            if part.offer.occurrence.identity == identity and part.offer.region is not None:
+                return part.offer.region
+            pending.extend(part.children)
+        msg = "allocation lost its region contract"
+        raise LayoutInvariantError(msg)
+
+    def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
+        return dict(self._page(coordinates).coordinates)
+
     def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> OutputT:
         """Select clamped zero-based coordinates; hidden nested coordinates are ignored."""
+        return self._page(coordinates).output
+
+    def _page(self, coordinates: Mapping[OccurrenceId, int] | None) -> CertifiedPage[OutputT]:
         positions = coordinates or {}
         if positions.keys() - self.family.regions.keys():
             message = "page coordinates contain an unknown region occurrence"
@@ -195,6 +226,6 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
                 index == max(0, min(positions.get(identity, 0), len(self.family.regions[identity].pages) - 1))
                 for identity, index in page.coordinates
             ):
-                return page.output
+                return page
         message = "certified allocation lost a reachable page combination"
         raise LayoutInvariantError(message)

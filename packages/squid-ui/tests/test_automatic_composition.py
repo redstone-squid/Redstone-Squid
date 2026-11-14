@@ -142,7 +142,8 @@ def test_bindings_remain_page_local_and_no_state_is_published() -> None:
         FrontendHandler("joint.discord", second)
     }
     assert session.revision == 0
-    assert not result.session_updates
+    assert result.session_updates
+    assert not session.cursors
 
 
 def test_reservations_and_custom_chrome_are_certified() -> None:
