@@ -16,6 +16,7 @@ from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.application.services import BuildEditor, BuildService
 from squid.builds.domain import Info, Status, UnresolvedTaxonomy
+from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
@@ -56,6 +57,8 @@ def _patch_document(patch: BuildEditPatch) -> dict[str, object]:
     values = patch.attributes()
     if patch.credits is not UNSET:
         values["credits"] = [credit.to_json() for credit in patch.credits]
+    if isinstance(patch.door_expansion, DoorExpansion):
+        values["door_expansion"] = patch.door_expansion.model_dump(mode="json")
     return values
 
 
@@ -99,6 +102,9 @@ def build_values(build: Build) -> EditValues:
                 patch,
                 BuildEditPatch(
                     door_dimensions=build.door_dimensions,
+                    # Without this an expansion-only edit compares equal before
+                    # and after, is skipped, and cannot be undone.
+                    door_expansion=build.expansion,
                     door_orientation_type=build.orientation,
                     visible_opening_time=build.visible_opening_time,
                     visible_closing_time=build.visible_closing_time,

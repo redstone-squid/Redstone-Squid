@@ -5,6 +5,8 @@ from copy import deepcopy
 import pytest
 
 from squid.builds.application import BuildEditPatch
+from squid.builds.application.edits import build_values, patch_values
+from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
@@ -136,3 +138,16 @@ def test_extender_geometry_rejects_other_categories() -> None:
         BuildEditPatch(extension_length=3).apply(DoorBuild())
     with pytest.raises(InvalidBuildError, match="Extender fields"):
         BuildEditPatch(extension_time=3).apply(DoorBuild())
+
+
+def test_expansion_survives_edit_values_and_is_captured_from_the_build() -> None:
+    expansion = DoorExpansion(raw_description="n x 3", branches=(ExpansionBranch(opening_width="n"),))
+    stored = patch_values(BuildEditPatch(door_expansion=expansion)).unpack()
+    assert BuildEditPatch.from_attributes(stored) == BuildEditPatch(door_expansion=expansion)
+    assert patch_values(BuildEditPatch(door_expansion=None)).unpack() == {"door_expansion": None}
+
+    build = DoorBuild(expansion=expansion)
+    captured = build_values(build).unpack()
+    assert captured["door_expansion"] == expansion.model_dump(mode="json")
+    build.expansion = None
+    assert build_values(build).unpack()["door_expansion"] is None
