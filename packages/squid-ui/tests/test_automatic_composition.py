@@ -18,7 +18,7 @@ from squid_ui.planning import (
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.composition_v2 import V2CompositionRules
-from squid_ui.planning.discord import classic_target, components_v2_target
+from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
@@ -174,7 +174,7 @@ def test_custom_automatic_rules_share_the_public_boundary() -> None:
 
 
 def test_unsupported_automatic_target_has_structured_capability_diagnostics() -> None:
-    target = classic_target(AdapterProfile(DiscordAdapter, "joint.classic", ">=1"))
+    target = sl.slack.modal_target(adapter=AdapterProfile(SlackAdapter, "joint.modal", ">=1"))
     with pytest.raises(JointUnsupportedError) as caught:
         sl.planning.plan(sl.paragraph("Body"), target=target, composition=CompositionOptions(automatic=True))
     assert caught.value.diagnostics.completion == SearchCompletion.UNSUPPORTED

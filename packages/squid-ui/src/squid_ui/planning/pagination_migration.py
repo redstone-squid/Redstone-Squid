@@ -10,14 +10,14 @@ from squid_ui import scene
 from squid_ui import semantic as sem
 from squid_ui.document import Document
 from squid_ui.html.target import HtmlLimits
-from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.pagination_content import RootRegion, TextPages
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.semantics import UnsupportedSemanticError
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Paginate
-from squid_ui.slack.target import SlackMessageLimits
+from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import Renderable
 
 
@@ -33,7 +33,11 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     document: Document[RenderTargetT], request: PlanRequest[BodyT, RenderTargetT, AdapterT]
 ) -> PaginationMigration[RenderTargetT]:
     limits = request.target.limits
-    if not isinstance(limits, V2Limits | SlackMessageLimits | HtmlLimits):
+    if isinstance(limits, SlackModalLimits):
+        return PaginationMigration(
+            document, enabled=False, limitation="Slack modals require one top-level form trigger"
+        )
+    if not isinstance(limits, ClassicLimits | V2Limits | SlackMessageLimits | SlackHomeLimits | HtmlLimits):
         return PaginationMigration(document, enabled=False, limitation="target has no shared composition rules")
     pageable = False
     combinations = 1

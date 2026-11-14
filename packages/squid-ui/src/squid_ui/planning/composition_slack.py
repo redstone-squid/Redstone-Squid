@@ -1,6 +1,7 @@
 """Direct Slack realization rules; no HTML planning or HTML scene is involved."""
 
 from dataclasses import dataclass
+from typing import cast
 
 from squid_i18n import tree
 from squid_ui import scene
@@ -34,7 +35,7 @@ from squid_ui.planning.realizations import (
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.slack.target import SlackMessageLimits
+from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits
 
 
 def _plain(nodes: tuple[tree.Node, ...]) -> str | None:
@@ -56,8 +57,12 @@ def _plain(nodes: tuple[tree.Node, ...]) -> str | None:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackCompositionRules[RenderTargetT, ContextT]:
-    limits: SlackMessageLimits = SlackMessageLimits()
+class SlackCompositionRules[
+    RenderTargetT,
+    ContextT,
+    BodyT: scene.SlackMessage | scene.SlackHomeView = scene.SlackMessage,
+]:
+    limits: SlackMessageLimits | SlackHomeLimits = SlackMessageLimits()
 
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
@@ -72,7 +77,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
-    ) -> Evaluation[Asset, scene.SlackMessage]:
+    ) -> Evaluation[Asset, BodyT]:
         texts: list[str] = []
         scopes: dict[OccurrenceId, ResourceCost] = {}
         violations: list[CandidateViolation] = (
@@ -220,7 +225,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
             for axis, used, capacity in cost.over(self.limits.capacities)
         )
         fallback_length = len("\n".join(texts))
-        if fallback_length > self.limits.fallback_text:
+        if isinstance(self.limits, SlackMessageLimits) and fallback_length > self.limits.fallback_text:
             violations.append(
                 LocalCapacityExceeded(
                     candidate.offer.occurrence.identity, "fallback.text", fallback_length, self.limits.fallback_text
@@ -231,19 +236,22 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
             violations=tuple(violations),
             effects=tuple(effects),
             interactions=frozenset(interactions),
-            preparation=scene.SlackMessage("\n".join(texts), tuple(prepared_blocks)),
+            preparation=cast(
+                BodyT,
+                scene.SlackMessage("\n".join(texts), tuple(prepared_blocks))
+                if isinstance(self.limits, SlackMessageLimits)
+                else scene.SlackHomeView(tuple(prepared_blocks)),
+            ),
             text=tuple(texts),
             resource_axes=frozenset({Axis.BLOCKS}),
             scoped_costs=scopes,
         )
 
-    def build(self, preparation: scene.SlackMessage, context: PlanningContext) -> scene.SlackMessage:
+    def build(self, preparation: BodyT, context: PlanningContext) -> BodyT:
         context.work.consume()
         return preparation
 
-    def validate(
-        self, body: scene.SlackMessage, expected: Evaluation[Asset, scene.SlackMessage], context: PlanningContext
-    ) -> None:
+    def validate(self, body: BodyT, expected: Evaluation[Asset, BodyT], context: PlanningContext) -> None:
         texts: list[str] = []
 
         def text(value: scene.SlackText, capacity: int) -> None:
@@ -303,8 +311,11 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
             or body != expected.preparation
             or not cost.within(self.limits.capacities)
             or tuple(texts) != expected.text
-            or body.text != "\n".join(texts)
-            or len(body.text) > self.limits.fallback_text
+            or (
+                isinstance(body, scene.SlackMessage)
+                and isinstance(self.limits, SlackMessageLimits)
+                and (body.text != "\n".join(texts) or len(body.text) > self.limits.fallback_text)
+            )
         ):
             message = "built Slack composition disagrees with evaluation"
             raise DrawInvariantError(message)

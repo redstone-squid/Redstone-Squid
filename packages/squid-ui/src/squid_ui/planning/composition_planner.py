@@ -26,6 +26,7 @@ from squid_ui.planning.composition import (
     WorkBudget,
     build_composition,
 )
+from squid_ui.planning.composition_classic import ClassicCompositionRules
 from squid_ui.planning.composition_html import HtmlCompositionRules
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.composition_slack import SlackCompositionRules
@@ -34,14 +35,14 @@ from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
-from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
 from squid_ui.planning.realizations import select_composition
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 from squid_ui.semantic import Group
-from squid_ui.slack.target import SlackMessageLimits
+from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits
 
 _logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
     if nav is None and request.shared_pagination:
         if request.target.body_type is scene.HtmlBody:
             nav = page_select_nav
-        elif request.target.body_type is scene.SlackMessage:
+        elif request.target.body_type in (scene.SlackMessage, scene.SlackHomeView):
             nav = default_nav
     return PlanningContext(
         WorkBudget(request.search_budget if work_limit is None else work_limit),
@@ -309,6 +310,24 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
             options.selections,
             options,
             cast(PlanCache[scene.ComponentsV2] | None, cache),
+        )
+    elif isinstance(effective.limits, ClassicLimits) and effective.body_type is scene.ClassicMessage:
+        result = _plan(
+            rendered,
+            cast(PlanRequest[scene.ClassicMessage, RenderTargetT, AdapterT], request),
+            ClassicCompositionRules[RenderTargetT, object](effective.limits),
+            options.selections,
+            options,
+            cast(PlanCache[scene.ClassicMessage] | None, cache),
+        )
+    elif isinstance(effective.limits, SlackHomeLimits) and effective.body_type is scene.SlackHomeView:
+        result = _plan(
+            rendered,
+            cast(PlanRequest[scene.SlackHomeView, RenderTargetT, AdapterT], request),
+            SlackCompositionRules[RenderTargetT, object, scene.SlackHomeView](effective.limits),
+            options.selections,
+            options,
+            cast(PlanCache[scene.SlackHomeView] | None, cache),
         )
     elif isinstance(effective.limits, SlackMessageLimits) and effective.body_type is scene.SlackMessage:
         slack_request = cast(PlanRequest[scene.SlackMessage, RenderTargetT, AdapterT], request)
