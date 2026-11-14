@@ -208,10 +208,10 @@ references; local paths and streams belong to the current process.
 
 ## Joint page regions
 
-For Discord Components V2, `sl.region` allocates space together with sibling and
-nested regions. Use `header` and `footer` for content that must remain visible on
-every page of that region. `title` labels its Previous and Next controls; put a
-heading in `header` when the title should also appear above the content.
+`sl.region` allocates space together with sibling and nested regions on Discord
+Components V2, classic Discord, HTML, Slack messages, and Slack Home. Use `header` and `footer` for content that must remain visible on
+every page of that region. `title` supplies descriptive metadata; put a heading in `header` when it should
+appear above the content. Navigation labels come from the configured chrome.
 
 ```python
 return sl.Document(
@@ -239,10 +239,9 @@ return sl.Document(
 )
 ```
 
-The planner measures persistent content and navigation before choosing page
-boundaries. Each region reserves enough room for its largest page. Successful
-delivery commits those allocations and boundaries; subsequent page turns reuse
-them. Content, locale, target limits, or control-state changes permit a new
+The planner measures persistent content and navigation before certifying every
+reachable page combination. Successful delivery commits the allocation and
+boundaries; subsequent page turns reuse them. Content, locale, target limits, or control-state changes permit a new
 allocation. Hidden regions keep their positions while they remain in the tree.
 The planner consumes the supplied data snapshot; it does not fetch more results.
 
@@ -256,19 +255,31 @@ to prohibit the next break. Existing action keys retain their dispatch scopes.
 
 `page=` accepts the existing uncontrolled, controlled, and routed ownership
 policies. Planning never invokes change handlers. Explicit application page
-requests take precedence over remembered anchors. Existing `sl.paged` regions
-retain their character cap when composed inside a joint region; other local
-pagers are measured across every reachable page before their envelope is used.
+requests take precedence over remembered anchors. A removed anchor recovers to
+the nearest surviving item in the last displayed order, preferring the following
+item on a tie. `sl.paged` retains its character cap in V2 regions. Other targets
+use explicit regions or lists; a character grant does not map unambiguously to
+classic's separate text pools or Slack's block budget.
 
-Use `sl.fallback(primary, compact)` to offer another representation. Allocation
-compares fidelity, total page turns, representation preference, then resource
-cost, with deterministic ties. Strict planning rejects a selected degradation.
-`result.report.regions` describes each region's allocation, page count, resolved
-page, and anchor. `result.cost` bounds the message across its region pages.
+Use `sl.alternatives` with explicit fidelity declarations to offer another
+representation. `sl.fallback` has no source correspondence and cannot be used
+inside a shared region. Strict planning permits equivalent presentations and
+lossless pagination, but rejects declared content loss. Section headings repeat
+on continuation pages. Exact page counts and historical breaks are not a
+compatibility guarantee.
 
-Search is bounded by the request's `search_budget`: up to that many backend
-measurements and its square in frontier expansions. A document that fits without
-pagination uses a fast path. A proven lack of feasible allocations raises
-`UnsolvableLayoutError`; an unfinished search raises `LayoutSearchExhaustedError`.
-No partial result or cursor writes are published in either case. Other target
-families currently reject joint regions explicitly.
+`result.report.regions` describes each allocation, page count, resolved page,
+and anchor. `result.cost` bounds the certified page family. `result.report.search`
+distinguishes complete search from exhaustion with a valid certificate. An
+explicit `search_budget` limits shared operations, including preprocessing and
+target evaluation. Exhaustion without a certificate raises
+`LayoutSearchExhaustedError`; established infeasibility raises
+`UnsolvableLayoutError`. Neither case publishes a partial result or cursor writes.
+
+Unsupported combinations raise `JointUnsupportedError` with capability diagnostics;
+they never retry through another region solver. Slack modals retain their separate
+form-only contract. Native adaptation ladders and extensions need explicit shared
+realizations before they can participate in regions. Non-region documents can
+still use their target's existing fitter; `report.legacy_pagination` identifies
+missing shared capabilities. See the [target capability matrix](plans/generic-region-pagination/06-target-coverage.md#target-capability-matrix)
+for supported vocabulary and deliberate limitations.

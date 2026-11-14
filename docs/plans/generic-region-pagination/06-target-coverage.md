@@ -1,6 +1,6 @@
 # Target coverage and migration
 
-Status: in progress.
+Status: implemented and validated.
 
 ## Evidence and decisions
 
@@ -41,3 +41,85 @@ reservations, bindings, and retained turns. Run focused tests with `--no-cov`
 after edits, both UI package suites where broad integration warrants it, Ruff via
 installed hooks, `git diff --check`, and whole-project `just typecheck`.
 Unrelated application edits present at task start remain outside these commits.
+
+## Target capability matrix
+
+This is the production pagination boundary, not an assertion that every legacy
+semantic adaptation is now a shared offer. Unsupported vocabulary outside explicit
+regions still uses its existing target fitter; the report names that route.
+
+| Surface | Shared pagination and resource contract | Deliberate constraints |
+| --- | --- | --- |
+| Discord V2 | Regions, root pages, lists, character-based `Paged`, and keyed primitive `Paginate`; component, text, and attachment capacities. | Explicit nested blocks cannot become nested V2 containers. Nested semantic sections retain headings inside the enclosing panel. |
+| Classic Discord | Regions, root pages, lists, count-based keyed primitive `Paginate`; independent content, embed text, embed count, row, control, and attachment capacities. Blocks become embeds; loose prose uses message content. | Character grants have no single text pool. Inline download widgets and spoiler embed images have no classic representation; document attachments remain available. |
+| HTML | Regions, root pages, lists; no invented global message budget. | Character grants are not HTML layout constraints. Native extensions need typed target rules. |
+| Slack message | Regions, root pages, lists; block capacity, local text/control limits, and message fallback-text capacity. | No disabled buttons/selects, inline attachments, spoiler images, or accent-bearing panels. Images require public URLs. |
+| Slack Home | Same direct block composition and navigation as messages, using Home's block capacity. | Same block vocabulary constraints; no message fallback-text budget. |
+| Slack modal | Existing form planner and modal limits. | The surface requires one top-level form trigger. Region navigation is rejected with this reason; it cannot preserve a submitted form's ownership contract. |
+
+Shared vocabulary now includes headings, paragraphs, notes, code, quotations,
+fields, tables, lists, images and figures, actions, choices, toggles, form triggers,
+checked alternatives, regions, and the supported grouping/budget wrappers. Actual
+realizations remain target-specific: for example, classic displays an image's
+alternative description as embed text, and Slack requires plain text in headers
+and native table cells. Slack rich inline text is encoded directly; combinations
+that cannot preserve literal punctuation in mrkdwn are refused instead of silently
+changing it. Section/article thumbnails are not shared offers yet.
+
+Actions keep ordered button rows and may offer a select when every action permits
+grouping. A select must fit the target's option and cardinality limits; cross-page
+multi-selection is deliberately not invented. Mixed groups retain their buttons.
+Session-owned choices and toggles are rebuilt after state changes rather than
+replaying their old certified values. Unambiguous short public control keys remain
+stable; scoped or long identities use derived wire keys.
+
+## Compatibility and deferred contracts
+
+`regions.py` and its backend-probing frontier search are removed. Discovery lives
+in `region_detection.py`; unsupported explicit regions raise `JointUnsupportedError`
+with diagnostics. Shared search failures never retry through a target fitter.
+
+Section headings now repeat on continuation pages, including character-based
+`Paged` sections. Classic loose prose uses the content pool in shared composition;
+authored blocks use embeds. Page counts, exact cuts, and historical adaptation
+event names may change. Reports use shared search metrics and fidelity effects.
+
+Legacy `fallback`, primitive truncation/spill/condensation ladders, line alternatives,
+and rich primitive text fragmentation retain their existing non-region paths.
+They do not declare the source correspondence and permitted fragments required
+for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
+or typed atomic target rules inside regions. No equivalence is inferred from
+arbitrary replacement text. Native extensions are usable through explicit custom
+composition rules, rather than an opaque production backend probe.
+
+Stateful semantic widgets beyond choices/toggles (such as disclosure/item navigation
+and native entity discovery), palette overrides, status/progress structures, and
+section thumbnails also retain their non-region planners. Their current adapters
+combine state selection, adaptation, and target lowering; migrating them requires
+explicit offers that preserve those contracts. This is a consciously deferred
+vocabulary extension, not a claim that the underlying platforms lack these features.
+The retained fitters remain active machinery and are not removed as dead code.
+
+## Application outcome and validation
+
+Focused command help now uses a shared region instead of truncating the command
+description. A long-description regression reconstructs the complete text from all
+certified pages and checks that the command heading remains visible. Build-browser
+regressions exercise full catalogue/search pages, reference tabs, controlled record
+filters, help toggles, and unchanged data-fetch counts. Application selection windows
+remain application-owned.
+
+Cross-target tests exercise independent coordinates, retained allocation reuse,
+production lists, text roles, repeated headings, packed controls, choices, image
+coverage, visible bindings, shared attachments, and concrete modal/legacy-fallback
+refusals. Mounted Discord regressions cover devtools controls and pressure-driven
+action grouping. The combined UI and application run passed 3,066 tests with `--no-cov`.
+After the final classic primitive-route change, 217 classic and pagination checks
+passed; the final control-order and Slack continuation changes passed 64 focused
+checks. Whole-project Pyrefly reports zero errors. Installed Ruff/format hooks and
+`git diff --check` pass. Async delivery tests ran outside the sandbox because its
+thread wakeups stall the file-delivery tests, as observed in earlier phases.
+
+The roadmap is complete for the documented shared vocabulary and target matrix.
+The deferred adapters above remain explicit extension work; no target family is
+excluded merely because it is not V2, and no obsolete region solver remains.

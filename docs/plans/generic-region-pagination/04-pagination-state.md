@@ -91,9 +91,10 @@ Changed callbacks rebuild bindings. Routed documents bypass retention because a 
 can encode changed external state behind the same callable. Route and navigation factories
 must remain safe to repeat for discarded candidates.
 
-## Remaining capability routes
+## Phase 4 capability handoff
 
-The following cases retain legacy planning until phase 6. `PlanReport.legacy_pagination` records
+This historical handoff is superseded by the [phase 6 matrix](06-target-coverage.md#target-capability-matrix).
+At the end of phase 4, the following cases retained legacy planning. `PlanReport.legacy_pagination` records
 the first missing capability without reporting a content adaptation or degradation.
 
 | Capability | Current route and phase 6 work |

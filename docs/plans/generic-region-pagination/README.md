@@ -1,6 +1,7 @@
 # Generic region pagination roadmap
 
-Status: phases 1–5 complete. [Shared allocation search](03-joint-search.md) documents the solver.
+Status: phases 1–6 complete. [Target coverage and migration](06-target-coverage.md) records
+the final capability matrix, application migration, and deliberate limitations. [Shared allocation search](03-joint-search.md) documents the solver.
 [Pagination and presentation state](04-pagination-state.md) records production integration, anchor
 recovery, remaining capability routes, and the production integration boundaries. [Reuse and performance](05-reuse-performance.md)
 records partition hints, current-call metrics, and measured workloads.
@@ -33,7 +34,7 @@ Existing tests cover useful allocation and delivery behavior. They are regressio
 for the implementation, not proof of a general composition or search contract. Reuse the
 working behavior and tests where they fit; the current internal structure is open to replacement.
 
-Start from `planning/regions.py`, `planning/planner.py`, `planning/dialect.py`, and the target
+Start from `planning/joint_search.py`, `planning/planner.py`, `planning/composition.py`, and the target
 backends in `packages/squid-ui/src/squid_ui/`. The [architecture guide](../../squid-ui-architecture.md)
 and [pagination ownership contract](../pagination-ownership.md) describe surrounding behavior.
 
@@ -152,6 +153,8 @@ Depends on phases 3 and 4. Earlier phases should already expose the information 
 
 ## Phase 6 Complete target coverage and migration
 
+Implemented outcome: [Target coverage and migration](06-target-coverage.md).
+
 Finish integration for the existing target families identified in phase 1. Validate shared
 behavior through conformance tests while respecting actual target capabilities. Unsupported
 combinations must have a concrete capability reason rather than inheriting a blanket V2-only
@@ -181,3 +184,6 @@ and direct target participation. Phase 2 supplies an opt-in composition entry po
 structural resource budgets, live bindings, and typed atomic extension contracts. Phase 3 adds automatic
 joint search and certified page selection. Phase 4 connects supported production pagination to those
 allocations, with mounted ownership, delivery-staged state, and nearest-survivor anchor recovery.
+Phase 5 integrates partition hints and current-call metrics. Phase 6 completes document-target
+coverage, removes the old region solver, migrates command help, and records the remaining
+form-surface and vocabulary contracts explicitly.

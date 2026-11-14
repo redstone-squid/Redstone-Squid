@@ -1157,26 +1157,27 @@ with an additional first argument: the input `TransitionRoute`. After validation
 `driver.transition(machine, route.state, route.action, values=(str(number - 1),))`.
 Route encoders must be deterministic and safe for repeated planning calls.
 
-`sl.paged(container, key=..., chars=...)` applies an author-sized budget and pages between the
-container's heterogeneous children. Children are atomic unless a text child must split;
-`sl.unbreakable` groups several lowered primitives into one atomic item and
-`sl.keep_with_next` forbids the following break. Region breaks minimize preference violations,
-then page count and squared fill badness. Text and heterogeneous regions share this exact
-prefix-summed fragmentation engine at every input size; there is no size-dependent heuristic.
-A section heading is kept with its first body child automatically. Region fingerprints hash
-every child's stable logical identity, so callbacks do not make an otherwise unchanged page
-stale across processes.
+`sl.paged(container, key=..., chars=...)` applies a character budget on V2 while shared
+allocation pages its heterogeneous children. `sl.unbreakable` suppresses internal cuts;
+`sl.keep_with_next` prohibits the next break. Soft fill and widow preferences participate
+in allocation quality. Section headings repeat with their body on continuation pages.
+Target fragment contracts retain source identity when long text spans several pages.
 
 Root structural pagination is opt-in: return `Document(..., key="screen")` from the root
-component. If top-level structure still exceeds the component limit after lossless adaptation,
-the planner partitions it into measured whole-message pages. Local pagination has precedence.
-This legacy path rejects simultaneous local and root pagers. For independently navigable
-content, use `sl.region` on Components V2: its joint solver combines resource-vector
-frontiers for siblings and nested regions, including persistent content and navigation.
-Each allocation bounds every reachable page and is committed only after delivery.
-Page turns reuse the committed allocation; content or target changes permit replanning.
-See the [region API](squid-ui-quickstart.md#joint-page-regions) for identity, ownership,
-and bounded-search behavior.
+component. Supported content with navigation and no local pager becomes a shared root
+region. Explicit regions and supported local pagers use the same allocation search across
+V2, classic Discord, HTML, Slack messages, and Slack Home. Targets supply realizations,
+resource accounting, and final scene construction; the solver does not inspect their bodies.
+
+Every reachable page combination is certified with its actual navigation. Delivery commits
+the chosen allocation, and cursor-only turns reuse it with zero new search operations.
+Content, bindings, or target changes require current certification; partition cache entries
+are only hints. An exhausted search may return a valid certificate without proving optimality.
+Unsupported explicit regions produce capability diagnostics rather than another planner attempt.
+The old V2 resource-frontier region planner has been removed. Target fitters remain for
+non-region vocabulary that has no shared realization contract and for Slack modal forms.
+See the [region API](squid-ui-quickstart.md#joint-page-regions) and the
+[final capability matrix](plans/generic-region-pagination/06-target-coverage.md#target-capability-matrix).
 
 ## Scenes and renderers
 
