@@ -5,6 +5,7 @@ import json
 import sys
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
@@ -328,3 +329,72 @@ async def test_unavailable_decoded_counts_cannot_prove_frame_preservation(
         await normalizer._decoded_frame_count(Path("source.mp4"))
 
     assert raised.value.context["operation"] == "count_frames"
+
+
+@pytest.mark.parametrize("change", ["offset", "cadence", "missing_frame"])
+async def test_rate_metadata_fallback_requires_matching_frame_timestamps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    source = MediaProbe(
+        container_names=("mp4",),
+        video_codec="h264",
+        width=1200,
+        height=700,
+        frame_rate_numerator=4_830_000,
+        frame_rate_denominator=162_821,
+        duration_milliseconds=10_855,
+        frame_count=322,
+    )
+    output = replace(source, frame_rate_numerator=100_625, frame_rate_denominator=3413, duration_milliseconds=10_872)
+    poster = replace(output, video_codec="mjpeg", container_names=("jpeg_pipe",))
+    source_timestamps = tuple(Decimal(index) / 30 for index in range(322))
+    output_timestamps = tuple(value + Decimal("0.05") for value in source_timestamps)
+    if change == "cadence":
+        output_timestamps = (
+            *output_timestamps[:100],
+            output_timestamps[100] + Decimal("0.01"),
+            *output_timestamps[101:],
+        )
+    elif change == "missing_frame":
+        output_timestamps = output_timestamps[:-1]
+    normalizer = FfmpegMediaNormalizer()
+
+    async def write_output(executable: str, arguments: Sequence[str], **kwargs: Any) -> bytes:
+        Path(arguments[-1]).write_bytes(b"normalized")
+        return b""
+
+    monkeypatch.setattr(normalizer, "_run", write_output)
+    monkeypatch.setattr(normalizer, "probe", AsyncMock(side_effect=[output, poster]))
+    timestamps = AsyncMock(side_effect=[source_timestamps, output_timestamps])
+    monkeypatch.setattr(normalizer, "_frame_timestamps", timestamps)
+    request = MediaNormalizationRequest(
+        kind=MediaKind.VIDEO,
+        source_path=tmp_path / "source",
+        output_path=tmp_path / "output.mp4",
+        poster_path=tmp_path / "poster.jpg",
+    )
+
+    if change == "offset":
+        result = await normalizer.normalize(request, probe=source, source_bytes=1, limits=MediaLimits())
+        assert result.output_path.exists()
+        assert result.report.input_probe == source
+        assert result.report.output_probe == output
+    else:
+        with pytest.raises(MediaProcessingError):
+            await normalizer.normalize(request, probe=source, source_bytes=1, limits=MediaLimits())
+        assert not request.output_path.exists()
+    assert timestamps.await_count == 2
+
+
+@pytest.mark.parametrize("values", [[], ["N/A"], ["NaN"], ["Infinity"], ["0.2", "0.1"]])
+async def test_invalid_frame_timestamps_cannot_prove_timing_preservation(
+    monkeypatch: pytest.MonkeyPatch, values: list[str]
+) -> None:
+    normalizer = FfmpegMediaNormalizer()
+    payload = {"frames": [{"best_effort_timestamp_time": value} for value in values]}
+    monkeypatch.setattr(normalizer, "_run", AsyncMock(return_value=json.dumps(payload).encode()))
+
+    with pytest.raises(MediaProcessingError) as raised:
+        await normalizer._frame_timestamps(Path("source.mp4"))
+
+    assert raised.value.context["operation"] == "frame_timestamps"

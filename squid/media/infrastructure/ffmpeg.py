@@ -12,6 +12,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from fractions import Fraction
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
 
@@ -292,7 +293,22 @@ class FfmpegMediaNormalizer:
                 # Count decoded frames before treating a header mismatch as frame loss.
                 validation_source = replace(probe, frame_count=await self._decoded_frame_count(request.source_path))
                 validation_output = replace(output_probe, frame_count=await self._decoded_frame_count(video_temporary))
-            _validate_video_output(validation_source, validation_output, strip_audio=request.strip_audio)
+            timestamps_verified = False
+            if _average_frame_rate_changed(validation_source, validation_output):
+                source_timestamps = await self._frame_timestamps(request.source_path)
+                output_timestamps = await self._frame_timestamps(video_temporary)
+                if len(source_timestamps) == len(output_timestamps):
+                    offset = output_timestamps[0] - source_timestamps[0]
+                    timestamps_verified = all(
+                        abs(output_time - source_time - offset) <= Decimal("0.001")
+                        for source_time, output_time in zip(source_timestamps, output_timestamps, strict=True)
+                    )
+            _validate_video_output(
+                validation_source,
+                validation_output,
+                strip_audio=request.strip_audio,
+                timestamps_verified=timestamps_verified,
+            )
 
             # Derive the thumbnail from the normalized video so both show the same content.
             seek_milliseconds = min((probe.duration_milliseconds or 0) // 2, 30_000)
@@ -383,6 +399,44 @@ class FfmpegMediaNormalizer:
             poster_path=request.poster_path,
             report=report,
         )
+
+    async def _frame_timestamps(self, source_path: Path) -> tuple[Decimal, ...]:
+        """Read decoded presentation times when average-rate metadata cannot establish preservation."""
+        stdout = await self._run(
+            self._ffprobe,
+            (
+                "-v",
+                "error",
+                "-protocol_whitelist",
+                _INPUT_PROTOCOLS,
+                "-protocol_blacklist",
+                _NETWORK_PROTOCOLS,
+                "-threads",
+                str(self._process_limits.threads),
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "frame=best_effort_timestamp_time",
+                "-of",
+                "json",
+                str(source_path.absolute()),
+            ),
+            operation="frame_timestamps",
+            timeout_seconds=self._process_limits.video_timeout_seconds,
+            max_file_bytes=8 * _MAX_PROBE_OUTPUT_BYTES,
+            capture_stdout=True,
+        )
+        try:
+            timestamps = tuple(Decimal(frame["best_effort_timestamp_time"]) for frame in json.loads(stdout)["frames"])
+            if (
+                timestamps
+                and all(value.is_finite() for value in timestamps)
+                and all(later >= earlier for earlier, later in pairwise(timestamps))
+            ):
+                return timestamps
+        except KeyError, TypeError, ValueError, InvalidOperation, json.JSONDecodeError:
+            pass
+        raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="frame_timestamps")
 
     async def _decoded_frame_count(self, source_path: Path) -> int:
         """Count decoded video frames when container counts disagree after normalization."""
@@ -535,9 +589,7 @@ def _ffmpeg_input_arguments(source_path: Path, limits: MediaProcessLimits) -> tu
     )
 
 
-def _validate_video_output(source: MediaProbe, output: MediaProbe, *, strip_audio: bool) -> None:
-    expected_audio = source.has_audio and not strip_audio
-    duration_tolerance = max(250, _frame_duration_milliseconds(source) * 2)
+def _average_frame_rate_changed(source: MediaProbe, output: MediaProbe) -> bool:
     # Average rates depend on the muxer's first/last sample durations. Allow at most
     # one frame of rate drift over the common interval; probe durations round up to milliseconds.
     rate_difference = abs(
@@ -545,13 +597,21 @@ def _validate_video_output(source: MediaProbe, output: MediaProbe, *, strip_audi
         - Fraction(source.frame_rate_numerator, source.frame_rate_denominator)
     )
     clip_duration = max(1, min(source.duration_milliseconds or 0, output.duration_milliseconds or 0) - 1)
+    return rate_difference * clip_duration > 1000
+
+
+def _validate_video_output(
+    source: MediaProbe, output: MediaProbe, *, strip_audio: bool, timestamps_verified: bool = False
+) -> None:
+    expected_audio = source.has_audio and not strip_audio
+    duration_tolerance = max(250, _frame_duration_milliseconds(source) * 2)
     if (
         output.video_codec != "h264"
         or "mp4" not in output.container_names
         or output.width != source.width
         or output.height != source.height
         or output.frame_rate_numerator <= 0
-        or rate_difference * clip_duration > 1000
+        or (not timestamps_verified and _average_frame_rate_changed(source, output))
         or output.has_audio != expected_audio
         or (output.has_audio and output.audio_codec != "aac")
         or output.duration_milliseconds is None
