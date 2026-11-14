@@ -22,6 +22,7 @@ from squid_ui.planning.composition import (
     FragmentContract,
     FragmentCoverage,
     OccurrenceId,
+    OfferDiscovery,
     Placement,
     PlanningContext,
     RealizationOffer,
@@ -345,13 +346,7 @@ def semantic_offers[RenderTargetT, ContextT](
         for index, form in enumerate(table_forms):
             payload = TableRealization(columns, tuple(rows), form)
             units = tuple(frozenset(cell.reference for cell in row.cells) for row in rows)
-            if occurrence.origin is not None:
-                units = tuple(
-                    frozenset(source for ref in unit for source in occurrence.origin.references(ref)) for unit in units
-                )
             repeated = frozenset(column.reference for column in columns)
-            if occurrence.origin is not None:
-                repeated = frozenset(source for ref in repeated for source in occurrence.origin.references(ref))
             fragments = (
                 FragmentContract(units, tuple(range(1, len(rows) + 1)), payload.fragment, repeated) if rows else None
             )
@@ -409,6 +404,8 @@ def select_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     multiple offers must be explicit until the joint solver takes over selection.
     """
     offers = rules.offers(occurrence, context)
+    if isinstance(offers, OfferDiscovery):
+        offers = offers.offers
     if not offers:
         return UnsupportedCapability(
             occurrence.identity, type(occurrence.graph.units[occurrence.reference].value).__name__

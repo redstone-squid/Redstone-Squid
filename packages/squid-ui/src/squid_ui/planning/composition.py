@@ -169,6 +169,25 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     region: RegionContract[RenderTargetT, ContextT, PayloadT] | None = None
 
 
+class DiscoveryCompletion(StrEnum):
+    COMPLETE = "complete"
+    UNSUPPORTED = "unsupported"
+    EXHAUSTED = "exhausted"
+
+
+@dataclass(frozen=True, slots=True)
+class OfferDiscovery[RenderTargetT, ContextT, PayloadT]:
+    """Explicit completeness for extensions; a complete empty domain is infeasible.
+
+    Existing tuple-returning rules declare complete nonempty domains and use an
+    empty tuple for unsupported vocabulary. Interrupted discovery must never look
+    like a complete empty domain.
+    """
+
+    offers: tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]
+    completion: DiscoveryCompletion = DiscoveryCompletion.COMPLETE
+
+
 @dataclass(frozen=True, slots=True)
 class CandidateComposition[RenderTargetT, ContextT, PayloadT]:
     offer: RealizationOffer[RenderTargetT, ContextT, PayloadT]
@@ -344,7 +363,10 @@ class Evaluation[ResourceT, PreparationT = None]:
 class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT = None](Protocol):
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
-    ) -> tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]: ...
+    ) -> (
+        tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]
+        | OfferDiscovery[RenderTargetT, ContextT, PayloadT]
+    ): ...
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT], context: PlanningContext
@@ -443,17 +465,25 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     if not evaluation.feasible:
         return evaluation
     reserved: dict[OccurrenceId, ResourceCost] = {}
+    navigation_chars: dict[OccurrenceId, int] = {}
 
     def reserve(part: CandidateComposition[RenderTargetT, ContextT, PayloadT]) -> ResourceCost:
         extra = EMPTY_COST
         for child in part.children:
             extra += reserve(child)
         identity = part.offer.occurrence.identity
+        navigation_chars[identity] = (
+            evaluation.scoped_costs.get(identity, EMPTY_COST).get(Axis.DISPLAY_TEXT)
+            if part.offer.occurrence.placement == Placement.NAVIGATION
+            else sum(navigation_chars[child.offer.occurrence.identity] for child in part.children)
+        )
         if identity in floors:
             context.work.consume()
             if Axis.DISPLAY_TEXT not in evaluation.resource_axes:
                 return extra
-            actual = evaluation.scoped_costs.get(identity, EMPTY_COST).get(Axis.DISPLAY_TEXT)
+            actual = (
+                evaluation.scoped_costs.get(identity, EMPTY_COST).get(Axis.DISPLAY_TEXT) - navigation_chars[identity]
+            )
             extra += ResourceCost({Axis.DISPLAY_TEXT: max(0, floors[identity] - actual - extra.get(Axis.DISPLAY_TEXT))})
         reserved[identity] = extra
         return extra
@@ -492,6 +522,10 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         if cost is None:
             message = f"target evaluation did not measure resources for {identity.path!r}"
             raise DrawInvariantError(message)
+        if identity in floors:
+            cost = ResourceCost(
+                {**cost.values, Axis.DISPLAY_TEXT: max(0, cost.get(Axis.DISPLAY_TEXT) - navigation_chars[identity])}
+            )
         violations.extend(
             CapacityExceeded(identity, axis, used, capacity)
             for axis, used, capacity in (cost + reserved.get(identity, EMPTY_COST)).over(supported)

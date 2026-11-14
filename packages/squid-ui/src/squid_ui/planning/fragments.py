@@ -25,6 +25,7 @@ class FragmentTree[RenderTargetT, ContextT, PayloadT]:
     children: tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...]
     units: tuple[frozenset[SemanticRef], ...]
     legal_ends: tuple[int, ...]
+    keep_with_next: bool = False
 
     @property
     def extent(self) -> int:
@@ -41,9 +42,18 @@ def fragment_tree[RenderTargetT, ContextT, PayloadT](
         if children or offer.flow:
             message = "leaf fragment contracts cannot also expose child breaks"
             raise LayoutInvariantError(message)
-        return FragmentTree(candidate, children, offer.fragments.units, offer.fragments.legal_ends)
+        units = offer.fragments.units
+        if (origin := offer.occurrence.origin) is not None:
+            units = tuple(frozenset(source for ref in unit for source in origin.references(ref)) for unit in units)
+        return FragmentTree(candidate, children, units, offer.fragments.legal_ends, offer.keep_with_next)
     if not offer.flow:
-        return FragmentTree(candidate, children, (offer.occurrence.sources,), (1,))
+        return FragmentTree(
+            candidate,
+            children,
+            (offer.occurrence.sources,),
+            (1,),
+            offer.keep_with_next or bool(children and children[-1].keep_with_next),
+        )
     units: list[frozenset[SemanticRef]] = []
     ends: list[int] = []
     for child in children:
@@ -58,12 +68,14 @@ def fragment_tree[RenderTargetT, ContextT, PayloadT](
         else:
             units.extend(child.units)
             ends.extend(offset + end for end in child.legal_ends)
-        if child_offer.keep_with_next and ends and ends[-1] == len(units):
+        if child.keep_with_next and ends and ends[-1] == len(units):
             ends.pop()
     # keep_with_next at the end has no following content to keep.
     if units and (not ends or ends[-1] != len(units)):
         ends.append(len(units))
-    return FragmentTree(candidate, children, tuple(units), tuple(ends))
+    content = [child for child in children if child.candidate.offer.occurrence.placement == Placement.CONTENT]
+    keep = offer.keep_with_next or bool(offer.region is None and content and content[-1].keep_with_next)
+    return FragmentTree(candidate, children, tuple(units), tuple(ends), keep)
 
 
 def _repeat[RenderTargetT, ContextT, PayloadT](
@@ -112,6 +124,8 @@ def slice_fragment[RenderTargetT, ContextT, PayloadT](
     if offer.fragments is not None:
         payload = offer.fragments.payload(start, end)
         repeated = offer.fragments.repeated
+        if occurrence.origin is not None:
+            repeated = frozenset(source for ref in repeated for source in occurrence.origin.references(ref))
     elif offer.flow:
         offset = 0
         for child in node.children:
