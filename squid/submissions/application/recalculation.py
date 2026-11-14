@@ -13,7 +13,14 @@ from squid.builds.domain import BuildDraft
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.models import Build
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
+from squid.core.errors import (
+    AccountRequiredError,
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    OwnershipRequiredError,
+    ValidationError,
+)
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.submissions.application.recalculation_values import (
@@ -68,8 +75,9 @@ class RecalculationProposalService:
     ) -> RecalculationProposal:
         """Retain one stable candidate; inference alone never writes the target build."""
         async with self._uow_factory() as uow:
-            if actor.account_id is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_RECALC):
-                raise AuthorizationError
+            if actor.account_id is None:
+                raise AccountRequiredError
+            await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_RECALC)
             now = Instant.now()
             result = await uow.recalculation_proposals.create(
                 RecalculationProposal(
@@ -112,8 +120,8 @@ class RecalculationProposalService:
         if any(
             actor.account_id not in {proposal.owner_account_id, proposal.requested_by_account_id}
             for proposal in proposals
-        ) and not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT):
-            raise AuthorizationError
+        ):
+            await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_EDIT)
 
     async def match(
         self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False
@@ -126,7 +134,7 @@ class RecalculationProposalService:
             raise BuildNotFoundError(build_id)
         await self._builds.authorize_edit(BuildEditor(actor), build)
         if build.submitter_account_id != proposal.owner_account_id:
-            raise AuthorizationError
+            raise OwnershipRequiredError
         if build_id not in await self._builds.list_ids_for_source_message(proposal.source_message_id):
             message = "Choose a build linked to this source message."
             raise ValidationError(message)
@@ -158,7 +166,7 @@ class RecalculationProposalService:
         the retained diff.
         """
         if actor.account_id is None:
-            raise AuthorizationError
+            raise AccountRequiredError
         proposal = await self.get(proposal_id, actor)
         if proposal.applied_revision is not None:
             return proposal
@@ -187,7 +195,7 @@ class RecalculationProposalService:
         self, proposal: RecalculationProposal, build: Build, actor: BuildEditor
     ) -> RecalculationProposal:
         if actor.subject.account_id is None:
-            raise AuthorizationError
+            raise AccountRequiredError
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(
@@ -227,7 +235,7 @@ class RecalculationProposalService:
                 raise AuthorizationError
             await self._builds.authorize_edit_in(uow, actor, current)
             if actor.subject.account_id is None:
-                raise AuthorizationError
+                raise AccountRequiredError
             build.edited_time = Instant.now()
             await uow.builds.save(
                 build,

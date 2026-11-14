@@ -1,5 +1,6 @@
 """Notification REST orchestration contracts."""
 
+from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import cast, override
 from uuid import UUID, uuid4
@@ -32,7 +33,7 @@ from squid.notifications import (
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode
+from squid.permissions.domain import Decision, PermissionNode, Reason
 from squid.runtime import ApiServices
 from tests.support.notification_edits import NotificationEditRecorder
 
@@ -99,6 +100,10 @@ class PermissionAnswer(PermissionService):
     @override
     async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         return self.allowed
+
+    @override
+    async def decisions(self, subject: Actor, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
+        return tuple([Decision(str(node), await self.allows(subject, node), Reason.DEFAULT) for node in nodes])
 
 
 async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:

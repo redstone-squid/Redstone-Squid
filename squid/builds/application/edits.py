@@ -20,7 +20,12 @@ from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, DataIntegrityError, InvalidStateError, ValidationError
+from squid.core.errors import (
+    AccountRequiredError,
+    DataIntegrityError,
+    InvalidStateError,
+    ValidationError,
+)
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import (
     EditCommand,
@@ -126,7 +131,7 @@ class BuildFieldsEdit:
 
     async def prepare(self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
         if actor.account_id is None:
-            raise AuthorizationError
+            raise AccountRequiredError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
             raise ValidationError
         expected = command.expected[0]
@@ -194,7 +199,7 @@ class BuildStatusEdit:
 
     async def prepare(self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
         if actor.account_id is None:
-            raise AuthorizationError
+            raise AccountRequiredError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
             raise ValidationError
         values = command.values.unpack()
@@ -219,8 +224,7 @@ class BuildStatusEdit:
                 raise InvalidStateError
             decision = status
         permission = BUILD_SUBMISSION_APPROVE if decision is Status.CONFIRMED else BUILD_SUBMISSION_REJECT
-        if not await self._permissions.allows_in(uow, actor, permission):
-            raise AuthorizationError
+        await self._permissions.require_in(uow, actor, permission)
         assert previous is not None
         return PreparedBuildEdit(
             EditValues.of({"submission_status": previous.value}),

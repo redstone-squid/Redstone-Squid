@@ -11,7 +11,7 @@ from squid.accounts.domain import ProfileLink, ProfileUpdate
 from squid.accounts.errors import AccountIdentityNotFoundError, ConsentRequiredError
 from squid.accounts.models import Account, AccountProfile
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ValidationError
+from squid.core.errors import AccountRequiredError, OwnershipRequiredError, ValidationError
 from squid.core.sentinel import UNSET
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
@@ -87,8 +87,9 @@ class AccountEdits:
         self.aggregate = Aggregate("account", load, lambda account: account.revision, flush)
 
     async def authorize(self, uow: AccountEditUnitOfWork, actor: Actor, account: Account) -> None:
-        if actor.account_id != account.id or not await self._permissions.allows_in(uow, actor, ACCOUNT_SELF_MANAGE):
-            raise AuthorizationError
+        if actor.account_id != account.id:
+            raise OwnershipRequiredError
+        await self._permissions.require_in(uow, actor, ACCOUNT_SELF_MANAGE)
         if not await uow.accounts.has_current_consent(account.id):
             raise ConsentRequiredError(account_id=account.id)
 
@@ -175,8 +176,9 @@ class AccountProfileClear(AccountEdits):
     async def prepare(self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         if command.values.unpack() or command.purpose != "edit":
             raise ValidationError
-        if actor.account_id is None or not await self._permissions.allows_in(uow, actor, ACCOUNT_PROFILE_MODERATE):
-            raise AuthorizationError
+        if actor.account_id is None:
+            raise AccountRequiredError
+        await self._permissions.require_in(uow, actor, ACCOUNT_PROFILE_MODERATE)
         account = await self.aggregate.lock(uow, command)
         # Even an empty profile records the staff action, without keeping erased content in a receipt.
         return PreparedEdit(

@@ -10,7 +10,12 @@ from whenever import Instant
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
+from squid.core.errors import (
+    AccountRequiredError,
+    DataIntegrityError,
+    OwnershipRequiredError,
+    ValidationError,
+)
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.edits.fields import Aggregate, FieldCommand
@@ -61,8 +66,9 @@ class NotificationEditUnitOfWork(NotificationUnitOfWork, EditUnitOfWork, Permiss
 async def authorize(
     uow: NotificationEditUnitOfWork, permissions: PermissionService, actor: Actor, account_id: int
 ) -> None:
-    if actor.account_id != account_id or not await permissions.allows_in(uow, actor, ACCOUNT_SELF_MANAGE):
-        raise AuthorizationError
+    if actor.account_id != account_id:
+        raise OwnershipRequiredError
+    await permissions.require_in(uow, actor, ACCOUNT_SELF_MANAGE)
     if not (await uow.notifications.get_preferences(account_id)).has_current_consent:
         raise ConsentRequiredError(account_id=account_id)
 
@@ -299,7 +305,7 @@ class InboxReadEdit:
     ) -> Sequence[InboxNotification]:
         account_id = actor.account_id
         if account_id is None:
-            raise AuthorizationError
+            raise AccountRequiredError
         await uow.notifications.lock_settings(account_id)
         await authorize(uow, self._permissions, actor, account_id)
         values = StatesValues.model_validate(command.values.unpack())

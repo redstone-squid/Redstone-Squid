@@ -1,5 +1,6 @@
 """Authoritative build collection views: moderation status and submitter ownership."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, NamedTuple, cast, override
 
@@ -17,7 +18,7 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode
+from squid.permissions.domain import Decision, PermissionNode, Reason
 from tests.unit.api.fakes import credential_nodes
 
 # This credential can read submissions but does not carry a moderation-view permission.
@@ -75,6 +76,10 @@ class PermissionRecorder(PermissionService):
     async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         self.calls.append((subject, node))
         return self.allowed
+
+    @override
+    async def decisions(self, subject: Actor, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
+        return tuple([Decision(str(node), await self.allows(subject, node), Reason.DEFAULT) for node in nodes])
 
 
 class Fakes(NamedTuple):

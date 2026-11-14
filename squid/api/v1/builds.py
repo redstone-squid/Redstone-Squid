@@ -47,7 +47,7 @@ from squid.builds.errors import (
     BuildRevisionRequiredError,
 )
 from squid.builds.models import Build
-from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
+from squid.core.errors import ValidationError
 from squid.edits.domain import EditCommand, LatestRevision, Revision
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
@@ -192,8 +192,7 @@ async def list_builds(
 
 async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:
     """Require permission to view unpublished submissions, including credential restrictions."""
-    if not await caller.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING):
-        raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
+    await caller.require(permissions, BUILD_SUBMISSION_VIEW_PENDING)
 
 
 def build_etag(build: Build) -> str:

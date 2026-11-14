@@ -20,6 +20,7 @@ from squid.core.errors import AuthenticationError, AuthorizationError, DomainErr
 from squid.minecraft_auth.application.crypto import PLAYER_TOKEN_PREFIX
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import CATALOGUE, Pattern, PermissionNode
+from squid.permissions.errors import CredentialPermissionDeniedError, PermissionDeniedError
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,11 +63,23 @@ class Caller:
         permission service. Changing an account's permissions therefore affects its
         existing keys without editing each key.
         """
-        if not self.credential_allows(node):
+        try:
+            await self.require(permissions, node)
+        except AuthenticationError, CredentialPermissionDeniedError, PermissionDeniedError:
             return False
-        if self.kind == "service" and self.account_id is None:
-            return True
-        return await permissions.allows(self.to_actor(), node)
+        return True
+
+    async def require(self, permissions: PermissionService, node: PermissionNode) -> None:
+        """Enforce credential and account authority, preserving anonymous 401 responses."""
+        try:
+            if not self.credential_allows(node):
+                raise CredentialPermissionDeniedError(node.name)  # noqa: TRY301 - both denial sources share anonymous handling
+            if self.kind != "service" or self.account_id is not None:
+                await permissions.require(self.to_actor(), node)
+        except (CredentialPermissionDeniedError, PermissionDeniedError) as error:
+            if self.kind == "anonymous":
+                raise AuthenticationError(error.message, public_context=error.public_context) from error
+            raise
 
     def credential_allows(self, node: PermissionNode) -> bool:
         """Whether the credential itself carries `node`, before its owner is consulted."""
@@ -115,8 +128,7 @@ def requires(node: PermissionNode | str) -> Callable[[ASGIConnection, BaseRouteH
     async def check(connection: ASGIConnection, _handler: BaseRouteHandler) -> None:
         caller = await current_caller(Request(connection.scope))
         permissions = connection.app.state.runtime.services.permissions
-        if not await caller.allows(permissions, required):
-            raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
+        await caller.require(permissions, required)
 
     return check
 

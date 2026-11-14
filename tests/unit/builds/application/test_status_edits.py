@@ -20,7 +20,7 @@ async def test_review_captures_status_and_checks_current_permission(status: Stat
     uow.builds = AsyncMock()
     uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=3, submission_status=Status.PENDING)
     permissions = AsyncMock(spec=PermissionService)
-    permissions.allows_in.return_value = True
+    permissions.require_in.return_value = None
     actor = Actor(account_id=1)
     command = EditCommand(
         BUILD_STATUS_EDIT, (Revision(build_target(7), 3),), EditValues.of({"submission_status": status})
@@ -30,8 +30,8 @@ async def test_review_captures_status_and_checks_current_permission(status: Stat
     assert prepared.before.unpack() == {"submission_status": Status.PENDING}
     assert prepared.after.unpack() == {"submission_status": status}
     permission = BUILD_SUBMISSION_APPROVE if status is Status.CONFIRMED else BUILD_SUBMISSION_REJECT
-    permissions.allows_in.assert_awaited_once_with(uow, actor, permission)
-    permissions.allows_in.return_value = False
+    permissions.require_in.assert_awaited_once_with(uow, actor, permission)
+    permissions.require_in.side_effect = AuthorizationError
     with pytest.raises(AuthorizationError):
         await handler.prepare(uow, actor, command)
 
@@ -57,7 +57,7 @@ async def test_undo_requires_the_original_decision_permission() -> None:
     uow.builds = AsyncMock()
     uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=4, submission_status=Status.DENIED)
     permissions = AsyncMock(spec=PermissionService)
-    permissions.allows_in.return_value = False
+    permissions.require_in.side_effect = AuthorizationError
     actor = Actor(account_id=1)
     command = EditCommand(
         BUILD_STATUS_EDIT,
@@ -67,4 +67,4 @@ async def test_undo_requires_the_original_decision_permission() -> None:
     )
     with pytest.raises(AuthorizationError):
         await BuildStatusEdit(permissions).prepare(uow, actor, command)
-    permissions.allows_in.assert_awaited_once_with(uow, actor, BUILD_SUBMISSION_REJECT)
+    permissions.require_in.assert_awaited_once_with(uow, actor, BUILD_SUBMISSION_REJECT)

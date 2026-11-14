@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ValidationError
+from squid.core.errors import AccountRequiredError, GuildContextRequiredError, ValidationError
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, Revision
 from squid.edits.fields import Aggregate, FieldCommand
@@ -41,8 +41,9 @@ class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, R
             return await uow.settings.flush_runtime_revision(row, expected)
 
         async def authorize(uow: SettingsEditUnitOfWork, actor: Actor, row: RuntimeSetting) -> None:
-            if actor.account_id is None or not await permissions.allows_in(uow, actor, SETTINGS_RUNTIME_EDIT):
-                raise AuthorizationError
+            if actor.account_id is None:
+                raise AccountRequiredError
+            await permissions.require_in(uow, actor, SETTINGS_RUNTIME_EDIT)
 
         async def audit(
             uow: SettingsEditUnitOfWork, actor: Actor, before: RuntimeSettings, after: RuntimeSettings
@@ -102,7 +103,7 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
 
         async def authorize(uow: SettingsEditUnitOfWork, actor: Actor, state: GuildEditState) -> None:
             if actor.guild_id != state.row.server_id:
-                raise AuthorizationError
+                raise GuildContextRequiredError
 
         super().__init__(
             Aggregate("guild-settings", load, lambda state: state.row.revision, flush), GuildSettings, authorize
@@ -128,9 +129,8 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
             nodes.add(SETTINGS_SERVER_EDIT)
         if "voting" in checked:
             nodes.add(SETTINGS_VOTING_EDIT)
-        for node in nodes:
-            if not await self._permissions.allows_in(uow, actor, node):
-                raise AuthorizationError
+        if nodes:
+            await self._permissions.require_in(uow, actor, *sorted(nodes, key=lambda node: node.name))
         for kind, configuration in after.voting.items():
             if configuration.preset is not None and (
                 configuration.preset.guild_id != guild_id

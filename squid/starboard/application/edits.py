@@ -5,7 +5,12 @@ from typing import Annotated, Protocol, cast
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
+from squid.core.errors import (
+    ConflictError,
+    GuildContextRequiredError,
+    NotFoundError,
+    ValidationError,
+)
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.edits.fields import Aggregate, FieldCommand
@@ -132,10 +137,9 @@ class StarboardOperations:
         self, uow: StarboardEditUnitOfWork, actor: Actor, guild_id: int, nodes: set[PermissionNode]
     ) -> None:
         if actor.guild_id != guild_id:
-            raise AuthorizationError
-        for node in nodes:
-            if not await self._permissions.allows_in(uow, actor, node):
-                raise AuthorizationError
+            raise GuildContextRequiredError
+        if nodes:
+            await self._permissions.require_in(uow, actor, *sorted(nodes, key=lambda node: node.name))
 
     @staticmethod
     async def board_values(uow: StarboardEditUnitOfWork, row: StarboardConfig) -> BoardValues:
@@ -159,7 +163,7 @@ class StarboardEdit(FieldCommand[StarboardEditUnitOfWork, StarboardConfig, Board
 
         async def authorize_root(uow: StarboardEditUnitOfWork, actor: Actor, row: StarboardConfig) -> None:
             if actor.guild_id != row.guild_id:
-                raise AuthorizationError
+                raise GuildContextRequiredError
 
         FieldCommand.__init__(
             self, Aggregate("starboard", load, lambda row: row.revision, flush), BoardValues, authorize_root

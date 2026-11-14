@@ -20,7 +20,7 @@ from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.builds.models import Build
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, InvalidStateError
+from squid.core.errors import AccountRequiredError, InvalidStateError
 from squid.core.sentinel import UNSET
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
@@ -167,7 +167,7 @@ class BuildService:
     ) -> Build:
         """Prepare an edit, then recheck current authority and revision before writing."""
         if actor.subject.account_id is None:
-            raise AuthorizationError
+            raise AccountRequiredError
         build = await self._get_required(build_id)
         await self.authorize_edit(actor, build)
         self._check_revision(build, expected_revision)
@@ -203,8 +203,8 @@ class BuildService:
             and actor.subject.account_id is not None
             and build.submitter_account_id == actor.subject.account_id
         )
-        if not owns and not await self._permissions.allows(actor.subject, BUILD_SUBMISSION_EDIT):
-            raise AuthorizationError
+        if not owns:
+            await self._permissions.require(actor.subject, BUILD_SUBMISSION_EDIT)
 
     async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: BuildEditor, build: Build) -> None:
         """Check edit permission using the caller's transaction and current build state."""
@@ -217,9 +217,7 @@ class BuildService:
             and build.submitter_account_id == actor.subject.account_id
         )
         if not owns:
-            capabilities = await self._permissions.capabilities_in(uow, actor.subject, (BUILD_SUBMISSION_EDIT,))
-            if BUILD_SUBMISSION_EDIT.name not in capabilities:
-                raise AuthorizationError
+            await self._permissions.require_in(uow, actor.subject, BUILD_SUBMISSION_EDIT)
 
     async def prepare_edit(self, actor: BuildEditor, build: Build, patch: BuildEditPatch) -> Build:
         """Apply an authorized patch and prepare derived values without saving.

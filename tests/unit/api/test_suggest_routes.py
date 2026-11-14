@@ -1,5 +1,6 @@
 """Typeahead route tests."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import cast, override
 
@@ -12,7 +13,7 @@ from squid.api.v1.suggest import list_sources, suggest
 from squid.core.actors import Actor
 from squid.core.errors import NotFoundError
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode
+from squid.permissions.domain import Decision, PermissionNode, Reason
 from squid.suggestions.application import (
     Candidate,
     SuggestionRegistry,
@@ -67,6 +68,10 @@ class PermissionAnswer(PermissionService):
     async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         del subject
         return self.allowed and str(getattr(node, "name", node)) == VIEW_PENDING
+
+    @override
+    async def decisions(self, subject: Actor, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
+        return tuple([Decision(str(node), await self.allows(subject, node), Reason.DEFAULT) for node in nodes])
 
 
 @dataclass(frozen=True, slots=True)

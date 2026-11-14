@@ -11,7 +11,7 @@ from squid.artifacts.application import ArtifactStore
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.builds.domain import BuildDraft
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ConflictError, JSONValue, NotFoundError
+from squid.core.errors import AccountRequiredError, AuthorizationError, ConflictError, JSONValue, NotFoundError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
@@ -172,10 +172,8 @@ class SubmissionInferenceRuns:
             owner, inputs, completed, candidates = retained
             if inputs.get("purpose") != "submission":
                 raise AuthorizationError
-            if actor.account_id != owner and not (
-                self._permissions is not None and await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
-            ):
-                raise AuthorizationError
+            if actor.account_id != owner:
+                await self._require_staff(uow, actor)
             if completed:
                 return candidates
         bundle = self._codec.decode_bundle(inputs["bundle"])
@@ -209,21 +207,23 @@ class SubmissionInferenceRuns:
             if result is None:
                 raise NotFoundError
             owner, candidates = result
-            if actor.account_id != owner and not (
-                self._permissions is not None and await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
-            ):
-                raise AuthorizationError
+            if actor.account_id != owner:
+                await self._require_staff(uow, actor)
             return candidates
+
+    async def _require_staff(self, uow: PermissionUnitOfWork, actor: Actor) -> None:
+        if self._permissions is None:
+            message = "Staff access to inferred submissions is not configured for this service."
+            raise AuthorizationError(message)
+        await self._permissions.require_in(uow, actor, BUILD_SUBMISSION_EDIT)
 
     async def list_active(self, actor: Actor, *, inbox: bool = False) -> tuple[UUID, ...]:
         """List retained runs for the actor, or for all accounts after a staff check."""
         async with self._uow_factory() as uow:
             if actor.account_id is None:
-                raise AuthorizationError
-            if inbox and not (
-                self._permissions is not None and await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
-            ):
-                raise AuthorizationError
+                raise AccountRequiredError
+            if inbox:
+                await self._require_staff(uow, actor)
             return await uow.inference_runs.list_active(None if inbox else actor.account_id)
 
     async def public_status(self, run_id: UUID) -> InferenceStatus | None:

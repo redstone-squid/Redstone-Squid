@@ -222,6 +222,18 @@ class AuthorizationError(DomainError):
     default_title = tr(t"core-errors-forbidden = Forbidden")
 
 
+class AccountRequiredError(AuthorizationError):
+    default_message = tr(t"core-account-required-action = A linked account is required for this action.")
+
+
+class OwnershipRequiredError(AuthorizationError):
+    default_message = tr(t"core-owner-required-action = Only the owner can perform this action.")
+
+
+class GuildContextRequiredError(AuthorizationError):
+    default_message = tr(t"core-guild-required-action = This action must be performed in the server it belongs to.")
+
+
 class RateLimitedError(DomainError):
     """A caller exceeded a rate limit; retry_after is the wait in seconds."""
 

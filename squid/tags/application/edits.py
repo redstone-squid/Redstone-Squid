@@ -14,7 +14,7 @@ from squid.builds.application.restrictions import RestrictionUnitOfWork
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
+from squid.core.errors import ConflictError, NotFoundError, OwnershipRequiredError, ValidationError
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
 from squid.edits.fields import Aggregate, FieldCommand, PreparedFields
@@ -98,7 +98,7 @@ class ShowcaseAssignmentEdit(FieldCommand[TagEditUnitOfWork, AssignmentRoot, Sho
         async def authorize(uow: TagEditUnitOfWork, actor: Actor, root: AssignmentRoot) -> None:
             account_id = actor.require_account_id()
             if root.build.submitter_account_id != account_id:
-                raise AuthorizationError
+                raise OwnershipRequiredError
             if not await uow.accounts.has_current_consent(account_id):
                 raise ConsentRequiredError(account_id=account_id)
             root.actor_id = account_id
@@ -196,8 +196,7 @@ class TagAliasEdit(FieldCommand[TagAliasUnitOfWork, TagDefinition, AliasValues])
             return definition
 
         async def authorize(uow: TagAliasUnitOfWork, actor: Actor, root: TagDefinition) -> None:
-            if not await permissions.allows_in(uow, actor, RESTRICTION_ALIAS_CREATE):
-                raise AuthorizationError
+            await permissions.require_in(uow, actor, RESTRICTION_ALIAS_CREATE)
 
         async def flush(uow: TagAliasUnitOfWork, root: TagDefinition, expected: Revision) -> Revision:
             return await uow.tags.flush_definition_revision(root, expected)
@@ -263,7 +262,7 @@ class TagProposalEdit(FieldCommand[TagEditUnitOfWork, ProposalRoot, ProposalValu
         async def authorize(uow: TagEditUnitOfWork, actor: Actor, root: ProposalRoot) -> None:
             account_id = actor.require_account_id()
             if root.definition is not None and root.definition.created_by_account_id != account_id:
-                raise AuthorizationError
+                raise OwnershipRequiredError
             if not await uow.accounts.has_current_consent(account_id):
                 raise ConsentRequiredError(account_id=account_id)
             root.actor_id = account_id
@@ -379,8 +378,7 @@ class TagModerationEdit(FieldCommand[TagEditUnitOfWork, TagDefinition, Moderatio
         }.get(after.status)
         if node is None:
             raise ValidationError
-        if not await self._permissions.allows_in(uow, actor, node):
-            raise AuthorizationError
+        await self._permissions.require_in(uow, actor, node)
         return after
 
     async def prepare(
