@@ -19,7 +19,7 @@ class InstantUTC(TypeDecorator[Instant]):
     in-memory value is unchanged, so exact equality after a round trip is not guaranteed.
 
     Adapted from Advanced Alchemy's ``DateTimeUTC`` type. See
-    ``THIRD_PARTY_LICENSES/advanced-alchemy.txt`` for its MIT license.
+    ``LICENSE-advanced-alchemy.txt`` beside this module for its MIT license.
     """
 
     impl = DateTime(timezone=True)
