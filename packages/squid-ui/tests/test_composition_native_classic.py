@@ -20,9 +20,10 @@ from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
+from squid_ui.presentations import Alternative
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Paginate, Truncate
-from squid_ui.target_types import DiscordAdapter
+from squid_ui.target_types import DiscordAdapter, Renderable
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-classic", "1")
 TARGET = classic_target(ADAPTER)
@@ -143,3 +144,47 @@ def test_classic_native_structures_report_the_v2_capability_boundary() -> None:
     with pytest.raises(JointUnsupportedError) as error:
         plan(sl.region(native.Card(title="Title"), key="r", title="R"), target=target)
     assert "native classic embed on another target" in str(error.value.diagnostics)
+
+
+@pytest.mark.parametrize(
+    "target", [TARGET, components_v2_target(ADAPTER), sl.html.target()], ids=lambda target: target.id
+)
+def test_checked_alternatives_select_a_supported_native_layout(target: Target[Any, Any, Any, Any]) -> None:
+    choices: tuple[Alternative[Any], ...] = (
+        sl.alternative(
+            native.Panel((native.Text("Body"),)),
+            key="v2",
+            fidelity=sl.equivalent(),
+            correspondence=(sl.corresponds(sl.ref("@0", "@0"), "body"),),
+        ),
+        sl.alternative(
+            native.Card((native.Text("Body"),)),
+            key="classic",
+            fidelity=sl.equivalent(),
+            correspondence=(sl.corresponds(sl.ref("@0", "@description", "@0"), "body"),),
+        ),
+        sl.alternative(sl.paragraph("Body", key="body"), key="portable", fidelity=sl.equivalent(), preference=1),
+    )
+    document = sl.alternatives(*choices, content=sl.paragraph("Body", key="body"), key="choice")
+    result = plan(document, target=target, strict=True)
+    assert result.allocation is not None
+    assert "Body" in scene.Codec.dumps(result.scene)
+    if isinstance(result.scene.body, scene.ClassicMessage):
+        assert result.scene.body.embeds[0].description == "Body"
+    elif isinstance(result.scene.body, scene.ComponentsV2):
+        assert isinstance(result.scene.body.children[0], scene.Panel)
+
+
+def test_canonical_content_does_not_need_a_realization_on_the_selected_target() -> None:
+    source: Renderable[Any] = native.Text("Body")
+    choice: Alternative[Any] = sl.alternative(
+        sl.paragraph("Body", key="body"),
+        key="html",
+        fidelity=sl.equivalent(),
+        correspondence=(sl.corresponds("body", "@0"),),
+    )
+    document = sl.alternatives(choice, content=source, key="choice")
+    target: Target[Any, Any, Any, Any] = sl.html.target()
+    result = plan(document, target=target, strict=True)
+    assert result.allocation is not None
+    assert "Body" in sl.html.Renderer().draw(result.scene, plan=result)

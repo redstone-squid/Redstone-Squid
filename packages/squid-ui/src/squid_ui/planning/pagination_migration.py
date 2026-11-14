@@ -14,7 +14,7 @@ from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
-from squid_ui.planning.semantics import UnsupportedSemanticError
+from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Condense, Drop, Never, Paginate, Spill, Truncate
@@ -292,11 +292,19 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 return replace(node, primary=visit(node.primary), alternates=tuple(map(visit, node.alternates)))
             case Alternatives():
                 pageable = True
-                return replace(
-                    node,
-                    content=visit(node.content),
-                    choices=tuple(replace(choice, node=visit(choice.node)) for choice in node.choices),
-                )
+                # Canonical content describes identity; it need not render on this target.
+                semantic_graph(node.content)
+                choices = []
+                limitations = []
+                for choice in node.choices:
+                    try:
+                        choices.append(replace(choice, node=visit(choice.node)))
+                    except UnsupportedSemanticError as error:
+                        limitations.append(error.kind)
+                if not choices:
+                    msg = "no checked presentation supports this target: " + "; ".join(dict.fromkeys(limitations))
+                    raise UnsupportedSemanticError(msg)
+                return replace(node, choices=tuple(choices))
             case _:
                 raise UnsupportedSemanticError(type(node).__name__)
 
