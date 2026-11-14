@@ -736,6 +736,8 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         ui.control(ui.key_for("guided-search"))
         assert "## Search results" in ui.texts()
         assert screen._results is results
+        for key in ("edit-0", "remove-0", "edit-1", "remove-1"):
+            ui.control(ui.key_for(key))
         await ui.press(ui.key_for("field"))
         assert screen._guided is editor
         assert screen._results is results

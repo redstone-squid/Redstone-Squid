@@ -207,7 +207,7 @@ async def test_picker_toggles_are_exclusive_and_keep_query_controls(monkeypatch:
             )
         )
     )
-    screen = editor()
+    screen = editor("width:3 AND height:5 AND depth:7")
     async with stage(screen, owner=object()) as ui:
         monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
         monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
@@ -215,6 +215,8 @@ async def test_picker_toggles_are_exclusive_and_keep_query_controls(monkeypatch:
             await ui.press(ui.key_for(button))
             assert screen.panel == panel
             ui.control(ui.key_for("advanced"))
+            for key in ("edit-0", "remove-0", "edit-1", "remove-1", "next-clauses"):
+                ui.control(ui.key_for(key))
             assert ui.control(ui.key_for("field")).payload["style"] == (3 if panel == "fields" else 2)
             assert ui.control(ui.key_for("sort")).payload["style"] == (3 if panel == "sort" else 2)
             assert not any(key.endswith(("picker-back", "relevance")) for key in ui.root.snapshot().handler_keys)
@@ -230,6 +232,16 @@ async def test_picker_toggles_are_exclusive_and_keep_query_controls(monkeypatch:
         assert screen.panel == "sort"
         assert screen.picker is not None
         assert screen.picker.picked == ()
+        picker = screen.picker
+        await ui.press(ui.key_for("next-clauses"))
+        form = await ui.press_for_form(ui.key_for("edit-2"))
+        await form.submit({"value": "8", "operator": "0"})
+        assert screen.query == "width:3 AND height:5 AND depth:8"
+        assert screen.picker is picker
+        await ui.press(ui.key_for("remove-2"))
+        assert screen.query == "width:3 AND height:5"
+        assert screen.picker is picker
+        ui.control(ui.key_for("edit-0"))
         await ui.press(ui.key_for("sort"))
         assert screen.panel is None
         assert screen.sort == "-width"

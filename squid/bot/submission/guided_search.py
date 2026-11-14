@@ -109,9 +109,6 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [self._controls()]
-        if self.picker is not None:
-            nodes.extend((sl.heading(self.picker_title), self.picker))
-            return tuple(nodes)
         clauses = self.clauses
         start = self.clause_page * 2
         for index, item in enumerate(clauses[start : start + 2], start):
@@ -134,6 +131,9 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                     key="clause-pages",
                 )
             )
+        if self.picker is not None:
+            nodes.extend((sl.heading(self.picker_title), self.picker))
+            return tuple(nodes)
         if self.selected is not None:
             field = self.selected
             field_label = field.name.replace("_", " ").title()
