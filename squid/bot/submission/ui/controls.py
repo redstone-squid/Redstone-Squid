@@ -11,14 +11,62 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.routes._root import _feature_group
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import drafts, inference, opening, recalculation
+from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import text_node
+from squid.bot.utils.permissions import allows
 from squid.core.i18n import tr
+from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import (
+    RESTRICTION_ALIAS_CREATE,
+    TAG_PROPOSAL_APPROVE,
+    TAG_PROPOSAL_ARCHIVE,
+    TAG_PROPOSAL_LIST,
+    TAG_PROPOSAL_REJECT,
+)
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 
 builds, _builds_created = _feature_group("builds")
+
+
+@builds.route("{build_id:int}:tags")
+async def build_tags(interaction: Interaction[RedstoneSquid], build_id: int) -> None:
+    request = await sd.request(interaction)
+    services = interaction.client.services
+    account_id = await ensure_consented_account(request, services.accounts)
+    if account_id is None:
+        return
+
+    async def authorize(node: PermissionNode) -> bool:
+        return await allows(request, node)
+
+    capabilities = frozenset(
+        [
+            node
+            for node in (
+                RESTRICTION_ALIAS_CREATE,
+                TAG_PROPOSAL_APPROVE,
+                TAG_PROPOSAL_ARCHIVE,
+                TAG_PROPOSAL_LIST,
+                TAG_PROPOSAL_REJECT,
+            )
+            if await authorize(node)
+        ]
+    )
+    await request.respond(
+        TagsScreen(
+            services.tags,
+            services.restrictions,
+            services.edits,
+            partial(request.client.actors.resolve, request, refresh=True),
+            build_id=build_id,
+            actor_account_id=account_id,
+            capabilities=capabilities,
+            authorize=authorize,
+        )
+    )
 
 
 @builds.route("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))

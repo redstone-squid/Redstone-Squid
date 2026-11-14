@@ -56,15 +56,19 @@ def starboard_setting_candidates() -> tuple[Candidate, ...]:
 class PermissionRoleProvider:
     """Suggest permission role slugs visible from the calling guild."""
 
-    def __init__(self, roles: PermissionRoles) -> None:
+    def __init__(self, roles: PermissionRoles, *, identities: bool = False) -> None:
         self._roles = roles
+        self._identities = identities
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         guild_id = int(request.context["guild_id"])
         return tuple(
             Candidate.create(
-                role.slug,
-                description=f"rank {role.rank}" + (" · protected" if role.protected else ""),
+                str(role.id) if self._identities else role.slug,
+                label=role.name or role.slug,
+                description=f"{role.slug} · rank {role.rank} · "
+                + ("global" if role.guild_id is None else "this server"),
+                terms=(role.name, role.slug),
                 kind="permission_role",
             )
             for role in await self._roles.roles(guild_id=guild_id)

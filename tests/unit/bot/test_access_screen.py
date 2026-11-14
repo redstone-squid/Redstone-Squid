@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -21,6 +22,7 @@ from squid.edits.domain import (
 from squid.permissions.application.administration import PermissionAdministrationService
 from squid.permissions.application.edits import PERMISSION_GRAPH, ROLE_DELETE
 from squid.permissions.domain.catalogue import PERM_GRANT_GUILD
+from squid.permissions.models import PermissionRole
 from squid_ui.runtime import transaction
 from tests.support.edits import bound_revisions
 
@@ -80,3 +82,45 @@ async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_hist
         await screen._decide_delete(event, "confirm")
     assert runner.execute.call_args.args[0].kind == ROLE_DELETE
     assert not screen.edits.undoable
+
+
+async def test_selected_role_assignment_does_not_resolve_a_new_role_with_the_same_slug() -> None:
+    admin = AsyncMock(spec=PermissionAdministrationService)
+    screen = AccessScreen(
+        admin,
+        AsyncMock(spec=EditRunner),
+        guild_id=42,
+        account_id=2,
+        discord_role_id=None,
+        subject_label="Member",
+        capabilities=frozenset(),
+        actor=AsyncMock(return_value=Actor(account_id=1)),
+        authorize=AsyncMock(return_value=True),
+    )
+    saved = AsyncMock()
+    screen._save = saved
+    event = Submission()
+    event.values = {"operation": "assign", "scope": "guild", "reason": "", "slug": "replacement"}
+    await screen._change_assignment(
+        cast(sl.SubmitEvent, event), base_revision=7, role=PermissionRole(id=15, slug="original", name="Original")
+    )
+    admin.role.assert_not_called()
+    assert saved.call_args.args[1].role_id == 15
+    assert saved.call_args.args[2] == 7
+
+
+async def test_selected_rank_change_rechecks_permission() -> None:
+    runner = AsyncMock(spec=EditRunner)
+    screen = AccessScreen(
+        AsyncMock(spec=PermissionAdministrationService),
+        runner,
+        guild_id=42,
+        account_id=2,
+        discord_role_id=None,
+        subject_label="Member",
+        capabilities=frozenset(),
+        actor=AsyncMock(return_value=Actor(account_id=1)),
+        authorize=AsyncMock(return_value=False),
+    )
+    await screen._rank_selected(15, 7, cast(sd.SubmitEvent, Submission()))
+    runner.execute.assert_not_called()

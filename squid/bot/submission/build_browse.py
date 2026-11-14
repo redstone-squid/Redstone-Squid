@@ -249,7 +249,11 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self._show_schematics = not self._show_schematics
 
     def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
-        actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = []
+        actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = [
+            sl.routed_action_control(
+                tr(t"build-browse-tags = Build tags"), build_controls.build_tags.id(build_id=self._build_id), key="tags"
+            )
+        ]
         if self._capabilities.edit or (
             build.submission_status is Status.PENDING
             and self._actor_account_id is not None

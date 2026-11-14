@@ -162,6 +162,16 @@ def _guild_sources(
                 kind_label="permission_role",
             )
         )
+        sources.append(
+            SuggestionSource(
+                id="permission_role_ids",
+                provider=PermissionRoleProvider(permission_roles, identities=True),
+                context_keys=frozenset({"guild_id"}),
+                kind=SourceKind.ENUMERABLE,
+                value_type=ValueType.INTEGER,
+                kind_label="permission_role",
+            )
+        )
     return tuple(sources)
 
 

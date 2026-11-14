@@ -1,6 +1,7 @@
 """Canonical permission and internal-role administration workspace."""
 
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from functools import partial
 from typing import Any, override
 
@@ -8,6 +9,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.edit_controller import EditController
+from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -47,6 +49,7 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE_GUILD,
 )
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
+from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
@@ -62,6 +65,8 @@ class AccessScreen(sd.Screen):
     """
 
     policy = sd.ResponseSpec(nav=sd.navigation_controls.page_jump_nav, timeout=300, session=sd.SessionSpec("access"))
+    _selected_pattern: tuple[str, int] | None = sl.state(None, persist=False)
+    _selected_role: tuple[PermissionRole, int] | None = sl.state(None, persist=False)
     _revision: int = sl.state(default=0, persist=False)
     _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
@@ -132,9 +137,38 @@ class AccessScreen(sd.Screen):
         if PERM_AUDIT_VIEW in self._capabilities:
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
             tabs.append(sp.Tab("audit", tr(t"access-view-audit = Audit"), self._audit(audit)))
+        if self._may_grant or self._may_manage_roles:
+            tabs.append(
+                sp.Tab(
+                    "advanced",
+                    tr(t"access-advanced = Advanced entry"),
+                    (
+                        sl.action_controls(
+                            self._may_grant
+                            and sl.form(
+                                tr(t"access-advanced-rule = Enter a permission pattern"),
+                                self._rule_form(),
+                                key="advanced-rule",
+                                on_submit=partial(self._change_rule, base_revision=self._revision),
+                            ),
+                            self._may_manage_roles
+                            and sl.form(
+                                tr(t"access-advanced-role = Enter role slugs"),
+                                self._edit_role_form(),
+                                key="advanced-role",
+                                on_submit=partial(self._edit_role, base_revision=self._revision),
+                            ),
+                            key="advanced-actions",
+                        ),
+                    ),
+                )
+            )
         subject_label = self._subject_label
         self._tabs = sp.Tabs(
-            tabs, key="access-tabs", title=md_tr(t"access-view-access-for = Access for {subject_label}")
+            tabs,
+            key="access-tabs",
+            title=md_tr(t"access-view-access-for = Access for {subject_label}"),
+            initial_state=None if self._tabs is None else self._tabs.machine_state,
         )
 
     @property
@@ -182,25 +216,72 @@ class AccessScreen(sd.Screen):
     def _subject_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if not (self._may_grant or self._may_manage_roles):
             return ()
-        return (
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.action_controls(
                 self._may_grant
-                and sl.form(
-                    tr(t"access-view-change-direct-rule = Change direct rule"),
-                    self._rule_form(),
-                    key="rule",
-                    on_submit=partial(self._change_rule, base_revision=self._revision),
+                and sl.action_control(
+                    tr(t"access-choose-permission = Choose permission"),
+                    self._choose_permission,
+                    key="choose-permission",
                 ),
                 self._may_manage_roles
-                and sl.form(
-                    tr(t"access-view-change-role-assignment = Change role assignment"),
-                    self._assignment_form(),
-                    key="assignment",
-                    on_submit=partial(self._change_assignment, base_revision=self._revision),
+                and sl.action_control(
+                    tr(t"access-choose-role = Choose internal role"), self._choose_role, key="choose-role"
                 ),
                 key="subject-forms",
-            ),
-        )
+            )
+        ]
+        if self._may_grant and self._selected_pattern is not None:
+            pattern, revision = self._selected_pattern
+            nodes.extend(
+                (
+                    sl.note(pattern),
+                    sl.form(
+                        tr(t"access-view-change-direct-rule = Change direct rule"),
+                        _without(_RuleForm().spec(), "pattern"),
+                        key="rule",
+                        on_submit=partial(self._change_rule, base_revision=revision, pattern=pattern),
+                    ),
+                )
+            )
+        if self._may_manage_roles and self._selected_role is not None:
+            role, revision = self._selected_role
+            nodes.extend(
+                (
+                    sl.note(role.name),
+                    sl.form(
+                        tr(t"access-view-change-role-assignment = Change role assignment"),
+                        _without(_AssignmentForm().spec(), "slug"),
+                        key="assignment",
+                        on_submit=partial(self._change_assignment, base_revision=revision, role=role),
+                    ),
+                )
+            )
+        return tuple(nodes)
+
+    async def _choose_permission(self, event: sd.PressEvent) -> None:
+        revision = self._revision
+
+        async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
+            self._selected_pattern = (item.value, revision)
+            await self._refresh()
+
+        await pick(event, "permission_patterns", tr(t"access-choose-permission = Choose permission"), selected)
+
+    async def _choose_role(self, event: sd.PressEvent) -> None:
+        revision = self._revision
+
+        async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
+            role = next(
+                (role for role in await self._admin.roles(guild_id=self._guild_id) if str(role.id) == item.value), None
+            )
+            if role is None:
+                await _event.notice(tr(t"access-role-unavailable = That role is no longer available."))
+                return
+            self._selected_role = (role, revision)
+            await self._refresh()
+
+        await pick(event, "permission_role_ids", tr(t"access-choose-role = Choose internal role"), selected)
 
     @staticmethod
     def _rule_form() -> sl.forms.FormSpec:
@@ -210,17 +291,17 @@ class AccessScreen(sd.Screen):
     def _assignment_form() -> sl.forms.FormSpec:
         return _AssignmentForm().spec()
 
-    @staticmethod
     def _role_browser(
+        self,
         roles: tuple[PermissionRole, ...],
     ) -> sp.Browser[PermissionRole, sl.ComponentsV2Target, sd.Request]:
         return sp.Browser(
             sl.sources.list_source(roles),
             key="roles",
             identity=lambda role: str(role.id),
-            label=lambda role: role.slug,
+            label=lambda role: role.name,
             summary=_role_summary,
-            detail=lambda role: _role_detail(role, roles),
+            detail=lambda role: self._role_editor(role, roles),
             page_size=15,
             title=tr(t"access-view-internal-roles = Internal roles"),
             empty=tr(t"access-role-list-empty = No internal roles are visible in this server."),
@@ -235,15 +316,113 @@ class AccessScreen(sd.Screen):
                     key="create-role",
                     on_submit=partial(self._create_role, base_revision=self._revision),
                 ),
-                sl.form(
-                    tr(t"access-view-edit-internal-role = Edit internal role"),
-                    self._edit_role_form(),
-                    key="edit-role",
-                    on_submit=partial(self._edit_role, base_revision=self._revision),
-                ),
                 key="role-forms",
             ),
         )
+
+    def _role_editor(
+        self, role: PermissionRole, roles: tuple[PermissionRole, ...]
+    ) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        revision = self._revision
+        return (
+            _role_detail(role, roles),
+            sl.action_controls(
+                sl.form(
+                    tr(t"access-view-set-rank = Set rank"),
+                    sl.forms.FormSpec[sd.Request](
+                        role.name,
+                        (
+                            sl.forms.IntField(
+                                key="rank",
+                                label=tr(t"access-view-management-rank = Management rank"),
+                                minimum=0,
+                                maximum=999,
+                                default=role.rank,
+                            ),
+                        ),
+                    ),
+                    key="rank",
+                    on_submit=partial(self._rank_selected, role.id, revision),
+                ),
+                *(
+                    sl.action_control(label, partial(self._pick_role_value, role, operation, revision), key=operation)
+                    for operation, label in _ROLE_ACTIONS
+                    if operation not in {"rank", "delete"}
+                ),
+                sl.action_control(
+                    tr(t"access-view-delete-role = Delete role"),
+                    partial(self._delete_selected, role, revision),
+                    key="delete",
+                    tone=sl.Tone.DANGER,
+                ),
+                key="role-actions",
+            ),
+        )
+
+    async def _rank_selected(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
+        if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
+            return
+        await self._save(
+            RANK_EDIT,
+            RankValues(role_id=role_id, rank=int(str(event.values["rank"]))),
+            revision,
+            tr(t"access-view-internal-role-updated = Internal role updated."),
+        )
+
+    async def _pick_role_value(self, role: PermissionRole, operation: str, revision: int, event: sd.PressEvent) -> None:
+        composing = operation in {"compose", "decompose"}
+
+        async def selected(source: sd.ActionEvent, item: Suggestion) -> None:
+            if not await self._authorize_mutation(source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
+                return
+            label = tr(t"access-view-internal-role-updated = Internal role updated.")
+            if composing:
+                included = next(
+                    (role for role in await self._admin.roles(guild_id=self._guild_id) if str(role.id) == item.value),
+                    None,
+                )
+                if included is None:
+                    await source.notice(tr(t"access-role-unavailable = That role is no longer available."))
+                    return
+                await self._save(
+                    INCLUDE_EDIT,
+                    IncludeValues(role_id=role.id, included_id=included.id, present=operation == "compose"),
+                    revision,
+                    label,
+                )
+            else:
+                await self._save(
+                    PATTERN_EDIT,
+                    PatternValues(
+                        role_id=role.id,
+                        pattern=item.value,
+                        mode={"include": INCLUDE_MODE, "exclude": EXCLUDE_MODE}.get(operation),
+                    ),
+                    revision,
+                    label,
+                )
+
+        await pick(
+            event,
+            "permission_role_ids" if composing else "permission_patterns",
+            role.name,
+            selected,
+            confirm=dict(_ROLE_ACTIONS)[operation],
+        )
+
+    async def _delete_selected(self, role: PermissionRole, revision: int, _event: sd.PressEvent) -> None:
+        self._request_delete(role, revision)
+
+    def _request_delete(self, role: PermissionRole, revision: int) -> None:
+        self._pending_delete = (role.slug, role.id, revision)
+        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
+            tr(t"access-role-delete-warning = Deleting an internal role removes every assignment of it."),
+            (
+                sp.DecisionOption("confirm", tr(t"access-view-delete-role = Delete role"), sl.Tone.DANGER),
+                sp.DecisionOption("cancel", tr(t"access-cancel = Cancel")),
+            ),
+            key="delete-role",
+        ).build_component(on_decide=self._decide_delete)
 
     @staticmethod
     def _create_role_form() -> sl.forms.FormSpec:
@@ -293,44 +472,49 @@ class AccessScreen(sd.Screen):
             values.edit_values(), label
         )
 
-    async def _change_rule(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
+    async def _change_rule(
+        self, event: sl.SubmitEvent, *, base_revision: int | None = None, pattern: str | None = None
+    ) -> None:
         if not await self._authorize_mutation(event, PERM_GRANT_GUILD, PERM_GRANT_GLOBAL):
             return
-        form = _RuleForm.from_submission(event)
-        effect = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}.get(form.operation)
+        effect = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}.get(
+            str(event.values["operation"])
+        )
         label = tr(t"access-view-direct-permission-rule-updated = Direct permission rule updated.")
         await self._save(
             GRANT_EDIT,
             GrantValues(
-                pattern=form.pattern,
+                pattern=pattern or str(event.values["pattern"]),
                 effect=effect,
                 account_id=self._account_id,
                 discord_role_id=self._discord_role_id,
                 guild_id=self._guild_id,
-                scope_guild_id=_scope(form.scope, self._guild_id),
-                reason=form.reason or None,
+                scope_guild_id=_scope(str(event.values["scope"]), self._guild_id),
+                reason=str(event.values.get("reason") or "") or None,
             ),
             base_revision,
             label,
         )
         await event.notice(label)
 
-    async def _change_assignment(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
+    async def _change_assignment(
+        self, event: sl.SubmitEvent, *, base_revision: int | None = None, role: PermissionRole | None = None
+    ) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        form = _AssignmentForm.from_submission(event)
-        role = await self._admin.role(form.slug, guild_id=self._guild_id)
+        if role is None:
+            role = await self._admin.role(str(event.values["slug"]), guild_id=self._guild_id)
         label = tr(t"access-view-internal-role-assignment-updated = Internal role assignment updated.")
         await self._save(
             ASSIGNMENT_EDIT,
             AssignmentValues(
                 role_id=role.id,
-                present=form.operation == "assign",
+                present=event.values["operation"] == "assign",
                 account_id=self._account_id,
                 discord_role_id=self._discord_role_id,
                 guild_id=self._guild_id,
-                scope_guild_id=_scope(form.scope, self._guild_id),
-                reason=form.reason or None,
+                scope_guild_id=_scope(str(event.values["scope"]), self._guild_id),
+                reason=str(event.values.get("reason") or "") or None,
             ),
             base_revision,
             label,
@@ -364,15 +548,7 @@ class AccessScreen(sd.Screen):
         operation, slug, value = form.operation, form.slug, form.value or ""
         role = await self._admin.role(slug, guild_id=self._guild_id)
         if operation == "delete":
-            self._pending_delete = (slug, role.id, self._revision if base_revision is None else base_revision)
-            self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-                tr(t"access-role-delete-warning = Deleting an internal role removes every assignment of it."),
-                (
-                    sp.DecisionOption("confirm", tr(t"access-view-delete-role = Delete role"), sl.Tone.DANGER),
-                    sp.DecisionOption("cancel", tr(t"access-cancel = Cancel")),
-                ),
-                key="delete-role",
-            ).build_component(on_decide=self._decide_delete)
+            self._request_delete(role, self._revision if base_revision is None else base_revision)
             return
         if not value:
             await event.notice(tr(t"access-value-required = This operation needs a value."))
@@ -420,6 +596,12 @@ class AccessScreen(sd.Screen):
                 return True
         await event.notice(tr(t"access-change-forbidden = You are no longer allowed to change access controls."))
         return False
+
+
+def _without(form: sl.forms.FormSpec, key: str) -> sl.forms.FormSpec:
+    return replace(
+        form, items=tuple(item for item in form.items if not isinstance(item, sl.forms.FormField) or item.key != key)
+    )
 
 
 def _scope_field() -> sl.forms.ChoiceField[str]:

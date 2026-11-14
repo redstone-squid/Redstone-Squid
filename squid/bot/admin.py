@@ -57,7 +57,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         options={
             "build_id": sd.Option(
                 name=tr(t"command-tags-build-id-name = build"),
-                description=tr(t"command-tags-build-id-help = …"),
+                description=tr(t"command-tags-build-id-help = Choose a build by name to apply tags to it"),
                 autocomplete=suggests("builds"),
             )
         },

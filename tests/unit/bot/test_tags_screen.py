@@ -40,7 +40,7 @@ from squid.tags.application.edits import (
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_ui.runtime import transaction
-from squid_ui.testing import labels
+from squid_ui.testing import RecordingResponder, labels
 from tests.support.edits import bound_revisions
 
 
@@ -312,3 +312,18 @@ async def test_moderation_discards_only_history_for_its_tag() -> None:
         await screen._decide(cast(Any, TransitionEvent(NoticeEvent())), "confirm")
     assert len(screen.edits.undoable) == 1
     assert screen.edits.undoable[0].receipt.targets == frozenset({tag_target(1).identity})
+
+
+@pytest.mark.parametrize(("value", "expected"), [(True, "true"), (2.5, "2.5"), ("compact", "compact")])
+async def test_selected_tag_value_uses_the_captured_build_and_revision(value: object, expected: str) -> None:
+    screen, tags, _ = make_screen()
+    await screen.on_load()
+    event = sl.SubmitEvent(
+        context=None, actor=sl.interactions.Actor("42"), responder=RecordingResponder(), values={"value": value}
+    )
+    with transaction():
+        await screen._apply_selected(tags.published, 42, 1, cast(Any, event))
+    assert tags.assignments == [(42, 1, expected, 7)]
+    with transaction(), pytest.raises(RevisionConflictError):
+        await screen._apply_selected(tags.published, 42, 1, cast(Any, event))
+    assert len(tags.assignments) == 1
