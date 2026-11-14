@@ -21,12 +21,13 @@ Implementation order:
    draft persistence, build finalization, and history. Do not require a solver.
 2. **Arithmetic feasibility spike (partly implemented):** one-variable smallest
    regions now cover exact crossovers, periodic domains, rounded formulas, fixed
-   exceptions, and bounded work. Multi-axis regions, timing-based titles, and
-   subprocess execution still need validation before computation schemas.
+   exceptions, bounded work, and isolated subprocess execution. Multi-axis
+   regions and timing-based titles remain open before computation schemas.
 3. **Concrete evaluation and live point lookup (implemented):** compare supported configurations
    through the existing ranking semantics, without materializing query sizes.
 4. **Symbolic regions and publication:** compute regions, prove nonemptiness
-   where possible, persist snapshots, and expose results.
+   where possible and persist snapshots. Live width-range queries are exposed;
+   publication remains pending.
 5. **UI and ingestion review:** explain domains, source claims, unresolved facts,
    and winning regions; add dedicated editing controls.
 
@@ -297,7 +298,7 @@ Defaults bound candidate configurations to 32, domain pieces per configuration
 to 128, combined residue classes to 128, output regions to 4096, and arithmetic
 steps to 50,000. Input bounds and polynomial coefficients use at most 256 bits.
 Exhausting a limit returns `limit_exceeded` with no partial awards. These are
-deterministic work limits, not a substitute for the planned worker isolation.
+deterministic work limits, supplemented by the process limits below.
 
 Only smallest records in one varying coordinate are supported. Existing concrete
 lookup continues to handle all five titles and supported multivariate configurations.
@@ -327,8 +328,39 @@ for fixed-size exceptions and reads related facts in a read-only repeatable-read
 transaction. The adapter and compiler share one arithmetic work allowance.
 No query creates categories, runs, queue entries or stored region results.
 
-This is an internal backend entry point. A public range API and publication still
-require the planned worker isolation and immutable candidate snapshots.
+### Public range queries and process limits
+
+`POST /v1/records/lookup/door/ranges` accepts a `DoorRangeQuery`:
+
+```json
+{"axis": "width", "height": 3, "depth": 1, "minimum": 6, "maximum": null,
+ "base_title": "smallest"}
+```
+
+Bounds are inclusive; a null maximum means an unbounded query. Category and
+version filters match concrete lookup. The response includes the query,
+evaluation time, analysis status, regions, and configuration-to-build/branch
+mappings. Region domains retain residue classes when periodic construction or
+rounding changes winners. Only width queries for smallest records are currently
+accepted. No query creates one record per opening size.
+
+The service admits at most two concurrent range requests per application process,
+including database loading. Saturation returns HTTP 503 without queueing or
+loading candidates. After the transaction closes, each request starts a fresh
+child process with only arithmetic facts sent as JSON. The child receives no
+database handle or inherited integration credentials. Default limits are 15
+seconds elapsed, 10 seconds CPU, 512 MiB address space, 2 MiB input, and 4 MiB
+output. POSIX resource limits are required; unsupported hosts fail closed.
+
+Cancellation and timeout terminate and reap the child. Unsupported arithmetic,
+resource exhaustion, and elapsed timeout return `unsupported`, `limit_exceeded`,
+or `timed_out`, respectively, with no partially awarded regions. Worker failures
+return HTTP 503. Exact analysis may still contain unresolved record regions when
+comparison facts are missing. Point queries remain independently available.
+
+These are live, ephemeral answers. Publication still requires immutable candidate
+snapshots, persisted region results, and atomic activation; live responses do not
+replace published record runs.
 
 ## Queries, persistence, and workers
 

@@ -6,17 +6,20 @@ from unittest.mock import create_autospec
 from uuid import UUID
 
 import httpx
+import pytest
 from litestar import Litestar, get, post
 from litestar.di import Provide
 
-from squid.api.v1.records import PublicRecordDTO, get_record, list_records, lookup_door
+from squid.api.v1.records import PublicRecordDTO, get_record, list_records, lookup_door, lookup_door_ranges
 from squid.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
 from squid.records.application import PublicRecordQueryService, RecordService
+from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, TitleResolution, VersionScope
+from squid.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 
 _RECORD = PublishedTitle(
     id=7,
@@ -200,3 +203,54 @@ async def test_live_door_lookup_serializes_configuration_evidence() -> None:
     schemas = app.openapi_schema.to_schema()["components"]["schemas"]
     assert "LiveDoorRecord" in schemas
     assert "DoorRecordLookup" in schemas
+
+
+@pytest.mark.parametrize("status", [RegionAnalysisStatus.EXACT, RegionAnalysisStatus.TIMED_OUT])
+async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(status: RegionAnalysisStatus) -> None:
+    records = create_autospec(RecordService, instance=True)
+    analysis = analyze_door_widths((), height=3).analysis
+    if status is RegionAnalysisStatus.TIMED_OUT:
+        analysis = SmallestRegionAnalysis(status, diagnostic="Elapsed-time limit exceeded.")
+    query = DoorRangeQuery(height=3)
+    records.lookup_door_ranges.return_value = DoorRangeResult(
+        query, datetime(2026, 8, 10, 12, tzinfo=UTC), analysis, ()
+    )
+    handler = post(
+        "/records/lookup/door/ranges",
+        status_code=200,
+        dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
+    )(lookup_door_ranges.fn)
+    app = Litestar([handler])
+    transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
+    async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
+        response = await client.post("/records/lookup/door/ranges", json={"height": 3})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["query"]["axis"] == "width"
+        assert body["query"]["maximum"] is None
+        assert body["analysis"]["status"] == status.value
+        if status is RegionAnalysisStatus.TIMED_OUT:
+            assert body["analysis"]["regions"] == []
+        else:
+            assert body["analysis"]["regions"][0]["domain"]["maximum"] is None
+        records.lookup_door_ranges.assert_awaited_once_with(query)
+        records.lookup_or_materialize.assert_not_called()
+        records.lookup_door_ranges.reset_mock()
+        for invalid in (
+            {"height": 0},
+            {"height": True},
+            {"height": 1.5},
+            {"height": 3, "depth": False},
+            {"height": 3, "minimum": "1"},
+            {"height": 3, "maximum": 1.5},
+            {"height": 3, "minimum": 5, "maximum": 4},
+            {"height": 3, "axis": "height"},
+            {"height": 3, "base_title": "fastest"},
+            {"height": 3, "unexpected": True},
+        ):
+            response = await client.post("/records/lookup/door/ranges", json=invalid)
+            assert response.status_code == 400, invalid
+        records.lookup_door_ranges.assert_not_called()
+    schemas = app.openapi_schema.to_schema()["components"]["schemas"]
+    assert "DoorRangeQuery" in schemas
+    assert "DoorRangeResult" in schemas

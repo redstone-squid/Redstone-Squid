@@ -9557,6 +9557,110 @@
         }
       }
     },
+    "/v1/records/lookup/door/ranges": {
+      "post": {
+        "tags": [
+          "records"
+        ],
+        "summary": "LookupDoorRanges",
+        "description": "Find smallest-record width ranges at fixed height and depth.\n\nResults are live and never published. Unsupported inputs, exhausted limits,\nand timeouts return an analysis status with no awarded ranges.",
+        "operationId": "records_lookup_door_ranges",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoorRangeQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorRangeResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/builds/{build_id}/schematics": {
       "get": {
         "tags": [
@@ -19049,6 +19153,140 @@
         "required": [],
         "title": "DoorPatch"
       },
+      "DoorRangeQuery": {
+        "properties": {
+          "orientation": {
+            "type": "string",
+            "enum": [
+              "Door",
+              "Skydoor",
+              "Trapdoor"
+            ],
+            "default": "Door"
+          },
+          "type_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "default": []
+          },
+          "restriction_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "default": []
+          },
+          "restriction_values": {
+            "items": {
+              "oneOf": [
+                {
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string",
+                      "enum": [
+                        "exact",
+                        "at_most",
+                        "at_least"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "default": []
+          },
+          "version_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "axis": {
+            "type": "string",
+            "const": "width",
+            "default": "width"
+          },
+          "base_title": {
+            "type": "string",
+            "const": "smallest",
+            "default": "smallest"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "depth": {
+            "type": "integer",
+            "default": 1
+          },
+          "minimum": {
+            "type": "integer",
+            "default": 1
+          },
+          "maximum": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "height"
+        ],
+        "title": "DoorRangeQuery"
+      },
+      "DoorRangeResult": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/DoorRangeQuery"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/SmallestRegionAnalysis"
+          },
+          "configurations": {
+            "items": {
+              "$ref": "#/components/schemas/DoorRegionConfiguration"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysis",
+          "configurations",
+          "evaluated_at",
+          "query"
+        ],
+        "title": "DoorRangeResult"
+      },
       "DoorRecordLookup": {
         "properties": {
           "orientation": {
@@ -19140,6 +19378,40 @@
           "opening"
         ],
         "title": "DoorRecordLookup"
+      },
+      "DoorRegionConfiguration": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "build_id": {
+            "type": "integer"
+          },
+          "branch_index": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ExpansionDiagnostic"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "branch_index",
+          "build_id",
+          "id"
+        ],
+        "title": "DoorRegionConfiguration"
       },
       "DraftChangeRequest": {
         "properties": {
@@ -20886,6 +21158,35 @@
         ],
         "title": "IntakeStatus",
         "description": "State of a supplied file before and after durable processor registration."
+      },
+      "IntegerProgression": {
+        "properties": {
+          "minimum": {
+            "type": "integer",
+            "default": 1
+          },
+          "maximum": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "period": {
+            "type": "integer",
+            "default": 1
+          },
+          "residue": {
+            "type": "integer",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "IntegerProgression"
       },
       "IssuedCliSessionResponse": {
         "properties": {
@@ -23159,6 +23460,16 @@
         ],
         "title": "RecordSearchResult"
       },
+      "RegionAnalysisStatus": {
+        "type": "string",
+        "enum": [
+          "exact",
+          "unsupported",
+          "limit_exceeded",
+          "timed_out"
+        ],
+        "title": "RegionAnalysisStatus"
+      },
       "RendererCapabilities": {
         "properties": {
           "controls": {
@@ -23754,6 +24065,65 @@
         "type": "object",
         "required": [],
         "title": "ServerProfileSchema"
+      },
+      "SmallestRecordRegion": {
+        "properties": {
+          "domain": {
+            "$ref": "#/components/schemas/IntegerProgression"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/TitleResolution"
+          },
+          "holder_configuration_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          },
+          "provisional_configuration_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "resolution"
+        ],
+        "title": "SmallestRecordRegion"
+      },
+      "SmallestRegionAnalysis": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/RegionAnalysisStatus"
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/SmallestRecordRegion"
+            },
+            "type": "array",
+            "default": []
+          },
+          "diagnostic": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "SmallestRegionAnalysis"
       },
       "SourceKind": {
         "type": "string",

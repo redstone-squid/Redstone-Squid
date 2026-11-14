@@ -14063,8 +14063,8 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:642",
-      "squid/records/application/services.py:673"
+      "squid/records/application/services.py:660",
+      "squid/records/application/services.py:691"
     ]
   },
   "records-category-not-found-title": {
@@ -14155,7 +14155,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:686"
+      "squid/records/application/services.py:704"
     ]
   },
   "records-fixed-volume-positive": {
@@ -14236,7 +14236,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/records/application/services.py:603"
+      "squid/records/application/services.py:621"
     ]
   },
   "records-rebuild-summary": {
@@ -14316,7 +14316,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:426"
+      "squid/records/application/services.py:444"
     ]
   },
   "records-record-category-not-found": {
@@ -14364,7 +14364,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:704"
+      "squid/records/application/services.py:722"
     ]
   },
   "records-reset-version": {

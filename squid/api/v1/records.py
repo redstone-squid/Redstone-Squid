@@ -19,6 +19,7 @@ from squid.api.pagination import (
     parse_page_sort,
     resolve_selector,
 )
+from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.records.application.live import DoorRecordLookup, LiveDoorRecord
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.records.errors import RecordNotFoundError
@@ -102,9 +103,26 @@ async def lookup_door(data: JSONBody[DoorRecordLookup], records: Records) -> Liv
     return await records.lookup_door(data)
 
 
+@post(
+    "/lookup/door/ranges",
+    status_code=200,
+    responses=responses(400, 422, 503),
+    operation_id="records_lookup_door_ranges",
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+)
+async def lookup_door_ranges(data: JSONBody[DoorRangeQuery], records: Records) -> DoorRangeResult:
+    """Find smallest-record width ranges at fixed height and depth.
+
+    Results are live and never published. Unsupported inputs, exhausted limits,
+    and timeouts return an analysis status with no awarded ranges.
+    """
+    return await records.lookup_door_ranges(data)
+
+
 router = Router(
     dependencies={"records": Provide(get_records, sync_to_thread=False)},
     path="/records",
     tags=["records"],
-    route_handlers=[get_record, list_records, lookup_door],
+    route_handlers=[get_record, list_records, lookup_door, lookup_door_ranges],
 )

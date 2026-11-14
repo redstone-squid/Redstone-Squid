@@ -183,6 +183,14 @@ export type BuildSponsor = {
 export type BuildStatusFilter = 'pending' | 'confirmed' | 'denied';
 
 /**
+ * CandidateGap
+ */
+export type CandidateGap = {
+    build_id: number;
+    field: string;
+};
+
+/**
  * CategoryFormResponse
  */
 export type CategoryFormResponse = {
@@ -420,6 +428,7 @@ export type CsrfTokenResponse = {
  */
 export type DoorDetails = {
     category?: 'Door';
+    expansion?: DoorExpansion | null;
     door_dimensions: PublicBuildDimensions;
     orientation: string | null;
     patterns: Array<string>;
@@ -428,9 +437,21 @@ export type DoorDetails = {
 };
 
 /**
+ * DoorExpansion
+ */
+export type DoorExpansion = {
+    schema_version?: 1;
+    raw_description?: string | null;
+    parameters?: Array<ExpansionParameter | unknown>;
+    branches?: Array<ExpansionBranch | unknown>;
+    evidence?: Array<ExpansionEvidence | unknown>;
+};
+
+/**
  * DoorPatch
  */
 export type DoorPatch = {
+    expansion?: DoorExpansion | null;
     door_dimensions?: [
         number | null,
         number | null,
@@ -442,6 +463,68 @@ export type DoorPatch = {
     closing_time?: number | null;
     visible_opening_time?: number | null;
     visible_closing_time?: number | null;
+};
+
+/**
+ * DoorRangeQuery
+ */
+export type DoorRangeQuery = {
+    orientation?: 'Door' | 'Skydoor' | 'Trapdoor';
+    type_ids?: Array<number>;
+    restriction_ids?: Array<number>;
+    restriction_values?: Array<[
+        number,
+        'exact' | 'at_most' | 'at_least',
+        string
+    ] | unknown>;
+    version_id?: number | null;
+    axis?: 'width';
+    base_title?: 'smallest';
+    height: number;
+    depth?: number;
+    minimum?: number;
+    maximum?: number | null;
+};
+
+/**
+ * DoorRangeResult
+ */
+export type DoorRangeResult = {
+    query: DoorRangeQuery;
+    evaluated_at: string;
+    analysis: SmallestRegionAnalysis;
+    configurations: Array<DoorRegionConfiguration>;
+};
+
+/**
+ * DoorRecordLookup
+ */
+export type DoorRecordLookup = {
+    orientation?: 'Door' | 'Skydoor' | 'Trapdoor';
+    type_ids?: Array<number>;
+    restriction_ids?: Array<number>;
+    restriction_values?: Array<[
+        number,
+        'exact' | 'at_most' | 'at_least',
+        string
+    ] | unknown>;
+    version_id?: number | null;
+    opening: [
+        number,
+        number,
+        number
+    ];
+    base_title?: BaseTitle;
+};
+
+/**
+ * DoorRegionConfiguration
+ */
+export type DoorRegionConfiguration = {
+    id: number;
+    build_id: number;
+    branch_index: number | null;
+    diagnostics?: Array<ExpansionDiagnostic>;
 };
 
 /**
@@ -654,6 +737,62 @@ export type ErrorReportSummary = {
     exception_type: string;
     code?: ErrorCode | null;
     work_lost?: boolean;
+};
+
+/**
+ * ExpansionBranch
+ */
+export type ExpansionBranch = {
+    label?: string | null;
+    opening_width?: string | null;
+    opening_height?: string | null;
+    opening_depth?: string | null;
+    domain?: string | null;
+    volume?: string | null;
+    timings?: Array<ExpansionTiming | unknown>;
+    claimed_record_domain?: string | null;
+    completion_time?: string | null;
+    evidence?: Array<ExpansionEvidence | unknown>;
+};
+
+/**
+ * ExpansionDiagnostic
+ */
+export type ExpansionDiagnostic = {
+    path: string;
+    code: string;
+    message: string;
+};
+
+/**
+ * ExpansionEvidence
+ */
+export type ExpansionEvidence = {
+    source_message_id: number;
+    text: string;
+};
+
+/**
+ * ExpansionParameter
+ */
+export type ExpansionParameter = {
+    name: string;
+    meaning?: string | null;
+    minimum?: number | null;
+    maximum_kind?: 'unknown' | 'finite' | 'unbounded';
+    maximum?: number | null;
+    initial_steps?: Array<number> | null;
+    repeating_steps?: Array<number> | null;
+};
+
+/**
+ * ExpansionTiming
+ */
+export type ExpansionTiming = {
+    method: 'opening' | 'opening_visible' | 'closing' | 'closing_visible' | 'opening_reset' | 'closing_reset';
+    expression: string;
+    unit?: 'game_tick' | 'redstone_tick' | 'second' | 'unknown';
+    variant?: string | null;
 };
 
 /**
@@ -888,6 +1027,16 @@ export type InstallationResponse = {
 export type IntakeStatus = 'pending' | 'ready' | 'failed' | 'discarded';
 
 /**
+ * IntegerProgression
+ */
+export type IntegerProgression = {
+    minimum?: number;
+    maximum?: number | null;
+    period?: number;
+    residue?: number;
+};
+
+/**
  * IssuedCliSessionResponse
  */
 export type IssuedCliSessionResponse = {
@@ -931,6 +1080,42 @@ export type LinkedIdentityDetail = {
     provider: IdentityProvider;
     subject: string;
     verified_at: string | null;
+};
+
+/**
+ * LiveDoorConfiguration
+ */
+export type LiveDoorConfiguration = {
+    id: number;
+    build_id: number;
+    branch_index: number | null;
+    membership: PointStatus;
+    parameters?: Array<[
+        string,
+        number
+    ]>;
+    volume?: number | null;
+    timing_variants?: Array<Array<number | null>>;
+    completion_at?: string | null;
+    diagnostics?: Array<ExpansionDiagnostic>;
+};
+
+/**
+ * LiveDoorRecord
+ */
+export type LiveDoorRecord = {
+    opening: [
+        number,
+        number,
+        number
+    ];
+    base_title: BaseTitle;
+    version_id: number | null;
+    evaluated_at: string;
+    resolution: TitleResolution;
+    holder_configuration_ids: Array<number>;
+    provisional_configuration_ids: Array<number>;
+    configurations: Array<LiveDoorConfiguration>;
 };
 
 /**
@@ -1164,6 +1349,11 @@ export type PaperChallengeCreateRequest = {
 export type PaperChallengeExchangeRequest = {
     device_code: string;
 };
+
+/**
+ * PointStatus
+ */
+export type PointStatus = 'supported' | 'outside_domain' | 'unresolved';
 
 /**
  * PollScope
@@ -1449,6 +1639,11 @@ export type RecordSearchResult = {
 };
 
 /**
+ * RegionAnalysisStatus
+ */
+export type RegionAnalysisStatus = 'exact' | 'unsupported' | 'limit_exceeded' | 'timed_out';
+
+/**
  * RendererCapabilities
  */
 export type RendererCapabilities = {
@@ -1604,6 +1799,25 @@ export type ServerProfileSchema = {
     description?: string | null;
     website_url?: string | null;
     sponsor_opt_in?: boolean;
+};
+
+/**
+ * SmallestRecordRegion
+ */
+export type SmallestRecordRegion = {
+    domain: IntegerProgression;
+    resolution: TitleResolution;
+    holder_configuration_ids?: Array<number>;
+    provisional_configuration_ids?: Array<number>;
+};
+
+/**
+ * SmallestRegionAnalysis
+ */
+export type SmallestRegionAnalysis = {
+    status: RegionAnalysisStatus;
+    regions?: Array<SmallestRecordRegion>;
+    diagnostic?: string | null;
 };
 
 /**
@@ -1777,6 +1991,16 @@ export type TagSemanticKind = 'restriction' | 'pattern' | 'showcase';
  * The scalar value attached to a tag.
  */
 export type TagValueType = 'none' | 'numeric' | 'text' | 'boolean';
+
+/**
+ * TitleResolution
+ */
+export type TitleResolution = {
+    status: ResolutionStatus;
+    holder_ids?: Array<number>;
+    provisional_holder_ids?: Array<number>;
+    gaps?: Array<CandidateGap>;
+};
 
 /**
  * UploadCapabilities
@@ -5023,6 +5247,80 @@ export type RecordsListResponses = {
 };
 
 export type RecordsListResponse = RecordsListResponses[keyof RecordsListResponses];
+
+export type RecordsLookupDoorData = {
+    body: DoorRecordLookup;
+    path?: never;
+    query?: never;
+    url: '/v1/records/lookup/door';
+};
+
+export type RecordsLookupDoorErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsLookupDoorError = RecordsLookupDoorErrors[keyof RecordsLookupDoorErrors];
+
+export type RecordsLookupDoorResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: LiveDoorRecord;
+};
+
+export type RecordsLookupDoorResponse = RecordsLookupDoorResponses[keyof RecordsLookupDoorResponses];
+
+export type RecordsLookupDoorRangesData = {
+    body: DoorRangeQuery;
+    path?: never;
+    query?: never;
+    url: '/v1/records/lookup/door/ranges';
+};
+
+export type RecordsLookupDoorRangesErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsLookupDoorRangesError = RecordsLookupDoorRangesErrors[keyof RecordsLookupDoorRangesErrors];
+
+export type RecordsLookupDoorRangesResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: DoorRangeResult;
+};
+
+export type RecordsLookupDoorRangesResponse = RecordsLookupDoorRangesResponses[keyof RecordsLookupDoorRangesResponses];
 
 export type BuildSchematicsListData = {
     body?: never;
