@@ -742,3 +742,125 @@ def test_discord_credit_preserves_a_source_alias_with_the_observed_username_and_
     assert credit.name == "FormerName"
     assert credit.username == "current_username"
     assert credit.subject == "30"
+
+
+async def test_unassigned_timing_pair_is_quoted_without_guessing_its_direction() -> None:
+    message = ContextMessage(10, "Builder", 20, "Double piston extender\ninstant/0.25, 6gt clockable", "", "primary")
+    value = inferred(
+        build_category="Piston Extender",
+        opening_time=None,
+        closing_time=None,
+        extension_length=2,
+        extension_time={"value": "instant", "qualifier": None},
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert build.extension_time == 0
+    assert build.retraction_time is None
+    assert build.description == "instant/0.25"
+
+
+async def test_timing_fallback_does_not_assign_shared_measurements_to_each_variant() -> None:
+    message = ContextMessage(10, "Builder", 20, "Two variants: opening .25/.4 and opening .5/.6", "", "primary")
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(opening_time=None), inferred(opening_time=None)])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+    builds = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert [build.description for build in builds] == [None, None]
+
+
+async def test_timing_fallback_ignores_dates_and_durations_already_represented() -> None:
+    message = ContextMessage(10, "Builder", 20, "Completed 12/26/2020\nSpeed: 0.25/0.4s", "", "primary")
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        opening_time={"value": "0.25s", "qualifier": None},
+                        closing_time={"value": "0.4s", "qualifier": None},
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert build.description is None
+
+
+async def test_a_source_quote_already_covering_an_unparseable_timing_is_not_repeated() -> None:
+    excerpt = "Opening: 18:8 seconds + 4.6 second cooldown"
+    message = ContextMessage(10, "Builder", 20, excerpt, "", "primary")
+    value = inferred(
+        opening_time={"value": "18:8 seconds", "qualifier": "+ 4.6 second cooldown"},
+        author_notes=[{"source_message_id": 10, "text": excerpt}],
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert build.normal_opening_time is None
+    assert build.description == excerpt
+
+
+def test_self_attribution_uses_the_observed_author_name_instead_of_the_word_me() -> None:
+    message = ContextMessage(10, "Builder", 20, "Made by me", "", "primary", author_username="builder_d")
+    value = inferred(
+        credits=[
+            {
+                "name": "me",
+                "kind": "discord",
+                "subject": "20",
+                "role": "creator",
+                "source_message_id": 10,
+            }
+        ]
+    )
+    [credit] = BuildInferenceService._credits(value, [message])
+    assert credit.name == "Builder"
+    assert credit.username == "builder_d"
+    assert credit.subject == "20"
+
+
+async def test_equal_qualified_opening_and_closing_times_keep_both_direction_labels() -> None:
+    timing = {"value": "0.45s", "qualifier": "0 gt input delay, 0 gt reset"}
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(opening_time=timing, closing_time=timing)])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+    [build] = await service.infer(source(), model="test")
+    assert build.description == (
+        "Opening: 0.45s; 0 gt input delay, 0 gt reset\nClosing: 0.45s; 0 gt input delay, 0 gt reset"
+    )
+
+
+async def test_equal_pair_values_are_not_both_covered_by_one_assigned_measurement() -> None:
+    message = ContextMessage(10, "Builder", 20, "Speed: 0.25/0.25s", "", "primary")
+    service = BuildInferenceService(
+        FakeTextGenerator(
+            InferenceResult(
+                builds=[
+                    inferred(
+                        opening_time={"value": "0.25s", "qualifier": None},
+                        closing_time=None,
+                    )
+                ]
+            )
+        ),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+    assert build.normal_opening_time == 5
+    assert build.normal_closing_time is None
+    assert build.description == "0.25/0.25s"

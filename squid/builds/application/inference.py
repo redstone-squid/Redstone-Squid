@@ -2,6 +2,7 @@
 
 import logging
 import re
+from collections import Counter
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass, replace
 from html import escape
@@ -29,6 +30,22 @@ from squid.messages.domain import MessageSnapshot
 from squid.versions.errors import InvalidVersionError
 
 logger = logging.getLogger(__name__)
+_PAIR_DURATION = (
+    r"(?:instant(?:ly|aneous)?|(?:\d+(?:\.\d+)?|\.\d+)(?:[ \t]*(?:seconds?|secs?|minutes?|mins?|ms|s|[gr]t))?)"
+)
+_TIMING_PAIR = re.compile(
+    rf"(?<![\w./])(?P<first>{_PAIR_DURATION})[ \t]*/[ \t]*(?P<second>{_PAIR_DURATION})(?![\w./])", re.IGNORECASE
+)
+_TIMING_CONTEXT = re.compile(
+    r"\b(?:open(?:ing)?|clos(?:e|es|ing)|extension|retraction|seamless|reset|clockable|speed|instant)\b", re.IGNORECASE
+)
+
+
+def _inferred_ticks(value: str | None) -> int | None:
+    """Accept explicit instant measurements as zero without interpreting other prose."""
+    if value is not None and value.strip().casefold() in {"instant", "instantly", "instantaneous"}:
+        return 0
+    return parse_time_string(value)
 
 
 class InferredTiming(BaseModel):
@@ -68,7 +85,9 @@ class InferredCredit(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
+    name: str = Field(
+        description="Source-stated name or alias next to the mention, rather than today's Discord display name."
+    )
     kind: CreditKind
     role: CreditRole
     source_message_id: int
@@ -116,7 +135,9 @@ class InferredBuild(BaseModel):
     credits: list[InferredCredit] = Field(
         description="Every explicit attribution, including MC Username or IGN labels."
     )
-    version_spec: str | None
+    version_spec: str | None = Field(
+        description="Claimed working Minecraft versions, not a duration, count, or component's introduction version."
+    )
     edition: Literal["Java", "Bedrock"] | None = Field(
         default=None, description="Explicit Minecraft edition, even when no release number is stated."
     )
@@ -303,6 +324,7 @@ class BuildInferenceService:
             return []
 
         primary_by_id = {message.message_id: message for message in source.primary}
+        source_uses = Counter(message_id for value in result.builds for message_id in set(value.source_message_ids))
         builds: list[BuildDraft] = []
         for inferred in result.builds:
             resolved = [
@@ -332,7 +354,13 @@ class BuildInferenceService:
                 ai_generated=True,
             )
             await self._apply_taxonomy(build, inferred)
-            await self._apply_fields(build, inferred)
+            await self._apply_fields(
+                build,
+                inferred,
+                exclusive_source_ids=frozenset(
+                    message.id for message in build.source_messages if source_uses[message.id] == 1
+                ),
+            )
             build.credits = self._credits(inferred, resolved)
             builds.append(build)
         return builds
@@ -362,7 +390,13 @@ class BuildInferenceService:
                 else:
                     # An old post may use an alias while Discord supplies today's
                     # display name. Both can refer to the same observed ID.
-                    name = value.name if value.name.strip() and value.name in message.content else identity.name
+                    source_name = value.name.strip()
+                    name = (
+                        source_name
+                        if source_name.casefold() not in {"", "me", "myself", "i", "author", "sender"}
+                        and source_name in message.content
+                        else identity.name
+                    )
                     username = identity.username
             elif subject is not None and subject not in message.content:
                 subject = None
@@ -468,7 +502,9 @@ class BuildInferenceService:
             restrictions=unresolved_restrictions, patterns=unresolved_patterns
         ).write(build.extra_info)
 
-    async def _apply_fields(self, build: BuildDraft, inferred: InferredBuild) -> None:
+    async def _apply_fields(
+        self, build: BuildDraft, inferred: InferredBuild, *, exclusive_source_ids: frozenset[int] = frozenset()
+    ) -> None:
         categories = {
             "Piston Door": BuildCategory.DOOR,
             "Entrance": BuildCategory.ENTRANCE,
@@ -493,6 +529,8 @@ class BuildInferenceService:
                 continue
             if excerpt not in notes:
                 notes.append(excerpt)
+        quoted_notes = tuple(notes)
+        represented_ticks: Counter[int] = Counter()
         for label, timing, attribute in (
             ("Opening", inferred.opening_time, "normal_opening_time"),
             ("Closing", inferred.closing_time, "normal_closing_time"),
@@ -503,13 +541,36 @@ class BuildInferenceService:
         ):
             if timing is None:
                 continue
-            parsed = parse_time_string(timing.value)
+            parsed = _inferred_ticks(timing.value)
             setattr(build, attribute, parsed)
+            if parsed is not None:
+                represented_ticks[parsed] += 1
             approximate = timing.value is not None and re.match(r"\s*[~≈]", timing.value) is not None
             if timing.qualifier or approximate or (timing.value is not None and parsed is None):
                 # Keep qualifications and unparseable measurements through form prefill,
                 # which carries the description but not arbitrary extra_info metadata.
-                notes.append(f"{label}: {'; '.join(part for part in (timing.value, timing.qualifier) if part)}")
+                parts = [" ".join(part.split()) for part in (timing.value, timing.qualifier) if part]
+                if not any(
+                    label.casefold() in note.casefold() and all(part in note for part in parts) for note in quoted_notes
+                ):
+                    notes.append(f"{label}: {'; '.join(parts)}")
+        # Unlabelled timing pairs must survive even when the model cannot assign
+        # both halves. Shared source messages cannot safely attribute them to a variant.
+        for message in build.source_messages:
+            if message.id not in exclusive_source_ids:
+                continue
+            for line in (message.content or "").splitlines():
+                if _TIMING_CONTEXT.search(line) is None:
+                    continue
+                for pair in _TIMING_PAIR.finditer(line):
+                    pair_ticks = Counter(
+                        value for side in ("first", "second") if (value := _inferred_ticks(pair[side])) is not None
+                    )
+                    if pair_ticks.total() == 2 and not pair_ticks - represented_ticks:
+                        continue
+                    excerpt = " ".join(pair[0].split())
+                    if not any(excerpt in note for note in notes):
+                        notes.append(excerpt)
         build.version_spec = (inferred.version_spec or "").strip() or None
         if inferred.edition is not None:
             if build.version_spec is None:
