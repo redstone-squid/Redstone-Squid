@@ -639,7 +639,7 @@ def _build_fuzz_image(client: docker.DockerClient, identity: RunIdentity, produc
             "--tag",
             tag,
             "--file",
-            "Dockerfile.api-fuzz",
+            "tests/fuzz/api/Dockerfile",
             "--build-arg",
             f"BASE_IMAGE={production_image.tags[0]}",
             str(_ROOT),

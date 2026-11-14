@@ -69,7 +69,6 @@ jobs:
               - 'uv.lock'
               - '.gitattributes'
               - 'Dockerfile'
-              - 'Dockerfile.api-fuzz'
               - 'compose.yml'
               - 'docs/media-normalization.md'
             cli:
