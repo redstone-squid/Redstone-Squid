@@ -110,6 +110,17 @@ def test_names_inference_could_not_resolve_become_proposals() -> None:
     assert result.answers["pattern_proposals"] == ["Spiral"]
 
 
+def test_general_pattern_fields_are_added_without_rewriting_pinned_forms() -> None:
+    source = BuildDraft(category=BuildCategory.ENTRANCE, extra_info={"unknown_patterns": ["Spiral Staircase"]})
+    current = project_submission(source, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+    pinned = project_submission(source, build_submission_manifest(revision=7), {}, origin=SubmissionOrigin.DISCORD)
+
+    assert current.unresolved == ()
+    assert current.answers["pattern_proposals"] == ["Spiral Staircase"]
+    assert pinned.unresolved == ("pattern_proposals",)
+    assert "pattern_proposals" not in pinned.answers
+
+
 def test_external_links_are_form_answers_in_revision_six_and_remain_references_on_older_forms() -> None:
     source = BuildDraft(
         category=BuildCategory.DOOR,

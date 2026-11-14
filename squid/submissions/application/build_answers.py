@@ -86,15 +86,14 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
             else:
                 restriction_keys.append(key)
     answers["restrictions"] = restriction_keys
-    if isinstance(build, DoorBuild | ExtenderBuild):
-        pattern_keys: list[JSONValue] = []
-        for name in build.patterns:
-            key = match_choice(name, options.get("approved_patterns", ()))
-            if key is None:
-                unresolved = unresolved.add(patterns=(name,))
-            else:
-                pattern_keys.append(key)
-        answers["patterns"] = pattern_keys
+    pattern_keys: list[JSONValue] = []
+    for name in build.patterns:
+        key = match_choice(name, options.get("approved_patterns", ()))
+        if key is None:
+            unresolved = unresolved.add(patterns=(name,))
+        else:
+            pattern_keys.append(key)
+    answers["patterns"] = pattern_keys
     if isinstance(build, DoorBuild):
         answers |= {
             "opening_width": build.door_width,

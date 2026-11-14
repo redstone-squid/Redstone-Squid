@@ -8,25 +8,30 @@ from uuid import UUID
 
 import pytest
 
-from squid.builds.domain import BuildCategory, Status
+from squid.builds.domain import BuildCategory, BuildDraft, Status
 from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
 from squid.builds.domain.titles import format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
-from squid.core.errors import ValidationError
+from squid.core.errors import DataIntegrityError, ValidationError
 from squid.sponsors import PublicSponsor
 from squid.submissions.application.build_target import SubmissionBuildPreparation, preview_build
+from squid.submissions.application.forms import build_submission_manifest
+from squid.submissions.application.prefill import project_submission
 from squid.submissions.domain import (
     BuildSubmissionRejected,
+    ChoiceOption,
     DoorOrientation,
     DoorSubmissionDetails,
     DoorTiming,
+    DraftSnapshot,
     ExtenderOrientation,
     ExtenderSubmissionDetails,
     ExtenderTiming,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicRightsPolicy,
+    SubmissionArtifactReadiness,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionCategory,
@@ -37,6 +42,7 @@ from squid.submissions.domain import (
     VerifiedSubmissionArtifacts,
 )
 from squid.submissions.domain.links import SubmissionLink
+from squid.submissions.domain.normalization import normalize_submission
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
@@ -194,6 +200,71 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
     assert build.dimensions == (8, 9, 10)
     assert build.versions == ["Java 26.1.2"]
     assert build.version_spec == ">=26.1"
+
+
+@pytest.mark.parametrize(
+    "category", [SubmissionCategory.ENTRANCE, SubmissionCategory.UTILITY, SubmissionCategory.OTHER]
+)
+async def test_general_patterns_survive_prefill_durable_payload_and_build(category: SubmissionCategory) -> None:
+    pattern = _definition("spiral", TagSemanticKind.PATTERN)
+    source = BuildDraft(
+        category=BuildCategory(category.value.title()),
+        display_name="Tiny hidden staircase",
+        patterns=[pattern.display_name],
+        extra_info={"unknown_patterns": ["Spiral Staircase"]},
+    )
+    manifest = build_submission_manifest()
+    projected = project_submission(
+        source,
+        manifest,
+        {"approved_patterns": (ChoiceOption(pattern.stable_key, pattern.display_name),)},
+        origin=SubmissionOrigin.DISCORD,
+    )
+    assert projected.unresolved == ()
+    answers = manifest.apply_defaults(category.value, projected.answers, origin=SubmissionOrigin.DISCORD)
+    snapshot = DraftSnapshot(DRAFT_ID, 1, manifest.schema_id, manifest.revision, category.value, answers=answers)
+    normalized = normalize_submission(
+        snapshot,
+        answers,
+        SubmissionArtifactReadiness(),
+        None,
+        origin=SubmissionOrigin.DISCORD,
+    )
+    payload = encode_submission(normalized)
+    assert payload["payload_schema"] == 8
+    restored = decode_submission(payload)
+    assert restored == normalized
+
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags((pattern,)), FakeVersions()).prepare(restored)
+    assert isinstance(build, Build)
+    assert build.patterns == [pattern.display_name]
+    assert build.extra_info["unknown_patterns"] == ["Spiral Staircase"]
+    preview = preview_build(category.value, answers, {pattern.stable_key: pattern})
+    assert preview is not None
+    assert preview.patterns == build.patterns
+    assert preview.extra_info["unknown_patterns"] == ["Spiral Staircase"]
+
+
+def test_empty_general_patterns_keep_the_legacy_payload_shape() -> None:
+    submission = _submission(SubmissionCategory.ENTRANCE)
+    payload = encode_submission(submission)
+    assert payload["payload_schema"] == 2
+    assert payload["details"] == {"kind": "general"}
+    assert "general_pattern_keys" not in payload
+    assert decode_submission(payload) == submission
+
+
+def test_general_pattern_payload_cannot_be_attached_to_a_door() -> None:
+    submission = replace(
+        _submission(SubmissionCategory.ENTRANCE),
+        details=GeneralSubmissionDetails(pattern_proposals=("Spiral Staircase",)),
+    )
+    payload = encode_submission(submission)
+    payload["category"] = "door"
+    payload["details"] = encode_submission(_submission(SubmissionCategory.DOOR))["details"]
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission"):
+        decode_submission(payload)
 
 
 async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_provenance() -> None:

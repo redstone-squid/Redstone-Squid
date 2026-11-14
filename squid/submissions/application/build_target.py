@@ -148,8 +148,7 @@ class SubmissionBuildPreparation:
             "restrictions": (submission.taxonomy.restriction_keys, TagSemanticKind.RESTRICTION),
             "showcase_tags": (submission.taxonomy.showcase_tag_keys, TagSemanticKind.SHOWCASE),
         }
-        if isinstance(submission.details, DoorSubmissionDetails | ExtenderSubmissionDetails):
-            requested["patterns"] = (submission.details.pattern_keys, TagSemanticKind.PATTERN)
+        requested["patterns"] = (submission.details.pattern_keys, TagSemanticKind.PATTERN)
 
         issues: list[SubmissionAttentionIssue] = []
         selected: dict[str, TagDefinition] = {}
@@ -194,11 +193,8 @@ def _restriction_values(keys: Sequence[str], definitions: Mapping[str, TagDefini
 def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDefinition]) -> Build:
     restriction_values = _restriction_values(submission.taxonomy.restriction_keys, definitions)
 
-    pattern_names: list[str] = []
-    pattern_proposals: tuple[str, ...] = ()
-    if isinstance(submission.details, DoorSubmissionDetails | ExtenderSubmissionDetails):
-        pattern_names = [definitions[key].display_name for key in submission.details.pattern_keys]
-        pattern_proposals = submission.details.pattern_proposals
+    pattern_names = [definitions[key].display_name for key in submission.details.pattern_keys]
+    pattern_proposals = submission.details.pattern_proposals
     showcase_assignments = [
         TagAssignment(definitions[key], provenance="submitted") for key in submission.taxonomy.showcase_tag_keys
     ]
@@ -265,7 +261,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
             extension_time=submission.details.timing.extension,
             retraction_time=submission.details.timing.retraction,
         )
-    return BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[submission.category]](**common)
+    return BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[submission.category]](**common, patterns=pattern_names)
 
 
 def _target_rejected() -> BuildSubmissionRejected:
@@ -418,7 +414,7 @@ def preview_build(
             retraction_time=integer("retraction_time"),
         )
     else:
-        build = BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[SubmissionCategory(category)]](**common)
+        build = BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[SubmissionCategory(category)]](**common, patterns=pattern_names)
     build.display_name = text("display_name")
     build.ai_generated = answers.get("ai_generated") is True
     build.submission_status = Status.PENDING

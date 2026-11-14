@@ -74,6 +74,22 @@ def test_versions_and_showcase_tags_are_replaced_as_lists() -> None:
     assert patch.attributes() == {"versions": [], "showcase_tags": ["compact", "tileable"]}
 
 
+def test_general_pattern_answers_survive_an_unrelated_edit() -> None:
+    build = _utility()
+    build.patterns = ["Spiral"]
+    build.extra_info = {"unknown_patterns": ["Spiral Staircase"]}
+    options = {"approved_patterns": (ChoiceOption("spiral", "Spiral"),)}
+    before = answers_from_build(build, options)
+
+    assert before.answers["patterns"] == ["spiral"]
+    assert before.unresolved.patterns == ("Spiral Staircase",)
+    after = before.answers | {"description": "Requires Carpet mod"}
+    patch = patch_from_answers(before, after, before.unresolved, options)
+
+    assert patch.door_type is UNSET
+    assert patch.extra_user_info == "Requires Carpet mod"
+
+
 def test_names_without_a_catalogue_entry_are_kept_aside_in_their_list() -> None:
     before = answers_from_build(_door(), OPTIONS)
 

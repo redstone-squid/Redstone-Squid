@@ -89,7 +89,10 @@ def normalize_submission(
             ),
         )
     else:
-        details = GeneralSubmissionDetails()
+        details = GeneralSubmissionDetails(
+            pattern_keys=_string_tuple(answers, "patterns"),
+            pattern_proposals=_string_tuple(answers, "pattern_proposals"),
+        )
     return NormalizedSubmission(
         source_draft_id=draft.id,
         owner_account_id=draft.owner_account_id,

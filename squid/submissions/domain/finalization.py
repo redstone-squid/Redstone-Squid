@@ -293,7 +293,13 @@ class ExtenderSubmissionDetails:
 
 @dataclass(frozen=True, slots=True)
 class GeneralSubmissionDetails:
-    """Marker for utility, entrance, and uncategorized submissions."""
+    """Pattern facts for utility, entrance, and uncategorized submissions."""
+
+    pattern_keys: tuple[str, ...] = ()
+    pattern_proposals: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_stable_keys(self.pattern_keys, "pattern")
 
 
 type SubmissionCategoryDetails = DoorSubmissionDetails | ExtenderSubmissionDetails | GeneralSubmissionDetails

@@ -37,8 +37,8 @@ from squid_i18n import Text, localization_scope
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
 # Older revisions remain immutable for pinned drafts and queued submissions.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 7
-_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6, 7})
+CURRENT_SUBMISSION_SCHEMA_REVISION = 8
+_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6, 7, 8})
 
 
 class FormManifestRegistry(Protocol):
@@ -472,9 +472,21 @@ def _build_form_manifest(revision: int) -> FormManifest:
         categories=(
             _door_form(localize, revision),
             _extender_form(localize),
-            CategoryForm("utility", localize(tr(t"submissions-application-forms-utility = Utility")), ()),
-            CategoryForm("entrance", localize(tr(t"submissions-application-forms-entrance = Entrance")), ()),
-            CategoryForm("other", localize(tr(t"submissions-application-forms-other = Other")), ()),
+            CategoryForm(
+                "utility",
+                localize(tr(t"submissions-application-forms-utility = Utility")),
+                (_pattern_section(localize),) if revision >= 8 else (),
+            ),
+            CategoryForm(
+                "entrance",
+                localize(tr(t"submissions-application-forms-entrance = Entrance")),
+                (_pattern_section(localize),) if revision >= 8 else (),
+            ),
+            CategoryForm(
+                "other",
+                localize(tr(t"submissions-application-forms-other = Other")),
+                (_pattern_section(localize),) if revision >= 8 else (),
+            ),
         ),
     )
 

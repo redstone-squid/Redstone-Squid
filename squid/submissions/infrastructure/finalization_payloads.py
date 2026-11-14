@@ -341,10 +341,7 @@ class _RestrictionProposalPayload(_StrictPayloadModel):
     name: str
 
 
-class FinalizationPayloadV7(_LinkedFinalizationPayload):
-    """Categorized restriction proposals, with optional expandable-door source facts."""
-
-    payload_schema: Literal[7]
+class _CategorizedFinalizationPayload(_LinkedFinalizationPayload):
     restriction_proposal_fields: list[_RestrictionProposalPayload]
 
     def _taxonomy(self) -> SubmissionTaxonomy:
@@ -354,13 +351,41 @@ class FinalizationPayloadV7(_LinkedFinalizationPayload):
         )
 
 
+class FinalizationPayloadV7(_CategorizedFinalizationPayload):
+    """Categorized restriction proposals, with optional expandable-door source facts."""
+
+    payload_schema: Literal[7]
+
+
+class FinalizationPayloadV8(_CategorizedFinalizationPayload):
+    """Pattern facts for categories whose older payloads had no pattern fields."""
+
+    payload_schema: Literal[8]
+    general_pattern_keys: list[str]
+    general_pattern_proposals: list[str]
+
+    def to_domain(self) -> NormalizedSubmission:
+        submission = super().to_domain()
+        if not isinstance(submission.details, GeneralSubmissionDetails):
+            msg = "general pattern fields require general submission details"
+            raise TypeError(msg)
+        return replace(
+            submission,
+            details=GeneralSubmissionDetails(
+                pattern_keys=tuple(self.general_pattern_keys),
+                pattern_proposals=tuple(self.general_pattern_proposals),
+            ),
+        )
+
+
 type FinalizationPayload = Annotated[
     FinalizationPayloadV2
     | FinalizationPayloadV3
     | FinalizationPayloadV4
     | FinalizationPayloadV5
     | FinalizationPayloadV6
-    | FinalizationPayloadV7,
+    | FinalizationPayloadV7
+    | FinalizationPayloadV8,
     Field(discriminator="payload_schema"),
 ]
 
@@ -371,14 +396,20 @@ def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
     """Preserve expansion and categorized proposals without changing older payload shapes."""
     expandable = isinstance(submission.details, DoorSubmissionDetails) and submission.details.expansion is not None
     grouped = bool(submission.taxonomy.restriction_proposal_fields)
+    general_patterns = isinstance(submission.details, GeneralSubmissionDetails) and bool(
+        submission.details.pattern_keys or submission.details.pattern_proposals
+    )
     typed = (
         expandable
         or grouped
+        or general_patterns
         or bool(submission.links)
         or any(credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits)
     )
     model_type = (
-        FinalizationPayloadV7
+        FinalizationPayloadV8
+        if general_patterns
+        else FinalizationPayloadV7
         if grouped
         else FinalizationPayloadV6
         if expandable
@@ -392,17 +423,23 @@ def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
         document = _submission_document(submission)
         if typed:
             document.update(payload_schema=4, creators=[], credits=[credit.to_json() for credit in submission.credits])
-        if submission.links or expandable or grouped:
+        if submission.links or expandable or grouped or general_patterns:
             document.update(
                 payload_schema=6 if expandable else 5,
                 links=[{"url": link.url, "media_type": link.media_type} for link in submission.links],
             )
-        if grouped:
+        if grouped or general_patterns:
             document.update(
                 payload_schema=7,
                 restriction_proposal_fields=[
                     {"field": field, "name": name} for field, name in submission.taxonomy.restriction_proposal_fields
                 ],
+            )
+        if general_patterns:
+            document.update(
+                payload_schema=8,
+                general_pattern_keys=list(submission.details.pattern_keys),
+                general_pattern_proposals=list(submission.details.pattern_proposals),
             )
         payload = model_type.model_validate(document)
     except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:
