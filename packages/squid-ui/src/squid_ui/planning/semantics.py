@@ -1,6 +1,6 @@
 """Retain semantic units and correspondence independently of target representations."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
@@ -11,6 +11,7 @@ from squid_ui.planning.interaction_semantics import Interaction, interaction_cha
 from squid_ui.presentations import (
     Alternative,
     Alternatives,
+    AtomicNode,
     Budget,
     InteractionChange,
     Omission,
@@ -20,6 +21,14 @@ from squid_ui.presentations import (
 )
 from squid_ui.target_types import Renderable
 from squid_ui.text import TextLike
+
+
+class UnsupportedSemanticError(LayoutInvariantError):
+    """The shared graph has no declared semantics for this vocabulary yet."""
+
+    def __init__(self, kind: str) -> None:
+        self.kind = kind
+        super().__init__(f"semantic correspondence does not yet support {kind}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +58,7 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | EmbeddedValue[ContextT]
     | Budget[RenderTargetT, ContextT]
     | Alternatives[RenderTargetT, ContextT]
+    | AtomicNode[RenderTargetT, ContextT]
     | TableCell
     | FieldPart
     | TextPresentation
@@ -117,6 +127,7 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             | sem.Download()
             | TextPresentation()
             | Alternatives()
+            | AtomicNode()
         ):
             return value.key
         case _:
@@ -125,6 +136,8 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
 
 def semantic_graph[RenderTargetT, ContextT](
     node: Renderable[RenderTargetT, ContextT],
+    *,
+    consume: Callable[[], None] | None = None,
 ) -> SemanticGraph[RenderTargetT, ContextT]:
     """Index supported structure without lowering it or invoking application callbacks.
 
@@ -141,6 +154,8 @@ def semantic_graph[RenderTargetT, ContextT](
         *,
         atomic: bool,
     ) -> SemanticRef:
+        if consume is not None:
+            consume()
         reference = SemanticRef(path)
         if reference in units:
             message = f"duplicate semantic identity {path!r}"
@@ -230,6 +245,7 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Quote()
                 | sem.Download()
                 | TextPresentation()
+                | AtomicNode()
                 | sem.Column()
                 | sem.ListItem()
                 | sem.ActionControl()
@@ -243,8 +259,7 @@ def semantic_graph[RenderTargetT, ContextT](
             ):
                 add(value, path, parent, atomic=True)
             case _:
-                message = f"semantic correspondence does not yet support {type(value).__name__}"
-                raise LayoutInvariantError(message)
+                raise UnsupportedSemanticError(type(value).__name__)
 
     visit(node, None, 0)
     return SemanticGraph(MappingProxyType(units))
@@ -279,14 +294,17 @@ class CheckedAlternative[RenderTargetT, ContextT]:
 
 
 def check_alternative[RenderTargetT, ContextT](
-    group: Alternatives[RenderTargetT, ContextT], choice: Alternative[RenderTargetT, ContextT]
+    group: Alternatives[RenderTargetT, ContextT],
+    choice: Alternative[RenderTargetT, ContextT],
+    *,
+    consume: Callable[[], None] | None = None,
 ) -> CheckedAlternative[RenderTargetT, ContextT]:
     """Check references, coverage, and declared behavior changes, without proving prose meaning.
 
     This validates structural declarations only. Target evaluation must also check
     shortening bounds after localization and enforce inherited layout requirements.
     """
-    source, presentation = semantic_graph(group.content), semantic_graph(choice.node)
+    source, presentation = semantic_graph(group.content, consume=consume), semantic_graph(choice.node, consume=consume)
     explicit: dict[SemanticRef, frozenset[SemanticRef]] = {}
     for mapping in choice.correspondence:
         target = presentation.resolve(mapping.presentation)
@@ -320,6 +338,8 @@ def check_alternative[RenderTargetT, ContextT](
     asserted: set[SemanticRef] = set()
     applied_shortening: set[SemanticRef] = set()
     for target in presentation.leaves:
+        if consume is not None:
+            consume()
         owners = [item for item in explicit if target.keys[: len(item.keys)] == item.keys]
         target_value = presentation.units[target].value
         if isinstance(target_value, TextPresentation):

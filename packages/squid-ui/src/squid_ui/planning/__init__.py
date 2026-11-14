@@ -12,6 +12,9 @@ reservations tell the planner how much space that particular display can use.
 from squid_ui.pages import PagePosition, PagePositionPolicy, resolve_page_position
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.composition import AtomicContract, OccurrenceId
+from squid_ui.planning.composition_planner import CompositionRejectedError, FixedComposition
+from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.dialect import TargetDialect
 from squid_ui.planning.discord import (
     CLASSIC_PROTOCOL_CAPABILITIES,
@@ -68,16 +71,21 @@ __all__ = [
     "DEFAULT_SEARCH_BUDGET",
     "V2_PROTOCOL_CAPABILITIES",
     "AdapterProfile",
+    "AtomicContract",
     "ClassicTarget",
     "ComponentsV2Target",
+    "CompositionOptions",
+    "CompositionRejectedError",
     "DiscordAdapter",
     "DiscordPy27Adapter",
     "DiscordPyAdapter",
     "DiscordTarget",
+    "FixedComposition",
     "HtmlAdapter",
     "HtmlTarget",
     "LayoutOverflowError",
     "MeasuredLayout",
+    "OccurrenceId",
     "PagePosition",
     "PagePositionPolicy",
     "PlanCache",

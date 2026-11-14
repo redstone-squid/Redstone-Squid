@@ -60,6 +60,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         texts: list[str] = []
         text_chars = 0
         scopes: dict[OccurrenceId, ResourceCost] = {}
+        scoped_resources: dict[OccurrenceId, frozenset[ResourceIdentity]] = {}
         uses: list[SharedUse[Asset]] = []
         violations: list[CandidateViolation] = []
         effects: list[FidelityEffect] = []
@@ -149,6 +150,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             nodes = realize(part, in_panel=in_panel)
             # An asset used by a sibling still counts within this subtree's budget.
             shared = SharedResources.combine(uses[uses_before:])
+            scoped_resources[part.offer.occurrence.identity] = frozenset(shared.uses)
             scopes[part.offer.occurrence.identity] = (
                 ResourceCost(
                     {Axis.COMPONENTS: components - components_before, Axis.DISPLAY_TEXT: text_chars - text_before}
@@ -174,6 +176,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             text=tuple(texts),
             resource_axes=frozenset({Axis.COMPONENTS, Axis.DISPLAY_TEXT, Axis.ATTACHMENTS}),
             scoped_costs=scopes,
+            scoped_resources=scoped_resources,
         )
 
     def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:

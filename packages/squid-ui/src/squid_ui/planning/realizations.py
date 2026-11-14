@@ -114,7 +114,7 @@ def semantic_offers[RenderTargetT, ContextT](
         choices: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
         for choice in value.choices:
             context.work.consume()
-            checked = check_alternative(value, choice)
+            checked = check_alternative(value, choice, consume=context.work.consume)
             origin = SourceScope(checked, occurrence.reference, occurrence.origin)
             root = next(ref for ref, unit in checked.presentation.units.items() if unit.parent is None)
             child = SemanticOccurrence(

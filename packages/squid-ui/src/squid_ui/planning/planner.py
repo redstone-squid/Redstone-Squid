@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -11,6 +11,8 @@ from squid_ui.handlers import bind_handlers
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.composition_planner import plan_composition
+from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 from squid_ui.planning.identity import has_routed_page
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.regions import contains_regions, plan_regions
@@ -37,6 +39,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     session: PresentationState | None = None,
     cache: PlanCache[BodyT] | None = None,
     memo: PlanMemo[BodyT] | None = None,
+    composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
     """Choose a target layout and return its Scene, handlers, and planning diagnostics.
@@ -48,6 +51,10 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     Planning reads presentation state without changing it. After successful delivery,
     the frontend must apply the result's session_updates so remembered pages and
     selections match the display. Reservations withhold space needed by other content.
+
+    `composition=CompositionOptions(...)` opts into fixed choices through the shared
+    core. A failed choice raises CompositionRejectedError without claiming other
+    representations are infeasible. This path does not paginate or use caches.
 
     The backend controls fitting and supported adaptations. Discord's strict check
     rejects lossy measurement diagnostics; HTML and Slack reject degradation events.
@@ -67,6 +74,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
         nav=nav,
         session=session,
         search_budget=search_budget,
+        composition=composition,
     )
     return plan_request(rendered, request, cache=cache, memo=memo)
 
@@ -79,18 +87,22 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""
-    # Structural fingerprints omit callbacks, but page factories produce scene route IDs.
-    # Replan these documents so a new route encoder cannot replay obsolete IDs.
-    if has_routed_page(rendered):
-        cache = None
-        memo = None
-    backend = request.target.dialect.planner
-    document = as_document(rendered)
-    result = (
-        plan_regions(document, request)
-        if contains_regions(document.children)
-        else backend.plan(rendered, request, cache=cache, memo=memo)
-    )
+    if isinstance(request.composition, CompositionOptions):
+        result = plan_composition(rendered, request, request.composition)
+    elif request.composition is not None:
+        result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)
+    else:
+        # Routed factories must not replay stale IDs from structural caches.
+        if has_routed_page(rendered):
+            cache = None
+            memo = None
+        backend = request.target.dialect.planner
+        document = as_document(rendered)
+        result = (
+            plan_regions(document, request)
+            if contains_regions(document.children)
+            else backend.plan(rendered, request, cache=cache, memo=memo)
+        )
     frontend = request.target.adapter.frontend or request.target.adapter.name
     bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend)
     result = (
@@ -103,7 +115,10 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
             result,
             form_plans={
                 key: prepare_form(
-                    binding.spec, target=request.target, localization=request.localization, strict=request.strict
+                    binding.spec,
+                    target=request.target,
+                    localization=request.localization,
+                    strict=request.strict or request.composition is not None,
                 )
                 for key, binding in forms.items()
             },

@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, TypedDict, override
+from typing import TYPE_CHECKING, Any, TypedDict, override
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -15,6 +15,9 @@ from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target, TargetIdentity
 from squid_ui.presentation import PresentationState
 from squid_ui.text import NEUTRAL, Localization
+
+if TYPE_CHECKING:
+    from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 
 
 class Identity:
@@ -43,6 +46,7 @@ class StaticPlanOptions(TypedDict, total=False):
     strict: bool
     nav: PlannedNav | None
     reservation: ResourceCost
+    composition: CompositionOptions | None
 
 
 class PlanOptions(StaticPlanOptions, total=False):
@@ -81,6 +85,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     positions: Mapping[str, PagePosition] | None = None
     nav: PlannedNav | None = None
     session: PresentationState | None = None
+    composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None
     search_budget: int = DEFAULT_SEARCH_BUDGET
     presentation: PresentationState = field(init=False, compare=False, repr=False)
     """`session`, or the empty state standing in for it -- resolved once, so that a request

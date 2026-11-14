@@ -5,7 +5,7 @@ referenced units and interactions survive, but cannot prove prose equivalent.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal
 
@@ -220,3 +220,17 @@ def budget[RenderTargetT, ContextT](
     node: Renderable[RenderTargetT, ContextT], *, limits: Mapping[Axis, int]
 ) -> Budget[RenderTargetT, ContextT]:
     return Budget(node, limits)
+
+
+@dataclass(frozen=True, slots=True)
+class AtomicNode[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+    """An opaque semantic leaf realized by explicitly supplied target rules.
+
+    Subclasses retain their own typed payload. Their offers must declare an atomic
+    resource and placement contract. The core never infers internal break points or
+    text transformations from that payload.
+    """
+
+    key: str
+    effects: tuple[FidelityEffect, ...] = field(default=(), kw_only=True)
+    """Author-authorized effects for this atom; preservation is the default."""

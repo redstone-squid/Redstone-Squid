@@ -15,8 +15,9 @@ from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, PressEvent
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
+from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantics import SemanticGraph, SourceScope
-from squid_ui.presentations import Budget, FidelityEffect, SemanticRef
+from squid_ui.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
 from squid_ui.text import NEUTRAL, Localization
 
 
@@ -51,6 +52,41 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
     def sources(self) -> frozenset[SemanticRef]:
         return self.origin.references(self.reference) if self.origin is not None else self.graph.atoms(self.reference)
 
+    def scope_effects(self, effects: tuple[FidelityEffect, ...]) -> tuple[FidelityEffect, ...]:
+        """Resolve an extension's local effect references into the shared source graph."""
+        scoped: list[FidelityEffect] = []
+        for effect in effects:
+            reference = (
+                self.reference if effect.source.keys == self.reference.keys[-1:] else self.graph.resolve(effect.source)
+            )
+            sources = self.origin.references(reference) if self.origin is not None else frozenset({reference})
+            scoped.extend(replace(effect, source=source) for source in sorted(sources, key=lambda ref: ref.keys))
+        return tuple(scoped)
+
+
+@dataclass(frozen=True, slots=True)
+class AtomicContract:
+    """Declared costs and legal placements for one opaque realization.
+
+    Shared costs identify reusable resources; their live values come from evaluation.
+    The complete target must still validate the prepared native output independently.
+    """
+
+    cost: ResourceCost = EMPTY_COST
+    shared_costs: Mapping[ResourceIdentity, ResourceCost] = field(default_factory=dict)
+    capabilities: frozenset[str] = frozenset()
+    placements: frozenset[Placement] = frozenset(Placement)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "shared_costs", MappingProxyType(dict(self.shared_costs)))
+
+    @property
+    def total(self) -> ResourceCost:
+        result = self.cost
+        for cost in self.shared_costs.values():
+            result += cost
+        return result
+
 
 @dataclass(frozen=True, slots=True)
 class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
@@ -70,6 +106,7 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     interaction: bool = False
     binding: ActionBinding[PressEvent[ContextT]] | None = None
     form: FormBinding[ContextT] | None = None
+    atomic: AtomicContract | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,12 +171,7 @@ class PlanningContext:
     strict: bool = True
     palette: Palette = DEFAULT_PALETTE
     capabilities: frozenset[str] = frozenset()
-
-
-@dataclass(frozen=True, slots=True)
-class ResourceIdentity:
-    kind: str
-    key: str
+    capacities: Mapping[Axis, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,8 +261,11 @@ class Evaluation[ResourceT, PreparationT = None]:
     scoped_costs: Mapping[OccurrenceId, ResourceCost] = field(default_factory=dict)
     """Subtree usage with shared resources deduplicated independently within each scope."""
 
+    scoped_resources: Mapping[OccurrenceId, frozenset[ResourceIdentity]] = field(default_factory=dict)
+
     def __post_init__(self) -> None:
         object.__setattr__(self, "scoped_costs", MappingProxyType(dict(self.scoped_costs)))
+        object.__setattr__(self, "scoped_resources", MappingProxyType(dict(self.scoped_resources)))
 
     @property
     def cost(self) -> ResourceCost:
@@ -278,6 +313,8 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
     bindings: dict[str, ActionBinding[PressEvent[ContextT]]] = {}
     forms: dict[str, FormBinding[ContextT]] = {}
     interactions: set[SemanticRef] = set()
+    atoms: dict[OccurrenceId, AtomicContract] = {}
+    preflight: list[CandidateViolation] = []
     while pending:
         context.work.consume()
         part = pending.pop()
@@ -300,9 +337,29 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
                 raise LayoutInvariantError(message)
             forms[form.key] = form
         semantic = part.offer.occurrence.graph.units[part.offer.occurrence.reference].value
+        if isinstance(semantic, AtomicNode):
+            contract = part.offer.atomic
+            if contract is None or part.children:
+                message = "opaque atomic offers require a contract and cannot expose invented children"
+                raise LayoutInvariantError(message)
+            if part.offer.effects != part.offer.occurrence.scope_effects(semantic.effects):
+                message = "atomic offers must retain the author's declared effects"
+                raise LayoutInvariantError(message)
+            atoms[identity] = contract
+            if contract.capabilities - context.capabilities:
+                preflight.append(
+                    UnsupportedCapability(
+                        identity,
+                        "atomic requirements: " + ", ".join(sorted(contract.capabilities - context.capabilities)),
+                    )
+                )
+            if part.offer.occurrence.placement not in contract.placements:
+                preflight.append(ConstraintViolation(identity, "atomic placement"))
         if isinstance(semantic, Budget) and semantic.limits:
             budgets[identity] = semantic.limits
         pending.extend(part.children)
+    if preflight:
+        return Evaluation(violations=tuple(preflight))
     evaluation = rules.evaluate(candidate, context)
     if set(evaluation.effects) - allowed:
         message = "target evaluation introduced an undeclared fidelity effect"
@@ -315,7 +372,22 @@ def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
         return replace(evaluation, violations=(*evaluation.violations, violation))
     if not evaluation.feasible:
         return evaluation
-    violations: list[CandidateViolation] = []
+    violations: list[CandidateViolation] = [
+        CapacityExceeded(candidate.offer.occurrence.identity, axis, used, capacity)
+        for axis, used, capacity in evaluation.cost.over(context.capacities)
+    ]
+    for identity, contract in atoms.items():
+        if evaluation.scoped_costs.get(identity) != contract.total:
+            message = "atomic evaluation disagrees with its declared resource cost"
+            raise DrawInvariantError(message)
+        if evaluation.scoped_resources.get(identity, frozenset()) != contract.shared_costs.keys():
+            message = "atomic evaluation disagrees with its declared shared resources"
+            raise DrawInvariantError(message)
+        for resource, cost in contract.shared_costs.items():
+            use = evaluation.resources.uses.get(resource)
+            if use is None or use.cost != cost:
+                message = "atomic evaluation lost a declared shared resource"
+                raise DrawInvariantError(message)
     for identity, limits in budgets.items():
         unsupported = limits.keys() - evaluation.resource_axes
         violations.extend(

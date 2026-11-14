@@ -99,3 +99,9 @@ class TargetLimits(Protocol):
 
 
 __all__ = ["EMPTY_COST", "TEXT_AXES", "Axis", "ResourceCost", "TargetLimits"]
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceIdentity:
+    kind: str
+    key: str
