@@ -434,7 +434,13 @@ class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparati
     ) -> (
         tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]
         | OfferDiscovery[RenderTargetT, ContextT, PayloadT]
-    ): ...
+    ):
+        """Discover realizations for an immutable occurrence and planning context.
+
+        Search memoizes discovery within one call. Offers must not depend on the
+        order in which other occurrences are explored or on mutable external state.
+        """
+        ...
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT], context: PlanningContext

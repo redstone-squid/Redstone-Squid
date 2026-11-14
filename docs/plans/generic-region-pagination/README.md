@@ -1,7 +1,7 @@
 # Generic region pagination roadmap
 
-Status: phases 1–5 complete; phase 6 remains in progress. [Target coverage and migration](06-target-coverage.md) records
-the current capability matrix, application migration, and remaining integration work. [Shared allocation search](03-joint-search.md) documents the solver.
+Status: all six phases complete. [Target coverage and migration](06-target-coverage.md) records
+the final capability matrix, application migration, and native extension contracts. [Shared allocation search](03-joint-search.md) documents the solver.
 [Pagination and presentation state](04-pagination-state.md) records production integration, anchor
 recovery, remaining capability routes, and the production integration boundaries. [Reuse and performance](05-reuse-performance.md)
 records partition hints, current-call metrics, and measured workloads.
@@ -153,7 +153,7 @@ Depends on phases 3 and 4. Earlier phases should already expose the information 
 
 ## Phase 6 Complete target coverage and migration
 
-Implementation progress: [Target coverage and migration](06-target-coverage.md).
+Implemented outcome: [Target coverage and migration](06-target-coverage.md).
 
 Finish integration for the existing target families identified in phase 1. Validate shared
 behavior through conformance tests while respecting actual target capabilities. Unsupported

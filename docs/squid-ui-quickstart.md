@@ -257,7 +257,7 @@ to prohibit the next break. Existing action keys retain their dispatch scopes.
 policies. Planning never invokes change handlers. Explicit application page
 requests take precedence over remembered anchors. A removed anchor recovers to
 the nearest surviving item in the last displayed order, preferring the following
-item on a tie. `sl.paged` retains its character cap in V2 regions. Other targets
+item on a tie. `sl.paged` retains its character cap in V2 and HTML regions. Other targets
 use explicit regions or lists; a character grant does not map unambiguously to
 classic's separate text pools or Slack's block budget.
 
@@ -279,8 +279,50 @@ target evaluation. Exhaustion without a certificate raises
 
 Unsupported combinations raise `JointUnsupportedError` with capability diagnostics;
 they never retry through another region solver. Slack modals retain their separate
-form-only contract. Native adaptation ladders and extensions need explicit shared
-realizations before they can participate in regions. Non-region documents can
-still use their target's existing fitter; `report.legacy_pagination` identifies
+form-only contract. Native `Variants` participates with checked source correspondence
+and loss contracts; V2 `NativeItem` participates through the Discord adapter's native
+validation contract. Non-region documents can still use their target's existing
+fitter; `report.legacy_pagination` identifies
 missing shared capabilities. See the [target capability matrix](plans/generic-region-pagination/06-target-coverage.md#target-capability-matrix)
 for supported vocabulary and deliberate limitations.
+
+
+## Native alternatives inside regions
+
+A native ladder defaults to using its first rung as canonical content. When the
+rungs deliberately change layout, supply semantic `content` and map each rung to
+that source. This example declares two equivalent presentations of one paragraph:
+
+```python
+from squid_ui.primitives import Never, Panel, Text, Variant, Variants
+
+summary = Variants(
+    (
+        Variant(
+            (Panel((Text("Build summary", overflow=Never()),)),),
+            correspondence=(sl.corresponds("@content", "summary"),),
+        ),
+        Variant(
+            (Text("Build summary", overflow=Never()),),
+            correspondence=(sl.corresponds("@content", "summary"),),
+        ),
+    ),
+    content=sl.paragraph("Build summary", key="summary"),
+    key="summary-layout",
+)
+layout = sl.region(summary, key="details", title="Details")
+```
+
+`@content` names the group of nodes in a native rung. Correspondence is an author
+declaration about meaning; the planner checks coverage and structural constraints,
+not prose equivalence. A rung that drops or replaces content needs a specific
+`Variant.contract`, such as `sl.losses(sl.omit("summary"))`. Changed control behavior
+needs named interaction effects. Strict planning rejects those effects even when
+the rung is marked `EXACT` or `REFORMATTED`.
+
+Primitive `Paginate` also works without a key, using scoped positional ownership.
+Supply an explicit key when the pager must retain its position after reordering.
+On `Lines`, per-entry `Alt` ladders preserve individual line identity, while
+`overflow=Alts(...)` replaces the whole collection and reports collection loss.
+See the [native extension contract](squid-ui-architecture.md#semantic-authoring-adaptation-and-exact-primitives)
+for integrating opaque widgets and shared attachments.

@@ -227,8 +227,11 @@ def test_collection_replacement_has_one_source_without_inventing_line_correspond
 
 def test_collection_replacement_source_can_be_referenced_as_one_text_unit() -> None:
     source = native.Lines(("one", "two"), overflow=alts("short"))
+    choice = sl.Alternative[sl.DiscordTarget](
+        sl.present_text(sl.ref("@0"), key="copy"), key="copy", fidelity=sl.equivalent()
+    )
     node = sl.alternatives(
-        sl.alternative(sl.present_text(sl.ref("@0"), key="copy"), key="copy", fidelity=sl.equivalent()),
+        choice,
         content=source,
         key="collection",
     )

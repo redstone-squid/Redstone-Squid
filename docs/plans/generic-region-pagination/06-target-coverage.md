@@ -1,12 +1,11 @@
 # Target coverage and migration
 
-Status: in progress. Portable document nodes and the principal native Discord layouts now use shared offers. Native variant ladders and opaque extensions still need integration contracts.
+Status: complete. Shared document pagination covers all five document targets, including native Discord ladders, pagers, and contracted extensions. The capability matrix records target restrictions.
 
 ## Evidence and decisions
 
-Phases 2–5 provide a target-neutral solver, but production selection still gates
-on three limit classes and a smaller vocabulary than the semantic graph supports.
-Classic messages and Slack Home need direct composition rules. Slack modals are
+Phases 2–5 supplied the target-neutral solver. Phase 6 extended production selection
+to classic messages and Slack Home, with direct composition rules for each. Slack modals are
 form submission surfaces: their existing contract requires one top-level form
 trigger, rather than an independently navigable document. Preserve that contract
 and report it explicitly when region pagination is requested.
@@ -18,9 +17,8 @@ Do not convert a completed V2 scene into classic output or a completed HTML scen
 into Slack output.
 
 Expand shared vocabulary where semantics and target resources can be preserved.
-Keep native extensions and authored adaptation ladders on their explicit target
-paths until they supply shared offers; do not guess equivalence or flatten hard
-structure requirements. Unsupported regions must report the missing capability,
+Native extensions and authored adaptation ladders now supply explicit composition
+contracts; equivalence is not guessed and hard structure requirements remain enforced. Unsupported regions must report the missing capability,
 not run the obsolete V2-only region search.
 
 ## Reviewable steps
@@ -50,8 +48,8 @@ regions still uses its existing target fitter; the report names that route.
 
 | Surface | Shared pagination and resource contract | Deliberate constraints |
 | --- | --- | --- |
-| Discord V2 | Regions, root pages, lists, character-based `Paged`, and keyed primitive `Paginate`; component, text, and attachment capacities. | Explicit nested blocks cannot become nested V2 containers. Nested semantic sections retain headings inside the enclosing panel. |
-| Classic Discord | Regions, root pages, lists, count-based keyed primitive `Paginate`; independent content, embed text, embed count, row, control, and attachment capacities. Blocks become embeds; loose prose uses message content. | Character grants have no single text pool. Inline download widgets and spoiler embed images have no classic representation; document attachments remain available. |
+| Discord V2 | Regions, root pages, lists, character-based `Paged`, and primitive `Paginate`; component, text, and attachment capacities. | Explicit nested blocks cannot become nested V2 containers. Nested semantic sections retain headings inside the enclosing panel. |
+| Classic Discord | Regions, root pages, lists, count-based primitive `Paginate`; independent content, embed text, embed count, row, control, and attachment capacities. Blocks become embeds; loose prose uses message content. | Character grants have no single text pool. Inline download widgets and spoiler embed images have no classic representation; document attachments remain available. |
 | HTML | Regions, root pages, lists and character-based `Paged`; visible text is measured for authored budgets, with no global message budget. | Native extensions need typed target rules. |
 | Slack message | Regions, root pages, lists; block capacity, local text/control limits, and message fallback-text capacity. | No disabled buttons/selects, inline attachments, spoiler images, or accent-bearing panels. Images require public URLs. |
 | Slack Home | Same direct block composition and navigation as messages, using Home's block capacity. | Same block vocabulary constraints; no message fallback-text budget. |
@@ -105,7 +103,7 @@ accessory controls count against native limits, and only visible accessories
 publish bindings. Premium buttons retain their SKU in exact rows, automatic rows,
 and section accessories; they require the target's premium-button capability and
 introduce no application callback. A section text slot cannot host a pager's controls; paginate the
-enclosing region instead. Other native extensions still need explicit composition rules.
+enclosing region instead. Opaque native extensions use the explicit composition contract described below.
 
 Native budget and break wrappers also participate directly. Budgets enforce the
 finite `preferred + stretch` ceiling; native `best_effort` only relaxes the minimum
@@ -127,7 +125,7 @@ and footers. Cards remain indivisible, and message content repeats on keyed root
 pages. Embed slots cannot host pager controls: paginate the enclosing cards.
 Failures use shared constraint diagnostics rather than legacy fitter messages.
 
-## Compatibility and deferred contracts
+## Compatibility and extension contracts
 
 `regions.py` and its backend-probing frontier search are removed. Discovery lives
 in `region_detection.py`; unsupported explicit regions raise `JointUnsupportedError`
@@ -138,7 +136,7 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Native text, headings, code and footers now expose their own keyed pagination
+Native text, headings, code and footers now expose their own pagination
 contracts, including rich inline content. Fragments preserve styles and link
 destinations, keep entity leaves intact, and rejoin adjacent styled fragments
 before serialization. Count boundaries never split an entity identifier. The
@@ -149,8 +147,9 @@ Item browsers and disclosures now expose only their open content to shared
 allocation, retaining hidden layout cursors until that content reopens. Navigation now uses shared
 offers with destination ownership separate from layout page coordinates. Palette overrides,
 status/progress content and section thumbnails now use shared composition. The retained
-fitters still serve native variant ladders, opaque extensions and unkeyed primitive
-pagination; they remain active compatibility machinery.
+fitters still serve ordinary layouts outside shared routing and unsupported compatibility
+vocabulary. Native ladders, contracted opaque extensions, and unkeyed primitive pagers
+now have shared routes; a failed shared search never selects a fitter.
 
 Explicit prose truncation and native `Truncate` text now offer shared shortening
 effects. Head/tail retention and importance survive migration, while strict mode
@@ -198,8 +197,8 @@ remain application-owned.
 Cross-target tests exercise independent coordinates, retained allocation reuse,
 production lists, text roles, repeated headings, packed controls, choices, image
 coverage, visible bindings, shared attachments, and concrete capability refusals.
-The latest combined core, Discord, Slack and widget suites passed 3,630 tests with
-`--no-cov`. The final single-text overflow change passed 48 focused checks afterward.
+The final combined core, Discord, Slack and widget suites passed 3,668 tests with
+`--no-cov`, including native adapter validation and component-pressure regressions.
 Build-browser, schematic-access, search-help and command-help regressions passed
 108 tests. Whole-project Pyrefly reports zero errors, installed Ruff/format hooks
 pass, and `git diff --check` is clean. Async delivery tests run outside the sandbox
@@ -212,20 +211,41 @@ individually; canonical content supplies identity and need not itself render on
 the selected target. V2 panels, classic cards and portable presentations can share
 one checked group without losing their source correspondence.
 
-## Remaining implementation sequence
+## Completed integration contracts
 
-1. Integrate native `Variants` without inferring correspondence from unrelated
-   replacement text. Its current fidelity flag does not express per-source coverage
-   or changes to control behavior; checked alternatives already provide that contract.
-2. Connect native `Extension` and `RawItem` to typed composition contracts for
-   contextual costs, shared resources and legal placement. A standalone declared
-   cost or a prepared renderer object does not establish those guarantees.
-3. Resolve the remaining primitive compatibility routes, including unkeyed pagers
-   and whole-collection `Lines` replacement ladders. Preserve authored ownership
-   and report loss against the correct source units.
-4. Reconcile public documentation and re-run conformance after those changes,
-   then remove any fitter paths that have become unused.
+Native `Variants` now converts to checked alternatives. Authors can provide canonical
+`content`, per-rung `correspondence`, and a `contract` naming losses or interaction
+changes. Without explicit content, the first rung supplies the source, including its
+hard structural boundaries. Capability requirements filter candidates before search.
+Exact presentations precede reformatted ones, and both precede declared loss. Strict
+mode permits preservation through reformatting. Role panels and regression fixtures
+now declare their actual source and control contracts instead of relying on fidelity
+flags to hide missing content or changed behavior.
 
-These are implementation gaps, not accepted reductions of scope. Phase 6 and the
-roadmap remain open. Slack modal ownership and the target limitations in the matrix
-are separate, deliberate capability constraints.
+Component-pressure search caches discovery per immutable occurrence and tries a
+structural repair chain before broad compact probes. Ordinary candidates stay in the
+frontier, and bounded exhaustion retains its existing meaning. Priority determines
+which eligible ladder changes first; the planner no longer compacts every ladder
+before considering a sufficient partial repair.
+
+V2 `RawItem` supports `NativeComposition`: an atomic resource contract, visible text,
+shared attachments, legal slots, and an independent native measurement callback.
+`Extension` adapters can implement `ComposableExtension.compose` to supply it. The
+Discord `NativeItem` adapter now does so: it prepares items once, validates detached
+native trees, rejects nested containers and undeclared attachment references, and
+shares attachment costs across visible widgets. Native callbacks remain native;
+Squid-managed bindings require typed control offers. Other targets use an extension's
+portable fallback or explicit target rules, since a Discord widget is not a portable
+representation.
+
+Unkeyed primitive pagers use scoped positional identity. Explicit keys remain the
+choice for ownership that must survive reordering. Whole-collection `Lines` alternatives
+are atomic source units: replacement and final-rung shortening report collection loss,
+while per-entry ladders retain individual line identities. Source text references can
+copy the collection's primary text without inventing per-line correspondence.
+
+The superseded region solver and `TextPages` bridge are removed. Remaining target
+fitters are active compatibility code, not abandoned region implementations. Public
+architecture documentation now describes shared work accounting, certification, native
+contracts, and positional pager ownership. No implementation steps remain in phase 6;
+Slack modal ownership and the target restrictions above are deliberate capabilities.

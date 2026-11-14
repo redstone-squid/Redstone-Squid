@@ -363,59 +363,74 @@ selects, while routed tally controls use one `RoutedChoices` route for all optio
 Spatial data has three explicit contracts. `sl.semantic.TableDisplay.MATRIX` is an authoritative dense
 code-block representation. `sd.button_grid(*cells, ...)` returns exact Discord rows
 and fails planning when that chosen shape exceeds Discord limits. `sl.grid(*cells, ...)` is
-semantic: its sticky `discord.grid` strategy moves from button rows to a coordinate matrix and
-select, then to a paged select. Every rung submits the same stable cell key in a
-`SelectionEvent`; unavailable cells remain visible but cannot be selected.
+semantic: shared offers choose button rows, a coordinate matrix and select, or a paged
+select. Every rung submits the same stable cell key in a `SelectionEvent`; unavailable
+cells remain visible but cannot be selected. Unchanged grids retain their certified
+allocation; a shape change recomputes it.
 
-Strategy ranking is lexicographic rather than scalar: representation stability by
-`Flexibility`, author display preference, pager count, transition distance, then stable path
-and strategy identifiers. Per-adapter versions invalidate only that adapter's sticky state.
-Choosing between alternatives is one search, not several. Semantic strategies, semantic
-fallback branches, and primitive `Variants` rungs are all decisions in a single conditional
-state graph the planner explores best-first; `measure()` evaluates exactly one concrete
-primitive layout and never chooses anything. The graph is conditional because a decision only
-exists once the branch containing it is selected, so nine axes behind an unopened fallback
-cost nothing.
+Shared planning indexes canonical semantic content, discovers target realizations,
+and searches representation choices and page boundaries together. Targets account for
+local and aggregate limits, shared resources such as attachments, and navigation costs.
+They build and independently validate scenes after admission; the solver does not
+inspect target scene bodies. Only the selected page publishes its bindings and resources.
 
-States are canonical: a decision the selected branches no longer expose is dropped, a newly
-reachable axis opens at its cheapest candidate, and changing a semantic representation
-discards the ladder positions that were measured against the old tree. Frontier entries are
-ranked by the structural loss they already commit to, then by semantic strategy cost;
-completed candidates are ranked by their measured loss merged with that structural loss. So a
-lossless representation change is always tried before a fallback the author priced as loss.
-If no wholly lossless candidate exists, author priority is compared before loss kind: semantic
-substitutions beat truncation, truncation beats spilling entries, and spilling beats dropping
-a whole node.
+Checked alternatives declare correspondence to the same source content. Coverage,
+control behavior, hard structure, and pagination ownership are checked before a choice
+can participate. Preservation precedes declared loss; strict planning permits a change
+of presentation but rejects omission, replacement, shortening, or interaction changes.
+Explicit contracts cannot remove a pager or weaken a hard source budget.
 
-Search stops as soon as the frontier's lower bound cannot beat the best feasible incumbent.
-The default budget is 512 `measure()` evaluations; root-pagination probes are packing rather
-than optimization and are not counted. A ladder product too large for the remaining budget is
-walked one deterministic component-saving step at a time instead. Exhaustion, and any use of
-that guidance, returns the best incumbent and records `planner.search_fallback`.
+Search is bounded by work operations, including discovery, measurement, and certification.
+Production defaults start at 50,000 operations and grow with the estimated workload,
+up to 2,000,000. An explicit `search_budget` supplies the operation limit directly.
+Discovery is memoized within the current immutable occurrence and planning context.
+Structural repair probes try promising combinations under component pressure; they
+change exploration order without discarding the ordinary search frontier. Exhaustion
+may return a certified incumbent without proving optimality, or report that no feasible
+candidate was found within the budget. Reports distinguish this from proven infeasibility.
 
-Every candidate gets its own `CursorCoordinator` and lowering, so a rejected state leaves no
-pagers, assets, events, bindings, or staged session writes behind. `PlanCache` stores the
-winning fallback branches, strategy assignment, and ladder positions; a hit re-lowers only
-those and recollects current callbacks without measuring again.
+A retained allocation supports cursor-only turns without new search. Content, constraints,
+or bindings that change require current certification. Partition caches supply hints;
+they do not authorize stale callbacks or old route encodings. Rejected candidates publish
+no bindings, assets, or staged presentation changes.
+
+The target fitters remain active for ordinary layouts outside shared routing and for
+unsupported compatibility vocabulary. Their strategy caches and measurement budgets
+are separate from shared allocation metrics. Explicit regions never retry through a
+fitter after shared search fails.
 
 Target-shaped nodes live under `squid_ui.primitives`. Their policies are explicit:
 
 - `Truncate` and `Spill` shorten content only when the author wraps or configures it.
-- `Alt`/`Alts` supply text ladders and per-entry drop priority.
-- `Paginate` has an explicit key, measured footer/navigation chrome, and optional `min_fill`
-  and `widows` break preferences.
-- `Variants` supplies an ordered ladder of complete structural alternates for component
-  pressure; rungs may be capability-gated, and the planner filters them after target lowering
-  so the survivors number from zero for the rest of the search.
+- `Alt`/`Alts` supply text ladders and per-entry drop priority. On `Lines`, per-entry
+  ladders preserve line identities; `overflow=Alts(...)` replaces the whole collection
+  and reports loss against that collection.
+- `Paginate` has measured footer/navigation chrome and optional `min_fill` and `widows`
+  break preferences. An omitted key uses scoped positional identity; use an explicit key
+  when ownership must survive reordering.
+- `Variants` supplies an ordered ladder of complete structural alternates. Its first rung
+  supplies canonical content unless `content` is explicit. `Variant.correspondence` maps
+  presentations to that source, and `Variant.contract` declares specific losses or
+  interaction changes. The legacy fidelity flag alone cannot authorize loss in shared
+  composition. Capability requirements filter rungs before exploration.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
 same losses at intent level. `budget` adds a hard minimum reservation, preferred size, and
 lossless stretch band. Consequential actions, status, and code are never silently lost.
 
-Target-native features use Extension(kind, version, payload, fallback). A target adapter
-prepares and measures the native resource once. Unsupported targets use the mandatory
-portable fallback. Extension payloads in scenes are versioned and JSON-safe.
+Target-native features use `Extension(kind, version, payload, fallback)`. Unsupported
+targets use the mandatory portable fallback. Shared V2 composition accepts adapters
+implementing `ComposableExtension.compose`, which returns a `RawItem` carrying a
+`NativeComposition` contract. That contract declares additive cost, shared attachments,
+visible text, legal placement, and an independent native validator. A bare legacy cost
+is insufficient. The Discord `NativeItem` adapter supplies this contract, prepares each
+item once per discovery, and audits local native limits without attaching it to a view.
+
+Native callbacks stay on the prepared renderer object. Extensions needing Squid-managed
+bindings must expose typed control offers. Other target-specific widgets participate
+through typed target rules and atomic contracts. Extension scene payloads remain
+versioned and JSON-safe; live objects belong in the resource side table.
 
 Strings and translations default to literal text. `tr("Save", key="save")`,
 `md_tr(t"**Build** {title}", key="build-title")`, and `md()` all return the same
@@ -1157,7 +1172,7 @@ with an additional first argument: the input `TransitionRoute`. After validation
 `driver.transition(machine, route.state, route.action, values=(str(number - 1),))`.
 Route encoders must be deterministic and safe for repeated planning calls.
 
-`sl.paged(container, key=..., chars=...)` applies a character budget on V2 while shared
+`sl.paged(container, key=..., chars=...)` applies a character budget on V2 or HTML while shared
 allocation pages its heterogeneous children. `sl.unbreakable` suppresses internal cuts;
 `sl.keep_with_next` prohibits the next break. Soft fill and widow preferences participate
 in allocation quality. Section headings repeat with their body on continuation pages.
