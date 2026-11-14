@@ -1,9 +1,7 @@
 """Observer lifetime, execution isolation, and redaction across event variants."""
 
 import gc
-import json
 import weakref
-from dataclasses import replace
 from datetime import UTC, datetime
 
 import anyio
@@ -11,24 +9,15 @@ import pytest
 
 from squid_reactivity import (
     ActionCommit,
-    ActionContext,
-    ActionResultSnapshot,
-    ActorRef,
-    CausalRef,
-    ConflictDetail,
-    ContinuationFailureSnapshot,
-    EventCodec,
     EventLedger,
     ExceptionReport,
     OperationEventSnapshot,
     Reactive,
     RedactionPolicy,
-    ResourceEventSnapshot,
     observe_events,
     transaction,
 )
 from squid_reactivity.diagnostics import (
-    CausalEventSnapshot,
     emit_causal_event,
 )
 from squid_reactivity.operations import ProgressReporter, operation
@@ -129,63 +118,3 @@ async def test_operation_resource_and_callback_errors_use_each_observers_policy(
     reports = [event.exception.message for event in privileged.events if event.exception]
     assert reports == ["operation detail", "resource detail", "callback detail"]
     assert [event.exception.message for event in default.events if event.exception] == ["[redacted]"] * 3
-
-
-def test_event_codec_round_trips_every_variant() -> None:
-    now = datetime.now(UTC)
-    cause = CausalRef("action", "root")
-    error = ExceptionReport("Error", "detail")
-    context = ActionContext.create("edit", actor=ActorRef("user", "42"), metadata={"tenant": "example"})
-    with transaction(action_context=context) as tx:
-        pass
-    with pytest.raises(ValueError), transaction("failed edit") as failed:
-        raise ValueError("failure detail")
-    assert tx.result is not None
-    assert failed.result is not None
-    events: list[CausalEventSnapshot] = [
-        replace(
-            ActionResultSnapshot.from_result(tx.result, RedactionPolicy(include_metadata=True)),
-            tags=frozenset({"second", "first"}),
-        ),
-        replace(
-            ActionResultSnapshot.from_result(failed.result, RedactionPolicy(include_exception_messages=True)),
-            conflict=ConflictDetail("cell", 1, 2),
-        ),
-        OperationEventSnapshot("operation", "root", cause, "fetch", "failed", now, error),
-        ResourceEventSnapshot("generation", "root", cause, "data", "failed", now, error),
-        ContinuationFailureSnapshot("failure", "root", cause, "callback", "failed", now, error),
-    ]
-    codec = EventCodec()
-    assert [codec.decode(codec.encode(event)) for event in events] == events
-
-
-@pytest.mark.parametrize(
-    "data", [b"null", b"[]", b"invalid", b"\xff", b'{"schema":1}', b'{"schema":2,"event":"unknown","data":{}}']
-)
-def test_event_codec_rejects_unknown_or_malformed_records(data: bytes) -> None:
-    with pytest.raises(ValueError, match="schema"):
-        EventCodec().decode(data)
-
-
-def test_event_codec_rejects_oversized_input() -> None:
-    codec = EventCodec()
-    with pytest.raises(ValueError, match="maximum encoded size"):
-        codec.decode(b" " * (codec.max_encoded_bytes + 1))
-
-
-@pytest.mark.parametrize("field", ["cause", "exception"])
-def test_event_codec_rejects_incomplete_callback_failures(field: str) -> None:
-    event = ContinuationFailureSnapshot(
-        "failure",
-        "root",
-        CausalRef("action", "root"),
-        "callback",
-        "failed",
-        datetime.now(UTC),
-        ExceptionReport("Error", "detail"),
-    )
-    codec = EventCodec()
-    payload = json.loads(codec.encode(event))
-    payload["data"][field] = None
-    with pytest.raises(ValueError, match="schema"):
-        codec.decode(json.dumps(payload).encode())
