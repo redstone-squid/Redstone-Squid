@@ -225,8 +225,10 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     steps = sum(len(item.fallbacks) if isinstance(item, Alt) else 0 for item in node.lines)
                     combinations = max(combinations, len(node.lines) + steps)
                     return node
-                if isinstance(overflow, Never | Truncate | Alts | Drop) and not isinstance(node, primitive.Lines):
-                    if isinstance(overflow, Truncate | Alts) or shortening_depth:
+                if isinstance(overflow, Never | Truncate | Alts | Drop | Spill | Condense) and not isinstance(
+                    node, primitive.Lines
+                ):
+                    if isinstance(overflow, Truncate | Alts | Condense) or shortening_depth:
                         length = len(resolve_text(node.content, request.localization).plain())
                         if isinstance(overflow, Alts):
                             length = max(length, len(overflow.ladder[-1]))

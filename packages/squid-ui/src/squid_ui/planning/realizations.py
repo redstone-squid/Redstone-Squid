@@ -966,6 +966,11 @@ def semantic_offers[RenderTargetT, ContextT](
         return tuple(offers)
     if isinstance(value, primitive.Text | primitive.Heading | primitive.Footer | primitive.Code):
         overflow = Truncate(keep) if keep is not None else value.overflow
+        # Without entry ladders, condensation shortens prose and spilling drops it whole.
+        if isinstance(overflow, Condense):
+            overflow = Truncate()
+        elif isinstance(overflow, Spill):
+            overflow = Drop()
         if not native_controls or not isinstance(overflow, Never | Truncate | Alts | Drop | Paginate):
             return ()
         payload = TextRealization(resolve_text(value.content, context.localization).nodes)

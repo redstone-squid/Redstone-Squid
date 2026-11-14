@@ -13,7 +13,7 @@ from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Drop, Never, alts
+from squid_ui.primitives.constraints import Condense, Drop, Never, Spill, alts
 from squid_ui.target_types import DiscordAdapter
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-overflow.discord", "1")
@@ -21,6 +21,24 @@ TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(ADAPTER, limits=V2Limits(total_text=10)),
     classic_target(ADAPTER, limits=ClassicLimits(content=10)),
 ]
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+@pytest.mark.parametrize("overflow", [Condense(), Spill()])
+def test_single_text_condensation_and_spill_keep_their_existing_loss_permission(
+    target: Target[Any, Any, Any, Any], overflow: Condense | Spill
+) -> None:
+    node = sl.region(native.Text("abcdefghijk", overflow=overflow), key="r", title="R")
+    result = plan(node, target=target)
+    assert result.allocation is not None
+    if isinstance(overflow, Condense):
+        assert "abcdefghi…" in scene.Codec.dumps(result.scene)
+        assert [event.message for event in result.report.events] == ["Shortening"]
+    else:
+        assert "abcdef" not in scene.Codec.dumps(result.scene)
+        assert [event.message for event in result.report.events] == ["Omission"]
+    with pytest.raises(JointInfeasibleError):
+        plan(node, target=target, strict=True)
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
