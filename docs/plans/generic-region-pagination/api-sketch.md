@@ -136,6 +136,8 @@ sl.region(
 Root and local pagination will use the same planning machinery. Author APIs for budgets, break
 preferences, and ownership can evolve during migration; they must not create separate solvers.
 Current key arguments remain the authoring mechanism for identity, without an extra identity wrapper.
+Author budgets separate an explicit hard `max` from allocation preferences; `prefer` and `stretch`
+do not implicitly cap content or authorize loss.
 
 Separate semantic identity, occurrence identity, representation choice, and page position in the
 planning model. Occurrences carry inherited policies and placement context. Representation changes

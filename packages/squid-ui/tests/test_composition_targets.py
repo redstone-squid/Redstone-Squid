@@ -18,9 +18,11 @@ from squid_ui.planning.composition import (
     OccurrenceId,
     PlanningContext,
     SemanticOccurrence,
+    UnsupportedCapability,
     WorkBudget,
     build_composition,
 )
+from squid_ui.planning.composition_html import HtmlCompositionRules
 from squid_ui.planning.composition_slack import SlackCompositionRules
 from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.limits import V2Limits
@@ -28,6 +30,7 @@ from squid_ui.planning.realizations import TableRealization, select_composition
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import semantic_graph
 from squid_ui.presentations import ref
+from squid_ui.semantic import TableDisplay
 from squid_ui.slack.target import SlackComponentLimits, SlackMessageLimits
 from squid_ui.target_types import RenderTarget
 
@@ -228,3 +231,83 @@ def test_slack_constructs_and_validates_without_serializing_again(monkeypatch: p
 
 def reject_reserialization(nodes: tuple[tree.Node, ...]) -> str:
     raise AssertionError("construction and validation must consume prepared target text")
+
+
+def test_html_has_no_implicit_message_size_limit() -> None:
+    content = "a" * 20000
+    node = sl.paragraph(content, key="text")
+    rules, context = HtmlCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("text"))
+    candidate = select_composition(occurrence, rules, context, selections={})
+    assert isinstance(candidate, CandidateComposition)
+    result = build_composition(candidate, rules, context)
+    assert isinstance(result, BuiltComposition)
+    assert result.evaluation.text == (content,)
+    assert result.evaluation.cost.axes == ()
+    assert result.body is result.evaluation.preparation
+
+
+def test_html_preserves_table_structure_and_source_references() -> None:
+    node = sl.table(
+        sl.columns(sl.column("A", key="a"), sl.column("B", key="b")), sl.table_row("1", "2", key="r"), key="table"
+    )
+    rules, context = HtmlCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("table"))
+    candidate = select_composition(occurrence, rules, context, selections={occurrence.identity: "table"})
+    assert isinstance(candidate, CandidateComposition)
+    assert isinstance(candidate.offer.payload, TableRealization)
+    assert candidate.offer.payload.rows[0].cells[1].reference == ref("table", "rows", "r", "b")
+    result = build_composition(candidate, rules, context)
+    assert isinstance(result, BuiltComposition)
+    assert result.evaluation.text == ("A", "B", "1", "2")
+    table = result.body.children[0]
+    assert isinstance(table, scene.HtmlElement) and table.tag == scene.HtmlTag.TABLE
+    assert tuple(child.tag for child in table.children if isinstance(child, scene.HtmlElement)) == (
+        scene.HtmlTag.THEAD,
+        scene.HtmlTag.TBODY,
+    )
+
+
+def test_unbounded_html_refuses_unimplemented_authored_constraints() -> None:
+    node = sl.paragraph("Too much for an authored budget", key="text").budget(min=0, prefer=3)
+    rules, context = HtmlCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("@0"))
+    rejected = select_composition(occurrence, rules, context, selections={})
+    assert rejected == UnsupportedCapability(occurrence.identity, "Budgeted")
+
+
+def test_html_retains_styled_links_and_shared_asset_references(tmp_path: Path) -> None:
+    asset = sl.file(tmp_path / "not-fetched.schem")
+    node = sl.stack(
+        sl.paragraph(sl.strong(sl.text_link("Docs", "https://example.com"))),
+        sl.download(asset, key="a"),
+        sl.download(asset, key="b"),
+        key="root",
+    )
+    rules, context = HtmlCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("root"))
+    candidate = select_composition(occurrence, rules, context, selections={})
+    assert isinstance(candidate, CandidateComposition)
+    result = build_composition(candidate, rules, context)
+    assert isinstance(result, BuiltComposition)
+    assert len(result.evaluation.resources.uses) == 1
+    assert result.evaluation.text == ("Docs", asset.name, asset.name)
+    paragraph = result.body.children[0]
+    assert isinstance(paragraph, scene.HtmlElement)
+    strong = paragraph.children[0]
+    assert isinstance(strong, scene.HtmlElement) and strong.tag == scene.HtmlTag.STRONG
+    link = strong.children[0]
+    assert isinstance(link, scene.HtmlElement) and link.url == scene.HtmlUrlRef("https://example.com")
+
+
+def test_representation_preference_does_not_forbid_lossless_alternatives() -> None:
+    node = sl.table(
+        sl.columns(sl.column("A", key="a")), sl.table_row("1", key="r"), key="table", display=TableDisplay.RECORDS
+    )
+    rules, context = HtmlCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("table"))
+    offers = rules.offers(occurrence, context)
+    assert {offer.key: offer.preference for offer in offers} == {"table": 1, "records": 0}
+    candidate = select_composition(occurrence, rules, context, selections={occurrence.identity: "table"})
+    assert isinstance(candidate, CandidateComposition)
+    assert isinstance(build_composition(candidate, rules, context), BuiltComposition)

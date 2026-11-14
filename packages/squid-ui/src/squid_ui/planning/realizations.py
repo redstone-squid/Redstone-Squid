@@ -139,19 +139,21 @@ def semantic_offers[RenderTargetT, ContextT](
                 for column, cell in zip(columns, row.cells, strict=True)
             )
             rows.append(TableRecord(row_ref, cells))
-        allowed = (
-            (TableForm.NATIVE,)
-            if value.display == sem.TableDisplay.TABULAR
-            else (TableForm.RECORDS,)
-            if value.display == sem.TableDisplay.RECORDS
-            else table_forms
-            if value.display == sem.TableDisplay.AUTO
-            else ()
-        )
+        preferred = table_forms[0] if table_forms else None
+        if value.display == sem.TableDisplay.TABULAR:
+            preferred = TableForm.NATIVE
+        elif value.display == sem.TableDisplay.RECORDS:
+            preferred = TableForm.RECORDS
+        elif value.display == sem.TableDisplay.MATRIX:
+            preferred = None
         return tuple(
-            RealizationOffer(occurrence, form.value, TableRealization(columns, tuple(rows), form), preference=index)
+            RealizationOffer(
+                occurrence,
+                form.value,
+                TableRealization(columns, tuple(rows), form),
+                preference=0 if form == preferred else index + 1,
+            )
             for index, form in enumerate(table_forms)
-            if form in allowed
         )
     if isinstance(value, sem.Download):
         payload = DownloadRealization(

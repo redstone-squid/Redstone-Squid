@@ -155,11 +155,13 @@ work accounting, and candidate failures. `select_composition` takes explicit rep
 choices; it does not search or allocate pages. Direct V2 and Slack rules exercise paragraphs,
 tables, and ordered containers. V2 also exercises physical containers and shared downloads.
 They preserve table references, reject local and global overflows, and independently check the
-built output against typed evaluation evidence. Slack does not call the HTML planner.
+built output against typed evaluation preparation. Slack does not call the HTML planner. HTML
+now exercises the same preparation contract without global message limits, including tables,
+styled links, and shared file references.
 
 These paths are not routed through the production `plan` entry point yet. Source-referenced
 text and alternative validation are tested separately; connecting them to target composition,
-HTML, visible interaction bindings, native atomic extensions, inherited requirements, and the
+visible interaction bindings, native atomic extensions, inherited requirements, and the
 public migration boundary remains work in this phase. Unsupported vocabulary fails explicitly.
 Existing production planners and their known limitations remain in place until that migration.
 
@@ -168,6 +170,10 @@ V2 and Slack serialize a candidate once; independent validation checks the const
 resource counts, text, and structure. A feasible selection without a preparation is a target
 contract error. Semantic selection remains in the core, and rejected candidates never construct
 or publish a body.
+
+Author budgets will distinguish an explicit hard `max` from `prefer` and `stretch` allocation
+guidance. A preference alone does not cap an unbounded target or authorize text loss. Existing
+callers that relied on a cap need an explicit maximum during migration.
 
 ## Validation and acceptance
 
