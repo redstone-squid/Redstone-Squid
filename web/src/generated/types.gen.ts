@@ -448,6 +448,14 @@ export type DoorExpansion = {
 };
 
 /**
+ * DoorExpansionSource
+ */
+export type DoorExpansionSource = {
+    build_id: number;
+    expansion: DoorExpansion;
+};
+
+/**
  * DoorPatch
  */
 export type DoorPatch = {
@@ -509,6 +517,16 @@ export type DoorRangeResult = {
     evaluated_at: string;
     analysis: SmallestRegionAnalysis;
     configurations: Array<DoorRegionConfiguration>;
+};
+
+/**
+ * DoorRecordEvidence
+ */
+export type DoorRecordEvidence = {
+    schema_version?: 1;
+    calculator_version?: 'door-point-1';
+    evaluation: LiveDoorRecord;
+    sources: Array<DoorExpansionSource>;
 };
 
 /**
@@ -1534,6 +1552,7 @@ export type PublicRecordDetail = {
     status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
+    door_evidence?: DoorRecordEvidence | null;
     holder_builds: Array<PublicBuildSummary>;
 };
 

@@ -11,13 +11,14 @@ from typing import cast
 from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 from whenever import Instant
 
 from squid.builds.domain import Status
 from squid.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
+from squid.records.application.door_evidence import LiveDoorConfiguration
 from squid.records.application.models import (
     CandidateBuild,
     CandidateFacet,
@@ -62,7 +63,7 @@ from squid.tags.models import TagAssignment, TagDefinition, display_conversion_s
 from squid_i18n import md_tr
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
-CALCULATOR_VERSION = "4"
+CALCULATOR_VERSION = "5"
 FORMATTER_VERSION = "2"
 
 RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
@@ -101,6 +102,9 @@ class PostgresRecordRepository:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
         self._recompute_queue = ClaimedRowQueue(RECORD_RECOMPUTE_QUEUE_SPEC)
+
+    async def begin_computation(self) -> None:
+        await self._session().execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]:
         """Load confirmed doors or extenders; return no candidates for unsupported kinds."""
@@ -288,6 +292,7 @@ class PostgresRecordRepository:
                 },
                 provisional_build_id=next(iter(computed.resolution.provisional_holder_ids), None),
                 history_complete=computed.history_complete,
+                door_evidence=computed.door_evidence,
             )
             session.add(result)
             results.append((computed, definition, result))
@@ -306,7 +311,7 @@ class PostgresRecordRepository:
                         metric_snapshot=_metric_snapshot(computed, candidate),
                         title=computed.title.title,
                         subtitle=computed.title.subtitle,
-                        completion_at=Instant(candidate.completion_at) if candidate.completion_at is not None else None,
+                        completion_at=_holder_completion(computed, candidate),
                     )
                 )
 
@@ -479,6 +484,8 @@ class PostgresRecordRepository:
             .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
             .where(ComputationRun.is_active.is_(True))
         )
+        if result_id is None:
+            statement = statement.options(defer(TitleResult.door_evidence))
         if resolved_only:
             statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
         if result_id is not None:
@@ -524,6 +531,7 @@ class PostgresRecordRepository:
                 status=result.status,
                 holder_build_ids=tuple(holders.get(result.id, ())),
                 computed_at=result.computed_at.to_stdlib(),
+                door_evidence=result.door_evidence if result_id is not None else None,
             )
             for result, definition in rows
         )
@@ -624,9 +632,10 @@ class PostgresRecordRepository:
             select(DoorBuild)
             .where(
                 DoorBuild.submission_status == Status.CONFIRMED,
-                DoorBuild.expansion.is_(None),
-                DoorBuild.door_width.is_not(None),
-                DoorBuild.door_height.is_not(None),
+                or_(
+                    DoorBuild.expansion.is_not(None),
+                    and_(DoorBuild.door_width.is_not(None), DoorBuild.door_height.is_not(None)),
+                ),
                 DoorBuild.orientation.is_not(None),
             )
             .options(
@@ -635,8 +644,13 @@ class PostgresRecordRepository:
             )
         )
         doors = tuple((await session.execute(statement)).unique().scalars())
-        timing_by_build = await _door_timings(session, tuple(door.id for door in doors))
-        return tuple(_door_candidate(door, timing_by_build.get(door.id, ())) for door in doors)
+        timing_by_build = await _door_timings(session, tuple(door.id for door in doors if door.expansion is None))
+        return tuple(
+            _door_candidate(
+                door, timing_by_build.get(door.id, ()), size="variable" if door.expansion is not None else None
+            )
+            for door in doors
+        )
 
     async def _list_extenders(self, session: AsyncSession) -> Sequence[CandidateBuild]:
         statement = (
@@ -961,15 +975,55 @@ def _door_size(door: DoorBuild) -> str:
     return f"{door.door_width}x{door.door_height}"
 
 
+def _holder_configurations(computed: ComputedRecord, build_id: int) -> tuple[LiveDoorConfiguration, ...]:
+    if computed.door_evidence is None:
+        return ()
+    evaluation = computed.door_evidence.evaluation
+    ids = set(evaluation.holder_configuration_ids + evaluation.provisional_configuration_ids)
+    return tuple(c for c in evaluation.configurations if c.id in ids and c.build_id == build_id)
+
+
+def _holder_completion(computed: ComputedRecord, candidate: Candidate) -> Instant | None:
+    if computed.door_evidence is None:
+        return Instant(candidate.completion_at) if candidate.completion_at is not None else None
+    dates = {c.completion_at for c in _holder_configurations(computed, candidate.build_id)}
+    date = next(iter(dates)) if len(dates) == 1 else None
+    return Instant(date) if date is not None else None
+
+
 def _metric_snapshot(computed: ComputedRecord, candidate: Candidate) -> dict[str, object]:
+    configurations = _holder_configurations(computed, candidate.build_id)
+    if computed.door_evidence is not None:
+        metrics = tuple(
+            _fixed_metric_snapshot(
+                computed.base_title,
+                Candidate(c.build_id, c.completion_at, c.volume, tuple(TimingVariant(v) for v in c.timing_variants)),
+            )
+            for c in configurations
+        )
+        snapshot: dict[str, object] = {
+            "opening": list(computed.door_evidence.evaluation.opening),
+            "configuration_ids": [c.id for c in configurations],
+        }
+        # Ambiguous alternatives remain separate. Only expose a scalar metric
+        # when every possible winning configuration agrees on it.
+        for key in ("volume", "timing", "completion_at"):
+            values = [metric[key] for metric in metrics if key in metric]
+            if values:
+                snapshot[key] = values[0] if all(v == values[0] for v in values) else None
+        return snapshot
+    return _fixed_metric_snapshot(computed.base_title, candidate)
+
+
+def _fixed_metric_snapshot(base_title: BaseTitle, candidate: Candidate) -> dict[str, object]:
     snapshot: dict[str, object] = {}
-    if computed.base_title in (
+    if base_title in (
         BaseTitle.FASTEST_SMALLEST,
         BaseTitle.SMALLEST,
         BaseTitle.SMALLEST_FASTEST,
     ):
         snapshot["volume"] = candidate.fixed_volume
-    if computed.base_title is BaseTitle.FIRST:
+    if base_title is BaseTitle.FIRST:
         snapshot["completion_at"] = candidate.completion_at.isoformat() if candidate.completion_at is not None else None
         return snapshot
     reduction = reduce_timing_variants(candidate.timing_variants)

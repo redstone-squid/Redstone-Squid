@@ -27,8 +27,8 @@ Implementation order:
    through the existing ranking semantics, without materializing query sizes.
 4. **Symbolic regions and publication:** compute regions, prove nonemptiness
    where possible and persist snapshots. Live width-range queries are exposed;
-   registered width-query publication is implemented. Integration with ordinary
-   fixed-title publication and broader region types remains pending.
+   registered width-query publication and ordinary concrete-title publication
+   are implemented. Broader region types remain pending.
 5. **UI and ingestion review:** explain domains, source claims, unresolved facts,
    and winning regions; add dedicated editing controls.
 
@@ -56,8 +56,8 @@ Documents must survive saved inference drafts, finalization, reloads, edits,
 and build history. Old rows and payloads default to no expansion document.
 Legacy expandable tags without formulas remain incomplete evidence.
 
-Until evaluation is implemented, structured families must not be treated as
-fixed-size record candidates using their sample measurements.
+Structured families compete using evaluated configurations, never their sample
+measurements.
 
 ## Storage implementation
 
@@ -102,9 +102,9 @@ sequence with `repeating_steps: [1, 2]`. Branch `domain` retains arbitrary sourc
 constraints, including coupled variables. `evidence` contains message IDs and
 excerpts, and `raw_description` retains qualifications or unsupported syntax.
 
-The fixed-size record loader excludes doors with an expansion document until
-point evaluation is integrated into record queries and publication. Sample dimensions are retained but cannot accidentally
-establish a family record. No existing descriptions or expandable tags are
+The record loader includes structured families and clears their sample metrics
+before comparison. Sample dimensions are retained but cannot establish a family
+record. No existing descriptions or expandable tags are
 backfilled automatically; those need source reprocessing or explicit review.
 
 ## Normalizer and concrete evaluator
@@ -173,8 +173,30 @@ completion text do not become eligibility constraints or verified completion dat
 The result retains separate alternatives, so callers cannot silently combine the
 smallest branch's volume with the fastest branch's timing. Record integration must
 check membership, retain unresolved competitors, and apply existing ranking rules
-with explicit completion evidence. The live lookup below applies those rules;
-published record runs still exclude families until snapshot integration is ready.
+with explicit completion evidence. Live lookup and ordinary published records
+use the same concrete evaluator and ranking rules.
+
+## Ordinary concrete records
+
+Ordinary rebuilds evaluate families at openings observed among fixed builds or
+explicitly requested through category lookup. A family alone does not enumerate
+its domain or create a category from its sample opening. A request for 9999×3
+creates that single category; live point lookup still creates none. Categories
+keep their existing orientation, exact pattern set, restriction and version rules.
+
+All five door titles use the concrete evaluator when families compete. Each
+published result retains the evaluated configurations and immutable source
+documents in `title_results.door_evidence` (migration `c4f8b2e6a0d3`). Rebuilds read
+one repeatable-read snapshot and activate results atomically. Ordinary detail
+responses expose this evidence; list responses stay compact. Holder metrics,
+search projections and activation events use the evaluated result. Later source
+edits cannot change a published configuration until another rebuild.
+
+Unknown membership prevents an official result. Alternative configurations stay
+separate, and a holder metric is scalar only when all selected alternatives agree.
+Family completion dates remain unverified; categories involving families report
+incomplete history rather than reconstructing it from sample dates. Fixed-only
+categories retain their existing history behavior.
 
 ## Live point lookup
 
@@ -427,7 +449,8 @@ exists; `outside_query` means the opening is beyond the registered bounds.
 Neither means `no_candidate`, which is a record outcome inside a published
 region. Unknown query IDs return 404; invalid widths are rejected.
 
-Dedicated bot/web controls and integration with fixed-title URLs remain.
+Dedicated bot/web controls for range queries remain. Ordinary concrete-title URLs
+include families through the publication path described above.
 Broader competition identities, multiaxis regions, timing titles, caching,
 per-competition invalidation, and publication notifications remain separate work.
 Bump the range calculator/arithmetic versions when their semantics change and the

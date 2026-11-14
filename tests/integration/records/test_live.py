@@ -14,7 +14,7 @@ from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.records.application.expansion_regions import DoorRangeQuery
 from squid.records.application.live import DoorRecordLookup
 from squid.records.application.services import RecordComputationService, RecordService
-from squid.records.domain import BaseTitle, ResolutionStatus, TimingVariant
+from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, TimingVariant
 from squid.records.domain.regions import RegionAnalysisStatus
 from squid.records.infrastructure import repository
 from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
@@ -107,9 +107,11 @@ async def test_live_lookup_does_not_materialize_large_sizes(
     assert after == before
 
 
+@pytest.mark.parametrize("publication", [False, True])
 async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
     migrated_session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
+    publication: bool,
 ) -> None:
     sessions = migrated_session_factory
     async with build_edit_session(sessions) as session:
@@ -137,7 +139,7 @@ async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
         build_ids: tuple[int, ...],
     ) -> dict[int, tuple[TimingVariant, ...]]:
         assert await session.scalar(text("SHOW transaction_isolation")) == "repeatable read"
-        assert await session.scalar(text("SHOW transaction_read_only")) == "on"
+        assert await session.scalar(text("SHOW transaction_read_only")) == ("off" if publication else "on")
         async with build_edit_session(sessions) as editor:
             build = await editor.get(DoorBuild, build_id)
             assert build is not None
@@ -147,7 +149,12 @@ async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
 
     monkeypatch.setattr(repository, "_door_timings", edit_before_timing_read)
     async with sessions() as session:
-        sources = await PostgresRecordRepository(lambda: session).list_for_door_lookup((6, 3, 1), "Door", None)
+        records = PostgresRecordRepository(lambda: session)
+        if publication:
+            await records.begin_computation()
+            sources = await records.list_confirmed(BuildKind.DOOR)
+        else:
+            sources = await records.list_for_door_lookup((6, 3, 1), "Door", None)
     assert sources[0].candidate.fixed_volume == 100
     assert sources[0].candidate.timing_variants[0].values[0] == 10
     monkeypatch.setattr(repository, "_door_timings", original_timings)

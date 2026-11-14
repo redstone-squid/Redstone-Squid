@@ -38,6 +38,10 @@ class RecomputeLease:
 class RecordCandidateRepository(Protocol):
     """Load confirmed builds eligible to become computation candidates."""
 
+    async def begin_computation(self) -> None:
+        """Pin a consistent read/write snapshot; call first in a fresh unit of work."""
+        ...
+
     async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]: ...
 
     async def list_for_door_lookup(

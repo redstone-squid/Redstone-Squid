@@ -6,7 +6,6 @@ The public result maps those IDs back to builds and retains branch evidence.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal, Self
 
@@ -19,6 +18,7 @@ from squid.builds.domain.expansion_evaluation import (
     evaluate_expansion,
     normalize_expansion,
 )
+from squid.records.application.door_evidence import LiveDoorConfiguration, LiveDoorRecord
 from squid.records.application.models import CandidateBuild, CategoryIdentity
 from squid.records.domain import (
     BaseTitle,
@@ -98,47 +98,6 @@ class DoorRecordLookup(DoorRecordCategory):
         return self.identity_for_opening(self.opening)
 
 
-@dataclass(frozen=True, slots=True)
-class LiveDoorConfiguration:
-    """A fixed build or one family branch; metrics use blocks and game ticks.
-
-    ID is local to this response. A null branch index represents a fixed build
-    or an unnormalizable whole family, distinguished by membership and diagnostics.
-    Family completion dates remain unknown until per-configuration evidence is modeled.
-    """
-
-    id: int
-    build_id: int
-    branch_index: int | None
-    membership: PointStatus
-    parameters: tuple[tuple[str, int], ...] = ()
-    volume: int | None = None
-    timing_variants: tuple[tuple[int | None, ...], ...] = ()
-    completion_at: datetime | None = None
-    diagnostics: tuple[ExpansionDiagnostic, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class LiveDoorRecord:
-    """An ephemeral result, not a published title or persisted candidate snapshot.
-
-    Resolution IDs identify builds. Configuration IDs identify the alternatives
-    selected by the resolver. Uncertain membership conservatively blocks an
-    official holder even if known candidates currently have a winner. If all tied
-    alternatives belong to one build, that build can hold the record while its
-    exact winning configuration remains provisional.
-    """
-
-    opening: tuple[int, int, int]
-    base_title: BaseTitle
-    version_id: int | None
-    evaluated_at: datetime
-    resolution: TitleResolution
-    holder_configuration_ids: tuple[int, ...]
-    provisional_configuration_ids: tuple[int, ...]
-    configurations: tuple[LiveDoorConfiguration, ...]
-
-
 def evaluate_door_record(
     request: DoorRecordLookup, sources: Sequence[CandidateBuild], *, evaluated_at: datetime
 ) -> LiveDoorRecord:
@@ -192,6 +151,16 @@ def evaluate_door_record(
                 )
             )
 
+    return resolve_door_configurations(request, tuple(configurations), evaluated_at=evaluated_at)
+
+
+def resolve_door_configurations(
+    request: DoorRecordLookup,
+    configurations: tuple[LiveDoorConfiguration, ...],
+    *,
+    evaluated_at: datetime,
+) -> LiveDoorRecord:
+    """Compare an already evaluated population; IDs must index the configuration tuple."""
     eligible = tuple(
         Candidate(
             configuration.id,

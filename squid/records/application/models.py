@@ -1,7 +1,7 @@
 """Application data transferred between record computation and persistence."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 from decimal import Decimal
 from typing import Self
@@ -9,6 +9,7 @@ from uuid import UUID
 
 from squid.builds.application.queries import PublicBuildSummary
 from squid.builds.domain.expansion import DoorExpansion
+from squid.records.application.door_evidence import DoorRecordEvidence
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
@@ -115,6 +116,7 @@ class ComputedRecord:
     resolution: TitleResolution
     history: tuple[HolderHistoryEntry, ...] = ()
     history_complete: bool = True
+    door_evidence: DoorRecordEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +178,7 @@ class PublishedTitle:
     status: ResolutionStatus
     holder_build_ids: tuple[int, ...]
     computed_at: datetime
+    door_evidence: DoorRecordEvidence | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True, slots=True)

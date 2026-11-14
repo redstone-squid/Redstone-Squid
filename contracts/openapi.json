@@ -19635,6 +19635,22 @@
         "required": [],
         "title": "DoorExpansion"
       },
+      "DoorExpansionSource": {
+        "properties": {
+          "build_id": {
+            "type": "integer"
+          },
+          "expansion": {
+            "$ref": "#/components/schemas/DoorExpansion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id",
+          "expansion"
+        ],
+        "title": "DoorExpansionSource"
+      },
       "DoorPatch": {
         "properties": {
           "expansion": {
@@ -19923,6 +19939,35 @@
           "query"
         ],
         "title": "DoorRangeResult"
+      },
+      "DoorRecordEvidence": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "default": 1
+          },
+          "calculator_version": {
+            "type": "string",
+            "const": "door-point-1",
+            "default": "door-point-1"
+          },
+          "evaluation": {
+            "$ref": "#/components/schemas/LiveDoorRecord"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DoorExpansionSource"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evaluation",
+          "sources"
+        ],
+        "title": "DoorRecordEvidence"
       },
       "DoorRecordLookup": {
         "properties": {
@@ -23552,6 +23597,16 @@
           "computed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "door_evidence": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DoorRecordEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "holder_builds": {
             "items": {

@@ -36,8 +36,10 @@ from whenever import Instant
 from squid.persistence.base import Base
 from squid.persistence.queue_models import QueueColumns
 from squid.persistence.types import InstantUTC, StrEnumText
+from squid.records.application.door_evidence import DoorRecordEvidence
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.records.domain.models import FacetKind, MaterializationSource
+from squid.records.persistence_types import DoorRecordEvidenceJSON
 
 
 class ComputationStatus(StrEnum):
@@ -261,6 +263,11 @@ class TitleResult(Base, kw_only=True):
             "status IN ('resolved', 'unresolved', 'no_candidate')",
             name="title_results_status_check",
         ),
+        CheckConstraint(
+            "door_evidence IS NULL OR (jsonb_typeof(door_evidence) = 'object' "
+            "AND door_evidence->'schema_version' = '1'::jsonb) IS TRUE",
+            name="title_results_door_evidence_check",
+        ),
         UniqueConstraint("run_id", "definition_id", name="title_results_run_definition_key"),
         Index("title_results_definition_idx", "definition_id"),
     )
@@ -285,6 +292,7 @@ class TitleResult(Base, kw_only=True):
         ForeignKey("builds.id", name="title_results_provisional_build_id_fkey", ondelete="SET NULL"),
         default=None,
     )
+    door_evidence: Mapped[DoorRecordEvidence | None] = mapped_column(DoorRecordEvidenceJSON(), default=None)
     history_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     computed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now

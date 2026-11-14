@@ -12,8 +12,15 @@ import anyio
 from squid.core.errors import DataIntegrityError, InvalidStateError, ServiceUnavailableError, ValidationError
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.records.application.door_categories import door_category_lookup, family_at_category
+from squid.records.application.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
-from squid.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
+from squid.records.application.live import (
+    DoorRecordLookup,
+    LiveDoorRecord,
+    evaluate_door_record,
+    resolve_door_configurations,
+)
 from squid.records.application.models import (
     CandidateBuild,
     CandidateFacet,
@@ -94,8 +101,9 @@ class RecordComputationService:
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
-        """Publish fixed-title runs together, then refresh registered door ranges."""
+        """Publish concrete-title runs together, then refresh registered door ranges."""
         async with self._uow_factory() as uow:
+            await uow.record_candidates.begin_computation()
             result = await self.rebuild_in(uow, current_version_id=current_version_id, kinds=kinds)
             await uow.commit()
         if BuildKind.DOOR in kinds and self._refresh_ranges is not None:
@@ -112,7 +120,8 @@ class RecordComputationService:
         """Stage replacement runs in the caller's transaction without committing.
 
         Every kind gets an all-time run. A supplied current version also gets a
-        filtered run.
+        filtered run. The caller must pin a consistent snapshot before reading
+        or writing computation inputs.
         """
         rules_revision_id = await uow.records.active_rules_revision_id()
         run_ids: list[int] = []
@@ -158,7 +167,18 @@ class RecordComputationService:
         requested: Sequence[CategoryIdentity],
     ) -> ComputationBatch:
         scoped = tuple(candidate for candidate in source if version_id is None or version_id in candidate.version_ids)
-        categories = self._eager_categories(kind, scoped)
+        # Only observed fixed openings seed eager categories. Explicit requests
+        # add individual openings; a family's measured example never seeds one.
+        fixed = tuple(c for c in scoped if c.expansion is None)
+        concrete = {_base_key(c) for c in fixed} | {identity.base_key for identity in requested}
+        projected = tuple(
+            projected
+            for candidate in scoped
+            if candidate.expansion is not None
+            for base_key in sorted(concrete)
+            if (projected := family_at_category(candidate, CategoryIdentity(kind, base_key, ()))) is not None
+        )
+        categories = self._eager_categories(kind, (*fixed, *projected))
         for identity in requested:
             category = self.requested_category(identity, scoped)
             if category is not None:
@@ -167,8 +187,32 @@ class RecordComputationService:
         scope = VersionScope.ALL_TIME if version_id is None else VersionScope.UP_TO_DATE
         records: list[ComputedRecord] = []
         for category in categories.values():
+            ids = {candidate.build_id for candidate in category.candidates}
+            sources = tuple(source for source in scoped if source.candidate.build_id in ids)
+            families = tuple(source for source in sources if source.expansion is not None)
+            evaluation: LiveDoorRecord | None = None
             for base_title in _base_titles(kind):
-                resolution = _resolve_record(base_title, kind, category.candidates)
+                evidence = None
+                query = door_category_lookup(category.identity, base_title=base_title, version_id=version_id)
+                if families and query is not None:
+                    evaluation = (
+                        evaluate_door_record(query, sources, evaluated_at=datetime.now(UTC))
+                        if evaluation is None
+                        else resolve_door_configurations(
+                            query, evaluation.configurations, evaluated_at=evaluation.evaluated_at
+                        )
+                    )
+                    resolution = evaluation.resolution
+                    evidence = DoorRecordEvidence(
+                        evaluation=evaluation,
+                        sources=tuple(
+                            DoorExpansionSource(build_id=s.candidate.build_id, expansion=s.expansion)
+                            for s in families
+                            if s.expansion is not None
+                        ),
+                    )
+                else:
+                    resolution = _resolve_record(base_title, kind, category.candidates)
                 records.append(
                     ComputedRecord(
                         base_title=base_title,
@@ -177,8 +221,12 @@ class RecordComputationService:
                         category=category,
                         title=self._formatter.format_record(base_title, category.category_text),
                         resolution=resolution,
-                        history=_reconstruct_history(base_title, kind, category.candidates),
-                        history_complete=all(candidate.completion_at is not None for candidate in category.candidates),
+                        history=()
+                        if evidence is not None
+                        else _reconstruct_history(base_title, kind, category.candidates),
+                        history_complete=evidence is None
+                        and all(candidate.completion_at is not None for candidate in category.candidates),
+                        door_evidence=evidence,
                     )
                 )
         return ComputationBatch(
@@ -264,6 +312,11 @@ class RecordComputationService:
         requested_ids = frozenset(identity.restriction_ids)
         requested_values = {tag_id: (operator, value) for tag_id, operator, value in identity.restriction_values}
         for source in candidates:
+            if source.expansion is not None:
+                projected = family_at_category(source, identity)
+                if projected is None:
+                    continue
+                source = projected
             restrictions_by_id = {facet.id: facet for facet in source.restrictions}
             if _base_key(source) == identity.base_key and requested_ids <= restrictions_by_id.keys():
                 selected: list[CandidateFacet] = []
@@ -467,6 +520,7 @@ class RecordService:
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""
         async with self._uow_factory() as uow:
+            await uow.record_candidates.begin_computation()
             source = tuple(await uow.record_candidates.list_confirmed(request.kind))
             scoped = tuple(
                 candidate

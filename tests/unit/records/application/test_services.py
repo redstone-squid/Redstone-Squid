@@ -9,7 +9,7 @@ import anyio
 import pytest
 
 from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
+from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError, ValidationError
 from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup
@@ -45,6 +45,9 @@ from tests.support.record_uow import RecordQueryScope, RecordScope
 class FakeCandidates:
     def __init__(self, candidates: Sequence[CandidateBuild]) -> None:
         self.candidates = tuple(candidates)
+
+    async def begin_computation(self) -> None:
+        pass
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]:
         return tuple(candidate for candidate in self.candidates if candidate.kind is kind)
@@ -846,3 +849,108 @@ async def test_queue_acknowledges_only_after_range_refresh_succeeds() -> None:
     refresh.side_effect = None
     await computation.process_queue()
     assert runs.completed == (BuildKind.DOOR,)
+
+
+def _expanding_door(*, steps: tuple[int, ...] = (1,), maximum_kind: str = "unbounded") -> CandidateBuild:
+    return replace(
+        _door(2, volume=1, opening=0, restrictions=()),
+        expansion=DoorExpansion.model_validate(
+            {
+                "parameters": [
+                    {
+                        "name": "n",
+                        "minimum": 1,
+                        "maximum_kind": maximum_kind,
+                        "initial_steps": [],
+                        "repeating_steps": steps,
+                    }
+                ],
+                "branches": [
+                    ExpansionBranch(
+                        opening_width="n",
+                        opening_height="2",
+                        opening_depth="1",
+                        volume="5n",
+                        timings=(ExpansionTiming(method="opening", expression="n+1", unit="game_tick"),),
+                    )
+                ],
+            }
+        ),
+    )
+
+
+async def test_ordinary_records_evaluate_families_and_keep_the_source_evidence() -> None:
+    fixed = _door(1, volume=100, opening=10, restrictions=())
+    family = _expanding_door()
+    candidates = FakeCandidates((fixed, family))
+    runs = FakeRuns()
+    service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+    await service.rebuild(kinds=(BuildKind.DOOR,))
+    assert len(runs.batches[0].records) == 5
+    for record in runs.batches[0].records:
+        assert record.door_evidence is not None
+        assert record.door_evidence.sources[0].expansion == family.expansion
+        configuration = next(c for c in record.door_evidence.evaluation.configurations if c.build_id == 2)
+        assert configuration.parameters == (("n", 2),)
+        assert configuration.volume == 10
+        assert configuration.timing_variants == ((3, None, None, None, None, None),)
+        assert configuration.completion_at is None
+        assert record.resolution.holder_ids == ((1,) if record.base_title is BaseTitle.FIRST else (2,))
+        assert not record.history_complete
+        assert record.history == ()
+
+
+async def test_family_sample_never_seeds_categories_but_explicit_large_request_does() -> None:
+    candidates = FakeCandidates((_expanding_door(),))
+    runs = FakeRuns()
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+    await computation.rebuild(kinds=(BuildKind.DOOR,))
+    assert runs.batches[0].records == ()
+    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
+    await service.lookup_or_materialize(
+        RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x2|t[20]|Door", restriction_ids=frozenset())
+    )
+    records = runs.batches[-1].records
+    assert len(records) == 5
+    assert {r.category.identity.base_key for r in records} == {"door|9999x2|t[20]|Door"}
+    smallest = next(r for r in records if r.base_title is BaseTitle.SMALLEST)
+    assert smallest.resolution.holder_ids == (2,)
+    assert smallest.door_evidence is not None
+    assert smallest.door_evidence.evaluation.configurations[0].volume == 49995
+
+
+@pytest.mark.parametrize("unknown", [False, True])
+async def test_ordinary_records_respect_step_membership_and_unknown_bounds(unknown: bool) -> None:
+    candidates = FakeCandidates(
+        (
+            _door(1, volume=100, opening=10, restrictions=()),
+            _expanding_door(steps=(1,) if unknown else (2,), maximum_kind="unknown" if unknown else "unbounded"),
+        )
+    )
+    runs = FakeRuns()
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+    await computation.rebuild(kinds=(BuildKind.DOOR,))
+    smallest = next(r for r in runs.batches[0].records if r.base_title is BaseTitle.SMALLEST)
+    assert smallest.resolution.status is (ResolutionStatus.UNRESOLVED if unknown else ResolutionStatus.RESOLVED)
+    assert smallest.resolution.holder_ids == (() if unknown else (1,))
+
+
+async def test_family_population_respects_version_and_category_identity() -> None:
+    fixed = _door(1, volume=100, opening=10, restrictions=())
+    family = replace(_expanding_door(), version_ids=frozenset({4}))
+    assert family.door is not None
+    wrong_orientation = replace(
+        family, candidate=replace(family.candidate, build_id=3), door=replace(family.door, orientation="Skydoor")
+    )
+    wrong_type = replace(family, candidate=replace(family.candidate, build_id=4), types=())
+    candidates = FakeCandidates((fixed, family, wrong_orientation, wrong_type))
+    runs = FakeRuns()
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3)
+    all_time = next(r for r in runs.batches[0].records if r.base_title is BaseTitle.SMALLEST)
+    assert all_time.resolution.holder_ids == (2,)
+    assert all_time.door_evidence is not None
+    assert {c.build_id for c in all_time.door_evidence.evaluation.configurations} == {1, 2}
+    current = next(r for r in runs.batches[1].records if r.base_title is BaseTitle.SMALLEST)
+    assert current.resolution.holder_ids == (1,)
+    assert current.door_evidence is None

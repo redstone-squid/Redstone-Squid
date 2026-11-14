@@ -1,5 +1,6 @@
 """Published records serialize through Litestar without an intermediate API model."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import create_autospec
@@ -19,9 +20,11 @@ from squid.api.v1.records import (
     lookup_door_ranges,
 )
 from squid.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
+from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
 from squid.records.application import PublicRecordQueryService, RecordService
+from squid.records.application.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
@@ -92,7 +95,8 @@ async def test_record_listing_dto_preserves_json_and_declares_public_fields() ->
     assert public["properties"]["title_id"]["format"] == "uuid"
 
 
-async def test_record_detail_serializes_the_application_read_model() -> None:
+@pytest.mark.parametrize("expanded", [False, True])
+async def test_record_detail_serializes_the_application_read_model(expanded: bool) -> None:
     holder = PublicBuildSummary(
         id=42,
         revision=3,
@@ -112,7 +116,40 @@ async def test_record_detail_serializes_the_application_read_model() -> None:
         updated_at=None,
     )
     records = create_autospec(PublicRecordQueryService, instance=True)
-    records.get.return_value = PublicRecordDetail.with_holders(_RECORD, [holder])
+    evidence = (
+        DoorRecordEvidence(
+            evaluation=LiveDoorRecord(
+                opening=(2, 3, 1),
+                base_title=BaseTitle.FASTEST,
+                version_id=None,
+                evaluated_at=_RECORD.computed_at,
+                resolution=TitleResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
+                holder_configuration_ids=(0,),
+                provisional_configuration_ids=(),
+                configurations=(
+                    LiveDoorConfiguration(
+                        id=0,
+                        build_id=42,
+                        branch_index=0,
+                        membership=PointStatus.SUPPORTED,
+                        parameters=(("n", 2),),
+                        volume=10,
+                    ),
+                ),
+            ),
+            sources=(
+                DoorExpansionSource(
+                    build_id=42,
+                    expansion=DoorExpansion(
+                        branches=(ExpansionBranch(volume="5n"),),
+                    ),
+                ),
+            ),
+        )
+        if expanded
+        else None
+    )
+    records.get.return_value = PublicRecordDetail.with_holders(replace(_RECORD, door_evidence=evidence), [holder])
     handler = get(
         "/records/{record_id:int}",
         dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
@@ -126,6 +163,7 @@ async def test_record_detail_serializes_the_application_read_model() -> None:
     assert response.status_code == 200
     assert response.json() == {
         **_RECORD_JSON,
+        "door_evidence": evidence.model_dump(mode="json") if evidence is not None else None,
         "holder_builds": [
             {
                 "id": 42,
