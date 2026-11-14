@@ -757,111 +757,96 @@ bot-notifications-a-credited-build-gained-record =
        *[other] A credited build gained { $count } records.
     }
 
-# squid/bot/notifications_view.py:449
+# squid/bot/notifications_view.py:481
 bot-notifications-remainder = …and { $hidden } more.
 
-# squid/bot/notifications_view.py:439
+# squid/bot/notifications_view.py:471
 bot-notifications-subscription =
     { "*" }*{ $label }**
     { $detail }
 
-# squid/bot/notifications_view.py:400
+# squid/bot/notifications_view.py:438
 bot-notifications-view-base-title = Base title
 
-# squid/bot/notifications_view.py:577
+# squid/bot/notifications_view.py:609
 bot-notifications-view-build-awaiting-review = Build awaiting review
 
-# squid/bot/notifications_view.py:569
+# squid/bot/notifications_view.py:601
 bot-notifications-view-build-confirmed = Build confirmed
 
-# squid/bot/notifications_view.py:571
+# squid/bot/notifications_view.py:603
 bot-notifications-view-build-denied = Build denied
 
-# squid/bot/notifications_view.py:391
+# squid/bot/notifications_view.py:429
 bot-notifications-view-build-kind = Build kind
 
-# squid/bot/notifications_view.py:581
+# squid/bot/notifications_view.py:613
 bot-notifications-view-build-notification = Build notification
 
-# squid/bot/notifications_view.py:49
+# squid/bot/notifications_view.py:51
 bot-notifications-view-creator = Creator
 
-# squid/bot/notifications_view.py:573
+# squid/bot/notifications_view.py:605
 bot-notifications-view-creator-build-confirmed = Creator build confirmed
 
-# squid/bot/notifications_view.py:242
-bot-notifications-view-creator-profile-id = Creator profile ID
-
-# squid/bot/notifications_view.py:160
+# squid/bot/notifications_view.py:164
 bot-notifications-view-discord-dms = Discord DMs
 
-# squid/bot/notifications_view.py:424
+# squid/bot/notifications_view.py:456
 bot-notifications-view-exact-tag-value = Exact tag value
 
-# squid/bot/notifications_view.py:238
-bot-notifications-view-follow-a-creator = Follow a creator
-
-# squid/bot/notifications_view.py:253
-bot-notifications-view-follow-a-record = Follow a record
-
-# squid/bot/notifications_view.py:234
+# squid/bot/notifications_view.py:248
 bot-notifications-view-follow-creator = Follow creator
 
-# squid/bot/notifications_view.py:266, squid/bot/notifications_view.py:387
+# squid/bot/notifications_view.py:258, squid/bot/notifications_view.py:425
 bot-notifications-view-follow-matching-records = Follow matching records
 
-# squid/bot/notifications_view.py:251
+# squid/bot/notifications_view.py:253
 bot-notifications-view-follow-record = Follow record
 
-# squid/bot/notifications_view.py:92
+# squid/bot/notifications_view.py:94
 bot-notifications-view-following = Following
 
-# squid/bot/notifications_view.py:329
+# squid/bot/notifications_view.py:363
 bot-notifications-view-following-that-creator = Following that creator.
 
-# squid/bot/notifications_view.py:341
+# squid/bot/notifications_view.py:377
 bot-notifications-view-following-that-record = Following that record.
 
-# squid/bot/notifications_view.py:524
+# squid/bot/notifications_view.py:556
 bot-notifications-view-mark-selected-read = Mark selected read
 
-# squid/bot/notifications_view.py:530
+# squid/bot/notifications_view.py:562
 bot-notifications-view-mark-selected-unread = Mark selected unread
 
-# squid/bot/notifications_view.py:433
+# squid/bot/notifications_view.py:465
 bot-notifications-view-nothing-yet = _Nothing yet._
 
-# squid/bot/notifications_view.py:102
+# squid/bot/notifications_view.py:104
 bot-notifications-view-notifications = Notifications
 
-# squid/bot/notifications_view.py:513
+# squid/bot/notifications_view.py:545
 bot-notifications-view-read = Read
 
-# squid/bot/notifications_view.py:51
+# squid/bot/notifications_view.py:53
 bot-notifications-view-record = Record
 
-# squid/bot/notifications_view.py:53
+# squid/bot/notifications_view.py:55
 bot-notifications-view-record-filter = Record filter
 
-# squid/bot/notifications_view.py:575
+# squid/bot/notifications_view.py:607
 bot-notifications-view-record-gained = Record gained
 
-# squid/bot/notifications_view.py:257
-bot-notifications-view-record-title-id = Record title ID
-
-# squid/bot/notifications_view.py:418
-bot-notifications-view-showcase-tag-id = Showcase tag ID
-
-# squid/bot/notifications_view.py:273
+# squid/bot/notifications_view.py:265
 bot-notifications-view-unfollow-selected = Unfollow selected
 
-# squid/bot/notifications_view.py:511, squid/bot/notifications_view.py:93
+# squid/bot/notifications_view.py:543, squid/bot/notifications_view.py:95
 bot-notifications-view-unread = Unread
 
-# squid/bot/notifications_view.py:409
+# squid/bot/notifications_view.py:447
 bot-notifications-view-version-scope = Version scope
 
-# squid/bot/notifications_view.py:154
+# squid/bot/notifications_view.py:158
 bot-notifications-view-web-inbox = Web inbox
 
 # squid/bot/notifications.py:142
@@ -1598,13 +1583,13 @@ bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 # squid/bot/ui.py:118
 bot-ui-you-chose = You chose { $label }.
 
-# squid/bot/verify.py:162
+# squid/bot/verify.py:168
 bot-verify-doesn-t-have-a-creator-page = { $user } doesn't have a creator page.
 
-# squid/bot/verify.py:133
+# squid/bot/verify.py:136
 bot-verify-hidden-creator-page = Hidden creator page
 
-# squid/bot/verify.py:129
+# squid/bot/verify.py:132
 bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.
 
 # squid/bot/version_tracking.py:178
@@ -1997,13 +1982,13 @@ builds-alias-restriction = That alias is already on this restriction.
 # squid/builds/errors.py:126
 builds-alias-used = That alias is already used by another restriction.
 
-# squid/builds/domain/models.py:141
+# squid/builds/domain/models.py:142
 builds-attribute-immutable = Attribute `{ $name }` is immutable!
 
 # squid/builds/errors.py:11
 builds-build-data-invalid = The build data is invalid.
 
-# squid/builds/models.py:222
+# squid/builds/models.py:224
 builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildDraft.
 
 # squid/builds/errors.py:22
@@ -2042,7 +2027,7 @@ builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to fin
 # squid/builds/errors.py:55
 builds-if-match-build = An If-Match build revision is required for this operation.
 
-# squid/builds/domain/models.py:165
+# squid/builds/domain/models.py:166
 builds-not-dataclass = { $class_name } is not a dataclass
 
 # squid/builds/errors.py:99
@@ -2168,13 +2153,13 @@ command-access-user-help = Member whose access to inspect. Defaults to you.
 # squid/bot/permissions.py:54
 command-access-user-name = user
 
-# squid/bot/verify.py:43
+# squid/bot/verify.py:46
 command-account-help = Manage your account or view a creator page
 
-# squid/bot/verify.py:42
+# squid/bot/verify.py:45
 command-account-name = account
 
-# squid/bot/verify.py:46
+# squid/bot/verify.py:49
 command-account-user-name = user
 
 # squid/bot/admin.py:102
@@ -2527,6 +2512,15 @@ consent-storage-prerequisite = Before Redstone Squid stores anything about you
 
 # squid/bot/consent.py:160, squid/bot/consent.py:196
 consent-value-2 = { $user_mention } (`{ $user_id }`)
+
+# squid/bot/follows.py:21
+context-follow-creator = Follow creator
+
+# squid/bot/follows.py:23
+context-follow-record = Follow record
+
+# squid/bot/follows.py:48
+context-follow-saved = Following. Manage your follows in /notifications.
 
 # squid/core/errors.py:226
 core-account-required-action = A linked account is required for this action.
@@ -3472,14 +3466,17 @@ layout-workbench-toggle-tags = Add or remove tags
 # squid/bot/layout_workbench.py:226
 layout-workbench-undo = Undo
 
-# squid/bot/lookup.py:99
+# squid/bot/lookup.py:104
 lookup-bounded = Up to 25 matches are shown. Search by name to narrow the results.
 
-# squid/bot/lookup.py:105
+# squid/bot/lookup.py:110
 lookup-cancel = Cancel
 
-# squid/bot/lookup.py:101
+# squid/bot/lookup.py:106
 lookup-catalogue = Browse or search by name.
+
+# squid/bot/lookup.py:139
+lookup-use-selection = Use selection
 
 # squid/media/application/jobs.py:189
 media-artifact-dimensions-either = Media artifact dimensions must either both be present or both be absent.
@@ -3757,17 +3754,38 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/notifications_view.py:317
+# squid/bot/notifications_view.py:356
+notification-choose-creator = Choose a creator
+
+# squid/bot/notifications_view.py:369
+notification-choose-record = Choose a record
+
+# squid/bot/notifications_view.py:278, squid/bot/notifications_view.py:380
+notification-choose-tag = Choose filter tag
+
+# squid/bot/notifications_view.py:281
+notification-clear-tag = Clear filter tag
+
+# squid/bot/notifications_view.py:358, squid/bot/notifications_view.py:371
+notification-follow = Follow
+
+# squid/bot/notifications_view.py:349
 notification-history-follow = Follow
 
-# squid/bot/notifications_view.py:182
+# squid/bot/notifications_view.py:186
 notification-history-preferences = Change notification preferences
 
-# squid/bot/notifications_view.py:557
+# squid/bot/notifications_view.py:589
 notification-history-read = Change read state
 
-# squid/bot/notifications_view.py:293
+# squid/bot/notifications_view.py:325
 notification-history-unfollow = Unfollow
+
+# squid/bot/notifications_view.py:296
+notification-next = Next follows
+
+# squid/bot/notifications_view.py:290
+notification-previous = Previous follows
 
 # squid/bot/notifications.py:129
 notifications-build-awaiting-review = A new build is awaiting staff review.
@@ -3780,16 +3798,16 @@ notifications-build-review-link =
     A new build is awaiting staff review.
     Open it in Discord with `/build browse id:{ $build_id }`.
 
-# squid/bot/notifications_view.py:95
+# squid/bot/notifications_view.py:97
 notifications-channel-and-follow-help = Toggle where notifications arrive, and unfollow what you no longer want.
 
 # squid/bot/notifications.py:55
 notifications-channel-preferences = Manage notification channels and subscriptions
 
-# squid/notifications/application.py:220
+# squid/notifications/application.py:224
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
-# squid/bot/notifications_view.py:188
+# squid/bot/notifications_view.py:192
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
 
 # squid/notifications/domain.py:230
@@ -3801,25 +3819,19 @@ notifications-domain-unsupported = unsupported { $name }: { $value }
 # squid/notifications/domain.py:165
 notifications-exact-predicate-value-required = exact predicates require a value
 
-# squid/bot/notifications_view.py:366
+# squid/bot/notifications_view.py:411
 notifications-follow-filter-confirmation = Following records matching that filter.
 
 # squid/bot/notifications.py:146
 notifications-followed-creator-build = A creator you follow has a newly confirmed build.
 
-# squid/bot/notifications_view.py:323
-notifications-invalid-creator-uuid = Enter a creator profile ID in UUID form.
-
 # squid/notifications/domain.py:232
 notifications-invalid-exact-tag-value = invalid exact tag value
-
-# squid/bot/notifications_view.py:335
-notifications-invalid-record-title-uuid = Enter a record title ID in UUID form.
 
 # squid/notifications/domain.py:284, squid/notifications/domain.py:289
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
-# squid/notifications/application.py:171
+# squid/notifications/application.py:175
 notifications-page-size = page_size must be between 1 and 100
 
 # squid/notifications/domain.py:251
@@ -3834,13 +3846,13 @@ notifications-presence-predicates-include = presence predicates cannot include a
 # squid/notifications/domain.py:192
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
-# squid/bot/notifications_view.py:350
+# squid/bot/notifications_view.py:395
 notifications-record-filter-required = Choose at least one record filter.
 
 # squid/notifications/domain.py:199
 notifications-record-filter-single-predicate = record filters may contain only one predicate per tag
 
-# squid/notifications/application.py:117
+# squid/notifications/application.py:120
 notifications-retention-days-positive = retention_days must be positive
 
 # squid/notifications/domain.py:154
@@ -4155,16 +4167,16 @@ recalculation-reviewed = Build #{ $build_id }, reviewed revision { $revision }.
 # squid/bot/submission/ui/recalculation.py:72
 recalculation-target = Build #{ $target }
 
-# squid/bot/submission/record_browser.py:82
+# squid/bot/submission/record_browser.py:85
 record-browse-empty = No published records are available.
 
-# squid/bot/submission/record_browser.py:70
+# squid/bot/submission/record_browser.py:73
 record-browse-no-holders = No confirmed holders yet.
 
-# squid/bot/submission/record_browser.py:59
+# squid/bot/submission/record_browser.py:62
 record-browse-open-holder = Open build #{ $build_id }
 
-# squid/bot/submission/record_browser.py:81
+# squid/bot/submission/record_browser.py:84
 record-browse-title = Records
 
 # squid/bot/submission/build_browse.py:584
@@ -4996,7 +5008,7 @@ submissions-draft-answers-exceed = The draft answers exceed the retained data li
 # squid/submissions/application/attachments.py:73
 submissions-draft-attachment-upload = Draft attachment upload authority is invalid.
 
-# squid/submissions/application/drafts.py:249
+# squid/submissions/application/drafts.py:251
 submissions-draft-capacity-positive = draft capacity must be positive
 
 # squid/submissions/domain/drafts.py:142
@@ -5008,10 +5020,10 @@ submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII ch
 # squid/submissions/domain/drafts.py:132
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
-# squid/submissions/application/drafts.py:364
+# squid/submissions/application/drafts.py:371
 submissions-draft-discovery-limit = draft discovery limit must be between 1 and { $maximum }
 
-# squid/submissions/application/drafts.py:432
+# squid/submissions/application/drafts.py:439
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
 # squid/submissions/domain/drafts.py:292, squid/submissions/domain/drafts.py:300
@@ -5041,7 +5053,7 @@ submissions-draft-operation-required = draft changes require at least one operat
 # squid/submissions/errors.py:39
 submissions-draft-owner-required = Only the account that owns this draft can perform this action.
 
-# squid/submissions/application/drafts.py:289
+# squid/submissions/application/drafts.py:291
 submissions-draft-retention-positive = draft retention must be positive
 
 # squid/submissions/errors.py:35
@@ -5056,7 +5068,7 @@ submissions-enter-game-ticks = Include a unit: 30gt, 15rt, or 1.5s.
 # squid/submissions/application/forms.py:259
 submissions-exact-source-minecraft = Minecraft version
 
-# squid/submissions/domain/finalization.py:277
+# squid/submissions/domain/finalization.py:279
 submissions-extender-length-positive = extender length must be positive
 
 # squid/submissions/application/forms.py:628
@@ -5074,10 +5086,10 @@ submissions-field-inline-dynamic = field { $field_id } cannot have inline and dy
 # squid/submissions/domain/forms.py:548
 submissions-field-name-format = { $label } must start with a letter and contain only lowercase letters, digits, or underscores
 
-# squid/submissions/domain/normalization.py:172
+# squid/submissions/domain/normalization.py:175
 submissions-field-not-integer = validated field { $field_id } is not an integer
 
-# squid/submissions/domain/normalization.py:138, squid/submissions/domain/normalization.py:151
+# squid/submissions/domain/normalization.py:141, squid/submissions/domain/normalization.py:154
 submissions-field-not-string = validated field { $field_id } is not a string
 
 # squid/submissions/domain/forms.py:234
@@ -5089,7 +5101,7 @@ submissions-finalization-job-missing = processing draft has no active finalizati
 # squid/submissions/application/finalization.py:266
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
-# squid/submissions/domain/finalization.py:389
+# squid/submissions/domain/finalization.py:391
 submissions-finalized-build-identity = finalized build identity is invalid
 
 # squid/submissions/domain/forms.py:318
@@ -5101,16 +5113,16 @@ submissions-i-permission-distribute = I have permission to distribute this schem
 # squid/submissions/domain/drafts.py:90
 submissions-invalid-draft-field-id = invalid draft field ID: { $field_id }
 
-# squid/submissions/domain/finalization.py:121
+# squid/submissions/domain/finalization.py:122
 submissions-invalid-submission-attention = invalid submission attention field ID: { $field_id }
 
 # squid/submissions/domain/drafts.py:259
 submissions-json-contain-too = draft JSON values contain too many nodes
 
-# squid/submissions/domain/finalization.py:413
+# squid/submissions/domain/finalization.py:415
 submissions-keys-stable-lowercase = { $label } keys must be stable lowercase identifiers
 
-# squid/submissions/domain/finalization.py:410
+# squid/submissions/domain/finalization.py:412
 submissions-keys-unique = { $label } keys must be unique
 
 # squid/submissions/domain/forms.py:162
@@ -5128,19 +5140,19 @@ submissions-name-and-credits = Name and credits
 # squid/submissions/domain/forms.py:157
 submissions-negative = { $name } cannot be negative
 
-# squid/submissions/domain/finalization.py:200
+# squid/submissions/domain/finalization.py:201
 submissions-normalized-media-upload = normalized media upload identifiers must be unique
 
-# squid/submissions/domain/finalization.py:337
+# squid/submissions/domain/finalization.py:339
 submissions-normalized-source-version-blank = normalized source versions cannot be blank
 
-# squid/submissions/domain/finalization.py:331
+# squid/submissions/domain/finalization.py:333
 submissions-normalized-submission-provenance = normalized submission provenance is invalid
 
-# squid/submissions/domain/finalization.py:334
+# squid/submissions/domain/finalization.py:336
 submissions-normalized-submission-schema = normalized submission schema provenance is invalid
 
-# squid/submissions/domain/normalization.py:198
+# squid/submissions/domain/normalization.py:201
 submissions-not-string-list = validated field { $field_id } is not a string list
 
 # squid/submissions/domain/drafts.py:138
@@ -5158,13 +5170,13 @@ submissions-optional-name-shown = Optional. Shown next to the title generated fr
 # squid/submissions/domain/drafts.py:170
 submissions-owner-account-id = owner_account_id must be positive
 
-# squid/submissions/domain/finalization.py:356
+# squid/submissions/domain/finalization.py:358
 submissions-paper-installation-only = Only Paper submissions may retain an installation provenance ID.
 
-# squid/submissions/application/drafts.py:319
+# squid/submissions/application/drafts.py:322
 submissions-paper-installation-provenance-required = Paper drafts require server-derived installation provenance.
 
-# squid/submissions/application/drafts.py:99
+# squid/submissions/application/drafts.py:101
 submissions-paper-may-retain = Only Paper drafts may retain an installation provenance ID.
 
 # squid/submissions/application/forms.py:660
@@ -5176,13 +5188,13 @@ submissions-propose-missing-restrictions = Other restrictions
 # squid/submissions/application/forms.py:374
 submissions-public-schematic-license = Schematic license
 
-# squid/submissions/domain/finalization.py:169
+# squid/submissions/domain/finalization.py:170
 submissions-public-schematic-rights-required = public schematics require a license and rights attestation
 
-# squid/submissions/domain/finalization.py:215
+# squid/submissions/domain/finalization.py:216
 submissions-ready-schematic-assessment = only a ready schematic assessment may expose an artifact ID
 
-# squid/submissions/domain/finalization.py:401
+# squid/submissions/domain/finalization.py:403
 submissions-rejected-build-submission = rejected build submission requires at least one issue
 
 # squid/submissions/application/preparation.py:45
@@ -5197,7 +5209,7 @@ submissions-restrictions-tags = Restrictions and tags
 # squid/submissions/application/finalization.py:405
 submissions-retry-retention-limits = finalization retry and retention limits must be positive
 
-# squid/submissions/domain/finalization.py:175
+# squid/submissions/domain/finalization.py:176
 submissions-reviewer-schematics-carry = reviewer-only schematics cannot carry a public distribution grant
 
 # squid/submissions/domain/forms.py:315
@@ -5218,7 +5230,7 @@ submissions-show-sponsoring-server = Show the sponsoring server on this build
 # squid/submissions/application/forms.py:262
 submissions-source-version-help = The version the schematic or world capture was exported from.
 
-# squid/submissions/domain/finalization.py:368
+# squid/submissions/domain/finalization.py:370
 submissions-sponsor-installation-match-required = Sponsor attribution requires a matching Paper installation projection.
 
 # squid/submissions/application/attachments.py:102
@@ -5227,19 +5239,19 @@ submissions-staged-attachment-unavailable = The staged attachment is no longer a
 # squid/submissions/domain/drafts.py:195
 submissions-state-edited = drafts in { $current_status } state cannot be edited
 
-# squid/submissions/domain/finalization.py:141
+# squid/submissions/domain/finalization.py:142
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
-# squid/submissions/application/drafts.py:214
+# squid/submissions/application/drafts.py:216
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
-# squid/submissions/domain/finalization.py:350
+# squid/submissions/domain/finalization.py:352
 submissions-submission-incompatible-category = { $category } submission has incompatible category details
 
-# squid/submissions/domain/finalization.py:374
+# squid/submissions/domain/finalization.py:376
 submissions-submission-retain-sponsor = A submission cannot retain a sponsor projection when attribution was not requested.
 
-# squid/submissions/domain/finalization.py:421
+# squid/submissions/domain/finalization.py:423
 submissions-submission-timings-negative = submission timings cannot be negative
 
 # squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:662
@@ -5257,10 +5269,10 @@ submissions-unset-operations-carry = unset operations cannot carry a value
 # squid/submissions/application/forms.py:154
 submissions-unsupported-checked-submission = unsupported checked-in submission form revision
 
-# squid/submissions/domain/normalization.py:183
+# squid/submissions/domain/normalization.py:186
 submissions-validated-field-not = validated field { $field_id } is not a boolean
 
-# squid/submissions/domain/finalization.py:197
+# squid/submissions/domain/finalization.py:198
 submissions-verified-artifact-identifiers = verified artifact identifiers cannot be nil UUIDs
 
 # squid/submissions/application/forms.py:531
@@ -5407,10 +5419,10 @@ ui-control-expired = This control is no longer available.
 # squid/bot/ui.py:87
 ui-list-controls-not-owned = These list controls belong to someone else.
 
-# squid/bot/verify.py:134
+# squid/bot/verify.py:137
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
 
-# squid/bot/verify.py:47
+# squid/bot/verify.py:50
 verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.
 
 # squid/bot/version_tracking.py:108

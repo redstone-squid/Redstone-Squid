@@ -292,6 +292,41 @@ class PostgresNotificationRepository:
         ).all()
         return tuple(row for row in rows)
 
+    async def subscription_labels(self, account_id: int) -> Sequence[tuple[int, str]]:
+        """Resolve enabled follows using public aliases and the latest record title."""
+        latest = (
+            select(TitleDefinition.title_id, TitleDefinition.title)
+            .distinct(TitleDefinition.title_id)
+            .order_by(TitleDefinition.title_id, TitleDefinition.id.desc())
+            .subquery()
+        )
+        aliases = (
+            select(Account.public_creator_id, func.min(CreatorAlias.name).label("name"))
+            .join(CreatorAlias, CreatorAlias.account_id == Account.id)
+            .group_by(Account.public_creator_id)
+            .subquery()
+        )
+        label = func.coalesce(latest.c.title, aliases.c.name)
+        rows = await self._session().execute(
+            select(NotificationSubscription.id, label)
+            .outerjoin(
+                latest,
+                (NotificationSubscription.kind == SubscriptionKind.RECORD)
+                & (latest.c.title_id == NotificationSubscription.subject_id),
+            )
+            .outerjoin(
+                aliases,
+                (NotificationSubscription.kind == SubscriptionKind.CREATOR)
+                & (aliases.c.public_creator_id == NotificationSubscription.subject_id),
+            )
+            .where(
+                NotificationSubscription.account_id == account_id,
+                NotificationSubscription.enabled.is_(True),
+                label.is_not(None),
+            )
+        )
+        return tuple((row[0], row[1]) for row in rows)
+
     async def delete_subscription(self, account_id: int, subscription_id: int) -> bool:
         await self.lock_settings(account_id)
         row = await self.subscription(account_id, subscription_id)

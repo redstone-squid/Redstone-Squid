@@ -6,12 +6,14 @@ from uuid import UUID
 
 import discord
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
 from squid.accounts.models import Account
 from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
+from squid.bot.follows import follow_control
 from squid.bot.profile_render import (
     public_profile_fields,
 )
@@ -19,6 +21,7 @@ from squid.bot.ui import card_node, text_node
 from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
 from squid.core.i18n import tr
+from squid.notifications.domain import SubscriptionKind
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -137,11 +140,14 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
                 ),
                 fields=public_profile_fields(public),
             )
-        return card_node(
-            public.display_name or fallback_name,
-            public.bio,
-            fields=public_profile_fields(public),
-            media=() if public.avatar_url is None else (public.avatar_url,),
+        return sl.stack(
+            card_node(
+                public.display_name or fallback_name,
+                public.bio,
+                fields=public_profile_fields(public),
+                media=() if public.avatar_url is None else (public.avatar_url,),
+            ),
+            sl.action_controls(follow_control(SubscriptionKind.CREATOR, public_id), key="creator-follow"),
         )
 
     async def _refresh_discord_avatar_key(self, account: Account, user: discord.Member | discord.User) -> None:

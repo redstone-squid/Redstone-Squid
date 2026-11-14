@@ -215,3 +215,15 @@ def test_content_revision_preserves_field_and_item_boundaries() -> None:
     split = (Suggestion("a", "b"), Suggestion("c", "d"))
     assert content_revision(combined) != content_revision(split)
     assert content_revision((Suggestion("a\0b", "c"),)) != content_revision((Suggestion("a", "b\0c"),))
+
+
+async def test_persistent_lookup_distinguishes_provider_failure_from_no_matches() -> None:
+    service = service_for(SuggestionSource(id="restrictions", provider=FailingProvider()))
+    with pytest.raises(RuntimeError, match="database is on fire"):
+        await service.suggest(SuggestionRequest(source="restrictions"), raise_on_failure=True)
+
+
+async def test_persistent_lookup_can_retry_a_timeout() -> None:
+    service = service_for(SuggestionSource(id="restrictions", provider=HangingProvider()), timeout_seconds=0.01)
+    with pytest.raises(TimeoutError):
+        await service.suggest(SuggestionRequest(source="restrictions"), raise_on_failure=True)

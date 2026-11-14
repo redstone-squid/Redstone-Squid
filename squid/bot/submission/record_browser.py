@@ -6,8 +6,10 @@ from functools import partial
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.follows import follow_control
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.pagination import PageSelector
+from squid.notifications.domain import SubscriptionKind
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle
 from squid_i18n import md_tr
@@ -53,6 +55,7 @@ def record_browser(
             sl.heading(record.title),
             record.subtitle and sl.paragraph(record.subtitle),
             sl.note(f"{record.build_kind.value} · {record.version_scope.replace('_', ' ')}"),
+            sl.action_controls(follow_control(SubscriptionKind.RECORD, record.title_id), key="record-follow"),
             sl.action_controls(
                 *(
                     sl.action_control(

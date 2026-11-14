@@ -2,12 +2,13 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import override
+from typing import cast, override
 from uuid import UUID
 
 from whenever import Instant
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.notifications_view import NotificationScreen
 from squid.core.actors import Actor
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
@@ -22,6 +23,7 @@ from squid.notifications import (
 from squid.notifications.application import NotificationEditorSnapshot
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
+from squid.suggestions.domain import Suggestion
 from squid_ui.testing import RecordingResponder, choose, find_all, keys, labels, press, render_tree, submit
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import stage
@@ -169,7 +171,12 @@ async def test_following_a_creator_refreshes_the_subscription_browser() -> None:
     responder = RecordingResponder()
 
     with sl.runtime.transaction():
-        await submit(screen.subscriptions, "follow-creator", {"creator": str(creator)}, responder=responder)
+        await screen.subscriptions._creator_picked(
+            cast(
+                sd.ActionEvent, sl.ActionEvent(context=None, actor=sl.interactions.Actor(id="42"), responder=responder)
+            ),
+            Suggestion(str(creator), "Builder"),
+        )
 
     assert harness.notifications.subscribe_calls == [SubscribeCall(7, SubscriptionKind.CREATOR, creator, None)]
     assert harness.notifications.subscription_reads == 2
@@ -181,6 +188,7 @@ async def test_following_a_record_filter_uses_typed_tag_input() -> None:
     screen = harness.screen
     await screen.on_load()
     responder = RecordingResponder()
+    screen.subscriptions.filter_tag = Suggestion("4", "Compact")
 
     with sl.runtime.transaction():
         await submit(
@@ -190,7 +198,6 @@ async def test_following_a_record_filter_uses_typed_tag_input() -> None:
                 "build_kind": "door",
                 "base_title": None,
                 "version_scope": "up_to_date",
-                "tag": 4,
                 "tag_value": "compact",
             },
             responder=responder,
@@ -220,7 +227,6 @@ async def test_empty_record_filter_does_not_call_the_service() -> None:
                 "build_kind": None,
                 "base_title": None,
                 "version_scope": None,
-                "tag": None,
                 "tag_value": None,
             },
             responder=responder,
@@ -297,3 +303,28 @@ async def test_selection_actions_need_something_to_select() -> None:
         node for node in find_all(tree, sl.semantic.ActionControl) if node.key.endswith("mark_selected_read")
     )
     assert mark_read.available is False
+
+
+async def test_follows_after_the_first_page_can_be_selected_and_named() -> None:
+    screen = make_screen().screen
+    await screen.on_load()
+    screen.settings.subscriptions = tuple(
+        NotificationSubscription(
+            id=index, account_id=7, kind=SubscriptionKind.CREATOR, subject_id=UUID(int=index), created_at=Instant.now()
+        )
+        for index in range(1, 32)
+    )
+    screen.settings.labels = {31: "Last builder"}
+    await choose(screen.subscriptions, "unfollow", "1")
+    await press(screen.subscriptions, "next")
+    assert [row.id for row in screen.subscriptions.subscriptions] == list(range(26, 32))
+    assert "Last builder" in labels(render_tree(screen.subscriptions))
+    await choose(screen.subscriptions, "unfollow", "31")
+    assert screen.subscriptions.selected_ids == ("1", "31")
+    await press(screen.subscriptions, "previous")
+    assert screen.subscriptions.selected_ids == ("1", "31")
+    screen.settings.subscriptions = screen.settings.subscriptions[:10]
+    screen.subscriptions.page = 1
+    screen.subscriptions.reconcile_selection()
+    assert screen.subscriptions.page == 0
+    assert screen.subscriptions.selected_ids == ("1",)

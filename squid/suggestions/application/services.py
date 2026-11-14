@@ -64,12 +64,14 @@ class SuggestionService:
         request: SuggestionRequest,
         *,
         authorizer: SuggestionAuthorizer | None = None,
+        raise_on_failure: bool = False,
     ) -> SuggestionResult:
         """Return ranked completions for a partially typed value.
 
         Unknown sources raise `UnknownSuggestionSourceError`. Denied access, missing
         context, provider errors, and provider timeouts return an empty result.
-        Errors from the authorizer and task cancellation propagate.
+        Errors from the authorizer and task cancellation propagate. Persistent
+        pickers use `raise_on_failure` to distinguish provider failures from no matches.
 
         Queries are truncated to `MAX_QUERY_LENGTH`. Nonzero limits are clamped
         to 1..MAX_SUGGESTIONS; zero asks a candidate provider for its full set.
@@ -94,10 +96,14 @@ class SuggestionService:
                 span.set_error()
                 add_counter("suggestions.timeout", attributes={"squid.suggestion.source": source.id})
                 logger.warning("Suggestion source timed out", extra={"source": source.id})
+                if raise_on_failure:
+                    raise
             except Exception:
                 span.set_error()
                 add_counter("suggestions.failed", attributes={"squid.suggestion.source": source.id})
                 logger.exception("Suggestion source failed", extra={"source": source.id})
+                if raise_on_failure:
+                    raise
             return SuggestionResult()
 
     async def enumerate(

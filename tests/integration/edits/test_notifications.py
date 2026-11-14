@@ -6,8 +6,10 @@ import anyio
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
-from squid.accounts.domain import AccountConsent
+from squid.accounts.domain import AccountConsent, ClaimMethod
+from squid.accounts.models import CreatorAlias
 from squid.core.actors import Actor
 from squid.edits.application import EditExecutor
 from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
@@ -34,6 +36,63 @@ from squid.notifications.errors import NotificationNotFoundError
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application.services import PermissionService
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.records.domain.models import MaterializationSource
+from squid.records.models import RecordTitle, RulesRevision, TitleDefinition
+
+
+async def test_follow_labels_resolve_public_names_and_latest_titles(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    async with factory() as uow:
+        owner = await uow.accounts.create(consent=AccountConsent.grant_current())
+        creator = await uow.accounts.create(consent=AccountConsent.grant_current())
+        await uow.commit()
+    async with migrated_session_factory.begin() as session:
+        session.add(
+            CreatorAlias(
+                name="Discovered builder",
+                account_id=creator.id,
+                claimed_at=Instant.now(),
+                claim_method=ClaimMethod.VERIFIED_IGN,
+            )
+        )
+        title = RecordTitle(
+            base_title=BaseTitle.SMALLEST,
+            build_kind=BuildKind.DOOR,
+            version_scope=VersionScope.ALL_TIME,
+            category_key="discovery-test",
+        )
+        session.add(title)
+        await session.flush()
+        for index, wording in enumerate(("Old wording", "Latest wording")):
+            revision = RulesRevision(
+                document_hash=f"discovery-{index}", calculator_version="test", formatter_version="test"
+            )
+            session.add(revision)
+            await session.flush()
+            session.add(
+                TitleDefinition(
+                    title_id=title.public_id,
+                    rules_revision_id=revision.id,
+                    title=wording,
+                    materialization_source=MaterializationSource.EAGER,
+                )
+            )
+            await session.flush()
+        follows = [
+            NotificationSubscription(
+                account_id=owner.id, kind=SubscriptionKind.CREATOR, subject_id=creator.public_creator_id
+            ),
+            NotificationSubscription(account_id=owner.id, kind=SubscriptionKind.RECORD, subject_id=title.public_id),
+            NotificationSubscription(account_id=creator.id, kind=SubscriptionKind.RECORD, subject_id=title.public_id),
+        ]
+        session.add_all(follows)
+        await session.flush()
+        expected = {follows[0].id: "Discovered builder", follows[1].id: "Latest wording"}
+    snapshot = await NotificationService(uow_factory=factory).editor_snapshot(owner.id)
+    assert dict(snapshot.labels) == expected
 
 
 async def test_preferences_and_follows_compete_on_one_account_revision(

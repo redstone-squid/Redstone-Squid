@@ -26,6 +26,7 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 class NotificationEditorSnapshot:
     preferences: NotificationPreferences
     subscriptions: tuple[NotificationSubscription, ...]
+    labels: tuple[tuple[int, str], ...] = ()
 
 
 class NotificationRepository(Protocol):
@@ -60,6 +61,8 @@ class NotificationRepository(Protocol):
     ) -> NotificationSubscription: ...
 
     async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
+
+    async def subscription_labels(self, account_id: int) -> Sequence[tuple[int, str]]: ...
 
     async def delete_subscription(self, account_id: int, subscription_id: int) -> bool: ...
 
@@ -126,6 +129,7 @@ class NotificationService:
             return NotificationEditorSnapshot(
                 await uow.notifications.get_preferences(account_id),
                 tuple(await uow.notifications.list_subscriptions(account_id)),
+                tuple(await uow.notifications.subscription_labels(account_id)),
             )
 
     async def subscription_snapshot(

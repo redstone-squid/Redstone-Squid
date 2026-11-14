@@ -1,6 +1,6 @@
 """Manage notification channels, follows, and the newest visible inbox items."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, cast, override
 from uuid import UUID
 
@@ -9,6 +9,7 @@ from pydantic import JsonValue
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
+from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -30,7 +31,8 @@ from squid.notifications.edits import (
 )
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.records.domain import BaseTitle, BuildKind, VersionScope
-from squid_i18n import md, md_tr
+from squid.suggestions.domain import Suggestion
+from squid_i18n import md_tr
 
 if TYPE_CHECKING:
     from squid.notifications.application import NotificationService
@@ -116,6 +118,7 @@ class NotificationSettings(sl.Reactive):
 
     preferences: NotificationPreferences | None = sl.state(None, persist=False)
     subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
+    labels: Mapping[int, str] = sl.state(factory=dict, persist=False)
 
     def __init__(self, notifications: NotificationService, account_id: int) -> None:
         self._notifications = notifications
@@ -125,6 +128,7 @@ class NotificationSettings(sl.Reactive):
         snapshot = await self._notifications.editor_snapshot(self._account_id)
         self.preferences = snapshot.preferences
         self.subscriptions = snapshot.subscriptions
+        self.labels = dict(snapshot.labels)
 
     async def save(self, edits: EditController, kind: str, values: EditValues, label: sl.TextLike) -> None:
         revision = 0 if self.preferences is None else self.preferences.revision
@@ -195,6 +199,8 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
     """Own follow forms and the selection of subscriptions to remove."""
 
     selected_ids: tuple[str, ...] = sl.state(())
+    page: int = sl.state(0)
+    filter_tag: Suggestion | None = sl.state(None, persist=False)
 
     def __init__(self, settings: NotificationSettings, edits: EditController) -> None:
         self._settings = settings
@@ -202,12 +208,15 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
 
     def reconcile_selection(self) -> None:
         self.selected_ids = tuple(
-            selected for selected in self.selected_ids if any(str(item.id) == selected for item in self.subscriptions)
+            selected
+            for selected in self.selected_ids
+            if any(str(item.id) == selected for item in self._settings.subscriptions)
         )
+        self.page = min(self.page, max(0, (len(self._settings.subscriptions) - 1) // MAX_LISTED))
 
     @property
     def subscriptions(self) -> tuple[NotificationSubscription, ...]:
-        return self._settings.subscriptions[:MAX_LISTED]
+        return self._settings.subscriptions[self.page * MAX_LISTED : (self.page + 1) * MAX_LISTED]
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
@@ -224,43 +233,26 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
                         for subscription in self.subscriptions
                     ),
                     key="unfollow",
-                    selection=sl.controlled(self.selected_ids, self._selection_changed),
+                    selection=sl.controlled(
+                        tuple(
+                            key for key in self.selected_ids if any(str(row.id) == key for row in self.subscriptions)
+                        ),
+                        self._selection_changed,
+                    ),
                     minimum=0,
                     maximum=len(self.subscriptions),
                 ),
             )
         actions = sl.action_controls(
-            sl.form(
+            sl.action_control(
                 tr(t"bot-notifications-view-follow-creator = Follow creator"),
-                # The explicit context stops Pyrefly from inferring this spec as FormSpec[object] from the
-                # still-unsolved action_controls call, which would then reject every request-typed entry.
-                sl.forms.FormSpec[sd.Request](
-                    tr(t"bot-notifications-view-follow-a-creator = Follow a creator"),
-                    (
-                        sl.forms.TextField(
-                            key="creator",
-                            label=tr(t"bot-notifications-view-creator-profile-id = Creator profile ID"),
-                            maximum=36,
-                        ),
-                    ),
-                ),
+                self._follow_creator,
                 key="follow-creator",
-                on_submit=self._follow_creator,
             ),
-            sl.form(
+            sl.action_control(
                 tr(t"bot-notifications-view-follow-record = Follow record"),
-                sl.forms.FormSpec[sd.Request](
-                    tr(t"bot-notifications-view-follow-a-record = Follow a record"),
-                    (
-                        sl.forms.TextField(
-                            key="record_title",
-                            label=tr(t"bot-notifications-view-record-title-id = Record title ID"),
-                            maximum=36,
-                        ),
-                    ),
-                ),
+                self._follow_record,
                 key="follow-record",
-                on_submit=self._follow_record,
             ),
             sl.form(
                 tr(t"bot-notifications-view-follow-matching-records = Follow matching records"),
@@ -278,10 +270,50 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
             ),
             key="subscription-actions",
         )
-        return (*selection, actions)
+        return (
+            *selection,
+            sl.note(self.filter_tag.label) if self.filter_tag is not None else sl.note(""),
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"notification-choose-tag = Choose filter tag"), self._choose_filter_tag, key="filter-tag"
+                ),
+                sl.action_control(
+                    tr(t"notification-clear-tag = Clear filter tag"),
+                    self._clear_filter_tag,
+                    key="clear-filter-tag",
+                    available=self.filter_tag is not None,
+                ),
+                key="filter-tag-actions",
+            ),
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"notification-previous = Previous follows"),
+                    self._previous,
+                    key="previous",
+                    available=self.page > 0,
+                ),
+                sl.action_control(
+                    tr(t"notification-next = Next follows"),
+                    self._next,
+                    key="next",
+                    available=(self.page + 1) * MAX_LISTED < len(self._settings.subscriptions),
+                ),
+                key="follow-pages",
+            )
+            if len(self._settings.subscriptions) > MAX_LISTED
+            else sl.note(""),
+            actions,
+        )
+
+    async def _previous(self, _event: sd.PressEvent) -> None:
+        self.page = max(0, self.page - 1)
+
+    async def _next(self, _event: sd.PressEvent) -> None:
+        self.page = min((len(self._settings.subscriptions) - 1) // MAX_LISTED, self.page + 1)
 
     async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
-        self.selected_ids = event.selected
+        visible = {str(row.id) for row in self.subscriptions}
+        self.selected_ids = tuple(key for key in self.selected_ids if key not in visible) + event.selected
 
     async def _unfollow(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
@@ -317,34 +349,47 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
             tr(t"notification-history-follow = Follow"),
         )
 
-    async def _follow_creator(self, event: sd.SubmitEvent) -> None:
-        creator = self._uuid(event.values["creator"])
-        if creator is None:
-            await event.notice(tr(t"notifications-invalid-creator-uuid = Enter a creator profile ID in UUID form."))
-            return
-        await self._save_follow(
-            kind=SubscriptionKind.CREATOR,
-            subject_id=creator,
+    async def _follow_creator(self, event: sd.PressEvent) -> None:
+        await pick(
+            event,
+            "creator_profiles",
+            tr(t"notification-choose-creator = Choose a creator"),
+            self._creator_picked,
+            confirm=tr(t"notification-follow = Follow"),
         )
-        await self._followed(event, tr(t"bot-notifications-view-following-that-creator = Following that creator."))
 
-    async def _follow_record(self, event: sd.SubmitEvent) -> None:
-        """Follow the stable record title UUID, so the subscription survives record rebuilds."""
-        record_title = self._uuid(event.values["record_title"])
-        if record_title is None:
-            await event.notice(tr(t"notifications-invalid-record-title-uuid = Enter a record title ID in UUID form."))
-            return
-        await self._save_follow(
-            kind=SubscriptionKind.RECORD,
-            subject_id=record_title,
+    async def _creator_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
+        await self._save_follow(kind=SubscriptionKind.CREATOR, subject_id=UUID(item.value))
+        await event.notice(tr(t"bot-notifications-view-following-that-creator = Following that creator."))
+
+    async def _follow_record(self, event: sd.PressEvent) -> None:
+        await pick(
+            event,
+            "record_titles",
+            tr(t"notification-choose-record = Choose a record"),
+            self._record_picked,
+            confirm=tr(t"notification-follow = Follow"),
         )
-        await self._followed(event, tr(t"bot-notifications-view-following-that-record = Following that record."))
+
+    async def _record_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
+        # The lookup carries the stable title UUID, never a definition's numeric ID.
+        await self._save_follow(kind=SubscriptionKind.RECORD, subject_id=UUID(item.value))
+        await event.notice(tr(t"bot-notifications-view-following-that-record = Following that record."))
+
+    async def _choose_filter_tag(self, event: sd.PressEvent) -> None:
+        await pick(event, "showcase_tag_ids", tr(t"notification-choose-tag = Choose filter tag"), self._tag_picked)
+
+    async def _tag_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
+        self.filter_tag = item
+
+    async def _clear_filter_tag(self, _event: sd.PressEvent) -> None:
+        self.filter_tag = None
 
     async def _follow_filter(self, event: sd.SubmitEvent) -> None:
         build_kind = self._optional_text(event.values.get("build_kind"))
         base_title = self._optional_text(event.values.get("base_title"))
         version_scope = self._optional_text(event.values.get("version_scope"))
-        tag = event.values.get("tag")
+        tag = None if self.filter_tag is None else int(self.filter_tag.value)
         tag_value = self._optional_text(event.values.get("tag_value"))
         if not any((build_kind, base_title, version_scope, tag is not None)):
             await event.notice(tr(t"notifications-record-filter-required = Choose at least one record filter."))
@@ -368,13 +413,6 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
 
     async def _followed(self, event: sd.SubmitEvent, notice: sl.TextLike) -> None:
         await event.notice(notice)
-
-    @staticmethod
-    def _uuid(value: object) -> UUID | None:
-        try:
-            return UUID(str(value))
-        except ValueError:
-            return None
 
     @staticmethod
     def _optional_text(value: object) -> str | None:
@@ -413,12 +451,6 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
                         for item in VersionScope
                     ),
                 ),
-                sl.forms.IntField(
-                    key="tag",
-                    label=tr(t"bot-notifications-view-showcase-tag-id = Showcase tag ID"),
-                    required=False,
-                    minimum=1,
-                ),
                 sl.forms.TextField(
                     key="tag_value",
                     label=tr(t"bot-notifications-view-exact-tag-value = Exact tag value"),
@@ -450,12 +482,12 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         return sl.text.Text.join("\n", lines)
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
-        return _kind_label(subscription.kind)
+        return self._settings.labels.get(subscription.id) or _kind_label(subscription.kind)
 
     def detail(self, subscription: NotificationSubscription) -> sl.TextLike:
         if subscription.record_filter is not None:
             return _filter_text(subscription.record_filter)
-        return md(t"`{subscription.subject_id}`")
+        return _kind_label(subscription.kind)
 
 
 class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request]):
