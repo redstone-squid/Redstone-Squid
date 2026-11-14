@@ -77,6 +77,7 @@ class SemanticUnit[RenderTargetT, ContextT]:
 @dataclass(frozen=True, slots=True)
 class SemanticGraph[RenderTargetT, ContextT]:
     units: Mapping[SemanticRef, SemanticUnit[RenderTargetT, ContextT]]
+    children: Mapping[SemanticRef, tuple[SemanticRef, ...]]
 
     def resolve(self, reference: SemanticRef) -> SemanticRef:
         if reference in self.units:
@@ -262,7 +263,15 @@ def semantic_graph[RenderTargetT, ContextT](
                 raise UnsupportedSemanticError(type(value).__name__)
 
     visit(node, None, 0)
-    return SemanticGraph(MappingProxyType(units))
+    children: dict[SemanticRef, list[SemanticRef]] = {}
+    for reference, unit in units.items():
+        if consume is not None:
+            consume()
+        if unit.parent is not None:
+            children.setdefault(unit.parent, []).append(reference)
+    return SemanticGraph(
+        MappingProxyType(units), MappingProxyType({ref: tuple(values) for ref, values in children.items()})
+    )
 
 
 def interaction[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, ContextT]) -> Interaction[ContextT] | None:

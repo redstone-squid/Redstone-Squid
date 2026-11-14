@@ -42,10 +42,12 @@ def fragment_tree[RenderTargetT, ContextT, PayloadT](
         if children or offer.flow:
             message = "leaf fragment contracts cannot also expose child breaks"
             raise LayoutInvariantError(message)
-        units = offer.fragments.units
+        leaf_units = offer.fragments.units
         if (origin := offer.occurrence.origin) is not None:
-            units = tuple(frozenset(source for ref in unit for source in origin.references(ref)) for unit in units)
-        return FragmentTree(candidate, children, units, offer.fragments.legal_ends, offer.keep_with_next)
+            leaf_units = tuple(
+                frozenset(source for ref in unit for source in origin.references(ref)) for unit in leaf_units
+            )
+        return FragmentTree(candidate, children, leaf_units, offer.fragments.legal_ends, offer.keep_with_next)
     if not offer.flow:
         return FragmentTree(
             candidate,

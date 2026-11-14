@@ -251,7 +251,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         task: _Assignment[RenderTargetT, ContextT, PayloadT] | _Partitions[RenderTargetT, ContextT, PayloadT],
     ) -> None:
         nonlocal generated
-        context.work.consume()
+        context.work.consume(1 + len(task.choices))
         if isinstance(task, _Partitions):
             identity = (task.assignment, task.cuts)
             if identity in seen_partitions:
@@ -284,6 +284,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         offers = discovery
                         if not offers:
                             unsupported.add(occurrence.identity)
+                    context.work.consume(len(offers))
                     ranks = dense_ranks(tuple(offer.preference for offer in offers))
                     keys: set[str] = set()
                     for offer, rank in sorted(
@@ -296,6 +297,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         keys.add(offer.key)
                         if occurrence.identity in selected and selected[occurrence.identity] != offer.key:
                             continue
+                        context.work.consume(len(task.choices))
                         if any(previous.occurrence.identity == occurrence.identity for previous, _ in task.choices):
                             message = "cyclic or duplicate occurrence in offer structure"
                             raise LayoutInvariantError(message)
@@ -304,6 +306,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         message = f"unknown fixed offer for {occurrence.identity.path!r}"
                         raise LayoutInvariantError(message)
                     continue
+                context.work.consume(len(task.choices))
                 choices = {offer.occurrence.identity: offer for offer, _ in task.choices}
                 candidate = _candidate(root, choices, context)
                 regions = _region_trees(fragment_tree(candidate, context), context)
@@ -326,6 +329,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                 evaluations += 1
                 admitted = evaluate_composition(visible, rules, context)
                 if isinstance(admitted, Evaluation):
+                    context.work.consume(len(admitted.violations))
                     violations.extend(admitted.violations)
                     unsupported.update(
                         v.occurrence for v in admitted.violations if isinstance(v, UnsupportedCapability)
@@ -336,6 +340,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     visible, admitted.evaluation, family, region_map, policy, context
                 )
                 if failures:
+                    context.work.consume(len(failures))
                     violations.extend(failures)
                     unsupported.update(v.occurrence for v in failures if isinstance(v, UnsupportedCapability))
                     feasible = False
@@ -355,11 +360,12 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                 certified += 1
             satisfied = False
             if feasible:
-                context.work.consume()
+                context.work.consume(1 + len(task.choices) + len(region_map) + len(policy) + len(retained))
                 ranks = {offer.occurrence.identity: rank for offer, rank in task.choices}
                 preferences = _preferences(task.candidate, ranks, policy, context)
                 minimums: list[int] = []
                 for axis in Axis:
+                    context.work.consume(1 + sum(len(value.goals) for value in policy.values()))
                     deficits = [
                         max(0, goal.minimum - peaks.get(identity, EMPTY_COST).get(axis))
                         for identity in region_map
@@ -429,7 +435,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                 # cut is still enqueued below; no fit assumption prunes that domain.
                 refined: list[tuple[int, ...]] = []
                 for node, ends in zip(task.regions, task.cuts, strict=True):
-                    context.work.consume()
+                    context.work.consume(1 + len(node.legal_ends) + len(ends))
                     available = [end for end in node.legal_ends if end not in ends]
                     if node.candidate.offer.occurrence.identity in fixed_cuts or not available:
                         refined.append(ends)

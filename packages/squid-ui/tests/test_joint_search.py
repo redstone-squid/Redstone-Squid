@@ -43,7 +43,7 @@ def test_joint_sibling_pages_are_certified_and_cursor_independent() -> None:
         ),
         key="root",
     )
-    limits = V2Limits(total_text=40)
+    limits = V2Limits(total_text=47)
     result = search_composition(
         occurrence(node),
         V2CompositionRules[RenderTarget, object](limits),
@@ -177,7 +177,7 @@ def test_empty_region_is_valid_and_impossible_atom_is_infeasible() -> None:
 def test_budget_exhaustion_keeps_only_fully_certified_families() -> None:
     node = sl.region(*(sl.paragraph("x" * 10, key=str(i)) for i in range(6)), key="region", title="Region")
     rules = V2CompositionRules[RenderTarget, object](V2Limits(total_text=35))
-    statuses = set()
+    statuses: set[str] = set()
     for budget in (1, 100, 500, 1000, 3000, 10000, 50000):
         try:
             result = search_composition(occurrence(node), rules, PlanningContext(WorkBudget(budget)), finalize=finish)
@@ -293,7 +293,7 @@ def test_incomparable_losses_remain_in_the_nondominated_set() -> None:
 
 
 def test_partitions_match_exhaustive_multiaxis_oracle() -> None:
-    lengths = ((9, 3, 7), (4, 8))
+    lengths = ((90, 30, 70), (40, 80))
     node = sl.stack(
         *(
             sl.region(
@@ -305,7 +305,7 @@ def test_partitions_match_exhaustive_multiaxis_oracle() -> None:
         ),
         key="root",
     )
-    limits = V2Limits(total_text=28, total_components=14)
+    limits = V2Limits(total_text=230, total_components=14)
     rules = V2CompositionRules[RenderTarget, object](limits)
     identities = tuple(OccurrenceId(("root", str(i))) for i in range(2))
 
@@ -317,7 +317,7 @@ def test_partitions_match_exhaustive_multiaxis_oracle() -> None:
 
     def page_costs(sizes: tuple[int, ...], cuts: tuple[int, ...]) -> list[tuple[int, int]]:
         return [
-            (sum(sizes[start:end]) + (5 if len(cuts) > 1 else 0), end - start + (5 if len(cuts) > 1 else 0))
+            (sum(sizes[start:end]) + (11 if len(cuts) > 1 else 0), end - start + (5 if len(cuts) > 1 else 0))
             for start, end in zip((0, *cuts[:-1]), cuts, strict=True)
         ]
 

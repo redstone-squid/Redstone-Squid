@@ -115,6 +115,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                 case TextRealization(nodes=nodes):
                     return text(nodes)
                 case TableRealization() as table:
+                    context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
                     if table.form != TableForm.RECORDS:
                         violations.append(UnsupportedCapability(part.offer.occurrence.identity, "native table"))
                     return tuple(node for row in record_text(table) for node in text(row))

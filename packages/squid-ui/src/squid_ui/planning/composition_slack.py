@@ -144,6 +144,7 @@ class SlackCompositionRules[RenderTargetT, ContextT]:
                             scene.SlackSection(scene.SlackText(rendered, scene.SlackTextKind.PLAIN, emoji=False))
                         )
                 case TableRealization() as table:
+                    context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
                     if table.form == TableForm.NATIVE:
                         blocks += 1
                         limit("table.columns", len(table.columns), self.limits.components.table_columns)

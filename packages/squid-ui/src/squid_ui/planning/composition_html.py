@@ -109,6 +109,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                 case TextRealization(nodes=nodes):
                     return (scene.HtmlElement(scene.HtmlTag.P, (text(nodes),)),)
                 case TableRealization() as table:
+                    context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
                     if table.form == TableForm.RECORDS:
                         return tuple(scene.HtmlElement(scene.HtmlTag.P, (text(nodes),)) for nodes in record_text(table))
                     heading = scene.HtmlElement(

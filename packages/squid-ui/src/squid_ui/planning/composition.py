@@ -10,6 +10,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Protocol
 
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, PressEvent
@@ -256,6 +257,7 @@ class PlanningContext:
     palette: Palette = DEFAULT_PALETTE
     capabilities: frozenset[str] = frozenset()
     capacities: Mapping[Axis, int] = field(default_factory=dict)
+    chrome: Chrome = DEFAULT_CHROME
 
 
 @dataclass(frozen=True, slots=True)

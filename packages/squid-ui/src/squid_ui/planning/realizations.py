@@ -122,13 +122,17 @@ class RegionNavigation[RenderTargetT, ContextT]:
         occurrence = self.occurrence
         route = "composition.page." + sha256("/".join(occurrence.identity.path).encode()).hexdigest()[:24]
         payloads: list[Realization] = []
+        previous = "".join(
+            tree.plain(node) for node in resolve_text(context.chrome.previous, context.localization).nodes
+        )
+        following = "".join(tree.plain(node) for node in resolve_text(context.chrome.next, context.localization).nodes)
         if page > 0 or self.disabled_controls:
-            payloads.append(ControlRealization("Previous", route=f"{route}.{max(0, page - 1)}", disabled=page == 0))
-        label = self.footer(page + 1, pages) if self.footer is not None else f"{page + 1} / {pages}"
+            payloads.append(ControlRealization(previous, route=f"{route}.{max(0, page - 1)}", disabled=page == 0))
+        label = (self.footer or context.chrome.page_footer)(page + 1, pages)
         payloads.append(TextRealization(resolve_text(label, context.localization).nodes))
         if page + 1 < pages or self.disabled_controls:
             payloads.append(
-                ControlRealization("Next", route=f"{route}.{min(pages - 1, page + 1)}", disabled=page + 1 == pages)
+                ControlRealization(following, route=f"{route}.{min(pages - 1, page + 1)}", disabled=page + 1 == pages)
             )
         result: list[CandidateComposition[RenderTargetT, ContextT, Realization]] = []
         for index, payload in enumerate(payloads):
@@ -266,7 +270,8 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.Unbreakable
         | sem.KeepWithNext,
     ):
-        refs = [ref for ref, unit in occurrence.graph.units.items() if unit.parent == occurrence.reference]
+        refs = list(occurrence.graph.children.get(occurrence.reference, ()))
+        context.work.consume(len(refs))
         if isinstance(value, sem.Region):
             refs.sort(key=lambda ref: -1 if ref.keys[-1] == "@header" else 1 if ref.keys[-1] == "@footer" else 0)
         placement = occurrence.placement
@@ -315,6 +320,7 @@ def semantic_offers[RenderTargetT, ContextT](
             ),
         )
     if isinstance(value, sem.Table):
+        context.work.consume(len(value.columns.columns))
         prefix = occurrence.reference.keys
         columns = tuple(
             ReferencedText(
@@ -325,7 +331,7 @@ def semantic_offers[RenderTargetT, ContextT](
         )
         rows: list[TableRecord] = []
         for i, row in enumerate(value.rows):
-            context.work.consume()
+            context.work.consume(1 + len(row.cells))
             row_ref = SemanticRef((*prefix, "rows", row.key or f"@{i}"))
             cells = tuple(
                 ReferencedText(
