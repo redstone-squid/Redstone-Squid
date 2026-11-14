@@ -466,6 +466,14 @@ export type DoorPatch = {
 };
 
 /**
+ * DoorRangeAnalysis
+ */
+export type DoorRangeAnalysis = {
+    analysis: SmallestRegionAnalysis;
+    configurations: Array<DoorRegionConfiguration>;
+};
+
+/**
  * DoorRangeQuery
  */
 export type DoorRangeQuery = {
@@ -1537,6 +1545,33 @@ export type PublishedTitle = {
     status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
+};
+
+/**
+ * RangeAttempt
+ */
+export type RangeAttempt = {
+    id: number;
+    query_id: number;
+    generation: number;
+    rules_revision_id: number;
+    started_at: string;
+    completed_at: string | null;
+    is_active: boolean;
+    result: DoorRangeAnalysis | null;
+    error: string | null;
+    snapshot_hash: string | null;
+    captured_at: string | null;
+};
+
+/**
+ * RangePublication
+ */
+export type RangePublication = {
+    query_id: number;
+    query: DoorRangeQuery;
+    active: RangeAttempt | null;
+    latest: RangeAttempt | null;
 };
 
 /**
@@ -5321,6 +5356,45 @@ export type RecordsLookupDoorRangesResponses = {
 };
 
 export type RecordsLookupDoorRangesResponse = RecordsLookupDoorRangesResponses[keyof RecordsLookupDoorRangesResponses];
+
+export type RecordsGetDoorRangesData = {
+    body?: never;
+    path: {
+        query_id: number;
+    };
+    query?: never;
+    url: '/v1/records/ranges/door/{query_id}';
+};
+
+export type RecordsGetDoorRangesErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsGetDoorRangesError = RecordsGetDoorRangesErrors[keyof RecordsGetDoorRangesErrors];
+
+export type RecordsGetDoorRangesResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RangePublication;
+};
+
+export type RecordsGetDoorRangesResponse = RecordsGetDoorRangesResponses[keyof RecordsGetDoorRangesResponses];
 
 export type BuildSchematicsListData = {
     body?: never;

@@ -17,6 +17,7 @@ from squid.minecraft_auth.application import InstallationCredentialService, Play
 from squid.notifications import NotificationService
 from squid.permissions.application import PermissionService
 from squid.records.application import PublicRecordQueryService, RecordService
+from squid.records.application.range_publication import RangePublicationService
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
@@ -47,6 +48,10 @@ def get_build_queries(services: Services) -> BuildQueryService:
 
 def get_records(services: Services) -> RecordService:
     return services.records
+
+
+def get_range_publication(services: Services) -> RangePublicationService:
+    return services.range_publication
 
 
 def get_public_records(services: Services) -> PublicRecordQueryService:
@@ -130,6 +135,7 @@ BuildCommands = NamedDependency[SkipValidation[BuildService]]
 BuildQueries = NamedDependency[SkipValidation[BuildQueryService]]
 CurrentCaller = NamedDependency[SkipValidation[Caller]]
 Records = NamedDependency[SkipValidation[RecordService]]
+RangePublications = NamedDependency[SkipValidation[RangePublicationService]]
 PublicRecords = NamedDependency[SkipValidation[PublicRecordQueryService]]
 Notifications = NamedDependency[SkipValidation[NotificationService]]
 Schematics = NamedDependency[SkipValidation[SchematicService]]

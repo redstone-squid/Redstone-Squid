@@ -8,7 +8,14 @@ from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, JSONBody, QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import PublicRecords, Records, get_public_records, get_records
+from squid.api.dependencies import (
+    PublicRecords,
+    RangePublications,
+    Records,
+    get_public_records,
+    get_range_publication,
+    get_records,
+)
 from squid.api.errors import responses
 from squid.api.pagination import (
     AfterIdParam,
@@ -22,6 +29,7 @@ from squid.api.pagination import (
 from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.records.application.live import DoorRecordLookup, LiveDoorRecord
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.records.application.range_snapshots import RangePublication
 from squid.records.errors import RecordNotFoundError
 
 
@@ -120,9 +128,25 @@ async def lookup_door_ranges(data: JSONBody[DoorRangeQuery], records: Records) -
     return await records.lookup_door_ranges(data)
 
 
+@get(
+    "/ranges/door/{query_id:int}",
+    responses=responses(404, 422, 503),
+    operation_id="records_get_door_ranges",
+    dependencies={"publications": Provide(get_range_publication, sync_to_thread=False)},
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+)
+async def get_door_ranges(query_id: FromPath[int], publications: RangePublications) -> RangePublication:
+    """Read a registered query's active publication and latest computation attempt."""
+    publication = await publications.get(query_id)
+    if publication is None:
+        raise RecordNotFoundError(query_id)
+    return publication
+
+
 router = Router(
     dependencies={"records": Provide(get_records, sync_to_thread=False)},
     path="/records",
     tags=["records"],
-    route_handlers=[get_record, list_records, lookup_door, lookup_door_ranges],
+    route_handlers=[get_record, list_records, lookup_door, lookup_door_ranges, get_door_ranges],
 )

@@ -9661,6 +9661,111 @@
         }
       }
     },
+    "/v1/records/ranges/door/{query_id}": {
+      "get": {
+        "tags": [
+          "records"
+        ],
+        "summary": "GetDoorRanges",
+        "description": "Read a registered query's active publication and latest computation attempt.",
+        "operationId": "records_get_door_ranges",
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RangePublication"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/builds/{build_id}/schematics": {
       "get": {
         "tags": [
@@ -19153,6 +19258,25 @@
         "required": [],
         "title": "DoorPatch"
       },
+      "DoorRangeAnalysis": {
+        "properties": {
+          "analysis": {
+            "$ref": "#/components/schemas/SmallestRegionAnalysis"
+          },
+          "configurations": {
+            "items": {
+              "$ref": "#/components/schemas/DoorRegionConfiguration"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysis",
+          "configurations"
+        ],
+        "title": "DoorRangeAnalysis"
+      },
       "DoorRangeQuery": {
         "properties": {
           "orientation": {
@@ -23003,6 +23127,134 @@
           "version_scope"
         ],
         "title": "PublishedTitle"
+      },
+      "RangeAttempt": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "query_id": {
+            "type": "integer"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "rules_revision_id": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DoorRangeAnalysis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snapshot_hash": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "captured_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "captured_at",
+          "completed_at",
+          "error",
+          "generation",
+          "id",
+          "is_active",
+          "query_id",
+          "result",
+          "rules_revision_id",
+          "snapshot_hash",
+          "started_at"
+        ],
+        "title": "RangeAttempt"
+      },
+      "RangePublication": {
+        "properties": {
+          "query_id": {
+            "type": "integer"
+          },
+          "query": {
+            "$ref": "#/components/schemas/DoorRangeQuery"
+          },
+          "active": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RangeAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RangeAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "active",
+          "latest",
+          "query",
+          "query_id"
+        ],
+        "title": "RangePublication"
       },
       "RecalculationFacts": {
         "properties": {

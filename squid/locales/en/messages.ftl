@@ -4314,7 +4314,7 @@ record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title
 # squid/bot/submission/records.py:172
 records-active-version = Using the active version
 
-# squid/records/application/services.py:660, squid/records/application/services.py:691
+# squid/records/application/services.py:668, squid/records/application/services.py:699
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/records/errors.py:29, squid/records/errors.py:45
@@ -4341,7 +4341,7 @@ records-exact-category = Lookup exact category
 # squid/bot/submission/records.py:396
 records-exact-category-key = Exact category key
 
-# squid/records/application/services.py:704
+# squid/records/application/services.py:712
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/records/domain/models.py:115
@@ -4368,7 +4368,7 @@ records-no-unresolved-categories = No unresolved active record categories.
 # squid/bot/submission/records.py:387
 records-operation-permission-denied = You are no longer allowed to perform this records operation.
 
-# squid/records/application/services.py:621
+# squid/records/application/services.py:629
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/submission/records.py:377
@@ -4380,7 +4380,7 @@ records-recompute-definition = Recompute definition
 # squid/bot/submission/records.py:306, squid/bot/submission/records.py:355
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/records/application/services.py:444
+# squid/records/application/services.py:452
 records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
 # squid/records/errors.py:28
@@ -4392,7 +4392,7 @@ records-record-definition-stores = Record definition { $definition_id } stores a
 # squid/records/errors.py:16
 records-record-not-found-title = Record not found
 
-# squid/records/application/services.py:722
+# squid/records/application/services.py:730
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/submission/records.py:176

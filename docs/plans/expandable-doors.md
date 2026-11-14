@@ -27,7 +27,8 @@ Implementation order:
    through the existing ranking semantics, without materializing query sizes.
 4. **Symbolic regions and publication:** compute regions, prove nonemptiness
    where possible and persist snapshots. Live width-range queries are exposed;
-   publication remains pending.
+   registered width-query publication is implemented. Integration with ordinary
+   fixed-title publication and broader region types remains pending.
 5. **UI and ingestion review:** explain domains, source claims, unresolved facts,
    and winning regions; add dedicated editing controls.
 
@@ -358,30 +359,58 @@ or `timed_out`, respectively, with no partially awarded regions. Worker failures
 return HTTP 503. Exact analysis may still contain unresolved record regions when
 comparison facts are missing. Point queries remain independently available.
 
-These are live, ephemeral answers. Publication still requires immutable candidate
-snapshots, persisted region results, and atomic activation; live responses do not
-replace published record runs.
+These are live, ephemeral answers. They do not replace published record runs.
+Registered queries use the snapshot-backed publication flow below.
 
-## Queries, persistence, and workers
+## Registered range publication
 
-Introduce typed competition identities for orientation, patterns, restrictions,
-and version scope. Opening sizes become constraints, not strings embedded in
-competition identities. Keep existing fixed-title URLs as point views.
+Migration `b3e7a1d5c9f2` adds registrations, computation attempts, and immutable
+candidate snapshots. A registration identifies an exact `DoorRangeQuery`,
+including its bounds, category filters, and explicit Minecraft version. Canonical
+JSON sorts unordered category fields so equivalent requests share an identity.
+Registration is currently an application service operation, not a public write API.
 
-A 9999×3 lookup reads the active candidate snapshot, tests membership, evaluates
-formulas, and invokes the concrete resolver. It neither creates a permanent
-category nor triggers recomputation. Cache by snapshot, competition, and size.
+`RangePublicationService.register(query)` queues the query's initial computation.
+`publish(query)` registers it if needed and computes immediately. Door rebuilds
+refresh all registered queries through the same durable recomputation queue.
+Range publication is separate from fixed-title runs and atomic per registered
+query; it does not replace fixed-title URLs, search projections, or notifications.
 
-Reuse the computation queue and atomic run activation. Extend persistence with
-immutable candidate snapshots, winning and gap predicates, nonemptiness status,
-optional witnesses, and simplified representations. Record calculator and
-arithmetic-library versions. A family can be resolved in one region and
-unresolved elsewhere, so one TitleResult status is insufficient.
+Each attempt reserves a generation before loading candidates. It reads one
+repeatable-read view, applies the same taxonomy rules as live lookup, and saves
+the filtered arithmetic facts before starting its subprocess. The snapshot
+contains the query, source branches and evidence, fixed measurements, capture
+time, document version, calculator version, and arithmetic version. The attempt
+also records the rules revision. A content hash identifies the saved document.
+Database triggers reject updates and deletes of snapshots.
 
-Run algebra in a supervised subprocess with memory/time limits, outside the
-bot process and database transaction. Initially recompute existing queued scopes;
-optimize by competition group and input hashes only after measurement. Never
-combine a published region with live edited candidate formulas.
+The worker receives the saved inputs after all database transactions close.
+Publication stores the complete analysis and swaps the active attempt in one
+transaction. Only an exact analysis from the latest reserved generation and
+active rules revision can replace the previous result. Exact analyses may include
+unresolved regions. Older attempts cannot overwrite newer work, including when
+the newer attempt failed.
+
+Unsupported inputs, limits, timeouts, cancellation, and worker failures leave the
+last exact publication active. The latest attempt records its outcome separately;
+a process kill may leave it unfinished until the queue retries with a new
+generation. Queue acknowledgement still matches the claim token, so source edits
+during computation keep their newly queued work. One publication worker runs at
+a time per application process, in addition to the live-request admission budget.
+
+`GET /v1/records/ranges/door/{query_id}` returns the query, active publication, and
+latest attempt together. Each attempt includes capture/completion times, snapshot
+hash, rules revision, saved analysis, and failure information. Reads never join
+live build formulas to saved winners. A registration without a successful result
+has a null active publication; an older result can remain active while the latest
+attempt is pending or failed.
+
+Next steps are registration/editing controls and published concrete-size views.
+Broader competition identities, multiaxis regions, timing titles, caching,
+per-competition invalidation, and publication notifications remain separate work.
+Bump the range calculator/arithmetic versions when their semantics change and the
+record calculator version when deploying changed rules, so existing scopes queue
+replacement computations.
 
 ## Validation
 

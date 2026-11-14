@@ -10,7 +10,14 @@ import pytest
 from litestar import Litestar, get, post
 from litestar.di import Provide
 
-from squid.api.v1.records import PublicRecordDTO, get_record, list_records, lookup_door, lookup_door_ranges
+from squid.api.v1.records import (
+    PublicRecordDTO,
+    get_door_ranges,
+    get_record,
+    list_records,
+    lookup_door,
+    lookup_door_ranges,
+)
 from squid.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
@@ -18,6 +25,8 @@ from squid.records.application import PublicRecordQueryService, RecordService
 from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.records.application.range_publication import RangePublicationService
+from squid.records.application.range_snapshots import RangeAttempt, RangePublication
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, TitleResolution, VersionScope
 from squid.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 
@@ -254,3 +263,54 @@ async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(st
     schemas = app.openapi_schema.to_schema()["components"]["schemas"]
     assert "DoorRangeQuery" in schemas
     assert "DoorRangeResult" in schemas
+
+
+async def test_published_ranges_show_active_and_failed_latest_attempts() -> None:
+    publications = create_autospec(RangePublicationService, instance=True)
+    moment = datetime(2026, 11, 14, tzinfo=UTC)
+    active = RangeAttempt(
+        1,
+        7,
+        1,
+        3,
+        moment,
+        moment,
+        is_active=True,
+        result=analyze_door_widths((), height=3),
+        error=None,
+        snapshot_hash="abc",
+        captured_at=moment,
+    )
+    latest = RangeAttempt(
+        2,
+        7,
+        2,
+        3,
+        moment,
+        moment,
+        is_active=False,
+        result=None,
+        error="cancelled",
+        snapshot_hash="def",
+        captured_at=moment,
+    )
+    publications.get.return_value = RangePublication(7, DoorRangeQuery(height=3), active, latest)
+    handler = get(
+        "/records/ranges/door/{query_id:int}",
+        dependencies={"publications": Provide(lambda: publications, sync_to_thread=False)},
+    )(get_door_ranges.fn)
+    app = Litestar([handler])
+    transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
+    async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
+        response = await client.get("/records/ranges/door/7")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["query_id"] == 7
+        assert body["active"]["id"] == 1
+        assert body["active"]["result"]["analysis"]["status"] == "exact"
+        assert body["latest"]["error"] == "cancelled"
+        assert body["latest"]["snapshot_hash"] == "def"
+        assert body["latest"]["result"] is None
+        publications.get.assert_awaited_once_with(7)
+        publications.publish.assert_not_called()
+        publications.register.assert_not_called()
