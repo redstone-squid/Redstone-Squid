@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Callable, Sequence
-from typing import Literal, cast, override
+from typing import override
 
 from sqlalchemy import func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,6 @@ from squid_i18n import md_tr
 _CANDIDATE_LIMIT = 200
 _PUBLIC_BUILD_STATUSES = frozenset({"confirmed"})
 _SEMANTIC_WARNING = "Semantic search is temporarily unavailable; showing lexical results."
-ResourceKind = Literal["record", "build", "metadata"]
 logger = logging.getLogger(__name__)
 
 
@@ -226,22 +225,17 @@ class PostgresSearchBackend(SearchBackend):
                     warnings = (_SEMANTIC_WARNING,)
         ranked = reciprocal_rank_fusion(branches)
         if request.group_by_build:
-            documents = await self._documents_by_candidate(session, ranked)
-            candidates = {
-                documents[(candidate.resource_kind, candidate.source_id)].id: candidate
-                for candidate in ranked
-                if (candidate.resource_kind, candidate.source_id) in documents
-            }
+            candidates = {candidate.document_id: candidate for candidate in ranked}
             return await GroupedSearch(session, request, query).search(
                 predicate, query_predicate, offset=offset, ranked=candidates, warnings=warnings
             )
         page_candidates = ranked[offset : offset + request.page_size]
-        documents = await self._documents_by_candidate(session, page_candidates)
-        hits = tuple(
-            _to_hit(documents[(candidate.resource_kind, candidate.source_id)], candidate.score)
-            for candidate in page_candidates
-            if (candidate.resource_kind, candidate.source_id) in documents
-        )
+        page_ids = [candidate.document_id for candidate in page_candidates]
+        documents = {
+            document.id: document
+            for document in (await session.scalars(select(SearchDocument).where(SearchDocument.id.in_(page_ids)))).all()
+        }
+        hits = tuple(_to_hit(documents[candidate.document_id], candidate.score) for candidate in page_candidates)
         return SearchSlice(hits, len(ranked), warnings)
 
     async def _filter_only(
@@ -304,20 +298,12 @@ class PostgresSearchBackend(SearchBackend):
         score: ColumnElement[float],
     ) -> tuple[RankedCandidate, ...]:
         statement = (
-            select(SearchDocument.resource_kind, SearchDocument.source_key, SearchDocument.normalized_title)
+            select(SearchDocument.id, SearchDocument.normalized_title)
             .where(predicate)
             .order_by(score.desc(), SearchDocument.resource_kind, SearchDocument.source_key)
             .limit(_CANDIDATE_LIMIT)
         )
-        rows = (await session.execute(statement)).all()
-        return tuple(
-            RankedCandidate(
-                source_id=_public_source_id(row.resource_kind, row.source_key),
-                resource_kind=_group_kind(row.resource_kind),
-                normalized_title=row.normalized_title,
-            )
-            for row in rows
-        )
+        return tuple(RankedCandidate(row.id, row.normalized_title) for row in (await session.execute(statement)).all())
 
     async def _semantic_candidates(
         self,
@@ -336,42 +322,12 @@ class PostgresSearchBackend(SearchBackend):
             .subquery()
         )
         statement = (
-            select(SearchDocument.resource_kind, SearchDocument.source_key, SearchDocument.normalized_title)
+            select(SearchDocument.id, SearchDocument.normalized_title)
             .join(nearest, SearchDocument.id == nearest.c.id)
             .where(predicate)
             .order_by(nearest.c.distance)
         )
-        return tuple(
-            RankedCandidate(
-                _public_source_id(row.resource_kind, row.source_key),
-                _group_kind(row.resource_kind),
-                row.normalized_title,
-            )
-            for row in (await session.execute(statement)).all()
-        )
-
-    async def _documents_by_candidate(
-        self,
-        session: AsyncSession,
-        candidates: Sequence[RankedCandidate],
-    ) -> dict[tuple[ResourceKind, str], SearchDocument]:
-        if not candidates:
-            return {}
-        identities = tuple(_raw_identity(candidate.resource_kind, candidate.source_id) for candidate in candidates)
-        predicate = or_(
-            *(
-                (SearchDocument.resource_kind == resource_kind) & (SearchDocument.source_key == source_key)
-                for resource_kind, source_key in identities
-            )
-        )
-        documents = (await session.scalars(select(SearchDocument).where(predicate))).all()
-        return {
-            (
-                _group_kind(document.resource_kind),
-                _public_source_id(document.resource_kind, document.source_key),
-            ): document
-            for document in documents
-        }
+        return tuple(RankedCandidate(row.id, row.normalized_title) for row in (await session.execute(statement)).all())
 
     @staticmethod
     def _scope_predicate(scope: SearchScope) -> ColumnElement[bool]:
@@ -400,22 +356,3 @@ def _ranking_text(query: SearchQuery) -> str:
         elif not isinstance(expression.value, bool | int | float):
             values.append(str(expression.value))
     return " ".join(values)
-
-
-def _group_kind(resource_kind: str) -> ResourceKind:
-    if resource_kind in {"record", "build"}:
-        return cast(ResourceKind, resource_kind)
-    return "metadata"
-
-
-def _public_source_id(resource_kind: str, source_key: str) -> str:
-    if resource_kind in {"record", "build"}:
-        return source_key
-    return f"{resource_kind}:{source_key}"
-
-
-def _raw_identity(resource_kind: ResourceKind, source_id: str) -> tuple[str, str]:
-    if resource_kind != "metadata":
-        return resource_kind, source_id
-    raw_kind, separator, source_key = source_id.partition(":")
-    return (raw_kind, source_key) if separator else ("metadata", source_id)

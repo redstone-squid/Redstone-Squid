@@ -9,13 +9,13 @@ from squid.search.application import (
 )
 
 
-def _candidate(source_id: str, title: str) -> RankedCandidate:
-    return RankedCandidate(source_id, "record", title)
+def _candidate(document_id: int, title: str) -> RankedCandidate:
+    return RankedCandidate(document_id, title)
 
 
 def test_rrf_combines_branches_and_deduplicates_within_each_branch() -> None:
-    door = _candidate("door", "Door")
-    extender = _candidate("extender", "Extender")
+    door = _candidate(1, "Door")
+    extender = _candidate(2, "Extender")
 
     ranked = reciprocal_rank_fusion(
         {
@@ -24,7 +24,7 @@ def test_rrf_combines_branches_and_deduplicates_within_each_branch() -> None:
         }
     )
 
-    assert [candidate.source_id for candidate in ranked] == ["door", "extender"]
+    assert [candidate.document_id for candidate in ranked] == [1, 2]
     assert ranked[0].score == pytest.approx(4 / 61 + 2 / 62)
     assert ranked[1].score == pytest.approx(2 / 61)
     assert ranked[0].branches == (RankingBranch.EXACT, RankingBranch.FULL_TEXT)
@@ -33,28 +33,28 @@ def test_rrf_combines_branches_and_deduplicates_within_each_branch() -> None:
 
 def test_rrf_applies_branch_limit_before_fusion() -> None:
     ranked = reciprocal_rank_fusion(
-        {RankingBranch.EXACT: (_candidate("1", "One"), _candidate("2", "Two"))},
+        {RankingBranch.EXACT: (_candidate(1, "One"), _candidate(2, "Two"))},
         branch_limit=1,
     )
 
-    assert [candidate.source_id for candidate in ranked] == ["1"]
+    assert [candidate.document_id for candidate in ranked] == [1]
 
 
 def test_rrf_uses_deterministic_tie_order() -> None:
     ranked = reciprocal_rank_fusion(
         {
             RankingBranch.TRIGRAM: (
-                _candidate("2", "Beta"),
-                _candidate("1", "Alpha"),
+                _candidate(2, "Beta"),
+                _candidate(1, "Alpha"),
             ),
             RankingBranch.FULL_TEXT: (
-                _candidate("1", "Alpha"),
-                _candidate("2", "Beta"),
+                _candidate(1, "Alpha"),
+                _candidate(2, "Beta"),
             ),
         }
     )
 
-    assert [candidate.source_id for candidate in ranked] == ["1", "2"]
+    assert [candidate.document_id for candidate in ranked] == [1, 2]
 
 
 def test_rrf_rejects_invalid_configuration() -> None:
@@ -62,6 +62,6 @@ def test_rrf_rejects_invalid_configuration() -> None:
         reciprocal_rank_fusion({}, k=0)
     with pytest.raises(ValueError, match="cannot be negative"):
         reciprocal_rank_fusion(
-            {RankingBranch.EXACT: (_candidate("1", "One"),)},
+            {RankingBranch.EXACT: (_candidate(1, "One"),)},
             weights={RankingBranch.EXACT: -1},
         )

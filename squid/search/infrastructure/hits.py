@@ -1,9 +1,22 @@
 """Convert indexed documents to public search hits."""
 
-from typing import cast
+from typing import Literal, cast
 
 from squid.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit
 from squid.search.models import SearchDocument
+
+
+def public_identity(document: SearchDocument) -> tuple[Literal["build", "record", "metadata"], str]:
+    """Return the resource kind and source ID that search results expose for a document.
+
+    Builds and records keep their stored key. Every other stored kind is metadata,
+    whose source ID is prefixed with the stored kind to keep it unique.
+    """
+    if document.resource_kind == "build":
+        return "build", document.source_key
+    if document.resource_kind == "record":
+        return "record", document.source_key
+    return "metadata", f"{document.resource_kind}:{document.source_key}"
 
 
 def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
@@ -45,7 +58,7 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
         aliases = ()
     typed_aliases = cast(list[object] | tuple[object, ...], aliases)
     return MetadataSearchHit(
-        source_id=f"{document.resource_kind}:{document.source_key}",
+        source_id=public_identity(document)[1],
         title=document.title,
         metadata_kind=_string(data, "metadata_kind", document.resource_kind),
         description=document.description,

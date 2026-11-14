@@ -10,7 +10,6 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
@@ -36,10 +35,9 @@ DEFAULT_RRF_WEIGHTS: Mapping[RankingBranch, float] = {
 
 @dataclass(frozen=True, slots=True)
 class RankedCandidate:
-    """A result identity, title for breaking ties, and optional ranking score."""
+    """A search document's ID, title for breaking ties, and optional ranking score."""
 
-    source_id: str
-    resource_kind: Literal["record", "build", "metadata"]
+    document_id: int
     normalized_title: str
     score: float = 0
     branches: tuple[RankingBranch, ...] = ()
@@ -59,8 +57,8 @@ def reciprocal_rank_fusion(
     at one. Input scores are ignored because the branches use different scales.
 
     Only the first `branch_limit` entries of each branch are considered. Repeated
-    identities within that window count once and do not consume a rank. Ties in
-    the final score are ordered by case-folded title, resource kind, and source ID.
+    documents within that window count once and do not consume a rank. Ties in
+    the final score are ordered by case-folded title, then document ID.
 
     Raises:
         ValidationError: If k or branch_limit is not positive, or a used weight
@@ -70,18 +68,18 @@ def reciprocal_rank_fusion(
         raise ValidationError(tr(t"search-k-positive = k must be positive"))
     if branch_limit <= 0:
         raise ValidationError(tr(t"search-branch-limit-positive = branch_limit must be positive"))
-    scores: defaultdict[tuple[str, str], float] = defaultdict(float)
-    documents: dict[tuple[str, str], RankedCandidate] = {}
-    contributions: defaultdict[tuple[str, str], list[RankingBranch]] = defaultdict(list)
+    scores: defaultdict[int, float] = defaultdict(float)
+    documents: dict[int, RankedCandidate] = {}
+    contributions: defaultdict[int, list[RankingBranch]] = defaultdict(list)
     for branch, candidates in branches.items():
         weight = weights.get(branch, 0)
         if weight < 0:
             branch_name = branch.value
             raise ValidationError(md_tr(t"search-weight-negative = weight for {branch_name} cannot be negative"))
-        seen: set[tuple[str, str]] = set()
+        seen: set[int] = set()
         rank = 0
         for candidate in candidates[:branch_limit]:
-            key = (candidate.resource_kind, candidate.source_id)
+            key = candidate.document_id
             if key in seen:
                 continue
             seen.add(key)
@@ -91,8 +89,7 @@ def reciprocal_rank_fusion(
             scores[key] += weight / (k + rank)
     fused = (
         RankedCandidate(
-            source_id=document.source_id,
-            resource_kind=document.resource_kind,
+            document_id=key,
             normalized_title=document.normalized_title,
             score=scores[key],
             branches=tuple(contributions[key]),
@@ -102,10 +99,5 @@ def reciprocal_rank_fusion(
     return tuple(sorted(fused, key=_ranked_sort_key))
 
 
-def _ranked_sort_key(candidate: RankedCandidate) -> tuple[float, str, str, str]:
-    return (
-        -candidate.score,
-        candidate.normalized_title.casefold(),
-        candidate.resource_kind,
-        candidate.source_id,
-    )
+def _ranked_sort_key(candidate: RankedCandidate) -> tuple[float, str, int]:
+    return (-candidate.score, candidate.normalized_title.casefold(), candidate.document_id)

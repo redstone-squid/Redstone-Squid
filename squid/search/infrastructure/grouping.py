@@ -27,7 +27,7 @@ from squid.search.domain import (
     SearchText,
     SortDirection,
 )
-from squid.search.infrastructure.hits import document_hit
+from squid.search.infrastructure.hits import document_hit, public_identity
 from squid.search.models import SearchDocument, SearchDocumentFacet
 
 
@@ -267,12 +267,5 @@ class GroupedSearch:
 
     @staticmethod
     def _match(document: SearchDocument, candidate: RankedCandidate | None) -> SearchMatch:
-        kind = (
-            "build"
-            if document.resource_kind == "build"
-            else "record"
-            if document.resource_kind == "record"
-            else "metadata"
-        )
-        source_id = document.source_key if kind != "metadata" else f"{document.resource_kind}:{document.source_key}"
+        kind, source_id = public_identity(document)
         return SearchMatch(kind, source_id, tuple(branch.value for branch in candidate.branches) if candidate else ())
