@@ -143,6 +143,73 @@ async def test_variable_rate_video_preserves_closely_spaced_frame_timestamps(tmp
         assert abs(original_interval - normalized_interval) <= Decimal("0.000001")
 
 
+@pytest.mark.parametrize("rotation", [-90, 90, 180])
+async def test_rotated_video_preserves_display_orientation(tmp_path: Path, rotation: int) -> None:
+    original = tmp_path / "original.mp4"
+    source = tmp_path / "rotated.mov"
+    _generate_video(original)
+    assert FFMPEG is not None
+    assert FFPROBE is not None
+    subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-display_rotation:v:0",
+            str(rotation),
+            "-i",
+            str(original),
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
+        MediaNormalizationRequest(
+            kind=MediaKind.VIDEO,
+            source_path=source,
+            output_path=tmp_path / "normalized.mp4",
+            poster_path=tmp_path / "poster.jpg",
+        )
+    )
+
+    expected = (180, 320) if abs(rotation) == 90 else (320, 180)
+    assert (result.report.input_probe.width, result.report.input_probe.height) == expected
+    raw_output = subprocess.run(
+        [
+            FFPROBE,
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height:stream_side_data=rotation",
+            "-of",
+            "json",
+            str(result.output_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    stream = json.loads(raw_output.stdout)["streams"][0]
+    assert (stream["width"], stream["height"]) == expected
+    assert all(side.get("rotation", 0) == 0 for side in stream.get("side_data_list", []))
+    frames = [
+        subprocess.run(
+            [FFMPEG, "-v", "error", "-i", str(path), "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"],
+            check=True,
+            capture_output=True,
+        ).stdout
+        for path in (source, result.output_path)
+    ]
+    assert len(frames[0]) == len(frames[1]) == expected[0] * expected[1] * 3
+    assert sum(abs(a - b) for a, b in zip(*frames, strict=True)) / len(frames[0]) < 6
+
+
 def _generate_video(destination: Path, *, variable_timestamps: bool = False) -> None:
     assert FFMPEG is not None
     encoders = subprocess.run(

@@ -150,6 +150,48 @@ def test_probe_falls_back_to_declared_rate_and_container_duration() -> None:
     assert probe.duration_milliseconds == 40
 
 
+@pytest.mark.parametrize("rotation", [0, 90, -90, 180, 270, -270, 360])
+def test_probe_dimensions_follow_display_rotation(rotation: int) -> None:
+    data = json.dumps(
+        {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 480,
+                    "height": 640,
+                    "side_data_list": [{"side_data_type": "Display Matrix", "rotation": rotation}],
+                }
+            ],
+        }
+    ).encode()
+
+    probe = parse_ffprobe_output(data)
+
+    expected = (640, 480) if abs(rotation) % 180 == 90 else (480, 640)
+    assert (probe.width, probe.height) == expected
+
+
+@pytest.mark.parametrize("rotation", ["NaN", "Infinity", "not-an-angle"])
+def test_invalid_display_rotation_is_rejected(rotation: str) -> None:
+    data = json.dumps(
+        {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 480,
+                    "height": 640,
+                    "side_data_list": [{"rotation": rotation}],
+                }
+            ]
+        }
+    ).encode()
+
+    with pytest.raises(InvalidMediaError):
+        parse_ffprobe_output(data)
+
+
 @pytest.mark.parametrize("data", [b"not-json", b"{}", b'{"streams": []}'])
 def test_malformed_probe_output_has_one_stable_reason(data: bytes) -> None:
     with pytest.raises(InvalidMediaError) as raised:

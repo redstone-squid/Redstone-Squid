@@ -121,7 +121,8 @@ class FfmpegMediaNormalizer:
                 "-show_entries",
                 (
                     "format=format_name,duration:"
-                    "stream=index,codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate,duration,nb_frames"
+                    "stream=index,codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate,duration,nb_frames:"
+                    "stream_side_data=rotation"
                 ),
                 "-of",
                 "json",
@@ -530,6 +531,7 @@ class FfmpegMediaNormalizer:
 def parse_ffprobe_output(data: bytes) -> MediaProbe:
     """Read the first video and audio streams from ffprobe JSON.
 
+    Dimensions include quarter-turn display rotation, matching FFmpeg's autorotation.
     Durations are rounded up to milliseconds, falling back to container duration
     when the video stream omits it. Missing frame rates become zero. Malformed
     required metadata raises InvalidMediaError; the caller bounds the input size.
@@ -540,8 +542,7 @@ def parse_ffprobe_output(data: bytes) -> MediaProbe:
         format_data = cast(Mapping[str, Any], payload.get("format", {}))
         video = next(stream for stream in streams if stream.get("codec_type") == "video")
         audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
-        width = _positive_int(video["width"])
-        height = _positive_int(video["height"])
+        width, height = _display_dimensions(video)
         frame_rate = _frame_rate(video)
         duration_raw = video.get("duration")
         if duration_raw in {None, "N/A"}:
@@ -551,7 +552,15 @@ def parse_ffprobe_output(data: bytes) -> MediaProbe:
         video_codec = _short_string(video["codec_name"])
         audio_codec = _short_string(audio["codec_name"]) if audio is not None else None
         container = _short_string(format_data.get("format_name", "unknown"))
-    except (AttributeError, KeyError, StopIteration, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (
+        AttributeError,
+        KeyError,
+        StopIteration,
+        TypeError,
+        ValueError,
+        InvalidOperation,
+        json.JSONDecodeError,
+    ) as exc:
         raise InvalidMediaError(MediaFailureReason.PROBE_INVALID) from exc
     return MediaProbe(
         container_names=tuple(name for name in container.split(",") if name),
@@ -564,6 +573,18 @@ def parse_ffprobe_output(data: bytes) -> MediaProbe:
         audio_codec=audio_codec,
         frame_count=frame_count,
     )
+
+
+def _display_dimensions(video: Mapping[str, Any]) -> tuple[int, int]:
+    width, height = _positive_int(video["width"]), _positive_int(video["height"])
+    rotation = next(
+        (Decimal(str(side["rotation"])) for side in video.get("side_data_list", []) if "rotation" in side),
+        Decimal(0),
+    )
+    if not rotation.is_finite():
+        msg = "Display rotation must be finite"
+        raise ValueError(msg)
+    return (height, width) if abs(rotation) % 180 == 90 else (width, height)
 
 
 def _ffmpeg_input_arguments(source_path: Path, limits: MediaProcessLimits) -> tuple[str, ...]:

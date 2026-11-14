@@ -124,7 +124,8 @@ class MediaProbe:
 
     Frame rate is a rational number of frames per second. A zero numerator means
     no usable rate was reported. Duration and frame count are None when unknown;
-    audio_codec is None when no audio stream was found.
+    audio_codec is None when no audio stream was found. Width and height are
+    display dimensions after container rotation.
     """
 
     container_names: tuple[str, ...]
