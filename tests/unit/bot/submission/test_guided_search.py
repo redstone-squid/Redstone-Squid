@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
-from squid.bot.submission.guided_search import Filter, GuidedSearch, SearchSelection
+from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
-from squid.search.domain.query import BooleanExpression, BooleanOperator, FieldExpression
+from squid.search.domain.query import BooleanExpression, BooleanOperator, ComparisonOperator, FieldExpression
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid_ui_discord.testing import iter_component_payloads, stage
@@ -31,7 +31,9 @@ def editor(query: str = "") -> GuidedSearch:
 
 def test_added_filters_preserve_or_grouping() -> None:
     screen = editor("title:door OR title:extender")
-    screen._append(Filter("width", ">=", "3"))
+    addition = SearchQueryParser().parse("width>=3").expression
+    assert addition is not None
+    screen._append(addition)
     parsed = SearchQueryParser().parse(screen.query).expression
     assert isinstance(parsed, BooleanExpression)
     assert parsed.operator is BooleanOperator.AND
@@ -44,7 +46,9 @@ def test_added_filters_preserve_or_grouping() -> None:
 def test_named_values_cannot_inject_query_syntax() -> None:
     value = 'a" OR width:99 OR "b'
     screen = editor()
-    screen._append(Filter("creator", "", value))
+    field = DEFAULT_FIELD_REGISTRY.resolve("creator")
+    assert field is not None
+    screen._append(FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=True))
     parsed = SearchQueryParser().parse(screen.query).expression
     assert isinstance(parsed, FieldExpression)
     assert parsed.value == value
