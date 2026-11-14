@@ -20,7 +20,8 @@ from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
 from squid_ui_discord import render_static
 from squid_ui_discord import testing as sd
-from squid_ui_discord.routing import Router, _dispatch_item
+from squid_ui_discord.routing import Router
+from squid_ui_discord.routing._router import _dispatch_item
 from squid_ui_discord.testing import interaction_harness
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")

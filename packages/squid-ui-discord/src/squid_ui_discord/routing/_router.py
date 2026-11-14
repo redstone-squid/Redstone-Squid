@@ -1,36 +1,10 @@
-"""Dispatch controls whose identity is stored in their Discord custom ID.
+"""Own the route table, resolve custom IDs, and coordinate dispatch."""
 
-A Router matches an incoming custom ID against registered Routes and passes the extracted
-parameters to a handler. Re-registering the same routes at startup lets controls on old
-messages work after a process restart; no live MessageRoot or in-memory handler binding
-is needed for those messages.
-
-    @router.route("build:edit:{build_id:int}")
-    async def edit_build(interaction: discord.Interaction[Bot], build_id: int) -> None: ...
-
-Decorated handlers expose ``.id(...)`` to build control IDs and ``.route`` for the
-underlying Route. Their handles stay current when the same router or group is reloaded. Parameter names are checked when the handler registers, so a misspelling fails
-at registration instead of on a click. Call ``router.register(client)`` after defining
-routes to install dispatch; existing handlers can later be replaced during reloads.
-
-Handlers receive the raw Discord interaction so they can read the message and look up
-application state. They supply their own authorization, concurrency control, and
-transactions. MessageRoot's action lock and render-generation checks do not apply.
-
-Use ``squid_ui_discord.testing.interaction_harness`` with ``Router.dispatch`` to exercise
-handlers without a bot, gateway, or real message.
-"""
-
-import annotationlib
-import inspect
 import logging
 import re
 import weakref
-from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, replace
-from enum import StrEnum
-from functools import update_wrapper
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Any, Concatenate, Self, cast, override
 
@@ -47,20 +21,23 @@ from squid_ui_discord.message_root_contracts import ErrorHook
 from squid_ui_discord.request import request as resolve_request
 from squid_ui_discord.runtime import DiscordUIRuntimeMissing
 
+from ._contracts import (
+    GoneHook,
+    Middleware,
+    RouteComponent,
+    RouteDescription,
+    RouteHandle,
+    RouteHandler,
+    RouteLike,
+    RouteProceed,
+    RouteRequest,
+    _accepted,
+    _Registration,
+)
+from ._groups import RouteGroup
+
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
-
-type RouteHandler = Callable[..., Awaitable[None]]
-"""Storage type. The checked surface is `Router.route`, which pins the first argument."""
-
-type RouteLike = Route | str
-"""A route, or the format string to build one from."""
-
-type GoneHook[BotT: discord.Client] = Callable[[discord.Interaction[BotT]], Awaitable[None]]
-"""A friendly response for a control retired from a reserved router namespace."""
-
-type RouteProceed = Callable[[], Awaitable[None]]
-"""Proceed through the remaining middleware to the already-resolved handler."""
 
 _INSTALLED: weakref.WeakKeyDictionary[discord.Client, list[Router[Any]]] = weakref.WeakKeyDictionary()
 """Routers installed per client, so `register` can refuse the second router a click would wake."""
@@ -70,331 +47,6 @@ def routers[ClientT: discord.Client](client: ClientT) -> tuple[Router[ClientT], 
     """Return a read-only snapshot of the routers installed on ``client``."""
     installed = cast(list[Router[ClientT]], _INSTALLED.get(client, ()))
     return tuple(installed)
-
-
-class RouteComponent(StrEnum):
-    """The Discord component type playing the role of an HTTP method."""
-
-    BUTTON = "button"
-    SELECT = "select"
-
-
-@dataclass(frozen=True, slots=True)
-class RouteDescription:
-    """A stable, read-only description of one registered routed control."""
-
-    component: RouteComponent
-    format: str
-    params: tuple[tuple[str, str], ...]
-    aliases: tuple[str, ...]
-    handler_module: str
-    handler_qualname: str
-    group_prefix: str | None = None
-    middleware: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class RouteRequest[BotT: discord.Client]:
-    """Immutable dispatch facts supplied to routed-control middleware."""
-
-    interaction: discord.Interaction[BotT]
-    component: RouteComponent
-    route_id: str
-    route: Route | None
-    params: Mapping[str, Any]
-    values: tuple[str, ...]
-    group_prefix: str | None
-    matched_alias: bool
-
-
-class Middleware[BotT: discord.Client](ABC):
-    """A reusable routed-control policy attached to a router or route group."""
-
-    @abstractmethod
-    async def dispatch(self, request: RouteRequest[BotT], proceed: RouteProceed) -> None:
-        """Continue once through ``proceed``, or return to short-circuit."""
-
-
-@dataclass(frozen=True, slots=True)
-class _Registration:
-    route: Route
-    handler: RouteHandler
-    component: RouteComponent
-    accepts: frozenset[str] | None
-    """Parameter names to pass, or None for a handler taking `**kwargs`."""
-    group_prefix: str | None = None
-
-
-class RouteHandle[**P]:
-    """A callable action whose identity survives handler reloads.
-
-    The owning router or group retains this handle. Redeclaring the same route and
-    component replaces its validated binding, so previously imported handles call the
-    latest handler. Calls already in progress finish with their original handler.
-    Direct calls bypass router middleware and acknowledgement handling.
-
-    The call signature follows the decorated function; ID parameters are validated at
-    runtime by Route.id. Reloaded handlers must remain compatible with direct callers.
-    """
-
-    __wrapped__: RouteHandler
-    __qualname__: str
-
-    def __init__(self, registration: _Registration) -> None:
-        self._bind(registration)
-
-    def _bind(self, registration: _Registration) -> None:
-        update_wrapper(self, registration.handler, updated=())
-        self._registration = registration
-
-    @property
-    def route(self) -> Route:
-        """The immutable route used to generate and match custom IDs."""
-        return self._registration.route
-
-    def id(self, **params: object) -> str:
-        """Build a canonical custom ID, validating parameters against the route."""
-        return self.route.id(**params)
-
-    async def __call__(self, *args: P.args, **kwargs: P.kwargs) -> None:
-        await self._registration.handler(*args, **kwargs)
-
-
-def _accepted(route: Route, handler: RouteHandler, component: RouteComponent) -> frozenset[str] | None:
-    """Which of ``route``'s parameters ``handler`` asked for, rejecting names it invented."""
-    # FORWARDREF, because evaluating a handler's annotations here would resurrect the
-    # TYPE_CHECKING-only client import that PEP 649 exists to keep deferred. Only names and
-    # kinds are wanted anyway.
-    signature = inspect.signature(handler, annotation_format=annotationlib.Format.FORWARDREF)
-    parameters = list(signature.parameters.values())
-    required = 2 if component is RouteComponent.SELECT else 1
-    detail = "the interaction and selected values" if component is RouteComponent.SELECT else "the interaction"
-    if len(parameters) < required:
-        message = f"route handler {handler.__qualname__!r} must take {detail} first"
-        raise ValueError(message)
-    positional = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-    for parameter in parameters[:required]:
-        if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-            break
-        if parameter.kind not in positional:
-            message = (
-                f"route handler {handler.__qualname__!r} must take {detail} positionally, "
-                f"but {parameter.name!r} is {parameter.kind.description}"
-            )
-            raise ValueError(message)
-    unfeedable = [
-        parameter.name for parameter in parameters[required:] if parameter.kind is inspect.Parameter.POSITIONAL_ONLY
-    ]
-    if unfeedable:
-        message = (
-            f"route handler {handler.__qualname__!r} takes {unfeedable} positional-only, "
-            "but route parameters are passed by name"
-        )
-        raise ValueError(message)
-    if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters):
-        return None
-    named = {
-        parameter.name
-        for parameter in parameters[required:]
-        if parameter.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-    }
-    unknown = named - set(route.params)
-    if unknown:
-        message = (
-            f"route handler {handler.__qualname__!r} asks for {sorted(unknown)}, "
-            f"which route {route.format!r} does not carry: it has {list(route.params)}"
-        )
-        raise ValueError(message)
-    return frozenset(named)
-
-
-class RouteGroup[BotT: discord.Client]:
-    """A stable route prefix with feature-owned identities and handlers."""
-
-    def __init__(self, *prefix: str, _parent: RouteGroup[BotT] | None = None) -> None:
-        if not prefix:
-            message = "a route group needs at least one prefix segment"
-            raise ValueError(message)
-        for segment in prefix:
-            parsed = Route(segment)
-            if len(parsed.segments) != 1 or parsed.params:
-                message = f"route group prefix {segment!r} must be one literal segment"
-                raise ValueError(message)
-        self._segments = (*(_parent._segments if _parent is not None else ()), *prefix)
-        self.prefix = ":".join(self._segments)
-        self._parent = _parent
-        self._children: list[RouteGroup[BotT]] = []
-        self._definitions: list[Route] = []
-        self._routes: list[RouteHandle[...]] = []
-        self._middleware: list[Middleware[BotT]] = []
-        self._middleware_keys: dict[str, int] = {}
-        self._routers: weakref.WeakSet[Router[Any]] = weakref.WeakSet()
-        self._frozen = False
-
-    def group(self, *prefix: str) -> RouteGroup[BotT]:
-        """Get or create a child group, reusing the same prefix across reloads.
-
-        Existing children remain available after registration; new children do not.
-        """
-        child = RouteGroup(*prefix, _parent=self)
-        for existing in self._children:
-            if existing.prefix == child.prefix:
-                return existing
-        if self._frozen:
-            message = f"child groups of {self.prefix!r} must be created before registration"
-            raise RuntimeError(message)
-        for router in self._routers:
-            router._validate_group(child)
-            child._attach(router)
-        self._children.append(child)
-        return child
-
-    def define(self, format: str, *, aliases: tuple[str, ...] = ()) -> Route:
-        """Return the existing identity for an identical definition, or define a new route.
-
-        Repeated definitions remain valid after registration so handler modules can reload.
-        Changing aliases or defining an overlapping route still fails.
-        """
-        route = Route(f"{self.prefix}:{format}", aliases=aliases)
-        for existing in self._definitions:
-            if existing.format == route.format:
-                if existing.aliases != route.aliases:
-                    message = f"redefined route {route.format!r} changed aliases"
-                    raise ValueError(message)
-                return existing
-        if self._frozen:
-            message = f"new route {format!r} must be defined before the route group is registered"
-            raise RuntimeError(message)
-        for existing in self._definitions:
-            if route.overlaps(existing):
-                message = f"route {route.format!r} overlaps the group route {existing.format!r}"
-                raise ValueError(message)
-        for router in self._routers:
-            router._validate_group_route(self, route)
-        self._definitions.append(route)
-        return route
-
-    def route[**P](
-        self, route: RouteLike, *, aliases: tuple[str, ...] = ()
-    ) -> Callable[
-        [Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]]],
-        RouteHandle[Concatenate[discord.Interaction[BotT], P]],
-    ]:
-        """Define a group-relative route and return its stable callable handle.
-
-        An existing Route from define() is also accepted. Aliases are absolute custom
-        ID formats and may only be supplied with a string definition.
-        """
-        if isinstance(route, str):
-            route = self.define(route, aliases=aliases)
-        elif aliases:
-            message = "aliases must be supplied with a route format string"
-            raise ValueError(message)
-
-        def decorate(
-            handler: Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]],
-        ) -> RouteHandle[Concatenate[discord.Interaction[BotT], P]]:
-            return self.add(route, handler)
-
-        return decorate
-
-    def select[**P](
-        self, route: RouteLike, *, aliases: tuple[str, ...] = ()
-    ) -> Callable[
-        [Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]]],
-        RouteHandle[Concatenate[discord.Interaction[BotT], tuple[str, ...], P]],
-    ]:
-        """Define a routed select receiving values before path parameters.
-
-        Uses the same identity and reload rules as route().
-        """
-        if isinstance(route, str):
-            route = self.define(route, aliases=aliases)
-        elif aliases:
-            message = "aliases must be supplied with a route format string"
-            raise ValueError(message)
-
-        def decorate(
-            handler: Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]],
-        ) -> RouteHandle[Concatenate[discord.Interaction[BotT], tuple[str, ...], P]]:
-            return self.add(route, handler, component=RouteComponent.SELECT)
-
-        return decorate
-
-    def add(
-        self,
-        route: Route,
-        handler: RouteHandler,
-        *,
-        component: RouteComponent = RouteComponent.BUTTON,
-    ) -> RouteHandle[...]:
-        """Bind a handler to a route this group defined, replacing it on reload."""
-        if route not in self._definitions:
-            message = f"route {route.format!r} was not defined by group {self.prefix!r}"
-            raise ValueError(message)
-        if isinstance(handler, RouteHandle):
-            handler = handler._registration.handler
-        registration = _Registration(route, handler, component, _accepted(route, handler, component), self.prefix)
-        for handle in self._routes:
-            existing = handle._registration
-            if existing.component is component and existing.route == route:
-                handle._bind(registration)
-                return handle
-        if self._frozen:
-            message = f"new {component.value} handler for {route.format!r} must be added before registration"
-            raise RuntimeError(message)
-        handle = RouteHandle[...](registration)
-        self._routes.append(handle)
-        return handle
-
-    def add_middleware(self, middleware: Middleware[BotT], *, key: str | None = None) -> None:
-        """Append middleware, or replace an existing key in its original position.
-
-        Keys allow replacement after registration, including extension reloads. New
-        keys must be installed before registration. Without a key, repeated instances
-        are ignored by object identity.
-        """
-        if key is not None and key in self._middleware_keys:
-            self._middleware[self._middleware_keys[key]] = middleware
-            return
-        if key is None and any(existing is middleware for existing in self._middleware):
-            return
-        if self._frozen:
-            message = f"middleware for route group {self.prefix!r} must be added before registration"
-            raise RuntimeError(message)
-        if key is not None:
-            self._middleware_keys[key] = len(self._middleware)
-        self._middleware.append(middleware)
-
-    def _freeze(self) -> None:
-        missing = [
-            route.format for route in self._definitions if not any(handle.route == route for handle in self._routes)
-        ]
-        if missing:
-            message = f"route group {self.prefix!r} has identities without handlers: {missing}"
-            raise RuntimeError(message)
-        self._frozen = True
-        for child in self._children:
-            child._freeze()
-
-    def _walk(self) -> tuple[RouteGroup[BotT], ...]:
-        """This group and every descendant in definition order."""
-        return (self, *(group for child in self._children for group in child._walk()))
-
-    def _attach(self, router: Router[Any]) -> None:
-        self._routers.add(router)
-        for child in self._children:
-            child._attach(router)
-
-    def _lineage(self) -> tuple[RouteGroup[BotT], ...]:
-        """Ancestors followed by this group, for outer-to-inner middleware order."""
-        lineage: list[RouteGroup[BotT]] = []
-        current: RouteGroup[BotT] | None = self
-        while current is not None:
-            lineage.append(current)
-            current = current._parent
-        lineage.reverse()
-        return tuple(lineage)
 
 
 class Router[BotT: discord.Client]:
