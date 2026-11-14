@@ -101,10 +101,13 @@ class DomainValue:
         return value
 
 
+type ComparisonOperator = Literal["lt", "le", "eq", "ne", "ge", "gt"]
+
+
 @dataclass(frozen=True, slots=True)
 class Comparison:
     left: DomainValue
-    operator: Literal["lt", "le", "eq", "ne", "ge", "gt"]
+    operator: ComparisonOperator
     right: DomainValue
 
     def evaluate(self, values: tuple[int, ...]) -> bool:
@@ -261,7 +264,14 @@ class ExpressionParser:
                 return Junction("not", (self._predicate(operand, text),))
             case ast.Compare(left=left, ops=ops, comparators=comparators):
                 comparisons: list[Predicate] = []
-                names = {ast.Lt: "lt", ast.LtE: "le", ast.Eq: "eq", ast.NotEq: "ne", ast.GtE: "ge", ast.Gt: "gt"}
+                names: dict[type[ast.cmpop], ComparisonOperator] = {
+                    ast.Lt: "lt",
+                    ast.LtE: "le",
+                    ast.Eq: "eq",
+                    ast.NotEq: "ne",
+                    ast.GtE: "ge",
+                    ast.Gt: "gt",
+                }
                 for (a, b), op in zip(pairwise([left, *comparators]), ops, strict=True):
                     if type(op) not in names:
                         break

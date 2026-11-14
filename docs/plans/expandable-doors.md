@@ -22,7 +22,7 @@ Implementation order:
 2. **Arithmetic feasibility spike:** validate exact one-variable crossovers,
    periodic domains, three-axis comparisons, fixed-build exceptions, missing
    timings, and timeouts before committing to computation schemas.
-3. **Concrete evaluation and point lookup:** compare supported configurations
+3. **Concrete evaluation (implemented) and point lookup (pending):** compare supported configurations
    through the existing ranking semantics, without materializing query sizes.
 4. **Symbolic regions and publication:** compute regions, prove nonemptiness
    where possible, persist snapshots, and expose results.
@@ -95,9 +95,69 @@ constraints, including coupled variables. `evidence` contains message IDs and
 excerpts, and `raw_description` retains qualifications or unsupported syntax.
 
 The fixed-size record loader excludes doors with an expansion document until
-the evaluator exists. Sample dimensions are retained but cannot accidentally
+point evaluation is integrated into record queries and publication. Sample dimensions are retained but cannot accidentally
 establish a family record. No existing descriptions or expandable tags are
 backfilled automatically; those need source reprocessing or explicit review.
+
+## Normalizer and concrete evaluator
+
+`normalize_expansion` and `evaluate_expansion` in
+`squid/builds/domain/expansion_evaluation.py` compile source documents and evaluate
+individual opening sizes. They are pure domain operations: they do not mutate
+source facts, query the database, create record definitions, or publish holders.
+No solver dependency is required for this stage.
+
+```python
+from squid.builds.domain.expansion_evaluation import normalize_expansion, evaluate_expansion
+
+normalized = normalize_expansion(door.expansion)  # Require a non-null document first.
+result = evaluate_expansion(normalized, (6, 3, 1))
+for configuration in result.configurations:
+    # Each source branch remains an independent construction choice.
+    print(configuration.branch_index, configuration.status, configuration.volume)
+```
+
+For the source example above, the 6×3 configuration has volume 160. A 7×3 request
+is outside the declared two-layer progression. Each branch returns `supported`,
+`outside_domain`, or `unresolved`. Supported membership does not guarantee known
+metrics: volume and individual timing slots can remain unknown with diagnostics.
+Top-level diagnostics cover absent branches or an unsupported parameter namespace.
+Normalization also retains branch diagnostics independently of point membership.
+
+Supported arithmetic consists of up to three declared ASCII parameters, exact
+integer/decimal constants, addition, subtraction, multiplication, division by a
+nonzero constant, and powers zero through three. Common implicit products such as
+`20n` and `(x+3)(y+3)` are accepted. An undeclared `xy` is not guessed to mean `x*y`.
+The canonical representation is a sparse rational polynomial. Limits are 512
+source characters, 128 tokens, 192 AST nodes, degree three at intermediate steps,
+64 terms, and 256-bit coefficients. Point dimensions are positive integers of at
+most 256 bits. Unsupported syntax remains in the source document.
+
+All three opening expressions must be known affine polynomials with a unique
+inverse for the declared parameters. Gaussian elimination recovers module counts
+without enumerating possible sizes; consistency checks handle coupled openings
+such as n×n and reject noninteger parameter values. Nonlinear or underdetermined
+opening mappings need future normalization support.
+
+Domains accept chained comparisons, `and`/`or`/`not`, semicolon conjunctions, and
+positive integer modulo tests, for example `n % 2 = 0`. Raw prose such as `odd n`
+is diagnosed rather than interpreted. Structured bounds and layer progressions
+remain authoritative: absent steps or an unknown upper bound are not filled in
+from assumptions. Known exclusions still reject sizes, and a declared minimum
+establishes the sequence's first size even if later sizes remain unknown.
+
+Volume must evaluate to a positive integer. Timings are converted exactly to game
+ticks (seconds ×20, redstone ticks ×2); nonintegral results remain unknown rather
+than being rounded. Negative reset timings are allowed. Unknown units, unsupported
+formulas, and duplicate slots within a named timing variant produce diagnostics.
+A sample's fixed timings are never consulted. Source-claimed record domains and
+completion text do not become eligibility constraints or verified completion dates.
+
+The result retains separate alternatives, so callers cannot silently combine the
+smallest branch's volume with the fastest branch's timing. Record integration must
+check membership, retain unresolved competitors, and apply existing ranking rules
+with explicit completion evidence. Tests demonstrate compatibility with the current
+concrete resolver, but the live loader remains unchanged at this stage.
 
 ## Common coordinates and formula branches
 
