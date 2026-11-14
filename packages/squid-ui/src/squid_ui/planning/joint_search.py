@@ -46,6 +46,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
+from squid_ui.planning.semantics import budget_floor
 from squid_ui.presentations import Budget, FidelityEffect
 from squid_ui.semantic import Budgeted
 
@@ -80,6 +81,7 @@ class _Assignment[RenderTargetT, ContextT, PayloadT]:
     pending: tuple[SemanticOccurrence[RenderTargetT, ContextT], ...]
     choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...] = ()
     probe: bool = False
+    fraction: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,7 +220,16 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
         semantic = occurrence.graph.units[occurrence.reference].value
         if isinstance(semantic, Budgeted):
             actual = cost.get(Axis.DISPLAY_TEXT) - navigation_chars[occurrence.identity]
-            extra += ResourceCost({Axis.DISPLAY_TEXT: max(0, semantic.minimum - actual - extra.get(Axis.DISPLAY_TEXT))})
+            extra += ResourceCost(
+                {
+                    Axis.DISPLAY_TEXT: max(
+                        0,
+                        budget_floor(occurrence.graph, occurrence.reference, occurrence.ancestors())
+                        - actual
+                        - extra.get(Axis.DISPLAY_TEXT),
+                    )
+                }
+            )
             if not semantic.stretch and actual + extra.get(Axis.DISPLAY_TEXT) > semantic.preferred:
                 violations.append(
                     CapacityExceeded(
@@ -286,6 +297,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     seen_occurrences: set[OccurrenceId] = set()
     seen_regions: set[OccurrenceId] = set()
     degradation_probed = False
+    choice_counts: dict[OccurrenceId, int] = {}
 
     def push(
         task: _Assignment[RenderTargetT, ContextT, PayloadT] | _Partitions[RenderTargetT, ContextT, PayloadT],
@@ -342,12 +354,18 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     context.work.consume(len(offers))
                     ranks = dense_ranks(tuple(offer.preference for offer in offers))
                     keys: set[str] = set()
+                    eligible_count = 0
                     for offer in offers:
                         context.work.consume()
                         if offer.key in keys or offer.occurrence != occurrence:
                             message = "offers must have unique keys and retain their requested occurrence"
                             raise LayoutInvariantError(message)
                         keys.add(offer.key)
+                        if (occurrence.identity not in selected or offer.key == selected[occurrence.identity]) and not (
+                            context.strict and offer.effects
+                        ):
+                            eligible_count += 1
+                    choice_counts[occurrence.identity] = eligible_count
                     ordered = sorted(zip(offers, ranks, strict=True), key=lambda entry: (entry[1], entry[0].key))
                     if task.probe:
                         eligible = [
@@ -356,7 +374,8 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                             if (occurrence.identity not in selected or entry[0].key == selected[occurrence.identity])
                             and not (context.strict and entry[0].effects)
                         ]
-                        ordered = eligible[-1:]
+                        position = min(len(eligible) - 1, int((len(eligible) - 1) * task.fraction + 0.5))
+                        ordered = eligible[position : position + 1] if eligible else []
                     for offer, rank in ordered:
                         if occurrence.identity in selected and selected[occurrence.identity] != offer.key:
                             continue
@@ -366,7 +385,14 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                         if any(previous.occurrence.identity == occurrence.identity for previous, _ in task.choices):
                             message = "cyclic or duplicate occurrence in offer structure"
                             raise LayoutInvariantError(message)
-                        push(_Assignment((*offer.children, *rest), (*task.choices, (offer, rank)), probe=task.probe))
+                        push(
+                            _Assignment(
+                                (*offer.children, *rest),
+                                (*task.choices, (offer, rank)),
+                                probe=task.probe,
+                                fraction=task.fraction,
+                            )
+                        )
                     if occurrence.identity in selected and selected[occurrence.identity] not in keys:
                         message = f"unknown fixed offer for {occurrence.identity.path!r}"
                         raise LayoutInvariantError(message)
@@ -559,7 +585,13 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                 # independent ladders. This changes work order only: ordinary
                 # assignments remain queued and still establish optimality.
                 degradation_probed = True
-                push(_Assignment((root,), probe=True))
+                # Intermediate rungs avoid an empty incumbent when several prose
+                # blocks must share space. This samples work order, never feasibility.
+                context.work.consume(len(task.choices))
+                adjustable = sum(choice_counts.get(offer.occurrence.identity, 0) > 1 for offer, _ in task.choices)
+                if adjustable:
+                    for fraction in dict.fromkeys((1.0, 1 - 1 / max(2, adjustable), 0.5, 0.75, 0.875, 0.9375)):
+                        push(_Assignment((root,), probe=True, fraction=fraction))
             if task.probe:
                 # Balanced refinement is only a work-order heuristic. Every legal
                 # cut is still enqueued below; no fit assumption prunes that domain.

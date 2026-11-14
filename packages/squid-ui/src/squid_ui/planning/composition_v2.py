@@ -32,6 +32,7 @@ from squid_ui.planning.realizations import (
     ControlRealization,
     DownloadRealization,
     EntityRealization,
+    FieldsRealization,
     FlowRealization,
     ImageRealization,
     NativeSectionRealization,
@@ -279,6 +280,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         )
                         + sequence.suffix
                     )
+                    if sequence.notice:
+                        rendered += ("\n" if rendered else "") + tree.markdown(
+                            sequence.notice, discord=True, escape=context.escape_text
+                        )
                     return (
                         *rendered_text(rendered),
                         *(node for child in part.children for node in visit(child, in_panel=in_panel)),
@@ -365,6 +370,11 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                                 )
                             children = (scene.Section((children[0],), scene.Thumbnail(panel.thumbnail)), *children[1:])
                     return (scene.Panel(children, panel.accent, panel.spoiler),) if panel.framed else children
+                case FieldsRealization(notice=notice):
+                    return (
+                        *(node for child in part.children for node in visit(child, in_panel=in_panel)),
+                        *text(notice),
+                    )
                 case FlowRealization():
                     return tuple(node for child in part.children for node in visit(child, in_panel=in_panel))
                 case unknown:

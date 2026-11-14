@@ -144,7 +144,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     else:
                         fields.append(entry)
                     texts.extend((name, content))
-                case FieldsRealization():
+                case FieldsRealization(notice=notice):
                     entries: list[scene.EmbedField] = []
                     field_stack.append(entries)
                     for child in part.children:
@@ -154,6 +154,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         fields.extend(entries)
                     elif entries:
                         cards(entries, scene.Embed())
+                    text(markdown(notice))
                 case TextRealization() as payload:
                     text(discord_text(payload, context.escape_text))
                 case TextSequenceRealization() as sequence:
@@ -170,6 +171,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                             for index, item in enumerate(sequence.items)
                         )
                         + sequence.suffix
+                        + (("\n" if sequence.items else "") + markdown(sequence.notice) if sequence.notice else "")
                     )
                     for child in part.children:
                         visit(child, output, embedded=embedded)

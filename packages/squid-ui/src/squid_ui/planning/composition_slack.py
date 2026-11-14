@@ -27,6 +27,7 @@ from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
     EntityRealization,
+    FieldsRealization,
     FlowRealization,
     ImageRealization,
     PanelRealization,
@@ -317,6 +318,7 @@ class SlackCompositionRules[
                             )
                         ),
                         tree.literal(sequence.suffix),
+                        *((tree.literal("\n"), *sequence.notice) if sequence.notice else ()),
                     )
                     plain = _plain(nodes)
                     rendered = plain if plain is not None else _mrkdwn(nodes)
@@ -479,6 +481,20 @@ class SlackCompositionRules[
                             limit("image.url", len(panel.thumbnail), self.limits.components.url)
                             prepared_blocks.append(scene.SlackImage(panel.thumbnail, panel.heading))
                             texts.append(panel.heading)
+                            blocks += 1
+                case FieldsRealization(notice=notice):
+                    for child in part.children:
+                        visit(child)
+                    if notice:
+                        rendered_notice = _mrkdwn(notice)
+                        if rendered_notice is None:
+                            violations.append(UnsupportedCapability(identity, "Slack spill notice markup"))
+                        else:
+                            limit("text", len(rendered_notice), self.limits.components.section_text)
+                            texts.append(rendered_notice)
+                            prepared_blocks.append(
+                                scene.SlackSection(scene.SlackText(rendered_notice, scene.SlackTextKind.MARKDOWN))
+                            )
                             blocks += 1
                 case FlowRealization():
                     for child in part.children:

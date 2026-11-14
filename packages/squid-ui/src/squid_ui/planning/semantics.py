@@ -1,6 +1,6 @@
 """Retain semantic units and correspondence independently of target representations."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
@@ -234,6 +234,8 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Paged()
                 | sem.OptionalContent()
                 | sem.Truncated()
+                | sem.Spilled()
+                | sem.BestEffort()
                 | Budget()
             ):
                 root = add(value, path, parent, atomic=False)
@@ -622,6 +624,26 @@ class SourceScope[RenderTargetT, ContextT]:
         return self.parent.page_boundary(scoped) if self.parent is not None else scoped
 
 
+def budget_floor[RenderTargetT, ContextT](
+    graph: SemanticGraph[RenderTargetT, ContextT],
+    reference: SemanticRef,
+    inherited: Iterable[SemanticValue[RenderTargetT, ContextT]] = (),
+) -> int:
+    """Return the hard character reservation after explicit best-effort permission."""
+    unit = graph.units[reference]
+    if not isinstance(unit.value, sem.Budgeted) or isinstance(unit.value.node, sem.BestEffort):
+        return 0
+    if any(isinstance(value, sem.BestEffort) for value in inherited):
+        return 0
+    parent = unit.parent
+    while parent is not None:
+        ancestor = graph.units[parent]
+        if isinstance(ancestor.value, sem.BestEffort):
+            return 0
+        parent = ancestor.parent
+    return unit.value.minimum
+
+
 def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[RenderTargetT, ContextT]) -> None:
     """Preserve hard layout scopes even when presentations rearrange their contents."""
     for reference, unit in checked.source.units.items():
@@ -651,12 +673,12 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
             message = f"alternative merges content across a {type(constraint).__name__} boundary at {reference.keys!r}"
             raise LayoutInvariantError(message)
         matches = [
-            other.value
+            (target, other.value)
             for target, other in checked.presentation.units.items()
             if type(other.value) is type(constraint) and checked.presentation.atoms(target) == targets
         ]
         preserved = False
-        for other in matches:
+        for target, other in matches:
             match constraint, other:
                 case Budget(), Budget():
                     preserved = all(
@@ -667,7 +689,7 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.minimum,
                         other.preferred,
                         other.stretch,
-                    )
+                    ) and budget_floor(checked.presentation, target) >= budget_floor(checked.source, reference)
                 case sem.Paged(), sem.Paged():
                     preserved = (
                         constraint.key,

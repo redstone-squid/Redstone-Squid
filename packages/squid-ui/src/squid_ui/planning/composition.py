@@ -4,7 +4,7 @@ This boundary evaluates an explicitly selected composition. Choosing offers and
 certifying all reachable page combinations belongs to the joint solver.
 """
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from types import MappingProxyType
@@ -19,7 +19,7 @@ from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
-from squid_ui.planning.semantics import SemanticGraph, SourceScope
+from squid_ui.planning.semantics import SemanticGraph, SemanticValue, SourceScope, budget_floor
 from squid_ui.presentation import PresentationState
 from squid_ui.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
@@ -115,11 +115,23 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
     fragment: FragmentCoverage | None = None
     palette: Palette | None = None
     """Inherited palette for this presentation, including across alternative graphs."""
+    enclosing: SemanticOccurrence[RenderTargetT, ContextT] | None = None
+    """The original scope surrounding an alternative's separate presentation graph."""
 
     def __post_init__(self) -> None:
         if self.reference not in self.graph.units:
             message = "an occurrence needs a resolved reference in its semantic graph"
             raise LayoutInvariantError(message)
+
+    def ancestors(self) -> Iterator[SemanticValue[RenderTargetT, ContextT]]:
+        occurrence: SemanticOccurrence[RenderTargetT, ContextT] | None = self
+        while occurrence is not None:
+            parent = occurrence.graph.units[occurrence.reference].parent
+            while parent is not None:
+                unit = occurrence.graph.units[parent]
+                yield unit.value
+                parent = unit.parent
+            occurrence = occurrence.enclosing
 
     @property
     def sources(self) -> frozenset[SemanticRef]:
@@ -233,6 +245,7 @@ class CandidateComposition[RenderTargetT, ContextT, PayloadT]:
             or child.offer.occurrence.placement != expected_child.placement
             or child.offer.occurrence.origin is not expected_child.origin
             or child.offer.occurrence.fragment != expected_child.fragment
+            or child.offer.occurrence.enclosing is not expected_child.enclosing
             for child, expected_child in zip(self.children, self.offer.children, strict=True)
         ):
             message = "candidate children must retain their declared semantic source and placement"
@@ -492,7 +505,9 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         if isinstance(semantic, Budget) and semantic.limits:
             budgets[identity] = semantic.limits
         if isinstance(semantic, Budgeted):
-            floors[identity] = semantic.minimum
+            floors[identity] = budget_floor(
+                part.offer.occurrence.graph, part.offer.occurrence.reference, part.offer.occurrence.ancestors()
+            )
             if not semantic.stretch:
                 budgets[identity] = {Axis.DISPLAY_TEXT: semantic.preferred}
         pending.extend(part.children)

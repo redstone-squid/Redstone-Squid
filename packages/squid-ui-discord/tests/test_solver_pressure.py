@@ -93,7 +93,11 @@ class TestBudgetContract:
 
         result = sl.planning.plan(document, target=target)
 
-        assert any("breached best-effort budget floor" in event.message for event in result.report.events)
+        assert result.allocation is not None
+        assert any(event.message == "Shortening" for event in result.report.events)
+        text = [node.content for node in result.scene.body.children if isinstance(node, scene.Text)]
+        assert len(text) == 2
+        assert 90 <= sum(map(len, text)) <= 100
 
 
 class TestPaginateBreakPreferences:

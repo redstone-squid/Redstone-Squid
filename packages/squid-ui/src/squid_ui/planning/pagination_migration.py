@@ -43,6 +43,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
         return PaginationMigration(document, enabled=False, limitation="target has no shared composition rules")
     pageable = False
     combinations = 1
+    text_choices = 0
     shortening_depth = 0
     text_ladder = (
         limits.total_text
@@ -55,7 +56,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     )
 
     def visit[NodeTargetT](node: Renderable[NodeTargetT]) -> Renderable[NodeTargetT]:
-        nonlocal pageable, combinations, shortening_depth
+        nonlocal pageable, combinations, shortening_depth, text_choices
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation():
                 pageable = True
@@ -87,7 +88,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             case sem.OptionalContent():
                 pageable = True
                 return replace(node, node=visit(node.node))
-            case sem.Truncated():
+            case sem.Truncated() | sem.Spilled() | sem.BestEffort():
                 pageable = True
                 shortening_depth += 1
                 try:
@@ -152,7 +153,8 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                         length = len(resolve_text(node.content, request.localization).plain())
                         if isinstance(overflow, Alts):
                             length = max(length, len(overflow.ladder[-1]))
-                        combinations = max(combinations, min(text_ladder, length))
+                        text_choices += min(text_ladder, length)
+                        combinations = max(combinations, text_choices)
                     return node
                 if not isinstance(overflow, Paginate):
                     msg = "primitive text overflow alternatives"
@@ -234,7 +236,8 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             ):
                 if shortening_depth and isinstance(node, sem.Paragraph | sem.Heading | sem.Note | sem.Code | sem.Quote):
                     length = len(resolve_text(node.content, request.localization).plain())
-                    combinations = max(combinations, min(text_ladder, length))
+                    text_choices += min(text_ladder, length)
+                    combinations = max(combinations, text_choices)
                 return node
             case sem.ActionControls():
                 return node

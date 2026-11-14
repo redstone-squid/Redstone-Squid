@@ -79,6 +79,8 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                 | sem.Budgeted()
                 | sem.OptionalContent()
                 | sem.Truncated()
+                | sem.Spilled()
+                | sem.BestEffort()
                 | Budget()
             ),
             (
@@ -87,6 +89,8 @@ def _same_node(left: AllocationNode, right: AllocationNode) -> bool:
                 | sem.Budgeted()
                 | sem.OptionalContent()
                 | sem.Truncated()
+                | sem.Spilled()
+                | sem.BestEffort()
                 | Budget()
             ),
         ):

@@ -27,6 +27,7 @@ from squid_ui.planning.realizations import (
     DisclosureRealization,
     DownloadRealization,
     EntityRealization,
+    FieldsRealization,
     FlowRealization,
     ImageRealization,
     PanelRealization,
@@ -291,6 +292,11 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         )
                         return (
                             scene.HtmlElement(scene.HtmlTag.OL if sequence.list_ordered else scene.HtmlTag.UL, items),
+                            *(
+                                (scene.HtmlElement(scene.HtmlTag.P, (text(sequence.notice),)),)
+                                if sequence.notice
+                                else ()
+                            ),
                             *(node for child in part.children for node in visit(child)),
                         )
                     rendered = (
@@ -403,6 +409,11 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         scene.HtmlElement(
                             scene.HtmlTag.NAV, tuple(node for child in part.children for node in visit(child))
                         ),
+                    )
+                case FieldsRealization(notice=notice):
+                    return (
+                        *(node for child in part.children for node in visit(child)),
+                        *((scene.HtmlElement(scene.HtmlTag.P, (text(notice),)),) if notice else ()),
                     )
                 case FlowRealization() | RowRealization() | ActionsRealization():
                     return tuple(node for child in part.children for node in visit(child))

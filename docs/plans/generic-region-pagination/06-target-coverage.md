@@ -94,8 +94,8 @@ Section headings now repeat on continuation pages, including character-based
 authored blocks use embeds. Page counts, exact cuts, and historical adaptation
 event names may change. Reports use shared search metrics and fidelity effects.
 
-Per-line alternatives combined with native `Paginate`, semantic spill/best-effort
-wrappers, and rich primitive text fragmentation retain their existing non-region paths.
+Per-line alternatives combined with native `Paginate` and rich primitive text
+fragmentation retain their existing non-region paths.
 They do not declare the source correspondence and permitted fragments required
 for shared certification. Use checked `alternatives`, semantic paragraphs/lists,
 or typed atomic target rules inside regions. No equivalence is inferred from
@@ -126,6 +126,14 @@ lines, including when the retained text crosses a joiner. Per-line `Alt` ladders
 step the largest eligible entry first. Spill removes lower-priority entries only
 after those ladders are exhausted; condensation then shortens the joined text.
 Combining per-line alternatives with native `Paginate` remains on its compatibility path.
+
+Portable `spill` and `best_effort` wrappers now use shared offers. Fields and lists
+omit lower-priority entries with measured notices; best effort also permits prose
+shortening and makes enclosing or directly wrapped character-budget minima advisory.
+Hard caps still apply. Controls retain their labels and callbacks, and strict mode
+rejects actual content loss rather than an unused reservation. Permissions and
+character caps survive entry into a checked alternative's presentation graph;
+equivalent alternatives cannot independently weaken a source's hard budget floor.
 
 ## Application outcome and validation
 
@@ -223,10 +231,12 @@ Classic Discord retains native embed fields, including on continuation pages.
 Names, values, per-embed counts and aggregate embed text all participate in shared
 resource accounting.
 
-After a fixed layout fails, search probes the end of its ladders before enumerating
-all combinations. This provides a bounded certificate for many independent field
-ladders. It changes work order only; exhaustive comparison remains queued, and
-the search report distinguishes a certificate from proven optimality.
+After a fixed layout fails, search probes intermediate and final ladder choices
+before enumerating all combinations. This finds useful text allocations when
+several blocks share a tight budget, as well as certificates for independent field
+ladders. The work allowance accounts for their combined text choices. These probes
+change work order only; exhaustive comparison remains queued, and the search report
+distinguishes a certificate from proven optimality.
 
 Both complete UI suites pass (3,202 tests with `--no-cov`), and whole-project
 Pyrefly reports zero errors.

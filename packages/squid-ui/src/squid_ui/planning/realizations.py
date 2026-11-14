@@ -143,7 +143,7 @@ class FlowRealization:
 
 @dataclass(frozen=True, slots=True)
 class FieldsRealization(FlowRealization):
-    pass
+    notice: tuple[tree.Node, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +193,7 @@ class TextSequenceRealization:
     suffix: str = ""
     list_ordered: bool | None = None
     literal: bool = False
+    notice: tuple[tree.Node, ...] = ()
 
     def fragment(self, start: int, end: int) -> Realization:
         return replace(self, items=self.items[start:end])
@@ -511,7 +512,15 @@ def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[Re
     while ref is not None:
         unit = occurrence.graph.units[ref]
         if unit.parent is not None and not isinstance(
-            unit.value, sem.Budgeted | sem.KeepWithNext | sem.Unbreakable | sem.Truncated | Budget | RootRegion
+            unit.value,
+            sem.Budgeted
+            | sem.KeepWithNext
+            | sem.Unbreakable
+            | sem.Truncated
+            | sem.Spilled
+            | sem.BestEffort
+            | Budget
+            | RootRegion,
         ):
             parts.append(quote(ref.keys[-1], safe=""))
         ref = unit.parent
@@ -575,31 +584,31 @@ def semantic_offers[RenderTargetT, ContextT](
     value = occurrence.graph.units[occurrence.reference].value
     text_capacity = context.capacities.get(Axis.DISPLAY_TEXT, text_limit)
     keep: Literal["head", "tail"] | None = None
-    parent = occurrence.graph.units[occurrence.reference].parent
+    spill = False
     inside_panel = False
-    while parent is not None:
-        ancestor = occurrence.graph.units[parent]
-        inside_panel |= isinstance(ancestor.value, sem.Block | sem.Section | sem.Article | primitive.Panel)
-        if isinstance(ancestor.value, sem.Truncated):
-            keep = ancestor.value.keep
-        parent = ancestor.parent
+    for ancestor in occurrence.ancestors():
+        inside_panel |= isinstance(ancestor, sem.Block | sem.Section | sem.Article | primitive.Panel)
+        if isinstance(ancestor, sem.Truncated):
+            keep = ancestor.keep
+            spill = False
+        elif isinstance(ancestor, sem.Spilled):
+            keep, spill = None, True
+        elif isinstance(ancestor, sem.BestEffort):
+            keep, spill = "head", True
     if inside_panel and panel_text_limit is not None:
         text_capacity = panel_text_limit
-    parent = occurrence.graph.units[occurrence.reference].parent
-    while parent is not None:
-        ancestor = occurrence.graph.units[parent]
+    for ancestor in occurrence.ancestors():
         cap = (
-            ancestor.value.chars
-            if isinstance(ancestor.value, sem.Paged)
-            else ancestor.value.preferred
-            if isinstance(ancestor.value, sem.Budgeted) and not ancestor.value.stretch
-            else ancestor.value.limits.get(Axis.DISPLAY_TEXT)
-            if isinstance(ancestor.value, Budget)
+            ancestor.chars
+            if isinstance(ancestor, sem.Paged)
+            else ancestor.preferred
+            if isinstance(ancestor, sem.Budgeted) and not ancestor.stretch
+            else ancestor.limits.get(Axis.DISPLAY_TEXT)
+            if isinstance(ancestor, Budget)
             else None
         )
         if cap is not None:
             text_capacity = min(text_capacity, cap) if text_capacity is not None else cap
-        parent = ancestor.parent
 
     def text_offers(
         full: RealizationOffer[RenderTargetT, ContextT, Realization],
@@ -651,7 +660,7 @@ def semantic_offers[RenderTargetT, ContextT](
         )
 
     if isinstance(value, primitive.Lines):
-        overflow = Truncate(keep) if keep is not None else value.overflow
+        overflow = Spill() if spill else Truncate(keep) if keep is not None else value.overflow
         if not native_controls or not isinstance(overflow, Never | Truncate | Spill | Drop | Condense):
             return ()
         items = tuple(
@@ -887,6 +896,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 occurrence.placement,
                 occurrence.origin,
                 palette=context.palette,
+                enclosing=occurrence.enclosing,
             )
             for ref in occurrence.graph.children.get(occurrence.reference, ())
         )
@@ -943,6 +953,7 @@ def semantic_offers[RenderTargetT, ContextT](
                         occurrence.placement,
                         occurrence.origin,
                         palette=context.palette,
+                        enclosing=occurrence.enclosing,
                     ),
                 ),
                 effects=effects if index else (),
@@ -960,6 +971,7 @@ def semantic_offers[RenderTargetT, ContextT](
             occurrence.placement,
             occurrence.origin,
             palette=context.palette,
+            enclosing=occurrence.enclosing,
         )
         sources = sorted(occurrence.sources, key=lambda source: source.keys)
         context.work.consume(len(sources))
@@ -991,6 +1003,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 occurrence.placement,
                 origin,
                 palette=context.palette,
+                enclosing=occurrence,
             )
             effects = tuple(
                 replace(effect, source=source)
@@ -1070,7 +1083,61 @@ def semantic_offers[RenderTargetT, ContextT](
             cursor_key=value.key,
             required_ends=tuple(required),
         )
-        return (RealizationOffer(occurrence, "text-pages", payload, fragments=fragments, region=contract),)
+        complete = RealizationOffer(occurrence, "text-pages", payload, fragments=fragments, region=contract)
+        if not spill or not isinstance(value, sem.List) or not value.items:
+            return (complete,)
+        originals = tuple(
+            ReferencedText(
+                ref,
+                resolve_text(item.content, context.localization).nodes,
+                f"{index + 1}. " if value.ordered else "• ",
+                ordinal=index + 1,
+            )
+            for index, (ref, item) in enumerate(
+                zip(occurrence.graph.children[occurrence.reference], value.items, strict=True)
+            )
+        )
+        order = sorted(range(len(originals)), key=lambda index: (value.items[index].importance, -index))
+        spilled_lists = [complete]
+        for count in range(1, len(originals) + 1):
+            context.work.consume(len(originals))
+            omitted = set(order[:count])
+            retained = tuple(item for index, item in enumerate(originals) if index not in omitted)
+            shortened_sequence = replace(
+                payload,
+                items=retained,
+                notice=resolve_text(context.chrome.and_n_more(count), context.localization).nodes,
+            )
+            spilled_lists.append(
+                replace(
+                    complete,
+                    key=f"spill-{count}",
+                    payload=shortened_sequence,
+                    preference=count,
+                    effects=occurrence.scope_effects(
+                        tuple(Omission(item.reference) for index, item in enumerate(originals) if index in omitted)
+                    ),
+                    fragments=FragmentContract(
+                        tuple(frozenset({item.reference}) for item in retained),
+                        tuple(range(1, len(retained) + 1)),
+                        shortened_sequence.fragment,
+                    )
+                    if retained
+                    else None,
+                    region=replace(
+                        contract, required_ends=tuple(range(per, len(retained) + 1, per)) if per is not None else ()
+                    ),
+                )
+            )
+        spilled_lists.append(
+            replace(
+                spilled_lists[-1],
+                key="spill-empty",
+                payload=replace(payload, items=(), notice=()),
+                preference=len(originals) + 1,
+            )
+        )
+        return tuple(spilled_lists)
     if isinstance(value, TextPresentation):
         if occurrence.origin is None:
             message = "source-referenced text must belong to a checked alternative"
@@ -1115,6 +1182,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 Placement.HEADER if index == 0 and len(refs) > 1 else occurrence.placement,
                 occurrence.origin,
                 palette=context.palette,
+                enclosing=occurrence.enclosing,
             )
             for index, ref in enumerate(refs)
         )
@@ -1133,6 +1201,7 @@ def semantic_offers[RenderTargetT, ContextT](
                     Placement.FOOTER if ref.keys[-1] == "@back" else occurrence.placement,
                     occurrence.origin,
                     palette=context.palette,
+                    enclosing=occurrence.enclosing,
                 )
                 for ref in visible
             )
@@ -1213,6 +1282,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 Placement.HEADER if open_ and len(refs) > 1 and index == 0 else occurrence.placement,
                 occurrence.origin,
                 palette=context.palette,
+                enclosing=occurrence.enclosing,
             )
             for index, ref in enumerate(visible)
         )
@@ -1264,6 +1334,7 @@ def semantic_offers[RenderTargetT, ContextT](
                     occurrence.placement,
                     occurrence.origin,
                     palette=context.palette,
+                    enclosing=occurrence.enclosing,
                 )
                 for ref, _ in available
             ),
@@ -1590,6 +1661,8 @@ def semantic_offers[RenderTargetT, ContextT](
         | sem.ActionControls
         | sem.ControlGroup
         | sem.Truncated
+        | sem.Spilled
+        | sem.BestEffort
         | sem.Region
         | sem.Paged
         | sem.Budgeted
@@ -1622,6 +1695,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 else placement,
                 occurrence.origin,
                 palette=context.palette,
+                enclosing=occurrence.enclosing,
             )
             for ref in refs
         )
@@ -1645,12 +1719,10 @@ def semantic_offers[RenderTargetT, ContextT](
             payload = FlowRealization()
         region = None
         if isinstance(value, sem.Region | sem.Paged):
-            parent = occurrence.graph.units[occurrence.reference].parent
-            nested_region = False
-            while parent is not None:
-                unit = occurrence.graph.units[parent]
-                nested_region |= isinstance(unit.value, sem.Region) and not isinstance(unit.value, RootRegion)
-                parent = unit.parent
+            nested_region = any(
+                isinstance(ancestor, sem.Region) and not isinstance(ancestor, RootRegion)
+                for ancestor in occurrence.ancestors()
+            )
             cursor_key = (
                 region_cursor_key(occurrence)
                 if (isinstance(value, sem.Region) or nested_region) and not isinstance(value, RootRegion)
@@ -1680,6 +1752,32 @@ def semantic_offers[RenderTargetT, ContextT](
             keep_with_next=isinstance(value, sem.KeepWithNext),
             region=region,
         )
+        if isinstance(value, sem.Fields) and spill and value.fields:
+            order = sorted(range(len(children)), key=lambda index: (value.fields[index].importance, -index))
+            spilled_fields = [container]
+            for count in range(1, len(children) + 1):
+                context.work.consume(len(children))
+                omitted = set(order[:count])
+                spilled_fields.append(
+                    replace(
+                        container,
+                        key=f"spill-{count}",
+                        children=tuple(child for index, child in enumerate(children) if index not in omitted),
+                        payload=FieldsRealization(
+                            resolve_text(context.chrome.and_n_more(count), context.localization).nodes
+                        ),
+                        preference=count,
+                        effects=occurrence.scope_effects(
+                            tuple(Omission(child.reference) for index, child in enumerate(children) if index in omitted)
+                        ),
+                    )
+                )
+            spilled_fields.append(
+                replace(
+                    spilled_fields[-1], key="spill-empty", payload=FieldsRealization(), preference=len(children) + 1
+                )
+            )
+            return tuple(spilled_fields)
         if isinstance(value, sem.ActionControls) and value.display != sem.ControlDisplay.INDIVIDUAL:
             eligible = tuple(
                 item
