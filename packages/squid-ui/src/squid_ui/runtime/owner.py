@@ -307,7 +307,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._cached_revision = self.revision
         return True
 
-    def pending_cached_atomic_resources(self) -> tuple[AsyncBinding, ...]:
+    def pending_cached_atomic_resources(self) -> tuple[AsyncBinding[object], ...]:
         """Return atomic bindings that can settle before the next component-tree render.
 
         This is deliberately narrower than general cache reuse. Every directly moved render

@@ -91,7 +91,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.active: set[int] = set()
         self.deferred: list[AnyComponent] = []
         self.observed_addresses: list[Address] = []
-        self.observed_bindings: list[AsyncBinding] = []
+        self.observed_bindings: list[AsyncBinding[object]] = []
 
     def run(self) -> ComponentTree[RenderTargetT, ContextT]:
         """Expand the tree, splicing in place when only part of it changed."""

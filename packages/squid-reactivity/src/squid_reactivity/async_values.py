@@ -8,13 +8,13 @@ from typing import Protocol
 from squid_reactivity.completion import Completion
 
 
-class AsyncBinding(Protocol):
+class AsyncBinding[StatusT](Protocol):
     """An observed asynchronous value whose loader runs in the caller's task."""
 
     @property
     def pending(self) -> bool: ...
 
-    async def resolve(self) -> object:
+    async def resolve(self) -> StatusT:
         """Start or join work and return its status instead of unwrapping its value."""
         ...
 
@@ -52,21 +52,21 @@ class _Execution[StatusT]:
             self.completion.resolve(status())
 
 
-_CURRENT_BINDINGS: ContextVar[list[AsyncBinding] | None] = ContextVar(
+_CURRENT_BINDINGS: ContextVar[list[AsyncBinding[object]] | None] = ContextVar(
     "squid_reactivity_observed_async_bindings", default=None
 )
 
 
-def _observe(binding: AsyncBinding) -> None:
+def _observe(binding: AsyncBinding[object]) -> None:
     observed = _CURRENT_BINDINGS.get()
     if observed is not None:
         observed.append(binding)
 
 
 @contextmanager
-def observe_async_bindings() -> Iterator[list[AsyncBinding]]:
+def observe_async_bindings() -> Iterator[list[AsyncBinding[object]]]:
     """Collect asynchronous bindings accessed by one expanded component render."""
-    observed: list[AsyncBinding] = []
+    observed: list[AsyncBinding[object]] = []
     token = _CURRENT_BINDINGS.set(observed)
     try:
         yield observed
@@ -74,10 +74,10 @@ def observe_async_bindings() -> Iterator[list[AsyncBinding]]:
         _CURRENT_BINDINGS.reset(token)
 
 
-def unique_async_bindings(bindings: list[AsyncBinding]) -> tuple[AsyncBinding, ...]:
+def unique_async_bindings(bindings: list[AsyncBinding[object]]) -> tuple[AsyncBinding[object], ...]:
     """Preserve render order while removing repeat accesses to the same binding."""
     seen: set[int] = set()
-    unique: list[AsyncBinding] = []
+    unique: list[AsyncBinding[object]] = []
     for binding in bindings:
         identity = id(binding)
         if identity not in seen:

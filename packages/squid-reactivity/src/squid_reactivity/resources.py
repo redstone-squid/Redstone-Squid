@@ -262,7 +262,7 @@ def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
     return status.previous
 
 
-class Resource[ValueT](AsyncBinding):
+class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
     """An asynchronous value with a synchronous status for render code.
 
     Reading status never starts a load. Await the resource to load it and get

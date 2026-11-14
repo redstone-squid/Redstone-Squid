@@ -26,7 +26,7 @@ _ATOMIC_RESOURCE = AsyncRenderPolicy(pending_mode=PendingMode.ATOMIC)
 _OPERATION = AsyncRenderPolicy(reconcile_while_pending=True, settle_without_delivery=True)
 
 
-def async_render_policy(binding: AsyncBinding) -> AsyncRenderPolicy:
+def async_render_policy(binding: AsyncBinding[object]) -> AsyncRenderPolicy:
     """Select scheduling policy without putting presentation flags on reactive values.
 
     Other AsyncBinding implementations use explicit pending status and settle

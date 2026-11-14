@@ -1417,14 +1417,16 @@ class MessageRoot[
         raise LayoutInvariantError(message)
 
     @staticmethod
-    def _pending_resources(tree: ComponentTree[RenderTargetT, Any], pending: PendingMode) -> tuple[AsyncBinding, ...]:
+    def _pending_resources(
+        tree: ComponentTree[RenderTargetT, Any], pending: PendingMode
+    ) -> tuple[AsyncBinding[object], ...]:
         return tuple(
             binding
             for binding in tree.async_bindings
             if async_render_policy(binding).pending_mode is pending and binding.pending
         )
 
-    async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
+    async def _settle_resources(self, resources: Sequence[AsyncBinding[object]]) -> None:
         """Settle one observed resource tier concurrently under this render operation.
 
         Both discovery paths funnel through here -- `_stage_loaded`'s atomic tier and
@@ -1468,7 +1470,7 @@ class MessageRoot[
                     return
 
             async def settle(
-                current_bindings: tuple[AsyncBinding, ...] = bindings,
+                current_bindings: tuple[AsyncBinding[object], ...] = bindings,
                 current_done: asyncio.Event = done,
                 current_wake: asyncio.Event = wake,
             ) -> None:
@@ -1483,7 +1485,7 @@ class MessageRoot[
             async def reconcile(
                 current_done: asyncio.Event = done,
                 current_wake: asyncio.Event = wake,
-                current_bindings: tuple[AsyncBinding, ...] = bindings,
+                current_bindings: tuple[AsyncBinding[object], ...] = bindings,
             ) -> None:
                 nonlocal candidate, delivery_open
                 while True:

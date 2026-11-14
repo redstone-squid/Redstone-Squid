@@ -98,7 +98,7 @@ class ProgressReporter[ProgressT]:
         self._execution._set_progress(value)
 
 
-class OperationExecution[ValueT, ProgressT](AsyncBinding):
+class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT, ProgressT]]):
     """One execution of an operation, shared by all callers that await it.
 
     The first waiter runs the loader in its own task. Later waiters join the

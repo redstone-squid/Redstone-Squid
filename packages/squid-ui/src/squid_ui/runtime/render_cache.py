@@ -115,7 +115,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
                     return False
         return True
 
-    def pending_atomic_resources(self) -> tuple[AsyncBinding, ...]:
+    def pending_atomic_resources(self) -> tuple[AsyncBinding[object], ...]:
         """Return atomic bindings that can settle before the next component-tree render.
 
         This is deliberately narrower than general cache reuse. Every directly moved render
@@ -134,7 +134,7 @@ class RenderCache[RenderTargetT: RenderTarget]:
         if len(dirty_paths) != len(self._dirty):
             return ()
 
-        found: list[AsyncBinding] = []
+        found: list[AsyncBinding[object]] = []
         seen: set[int] = set()
         for component, path in dirty_paths.items():
             if component in self._forced:

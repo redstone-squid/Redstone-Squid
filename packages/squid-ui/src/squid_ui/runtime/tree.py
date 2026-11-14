@@ -35,7 +35,7 @@ class ComponentTree(Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported
     document_key: str | None = None
     deferred: tuple[AnyComponent, ...] = ()
     """Children deferred for loading. A tree with deferred children is incomplete: do not plan, draw, or commit it."""
-    async_bindings: tuple[AsyncBinding, ...] = ()
+    async_bindings: tuple[AsyncBinding[object], ...] = ()
     """Async resources observed during rendering, including an atomic resource that suspended expansion."""
     observations: tuple[Address, ...] = ()
     """The bus addresses of every shared cell this render read, deduplicated.
@@ -67,7 +67,7 @@ class _ComponentRender[RenderTargetT: RenderTarget, ContextT = object]:
     document_key: str | None
     observation: Dependencies
     addresses: tuple[Address, ...]
-    async_bindings: tuple[AsyncBinding, ...]
+    async_bindings: tuple[AsyncBinding[object], ...]
 
 
 @dataclass(slots=True)
@@ -79,7 +79,7 @@ class _ExpandedSubtree[RenderTargetT: RenderTarget, ContextT = object]:
     nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     components: dict[str, AnyComponent]
     assets: tuple[Asset, ...]
-    async_bindings: tuple[AsyncBinding, ...]
+    async_bindings: tuple[AsyncBinding[object], ...]
     observations: tuple[Address, ...]
     child_splices: dict[str, _NodeSplice]
     topology: object = field(default_factory=object)
