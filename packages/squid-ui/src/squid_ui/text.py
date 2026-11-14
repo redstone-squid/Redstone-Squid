@@ -22,7 +22,13 @@ from squid_i18n import (
     current_localization as current_localization,
 )
 from squid_i18n import (
+    discord_markup as discord_markup,
+)
+from squid_i18n import (
     discord_text as discord_text,
+)
+from squid_i18n import (
+    emoji_text as emoji_text,
 )
 from squid_i18n import (
     emphasis as emphasis,

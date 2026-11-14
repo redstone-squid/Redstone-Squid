@@ -187,6 +187,7 @@ from squid_ui.target_types import (
 )
 from squid_ui.text import (
     TextLike,
+    emoji_text,
     emphasis,
     inline_code,
     md,
@@ -284,6 +285,7 @@ __all__ = [
     "document",
     "download",
     "emoji",
+    "emoji_text",
     "emphasis",
     "entities",
     "entity",

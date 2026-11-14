@@ -6,7 +6,20 @@ from datetime import UTC, datetime
 
 import pytest
 
-from squid_i18n import Localization, Text, discord_text, localization_scope, md, plain, resolve_text, source_text, tr
+from squid_i18n import (
+    NEUTRAL,
+    Localization,
+    Text,
+    discord_markup,
+    discord_text,
+    emoji_text,
+    localization_scope,
+    md,
+    plain,
+    resolve_text,
+    source_text,
+    tr,
+)
 
 
 def test_text_is_an_immutable_slotted_value() -> None:
@@ -118,3 +131,42 @@ def test_literal_emptiness_does_not_resolve_translations() -> None:
     assert not Text(t"")
     assert Text(" ")
     assert tr("Hello", key="greeting")
+
+
+@pytest.mark.parametrize("emoji", ["<:squid:123>", "<a:squid:123>"])
+def test_custom_emoji_survives_discord_rendering_and_has_a_portable_label(emoji: str) -> None:
+    value = md(t"**Vote:** {emoji_text(emoji)}")
+    assert discord_text(resolve_text(value, NEUTRAL)) == f"**Vote:** {emoji}"
+    assert source_text(value, format="plain") == "Vote: :squid:"
+
+
+@pytest.mark.parametrize("value", ["⭐", "<:invalid>", "**text** @everyone", "prefix <:squid:123>"])
+def test_other_emoji_inputs_stay_literal(value: str) -> None:
+    assert emoji_text(value) == Text(value)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "**bold** <:squid:123> <@456> @everyone\n||secret||",
+        "  indented\n\n",
+        "```py\nx = 1\n```",
+        "-# subtext",
+        "squidRawSlot0End squidRawSlotX0End",
+    ],
+)
+def test_copied_discord_markup_is_preserved_exactly(content: str) -> None:
+    value = discord_markup(content)
+    assert discord_text(resolve_text(value, NEUTRAL)) == content
+    assert discord_text(resolve_text(md(t"**Copied:** {value}"), NEUTRAL)) == "**Copied:** " + content
+    assert source_text(value, format="plain") == content
+
+
+def test_empty_discord_markup_allows_a_fallback() -> None:
+    assert not discord_markup("")
+
+
+def test_markdown_template_formats_bound_code_without_parsing_its_delimiters() -> None:
+    path = "a`b **literal**"
+    value = md(t"**Path:** `{path}`")
+    assert discord_text(resolve_text(value, NEUTRAL)) == "**Path:** `` a`b **literal** ``"

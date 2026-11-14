@@ -8,7 +8,9 @@ from squid_i18n import (
     Localization,
     Text,
     current_localization,
+    discord_markup,
     discord_text,
+    emoji_text,
     inline_code,
     localization_scope,
     md,
@@ -21,6 +23,8 @@ from squid_i18n import (
     timestamp_text,
     tr,
 )
+from squid_ui import scene
+from squid_ui.planning.text_nodes import html_text
 
 
 def discord(value: str | Text) -> str:
@@ -118,3 +122,9 @@ def test_literal_code_and_link_destinations_cannot_inject_structure() -> None:
     )
     with pytest.raises(ValueError, match="safe destination"):
         text_link("click", "javascript:alert(1)")
+
+
+def test_discord_only_content_lowers_to_literal_html_text() -> None:
+    content = "**bold** <script>alert(1)</script> <@123>"
+    assert html_text(resolve_text(discord_markup(content), Localization()).nodes) == scene.HtmlText(content)
+    assert html_text(resolve_text(emoji_text("<a:squid:123>"), Localization()).nodes) == scene.HtmlText(":squid:")

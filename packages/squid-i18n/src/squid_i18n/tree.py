@@ -116,6 +116,8 @@ def plain(node: Node) -> str:
         return "\n"
     if node.kind == "mention":
         return ("#" if dict(node.attrs)["kind"] == "channel" else "@") + node.content
+    if node.kind == "emoji":
+        return f":{node.content}:"
     content = "".join(plain(child) for child in node.children) if node.children else node.content
     return content + "\n" if node.kind in {"paragraph", "heading", "list_item"} else content
 
@@ -130,6 +132,15 @@ def _destination_nodes(nodes: Sequence[Node], discord: bool) -> tuple[Node, ...]
         if node.kind == "mention":
             prefix = {"user": "@", "role": "@&", "channel": "#"}[dict(node.attrs)["kind"]]
             result.append(Node("html_inline", f"<{prefix}{node.content}>") if discord else literal(plain(node)))
+        elif node.kind == "discord_markup":
+            result.append(Node("html_inline", node.content) if discord else literal(node.content))
+        elif node.kind == "emoji":
+            attrs = dict(node.attrs)
+            result.append(
+                Node("html_inline", f"<{attrs['animated']}:{node.content}:{attrs['id']}>")
+                if discord
+                else literal(plain(node))
+            )
         elif node.kind == "timestamp":
             attrs = dict(node.attrs)
             result.append(
@@ -210,6 +221,24 @@ def _markdown(nodes: tuple[Node, ...], escape: Callable[[str], str] | None = Non
         else:
             pending.append(node)
     flush()
+    # mdformat rewrites leading spaces and trailing newlines even in html_inline
+    # tokens. Restore Discord markup after serialization so copied messages survive
+    # unchanged, including when nested inside authored formatting.
+    prefix = "squidRawSlot"
+    while prefix in repr(nodes):
+        prefix += "X"
+    raw: dict[str, str] = {}
+
+    def protect_raw(items: Sequence[Token]) -> None:
+        for token in items:
+            if token.type == "html_inline":
+                marker = f"{prefix}{len(raw)}End"
+                raw[marker] = token.content
+                token.content = marker
+            if token.children:
+                protect_raw(token.children)
+
+    protect_raw(stream)
     plugins = [PARSER_EXTENSIONS["gfm"], PARSER_EXTENSIONS["tables"]]
     if escape is not None:
 
@@ -220,7 +249,10 @@ def _markdown(nodes: tuple[Node, ...], escape: Callable[[str], str] | None = Non
             return "".join(child.render(context) for child in node.children)
 
         plugins.insert(0, SimpleNamespace(RENDERERS={"text": render_literal, "paragraph": render_paragraph}))
-    return MDRenderer().render(stream, {"parser_extension": plugins}, {}, finalize=False)
+    rendered = MDRenderer().render(stream, {"parser_extension": plugins}, {}, finalize=False)
+    if raw:
+        return re.sub("|".join(map(re.escape, raw)), lambda match: raw[match[0]], rendered)
+    return rendered
 
 
 def formatted(node: Node) -> bool:

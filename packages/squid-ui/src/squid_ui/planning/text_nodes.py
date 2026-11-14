@@ -17,7 +17,7 @@ def _html_nodes(node: tree.Node) -> tuple[scene.HtmlNode, ...]:
     match node.kind:
         case "inline" | "sequence":
             return children
-        case "text" | "mention" | "timestamp":
+        case "text" | "mention" | "emoji" | "discord_markup" | "timestamp":
             return (scene.HtmlText(tree.plain(node)),)
         case "softbreak":
             return (scene.HtmlText("\n"),)

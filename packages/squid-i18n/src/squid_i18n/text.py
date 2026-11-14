@@ -4,6 +4,7 @@ Text is independent of its eventual destination. Translations resolve for the re
 before their authored formatting is parsed; captured values remain separate nodes.
 """
 
+import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -19,6 +20,8 @@ from squid_i18n import runtime, tree
 from squid_i18n.compiler import Declaration, compile_template
 from squid_i18n.errors import DeclarationError
 from squid_i18n.expressions import DEVELOPER_OPTIONS, DateTimeExpression, NumberExpression
+
+_CUSTOM_EMOJI = re.compile(r"<(?P<animated>a?):(?P<name>\w+):(?P<id>\d+)>")
 
 type SourceFormat = Literal["plain", "markdown"]
 
@@ -99,7 +102,19 @@ class _Timestamp:
     style: Literal["t", "T", "d", "D", "f", "F", "R"]
 
 
-type _Part = str | _Translation | _Markdown | _Style | _Link | _Code | _Mention | _Timestamp
+@dataclass(frozen=True, slots=True)
+class _Emoji:
+    name: str
+    identifier: int
+    animated: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _DiscordMarkup:
+    content: str
+
+
+type _Part = str | _Translation | _Markdown | _Style | _Link | _Code | _Mention | _Emoji | _DiscordMarkup | _Timestamp
 
 
 class Text:
@@ -397,6 +412,16 @@ def resolve_text(value: TextLike, localization: Localization) -> _Document:
                 nodes.append(tree.Node("code_inline", resolve_text(part.child, localization).plain(), tag="code"))
             case _Mention():
                 nodes.append(tree.Node("mention", str(part.identifier), attrs=(("kind", part.kind),)))
+            case _Emoji():
+                nodes.append(
+                    tree.Node(
+                        "emoji",
+                        part.name,
+                        attrs=(("id", str(part.identifier)), ("animated", "a" if part.animated else "")),
+                    )
+                )
+            case _DiscordMarkup():
+                nodes.append(tree.Node("discord_markup", part.content))
             case _Timestamp():
                 nodes.append(
                     tree.Node(
@@ -464,6 +489,29 @@ def mention(identifier: int, *, kind: Literal["user", "role", "channel"] = "user
         msg = "A mention requires a positive identifier and a user, role, or channel kind"
         raise ValueError(msg)
     return Text._from_parts((_Mention(kind, identifier),))
+
+
+def emoji_text(value: str) -> Text:
+    """Display an emoji written the way Discord stores it.
+
+    A custom emoji such as `<:squid:123>` shows as its image on Discord and as `:squid:`
+    elsewhere. Any other value, such as a Unicode emoji, is literal text.
+    """
+    match = _CUSTOM_EMOJI.fullmatch(value)
+    if match is None:
+        return Text(value)
+    return Text._from_parts((_Emoji(match["name"], int(match["id"]), bool(match["animated"])),))
+
+
+def discord_markup(value: str) -> Text:
+    """Show text copied from a Discord message with the formatting its author gave it.
+
+    Discord receives `value` unchanged, so its Markdown, mentions and emoji display as they
+    did in the original message. Other destinations show it as literal text. Use this only
+    for content Discord already accepted from a user; mentions in it ping unless the
+    message's allowed mentions exclude them.
+    """
+    return Text._from_parts((_DiscordMarkup(value),)) if value else Text("")
 
 
 def timestamp_text(instant: datetime, *, style: Literal["t", "T", "d", "D", "f", "F", "R"] = "f") -> Text:
