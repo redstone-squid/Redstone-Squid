@@ -215,4 +215,5 @@ def _claim_label(claim: AliasClaim) -> sl.text.Text:
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
     """Explain the second deliberate approval click."""
-    return conflict.message + " " + tr(t"claims-reapproval-warning = Approving again takes the name from them.")
+    warning = tr(t"claims-reapproval-warning = Approving again takes the name from them.")
+    return sl.text.Text(t"{conflict.message} {warning}")

@@ -129,7 +129,9 @@ class MessageRootInspector(sl.Component):
         mine = sl.md(" *(this panel)*") if snapshot.id == self.own_id else ""
         key = self._session_key(snapshot.id)
         session = "" if key is None else sl.md(t" · session `{key!r}`")
-        location = "" if snapshot.address is None else " · " + sl.text_link("jump", snapshot.address.jump_url)
+        location = (
+            "" if snapshot.address is None else sl.text.Text(t" · {sl.text_link('jump', snapshot.address.jump_url)}")
+        )
         return sl.md(
             t"`{snapshot.id}` **{snapshot.component.rsplit('.', 1)[-1]}**{mine}\n"
             t"gen {snapshot.generation} · {_flags(snapshot)} · age {_duration(snapshot.age)}"

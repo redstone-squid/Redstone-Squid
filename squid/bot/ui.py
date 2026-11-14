@@ -17,7 +17,7 @@ import discord
 import squid_ui as ui
 import squid_ui_discord as sd
 from squid.core.i18n import tr
-from squid_i18n import md_tr
+from squid_i18n import Text, md_tr
 
 
 class DiscordColour(IntEnum):
@@ -238,16 +238,11 @@ def text_node(
     return node
 
 
-def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
-    """Prefix text while preserving deferred translation, plural forms, and markup metadata."""
-    return prefix + value
-
-
 def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build an error card for composition inside a component render."""
     return card_node(
         title,
-        _prefixed(":x: ", description or ""),
+        Text(t":x: {description or ''}"),
         accent_colour=ui.Tone.DANGER,
     )
 

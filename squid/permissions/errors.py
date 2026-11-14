@@ -40,17 +40,14 @@ class PermissionDeniedError(AuthorizationError):
                 if mode == "any"
                 else tr(t"permissions-require-all = This action requires all of these permissions:")
             )
-            message = (
-                lead
-                + "\n"
-                + Text.join(
-                    "\n",
-                    (
-                        item.node + " — " + detail
-                        for item, (_, detail) in zip(self.decisions, explanations, strict=True)
-                    ),
-                )
+            details = Text.join(
+                "\n",
+                (
+                    Text(t"{item.node} — {detail}")
+                    for item, (_, detail) in zip(self.decisions, explanations, strict=True)
+                ),
             )
+            message = Text(t"{lead}\n{details}")
             public_context = {
                 "permission_mode": mode,
                 "required_permissions": self.nodes,
