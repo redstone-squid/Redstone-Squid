@@ -21,6 +21,7 @@ def test_inconsistent_bounds_remain_unknown_while_the_original_domain_survives(
         branches=[ExpansionBranch(opening_width="x", opening_height="3", domain="x=1-14 wide", volume="40+20x blocks")],
     )
     document = value.to_domain(SOURCES)
+    assert document is not None
     [parameter] = document.parameters
     assert parameter.minimum is None
     assert parameter.maximum is None
@@ -32,6 +33,7 @@ def test_inconsistent_bounds_remain_unknown_while_the_original_domain_survives(
 def test_valid_bounds_and_duplicate_parameter_names_do_not_fail_the_document() -> None:
     parameter = InferredExpansionParameter(name="x", minimum=1, maximum=14)
     document = InferredDoorExpansion(parameters=[parameter, parameter]).to_domain(SOURCES)
+    assert document is not None
     assert len(document.parameters) == 1
     assert document.parameters[0].maximum_kind == "finite"
     assert document.parameters[0].maximum == 14
@@ -51,6 +53,7 @@ def test_generated_summaries_and_foreign_source_ids_are_replaced_with_real_excer
         ],
     )
     document = value.to_domain(SOURCES)
+    assert document is not None
     assert document.raw_description is not None
     assert "author" not in document.raw_description
     assert all(line in SOURCES[10] for line in document.raw_description.splitlines())
@@ -68,9 +71,9 @@ def test_invented_algebra_is_not_accepted_as_a_source_expression() -> None:
         parameters=[InferredExpansionParameter(name="invented_parameter")],
     )
     document = value.to_domain(SOURCES)
+    assert document is not None
     assert document.parameters == ()
-    assert document.branches[0].volume is None
-    assert document.branches[0].opening_width is None
+    assert document.branches == ()
     assert document.raw_description == "40+20x blocks"
 
 
@@ -81,7 +84,9 @@ def test_raw_source_fallback_does_not_repeat_excerpts_covered_by_a_longer_quote(
         evidence=[ExpansionEvidence(source_message_id=10, text=excerpt)],
         branches=[ExpansionBranch(volume="40+20x blocks", domain="x=1-14 wide")],
     )
-    assert value.to_domain(SOURCES).raw_description == excerpt
+    document = value.to_domain(SOURCES)
+    assert document is not None
+    assert document.raw_description == excerpt
 
 
 def test_a_variable_must_not_be_an_accidental_letter_in_an_unrelated_word() -> None:
@@ -89,6 +94,46 @@ def test_a_variable_must_not_be_an_accidental_letter_in_an_unrelated_word() -> N
         parameters=[InferredExpansionParameter(name="n")],
         branches=[ExpansionBranch(opening_width="n")],
     )
-    document = value.to_domain({10: "contained expandable door"})
-    assert document.parameters == ()
-    assert document.branches[0].opening_width is None
+    assert value.to_domain({10: "contained expandable door"}) is None
+
+
+def test_a_document_without_grounded_facts_is_not_stored() -> None:
+    # A stored document marks the door as a family and hides its sample measurements.
+    assert InferredDoorExpansion().to_domain(SOURCES) is None
+    labelled = InferredDoorExpansion(branches=[ExpansionBranch(label="main", volume="20*(x+2)")])
+    assert labelled.to_domain(SOURCES) is None
+
+
+@pytest.mark.parametrize(
+    "source", ["expandable nx3 door", "a 3xn door", "nxn door", "n\N{MULTIPLICATION SIGN}3 door", "20n blocks"]
+)
+def test_a_single_letter_variable_is_found_in_size_notation(source: str) -> None:
+    value = InferredDoorExpansion(
+        parameters=[InferredExpansionParameter(name="n")], branches=[ExpansionBranch(opening_width="n")]
+    )
+    document = value.to_domain({10: source})
+    assert document is not None
+    assert [parameter.name for parameter in document.parameters] == ["n"]
+    assert document.branches[0].opening_width == "n"
+
+
+@pytest.mark.parametrize(
+    ("source", "kept"), [("opens in 0.5s", False), ("built in 2015", False), ("5 high", True), ("5.", True)]
+)
+def test_a_number_must_not_be_part_of_a_longer_number(source: str, kept: bool) -> None:
+    value = InferredDoorExpansion(
+        evidence=[ExpansionEvidence(source_message_id=10, text=source)],
+        branches=[ExpansionBranch(opening_height="5")],
+    )
+    document = value.to_domain({10: source})
+    assert document is not None
+    assert [branch.opening_height for branch in document.branches] == (["5"] if kept else [])
+
+
+def test_an_invented_completion_time_is_dropped() -> None:
+    value = InferredDoorExpansion(
+        branches=[ExpansionBranch(volume="40+20x blocks", completion_time="January 2020")],
+    )
+    document = value.to_domain(SOURCES)
+    assert document is not None
+    assert document.branches[0].completion_time is None

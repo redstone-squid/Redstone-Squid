@@ -52,12 +52,19 @@ class InferredDoorExpansion(BaseModel):
     branches: list[ExpansionBranch] = Field(default_factory=list, max_length=64)
     evidence: list[ExpansionEvidence] = Field(default_factory=list, max_length=64)
 
-    def to_domain(self, sources: Mapping[int, str]) -> DoorExpansion:
+    def to_domain(self, sources: Mapping[int, str]) -> DoorExpansion | None:
         """Keep partial facts without guessing bounds or trusting invented quotations.
 
         Sources contain only this candidate's selected primary messages, with
-        whitespace normalized. Formula strings are retained only when they occur
-        there; unsupported algebra remains unevaluated source text.
+        whitespace normalized. Parameter names, opening, domain, volume and timing
+        expressions, completion times, evidence and the raw description are kept
+        only when they occur there; unsupported algebra remains unevaluated source
+        text. Labels, parameter meanings, bounds, steps and timing units are the
+        model's reading of the source and are not checked against it.
+
+        Returns:
+            The grounded document, or None when no fact survives. A stored document
+            marks the door as a family, so an empty one must not be saved.
         """
         parameters: dict[str, ExpansionParameter] = {}
         for value in self.parameters:
@@ -87,6 +94,7 @@ class InferredDoorExpansion(BaseModel):
                 "domain",
                 "volume",
                 "claimed_record_domain",
+                "completion_time",
             ):
                 text = getattr(branch, name)
                 if text is None:
@@ -98,7 +106,10 @@ class InferredDoorExpansion(BaseModel):
                     branch_evidence.append(quote)
             updates["timings"] = tuple(timing for timing in branch.timings if _quote(timing.expression, sources))
             updates["evidence"] = tuple(branch_evidence[:64])
-            branches.append(branch.model_copy(update=updates))
+            grounded = branch.model_copy(update=updates)
+            # A label alone states nothing about the door.
+            if grounded.model_copy(update={"label": None}) != ExpansionBranch():
+                branches.append(grounded)
             evidence.extend(item for item in branch_evidence if item not in evidence)
         raw = _quote(self.raw_description, sources) if self.raw_description else None
         raw_description = raw.text if raw is not None else None
@@ -112,6 +123,8 @@ class InferredDoorExpansion(BaseModel):
                 if len("\n".join(combined)) <= 10_000:
                     excerpts = combined
             raw_description = "\n".join(excerpts) or None
+        if not (raw_description or parameters or branches or evidence):
+            return None
         return DoorExpansion(
             raw_description=raw_description,
             parameters=tuple(parameters.values()),
@@ -120,15 +133,34 @@ class InferredDoorExpansion(BaseModel):
         )
 
 
+_DIMENSION = r"(?:\d+|[^\W\d_])"
+
+
 def _quote(text: str, sources: Mapping[int, str]) -> ExpansionEvidence | None:
+    """Find text in a source, respecting the edges of names and numbers.
+
+    A name must not continue into a longer word, though a coefficient may precede
+    it: "n" occurs in "20n" but not in "open". A single-letter name also occurs
+    in ASCII size notation such as "nx3" or "3xn". A number must not continue into
+    a longer one: "5" occurs in neither "0.5s" nor "2015".
+    """
     excerpt = " ".join(text.split())
     if not excerpt:
         return None
-    identifier = re.fullmatch(r"[^\W\d]\w*", excerpt) is not None
-    pattern = rf"(?<![^\W\d]){re.escape(excerpt)}(?!\w)"
+    escaped = re.escape(excerpt)
+    if re.fullmatch(r"[^\W\d]\w*", excerpt):
+        pattern = rf"(?<![^\W\d]){escaped}(?!\w)"
+        if len(excerpt) == 1 and excerpt != "x":
+            pattern += (
+                rf"|(?<!\w)(?:{_DIMENSION}x)+{escaped}(?:x{_DIMENSION})*(?!\w)"
+                rf"|(?<!\w){escaped}(?:x{_DIMENSION})+(?!\w)"
+            )
+    else:
+        before = r"(?<![\d.])" if excerpt[0].isdigit() else ""
+        after = r"(?!\d|\.\d)" if excerpt[-1].isdigit() else ""
+        pattern = f"{before}{escaped}{after}"
     for key, source in sources.items():
-        matches = re.search(pattern, source) is not None if identifier else excerpt in source
-        if matches:
+        if re.search(pattern, source):
             return ExpansionEvidence(source_message_id=key, text=excerpt)
     return None
 
