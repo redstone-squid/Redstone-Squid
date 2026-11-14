@@ -10,9 +10,7 @@ from typing import Any, Generic
 from squid_reactivity.addresses import CellAddress
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import Topic
-from squid_reactivity.tracking import (
-    Dependencies,
-)
+from squid_reactivity.tracking import Dependencies
 from squid_ui.context import ContextKey
 from squid_ui.document import Asset
 from squid_ui.runtime._tree import _LayoutRoute

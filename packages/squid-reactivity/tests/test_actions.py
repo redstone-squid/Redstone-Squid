@@ -34,9 +34,7 @@ from squid_reactivity import (
     strong_read,
     transaction,
 )
-from squid_reactivity.tracking import (
-    _CURRENT,
-)
+from squid_reactivity.transaction_state import _CURRENT_TRANSACTION
 
 
 class Preferences(Reactive):
@@ -55,7 +53,7 @@ class LocalCounter(Reactive):
 def _outside_write(preferences: Preferences, name: str, value: str) -> None:
     # Simulate another action committing without joining this test's transaction.
     outside = contextvars.copy_context()
-    outside.run(_CURRENT.set, None)
+    outside.run(_CURRENT_TRANSACTION.set, None)
     outside.run(setattr, preferences, name, value)
 
 

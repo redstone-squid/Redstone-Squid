@@ -13,9 +13,7 @@ from squid_reactivity import (
     transaction,
 )
 from squid_reactivity.topics import Address, CellAddress
-from squid_reactivity.tracking import (
-    _CURRENT,
-)
+from squid_reactivity.transaction_state import _CURRENT_TRANSACTION
 
 
 class Preferences(Reactive):
@@ -47,7 +45,7 @@ def test_shared_read_write_conflict_rolls_back() -> None:
         descriptor = type(preferences)._state_descriptors["theme"]
         # Commit a competing write without joining the transaction being tested.
         outside = contextvars.copy_context()
-        outside.run(_CURRENT.set, None)
+        outside.run(_CURRENT_TRANSACTION.set, None)
         outside.run(descriptor.cell(preferences).write, "theirs")
 
     assert preferences.theme == "theirs"

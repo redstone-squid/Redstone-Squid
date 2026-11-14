@@ -190,6 +190,7 @@ queues or network delivery, implement the `TopicBus` protocol.
 
 ## Code layout
 
-`core` declares models, `tracking` records reads, and `transactions` stages and publishes
-writes. `transaction_results` defines results, `transaction_context` defines contexts, and `diagnostics`
-delivers events. `topics`, `resources`, and `operations` cover the last two sections.
+`core` declares models, `cells` stores versioned values, and `tracking` captures and checks
+dependencies. `transaction_state` holds internal read/write controls; `transactions` stages
+and publishes writes. `transaction_context` and `transaction_results` describe identity and
+outcomes. `diagnostics` delivers events; `topics`, `resources`, and `operations` handle external work.

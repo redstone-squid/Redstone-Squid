@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any, Protocol
 
+from squid_reactivity.cells import _MISSING, _Cell
 from squid_reactivity.diagnostics import (
     emit_continuation_failure,
     emit_result,
@@ -31,18 +32,7 @@ from squid_reactivity.errors import (
     TransactionValidationError,
     UndeclaredStateError,
 )
-from squid_reactivity.tracking import (
-    _CURRENT,
-    _MISSING,
-    ReactiveStateOwner,
-    _active,
-    _bump_epoch,
-    _Cell,
-    _check_write,
-    _checkpoint,
-    _current_task,
-    relaxed_read,
-)
+from squid_reactivity.tracking import _bump_epoch
 from squid_reactivity.transaction_context import (
     ActorRef,
     ExceptionReport,
@@ -65,6 +55,15 @@ from squid_reactivity.transaction_results import (
     TransactionContribution,
     TransactionResult,
     TransactionRollback,
+)
+from squid_reactivity.transaction_state import (
+    _CURRENT_TRANSACTION,
+    ReactiveStateOwner,
+    _active,
+    _check_write,
+    _checkpoint,
+    _current_task,
+    relaxed_read,
 )
 
 _log = logging.getLogger(__name__)
@@ -247,7 +246,7 @@ class CellPatchSet:
 
 def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
     """Stage an all-or-nothing conditional patch set in the active transaction."""
-    current = _CURRENT.get()
+    current = _CURRENT_TRANSACTION.get()
     if current is None or not current.writable():
         message = "conditional patches require an active writable transaction"
         raise RuntimeError(message)
@@ -266,7 +265,7 @@ def _write(owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> Non
     its construction lands immediately too.
     """
     _check_write(owner, name)
-    current = _CURRENT.get()
+    current = _CURRENT_TRANSACTION.get()
     if current is None and in_continuation():
         message = "direct reactive mutation in a result callback is forbidden; open a new transaction(...)"
         raise ReactiveWriteError(message)
@@ -338,7 +337,7 @@ class Transaction:
         hooks.append((key, callback))
 
     def _check_current(self) -> _Transaction:
-        current = _CURRENT.get()
+        current = _CURRENT_TRANSACTION.get()
         if current is None or current.handle is not self:
             message = "callbacks must be registered inside their transaction"
             raise StaleReactiveContextError(message)
@@ -566,7 +565,7 @@ class _Transaction:
         the observation report because conflict validation has already run.
         """
         with (
-            _CURRENT.set(self),
+            _CURRENT_TRANSACTION.set(self),
             block_writes("a transaction participant cannot write while preparing"),
             relaxed_read(),
         ):
@@ -789,15 +788,15 @@ def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> 
     """Own staging, the commit point, and outcome delivery for either transaction mode."""
     current = _Transaction(readonly=readonly, owner_task=_current_task(), context=context)
     with transaction_context_scope(context):
-        token = _CURRENT.set(current)
+        token = _CURRENT_TRANSACTION.set(current)
         try:
             _checkpoint("transaction.enter_body")
             yield current.handle
         except BaseException as error:
-            _CURRENT.reset(token)
+            _CURRENT_TRANSACTION.reset(token)
             _emit_rollback(current, error, during_commit=False)
             raise
-        _CURRENT.reset(token)
+        _CURRENT_TRANSACTION.reset(token)
         try:
             _checkpoint("transaction.close_staging")
             with _COMMIT_GATE:
@@ -848,7 +847,7 @@ def transaction(
     Such a failure raises FrameworkIntegrityError and is recorded as a damaged
     commit, since already applied external changes cannot be rolled back here.
     """
-    outer = _CURRENT.get()
+    outer = _CURRENT_TRANSACTION.get()
     if outer is not None:
         # Checked at the `with`, not at the first write inside it, so a task that inherited
         # someone else's transaction is told where it went wrong rather than where it showed.
@@ -892,11 +891,11 @@ def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Tr
     outer transaction that already staged work is rejected because committing the inner transaction
     could not then be rolled back with the outer one.
     """
-    outer = _CURRENT.get()
+    outer = _CURRENT_TRANSACTION.get()
     if outer is not None and (outer.writes or outer.participants or outer.preconditions):
         message = "a fresh transaction cannot start after the admitting transaction staged changes"
         raise FreshTransactionError(message)
-    with _CURRENT.set(None), transaction(transaction_context=transaction_context) as handle:
+    with _CURRENT_TRANSACTION.set(None), transaction(transaction_context=transaction_context) as handle:
         yield handle
 
 
@@ -910,7 +909,7 @@ def batch() -> Iterator[None]:
 @contextmanager
 def readonly_transaction(*, transaction_context: TransactionContext | None = None) -> Iterator[Transaction]:
     """Run an identified read-only transaction and reject any state mutation."""
-    if _CURRENT.get() is not None:
+    if _CURRENT_TRANSACTION.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
     causality = current_causality()
@@ -937,7 +936,7 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
     to wait for and should land now. `key` identifies the subsystem, is usually the
     subsystem itself, and must be hashable.
     """
-    current = _CURRENT.get()
+    current = _CURRENT_TRANSACTION.get()
     if current is None:
         return None
     return current.enlist(key, factory)
@@ -945,7 +944,7 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
 
 def transaction_participant(key: object) -> TransactionParticipant[Any] | None:
     """Return the participant already registered for ``key``, without creating one."""
-    current = _CURRENT.get()
+    current = _CURRENT_TRANSACTION.get()
     return None if current is None else current.participants.get(key)
 
 
@@ -957,7 +956,7 @@ def block_writes(reason: str) -> Iterator[None]:
     has recorded. For code that runs *inside* a transaction but must not touch the tree, such as
     an undo entry's external inverse, whose writes a following restore would silently clobber.
     """
-    current = _CURRENT.get()
+    current = _CURRENT_TRANSACTION.get()
     if current is None:
         yield
         return

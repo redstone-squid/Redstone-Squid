@@ -28,9 +28,7 @@ from squid_reactivity import (
     transaction,
 )
 from squid_reactivity.testing import InterleavingHarness
-from squid_reactivity.tracking import (
-    _CURRENT,
-)
+from squid_reactivity.transaction_state import _CURRENT_TRANSACTION
 from squid_replication import (
     PreparedReplicationInverse,
     ReferenceBackend,
@@ -61,7 +59,7 @@ class LocalModel(Reactive):
 def _outside(callback, *args) -> None:
     # Observe or import committed state without joining the transaction under test.
     outside = contextvars.copy_context()
-    outside.run(_CURRENT.set, None)
+    outside.run(_CURRENT_TRANSACTION.set, None)
     outside.run(callback, *args)
 
 

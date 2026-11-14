@@ -16,16 +16,13 @@ from datetime import UTC, datetime
 from typing import Any, overload, override
 
 from squid_reactivity.async_values import AsyncBinding, _Execution, _observe
+from squid_reactivity.cells import _Signal
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     emit_causal_event,
     has_event_observers,
 )
-from squid_reactivity.tracking import (
-    _CONSUMER,
-    _Signal,
-    settling,
-)
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, settling
 from squid_reactivity.transaction_context import (
     CausalRef,
     ExceptionReport,
@@ -177,7 +174,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
         progress = ProgressReporter(self)
         # An execution is a fixed request. Its inputs must not become dependencies
         # of a resource that happens to be the first caller awaiting it.
-        consumer = _CONSUMER.set(None)
+        consumer = _DEPENDENCY_COLLECTOR.set(None)
         try:
             with causal_scope(self.context.causal_ref(), self.context.root_transaction_id):
                 value = await self._loader(progress)
@@ -200,7 +197,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
             self._signal.notify()
             self._emit("succeeded")
         finally:
-            _CONSUMER.reset(consumer)
+            _DEPENDENCY_COLLECTOR.reset(consumer)
         return self._status
 
     @contextmanager

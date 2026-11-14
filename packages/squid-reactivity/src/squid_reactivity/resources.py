@@ -47,20 +47,14 @@ from squid_reactivity.errors import (
     ReactiveCycleError,
     ReactivityError,
 )
-from squid_reactivity.tracking import (
-    _CONSUMER,
-    ReactiveStateOwner,
-    _bump_epoch,
-    _ReactiveSource,
-    cycle_path,
-    settling,
-)
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _bump_epoch, _ReactiveSource, cycle_path, settling
 from squid_reactivity.transaction_context import (
     CausalRef,
     ExceptionReport,
     TransactionId,
     current_causality,
 )
+from squid_reactivity.transaction_state import ReactiveStateOwner
 from squid_reactivity.transactions import (
     TransactionView,
     enlist,
@@ -246,7 +240,7 @@ class _Load[ValueT]:
         scope: LoadScope,
     ) -> None:
         # `owner` is what keeps `Resource.track` able to recognise a self-read. While the load
-        # runs it, not the resource, is the `_CONSUMER`, so an identity check against the
+        # runs it, not the resource, is the `_DEPENDENCY_COLLECTOR`, so an identity check against the
         # consumer alone would let a loader that reads its own resource subscribe the resource
         # to itself -- which re-pends it forever rather than settling.
         self.owner = owner
@@ -323,7 +317,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
 
     def track(self) -> None:
         """Record this resource and its version as a dependency of the current reader."""
-        consumer = _CONSUMER.get()
+        consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is None or consumer is self:
             return
         if isinstance(consumer, _Load) and consumer.owner is self:
@@ -503,7 +497,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
         # The active load tracks its own dependencies. Retire the old value's dependencies
         # so they do not remain subscribed after this generation installs its result.
         self.sources = {}
-        consumer = _CONSUMER.set(load)
+        consumer = _DEPENDENCY_COLLECTOR.set(load)
         try:
             try:
                 # A sentinel rather than a flag, so the abandoned branch below is the one place
@@ -539,7 +533,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
                 else:
                     self._emit_generation("superseded", generation)
         finally:
-            _CONSUMER.reset(consumer)
+            _DEPENDENCY_COLLECTOR.reset(consumer)
             if self._loading is load:
                 self._loading = None
         return self._status

@@ -55,16 +55,7 @@ from squid_reactivity.topics import (
     TopicName,
     watch,
 )
-from squid_reactivity.tracking import (
-    Dependencies,
-    addresses,
-    capture_reads,
-    observe_reads,
-    read_only,
-    relaxed_read,
-    strong_read,
-    untracked,
-)
+from squid_reactivity.tracking import Dependencies, addresses, capture_reads, observe_reads, untracked
 from squid_reactivity.transaction_context import (
     ActorRef,
     CausalRef,
@@ -86,6 +77,7 @@ from squid_reactivity.transaction_results import (
     TransactionResult,
     TransactionRollback,
 )
+from squid_reactivity.transaction_state import read_only, relaxed_read, strong_read
 from squid_reactivity.transactions import (
     CellPatch,
     CellPatchSet,

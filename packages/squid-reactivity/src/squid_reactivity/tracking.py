@@ -1,156 +1,21 @@
-"""Track versioned dependencies and the read context shared by reactive consumers.
+"""Capture dependencies and check whether a computation's inputs are still current.
 
-Cells consult the active transaction's overlay, while computed values and async
-resources collect their sources through the same consumer context. This module
-owns those contexts and invalidation epochs; transaction publication and model
-descriptors live in their respective modules.
+Computed values, resources, and renders share a dependency collector. Cycle detection
+and invalidation epochs support evaluation; cells and transaction rules live separately.
 """
 
-import asyncio
-import uuid
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from squid_reactivity.addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
+from squid_reactivity.addresses import CellAddress
+from squid_reactivity.errors import ReactiveCycleError
+from squid_reactivity.transaction_state import read_only
 
 if TYPE_CHECKING:
     from squid_reactivity.topics import Topic
-    from squid_reactivity.transactions import _Transaction
-
-from squid_reactivity.errors import (
-    ReactiveCycleError,
-    ReactiveWriteError,
-)
-
-_MISSING = object()
-"""A cell that has never been assigned. Distinct from ``None``, which is a real value."""
-
-
-class ReactiveStateOwner(SubscriptionSource, Protocol):
-    """A subscription source whose state participates in commit and rollback.
-
-    State descriptors also require an instance dictionary for cell storage.
-    """
-
-    def _state_changed(self, names: frozenset[str]) -> None: ...
-
-    def _state_rolled_back(self) -> None: ...
-
-
-def _equal(left: object, right: object) -> bool:
-    """Compare values, treating an equality-check failure as a difference."""
-    if left is right:
-        return True
-    try:
-        return bool(left == right)
-    except Exception:
-        return False
-
-
-_CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactivity_transaction", default=None)
-_RELAXED_READS: ContextVar[int] = ContextVar("squid_reactivity_relaxed_reads", default=0)
-_STRONG_READS: ContextVar[int] = ContextVar("squid_reactivity_strong_reads", default=0)
-_INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
-    "squid_reactivity_deterministic_interleaver", default=None
-)
-_INTERLEAVER_USERS: int = 0
-
-
-def _checkpoint(name: str) -> None:
-    if _INTERLEAVER_USERS == 0:
-        return
-    interleaver = _INTERLEAVER.get()
-    if interleaver is not None:
-        interleaver(name)
-
-
-def _current_task() -> object | None:
-    """Return the current asyncio task, or None when no event loop is running."""
-    try:
-        return asyncio.current_task()
-    except RuntimeError:
-        return None
-
-
-def _active() -> _Transaction | None:
-    """Return the open transaction used for reads, ignoring a finished context.
-
-    A child task may retain a transaction after its context exits. Reads then
-    use committed state, while writes through that context are rejected.
-    """
-    current = _CURRENT.get()
-    return None if current is None or current.closed else current
-
-
-class _Cell:
-    """Store one field's value, version, and optional publication address.
-
-    Reactive fields, including component fields, have CellAddress values. Topics
-    use cells with Topic addresses and no payload. Addressed reads can
-    be checked for conflicts and collected as render subscriptions.
-    """
-
-    __slots__ = ("__weakref__", "address", "identity", "value", "version")
-
-    def __init__(self, value: Any = _MISSING, version: int = 0, address: Topic | CellAddress | None = None) -> None:
-        self.identity = uuid.uuid7()
-        self.value = value
-        self.version = version
-        self.address = address
-
-    def dependencies(self) -> tuple[_ReactiveSource, ...]:
-        return ()
-
-    def settle(self) -> int:
-        """Return the version a reader should compare against. A cell is always settled."""
-        current = _active()
-        if current is not None:
-            entry = current.staged(self)
-            if entry is not None:
-                return entry.version
-        return self.version
-
-    def track(self, version: int) -> None:
-        """Record a read of this cell at `version` with whatever is consuming it."""
-        consumer = _CONSUMER.get()
-        if consumer is not None:
-            consumer.sources[self] = version
-
-    def read(self) -> Any:
-        """Return the value this reader should see, staged write included, and record it."""
-        current = _active()
-        if current is not None:
-            entry = current.staged(self)
-            if entry is not None:
-                # A staged read does not observe committed state, so it adds no
-                # commit-time version precondition.
-                self.track(entry.version)
-                return entry.value
-            if self.address is not None and _RELAXED_READS.get() == 0:
-                current.observe(self, strong=_STRONG_READS.get() > 0)
-        self.track(self.version)
-        return self.value
-
-    def write(self, value: Any) -> None:
-        self.value = value
-        self.touch()
-
-    def touch(self) -> None:
-        """Advance the version without replacing the value."""
-        self.version += 1
-        _bump_epoch()
-
-
-def _staged_value(cell: _Cell) -> Any:
-    """This action's pending value for `cell`, or `_MISSING` if it has not written one."""
-    current = _active()
-    if current is None:
-        return _MISSING
-    entry = current.staged(cell)
-    return _MISSING if entry is None else entry.value
 
 
 class _ReactiveSource(Protocol):
@@ -168,43 +33,23 @@ class _ReactiveSource(Protocol):
     def settle(self) -> int: ...
 
 
-class _Consumer(Protocol):
+class _DependencyCollector(Protocol):
     """Collect dependencies read by a computed value, resource load, or render."""
 
     sources: dict[_ReactiveSource, int]
 
 
-_CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_reactivity_consumer", default=None)
+_DEPENDENCY_COLLECTOR: ContextVar[_DependencyCollector | None] = ContextVar("squid_reactivity_consumer", default=None)
 
 
-class _Signal:
-    """Observe framework-managed changes that do not belong to an action transaction.
-
-    Operation progress and history bookkeeping publish immediately. Keeping their
-    versions in the ordinary dependency graph makes computed values and renders
-    follow them without assigning either a component owner.
-    """
-
-    def __init__(self) -> None:
-        self._reactive_subscribers: SubscriberRegistry = {}
-        self.address = CellAddress(self, "revision")
-        self.version = 0
-
-    def track(self) -> None:
-        consumer = _CONSUMER.get()
-        if consumer is not None:
-            consumer.sources[self] = self.version
-
-    def dependencies(self) -> tuple[_ReactiveSource, ...]:
-        return ()
-
-    def settle(self) -> int:
-        return self.version
-
-    def notify(self) -> None:
-        self.version += 1
-        _bump_epoch()
-        publish(self.address)
+def _equal(left: object, right: object) -> bool:
+    """Compare values, treating an equality-check failure as a difference."""
+    if left is right:
+        return True
+    try:
+        return bool(left == right)
+    except Exception:
+        return False
 
 
 class _SettlingNode(Protocol):
@@ -245,31 +90,6 @@ def settling(node: _SettlingNode) -> Iterator[None]:
         yield
 
 
-_READ_ONLY: ContextVar[object | None] = ContextVar("squid_reactivity_read_only", default=None)
-
-
-@contextmanager
-def read_only() -> Iterator[None]:
-    """Reject reactive writes, except initialization of objects created in this scope.
-
-    Nested scopes cannot initialize objects belonging to an outer scope. Dependency
-    capture is independent: use capture_reads() to collect reads as well.
-    """
-    with _READ_ONLY.set(object()):
-        yield
-
-
-def _check_write(owner: ReactiveStateOwner, name: str) -> None:
-    scope = _READ_ONLY.get()
-    if scope is not None and owner.__dict__.get("_reactive_initialization") is not scope:
-        message = (
-            f"{type(owner).__name__}.{name} was written during a read-only computation. "
-            "Initialize defaults with state(factory=...), derive values with computed, "
-            "and update existing state outside the computation."
-        )
-        raise ReactiveWriteError(message)
-
-
 _EPOCH = 0
 """Advance when state is staged, published, restored, or invalidated.
 
@@ -290,32 +110,7 @@ def untracked() -> Iterator[None]:
     handlers already run outside any consumer, so this is for a computed that deliberately
     samples something it does not want to recompute for.
     """
-    with _CONSUMER.set(None):
-        yield
-
-
-@contextmanager
-def relaxed_read() -> Iterator[None]:
-    """Read reactive state without adding a commit-time consistency precondition.
-
-    Only reads a precondition would otherwise cover are affected: a cell this action also
-    writes, and any read taken inside :func:`strong_read`. Unlike :func:`untracked`, this
-    does not change reactive dependency tracking.
-    """
-    with _RELAXED_READS.set(_RELAXED_READS.get() + 1):
-        yield
-
-
-@contextmanager
-def strong_read() -> Iterator[None]:
-    """Require every reactive read taken inside to still hold its version at commit.
-
-    The upgrade an action opts into when it branches on reactive state it does not write --
-    read A, write B, and by default nothing says A was still true. Wrap the whole handler
-    body to make one action serializable over what it read; wrap one read to guard just that
-    one. :func:`relaxed_read` nested inside opts a read back out.
-    """
-    with _STRONG_READS.set(_STRONG_READS.get() + 1):
+    with _DEPENDENCY_COLLECTOR.set(None):
         yield
 
 
@@ -373,7 +168,7 @@ def capture_reads() -> Iterator[Dependencies]:
     direct dependencies; their upstream notification addresses are resolved on demand.
     """
     dependencies = Dependencies()
-    with _CONSUMER.set(dependencies):
+    with _DEPENDENCY_COLLECTOR.set(dependencies):
         yield dependencies
 
 

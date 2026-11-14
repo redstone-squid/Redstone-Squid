@@ -14,23 +14,17 @@ from typing import Any, ClassVar, Self, overload, override
 
 import squid_reactivity.tracking as tracking
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
-from squid_reactivity.tracking import (
-    _CONSUMER,
-    _CURRENT,
-    _MISSING,
+from squid_reactivity.cells import _MISSING, _Cell, _staged_value
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _equal, _ReactiveSource, settling, untracked
+from squid_reactivity.transaction_state import (
+    _CURRENT_TRANSACTION,
     _READ_ONLY,
     _RELAXED_READS,
     _STRONG_READS,
     ReactiveStateOwner,
     _active,
-    _Cell,
     _check_write,
-    _equal,
-    _ReactiveSource,
-    _staged_value,
     read_only,
-    settling,
-    untracked,
 )
 from squid_reactivity.transactions import (
     _write,
@@ -414,7 +408,7 @@ class _Derived:
         self._settled = False
         self._epoch = -1
         self.sources = {}
-        with _CONSUMER.set(self), settling(self), read_only():
+        with _DEPENDENCY_COLLECTOR.set(self), settling(self), read_only():
             value = self._function(self.owner)
         self._settled = True
         self._view = view
@@ -433,7 +427,7 @@ class _Derived:
 
     def read(self) -> Any:
         self.settle()
-        consumer = _CONSUMER.get()
+        consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = self.version
         return self.value
@@ -542,7 +536,7 @@ class Reactive:
         object.__setattr__(instance, "_reactive_subscribers", {})
         object.__setattr__(instance, "_reactive_commit_listeners", set())
         object.__setattr__(instance, "_reactive_initialization", _READ_ONLY.get())
-        if current := _CURRENT.get():
+        if current := _CURRENT_TRANSACTION.get():
             current.note_born(instance)
         return instance
 

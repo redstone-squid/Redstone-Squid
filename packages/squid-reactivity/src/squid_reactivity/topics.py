@@ -7,9 +7,7 @@ from typing import Any, Protocol, override, runtime_checkable
 from weakref import WeakValueDictionary
 
 from squid_reactivity.addresses import CellAddress
-from squid_reactivity.tracking import (
-    _Cell,
-)
+from squid_reactivity.cells import _Cell
 
 logger = logging.getLogger(__name__)
 
