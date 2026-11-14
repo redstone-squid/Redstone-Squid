@@ -415,7 +415,7 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
             await asyncio.sleep(0)
         assert screen._updates.changed.pending
         assert screen._updates._shown != tuple(report.id for report in screen._operations.reports)
-        await screen._updates.changed._load()
+        await screen._updates.changed.resolve()
         assert screen._updates.changed.value is True
         view = commit_render(root)
         text = "\n".join(_texts(view))

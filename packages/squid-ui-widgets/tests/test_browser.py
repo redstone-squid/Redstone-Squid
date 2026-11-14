@@ -51,13 +51,13 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
     # Drive the semantic picker; adapters may lower its options into separate buttons.
     await engine.choose(browser, "browser.open", "a")
 
-    await browser._detail._load()
+    await browser._detail.resolve()
     assert browser.opened == Entry("a", "A")
     assert built == ["a"], "one detail per open, not one per render"
 
-    await browser._detail._load()
+    await browser._detail.resolve()
     await engine.press(browser, "browser.item-next")
-    await browser._detail._load()
+    await browser._detail.resolve()
 
     assert browser.opened == Entry("b", "B")
     assert built == ["a", "b"]
@@ -139,7 +139,7 @@ async def test_stepping_between_items_follows_the_list_order_in_time() -> None:
     browser.session.replace(loaded)
 
     await engine.choose(browser, "browser.open", "a")
-    await browser._detail._load()
+    await browser._detail.resolve()
     tree = engine.render_tree(browser)
 
     assert engine.labels(engine.find(tree, sl.semantic.ActionControl, key="browser.item-previous")) == ["Older"]
@@ -152,7 +152,7 @@ async def test_a_single_item_has_no_step_buttons() -> None:
     browser.session.replace(loaded)
 
     await engine.choose(browser, "browser.open", "a")
-    await browser._detail._load()
+    await browser._detail.resolve()
 
     tree = engine.render_tree(browser)
     assert not {"browser.item-previous", "browser.item-next"} & set(engine.keys(tree))

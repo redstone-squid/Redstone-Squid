@@ -14,7 +14,9 @@ class AsyncBinding(Protocol):
     @property
     def pending(self) -> bool: ...
 
-    async def _load(self) -> object: ...
+    async def resolve(self) -> object:
+        """Start or join work and return its status instead of unwrapping its value."""
+        ...
 
 
 class _Execution[StatusT]:

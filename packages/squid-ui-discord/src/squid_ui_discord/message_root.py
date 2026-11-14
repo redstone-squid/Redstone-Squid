@@ -1435,11 +1435,11 @@ class MessageRoot[
         """
         with abandon_superseded_loads(anyio.CancelScope):
             if len(resources) == 1:
-                await resources[0]._load()
+                await resources[0].resolve()
                 return
             async with anyio.create_task_group() as tasks:
                 for resource in resources:
-                    tasks.start_soon(resource._load)
+                    tasks.start_soon(resource.resolve)
 
     async def _settle_visible(
         self,

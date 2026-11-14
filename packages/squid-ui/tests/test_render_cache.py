@@ -153,7 +153,7 @@ async def test_new_atomic_resource_suspends_without_accepting_an_old_render(nest
     assert pending.async_bindings == (detail.content,)
     with pytest.raises(ui.errors.LayoutInvariantError, match="discovery"):
         runtime.commit(pending)
-    await detail.content._load()
+    await detail.content.resolve()
     ready = runtime.render(reuse_committed=True)
     assert not ready.suspended
     assert testing.texts(ready.nodes) == ["detail"]
@@ -182,7 +182,7 @@ async def test_initial_atomic_suspension_reuses_completed_ancestor_render() -> N
     root = CountingRoot(detail)
     runtime = ComponentRuntime(root)
     assert runtime.render(reuse_committed=True).suspended
-    await detail.content._load()
+    await detail.content.resolve()
     ready = runtime.render(reuse_committed=True)
     assert testing.texts(ready.nodes) == ["detail"]
     assert root.renders == 1
@@ -209,7 +209,7 @@ async def test_suspended_full_render_cannot_backdate_completed_siblings_to_old_c
     detail.shown = True
     runtime.invalidate()
     assert runtime.render(reuse_committed=True).suspended
-    await detail.content._load()
+    await detail.content.resolve()
     ready = runtime.render(reuse_committed=True)
     assert testing.texts(ready.nodes) == ["1", "detail"]
     runtime.commit(ready)

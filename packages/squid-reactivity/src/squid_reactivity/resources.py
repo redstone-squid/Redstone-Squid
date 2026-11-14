@@ -353,7 +353,7 @@ class Resource[ValueT](AsyncBinding):
         """Mark the resource pending when any dependency version changes.
 
         Dependencies are checked on read rather than at commit. Recursive checks
-        stop at this resource while it is already checking; _load detects and
+        stop at this resource while it is already checking; resolve detects and
         reports dependency cycles when a loader runs.
         """
         if self._rechecking:
@@ -451,7 +451,7 @@ class Resource[ValueT](AsyncBinding):
     async def _awaited(self) -> ValueT:
         self._recheck()
         if isinstance(self._status, Pending):
-            await self._load()
+            await self.resolve()
         # Tracked after settling, never before: recording the version this resource held
         # while still pending would leave the caller stale against the value it just waited
         # for, and re-pend it the moment anyone looked.
@@ -467,11 +467,11 @@ class Resource[ValueT](AsyncBinding):
     async def reload(self) -> ResourceStatus[ValueT]:
         """Request and settle a fresh value under the caller's task."""
         self._invalidate(notify=True)
-        return await self._load()
+        return await self.resolve()
 
     @override
-    async def _load(self) -> ResourceStatus[ValueT]:
-        """Load the current pending generation, joining an existing load when possible.
+    async def resolve(self) -> ResourceStatus[ValueT]:
+        """Load or join the current pending generation and return its status.
 
         Use _status internally to avoid tracking the resource's pending version as
         a dependency of its caller. _awaited records the read after loading finishes.
@@ -609,7 +609,7 @@ class AtomicResource[ValueT](Resource[ValueT]):
     @override
     async def reload(self) -> AtomicResourceStatus[ValueT]:
         self._invalidate(notify=True)
-        status = await self._load()
+        status = await self.resolve()
         if isinstance(status, Pending):
             message = f"atomic resource {self._label!r} did not settle"
             raise ResourceNotReadyError(message)

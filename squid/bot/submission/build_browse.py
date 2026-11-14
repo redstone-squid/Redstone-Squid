@@ -677,9 +677,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         # Prepare the detail before a modal switches views. The parent keeps its own
         # collection and focus while this explicitly opened child browses by build ID.
-        await browser._detail._load()
+        await browser._detail.resolve()
         detail = cast(_BuildDetail, browser._detail.value)
-        await detail.projection._load()
+        await detail.projection.resolve()
         self._selected = browser
 
     async def _open_id(self, event: sl.SubmitEvent) -> None:

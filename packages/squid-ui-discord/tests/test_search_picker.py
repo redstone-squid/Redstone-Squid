@@ -156,7 +156,7 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
     await lookup._searched(submit_event({"query": "old"}))
     async with anyio.create_task_group() as tasks:
         assert lookup.session is not None and lookup.session.operation is not None
-        tasks.start_soon(lookup.session.operation._load)
+        tasks.start_soon(lookup.session.operation.resolve)
         await entered["old"].wait()
         await lookup._searched(submit_event({"query": "new"}))
         tasks.start_soon(settle_new)

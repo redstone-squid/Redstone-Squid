@@ -122,7 +122,7 @@ async def test_every_transition_moves_the_version() -> None:
     panel.build.invalidate()
     versions.append(panel.build.version)
 
-    await panel.build._load()
+    await panel.build.resolve()
     versions.append(panel.build.version)
 
     panel.build.replace("edited")

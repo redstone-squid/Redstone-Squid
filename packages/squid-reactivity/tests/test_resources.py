@@ -167,10 +167,10 @@ async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads(
 
     owner = Mixer()
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(owner.value._load)
+        tasks.start_soon(owner.value.resolve)
         await asyncio.sleep(0)
         owner.value.invalidate()
-        tasks.start_soon(owner.value._load)
+        tasks.start_soon(owner.value.resolve)
         await asyncio.sleep(0)
         released.set()
 
@@ -210,10 +210,10 @@ async def test_an_installed_scope_abandons_a_superseded_load() -> None:
     with observe_events(ledger):
         with abandon_superseded_loads(anyio.CancelScope):
             async with anyio.create_task_group() as tasks:
-                tasks.start_soon(owner.value._load)
+                tasks.start_soon(owner.value.resolve)
                 await asyncio.sleep(0)
                 owner.value.invalidate()
-                tasks.start_soon(owner.value._load)
+                tasks.start_soon(owner.value.resolve)
 
         assert owner.value.status == Ready("attempt-2")
         assert owner.attempts == 2
@@ -231,10 +231,10 @@ async def test_a_superseded_load_runs_to_completion_without_an_installed_scope()
     ledger = EventLedger()
     with observe_events(ledger):
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(owner.value._load)
+            tasks.start_soon(owner.value.resolve)
             await asyncio.sleep(0)
             owner.value.invalidate()
-            tasks.start_soon(owner.value._load)
+            tasks.start_soon(owner.value.resolve)
             await asyncio.sleep(0)
             owner.released.set()
 
@@ -251,7 +251,7 @@ async def test_replacing_a_resource_abandons_the_load_it_supersedes() -> None:
 
     with abandon_superseded_loads(anyio.CancelScope):
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(owner.value._load)
+            tasks.start_soon(owner.value.resolve)
             await asyncio.sleep(0)
             owner.value.replace("authoritative")
 

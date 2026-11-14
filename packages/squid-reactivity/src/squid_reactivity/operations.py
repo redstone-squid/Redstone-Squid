@@ -152,7 +152,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
 
     async def _awaited(self) -> ValueT:
         try:
-            await self._load()
+            await self.resolve()
         finally:
             # Track the outcome, not the transient progress seen before awaiting.
             self._signal.track()
@@ -168,7 +168,8 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
                 raise RuntimeError(message)
 
     @override
-    async def _load(self) -> OperationStatus[ValueT, ProgressT]:
+    async def resolve(self) -> OperationStatus[ValueT, ProgressT]:
+        """Run or join this execution and return its status instead of unwrapping its value."""
         with settling(self):
             return await self._execution.run(self._execute, lambda: self._status)
 
