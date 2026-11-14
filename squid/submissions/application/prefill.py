@@ -9,10 +9,11 @@ reported for review, while the original BuildDraft remains available to callers.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from squid.builds.domain import BuildDraft, UnresolvedTaxonomy
+from squid.builds.domain import RESTRICTION_FIELDS, BuildDraft, UnresolvedTaxonomy
 from squid.core.errors import JSONValue
 from squid.submissions.application.forms import SubmissionFormService
 from squid.submissions.domain import ChoiceOption, FormManifest, SubmissionOrigin, match_choice
+from squid.submissions.domain.finalization import RESTRICTION_PROPOSAL_FIELDS
 from squid.submissions.domain.links import LINK_FIELDS
 
 
@@ -107,19 +108,29 @@ def project_submission(
     # Names the taxonomy could not resolve still go through the catalog match below, so they become
     # proposals and reach the finalized build as unresolved names instead of disappearing.
     unresolved_taxonomy = UnresolvedTaxonomy.read(source.extra_info)
-    restrictions = [
-        *source.wiring_placement_restrictions,
-        *source.animated_restrictions,
-        *source.component_restrictions,
-        *source.miscellaneous_restrictions,
-        *unresolved_taxonomy.restriction_names(),
-    ]
+    restrictions = UnresolvedTaxonomy().add(
+        restrictions=[
+            *((field, name) for field in RESTRICTION_FIELDS for name in getattr(source, field)),
+            *unresolved_taxonomy.restrictions,
+        ]
+    )
+    proposal_fields = {value: key for key, value in RESTRICTION_PROPOSAL_FIELDS.items()}
+    for field, name in restrictions.restrictions:
+        key = match_choice(name, options.get("approved_restrictions", ()))
+        destination = (
+            "restrictions"
+            if key is not None
+            else proposal_fields.get(field, "restriction_proposals")
+            if manifest.revision >= 7
+            else "restriction_proposals"
+        )
+        current = answers.setdefault(destination, [])
+        assert isinstance(current, list)
+        if (value := key if key is not None else name) not in current:
+            current.append(value)
     patterns = [*source.patterns, *unresolved_taxonomy.patterns]
     unresolved: list[str] = []
-    for field_id, proposed_id, names, catalog in (
-        ("restrictions", "restriction_proposals", restrictions, "approved_restrictions"),
-        ("patterns", "pattern_proposals", patterns, "approved_patterns"),
-    ):
+    for field_id, proposed_id, names, catalog in (("patterns", "pattern_proposals", patterns, "approved_patterns"),):
         if not names:
             continue
         known: list[JSONValue] = []

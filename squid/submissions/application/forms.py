@@ -37,8 +37,8 @@ from squid_i18n import Text, localization_scope
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
 # Older revisions remain immutable for pinned drafts and queued submissions.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 6
-_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6})
+CURRENT_SUBMISSION_SCHEMA_REVISION = 7
+_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6, 7})
 
 
 class FormManifestRegistry(Protocol):
@@ -328,6 +328,36 @@ def _build_form_manifest(revision: int) -> FormManifest:
                     required_capability="repeatable_text",
                     # A saved build's unmatched names are listed by the editor instead.
                     purposes=_SUBMIT_ONLY,
+                ),
+                *(
+                    tuple(
+                        FormField(
+                            id=field_id,
+                            label=localize(label),
+                            control=ControlKind.TEXT,
+                            value_kind=ValueKind.STRING_LIST,
+                            repeatable=True,
+                            constraints=FieldConstraints(max_length=200, max_items=40),
+                            required_capability="repeatable_text",
+                            purposes=_SUBMIT_ONLY,
+                        )
+                        for field_id, label in (
+                            (
+                                "wiring_restriction_proposals",
+                                tr(t"submissions-propose-wiring-restrictions = Other wiring restrictions"),
+                            ),
+                            (
+                                "animation_restriction_proposals",
+                                tr(t"submissions-propose-animation-restrictions = Other animation restrictions"),
+                            ),
+                            (
+                                "component_restriction_proposals",
+                                tr(t"submissions-propose-component-restrictions = Other component restrictions"),
+                            ),
+                        )
+                    )
+                    if revision >= 7
+                    else ()
                 ),
                 FormField(
                     id="showcase_tags",

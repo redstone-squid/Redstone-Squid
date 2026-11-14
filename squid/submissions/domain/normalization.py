@@ -10,6 +10,7 @@ from squid.core.errors import InvalidStateError, JSONValue
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.domain.finalization import (
+    RESTRICTION_PROPOSAL_FIELDS,
     DoorOrientation,
     DoorSubmissionDetails,
     DoorTiming,
@@ -113,6 +114,11 @@ def normalize_submission(
             restriction_keys=_string_tuple(answers, "restrictions"),
             restriction_proposals=_string_tuple(answers, "restriction_proposals"),
             showcase_tag_keys=_string_tuple(answers, "showcase_tags"),
+            restriction_proposal_fields=tuple(
+                (field, name)
+                for field_id, field in RESTRICTION_PROPOSAL_FIELDS.items()
+                for name in _string_tuple(answers, field_id)
+            ),
         ),
         schematic_policy=policy,
         completion=_optional_str(answers, "completion"),

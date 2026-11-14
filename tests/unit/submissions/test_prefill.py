@@ -1,10 +1,14 @@
 """Inference prefill cannot fabricate required facts or promote unknown taxonomy."""
 
+from uuid import uuid4
+
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.builds.models import BuildLink
 from squid.submissions.application.forms import build_submission_manifest
 from squid.submissions.application.prefill import project_submission
-from squid.submissions.domain import ChoiceOption, SubmissionOrigin
+from squid.submissions.domain import ChoiceOption, DraftSnapshot, SubmissionOrigin
+from squid.submissions.domain.finalization import SubmissionArtifactReadiness
+from squid.submissions.domain.normalization import normalize_submission
 
 
 def test_missing_category_is_retained_for_correction() -> None:
@@ -101,7 +105,7 @@ def test_names_inference_could_not_resolve_become_proposals() -> None:
         origin=SubmissionOrigin.DISCORD,
     )
     assert result.answers["restrictions"] == ["observerless"]
-    assert result.answers["restriction_proposals"] == ["Floating wires"]
+    assert result.answers["wiring_restriction_proposals"] == ["Floating wires"]
     assert result.answers["patterns"] == ["regular"]
     assert result.answers["pattern_proposals"] == ["Spiral"]
 
@@ -121,3 +125,33 @@ def test_external_links_are_form_answers_in_revision_six_and_remain_references_o
     assert result.answers["world_download_urls"] == ["https://example.test/world.zip"]
     old = project_submission(source, build_submission_manifest(revision=5), {}, origin=SubmissionOrigin.DISCORD)
     assert {"image_urls", "video_urls", "world_download_urls"}.isdisjoint(old.answers)
+
+
+def test_unknown_restrictions_retain_their_categories_through_normalization() -> None:
+    source = BuildDraft(
+        category=BuildCategory.DOOR,
+        extra_info={
+            "unknown_restrictions": {
+                "wiring_placement_restrictions": ["Seamless"],
+                "animated_restrictions": ["Full Sync"],
+                "component_restrictions": ["Contained"],
+                "miscellaneous_restrictions": ["Other"],
+            }
+        },
+    )
+    manifest = build_submission_manifest()
+    projected = project_submission(source, manifest, {}, origin=SubmissionOrigin.DISCORD)
+    assert projected.unresolved == ()
+    answers = manifest.apply_defaults("door", projected.answers, origin=SubmissionOrigin.DISCORD)
+    snapshot = DraftSnapshot(uuid4(), 1, manifest.schema_id, manifest.revision, "door", answers=answers)
+    normalized = normalize_submission(
+        snapshot, answers, SubmissionArtifactReadiness(), None, origin=SubmissionOrigin.DISCORD
+    )
+    assert normalized.taxonomy.restriction_proposal_fields == (
+        ("wiring_placement_restrictions", "Seamless"),
+        ("animated_restrictions", "Full Sync"),
+        ("component_restrictions", "Contained"),
+    )
+    assert normalized.taxonomy.restriction_proposals == ("Other",)
+    old = project_submission(source, build_submission_manifest(revision=6), {}, origin=SubmissionOrigin.DISCORD)
+    assert old.answers["restriction_proposals"] == ["Seamless", "Full Sync", "Contained", "Other"]

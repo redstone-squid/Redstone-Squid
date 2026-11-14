@@ -1,11 +1,13 @@
 """Strict serialization for versioned durable finalization payloads."""
 
+from dataclasses import replace
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
+from squid.builds.domain import RestrictionField
 from squid.builds.domain.credits import Credit, CreditAttribution, name_credits
 from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import DataIntegrityError, JSONValue
@@ -224,6 +226,9 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
     def _links(self) -> tuple[SubmissionLink, ...]:
         return ()
 
+    def _taxonomy(self) -> SubmissionTaxonomy:
+        return self.taxonomy.to_domain()
+
     def _to_domain(
         self,
         *,
@@ -245,7 +250,7 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
             capture_dimensions=self.capture_dimensions.to_domain(),
             source_version=self.source_version,
             version_compatibility=self.version_compatibility,
-            taxonomy=self.taxonomy.to_domain(),
+            taxonomy=self._taxonomy(),
             schematic_policy=self.schematic_policy.to_domain(),
             completion=self.completion,
             ai_generated=self.ai_generated,
@@ -312,24 +317,41 @@ class FinalizationPayloadV4(_TypedFinalizationPayload):
     payload_schema: Literal[4]
 
 
-class FinalizationPayloadV5(_TypedFinalizationPayload):
+class _LinkedFinalizationPayload(_TypedFinalizationPayload):
+    links: list[_LinkPayload]
+
+    def _links(self) -> tuple[SubmissionLink, ...]:
+        return tuple(link.to_domain() for link in self.links)
+
+
+class FinalizationPayloadV5(_LinkedFinalizationPayload):
     """Typed credits and external media references, independent of uploaded artifacts."""
 
     payload_schema: Literal[5]
-    links: list[_LinkPayload]
-
-    def _links(self) -> tuple[SubmissionLink, ...]:
-        return tuple(link.to_domain() for link in self.links)
 
 
-class FinalizationPayloadV6(_TypedFinalizationPayload):
+class FinalizationPayloadV6(_LinkedFinalizationPayload):
     """Expandable-door source facts alongside typed credits and links."""
 
     payload_schema: Literal[6]
-    links: list[_LinkPayload]
 
-    def _links(self) -> tuple[SubmissionLink, ...]:
-        return tuple(link.to_domain() for link in self.links)
+
+class _RestrictionProposalPayload(_StrictPayloadModel):
+    field: RestrictionField
+    name: str
+
+
+class FinalizationPayloadV7(_LinkedFinalizationPayload):
+    """Categorized restriction proposals, with optional expandable-door source facts."""
+
+    payload_schema: Literal[7]
+    restriction_proposal_fields: list[_RestrictionProposalPayload]
+
+    def _taxonomy(self) -> SubmissionTaxonomy:
+        return replace(
+            self.taxonomy.to_domain(),
+            restriction_proposal_fields=tuple((value.field, value.name) for value in self.restriction_proposal_fields),
+        )
 
 
 type FinalizationPayload = Annotated[
@@ -337,7 +359,8 @@ type FinalizationPayload = Annotated[
     | FinalizationPayloadV3
     | FinalizationPayloadV4
     | FinalizationPayloadV5
-    | FinalizationPayloadV6,
+    | FinalizationPayloadV6
+    | FinalizationPayloadV7,
     Field(discriminator="payload_schema"),
 ]
 
@@ -345,15 +368,19 @@ _PAYLOAD_ADAPTER = TypeAdapter(FinalizationPayload)
 
 
 def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
-    """Choose a payload version that preserves expansion, credits, and links without changing older shapes."""
+    """Preserve expansion and categorized proposals without changing older payload shapes."""
     expandable = isinstance(submission.details, DoorSubmissionDetails) and submission.details.expansion is not None
+    grouped = bool(submission.taxonomy.restriction_proposal_fields)
     typed = (
         expandable
+        or grouped
         or bool(submission.links)
         or any(credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits)
     )
     model_type = (
-        FinalizationPayloadV6
+        FinalizationPayloadV7
+        if grouped
+        else FinalizationPayloadV6
         if expandable
         else FinalizationPayloadV5
         if submission.links
@@ -365,10 +392,17 @@ def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
         document = _submission_document(submission)
         if typed:
             document.update(payload_schema=4, creators=[], credits=[credit.to_json() for credit in submission.credits])
-        if submission.links or expandable:
+        if submission.links or expandable or grouped:
             document.update(
                 payload_schema=6 if expandable else 5,
                 links=[{"url": link.url, "media_type": link.media_type} for link in submission.links],
+            )
+        if grouped:
+            document.update(
+                payload_schema=7,
+                restriction_proposal_fields=[
+                    {"field": field, "name": name} for field, name in submission.taxonomy.restriction_proposal_fields
+                ],
             )
         payload = model_type.model_validate(document)
     except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:

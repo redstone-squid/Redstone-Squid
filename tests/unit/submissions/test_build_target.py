@@ -613,3 +613,27 @@ async def test_unparseable_compatibility_keeps_the_claim_without_failing_the_bui
     assert isinstance(result, Build)
     assert result.versions == []
     assert result.version_spec == "Java unknown"
+
+
+async def test_restriction_categories_survive_durable_payload_and_preparation() -> None:
+    grouped = (
+        ("wiring_placement_restrictions", "Seamless"),
+        ("animated_restrictions", "Full Sync"),
+        ("component_restrictions", "Contained"),
+    )
+    submission = replace(
+        _submission(SubmissionCategory.DOOR),
+        taxonomy=SubmissionTaxonomy(restriction_proposals=("Unclassified",), restriction_proposal_fields=grouped),
+    )
+    payload = encode_submission(submission)
+    assert payload["payload_schema"] == 7
+    restored = decode_submission(payload)
+    assert restored == submission
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)
+    assert isinstance(build, Build)
+    assert build.extra_info["unknown_restrictions"] == {
+        "wiring_placement_restrictions": ["Seamless"],
+        "animated_restrictions": ["Full Sync"],
+        "component_restrictions": ["Contained"],
+        "miscellaneous_restrictions": ["Unclassified"],
+    }

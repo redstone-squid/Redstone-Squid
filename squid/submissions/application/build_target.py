@@ -206,9 +206,11 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     extra_info: dict[str, JSONValue] = {
         "submission_provenance": _submission_provenance(submission),
     }
-    # The form does not ask which kind of restriction a proposal is, so record proposals as miscellaneous.
     UnresolvedTaxonomy().add(
-        restrictions=[("miscellaneous_restrictions", name) for name in submission.taxonomy.restriction_proposals],
+        restrictions=[
+            *submission.taxonomy.restriction_proposal_fields,
+            *(("miscellaneous_restrictions", name) for name in submission.taxonomy.restriction_proposals),
+        ],
         patterns=pattern_proposals,
     ).write(cast(Info, extra_info))
 
