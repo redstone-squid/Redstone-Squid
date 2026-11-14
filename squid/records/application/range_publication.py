@@ -1,5 +1,6 @@
 """Capture immutable inputs, compute outside transactions, and publish complete ranges."""
 
+import logging
 from contextlib import suppress
 from datetime import UTC, datetime
 
@@ -11,7 +12,10 @@ from squid.records.application.published_points import PublishedDoorPoint, publi
 from squid.records.application.range_ports import RangePublicationUnitOfWork
 from squid.records.application.range_snapshots import RangePublication, RangeSnapshotDocument, RangeSource
 from squid.records.application.services import RecordComputationService
+from squid.records.domain.regions import DEFAULT_REGION_LIMITS
 from squid.unit_of_work import UnitOfWorkFactory
+
+logger = logging.getLogger(__name__)
 
 
 class RangePublicationService:
@@ -60,11 +64,23 @@ class RangePublicationService:
         return None if publication is None else published_door_point(publication, width)
 
     async def refresh_registered(self) -> None:
-        """Recompute registered queries before acknowledging the claimed door work."""
+        """Recompute registered queries before acknowledging the claimed door work.
+
+        Every query is attempted. If any fail, the first failure is raised after
+        the rest have run, so the caller retries without one broken query keeping
+        the others stale.
+        """
         async with self._uow_factory() as uow:
             queries = await uow.record_ranges.list_registered()
-        for _, query in queries:
-            await self.publish(query)
+        failures: list[Exception] = []
+        for query_id, query in queries:
+            try:
+                await self.publish(query)
+            except Exception as error:
+                logger.exception("Range query %s failed to refresh", query_id)
+                failures.append(error)
+        if failures:
+            raise failures[0]
 
     async def publish(self, query: DoorRangeQuery) -> RangePublication:
         """Capture and compute a fresh attempt, returning active and latest outcomes."""
@@ -86,6 +102,11 @@ class RangePublicationService:
                     )
                     captured_at = datetime.now(UTC)
                 candidates = self._computation.door_range_candidates(query, sources)
+                if len(candidates) > DEFAULT_REGION_LIMITS.candidates:
+                    # The analyzer would reject these inputs. Snapshots cannot be
+                    # deleted, so do not save one that can never produce a result.
+                    await self._fail(attempt.id, "too_many_sources")
+                    return await self._published(query_id)
                 snapshot = RangeSnapshotDocument(
                     query=query,
                     sources=tuple(RangeSource.from_candidate(s) for s in candidates),
@@ -109,6 +130,9 @@ class RangePublicationService:
             except Exception as error:
                 await self._fail(attempt.id, type(error).__name__)
                 raise
+        return await self._published(query_id)
+
+    async def _published(self, query_id: int) -> RangePublication:
         publication = await self.get(query_id)
         assert publication is not None
         return publication

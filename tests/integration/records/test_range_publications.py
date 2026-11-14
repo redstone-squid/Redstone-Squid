@@ -316,3 +316,64 @@ async def test_registration_deduplicates_and_refresh_preserves_new_queue_work(
         assert set(replacement.claim_tokens).isdisjoint(lease.claim_tokens)
         await uow.commit()
     analyzer.analyze.assert_not_called()
+
+
+async def test_refresh_attempts_every_query_before_reporting_a_failure(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+    )
+    broken = await publisher.register(DoorRangeQuery(height=3))
+    healthy = await publisher.register(DoorRangeQuery(height=4))
+
+    async def analyze(sources: Sequence[CandidateBuild], query: DoorRangeQuery) -> DoorRangeAnalysis:
+        if query.height == 3:
+            raise RuntimeError("worker unavailable")
+        return analyze_door_widths((), height=query.height)
+
+    analyzer.analyze.side_effect = analyze
+    with pytest.raises(RuntimeError, match="worker unavailable"):
+        await publisher.refresh_registered()
+    failed = await publisher.get(broken)
+    refreshed = await publisher.get(healthy)
+    assert failed is not None
+    assert failed.active is None
+    assert failed.latest is not None
+    assert failed.latest.error == "RuntimeError"
+    assert refreshed is not None
+    assert refreshed.active is not None
+
+
+async def test_query_with_too_many_sources_saves_no_snapshot(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    async with build_edit_session(sessions) as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        session.add_all(
+            DoorBuild(
+                submitter_account_id=account.id,
+                submission_status=Status.CONFIRMED,
+                orientation="Door",
+                door_width=width,
+                door_height=3,
+            )
+            for width in range(1, 34)
+        )
+    analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+    )
+    publication = await publisher.publish(DoorRangeQuery(height=3))
+    assert publication.active is None
+    assert publication.latest is not None
+    assert publication.latest.error == "too_many_sources"
+    analyzer.analyze.assert_not_called()
+    async with sessions() as session:
+        assert (await session.execute(select(DoorRangeSnapshot))).scalars().all() == []
