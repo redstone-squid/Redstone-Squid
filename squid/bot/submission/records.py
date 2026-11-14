@@ -9,7 +9,7 @@ service persists the requested category and recomputes its standings.
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import replace
 from functools import partial
-from typing import Literal, Protocol, override
+from typing import TYPE_CHECKING, Literal, Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -22,6 +22,9 @@ from squid.records.application import RebuildSummary, RecordGap, RecordLookupReq
 from squid.records.domain import BuildKind
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 
 class RecordOperations(Protocol):
@@ -164,9 +167,13 @@ class RecordsScreen(sd.Screen):
             if self._version
             else sl.note(tr(t"records-active-version = Using the active version")),
             sl.action_controls(
-                sl.action_control(tr(t"records-choose-version = Choose version"), self._choose_version, key="version"),
                 sl.action_control(
-                    tr(t"records-reset-version = Use active version"), self._reset_version, key="active-version"
+                    tr(t"records-choose-version = Choose version"), sd.on_press(self._choose_version), key="version"
+                ),
+                sl.action_control(
+                    tr(t"records-reset-version = Use active version"),
+                    sd.on_press(self._reset_version),
+                    key="active-version",
                 ),
                 key="version-actions",
             ),
@@ -181,13 +188,13 @@ class RecordsScreen(sd.Screen):
                 self._can_inspect
                 and sl.action_control(
                     tr(t"records-choose-definition = Find definition by name"),
-                    self._choose_definition,
+                    sd.on_press(self._choose_definition),
                     key="definition",
                 ),
                 self._can_inspect
                 and sl.action_control(
                     tr(t"records-choose-restriction = Add category restriction"),
-                    self._choose_restriction,
+                    sd.on_press(self._choose_restriction),
                     key="restriction",
                 ),
                 self._can_inspect
@@ -255,7 +262,7 @@ class RecordsScreen(sd.Screen):
             ),
         )
 
-    async def _choose_version(self, event: sd.PressEvent) -> None:
+    async def _choose_version(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(event, "version_ids", tr(t"records-choose-version = Choose version"), self._version_picked)
 
     async def _version_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
@@ -264,7 +271,7 @@ class RecordsScreen(sd.Screen):
     async def _reset_version(self, _event: sd.PressEvent) -> None:
         self._version = None
 
-    async def _choose_restriction(self, event: sd.PressEvent) -> None:
+    async def _choose_restriction(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
             event,
             "restriction_ids",
@@ -280,7 +287,7 @@ class RecordsScreen(sd.Screen):
         self._restrictions = tuple(item for item in self._restrictions if item.value != value)
         self._build_tabs()
 
-    async def _choose_definition(self, event: sd.PressEvent) -> None:
+    async def _choose_definition(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         version = int(self._version.value) if self._version else None
 
         async def selected(source: sd.ActionEvent, item: Suggestion) -> None:

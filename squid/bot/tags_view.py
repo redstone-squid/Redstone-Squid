@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from functools import partial
-from typing import Protocol, override
+from typing import TYPE_CHECKING, Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -38,6 +38,9 @@ from squid.tags.application.edits import (
 from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_i18n import md_tr
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 
 class TagOperations(Protocol):
@@ -220,7 +223,9 @@ class TagsScreen(sd.Screen):
         return (
             sl.note(self._build_label or (f"Build #{self._build_id}" if self._build_id is not None else "")),
             sl.action_controls(
-                sl.action_control(tr(t"tags-choose-build = Choose build"), self._choose_build, key="choose-build"),
+                sl.action_control(
+                    tr(t"tags-choose-build = Choose build"), sd.on_press(self._choose_build), key="choose-build"
+                ),
                 key="build-actions",
             ),
             self._tabs,
@@ -249,7 +254,7 @@ class TagsScreen(sd.Screen):
             ),
         )
 
-    async def _choose_build(self, event: sd.PressEvent) -> None:
+    async def _choose_build(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(event, "builds", tr(t"tags-choose-build = Choose build"), self._build_picked)
 
     async def _build_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
@@ -315,7 +320,7 @@ class TagsScreen(sd.Screen):
             sl.action_controls(
                 sl.action_control(
                     tr(t"tags-choose-restriction = Choose restriction"),
-                    self._choose_restriction,
+                    sd.on_press(self._choose_restriction),
                     key="choose-restriction",
                 ),
                 key="restriction-actions",
@@ -341,7 +346,7 @@ class TagsScreen(sd.Screen):
             )
         return tuple(nodes)
 
-    async def _choose_restriction(self, event: sd.PressEvent) -> None:
+    async def _choose_restriction(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
             event,
             "approved_restrictions",

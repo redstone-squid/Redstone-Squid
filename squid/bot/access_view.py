@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from functools import partial
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -51,6 +51,9 @@ from squid.permissions.domain.catalogue import (
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
 type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -221,12 +224,12 @@ class AccessScreen(sd.Screen):
                 self._may_grant
                 and sl.action_control(
                     tr(t"access-choose-permission = Choose permission"),
-                    self._choose_permission,
+                    sd.on_press(self._choose_permission),
                     key="choose-permission",
                 ),
                 self._may_manage_roles
                 and sl.action_control(
-                    tr(t"access-choose-role = Choose internal role"), self._choose_role, key="choose-role"
+                    tr(t"access-choose-role = Choose internal role"), sd.on_press(self._choose_role), key="choose-role"
                 ),
                 key="subject-forms",
             )
@@ -259,7 +262,7 @@ class AccessScreen(sd.Screen):
             )
         return tuple(nodes)
 
-    async def _choose_permission(self, event: sd.PressEvent) -> None:
+    async def _choose_permission(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         revision = self._revision
 
         async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
@@ -268,7 +271,7 @@ class AccessScreen(sd.Screen):
 
         await pick(event, "permission_patterns", tr(t"access-choose-permission = Choose permission"), selected)
 
-    async def _choose_role(self, event: sd.PressEvent) -> None:
+    async def _choose_role(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         revision = self._revision
 
         async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
@@ -345,7 +348,9 @@ class AccessScreen(sd.Screen):
                     on_submit=partial(self._rank_selected, role.id, revision),
                 ),
                 *(
-                    sl.action_control(label, partial(self._pick_role_value, role, operation, revision), key=operation)
+                    sl.action_control(
+                        label, sd.on_press(partial(self._pick_role_value, role, operation, revision)), key=operation
+                    )
                     for operation, label in _ROLE_ACTIONS
                     if operation not in {"rank", "delete"}
                 ),
@@ -369,7 +374,9 @@ class AccessScreen(sd.Screen):
             tr(t"access-view-internal-role-updated = Internal role updated."),
         )
 
-    async def _pick_role_value(self, role: PermissionRole, operation: str, revision: int, event: sd.PressEvent) -> None:
+    async def _pick_role_value(
+        self, role: PermissionRole, operation: str, revision: int, event: sd.PressEvent[RedstoneSquid]
+    ) -> None:
         composing = operation in {"compose", "decompose"}
 
         async def selected(source: sd.ActionEvent, item: Suggestion) -> None:

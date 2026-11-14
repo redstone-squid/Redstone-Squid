@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -117,7 +117,7 @@ class LookupScreen(sd.Screen[Suggestion]):
 
 
 async def pick(
-    event: sd.ActionEvent,
+    event: sd.ActionEvent[RedstoneSquid],
     source: str,
     title: sl.TextLike,
     on_pick: PickHandler,
@@ -126,7 +126,7 @@ async def pick(
     context: Mapping[str, str] | None = None,
 ) -> None:
     """Return a selected object through the parent screen's current action context."""
-    request = cast(sd.Request[Any, RedstoneSquid], event.context)
+    request = event.context
     assert request.root is not None
     parent = request.root.component
     assert isinstance(parent, sd.Screen)

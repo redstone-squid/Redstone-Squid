@@ -3,7 +3,7 @@
 import json
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import override
+from typing import TYPE_CHECKING, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -14,6 +14,9 @@ from squid.search.application import SearchService
 from squid.search.application.fields import FieldRegistry
 from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.suggestions.domain import Suggestion
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 VALUE_SOURCES = {
     "creator": "creators",
@@ -96,8 +99,12 @@ class GuidedSearch(sd.Screen[SearchSelection]):
                     key="keywords",
                     on_submit=self._keywords,
                 ),
-                sl.action_control(tr(t"guided-search-add-filter = Choose filter"), self._choose_field, key="field"),
-                sl.action_control(tr(t"guided-search-sort = Choose sorting"), self._choose_sort, key="sort"),
+                sl.action_control(
+                    tr(t"guided-search-add-filter = Choose filter"), sd.on_press(self._choose_field), key="field"
+                ),
+                sl.action_control(
+                    tr(t"guided-search-sort = Choose sorting"), sd.on_press(self._choose_sort), key="sort"
+                ),
                 sl.action_control(tr(t"guided-search-relevance = Use relevance"), self._relevance, key="relevance"),
                 key="search-controls",
             ),
@@ -145,7 +152,7 @@ class GuidedSearch(sd.Screen[SearchSelection]):
                     sl.action_controls(
                         sl.action_control(
                             tr(t"guided-search-choose-value = Choose named value"),
-                            partial(self._choose_value, field),
+                            sd.on_press(partial(self._choose_value, field)),
                             key="choose-value",
                         ),
                         key="value-lookup",
@@ -218,7 +225,7 @@ class GuidedSearch(sd.Screen[SearchSelection]):
     async def _advanced(self, event: sd.SubmitEvent) -> None:
         self.advanced = str(event.values.get("query") or "")
 
-    async def _choose_field(self, event: sd.PressEvent) -> None:
+    async def _choose_field(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
             event,
             "search_fields",
@@ -238,14 +245,14 @@ class GuidedSearch(sd.Screen[SearchSelection]):
             )
         self.selected = field
 
-    async def _choose_value(self, field: FieldDefinition, event: sd.PressEvent) -> None:
+    async def _choose_value(self, field: FieldDefinition, event: sd.PressEvent[RedstoneSquid]) -> None:
         async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
             self.filters = (*self.filters, Filter(field.name, "", item.value))
             self.selected = None
 
         await pick(event, VALUE_SOURCES[field.name], field.name.replace("_", " ").title(), selected)
 
-    async def _choose_sort(self, event: sd.PressEvent) -> None:
+    async def _choose_sort(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
             event,
             "search_sorts",

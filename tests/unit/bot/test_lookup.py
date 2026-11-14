@@ -1,13 +1,15 @@
 """Domain pickers preserve identities, paging, and provider failure semantics."""
 
+from types import SimpleNamespace
 from typing import Any, override
+from unittest.mock import AsyncMock, Mock
 
 import anyio
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.lookup import LookupScreen, SuggestionSource
+from squid.bot.lookup import LookupScreen, SuggestionSource, pick
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
@@ -94,3 +96,32 @@ async def test_lookup_returns_the_selected_identity_only_after_confirmation(conf
         assert parent.value == ("second" if confirm else "")
         assert not ui.root.finished
         assert child.root.finished
+
+
+async def test_pick_opens_child_with_the_event_request() -> None:
+    provider = RecordingProvider((Candidate.create("creator-id", "Creator"),))
+    service = SuggestionService(SuggestionRegistry.of((RegisteredSource("creators", provider),)))
+    parent = Mock(spec=sd.Screen)
+    parent.open_child = AsyncMock()
+    resolve = AsyncMock(return_value=None)
+    request = SimpleNamespace(
+        root=SimpleNamespace(component=parent),
+        client=SimpleNamespace(actors=SimpleNamespace(resolve=resolve), services=SimpleNamespace(suggestions=service)),
+        guild=SimpleNamespace(id=123),
+    )
+    event = Mock(context=request, locale="en-US")
+    on_pick = AsyncMock()
+
+    await pick(event, "creators", "Creator", on_pick, confirm="Follow")
+
+    resolve.assert_awaited_once_with(request)
+    parent.open_child.assert_awaited_once()
+    child = parent.open_child.call_args.args[1]
+    source = child.picker.search("")
+    assert source.request.context == {"guild_id": "123"}
+    assert source.authorizer.request is request
+    assert child.confirm == "Follow"
+    selected = parent.open_child.call_args.kwargs["on_result"]
+    result = Mock(value=Suggestion(value="creator-id", label="Creator", kind="creator"))
+    await selected(result)
+    on_pick.assert_awaited_once_with(result, result.value)

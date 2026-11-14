@@ -35,6 +35,7 @@ from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
     from squid.notifications.application import NotificationService
 
 SESSION_SECONDS = 300
@@ -243,15 +244,16 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
                     maximum=len(self.subscriptions),
                 ),
             )
+        follow_creator: sl.semantic.ActionControl[sd.Request] = sl.action_control(
+            tr(t"bot-notifications-view-follow-creator = Follow creator"),
+            sd.on_press(self._follow_creator),
+            key="follow-creator",
+        )
         actions = sl.action_controls(
-            sl.action_control(
-                tr(t"bot-notifications-view-follow-creator = Follow creator"),
-                self._follow_creator,
-                key="follow-creator",
-            ),
+            follow_creator,
             sl.action_control(
                 tr(t"bot-notifications-view-follow-record = Follow record"),
-                self._follow_record,
+                sd.on_press(self._follow_record),
                 key="follow-record",
             ),
             sl.form(
@@ -275,11 +277,13 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
             sl.note(self.filter_tag.label) if self.filter_tag is not None else sl.note(""),
             sl.action_controls(
                 sl.action_control(
-                    tr(t"notification-choose-tag = Choose filter tag"), self._choose_filter_tag, key="filter-tag"
+                    tr(t"notification-choose-tag = Choose filter tag"),
+                    sd.on_press(self._choose_filter_tag),
+                    key="filter-tag",
                 ),
                 sl.action_control(
                     tr(t"notification-clear-tag = Clear filter tag"),
-                    self._clear_filter_tag,
+                    sd.on_press(self._clear_filter_tag),
                     key="clear-filter-tag",
                     available=self.filter_tag is not None,
                 ),
@@ -349,7 +353,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
             tr(t"notification-history-follow = Follow"),
         )
 
-    async def _follow_creator(self, event: sd.PressEvent) -> None:
+    async def _follow_creator(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
             event,
             "creator_profiles",
@@ -362,7 +366,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         await self._save_follow(kind=SubscriptionKind.CREATOR, subject_id=UUID(item.value))
         await event.notice(tr(t"bot-notifications-view-following-that-creator = Following that creator."))
 
-    async def _follow_record(self, event: sd.PressEvent) -> None:
+    async def _follow_record(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
             event,
             "record_titles",
@@ -376,7 +380,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request])
         await self._save_follow(kind=SubscriptionKind.RECORD, subject_id=UUID(item.value))
         await event.notice(tr(t"bot-notifications-view-following-that-record = Following that record."))
 
-    async def _choose_filter_tag(self, event: sd.PressEvent) -> None:
+    async def _choose_filter_tag(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(event, "showcase_tag_ids", tr(t"notification-choose-tag = Choose filter tag"), self._tag_picked)
 
     async def _tag_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
