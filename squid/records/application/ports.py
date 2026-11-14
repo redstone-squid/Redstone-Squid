@@ -49,6 +49,23 @@ class RecordCandidateRepository(Protocol):
         """
         ...
 
+    async def list_for_door_widths(
+        self,
+        height: int,
+        depth: int,
+        orientation: str,
+        version_id: int | None,
+        *,
+        minimum: int,
+        maximum: int | None,
+    ) -> Sequence[CandidateBuild]:
+        """Read a consistent width population; call first in a fresh unit of work.
+
+        Fixed doors retain their opening dimensions. Families have no fixed
+        opening and still require domain analysis before competing.
+        """
+        ...
+
 
 class PublicBuildSummaryReader(Protocol):
     """Load only build fields approved for public record details."""

@@ -42,23 +42,46 @@ type LookupThreshold = tuple[
 ]
 
 
-class DoorRecordLookup(BaseModel):
-    """One opening and taxonomy category; no version means all confirmed versions.
+class DoorRecordCategory(BaseModel):
+    """A taxonomy category; no version means all confirmed versions.
 
     Type IDs match the complete pattern set; restriction IDs select a subset.
     Parameterized restrictions also require (tag ID, operator, value) thresholds.
-    Dimensions are bounded to PostgreSQL's stored integer coordinate range.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    opening: tuple[LookupDimension, LookupDimension, LookupDimension]
-    base_title: BaseTitle = BaseTitle.SMALLEST
     orientation: DoorOrientationLiteral = "Door"
     type_ids: Annotated[frozenset[LookupTagId], Field(max_length=64)] = frozenset()
     restriction_ids: Annotated[frozenset[LookupTagId], Field(max_length=64)] = frozenset()
     restriction_values: Annotated[tuple[LookupThreshold, ...], Field(max_length=64)] = ()
     version_id: Annotated[int, Field(strict=True, ge=1, le=2**15 - 1)] | None = None
+
+    @model_validator(mode="after")
+    def validate_thresholds(self) -> Self:
+        ids = [tag_id for tag_id, _, _ in self.restriction_values]
+        if len(ids) != len(set(ids)) or not set(ids) <= self.restriction_ids:
+            msg = "Threshold IDs must be unique and included in restriction_ids."
+            raise ValueError(msg)
+        return self
+
+    def identity_for_opening(self, opening: tuple[int, int, int]) -> CategoryIdentity:
+        width, height, depth = opening
+        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
+        types = ",".join(map(str, sorted(self.type_ids)))
+        return CategoryIdentity(
+            BuildKind.DOOR,
+            f"door|{size}|t[{types}]|{self.orientation}",
+            tuple(sorted(self.restriction_ids)),
+            tuple(sorted(self.restriction_values)),
+        )
+
+
+class DoorRecordLookup(DoorRecordCategory):
+    """A concrete opening and title in a taxonomy category."""
+
+    opening: tuple[LookupDimension, LookupDimension, LookupDimension]
+    base_title: BaseTitle = BaseTitle.SMALLEST
 
     @field_validator("opening", mode="before")
     @classmethod
@@ -70,25 +93,9 @@ class DoorRecordLookup(BaseModel):
             raise ValueError(msg)
         return value
 
-    @model_validator(mode="after")
-    def validate_thresholds(self) -> Self:
-        ids = [tag_id for tag_id, _, _ in self.restriction_values]
-        if len(ids) != len(set(ids)) or not set(ids) <= self.restriction_ids:
-            msg = "Threshold IDs must be unique and included in restriction_ids."
-            raise ValueError(msg)
-        return self
-
     @property
     def identity(self) -> CategoryIdentity:
-        width, height, depth = self.opening
-        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
-        types = ",".join(map(str, sorted(self.type_ids)))
-        return CategoryIdentity(
-            BuildKind.DOOR,
-            f"door|{size}|t[{types}]|{self.orientation}",
-            tuple(sorted(self.restriction_ids)),
-            tuple(sorted(self.restriction_values)),
-        )
+        return self.identity_for_opening(self.opening)
 
 
 @dataclass(frozen=True, slots=True)

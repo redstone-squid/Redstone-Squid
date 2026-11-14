@@ -12,6 +12,9 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from itertools import pairwise
 from math import lcm
+from typing import Self
+
+from pydantic import model_validator
 
 from squid.builds.domain.expansion_evaluation import (
     ExpansionDiagnostic,
@@ -31,6 +34,7 @@ from squid.builds.domain.expansion_math import (
     scale_formula,
     substitute_formula,
 )
+from squid.records.application.live import DoorRecordCategory, LookupDimension
 from squid.records.application.models import CandidateBuild
 from squid.records.domain.region_math import (
     ArithmeticBudget,
@@ -52,6 +56,22 @@ from squid.records.domain.regions import (
 
 _VARIABLES = ("width",)
 _WIDTH = Polynomial.create(_VARIABLES, {(1,): Fraction(1)})
+
+
+class DoorWidthLookup(DoorRecordCategory):
+    """A smallest-record query varying width at fixed opening height and depth."""
+
+    height: LookupDimension
+    depth: LookupDimension = 1
+    minimum_width: LookupDimension = 1
+    maximum_width: LookupDimension | None = None
+
+    @model_validator(mode="after")
+    def validate_width_bounds(self) -> Self:
+        if self.maximum_width is not None and self.maximum_width < self.minimum_width:
+            msg = "The maximum width cannot be smaller than the minimum width."
+            raise ValueError(msg)
+        return self
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +106,6 @@ def analyze_door_widths(
     partial awards and includes the configuration responsible when identifiable.
     """
     configurations: list[DoorRegionConfiguration] = []
-    candidates: list[SmallestRegionCandidate] = []
     budget = ArithmeticBudget(limits.arithmetic_steps)
     try:
         query = IntegerProgression(minimum, maximum)
@@ -215,7 +234,13 @@ def _branch_candidate(
             for comparison in _comparisons(branch.domain)
         )
     for left, right in comparisons:
-        periodic.extend(scale_formula(value.expression, Fraction(1, value.modulus or 1)) for value in (left, right))
+        # Plain rational comparisons need sign boundaries, not integral values.
+        # Residue refinement is needed only for rounding and modulo here.
+        periodic.extend(
+            scale_formula(value.expression, Fraction(1, value.modulus or 1))
+            for value in (left, right)
+            if value.modulus is not None or not isinstance(value.expression, Polynomial)
+        )
     period = 1
     for formula in periodic:
         budget.spend()

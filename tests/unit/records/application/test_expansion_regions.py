@@ -7,9 +7,10 @@ from datetime import UTC, datetime
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
-from squid.records.application.expansion_regions import DoorWidthAnalysis, analyze_door_widths
+from squid.records.application.expansion_regions import DoorWidthAnalysis, DoorWidthLookup, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup, evaluate_door_record
 from squid.records.application.models import CandidateBuild
 from squid.records.domain import BuildKind, Candidate, ResolutionStatus
@@ -117,6 +118,7 @@ def test_module_counts_and_coupled_or_rounded_openings(width: str, height: str, 
         "5 < n <= 8 or n > 15",
         "n % 2 = 0",
         "n^2 < 40",
+        "n/1000 < 0.02",
         "not (n < 5 or n > 12)",
         "n % 2 = 0 and (n/2) % 2 = 1",
         "ceil(n/2) % 3 = 1",
@@ -206,3 +208,24 @@ def test_generated_module_mappings_and_progressions(scale: int, offset: int, ste
     ]
     result = analyze_door_widths(sources, height=3, maximum=40)
     assert_points(sources, result, widths=range(1, 41))
+
+
+def test_nonintegral_modulo_operand_remains_unknown_without_a_short_circuit() -> None:
+    sources = [family(branch(domain="(n/2)%2=1"))]
+    result = analyze_door_widths(sources, height=3)
+    assert result.analysis.status is RegionAnalysisStatus.UNSUPPORTED
+    assert result.analysis.regions == ()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"height": 0},
+        {"height": True},
+        {"height": 3, "minimum_width": 7, "maximum_width": 6},
+        {"height": 3, "restriction_values": [[7, "exact", "3"]]},
+    ],
+)
+def test_width_request_validates_dimensions_bounds_and_taxonomy(data: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        DoorWidthLookup.model_validate(data)

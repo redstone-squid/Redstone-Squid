@@ -294,10 +294,36 @@ steps to 50,000. Input bounds and polynomial coefficients use at most 256 bits.
 Exhausting a limit returns `limit_exceeded` with no partial awards. These are
 deterministic work limits, not a substitute for the planned worker isolation.
 
-This compiler does not yet translate raw expansion documents into verified
-region inputs, query live candidates, expose a range API, or publish snapshots.
-Only smallest records in one coordinate are supported. Existing concrete lookup
-continues to handle all five titles and supported multivariate configurations.
+Only smallest records in one varying coordinate are supported. Existing concrete
+lookup continues to handle all five titles and supported multivariate configurations.
+
+### Stored documents and live width queries
+
+`analyze_door_widths` in `squid/records/application/expansion_regions.py` now
+translates stored expansion documents into compiler inputs. At a fixed opening
+height and depth, each affine inverse becomes a polynomial in width. This also
+supports width slices of multidirectional families and coupled openings.
+Substitution preserves floor/ceiling operations and source branch identity.
+
+The adapter partitions wherever opening consistency, parameter integrality,
+bounds, initial steps, repeating steps, or parsed domain comparisons can change.
+Boolean predicates and modulo constraints retain the point evaluator's behavior,
+including short-circuiting around invalid modulo operands. It checks membership
+and volume with the original point evaluator at each partition witness. An
+unknown domain blocks the query with `unsupported`; a provable exclusion does
+not. A narrow query can therefore succeed when a broader query reaches unknown
+sizes. Source-claimed record domains and completion text remain unverified.
+
+`RecordService.lookup_door_widths(DoorWidthLookup(height=3))` reads current
+confirmed families and fixed doors, filters orientation, taxonomy and version,
+and returns smallest-record regions. Optional `minimum_width` and
+`maximum_width` bound the query. The repository retains typed opening dimensions
+for fixed-size exceptions and reads related facts in a read-only repeatable-read
+transaction. The adapter and compiler share one arithmetic work allowance.
+No query creates categories, runs, queue entries or stored region results.
+
+This is an internal backend entry point. A public range API and publication still
+require the planned worker isolation and immutable candidate snapshots.
 
 ## Queries, persistence, and workers
 

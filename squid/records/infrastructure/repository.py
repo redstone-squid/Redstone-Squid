@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 from itertools import pairwise
@@ -115,24 +115,40 @@ class PostgresRecordRepository:
         self, opening: tuple[int, int, int], orientation: str, version_id: int | None
     ) -> Sequence[CandidateBuild]:
         """Load a coherent live population without creating record definitions."""
-        session = self._session()
-        # Tags, versions and timing variants use separate SELECTs. Pin their view
-        # before the first read so concurrent edits cannot mix revisions.
-        await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
         width, height, depth = opening
+        sources = await self.list_for_door_widths(height, depth, orientation, version_id, minimum=width, maximum=width)
+        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
+        return tuple(
+            replace(source, door=replace(source.door, size=size)) for source in sources if source.door is not None
+        )
+
+    async def list_for_door_widths(
+        self,
+        height: int,
+        depth: int,
+        orientation: str,
+        version_id: int | None,
+        *,
+        minimum: int,
+        maximum: int | None,
+    ) -> Sequence[CandidateBuild]:
+        """Read fixed doors in a width interval and all potentially matching families."""
+        session = self._session()
+        # Related facts use separate SELECTs, so pin their view before reading.
+        await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+        fixed_domain = and_(
+            DoorBuild.door_width >= minimum,
+            DoorBuild.door_height == height,
+            func.coalesce(DoorBuild.door_depth, 1) == depth,
+        )
+        if maximum is not None:
+            fixed_domain = and_(fixed_domain, DoorBuild.door_width <= maximum)
         statement = (
             select(DoorBuild)
             .where(
                 DoorBuild.submission_status == Status.CONFIRMED,
                 DoorBuild.orientation == orientation,
-                or_(
-                    DoorBuild.expansion.is_not(None),
-                    and_(
-                        DoorBuild.door_width == width,
-                        DoorBuild.door_height == height,
-                        func.coalesce(DoorBuild.door_depth, 1) == depth,
-                    ),
-                ),
+                or_(DoorBuild.expansion.is_not(None), fixed_domain),
             )
             .options(
                 selectinload(DoorBuild.tags).options(*assignment_units()),
@@ -144,8 +160,10 @@ class PostgresRecordRepository:
             statement = statement.where(DoorBuild.build_versions.any(version_id=version_id))
         doors = tuple((await session.execute(statement)).unique().scalars())
         timings = await _door_timings(session, tuple(door.id for door in doors if door.expansion is None))
-        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
-        return tuple(_door_candidate(door, timings.get(door.id, ()), size=size) for door in doors)
+        return tuple(
+            _door_candidate(door, timings.get(door.id, ()), size="variable" if door.expansion is not None else None)
+            for door in doors
+        )
 
     async def active_rules_revision_id(self) -> int:
         """Return the active rules revision, activating and queuing it when needed."""

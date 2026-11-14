@@ -19051,23 +19051,6 @@
       },
       "DoorRecordLookup": {
         "properties": {
-          "opening": {
-            "prefixItems": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "integer"
-              }
-            ],
-            "type": "array"
-          },
-          "base_title": {
-            "$ref": "#/components/schemas/BaseTitle"
-          },
           "orientation": {
             "type": "string",
             "enum": [
@@ -19133,6 +19116,23 @@
                 "type": "null"
               }
             ]
+          },
+          "opening": {
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "base_title": {
+            "$ref": "#/components/schemas/BaseTitle"
           }
         },
         "type": "object",

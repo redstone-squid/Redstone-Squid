@@ -9,6 +9,7 @@ import pytest
 from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
 from squid.core.errors import DataIntegrityError, ValidationError
+from squid.records.application.expansion_regions import DoorWidthLookup
 from squid.records.application.live import DoorRecordLookup
 from squid.records.application.models import (
     CandidateBuild,
@@ -33,6 +34,7 @@ from squid.records.domain import (
     VersionScope,
 )
 from squid.records.domain.models import FacetKind
+from squid.records.domain.regions import RegionAnalysisStatus
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from tests.support.record_uow import RecordQueryScope, RecordScope
 
@@ -56,6 +58,33 @@ class FakeCandidates:
             and candidate.door.orientation == orientation
             and (candidate.expansion is not None or candidate.door.size == size)
             and (version_id is None or version_id in candidate.version_ids)
+        )
+
+    async def list_for_door_widths(
+        self,
+        height: int,
+        depth: int,
+        orientation: str,
+        version_id: int | None,
+        *,
+        minimum: int,
+        maximum: int | None,
+    ) -> Sequence[CandidateBuild]:
+        return tuple(
+            candidate
+            for candidate in self.candidates
+            if candidate.door is not None
+            and candidate.door.orientation == orientation
+            and (version_id is None or version_id in candidate.version_ids)
+            and (
+                candidate.expansion is not None
+                or (
+                    candidate.door_opening is not None
+                    and candidate.door_opening[1:] == (height, depth)
+                    and candidate.door_opening[0] >= minimum
+                    and (maximum is None or candidate.door_opening[0] <= maximum)
+                )
+            )
         )
 
 
@@ -222,6 +251,7 @@ def _door(
         version_ids=version_ids,
         restrictions=restrictions,
         types=(CandidateFacet(id=20, kind=FacetKind.TYPE, name="Regular"),),
+        door_opening=(2, 2, 1),
         door=DoorCategory(
             wiring_restrictions=(),
             animated_restrictions=(),
@@ -724,3 +754,37 @@ async def test_live_lookup_rejects_incompatible_threshold_without_crashing(thres
         )
     )
     assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
+
+
+async def test_width_lookup_filters_taxonomy_and_versions_without_writes() -> None:
+    fixed = _door(1, volume=1, opening=10, restrictions=())
+    family = replace(
+        fixed,
+        candidate=replace(fixed.candidate, build_id=2),
+        expansion=DoorExpansion(
+            parameters=(
+                ExpansionParameter(
+                    name="n", minimum=1, maximum_kind="unbounded", initial_steps=(), repeating_steps=(1,)
+                ),
+            ),
+            branches=(ExpansionBranch(opening_width="n", opening_height="2", opening_depth="1", volume="10n"),),
+        ),
+    )
+    wrong_version = replace(family, candidate=replace(family.candidate, build_id=3), version_ids=frozenset({4}))
+    wrong_type = replace(family, candidate=replace(family.candidate, build_id=4), types=())
+    candidates = FakeCandidates((fixed, family, wrong_version, wrong_type))
+    runs = FakeRuns()
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
+    result = await service.lookup_door_widths(DoorWidthLookup(height=2, type_ids=frozenset({20}), version_id=3))
+    assert result.analysis.status is RegionAnalysisStatus.EXACT
+    assert [(r.domain.minimum, r.domain.maximum, r.resolution.holder_ids) for r in result.analysis.regions] == [
+        (1, 1, (2,)),
+        (2, 2, (1,)),
+        (3, None, (2,)),
+    ]
+    assert {c.build_id for c in result.configurations} == {1, 2}
+    assert runs.batches == []
+    assert runs.requested == {}
