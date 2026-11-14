@@ -1,5 +1,6 @@
 """Public search domain API."""
 
+from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.search.domain.models import (
     BuildSearchHit,
     MetadataSearchHit,
@@ -31,7 +32,9 @@ __all__ = [
     "BooleanOperator",
     "BuildSearchHit",
     "ComparisonOperator",
+    "FieldDefinition",
     "FieldExpression",
+    "FieldType",
     "MetadataSearchHit",
     "NotExpression",
     "QueryExpression",

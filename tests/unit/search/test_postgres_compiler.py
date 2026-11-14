@@ -5,12 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.search.application import SearchQueryParser
 from squid.search.domain import SearchRequest, SearchScope
-from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler
+from squid.search.infrastructure.compiler import compile_query
 from squid.search.infrastructure.repository import PostgresSearchBackend
 
 
 def _compile(query: str) -> tuple[str, dict[str, object]]:
-    expression = PostgresSearchQueryCompiler().compile(SearchQueryParser().parse(query))
+    expression = compile_query(SearchQueryParser().parse(query))
     compiled = expression.compile(dialect=postgresql.dialect())
     return str(compiled), dict(compiled.params)
 

@@ -246,12 +246,7 @@ class SearchQueryParser:
         if operator is not ComparisonOperator.EQUAL and not field.supports_range:
             _fail(f"{field.name} does not support comparisons", operator_token.position)
         return FieldExpression(
-            field.name,
-            operator,
-            self._coerce(field, value_token),
-            phrase=value_token.kind is _TokenKind.PHRASE,
-            storage_field=field.storage_name,
-            value_type=field.value_type.value if field.storage_name is not None else None,
+            field, operator, self._coerce(field, value_token), phrase=value_token.kind is _TokenKind.PHRASE
         )
 
     def _parse_range(self, field: FieldDefinition) -> FieldExpression:
@@ -262,11 +257,7 @@ class SearchQueryParser:
         upper = self._expect_value()
         self._expect(_TokenKind.RIGHT_BRACKET, "expected ']' after range")
         return FieldExpression(
-            field.name,
-            ComparisonOperator.EQUAL,
-            RangeValue(self._coerce(field, lower), self._coerce(field, upper)),
-            storage_field=field.storage_name,
-            value_type=field.value_type.value if field.storage_name is not None else None,
+            field, ComparisonOperator.EQUAL, RangeValue(self._coerce(field, lower), self._coerce(field, upper))
         )
 
     def _coerce(self, field: FieldDefinition, token: _Token) -> ScalarValue:
@@ -333,7 +324,7 @@ def _render(expression: QueryExpression) -> str:
             ComparisonOperator.GREATER_THAN: ">",
             ComparisonOperator.GREATER_THAN_OR_EQUAL: ">=",
         }[expression.operator]
-        return f"{expression.field}{operator}{value}"
+        return f"{expression.field.name}{operator}{value}"
     if isinstance(expression, NotExpression):
         operand = _render(expression.operand)
         if isinstance(expression.operand, BooleanExpression):

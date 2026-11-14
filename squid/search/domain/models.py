@@ -43,7 +43,7 @@ class SearchSort:
         """Parse `field` as ascending and `-field` as descending.
 
         None selects the default ordering. Empty field names raise ValidationError;
-        whether a named field supports sorting is checked by the backend.
+        whether a named field supports sorting is checked by SearchService.
         """
         if value is None:
             return None

@@ -23,6 +23,12 @@ from squid.search.domain import (
 )
 
 
+def _field(name: str) -> FieldDefinition:
+    field = DEFAULT_FIELD_REGISTRY.resolve(name)
+    assert field is not None
+    return field
+
+
 def test_parser_applies_and_before_or_and_supports_implicit_and() -> None:
     parsed = SearchQueryParser().parse('compact OR title:"seamless door" status:confirmed')
 
@@ -33,8 +39,8 @@ def test_parser_applies_and_before_or_and_supports_implicit_and() -> None:
             BooleanExpression(
                 BooleanOperator.AND,
                 (
-                    FieldExpression("title", ComparisonOperator.EQUAL, "seamless door", phrase=True),
-                    FieldExpression("status", ComparisonOperator.EQUAL, "confirmed"),
+                    FieldExpression(_field("title"), ComparisonOperator.EQUAL, "seamless door", phrase=True),
+                    FieldExpression(_field("status"), ComparisonOperator.EQUAL, "confirmed"),
                 ),
             ),
         ),
@@ -48,9 +54,9 @@ def test_parser_supports_not_comparisons_and_typed_ranges() -> None:
     assert parsed.expression == BooleanExpression(
         BooleanOperator.AND,
         (
-            NotExpression(FieldExpression("kind", ComparisonOperator.EQUAL, "metadata")),
-            FieldExpression("volume", ComparisonOperator.EQUAL, RangeValue(10, 20)),
-            FieldExpression("opening_time", ComparisonOperator.LESS_THAN, 1.5),
+            NotExpression(FieldExpression(_field("kind"), ComparisonOperator.EQUAL, "metadata")),
+            FieldExpression(_field("volume"), ComparisonOperator.EQUAL, RangeValue(10, 20)),
+            FieldExpression(_field("opening_time"), ComparisonOperator.LESS_THAN, 1.5),
         ),
     )
 
@@ -96,7 +102,7 @@ def test_parser_normalizes_alias_and_timestamp() -> None:
     parsed = SearchQueryParser().parse("completion_date>=2026-07-30")
 
     assert parsed.expression == FieldExpression(
-        "completion_at",
+        _field("completion_at"),
         ComparisonOperator.GREATER_THAN_OR_EQUAL,
         "2026-07-30T00:00:00",
     )
@@ -122,25 +128,17 @@ def test_parser_accepts_empty_query_for_filter_defaults() -> None:
 
 
 def test_parser_coerces_units_for_database_defined_data_tag() -> None:
-    registry = FieldRegistry(
-        (
-            FieldDefinition(
-                "closing_delay",
-                FieldType.NUMBER,
-                supports_range=True,
-                storage_name="tag:42",
-                unit_scales=(("s", Decimal("20")), ("gt", Decimal("1"))),
-                numeric_step=Decimal("1"),
-            ),
-        )
+    closing_delay = FieldDefinition(
+        "closing_delay",
+        FieldType.NUMBER,
+        supports_range=True,
+        storage_name="tag:42",
+        unit_scales=(("s", Decimal("20")), ("gt", Decimal("1"))),
+        numeric_step=Decimal("1"),
     )
 
-    parsed = SearchQueryParser(registry).parse("closing_delay:[0.4s TO 10gt]")
+    parsed = SearchQueryParser(FieldRegistry((closing_delay,))).parse("closing_delay:[0.4s TO 10gt]")
 
     assert parsed.expression == FieldExpression(
-        "closing_delay",
-        ComparisonOperator.EQUAL,
-        RangeValue(Decimal("8.0"), Decimal("10")),
-        storage_field="tag:42",
-        value_type="number",
+        closing_delay, ComparisonOperator.EQUAL, RangeValue(Decimal("8.0"), Decimal("10"))
     )

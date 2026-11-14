@@ -1,47 +1,16 @@
 """Allowlisted search field definitions and value coercion."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from difflib import get_close_matches
-from enum import StrEnum
 
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.records.domain.models import BaseTitle, VersionScope
+from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.search.domain.query import ScalarValue
 from squid_i18n import md_tr
-
-
-class FieldType(StrEnum):
-    """Storage-independent field value types."""
-
-    TEXT = "text"
-    NUMBER = "number"
-    TIMESTAMP = "timestamp"
-    BOOLEAN = "boolean"
-
-
-@dataclass(frozen=True, slots=True)
-class FieldDefinition:
-    """A queryable field exposed by the search API."""
-
-    name: str
-    value_type: FieldType
-    supports_range: bool = False
-    aliases: tuple[str, ...] = ()
-    storage_name: str | None = None
-    """Facet key used in storage, such as `tag:42`; None uses the public name."""
-    supports_sort: bool = False
-    unit_scales: tuple[tuple[str, Decimal], ...] = ()
-    """Accepted suffixes and multipliers that convert values to the canonical unit."""
-    numeric_step: Decimal | None = None
-    suggested_values: tuple[str, ...] | None = None
-    """Fixed text completions; None reads indexed values, and an empty tuple disables suggestions.
-
-    These are completion hints, not a restriction on accepted query values.
-    """
 
 
 class FieldRegistry:
@@ -126,13 +95,13 @@ class FieldRegistry:
 
 DEFAULT_FIELD_REGISTRY = FieldRegistry(
     (
-        FieldDefinition("title", FieldType.TEXT),
-        FieldDefinition("description", FieldType.TEXT),
-        FieldDefinition("tag", FieldType.TEXT),
-        FieldDefinition("restriction", FieldType.TEXT),
-        FieldDefinition("type", FieldType.TEXT),
-        FieldDefinition("pattern", FieldType.TEXT),
-        FieldDefinition("creator", FieldType.TEXT),
+        FieldDefinition("title", FieldType.TEXT, ranked=True),
+        FieldDefinition("description", FieldType.TEXT, ranked=True),
+        FieldDefinition("tag", FieldType.TEXT, ranked=True),
+        FieldDefinition("restriction", FieldType.TEXT, ranked=True),
+        FieldDefinition("type", FieldType.TEXT, ranked=True),
+        FieldDefinition("pattern", FieldType.TEXT, ranked=True),
+        FieldDefinition("creator", FieldType.TEXT, ranked=True),
         FieldDefinition("version", FieldType.TEXT),
         FieldDefinition("status", FieldType.TEXT),
         FieldDefinition("kind", FieldType.TEXT),

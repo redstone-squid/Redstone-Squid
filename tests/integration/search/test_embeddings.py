@@ -182,11 +182,9 @@ async def test_semantic_search_ranks_vectors_and_respects_visibility_and_query_f
     parsed = SearchQueryParser().parse(request.query)
     embedding = QueryEmbedding([1.0] + [0.0] * 1535, "test-model")
     async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
-        page = await uow.search.search(request, parsed, offset=0, query_embedding=embedding)
-        wrong_model = await uow.search.search(
-            request, parsed, offset=0, query_embedding=replace(embedding, model="other-model")
-        )
-        lexical = await uow.search.search(replace(request, mode=SearchMode.LEXICAL), parsed, offset=0)
+        page = await uow.search.search(request, parsed, query_embedding=embedding)
+        wrong_model = await uow.search.search(request, parsed, query_embedding=replace(embedding, model="other-model"))
+        lexical = await uow.search.search(replace(request, mode=SearchMode.LEXICAL), parsed)
 
     assert [hit.source_id for hit in page.hits] == ["near", "far"]
     assert not page.warnings
@@ -209,11 +207,9 @@ async def test_failed_vector_lookup_preserves_lexical_results_and_the_read_scope
     parsed = SearchQueryParser().parse(request.query)
     async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
         # PostgreSQL rejects comparing vectors with different dimensions.
-        failed = await uow.search.search(
-            request, parsed, offset=0, query_embedding=QueryEmbedding([1.0, 0.0], "test-model")
-        )
-        unavailable = await uow.search.search(request, parsed, offset=0)
-        lexical = await uow.search.search(replace(request, mode=SearchMode.LEXICAL), parsed, offset=0)
+        failed = await uow.search.search(request, parsed, query_embedding=QueryEmbedding([1.0, 0.0], "test-model"))
+        unavailable = await uow.search.search(request, parsed)
+        lexical = await uow.search.search(replace(request, mode=SearchMode.LEXICAL), parsed)
 
     assert [hit.source_id for hit in failed.hits] == ["1"]
     assert failed.hits == unavailable.hits == lexical.hits

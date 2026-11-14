@@ -11,12 +11,13 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.selectable import CTE
 
-from squid.search.application.fields import FieldDefinition, FieldType
 from squid.search.application.highlighting import highlight_title
 from squid.search.application.ports import SearchSlice
 from squid.search.application.ranking import RankedCandidate
 from squid.search.domain import (
     BuildSearchHit,
+    FieldDefinition,
+    FieldType,
     MetadataSearchHit,
     RecordSearchHit,
     SearchHit,

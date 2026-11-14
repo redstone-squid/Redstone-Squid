@@ -11,7 +11,15 @@ from squid.core.pagination import PageAnchor
 from squid.search.application import SearchService, SearchSlice
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.search.application.ports import QueryEmbedding
-from squid.search.domain import BuildSearchHit, SearchMode, SearchQuery, SearchRequest, SearchScope, SearchSort
+from squid.search.domain import (
+    BuildSearchHit,
+    FieldDefinition,
+    SearchMode,
+    SearchQuery,
+    SearchRequest,
+    SearchScope,
+    SearchSort,
+)
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
@@ -19,7 +27,7 @@ class FakeSearchBackend:
     """Return one fixed hit with a configurable total while recording calls inside a UoW scope."""
 
     def __init__(self, total: int = 25) -> None:
-        self.calls: list[tuple[SearchRequest, SearchQuery, int]] = []
+        self.calls: list[tuple[SearchRequest, SearchQuery, FieldDefinition | None]] = []
         self.suggestions: tuple[str, ...] = ("door",)
         self.total = total
         self.active_scopes = 0
@@ -30,12 +38,11 @@ class FakeSearchBackend:
         request: SearchRequest,
         query: SearchQuery,
         *,
-        offset: int,
-        registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
+        sort_field: FieldDefinition | None = None,
         query_embedding: QueryEmbedding | None = None,
     ) -> SearchSlice:
         assert self.active_scopes == 1
-        self.calls.append((request, query, offset))
+        self.calls.append((request, query, sort_field))
         self.embeddings.append(query_embedding)
         hit = BuildSearchHit("1", "Door", "confirmed", score=0.5)
         return SearchSlice((hit,), self.total, warnings=("degraded",))
@@ -54,7 +61,27 @@ async def test_service_parses_query_and_reports_the_backend_total() -> None:
     assert page.total == 25
     assert page.warnings == ("degraded",)
     assert backend.calls[0][1].normalized == "status:confirmed AND door"
-    assert backend.calls[0][2] == 0
+    assert backend.calls[0][2] is None
+
+
+async def test_service_resolves_the_sort_field_before_searching() -> None:
+    backend = FakeSearchBackend()
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
+
+    await service.search(SearchRequest("door", sort=SearchSort("width")))
+
+    assert backend.calls[0][2] == DEFAULT_FIELD_REGISTRY.resolve("width")
+
+
+@pytest.mark.parametrize("field", ["volume", "nonexistent"])
+async def test_service_rejects_unsortable_and_unknown_sort_fields(field: str) -> None:
+    backend = FakeSearchBackend()
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
+
+    with pytest.raises(ValidationError, match="cannot be sorted"):
+        await service.search(SearchRequest("door", sort=SearchSort(field)))
+
+    assert backend.calls == []
 
 
 async def test_service_addresses_neighbouring_pages_by_offset() -> None:
@@ -150,7 +177,7 @@ async def test_query_embedding_is_generated_outside_scopes_and_passed_to_search(
     [
         SearchRequest("door"),
         SearchRequest("status:confirmed", mode=SearchMode.SEMANTIC),
-        SearchRequest("door", mode=SearchMode.SEMANTIC, sort=SearchSort("submission_time")),
+        SearchRequest("door", mode=SearchMode.SEMANTIC, sort=SearchSort("width")),
     ],
 )
 async def test_search_skips_embedding_when_semantic_ranking_is_unused(search_request: SearchRequest) -> None:

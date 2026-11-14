@@ -8,7 +8,6 @@ from sqlalchemy import func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from squid.core.errors import ErrorCode, ValidationError
 from squid.search.application import (
     RankedCandidate,
     RankingBranch,
@@ -18,9 +17,10 @@ from squid.search.application import (
     positive_text_expressions,
     reciprocal_rank_fusion,
 )
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.search.application.ports import QueryEmbedding
 from squid.search.domain import (
+    FieldDefinition,
+    FieldType,
     SearchMode,
     SearchQuery,
     SearchRequest,
@@ -28,11 +28,10 @@ from squid.search.domain import (
     SortDirection,
     TextExpression,
 )
-from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler
+from squid.search.infrastructure.compiler import compile_query
 from squid.search.infrastructure.grouping import GroupedSearch
 from squid.search.infrastructure.hits import document_hit as _to_hit
 from squid.search.models import SearchDocument, SearchDocumentFacet
-from squid_i18n import md_tr
 
 _CANDIDATE_LIMIT = 200
 _PUBLIC_BUILD_STATUSES = frozenset({"confirmed"})
@@ -54,14 +53,8 @@ class PostgresSearchBackend(SearchBackend):
     all matching documents.
     """
 
-    def __init__(
-        self,
-        session: Callable[[], AsyncSession],
-        *,
-        compiler: PostgresSearchQueryCompiler | None = None,
-    ) -> None:
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
-        self._compiler = compiler or PostgresSearchQueryCompiler()
 
     @override
     async def search(
@@ -69,47 +62,30 @@ class PostgresSearchBackend(SearchBackend):
         request: SearchRequest,
         query: SearchQuery,
         *,
-        offset: int,
-        registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
+        sort_field: FieldDefinition | None = None,
         query_embedding: QueryEmbedding | None = None,
     ) -> SearchSlice:
-        """Search indexed documents and return the window starting at `offset`."""
-        compiler = self._compiler if registry is DEFAULT_FIELD_REGISTRY else PostgresSearchQueryCompiler(registry)
-        predicate = self.compile_predicate(request, query, compiler=compiler)
+        """Search indexed documents and return the window starting at `request.offset`."""
+        predicate = self.compile_predicate(request, query)
         session = self._session()
-        if request.sort is not None:
-            field = registry.resolve(request.sort.field)
-            if field is None or not field.supports_sort:
-                field_name = request.sort.field
-                raise ValidationError(
-                    md_tr(
-                        t"search-search-results-sorted = Search results cannot be sorted by {field_name}.",
-                    ),
-                    code=ErrorCode.INVALID_QUERY,
-                    public_context={"field": "sort", "value": request.sort.field},
-                )
+        offset = request.offset
+        if sort_field is not None:
             if request.group_by_build:
                 return await GroupedSearch(session, request, query).search(
-                    predicate, compiler.compile(query), offset=offset, field=field
+                    predicate, compile_query(query), offset=offset, field=sort_field
                 )
-            return await self._sorted(session, request, predicate, offset, field)
+            return await self._sorted(session, request, predicate, offset, sort_field)
         if is_filter_only(query):
             if request.group_by_build:
                 return await GroupedSearch(session, request, query).search(
-                    predicate, compiler.compile(query), offset=offset
+                    predicate, compile_query(query), offset=offset
                 )
             return await self._filter_only(session, request, predicate, offset)
-        return await self._ranked(session, request, query, predicate, offset, query_embedding, compiler.compile(query))
+        return await self._ranked(session, request, query, predicate, offset, query_embedding, compile_query(query))
 
-    def compile_predicate(
-        self,
-        request: SearchRequest,
-        query: SearchQuery,
-        *,
-        compiler: PostgresSearchQueryCompiler | None = None,
-    ) -> ColumnElement[bool]:
+    def compile_predicate(self, request: SearchRequest, query: SearchQuery) -> ColumnElement[bool]:
         """Compile scope, visibility policy, and the complete user predicate."""
-        predicate = self._scope_predicate(request.scope) & (compiler or self._compiler).compile(query)
+        predicate = self._scope_predicate(request.scope) & compile_query(query)
         visible_statuses = request.visible_statuses
         if visible_statuses is None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
             visible_statuses = _PUBLIC_BUILD_STATUSES

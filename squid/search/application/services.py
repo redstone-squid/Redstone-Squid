@@ -3,7 +3,7 @@
 import logging
 from typing import Protocol
 
-from squid.core.errors import ValidationError
+from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import PageAnchor
 from squid.search.application.embeddings import SearchEmbeddingModel
 from squid.search.application.fields import FieldRegistry
@@ -12,6 +12,7 @@ from squid.search.application.ports import QueryEmbedding, SearchBackend
 from squid.search.application.query_analysis import is_filter_only
 from squid.search.domain import SearchMode, SearchPage, SearchQuery, SearchRequest
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,12 @@ class SearchFieldRegistryProvider(Protocol):
 class SearchService:
     """Search builds, records, and metadata through the shared search index.
 
-    The field registry defines the names and value types accepted by the query
-    parser. The backend filters indexed documents with that parsed query and
-    orders the matches. Lexical ranking uses text matches; semantic mode adds
-    similarity between model-generated vectors to those lexical results.
+    The field registry defines the names and value types accepted in queries and
+    sorts. The service resolves both against it, so the backend receives field
+    definitions rather than names. The backend filters indexed documents with
+    the parsed query and orders the matches. Lexical ranking uses text matches;
+    semantic mode adds similarity between model-generated vectors to those
+    lexical results.
 
     Query vectors are generated before opening the search transaction, so a slow
     model call does not hold a database connection. Filter-only queries and explicit
@@ -47,12 +50,24 @@ class SearchService:
     async def search(self, request: SearchRequest) -> SearchPage:
         """Parse the request, fetch results, and add offset-based page links.
 
+        An unknown or unsortable sort field raises ValidationError.
+
         Semantic searches generate their query vector before opening the search
         transaction. An embedding failure is logged and leaves the backend to
         return lexical results with a warning.
         """
         registry = await self.fields()
         query = SearchQueryParser(registry).parse(request.query)
+        sort_field = None
+        if request.sort is not None:
+            sort_field = registry.resolve(request.sort.field)
+            if sort_field is None or not sort_field.supports_sort:
+                field_name = request.sort.field
+                raise ValidationError(
+                    md_tr(t"search-search-results-sorted = Search results cannot be sorted by {field_name}."),
+                    code=ErrorCode.INVALID_QUERY,
+                    public_context={"field": "sort", "value": field_name},
+                )
         query_embedding = None
         if (
             request.mode is SearchMode.SEMANTIC
@@ -67,9 +82,7 @@ class SearchService:
             except Exception:
                 logger.exception("Search query embedding generation failed")
         async with self._uow_factory() as uow:
-            result = await uow.search.search(
-                request, query, offset=request.offset, registry=registry, query_embedding=query_embedding
-            )
+            result = await uow.search.search(request, query, sort_field=sort_field, query_embedding=query_embedding)
         offset = request.offset
         following = offset + request.page_size
         return SearchPage(

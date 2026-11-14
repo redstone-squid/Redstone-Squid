@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 import squid.search.infrastructure.repository as search_repository
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.search.application import SearchQueryParser
+from squid.search.application import DEFAULT_FIELD_REGISTRY, SearchQueryParser
 from squid.search.domain import BuildSearchHit, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 from squid.search.models import SearchDocument, SearchDocumentFacet
 from squid.unit_of_work import UnitOfWorkFactory
@@ -264,7 +264,9 @@ async def search(
     return await transact(
         backend,
         lambda uow: uow.search.search(
-            search_request, SearchQueryParser().parse(search_request.query), offset=search_request.offset
+            search_request,
+            SearchQueryParser().parse(search_request.query),
+            sort_field=DEFAULT_FIELD_REGISTRY.resolve(search_request.sort.field) if search_request.sort else None,
         ),
     )
 

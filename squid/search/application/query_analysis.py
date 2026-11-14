@@ -9,11 +9,9 @@ from squid.search.domain import (
     TextExpression,
 )
 
-_RANKED_TEXT_FIELDS = frozenset({"title", "description", "tag", "restriction", "type", "pattern", "creator"})
-
 
 def positive_text_expressions(query: SearchQuery) -> tuple[TextExpression | FieldExpression, ...]:
-    """Return text clauses outside an odd number of NOT operators.
+    """Return text clauses and clauses on ranked fields outside an odd number of NOT operators.
 
     These clauses supply ranking terms only. Their original AND/OR relationships
     are discarded here; the backend must still apply the complete query to filter
@@ -43,5 +41,5 @@ def _collect_positive_text(
             _collect_positive_text(operand, output, negated=negated)
     elif negated:
         return
-    elif isinstance(expression, TextExpression) or expression.field in _RANKED_TEXT_FIELDS:
+    elif isinstance(expression, TextExpression) or expression.field.ranked:
         output.append(expression)

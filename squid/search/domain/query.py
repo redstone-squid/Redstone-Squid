@@ -2,8 +2,8 @@
 
 TextExpression searches the combined document, while FieldExpression selects a
 named field such as width. BooleanExpression and NotExpression combine those
-clauses into a tree. The parser resolves field aliases and converts values before
-the backend compiles the tree into a filter.
+clauses into a tree. The parser resolves each field name to its definition and
+converts values before the backend compiles the tree into a filter.
 """
 
 from dataclasses import dataclass
@@ -12,6 +12,7 @@ from enum import StrEnum
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.search.domain.fields import FieldDefinition
 
 
 class BooleanOperator(StrEnum):
@@ -54,12 +55,10 @@ class TextExpression:
 class FieldExpression:
     """A typed comparison against a registered field."""
 
-    field: str
+    field: FieldDefinition
     operator: ComparisonOperator
     value: ScalarValue | RangeValue
     phrase: bool = False
-    storage_field: str | None = None
-    value_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,8 +3,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.search.domain import SearchHit, SearchQuery, SearchRequest
+from squid.search.domain import FieldDefinition, SearchHit, SearchQuery, SearchRequest
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,10 +27,15 @@ class SearchBackend(Protocol):
         request: SearchRequest,
         query: SearchQuery,
         *,
-        offset: int,
-        registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
+        sort_field: FieldDefinition | None = None,
         query_embedding: QueryEmbedding | None = None,
-    ) -> SearchSlice: ...
+    ) -> SearchSlice:
+        """Return the page of matches that starts at `request.offset`.
+
+        `query` and `sort_field` are `request.query` and `request.sort` after the
+        service has parsed and resolved them against the field registry.
+        """
+        ...
 
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]: ...
 

@@ -8,12 +8,12 @@ from sqlalchemy import and_, false, func, not_, or_, select, true
 from sqlalchemy.sql.elements import ColumnElement
 from whenever import Instant
 
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry, FieldType
 from squid.search.domain import (
     BooleanExpression,
     BooleanOperator,
     ComparisonOperator,
     FieldExpression,
+    FieldType,
     NotExpression,
     QueryExpression,
     RangeValue,
@@ -29,85 +29,75 @@ _VECTOR_FIELDS = {
 }
 
 
-class PostgresSearchQueryCompiler:
-    """Compile allowlisted expressions without emitting user-controlled identifiers."""
+def compile_query(query: SearchQuery) -> ColumnElement[bool]:
+    """Compile a parsed query into a predicate on SearchDocument; an empty query matches every document.
 
-    def __init__(self, registry: FieldRegistry = DEFAULT_FIELD_REGISTRY) -> None:
-        self._registry = registry
+    User text only ever reaches the statement as bound values. Column and facet
+    names come from the field definitions the parser resolved.
+    """
+    if query.expression is None:
+        return true()
+    return _compile_expression(query.expression)
 
-    def compile(self, query: SearchQuery) -> ColumnElement[bool]:
-        """Compile the full expression; an empty query matches every document."""
-        if query.expression is None:
-            return true()
-        return self._compile_expression(query.expression)
 
-    def _compile_expression(self, expression: QueryExpression) -> ColumnElement[bool]:
-        if isinstance(expression, TextExpression):
-            return _fuzzy_text_predicate(
-                cast(ColumnElement[object], SearchDocument.combined_vector),
-                cast(ColumnElement[object], SearchDocument.fuzzy_text),
-                expression.value,
-                phrase=expression.phrase,
-                exact_column=cast(ColumnElement[object], SearchDocument.normalized_title),
-            )
-        if isinstance(expression, NotExpression):
-            return not_(self._compile_expression(expression.operand))
-        if isinstance(expression, BooleanExpression):
-            operands = tuple(self._compile_expression(operand) for operand in expression.operands)
-            return and_(*operands) if expression.operator is BooleanOperator.AND else or_(*operands)
-        return self._compile_field(expression)
-
-    def _compile_field(self, expression: FieldExpression) -> ColumnElement[bool]:
-        field = self._registry.resolve(expression.field)
-        if field is None and (expression.storage_field is None or expression.value_type is None):
-            return false()
-        if expression.value_type is not None:
-            field_type = FieldType(expression.value_type)
-        elif field is not None:
-            field_type = field.value_type
-        else:
-            return false()
-        storage_field = expression.storage_field or (field.name if field is not None else None)
-        if storage_field is None:
-            return false()
-        if expression.field in _VECTOR_FIELDS:
-            if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
-                return false()
-            value = str(expression.value)
-            vector_match = _VECTOR_FIELDS[expression.field].bool_op("@@")(_text_query(value, phrase=expression.phrase))
-            if expression.field == "description":
-                return vector_match
-            return or_(
-                func.lower(SearchDocument.title) == value.casefold(),
-                vector_match,
-                func.similarity(SearchDocument.normalized_title, value) > 0.1,
-            )
-        if expression.field in _DIRECT_TEXT_FIELDS:
-            return _compile_direct(expression)
-        if expression.field == "tag":
-            if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
-                return false()
-            return SearchDocument.tags.contains([str(expression.value)])
-        # Use a separate EXISTS for each clause: a document may satisfy two clauses
-        # through different facet rows, and matching rows must not duplicate results.
-        facet = SearchDocumentFacet
-        value_column = {
-            FieldType.TEXT: facet.text_value,
-            FieldType.NUMBER: facet.numeric_value,
-            FieldType.TIMESTAMP: facet.timestamp_value,
-            FieldType.BOOLEAN: facet.boolean_value,
-        }[field_type]
-        comparison = _comparison(cast(ColumnElement[object], value_column), expression, field_type)
-        return (
-            select(facet.document_id)
-            .where(
-                facet.document_id == SearchDocument.id,
-                facet.field_name == storage_field,
-                comparison,
-            )
-            .correlate(SearchDocument)
-            .exists()
+def _compile_expression(expression: QueryExpression) -> ColumnElement[bool]:
+    if isinstance(expression, TextExpression):
+        return _fuzzy_text_predicate(
+            cast(ColumnElement[object], SearchDocument.combined_vector),
+            cast(ColumnElement[object], SearchDocument.fuzzy_text),
+            expression.value,
+            phrase=expression.phrase,
+            exact_column=cast(ColumnElement[object], SearchDocument.normalized_title),
         )
+    if isinstance(expression, NotExpression):
+        return not_(_compile_expression(expression.operand))
+    if isinstance(expression, BooleanExpression):
+        operands = tuple(_compile_expression(operand) for operand in expression.operands)
+        return and_(*operands) if expression.operator is BooleanOperator.AND else or_(*operands)
+    return _compile_field(expression)
+
+
+def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
+    """Compare a field against the document column or the facet rows that store it."""
+    field = expression.field
+    if field.name in _VECTOR_FIELDS:
+        if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
+            return false()
+        value = str(expression.value)
+        vector_match = _VECTOR_FIELDS[field.name].bool_op("@@")(_text_query(value, phrase=expression.phrase))
+        if field.name == "description":
+            return vector_match
+        return or_(
+            func.lower(SearchDocument.title) == value.casefold(),
+            vector_match,
+            func.similarity(SearchDocument.normalized_title, value) > 0.1,
+        )
+    if field.name in _DIRECT_TEXT_FIELDS:
+        return _compile_direct(expression)
+    if field.name == "tag":
+        if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
+            return false()
+        return SearchDocument.tags.contains([str(expression.value)])
+    # Use a separate EXISTS for each clause: a document may satisfy two clauses
+    # through different facet rows, and matching rows must not duplicate results.
+    facet = SearchDocumentFacet
+    value_column = {
+        FieldType.TEXT: facet.text_value,
+        FieldType.NUMBER: facet.numeric_value,
+        FieldType.TIMESTAMP: facet.timestamp_value,
+        FieldType.BOOLEAN: facet.boolean_value,
+    }[field.value_type]
+    comparison = _comparison(cast(ColumnElement[object], value_column), expression, field.value_type)
+    return (
+        select(facet.document_id)
+        .where(
+            facet.document_id == SearchDocument.id,
+            facet.field_name == (field.storage_name or field.name),
+            comparison,
+        )
+        .correlate(SearchDocument)
+        .exists()
+    )
 
 
 def _compile_direct(expression: FieldExpression) -> ColumnElement[bool]:

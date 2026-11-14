@@ -47,7 +47,7 @@ def _title_terms(expression: QueryExpression | None) -> tuple[str, ...]:
         return (expression.value,) if expression.phrase else tuple(expression.value.split())
     if (
         isinstance(expression, FieldExpression)
-        and expression.field == "title"
+        and expression.field.name == "title"
         and expression.operator is ComparisonOperator.EQUAL
     ):
         value = str(expression.value)
