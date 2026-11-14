@@ -1028,6 +1028,19 @@ which is the one place webhook tokens and response shapes are understood. When n
 live the render waits in `MessageRoot.pending` for the next interaction — `refresh()` has always
 promised the next opportunity rather than the current instant.
 
+A message root normally owns one message. With `max_messages` above 1 (`ResponseSpec(max_messages=...)`
+on a screen) it can continue a document that exceeds one message in follow-up messages.
+`sl.planning.plan_spread` cuts the document between top-level children, using the fewest messages that
+fit, and `sl.keep_with_next` forbids a cut after a child. The root remembers what starts each later
+message and reuses those cuts on later renders, so controls stay in the message the reader found them in.
+
+All of a root's messages show one component tree: a press on any of them runs the same handlers, and
+the render that follows is written only to the messages it changed. Each message has its own edit
+handle. When no live handle reaches a message, that message is recorded as stale and the others carry
+on; a press on the stale message repaints it before any exclusive action runs. A destination offers
+`DeliveryResult.follow_up` for sending the next message beside the first, and a press can send one as
+an interaction follow-up when the screen grows. Durable recovery restores only the first message.
+
 Reactive models notify readers directly. Changes in external application services use a payload-free
 `sl.runtime.TopicBus`: a topic names a dependency without carrying its state. Subscribers re-read
 application services before asking their message root to refresh, so the

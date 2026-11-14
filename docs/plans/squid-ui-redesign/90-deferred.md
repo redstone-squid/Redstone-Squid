@@ -223,23 +223,6 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   **Revisited 2026-08-22**: partially superseded by [31](../completed/squid-layouts-redesign/31-action-ergonomics.md) — the
   portable admission surface is `Guard`/`GuardDecision`; frontend facts still enter through
   plan 02's native access (`requires_role` lives in `sl.discord.guards`).
-- **Multi-message rendering — the *spanning* half** *(still deferred; the branching half already shipped, see below)* —
-  one logical UI spanning several messages, deferred until a consumer exists (the audit
-  found none; search and leaderboards fit one message with plan 06). When it comes, the
-  shape is decided: Discord's message sequence is append-only, so content cannot reflow
-  between slots — growth in slot 1 means rewriting every later slot with no batch edit, no
-  cross-message atomicity, and controls migrating between messages. Build *fixed
-  author-declared partitions*, each independently budgeted, as a coordinator over
-  per-message mounts (sharing services/session, routing invalidation) — never a
-  multi-handle `Mount`, which would smear message identity through planner, generations,
-  dispatch, and durability. `EditHandle`/`Destination` being per-message is what makes the
-  coordinator cheap; keep `on_load`, context, and session policy free of any
-  root-component-equals-session assumption so it stays that way.
-  (*Branching* — a click spawns an additional message — was bundled with this originally
-  and is not deferred: it shipped as the consent pattern, `account_view.py` mounting
-  `prompt_for_consent` as its own ephemeral message, with `open(..., parent=)` from plan 12
-  as the lifecycle piece and `sl.discord.responder(event).mount` already handing a handler
-  its own mount for `parent=` to use.)
 - **Statically checking a route handler's parameters against its route** *(still deferred — blocked on a pyrefly limitation, not on a missing consumer)* — (plan 16 stage 2)
   — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
   `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is
@@ -260,6 +243,36 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   Revisit if a mix-up ever ships.
 
 ## No longer live (resolved, shipped, overturned, closed, or promoted elsewhere)
+
+- **Multi-message rendering — the *spanning* half** *(no longer live — shipped 2026-11-14 in a different shape, see the end of this entry)* —
+  one logical UI spanning several messages, deferred until a consumer exists (the audit
+  found none; search and leaderboards fit one message with plan 06). When it comes, the
+  shape is decided: Discord's message sequence is append-only, so content cannot reflow
+  between slots — growth in slot 1 means rewriting every later slot with no batch edit, no
+  cross-message atomicity, and controls migrating between messages. Build *fixed
+  author-declared partitions*, each independently budgeted, as a coordinator over
+  per-message mounts (sharing services/session, routing invalidation) — never a
+  multi-handle `Mount`, which would smear message identity through planner, generations,
+  dispatch, and durability. `EditHandle`/`Destination` being per-message is what makes the
+  coordinator cheap; keep `on_load`, context, and session policy free of any
+  root-component-equals-session assumption so it stays that way.
+  (*Branching* — a click spawns an additional message — was bundled with this originally
+  and is not deferred: it shipped as the consent pattern, `account_view.py` mounting
+  `prompt_for_consent` as its own ephemeral message, with `open(..., parent=)` from plan 12
+  as the lifecycle piece and `sl.discord.responder(event).mount` already handing a handler
+  its own mount for `parent=` to use.)
+  **Shipped 2026-11-14**, once generic region pagination made the planner able to cut a
+  document: `planning/spread.py` plans an oversized document as consecutive messages, and a
+  message root with `max_messages` above 1 delivers them. The consumer was the build
+  workspace, whose crowded states exceeded 40 components. Two parts of the decision above
+  were overturned. Partitions are found by the planner, with `keep_with_next` as the
+  author's control, because cut costs are not additive and hand-declared parts could not
+  use the allocator. And one root does own several handles, because separately written
+  components per message would have split one screen's tree. The reflow concern is met
+  differently: cuts are retained by anchor across renders, unchanged messages are not
+  rewritten, and a message no handle reaches goes stale and is repainted when pressed.
+  Still open: durable recovery of the later messages, and reuse of a retained allocation
+  for page turns inside a spread.
 
 - **Abandoning a superseded resource load** *(resolved — shipped as an optional seam in `34d56b52`)* — proposed 2026-08-24 alongside the generation fix,
   so a load whose token has been bumped is cancelled rather than run to completion. No orphan
