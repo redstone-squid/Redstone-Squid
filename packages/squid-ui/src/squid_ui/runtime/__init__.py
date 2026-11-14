@@ -34,9 +34,10 @@ from squid_reactivity.resources import (
 )
 from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import (
-    Address,
+    BusAddress,
     CellAddress,
     DelimitedTopicCodec,
+    DependencyAddress,
     LocalTopicBus,
     Subscriber,
     SubscriptionStats,
@@ -124,9 +125,9 @@ from squid_ui.runtime.services import ManagedService, ServiceOwner, ServiceRun, 
 __all__ = [
     "ActionDiscardedError",
     "ActivePagers",
-    "Address",
     "AtomicResource",
     "AtomicResourceStatus",
+    "BusAddress",
     "CellAddress",
     "CellPatch",
     "CellPatchSet",
@@ -149,6 +150,7 @@ __all__ = [
     "CursorUpdate",
     "DelimitedTopicCodec",
     "Dependencies",
+    "DependencyAddress",
     "Discarded",
     "DisclosureState",
     "EventLedger",

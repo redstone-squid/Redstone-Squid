@@ -7,7 +7,7 @@ from typing import Any, cast, override
 import anyio
 import pytest
 
-from squid_reactivity.topics import Address, CellAddress, DelimitedTopicCodec, LocalTopicBus, TopicBus, TopicName
+from squid_reactivity.topics import BusAddress, CellAddress, DelimitedTopicCodec, LocalTopicBus, TopicBus, TopicName
 from squid_ui import Reactive, state
 from squid_ui_discord.durability import PostgresTopicBridge
 
@@ -203,9 +203,9 @@ async def test_a_cell_address_is_published_locally_only() -> None:
     """The default codec cannot encode the live object identified by a shared-cell address."""
     server = FakePostgres()
     bus = LocalTopicBus()
-    seen: list[Address] = []
+    seen: list[BusAddress] = []
 
-    def record(address: Address) -> None:
+    def record(address: BusAddress) -> None:
         seen.append(address)
 
     workspace = Workspace()

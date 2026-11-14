@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import anyio
 
-from squid_reactivity.topics import Address, DelimitedTopicCodec, TopicBus, TopicCodec, TopicName
+from squid_reactivity.topics import BusAddress, DelimitedTopicCodec, TopicBus, TopicCodec, TopicName
 from squid_storage.stores import (
     _SCHEMA_VERSION,
     AdmissionToken,
@@ -479,7 +479,7 @@ class PostgresTopicBridge:
         self._ignored = 0
         self._undecodable = 0
 
-    def publish(self, *addresses: Address) -> None:
+    def publish(self, *addresses: BusAddress) -> None:
         """Publish locally now and queue encodable topics for best-effort remote delivery.
 
         Identical payloads coalesce while queued; a full queue drops the remote notification.

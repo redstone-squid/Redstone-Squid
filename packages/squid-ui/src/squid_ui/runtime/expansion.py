@@ -8,10 +8,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Any
 
-from squid_reactivity.addresses import CellAddress
 from squid_reactivity.internals import AtomicResourcePending
 from squid_reactivity.resources import AsyncBinding, observe_async_bindings, unique_async_bindings
-from squid_reactivity.topics import Topic
+from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.tracking import capture_reads
 from squid_reactivity.transaction_state import read_only
 from squid_ui.context import ContextKey
@@ -89,7 +88,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.document_key: str | None = None
         self.active: set[int] = set()
         self.deferred: list[AnyComponent] = []
-        self.observed_addresses: list[Topic | CellAddress] = []
+        self.observed_addresses: list[DependencyAddress] = []
         self.observed_bindings: list[AsyncBinding[object]] = []
 
     def run(self) -> ComponentTree[RenderTargetT, ContextT]:

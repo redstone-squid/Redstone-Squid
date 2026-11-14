@@ -12,7 +12,7 @@ from squid_reactivity import (
     state,
     transaction,
 )
-from squid_reactivity.topics import Address, CellAddress
+from squid_reactivity.topics import CellAddress, DependencyAddress
 from squid_reactivity.transaction_state import _CURRENT_TRANSACTION
 
 
@@ -23,7 +23,7 @@ class Preferences(Reactive):
 def test_shared_commit_publishes_the_exact_cell() -> None:
     preferences = Preferences()
     address = CellAddress(preferences, "theme")
-    seen: list[Address] = []
+    seen: list[DependencyAddress] = []
     subscriptions = Subscriptions(seen.append)
     subscriptions.stage([address])
     subscriptions.commit()

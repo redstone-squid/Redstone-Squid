@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol, Self, TypedDict, Unpack, cast, 
 
 import discord
 
-from squid_reactivity.topics import Address, TopicBus
+from squid_reactivity.topics import DependencyAddress, TopicBus
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.guards import Challenge
@@ -92,7 +92,7 @@ class ProfiledScheduler(Protocol):
 class ReactiveScheduler(Protocol):
     """A scheduler that can preserve the component attribution of a bus change."""
 
-    def schedule_invalidated(self, message_root: AnyMessageRoot, address: Address) -> None: ...
+    def schedule_invalidated(self, message_root: AnyMessageRoot, address: DependencyAddress) -> None: ...
 
 
 type ResumedPress = Callable[[], Awaitable[None]]

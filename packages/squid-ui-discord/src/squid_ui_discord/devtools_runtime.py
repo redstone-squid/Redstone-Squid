@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import anyio
 
-from squid_reactivity.topics import Address, CellAddress, Topic, TopicBus, TopicBusStats, TopicName
+from squid_reactivity.topics import BusAddress, CellAddress, Topic, TopicBus, TopicBusStats, TopicName
 from squid_ui.errors import SquidUiError
 from squid_ui.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
 from squid_ui.runtime.histories import HistorySnapshot, inspect_histories
@@ -420,7 +420,7 @@ def _session_inspection(session: Session) -> SessionInspection:
     )
 
 
-def _address_text(address: Address) -> str:
+def _address_text(address: BusAddress) -> str:
     if isinstance(address, (TopicName, Topic)):
         return str(address)
     if isinstance(address, CellAddress):

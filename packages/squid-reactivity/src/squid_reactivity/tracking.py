@@ -10,12 +10,11 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
-from squid_reactivity.addresses import CellAddress
 from squid_reactivity.errors import ReactiveCycleError
 from squid_reactivity.transaction_state import read_only
 
 if TYPE_CHECKING:
-    from squid_reactivity.topics import Topic
+    from squid_reactivity.topics import DependencyAddress
 
 
 class _ReactiveSource(Protocol):
@@ -26,7 +25,7 @@ class _ReactiveSource(Protocol):
     """
 
     @property
-    def address(self) -> Topic | CellAddress | None: ...
+    def address(self) -> DependencyAddress | None: ...
 
     def dependencies(self) -> Iterable[_ReactiveSource]: ...
 
@@ -142,7 +141,7 @@ class Dependencies:
         """
         return all(source.settle() == seen for source, seen in tuple(self.sources.items()))
 
-    def addresses(self) -> tuple[Topic | CellAddress, ...]:
+    def addresses(self) -> tuple[DependencyAddress, ...]:
         """Every addressed cell this run reached, deduplicated, in read order.
 
         Anything with sources of its own is walked rather than re-run -- a cached computed, a
@@ -150,7 +149,7 @@ class Dependencies:
         still depends on every one of them, so a topic watched two loaders down is still this
         render's dependency. One that carries an address of its own contributes that too.
         """
-        found: list[Topic | CellAddress] = []
+        found: list[DependencyAddress] = []
         seen: set[int] = set()
 
         def walk(sources: Iterable[_ReactiveSource]) -> None:
@@ -187,7 +186,7 @@ def observe_reads() -> Iterator[Dependencies]:
         yield dependencies
 
 
-def addresses(read: Callable[[], object]) -> tuple[Topic | CellAddress, ...]:
+def addresses(read: Callable[[], object]) -> tuple[DependencyAddress, ...]:
     """Return the addresses read by a callable, raising if none are found.
 
     For example, ``addresses(lambda: preferences.theme)`` returns the address

@@ -45,9 +45,10 @@ from squid_reactivity.errors import (
 )
 from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import (
-    Address,
+    BusAddress,
     CellAddress,
     DelimitedTopicCodec,
+    DependencyAddress,
     LocalTopicBus,
     Topic,
     TopicBus,
@@ -94,7 +95,7 @@ from squid_reactivity.transactions import (
 
 __all__ = [
     "ActorRef",
-    "Address",
+    "BusAddress",
     "CausalEventSnapshot",
     "CausalRef",
     "CellAddress",
@@ -109,6 +110,7 @@ __all__ = [
     "ContinuationFailureSnapshot",
     "DelimitedTopicCodec",
     "Dependencies",
+    "DependencyAddress",
     "EventLedger",
     "EventSink",
     "ExceptionReport",

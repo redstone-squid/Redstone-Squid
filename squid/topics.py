@@ -13,7 +13,7 @@ import asyncpg
 from squid.config import DatabaseConfig
 from squid.persistence.wake_listener import asyncpg_dsn
 from squid.posts.domain import ResourceKind
-from squid_reactivity import Address, TopicBus, TopicName
+from squid_reactivity import BusAddress, TopicBus, TopicName
 from squid_storage import PostgresTopicBridge
 
 RESOURCE_TOPIC_CHANNEL = "squid_resource_topics"
@@ -32,7 +32,7 @@ def resource_topic(resource_kind: ResourceKind, resource_key: str) -> TopicName:
 class TopicPublisher(Protocol):
     """Publish resource changes through either a local bus or a PostgreSQL bridge."""
 
-    def publish(self, *topics: Address) -> None: ...
+    def publish(self, *topics: BusAddress) -> None: ...
 
 
 async def open_topic_bridge(database: DatabaseConfig, bus: TopicBus) -> PostgresTopicBridge | None:

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, overload
 
 import anyio
 
-from squid_reactivity.topics import Address, CellAddress, TopicBus, TopicName
+from squid_reactivity.topics import BusAddress, CellAddress, DependencyAddress, TopicBus, TopicName
 from squid_ui.profiling import NoOpProfiler, OperationKind, PresentationStatus, Profiler, TraceLink
 
 if TYPE_CHECKING:
@@ -154,14 +154,14 @@ class MessageRootScheduler:
         message_root.invalidate()
         self._enqueue(message_root)
 
-    def schedule_reactive(self, message_root: MessageRoot, address: Address) -> None:
+    def schedule_reactive(self, message_root: MessageRoot, address: BusAddress) -> None:
         """Enqueue a refresh attributed to one bus address."""
         if message_root.finished:
             return
         message_root.runtime.invalidate_address(address)
         self._enqueue(message_root)
 
-    def schedule_invalidated(self, message_root: MessageRoot, address: Address) -> None:
+    def schedule_invalidated(self, message_root: MessageRoot, address: DependencyAddress) -> None:
         """Enqueue a root whose runtime already invalidated the observed address."""
         self._enqueue(message_root)
 
@@ -222,7 +222,7 @@ class MessageRootScheduler:
     @overload
     def follow(self, message_root: MessageRoot, *topics: CellAddress) -> Callable[[], None]: ...
 
-    def follow(self, message_root: MessageRoot, *topics: Address) -> Callable[[], None]:
+    def follow(self, message_root: MessageRoot, *topics: BusAddress) -> Callable[[], None]:
         """Refresh ``message_root`` when an exact topic changes; return an unfollow callback.
 
         Call this before the mount's initial send so a write cannot land between its first
@@ -262,7 +262,7 @@ class MessageRootScheduler:
 
         message_root_ref = weakref.ref(message_root, lambda _: unfollow())
 
-        def refresh(topic: Address) -> None:
+        def refresh(topic: BusAddress) -> None:
             if (current := message_root_ref()) is None:
                 unfollow()
                 return

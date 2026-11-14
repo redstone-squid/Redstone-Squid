@@ -31,7 +31,7 @@ from squid_reactivity.addresses import CellAddress
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_reactivity.subscriptions import Subscriptions
-from squid_reactivity.topics import Address
+from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.transaction_context import ActorRef, CausalRef, TransactionContext, current_causality
 from squid_reactivity.transaction_results import (
     TransactionCommit,
@@ -502,7 +502,7 @@ class MessageRoot[
 
         message_root_ref = weakref.ref(self, collected)
 
-        def refresh(address: Address) -> None:
+        def refresh(address: DependencyAddress) -> None:
             if (current := message_root_ref()) is None:
                 if subscriptions_ref is not None and (subscription_set := subscriptions_ref()) is not None:
                     subscription_set.close()
@@ -608,7 +608,7 @@ class MessageRoot[
         return self._candidates.dirty
 
     @property
-    def observed(self) -> tuple[Address, ...]:
+    def observed(self) -> tuple[DependencyAddress, ...]:
         """The reactive fields and external topics the generation on screen read.
 
         What the reader is looking at, whether or not anything can notify this mount about
@@ -618,7 +618,7 @@ class MessageRoot[
         return self._subscriptions.committed
 
     @property
-    def followed(self) -> tuple[Address, ...]:
+    def followed(self) -> tuple[DependencyAddress, ...]:
         """The currently retained reactive and topic subscriptions, for diagnostics.
 
         These may cover both the committed generation and a staged successor. Topics followed
@@ -636,7 +636,7 @@ class MessageRoot[
         """The live render generation used to reject stale interactions."""
         return self._candidates.generation
 
-    def _note_unscheduled_change(self, address: Address) -> None:
+    def _note_unscheduled_change(self, address: DependencyAddress) -> None:
         """Remember a change made outside this message's interactions while it has no scheduler.
 
         Such a change only appears once something redraws this message: its own settlement,

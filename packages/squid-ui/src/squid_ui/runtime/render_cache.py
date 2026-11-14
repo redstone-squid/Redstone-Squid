@@ -8,7 +8,7 @@ delivery. Pruning must retain invalidations raised by mount and unmount hooks.
 from collections.abc import Iterable, Mapping
 
 from squid_reactivity.resources import AsyncBinding, PendingMode
-from squid_reactivity.topics import Address
+from squid_reactivity.topics import DependencyAddress
 from squid_ui.runtime.async_bindings import async_render_policy
 from squid_ui.runtime.definition import AnyComponent
 from squid_ui.runtime.tree import IncrementalRender, _ComponentRender, _ExpandedSubtree
@@ -52,10 +52,10 @@ class RenderCache[RenderTargetT: RenderTarget]:
             component_paths=self._paths,
         )
 
-    def observing(self, addresses: set[Address]) -> tuple[set[AnyComponent], bool]:
+    def observing(self, addresses: set[DependencyAddress]) -> tuple[set[AnyComponent], bool]:
         """Find affected snapshots and whether they account for every address."""
         matched: set[AnyComponent] = set()
-        covered: set[Address] = set()
+        covered: set[DependencyAddress] = set()
         for (component, _path), snapshot in self._renders.items():
             observed = addresses.intersection(snapshot.observation.addresses())
             if observed:

@@ -3,7 +3,7 @@
 from collections.abc import Callable, Sequence
 
 from squid_reactivity.addresses import CellAddress, subscribe
-from squid_reactivity.topics import Topic
+from squid_reactivity.topics import DependencyAddress, Topic
 
 
 class Subscriptions:
@@ -16,34 +16,34 @@ class Subscriptions:
     Only one set can be staged at a time. Call close to release all subscriptions.
     """
 
-    def __init__(self, callback: Callable[[Topic | CellAddress], None]) -> None:
+    def __init__(self, callback: Callable[[DependencyAddress], None]) -> None:
         self.callback = callback
-        self._committed: tuple[Topic | CellAddress, ...] = ()
-        self._staged: tuple[Topic | CellAddress, ...] | None = None
-        self._subscriptions: dict[Topic | CellAddress, Callable[[], None]] = {}
+        self._committed: tuple[DependencyAddress, ...] = ()
+        self._staged: tuple[DependencyAddress, ...] | None = None
+        self._subscriptions: dict[DependencyAddress, Callable[[], None]] = {}
         self._closed = False
 
     @property
-    def committed(self) -> tuple[Topic | CellAddress, ...]:
+    def committed(self) -> tuple[DependencyAddress, ...]:
         return self._committed
 
     @property
-    def staged(self) -> tuple[Topic | CellAddress, ...] | None:
+    def staged(self) -> tuple[DependencyAddress, ...] | None:
         return self._staged
 
     @property
-    def subscribed_addresses(self) -> tuple[Topic | CellAddress, ...]:
+    def subscribed_addresses(self) -> tuple[DependencyAddress, ...]:
         """Addresses with active subscriptions, including any staged additions."""
         return tuple(self._subscriptions)
 
     @property
-    def dependencies(self) -> tuple[Topic | CellAddress, ...]:
+    def dependencies(self) -> tuple[DependencyAddress, ...]:
         """Committed and staged dependencies, kept subscribed until commit or discard."""
         if self._staged is None:
             return self._committed
         return tuple(dict.fromkeys((*self._committed, *self._staged)))
 
-    def stage(self, addresses: Sequence[Topic | CellAddress]) -> None:
+    def stage(self, addresses: Sequence[DependencyAddress]) -> None:
         if self._closed:
             message = "cannot stage subscriptions after close"
             raise RuntimeError(message)
@@ -54,7 +54,7 @@ class Subscriptions:
         if any(not isinstance(address, (Topic, CellAddress)) for address in wanted):
             message = "subscriptions require a Topic or CellAddress; resolve topic names through a bus"
             raise TypeError(message)
-        acquired: list[Topic | CellAddress] = []
+        acquired: list[DependencyAddress] = []
         try:
             for address in wanted:
                 if address in self._subscriptions:
@@ -96,7 +96,7 @@ class Subscriptions:
             unsubscribe()
         self._subscriptions.clear()
 
-    def _require_staged(self) -> tuple[Topic | CellAddress, ...]:
+    def _require_staged(self) -> tuple[DependencyAddress, ...]:
         if self._staged is None:
             message = "no subscription candidate is staged"
             raise RuntimeError(message)

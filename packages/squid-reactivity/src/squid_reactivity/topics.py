@@ -53,9 +53,14 @@ class Topic:
         return str(self.name)
 
 
-type Address = TopicName | Topic | CellAddress
-type Subscriber = Callable[[Address], None]
-type SubscriberErrorHandler = Callable[[Address, Subscriber, Exception], None]
+type DependencyAddress = Topic | CellAddress
+"""A resolved dependency that carries its notification source."""
+
+type BusAddress = TopicName | DependencyAddress
+"""An address a bus accepts, including portable names resolved by that bus."""
+
+type Subscriber = Callable[[BusAddress], None]
+type SubscriberErrorHandler = Callable[[BusAddress, Subscriber, Exception], None]
 
 
 def watch(*topics: Topic) -> None:
@@ -110,18 +115,18 @@ class TopicBus(Protocol):
 
     def topic(self, kind: str, key: str) -> Topic: ...
 
-    def subscribe[AddressT: Address](
+    def subscribe[AddressT: BusAddress](
         self, address: AddressT, callback: Callable[[AddressT], None]
     ) -> Callable[[], None]: ...
 
-    def publish(self, *addresses: Address) -> None: ...
+    def publish(self, *addresses: BusAddress) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
 class SubscriptionStats:
     """Delivery counts for one address. Queue counts are zero on a synchronous bus."""
 
-    topic: Address
+    topic: BusAddress
     subscribers: int
     queued: bool = False
     in_flight: bool = False
@@ -147,7 +152,7 @@ class _AddressState:
     failed: int = 0
 
 
-def _log_subscriber_error(address: Address, callback: Subscriber, error: Exception) -> None:
+def _log_subscriber_error(address: BusAddress, callback: Subscriber, error: Exception) -> None:
     logger.error(
         "topic subscriber failed for %r (%s)",
         address,
@@ -167,7 +172,7 @@ class LocalTopicBus:
 
     def __init__(self, *, on_subscriber_error: SubscriberErrorHandler = _log_subscriber_error) -> None:
         self._on_subscriber_error = on_subscriber_error
-        self._addresses: dict[Address, _AddressState] = {}
+        self._addresses: dict[BusAddress, _AddressState] = {}
         self._topics: WeakValueDictionary[TopicName, Topic] = WeakValueDictionary()
 
     def topic(self, kind: str, key: str) -> Topic:
@@ -183,7 +188,7 @@ class LocalTopicBus:
             self._topics[name] = handle
         return handle
 
-    def subscribe[AddressT: Address](
+    def subscribe[AddressT: BusAddress](
         self, address: AddressT, callback: Callable[[AddressT], None]
     ) -> Callable[[], None]:
         if isinstance(address, Topic):
@@ -200,7 +205,7 @@ class LocalTopicBus:
 
         return unsubscribe
 
-    def publish(self, *addresses: Address) -> None:
+    def publish(self, *addresses: BusAddress) -> None:
         for address in addresses:
             if isinstance(address, Topic):
                 address.publish()
@@ -239,7 +244,7 @@ class LocalTopicBus:
             failed=sum(topic.failed for topic in topics),
         )
 
-    def _report(self, address: Address, callback: Callable[[Any], None], error: Exception) -> None:
+    def _report(self, address: BusAddress, callback: Callable[[Any], None], error: Exception) -> None:
         try:
             self._on_subscriber_error(address, callback, error)
         except Exception:
@@ -253,9 +258,10 @@ def _callback_name(callback: Subscriber) -> str:
 
 
 __all__ = [
-    "Address",
+    "BusAddress",
     "CellAddress",
     "DelimitedTopicCodec",
+    "DependencyAddress",
     "LocalTopicBus",
     "Subscriber",
     "SubscriberErrorHandler",

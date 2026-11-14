@@ -81,7 +81,12 @@ bridge can publish events received from another process.
 
 ## Addresses and cell inspection
 
-::: squid_reactivity.Address
+`DependencyAddress` is a resolved `Topic` or `CellAddress`. Tracking and subscriptions use
+this type. `BusAddress` also accepts `TopicName`, which the receiving bus resolves.
+
+::: squid_reactivity.DependencyAddress
+
+::: squid_reactivity.BusAddress
 
 ::: squid_reactivity.CellAddress
 

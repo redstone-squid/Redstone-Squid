@@ -9,7 +9,7 @@ from typing import override
 
 import pytest
 
-from squid_reactivity import Address, Subscriptions, UndeclaredStateError, addresses, export_state
+from squid_reactivity import DependencyAddress, Subscriptions, UndeclaredStateError, addresses, export_state
 from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, ReactiveConflictError, transaction
@@ -36,14 +36,14 @@ class Anonymous(Reactive):
     flag: bool = state(False)
 
 
-type Follow = Callable[[CellAddress, Callable[[Address], None]], Callable[[], None]]
+type Follow = Callable[[CellAddress, Callable[[DependencyAddress], None]], Callable[[], None]]
 
 
 @pytest.fixture
 def follow() -> Iterator[Follow]:
     subscriptions: list[Subscriptions] = []
 
-    def observe(address: CellAddress, callback: Callable[[Address], None]) -> Callable[[], None]:
+    def observe(address: CellAddress, callback: Callable[[DependencyAddress], None]) -> Callable[[], None]:
         subscription_set = Subscriptions(callback)
         subscription_set.stage([address])
         subscription_set.commit()

@@ -12,7 +12,7 @@ from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _bump_epoch, _React
 from squid_reactivity.transaction_state import _READ_CONSISTENCY, _active, _ReadConsistency
 
 if TYPE_CHECKING:
-    from squid_reactivity.topics import Topic
+    from squid_reactivity.topics import DependencyAddress
 
 
 _MISSING = object()
@@ -29,7 +29,7 @@ class _Cell:
 
     __slots__ = ("__weakref__", "address", "identity", "value", "version")
 
-    def __init__(self, value: Any = _MISSING, version: int = 0, address: Topic | CellAddress | None = None) -> None:
+    def __init__(self, value: Any = _MISSING, version: int = 0, address: DependencyAddress | None = None) -> None:
         self.identity = uuid.uuid7()
         self.value = value
         self.version = version

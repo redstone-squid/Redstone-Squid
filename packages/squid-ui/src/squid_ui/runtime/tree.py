@@ -7,9 +7,8 @@ lifetime and reconciles candidate trees only after successful delivery.
 from dataclasses import dataclass, field
 from typing import Any, Generic
 
-from squid_reactivity.addresses import CellAddress
 from squid_reactivity.resources import AsyncBinding
-from squid_reactivity.topics import Topic
+from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.tracking import Dependencies
 from squid_ui.context import ContextKey
 from squid_ui.document import Asset
@@ -36,7 +35,7 @@ class ComponentTree(Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported
     """Children deferred for loading. A tree with deferred children is incomplete: do not plan, draw, or commit it."""
     async_bindings: tuple[AsyncBinding[object], ...] = ()
     """Async resources observed during rendering, including an atomic resource that suspended expansion."""
-    observations: tuple[Topic | CellAddress, ...] = ()
+    observations: tuple[DependencyAddress, ...] = ()
     """The bus addresses of every shared cell this render read, deduplicated.
 
     A frontend reconciles its subscriptions against this so a panel follows exactly what it
@@ -65,7 +64,7 @@ class _ComponentRender[RenderTargetT: RenderTarget, ContextT = object]:
     assets: tuple[Asset, ...]
     document_key: str | None
     observation: Dependencies
-    addresses: tuple[Topic | CellAddress, ...]
+    addresses: tuple[DependencyAddress, ...]
     async_bindings: tuple[AsyncBinding[object], ...]
 
 
@@ -79,7 +78,7 @@ class _ExpandedSubtree[RenderTargetT: RenderTarget, ContextT = object]:
     components: dict[str, AnyComponent]
     assets: tuple[Asset, ...]
     async_bindings: tuple[AsyncBinding[object], ...]
-    observations: tuple[Topic | CellAddress, ...]
+    observations: tuple[DependencyAddress, ...]
     child_splices: dict[str, _NodeSplice]
     topology: object = field(default_factory=object)
 

@@ -7,7 +7,7 @@ from typing import Any, cast, override
 import pytest
 
 from squid_reactivity import LocalTopicBus, Subscriptions, TopicBus, TopicName, observe_reads, watch
-from squid_reactivity.topics import Address
+from squid_reactivity.topics import BusAddress
 
 BUILD = TopicName("build", "1")
 OTHER = TopicName("build", "2")
@@ -26,11 +26,11 @@ def test_local_bus_satisfies_the_protocol_and_delivers_in_order() -> None:
 
 
 def test_subscriber_failures_are_isolated_and_reported() -> None:
-    reported: list[tuple[Address, Exception]] = []
-    seen: list[Address] = []
+    reported: list[tuple[BusAddress, Exception]] = []
+    seen: list[BusAddress] = []
     bus = LocalTopicBus(on_subscriber_error=lambda address, _callback, error: reported.append((address, error)))
 
-    def fail(_address: Address) -> None:
+    def fail(_address: BusAddress) -> None:
         raise RuntimeError("broken")
 
     bus.subscribe(BUILD, fail)
@@ -43,10 +43,10 @@ def test_subscriber_failures_are_isolated_and_reported() -> None:
 
 
 def test_error_hook_failures_are_isolated(caplog: pytest.LogCaptureFixture) -> None:
-    def fail_hook(_address: Address, _callback: Callable[[Address], None], _error: Exception) -> None:
+    def fail_hook(_address: BusAddress, _callback: Callable[[BusAddress], None], _error: Exception) -> None:
         raise RuntimeError("reporter failed")
 
-    def fail_subscriber(_address: Address) -> None:
+    def fail_subscriber(_address: BusAddress) -> None:
         raise RuntimeError("subscriber failed")
 
     bus = LocalTopicBus(on_subscriber_error=fail_hook)
@@ -71,7 +71,7 @@ def test_publish_moves_a_watched_version_without_subscribers() -> None:
 
 def test_subscriptions_keeps_committed_and_one_staged_set() -> None:
     bus = LocalTopicBus()
-    seen: list[Address] = []
+    seen: list[BusAddress] = []
     build = bus.topic(BUILD.kind, BUILD.key)
     other = bus.topic(OTHER.kind, OTHER.key)
     subscriptions = Subscriptions(seen.append)
@@ -112,7 +112,7 @@ def test_subscriptions_commit_promotes_and_close_releases() -> None:
 def test_subscriptions_unwinds_a_partial_stage() -> None:
     class BrokenBus(LocalTopicBus):
         @override
-        def subscribe[AddressT: Address](
+        def subscribe[AddressT: BusAddress](
             self, address: AddressT, callback: Callable[[AddressT], None]
         ) -> Callable[[], None]:
             if address == OTHER:
@@ -135,7 +135,7 @@ def test_subscriptions_unwinds_a_partial_stage() -> None:
 def test_subscriptions_reject_unresolved_names_without_replacing_current_dependencies() -> None:
     bus = LocalTopicBus()
     topic = bus.topic(BUILD.kind, BUILD.key)
-    seen: list[Address] = []
+    seen: list[BusAddress] = []
     subscriptions = Subscriptions(seen.append)
     subscriptions.stage((topic,))
     subscriptions.commit()
@@ -153,7 +153,7 @@ def test_delivery_skips_removed_callbacks_and_defers_new_subscriptions() -> None
     bus = LocalTopicBus()
     seen: list[str] = []
 
-    def replace_subscriber(_address: Address) -> None:
+    def replace_subscriber(_address: BusAddress) -> None:
         seen.append("first")
         unsubscribe_first()
         unsubscribe_second()
@@ -172,7 +172,7 @@ def test_delivery_skips_removed_callbacks_and_defers_new_subscriptions() -> None
 
 def test_duplicate_callbacks_have_independent_idempotent_subscriptions() -> None:
     bus = LocalTopicBus()
-    seen: list[Address] = []
+    seen: list[BusAddress] = []
     callback = seen.append
     unsubscribe_first = bus.subscribe(BUILD, callback)
     unsubscribe_second = bus.subscribe(BUILD, callback)
@@ -206,7 +206,7 @@ def test_handles_follow_their_owner_without_an_explicit_bus() -> None:
     with observe_reads() as observation:
         handle.watch()
     source, version = next(iter(observation.sources.items()))
-    seen: list[Address] = []
+    seen: list[BusAddress] = []
     subscriptions = Subscriptions(seen.append)
     subscriptions.stage(observation.addresses())
     subscriptions.commit()
@@ -227,7 +227,7 @@ def test_handles_follow_their_owner_without_an_explicit_bus() -> None:
 def test_a_handle_subscription_keeps_the_watched_generation_alive() -> None:
     bus = LocalTopicBus()
     handle = bus.topic("build", "42")
-    seen: list[Address] = []
+    seen: list[BusAddress] = []
     unsubscribe = handle.subscribe(seen.append)
     handle.publish()
     assert seen == [handle]

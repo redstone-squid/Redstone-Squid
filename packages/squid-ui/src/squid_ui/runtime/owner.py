@@ -6,7 +6,7 @@ from typing import Any
 
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.subscriptions import Subscriptions
-from squid_reactivity.topics import Address
+from squid_reactivity.topics import BusAddress, DependencyAddress
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache, PlanMemo
@@ -88,7 +88,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         presentation: PresentationState | None = None,
         on_invalidate: Callable[[], None] | None = None,
-        on_reactive_invalidate: Callable[[Address], None] | None = None,
+        on_reactive_invalidate: Callable[[DependencyAddress], None] | None = None,
         context: Mapping[ContextKey[Any], object] | None = None,
         plan_cache: PlanCache | None = None,
         execution_host: UIExecutionHost | None = None,
@@ -119,7 +119,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.dirty = True
         """Whether the committed tree is behind the inputs a fresh render would read."""
 
-    def _reactive_changed(self, address: Address) -> None:
+    def _reactive_changed(self, address: DependencyAddress) -> None:
         self.invalidate_address(address)
         if self.on_reactive_invalidate is not None:
             self.on_reactive_invalidate(address)
@@ -177,24 +177,24 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             check_dependencies=check_dependencies,
         )
 
-    def invalidate_addresses(self, addresses: Iterable[Address]) -> None:
+    def invalidate_addresses(self, addresses: Iterable[BusAddress]) -> None:
         """Invalidate only component snapshots that observed any current bus address."""
         requested = set(addresses)
         if not requested:
             return
-        active: set[Address] = set(self.subscriptions.dependencies)
+        active: set[DependencyAddress] = set(self.subscriptions.dependencies)
         if self._committed_tree is not None:
             active.update(self._committed_tree.observations)
         if self._cached_tree is not None:
             active.update(self._cached_tree.observations)
-        relevant = requested & active
+        relevant = active & requested
         if not relevant:
             return
 
         matched, covered = self._cache.observing(relevant)
         self._invalidate_components(matched, force_all=not covered, check_dependencies=True)
 
-    def invalidate_address(self, address: Address) -> None:
+    def invalidate_address(self, address: BusAddress) -> None:
         """Invalidate component snapshots that observed one current bus address."""
         self.invalidate_addresses((address,))
 
