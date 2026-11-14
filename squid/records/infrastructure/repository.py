@@ -8,7 +8,7 @@ from decimal import Decimal
 from itertools import pairwise
 from typing import cast
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -110,6 +110,42 @@ class PostgresRecordRepository:
         if kind is BuildKind.EXTENDER:
             return await self._list_extenders(session)
         return ()
+
+    async def list_for_door_lookup(
+        self, opening: tuple[int, int, int], orientation: str, version_id: int | None
+    ) -> Sequence[CandidateBuild]:
+        """Load a coherent live population without creating record definitions."""
+        session = self._session()
+        # Tags, versions and timing variants use separate SELECTs. Pin their view
+        # before the first read so concurrent edits cannot mix revisions.
+        await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+        width, height, depth = opening
+        statement = (
+            select(DoorBuild)
+            .where(
+                DoorBuild.submission_status == Status.CONFIRMED,
+                DoorBuild.orientation == orientation,
+                or_(
+                    DoorBuild.expansion.is_not(None),
+                    and_(
+                        DoorBuild.door_width == width,
+                        DoorBuild.door_height == height,
+                        func.coalesce(DoorBuild.door_depth, 1) == depth,
+                    ),
+                ),
+            )
+            .options(
+                selectinload(DoorBuild.tags).options(*assignment_units()),
+                selectinload(DoorBuild.build_versions),
+            )
+            .order_by(DoorBuild.id)
+        )
+        if version_id is not None:
+            statement = statement.where(DoorBuild.build_versions.any(version_id=version_id))
+        doors = tuple((await session.execute(statement)).unique().scalars())
+        timings = await _door_timings(session, tuple(door.id for door in doors if door.expansion is None))
+        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
+        return tuple(_door_candidate(door, timings.get(door.id, ()), size=size) for door in doors)
 
     async def active_rules_revision_id(self) -> int:
         """Return the active rules revision, activating and queuing it when needed."""
@@ -759,9 +795,10 @@ async def _extender_timings(
     return {build_id: tuple(variants) for build_id, variants in grouped.items()}
 
 
-def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...]) -> CandidateBuild:
+def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...], *, size: str | None = None) -> CandidateBuild:
     # Incomplete builds can be saved, but cannot establish a comparable door category.
-    assert door.orientation is not None and door.door_width is not None and door.door_height is not None
+    assert door.orientation is not None
+    assert size is not None or (door.door_width is not None and door.door_height is not None)
     fallback_timing = TimingVariant(
         (
             door.normal_opening_time,
@@ -780,19 +817,20 @@ def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...]) -> Candi
         kind=BuildKind.DOOR,
         candidate=Candidate(
             build_id=door.id,
-            completion_at=_as_datetime(door.completion_at),
+            completion_at=_as_datetime(door.completion_at) if door.expansion is None else None,
             fixed_volume=door.width * door.height * depth
-            if door.width is not None and door.height is not None and not is_expandable
+            if door.width is not None and door.height is not None and not is_expandable and door.expansion is None
             else None,
-            timing_variants=timing or (fallback_timing,),
+            timing_variants=(timing or (fallback_timing,)) if door.expansion is None else (),
         ),
+        expansion=door.expansion,
         version_ids=frozenset(version.version_id for version in door.build_versions),
         restrictions=restrictions,
         types=patterns,
         door=DoorCategory(
             wiring_restrictions=(),
             animated_restrictions=(),
-            size=_door_size(door),
+            size=size if size is not None else _door_size(door),
             types=tuple(pattern.category_name for pattern in patterns) or ("Regular",),
             orientation=door.orientation,
         ),

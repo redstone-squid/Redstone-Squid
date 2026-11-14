@@ -119,3 +119,57 @@ async def test_database_rejects_invalid_document_envelope(
                 text("UPDATE doors SET expansion = CAST(:value AS jsonb) WHERE build_id = :id"),
                 {"value": document, "id": build_id},
             )
+
+
+async def test_live_lookup_loads_families_without_sample_dimensions(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    async with build_edit_session(sessions) as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        family = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=Status.CONFIRMED,
+            expansion=expansion_document(),
+            orientation="Door",
+            width=1,
+            height=1,
+            normal_opening_time=1,
+            completion_at=Instant.now(),
+        )
+        fixed = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=Status.CONFIRMED,
+            orientation="Door",
+            door_width=6,
+            door_height=3,
+            width=9,
+            height=6,
+            depth=2,
+        )
+        pending = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=Status.PENDING,
+            expansion=expansion_document(),
+            orientation="Door",
+        )
+        session.add_all([family, fixed, pending])
+        await session.flush()
+        family_id, fixed_id = family.id, fixed.id
+    async with SqlAlchemyUnitOfWork(sessions) as uow:
+        candidates = await uow.record_candidates.list_for_door_lookup((6, 3, 1), "Door", None)
+        assert {candidate.candidate.build_id for candidate in candidates} == {family_id, fixed_id}
+        loaded = next(candidate for candidate in candidates if candidate.candidate.build_id == family_id)
+        assert loaded.expansion == expansion_document()
+        assert loaded.candidate.fixed_volume is None
+        assert loaded.candidate.timing_variants == ()
+        assert loaded.candidate.completion_at is None
+        assert loaded.door is not None
+        assert loaded.door.size == "6x3"
+    async with SqlAlchemyUnitOfWork(sessions) as uow:
+        candidates = await uow.record_candidates.list_for_door_lookup((9999, 3, 1), "Door", None)
+        assert [candidate.candidate.build_id for candidate in candidates] == [family_id]
+    async with SqlAlchemyUnitOfWork(sessions) as uow:
+        assert await uow.record_candidates.list_for_door_lookup((6, 3, 1), "Skydoor", None) == ()

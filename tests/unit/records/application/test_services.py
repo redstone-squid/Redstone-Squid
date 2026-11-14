@@ -42,6 +42,20 @@ class FakeCandidates:
     async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]:
         return tuple(candidate for candidate in self.candidates if candidate.kind is kind)
 
+    async def list_for_door_lookup(
+        self, opening: tuple[int, int, int], orientation: str, version_id: int | None
+    ) -> Sequence[CandidateBuild]:
+        width, height, depth = opening
+        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
+        return tuple(
+            replace(candidate, door=replace(candidate.door, size=size))
+            for candidate in self.candidates
+            if candidate.door is not None
+            and candidate.door.orientation == orientation
+            and (candidate.expansion is not None or candidate.door.size == size)
+            and (version_id is None or version_id in candidate.version_ids)
+        )
+
 
 class FakeRuns:
     """Capture computed batches and supply the configured record queries.

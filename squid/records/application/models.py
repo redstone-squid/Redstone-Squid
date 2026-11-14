@@ -8,6 +8,7 @@ from typing import Self
 from uuid import UUID
 
 from squid.builds.application.queries import PublicBuildSummary
+from squid.builds.domain.expansion import DoorExpansion
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
@@ -68,6 +69,7 @@ class CandidateBuild:
     types: tuple[CandidateFacet, ...]
     door: DoorCategory | None = None
     extender: ExtenderCategory | None = None
+    expansion: DoorExpansion | None = None
 
 
 @dataclass(frozen=True, slots=True)
