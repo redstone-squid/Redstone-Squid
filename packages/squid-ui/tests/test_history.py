@@ -16,7 +16,7 @@ from squid_reactivity import (
     TransactionContribution,
     enlist,
     observe_events,
-    on_action_commit,
+    on_transaction_commit,
 )
 from squid_reactivity.operations import OperationContext
 from squid_reactivity.transaction_results import (
@@ -618,7 +618,7 @@ def test_memory_outbox_persists_first_intent_at_the_commit_point() -> None:
     with transaction():
         joined = enlist(outbox, lambda: outbox.participant(intent))
         assert joined is not None
-        on_action_commit(lambda commit: visible_at_commit.append(outbox.records))
+        on_transaction_commit(lambda commit: visible_at_commit.append(outbox.records))
 
     assert visible_at_commit[0][0].intent == intent
     assert visible_at_commit[0][0].attempts == 0

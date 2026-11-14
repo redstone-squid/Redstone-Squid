@@ -111,11 +111,12 @@ Apply targeted cell changes, optionally conditioned on what the writer last saw.
 
 ::: squid_reactivity.apply_conditional_patches
 
-## Actions
+## Action context and transaction results
 
-An action is an identified transaction. `transaction(name, actor=..., caused_by=...)` yields a
-`Transaction` whose context is available immediately and whose result is set when the outer
-block finishes. Nested blocks share the handle. Callbacks receive the completed result.
+`ActionContext` identifies why work ran and what caused it. `transaction(name, actor=..., caused_by=...)`
+yields a `Transaction` whose context is available immediately and whose result is set when the outer
+block finishes. Nested blocks share the handle. Callbacks receive a `TransactionCommit` or
+`TransactionRollback`; related operations and resource loads retain their own lifetimes and results.
 
 ::: squid_reactivity.action_scope
 
@@ -158,11 +159,11 @@ sinks do not register themselves; applications own serialization, storage, and r
 
 ::: squid_reactivity.EventSink
 
-::: squid_reactivity.on_action_commit
+::: squid_reactivity.on_transaction_commit
 
-::: squid_reactivity.on_action_rollback
+::: squid_reactivity.on_transaction_rollback
 
-::: squid_reactivity.on_action_result
+::: squid_reactivity.on_transaction_result
 
 ::: squid_reactivity.TransactionResult
 

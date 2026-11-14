@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from squid_reactivity import ConflictDetail, TransactionCommit, on_action_commit, transaction
+from squid_reactivity import ConflictDetail, TransactionCommit, on_transaction_commit, transaction
 from squid_replication import LoroBackend, Replica, ReplicationChangeToken
 
 _FIXTURE = Path(__file__).with_name("fixtures") / "loro_document_v1.json"
@@ -40,7 +40,7 @@ def measure(profile_name: str) -> dict[str, float | int | str]:
 
     def commit() -> None:
         with transaction():
-            on_action_commit(lambda outcome, continuation: commits.append(outcome))
+            on_transaction_commit(lambda outcome, continuation: commits.append(outcome))
             document.text("description").insert(0, "redstone " * (profile["text_bytes"] // 9))
             document.counter("votes").increment(2**53 + 17)
             document.set("tags").add("benchmark")

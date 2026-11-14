@@ -10,8 +10,8 @@ import discord
 from squid_reactivity.completion import Completion
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.transactions import (
-    on_action_commit,
-    on_action_rollback,
+    on_transaction_commit,
+    on_transaction_rollback,
 )
 from squid_ui.interactions import ActionEvent as PortableActionEvent
 from squid_ui.runtime.component import Component
@@ -272,7 +272,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                             if not state.closing:
                                 state.outcome = outcome
 
-                        on_action_commit(committed)
+                        on_transaction_commit(committed)
 
                     parent_root = parent._screen_require_root()
                     try:
@@ -293,7 +293,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                 state.pending = False
 
         try:
-            on_action_rollback(rolled_back)
+            on_transaction_rollback(rolled_back)
             responder.on_success(accept, name=f"{type(self).__qualname__}.resolve")
         except BaseException:
             state.pending = False
@@ -328,7 +328,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
         async def rollback_child() -> None:
             await child._screen_close(ScreenCancelReason.CLOSED)
 
-        on_action_rollback(lambda *_args: host.start_cleanup(rollback_child))
+        on_transaction_rollback(lambda *_args: host.start_cleanup(rollback_child))
         try:
             result = await event.context.respond(child, **overrides)
         except BaseException as error:

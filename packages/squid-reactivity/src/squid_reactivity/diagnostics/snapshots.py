@@ -146,7 +146,7 @@ class ResourceEventSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class ContinuationFailureSnapshot:
-    """A post-result failure that cannot alter the immutable action result."""
+    """A post-result failure that cannot alter the immutable transaction result."""
 
     failure_id: str
     root_action_id: str

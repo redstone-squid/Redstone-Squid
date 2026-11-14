@@ -57,8 +57,8 @@ from squid_reactivity.transactions import (
     apply_conditional_patches,
     enlist,
     fresh_action_transaction,
-    has_action_hook,
-    on_action_commit,
+    has_transaction_hook,
+    on_transaction_commit,
 )
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import SquidUiError
@@ -782,7 +782,7 @@ class History:
                         self._redoable.append(entry)
                     self._signal.notify()
 
-                on_action_commit(committed, key=self)
+                on_transaction_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
@@ -994,7 +994,7 @@ class History:
                     self._undone.append(entry)
                     self._signal.notify()
 
-                on_action_commit(committed, key=self)
+                on_transaction_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
@@ -1044,10 +1044,10 @@ class History:
         if current is not None and current.readonly:
             message = "a read-only action changed nothing, so it has nothing to record"
             raise ReactiveWriteError(message)
-        if has_action_hook(self):
+        if has_transaction_hook(self):
             message = "this action already used this history; only one history operation is allowed"
             raise HistoryError(message)
-        on_action_commit(callback, key=self)
+        on_transaction_commit(callback, key=self)
 
     def _push(self, entry: HistoryEntry) -> None:
         entry.retentions = self._retain_plan(entry.undo_plan)

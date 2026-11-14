@@ -16,7 +16,7 @@ from squid_reactivity.transaction_results import (
 )
 from squid_reactivity.transactions import (
     block_writes,
-    on_action_commit,
+    on_transaction_commit,
     readonly_transaction,
 )
 from squid_ui import Component, DiscordTarget, computed, state
@@ -188,7 +188,7 @@ class TestStaging:
         panel.declared = 1
         seen: list[TransactionCommit] = []
         with transaction():
-            on_action_commit(lambda commit: seen.append(commit))
+            on_transaction_commit(lambda commit: seen.append(commit))
             panel.declared = 2
             panel.declared = 3
         (commit,) = seen
@@ -464,7 +464,7 @@ class TestAbstractBases:
             Panel()
 
 
-class TestActionCommitHooks:
+class TestTransactionCommitHooks:
     """Committed patches provide the before/after state used by runtime.History."""
 
     def test_the_delta_carries_both_directions(self):
@@ -472,7 +472,7 @@ class TestActionCommitHooks:
         assert panel.declared == 0
         seen: list[TransactionCommit] = []
         with transaction():
-            on_action_commit(lambda commit: seen.append(commit))
+            on_transaction_commit(lambda commit: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -483,7 +483,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(Uncopyable()))
         seen: list[TransactionCommit] = []
         with transaction():
-            on_action_commit(lambda commit: seen.append(commit))
+            on_transaction_commit(lambda commit: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -493,7 +493,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(Uncopyable()))
         seen: list[TransactionCommit] = []
         with pytest.raises(RuntimeError), transaction():
-            on_action_commit(lambda commit: seen.append(commit))
+            on_transaction_commit(lambda commit: seen.append(commit))
             panel.declared = 7
             message = "the action failed"
             raise RuntimeError(message)
@@ -504,7 +504,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(service))
         seen: list[TransactionCommit] = []
         with transaction():
-            on_action_commit(lambda commit: seen.append(commit))
+            on_transaction_commit(lambda commit: seen.append(commit))
             panel.service = Uncopyable()
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -513,9 +513,9 @@ class TestActionCommitHooks:
     def test_one_key_registers_once(self):
         key = object()
         with transaction():
-            on_action_commit(lambda commit: None, key=key)
+            on_transaction_commit(lambda commit: None, key=key)
             with pytest.raises(RuntimeError, match="already registered"):
-                on_action_commit(lambda commit: None, key=key)
+                on_transaction_commit(lambda commit: None, key=key)
 
     def test_blocked_writes_name_their_reason(self):
         panel = attached(Panel(Uncopyable()))
@@ -724,7 +724,7 @@ class TestCommitFailures:
             raise RuntimeError(message)
 
         with transaction():
-            on_action_commit(explode)
+            on_transaction_commit(explode)
             panel.declared = 7
         assert panel.declared == 7
         assert panel.notified == [frozenset({"__state_declared"})]
@@ -734,7 +734,7 @@ class TestCommitFailures:
         log: list[str] = []
         panel = watched()
         with transaction():
-            on_action_commit(lambda commit: log.append("hook"))
+            on_transaction_commit(lambda commit: log.append("hook"))
             enlist(object(), lambda: Recorder(log, "a"))
             panel.declared = 7
         assert log == ["a.prepare", "a.apply", "a.finalize", "hook"]

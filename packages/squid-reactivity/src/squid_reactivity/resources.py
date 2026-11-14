@@ -63,8 +63,8 @@ from squid_reactivity.tracking import (
 )
 from squid_reactivity.transactions import (
     TransactionView,
-    action_participant,
     enlist,
+    transaction_participant,
 )
 
 
@@ -435,7 +435,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
 
     def _staged(self) -> ValueT | _Missing:
         """This action's replacement for this resource, if it made one."""
-        staged = action_participant(self)
+        staged = transaction_participant(self)
         return staged.value if isinstance(staged, _Replacement) else _MISSING
 
     def __await__(self) -> Generator[Any, None, ValueT]:

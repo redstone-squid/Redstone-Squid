@@ -1,7 +1,12 @@
 # Action ledger, history, and replicated state
 
 Squid treats the transaction outcome as the source of truth. History, DevTools, profiling, audit
-sinks, and optional replicated state consume that truth; none defines whether an action committed.
+sinks, and optional replicated state consume that truth; none defines whether a transaction committed.
+
+`ActionContext` identifies the intent and links work to its cause. `TransactionCommit` and
+`TransactionRollback` describe the transaction's published or discarded changes; their union is
+`TransactionResult`. These records live in `squid_reactivity.transaction_results`, while
+`squid_reactivity.transactions` owns staging, validation, publication, and result callbacks.
 
 ## Commit and rollback pipeline
 
@@ -219,7 +224,7 @@ def present_error(rollback, aftermath) -> None:
 
 
 with transaction():
-    on_action_rollback(present_error)
+    on_transaction_rollback(present_error)
     change_project()
 ```
 

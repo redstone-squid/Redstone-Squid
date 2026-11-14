@@ -40,7 +40,7 @@ from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
 from squid_reactivity.transactions import (
-    on_action_commit,
+    on_transaction_commit,
     readonly_transaction,
     transaction,
 )
@@ -1170,7 +1170,7 @@ class MessageRoot[
                 yield
             return
         with transaction(action_context=context):
-            on_action_commit(self._note_action_commit, key=self)
+            on_transaction_commit(self._note_action_commit, key=self)
             yield
 
     def _note_action_commit(self, commit: TransactionCommit) -> None:

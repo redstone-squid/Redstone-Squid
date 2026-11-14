@@ -959,7 +959,7 @@ retrying is the author starting another execution.
 rolled back.** An action is atomic over cells and over participants that enlisted in the commit
 gate, and a network call is neither. The supported shape is that the transaction commits the
 *intent* and an operation the action arms reaches the terminal outcome, which a later action
-records; `on_action_rollback` is how an author finds out that the effect already happened and
+records; `on_transaction_rollback` is how an author finds out that the effect already happened and
 the commit did not.
 
 The same narrowness explains why transactional state cannot be a loading indicator. Writing

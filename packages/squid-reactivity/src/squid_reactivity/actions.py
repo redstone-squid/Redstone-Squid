@@ -157,7 +157,7 @@ def causal_scope(cause: CausalRef, root_action_id: ActionId | None) -> Iterator[
 
 @contextmanager
 def continuation_callback() -> Iterator[None]:
-    """Mark this with block as continuation work after an action result."""
+    """Mark this with block as continuation work after an transaction result."""
     token = _continuation_depth.set(_continuation_depth.get() + 1)
     try:
         yield

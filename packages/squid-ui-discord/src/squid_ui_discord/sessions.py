@@ -24,7 +24,7 @@ from uuid import uuid4
 
 import anyio
 
-from squid_reactivity import on_action_commit
+from squid_reactivity import on_transaction_commit
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui.text import TextLike
 from squid_ui_discord.closure import CloseReason
@@ -969,7 +969,7 @@ class SessionManager:
             # A panel cannot close inside an action's transaction, so an open from a button
             # press retires the sessions it replaces once that action commits. If the action
             # rolls back, the opener discards the newcomer and the replaced sessions stay open.
-            on_action_commit(lambda _commit: host.start_cleanup(partial(self._retire, victims, newcomer)))
+            on_transaction_commit(lambda _commit: host.start_cleanup(partial(self._retire, victims, newcomer)))
         else:
             await self._retire(victims, newcomer)
         return Opened(newcomer)

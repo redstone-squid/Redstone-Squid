@@ -91,7 +91,7 @@ class TransactionView(Protocol):
 
 
 class TransactionParticipant[PreparedT](Protocol):
-    """Join an action with writes managed outside the state cells.
+    """Join a transaction with writes managed outside the state cells.
 
     Register through enlist. During commit, prepare validates the staged changes
     and returns the data apply needs. Preparation must not publish changes. If it
@@ -259,7 +259,7 @@ def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
 
 
 def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
-    """Stage a write into the action in flight, or land it now if there is none.
+    """Stage a write into the transaction in flight, or land it now if there is none.
 
     `enlist` already returns `None` when no transaction is open; this is the same
     signal read directly. A component built during the action is not protected by it, so
@@ -300,15 +300,15 @@ class Transaction:
 
     def after_commit(self, callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
         self._check_current()
-        on_action_commit(callback, key=key)
+        on_transaction_commit(callback, key=key)
 
     def after_rollback(self, callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
         self._check_current()
-        on_action_rollback(callback, key=key)
+        on_transaction_rollback(callback, key=key)
 
     def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
         self._check_current()
-        on_action_result(callback, key=key)
+        on_transaction_result(callback, key=key)
 
     def _check_current(self) -> None:
         current = _CURRENT.get()
@@ -899,33 +899,33 @@ def readonly_transaction(*, action_context: ActionContext | None = None) -> Iter
         yield handle
 
 
-def on_action_commit(callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
+def on_transaction_commit(callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
     """Register a synchronous callback for a successful commit.
 
     Call inside a transaction. Callback failures are reported without changing
     the result. Open a new transaction for writes; caused_by=result.context links it to this action.
     """
-    _add_action_hook("commit", callback, key=key)
+    _add_transaction_hook("commit", callback, key=key)
 
 
-def on_action_rollback(callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
+def on_transaction_rollback(callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
     """Register a synchronous callback after rollback; its errors are reported."""
-    _add_action_hook("rollback", callback, key=key)
+    _add_transaction_hook("rollback", callback, key=key)
 
 
-def on_action_result(callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
+def on_transaction_result(callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
     """Register a synchronous callback for either commit or rollback."""
-    _add_action_hook("result", callback, key=key)
+    _add_transaction_hook("result", callback, key=key)
 
 
-def _add_action_hook(kind: str, callback: Callable[..., None], *, key: object | None) -> None:
+def _add_transaction_hook(kind: str, callback: Callable[..., None], *, key: object | None) -> None:
     current = _CURRENT.get()
     if current is None:
         message = "commit hooks are only available inside an action's transaction"
         raise RuntimeError(message)
     if not current.writable():
         current.reject_stale("a commit hook")
-    if key is not None and has_action_hook(key):
+    if key is not None and has_transaction_hook(key):
         message = f"{key!r} already registered a commit hook for this action"
         raise RuntimeError(message)
     hooks = {
@@ -939,7 +939,7 @@ def _add_action_hook(kind: str, callback: Callable[..., None], *, key: object | 
 def enlist[ParticipantT: TransactionParticipant[Any]](
     key: object, factory: Callable[[], ParticipantT]
 ) -> ParticipantT | None:
-    """Take part in the action in flight, staging writes instead of publishing them.
+    """Take part in the transaction in flight, staging writes instead of publishing them.
 
     Returns the participant registered for `key`, built by `factory` on first use, or
     `None` when no transaction is open -- the caller's signal that its write has nothing
@@ -952,14 +952,14 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
     return current.enlist(key, factory)
 
 
-def action_participant(key: object) -> TransactionParticipant[Any] | None:
+def transaction_participant(key: object) -> TransactionParticipant[Any] | None:
     """Return the participant already registered for ``key``, without creating one."""
     current = _CURRENT.get()
     return None if current is None else current.participants.get(key)
 
 
-def has_action_hook(key: object) -> bool:
-    """Whether `key` already registered any result hook for the action in flight."""
+def has_transaction_hook(key: object) -> bool:
+    """Whether `key` already registered any result hook for the transaction in flight."""
     current = _CURRENT.get()
     if current is None:
         return False

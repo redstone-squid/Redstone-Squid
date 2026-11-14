@@ -22,8 +22,8 @@ from squid_reactivity.transaction_results import (
     TransactionCommit,
 )
 from squid_reactivity.transactions import (
-    on_action_commit,
-    on_action_rollback,
+    on_transaction_commit,
+    on_transaction_rollback,
 )
 from squid_ui.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
 from squid_ui.interactions import ActionEvent, ActionMode, Visibility
@@ -237,8 +237,8 @@ class ActionResponder:
             callback,
             name=name or getattr(callback, "__qualname__", type(callback).__qualname__),
         )
-        on_action_commit(self._record_commit)
-        on_action_rollback(operation._discard)
+        on_transaction_commit(self._record_commit)
+        on_transaction_rollback(operation._discard)
         self._after_commit.append(operation)
         return operation
 

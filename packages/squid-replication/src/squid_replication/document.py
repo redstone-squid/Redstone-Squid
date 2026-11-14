@@ -27,9 +27,9 @@ from squid_reactivity.transaction_results import (
 )
 from squid_reactivity.transactions import (
     TransactionView,
-    action_participant,
     enlist,
     transaction,
+    transaction_participant,
 )
 from squid_replication.engine import ReplicationBackend, ReplicationEngine
 from squid_replication.model import (
@@ -307,7 +307,7 @@ class ReplicatedDocument:
         """Return the staged snapshot inside an editing transaction, otherwise committed state."""
         self._ensure_open()
         self._version_cell.read()
-        participant = action_participant(self)
+        participant = transaction_participant(self)
         return (
             participant.branch.snapshot()
             if isinstance(participant, _ReplicationParticipant)
@@ -461,7 +461,7 @@ class ReplicatedDocument:
     def compact_history(self) -> None:
         """Compact backend history without crossing any retained token lease."""
         self._ensure_open()
-        if isinstance(action_participant(self), _ReplicationParticipant):
+        if isinstance(transaction_participant(self), _ReplicationParticipant):
             message = "replicated history cannot be compacted inside a transaction that edits the document"
             raise TypeError(message)
         self.engine.compact()

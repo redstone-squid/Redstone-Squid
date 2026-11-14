@@ -10,7 +10,7 @@ import anyio
 import pytest
 
 import squid_ui as sl
-from squid_reactivity import on_action_commit, on_action_rollback, transaction
+from squid_reactivity import on_transaction_commit, on_transaction_rollback, transaction
 from squid_reactivity.operations import OperationDefinition, Pending, ProgressReporter, Succeeded
 from squid_ui.primitives import Text
 from squid_ui.runtime import History, PostCommitOperation, UIExecutionHost, history
@@ -153,7 +153,7 @@ async def test_post_commit_status_is_observable_without_starting_work_from_rende
         host = UIExecutionHost()
         await tasks.start(host.run)
         with transaction():
-            on_action_commit(lambda commit: handle._commit(commit, host))
+            on_transaction_commit(lambda commit: handle._commit(commit, host))
         await started.wait()
         assert runtime.dirty
         tree = runtime.render(reuse_committed=True)
@@ -174,7 +174,7 @@ def test_post_commit_rollback_notifies_status_readers() -> None:
     handle = PostCommitOperation(work, name="discard")
     runtime = mount(lambda: str(handle.status))
     with pytest.raises(ValueError), transaction():
-        on_action_rollback(handle._discard)
+        on_transaction_rollback(handle._discard)
         raise ValueError("abort")
     assert runtime.dirty
     assert runtime.render(reuse_committed=True).nodes == (Text("Discarded()"),)

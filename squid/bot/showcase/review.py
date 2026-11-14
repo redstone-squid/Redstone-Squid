@@ -146,7 +146,7 @@ class ReviewerPanel(InspectablePanel):
             with sl.runtime.transaction("Log review activity", caused_by=commit.context):
                 self.room.log(line)
 
-        sl.runtime.on_action_commit(committed)
+        sl.runtime.on_transaction_commit(committed)
 
     async def _approve(self, event: sl.PressEvent[sd.Request]) -> None:
         if self.room.closed:

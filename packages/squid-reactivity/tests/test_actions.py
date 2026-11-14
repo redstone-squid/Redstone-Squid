@@ -28,8 +28,8 @@ from squid_reactivity import (
     computed,
     enlist,
     observe_events,
-    on_action_commit,
-    on_action_rollback,
+    on_transaction_commit,
+    on_transaction_rollback,
     readonly_transaction,
     relaxed_read,
     state,
@@ -97,7 +97,7 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
         def observe(rollback) -> None:
             seen.append((rollback.reason.value, preferences.theme))
 
-        on_action_rollback(observe)
+        on_transaction_rollback(observe)
         raise RuntimeError("failed")
 
     assert seen == [("handler_exception", "system")]
@@ -158,7 +158,7 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
     counter = Counter()
     commits: list[TransactionCommit] = []
     with transaction():
-        on_action_commit(lambda commit: commits.append(commit))
+        on_transaction_commit(lambda commit: commits.append(commit))
         counter.value = committed_value
     inverse = commits[0].patches.inverse()
 
@@ -178,7 +178,7 @@ def test_retained_patch_uses_weak_slot_authority() -> None:
     owner = weakref.ref(counter)
     commits: list[TransactionCommit] = []
     with transaction():
-        on_action_commit(lambda commit: commits.append(commit))
+        on_transaction_commit(lambda commit: commits.append(commit))
         counter.value = 1
     inverse = commits[0].patches.inverse()
 
@@ -244,7 +244,7 @@ def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) 
         raise RuntimeError("hook failed")
 
     with caplog.at_level(logging.ERROR), transaction():
-        on_action_commit(fail)
+        on_transaction_commit(fail)
         preferences.theme = "dark"
 
     assert preferences.theme == "dark"
@@ -259,7 +259,7 @@ def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
             raise RuntimeError("secret hook detail")
 
         with transaction():
-            on_action_commit(fail)
+            on_transaction_commit(fail)
 
         assert len(ledger.results) == 1
         failure = ledger.events[-1]
@@ -344,7 +344,7 @@ def test_continuation_direct_mutation_is_rejected() -> None:
             errors.append(error)
 
     with transaction():
-        on_action_commit(mutate)
+        on_transaction_commit(mutate)
         preferences.theme = "dark"
 
     assert len(errors) == 1
@@ -362,7 +362,7 @@ def test_continuation_recovery_is_a_fresh_causally_linked_action() -> None:
                 preferences.theme = "recovered"
 
         with pytest.raises(RuntimeError), transaction():
-            on_action_rollback(recover)
+            on_transaction_rollback(recover)
             raise RuntimeError("failed")
 
         assert preferences.theme == "recovered"
@@ -400,7 +400,7 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     rollbacks: list[TransactionRollback] = []
     with observe_events(ledger):
         with pytest.raises(RuntimeError), transaction(action_context=context):
-            on_action_rollback(lambda rollback: rollbacks.append(rollback))
+            on_transaction_rollback(lambda rollback: rollbacks.append(rollback))
             raise RuntimeError("private failure message")
 
         snapshot = ledger.results[0]

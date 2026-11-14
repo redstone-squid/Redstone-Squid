@@ -129,7 +129,7 @@ def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
         except Exception as error:
             _log.exception("a diagnostic event sink failed")
             failures.append((type(sink).__qualname__, error))
-    # Only action-result delivery generates failure events. A failed delivery of
+    # Only transaction-result delivery generates failure events. A failed delivery of
     # those diagnostics is logged without producing another diagnostic recursively.
     if isinstance(event, (TransactionCommit, TransactionRollback)):
         for callback, error in failures:
@@ -137,6 +137,7 @@ def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
 
 
 def emit_result(result: TransactionResult) -> None:
+    """Deliver a redacted transaction summary and report failures from result sinks."""
     _deliver(result)
 
 
