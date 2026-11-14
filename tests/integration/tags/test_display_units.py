@@ -6,7 +6,6 @@ from functools import partial
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
-from squid.api.v1.schemas.builds import BuildSummary
 from squid.builds.application.queries import PublicBuildSummary
 from squid.builds.domain import Status
 from squid.builds.models import OtherBuild
@@ -72,8 +71,7 @@ async def test_public_values_and_incompatible_assignment_units(
     for tag in (
         summary[0].tags[0],
         PublicBuildSummary.from_build(loaded).tags[0],
-        BuildSummary.from_domain(loaded).tags[0],
-        BuildSummary.from_domain(loaded.copy_for_edit()).tags[0],
+        PublicBuildSummary.from_build(loaded.copy_for_edit()).tags[0],
     ):
         assert tag.value == Decimal(1)
         assert tag.unit == "test_second"

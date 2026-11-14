@@ -15,7 +15,7 @@ import type {
   BuildsListResponse,
   RecordsListResponse,
   BuildSchematicsListResponse,
-  RecordDetail,
+  PublicRecordDetail,
   SearchScope,
   SearchSuggestions,
   SuggestionPage,
@@ -138,7 +138,7 @@ export async function fetchRecords(
   return unwrap(result);
 }
 
-export async function fetchRecord(locale: Locale, id: number): Promise<RecordDetail> {
+export async function fetchRecord(locale: Locale, id: number): Promise<PublicRecordDetail> {
   const result = await recordsGet({
     client: createCatalogueClient(locale),
     path: { record_id: id },

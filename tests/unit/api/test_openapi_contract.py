@@ -55,10 +55,10 @@ def test_catalogue_extensions_are_registered_in_openapi() -> None:
     schemas = document["components"]["schemas"]
 
     assert {"preview", "version_spec", "versions", "opening_time", "closing_time"} <= set(
-        schemas["BuildSummary"]["properties"]
+        schemas["PublicBuildSummary"]["properties"]
     )
-    assert "key" in schemas["BuildTag"]["properties"]
-    assert "holder_builds" in schemas["RecordDetail"]["properties"]
+    assert "key" in schemas["PublicBuildTag"]["properties"]
+    assert "holder_builds" in schemas["PublicRecordDetail"]["properties"]
     assert "500" in document["paths"]["/v1/records/{record_id}"]["get"]["responses"]
 
 

@@ -3,13 +3,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type {
   BuildDetail,
-  BuildSummary,
+  PublicBuildSummary,
   PageSearchResult as SearchPage,
   BuildsListResponse,
   RecordsListResponse,
   BuildSchematicsListResponse,
   ProblemDetail,
-  RecordDetail,
+  PublicRecordDetail,
   PublishedTitle,
   SearchSuggestions,
   SuggestionPage,
@@ -77,7 +77,7 @@ const builds = [
     created_at: "2026-06-10T09:00:00Z",
     updated_at: null,
   },
-] satisfies [BuildSummary, BuildSummary, BuildSummary];
+] satisfies [PublicBuildSummary, PublicBuildSummary, PublicBuildSummary];
 
 const detail: BuildDetail = {
   ...builds[0],
@@ -141,7 +141,7 @@ const records = [
   },
 ] satisfies [PublishedTitle, PublishedTitle];
 
-const recordDetail: RecordDetail = { ...records[0], holder_builds: [builds[0]] };
+const recordDetail: PublicRecordDetail = { ...records[0], holder_builds: [builds[0]] };
 
 function json(body: unknown, status = 200, contentType = "application/json"): Response {
   return new Response(JSON.stringify(body), {
@@ -262,7 +262,7 @@ async function routeRequest(request: Request): Promise<Response> {
     return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/records") return json(recordPage(url) satisfies RecordsListResponse);
-  if (url.pathname === "/v1/records/11") return json(recordDetail satisfies RecordDetail);
+  if (url.pathname === "/v1/records/11") return json(recordDetail satisfies PublicRecordDetail);
   if (/^\/v1\/records\/\d+$/.test(url.pathname)) return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/search/suggest") {

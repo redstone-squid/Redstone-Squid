@@ -8,7 +8,7 @@ from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
 from squid.builds.domain import Status
-from squid.builds.domain.credits import Credit
+from squid.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
@@ -50,8 +50,32 @@ class PublicBuildPreview:
 
 
 @dataclass(frozen=True, slots=True)
+class PublicBuildDimensions:
+    """A three-dimensional measurement in blocks; None means that dimension is unknown."""
+
+    width: int | None
+    height: int | None
+    depth: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class PublicBuildCredit:
+    """Public attribution without private account links or provider identifiers."""
+
+    name: str
+    kind: CreditKind
+    username: str | None
+    role: CreditRole
+    attribution: CreditAttribution
+
+
+@dataclass(frozen=True, slots=True)
 class PublicBuildSummary:
-    """Build fields exposed by public catalogue queries."""
+    """Build fields exposed by public catalogue queries.
+
+    The REST API serializes this type as it is, so every field here is public
+    and a new field changes the published contract.
+    """
 
     id: int
     revision: int
@@ -59,7 +83,7 @@ class PublicBuildSummary:
     display_name: str | None
     status: str
     category: str
-    dimensions: tuple[int | None, int | None, int | None]
+    dimensions: PublicBuildDimensions
     creators: tuple[str, ...]
     tags: tuple[PublicBuildTag, ...]
     preview: PublicBuildPreview | None
@@ -69,7 +93,7 @@ class PublicBuildSummary:
     closing_time: int | None
     created_at: datetime | None
     updated_at: datetime | None
-    credits: tuple[Credit, ...] = ()
+    credits: tuple[PublicBuildCredit, ...] = ()
 
     @classmethod
     def from_build(cls, build: Build) -> PublicBuildSummary:
@@ -88,9 +112,18 @@ class PublicBuildSummary:
             display_name=build.display_name,
             status=build.submission_status.name.casefold() if build.submission_status is not None else "unknown",
             category=build.category.value,
-            dimensions=build.dimensions,
+            dimensions=PublicBuildDimensions(width=build.width, height=build.height, depth=build.depth),
             creators=tuple(build.creators_ign),
-            credits=tuple(build.credits),
+            credits=tuple(
+                PublicBuildCredit(
+                    name=credit.name,
+                    kind=credit.kind,
+                    username=credit.username,
+                    role=credit.role,
+                    attribution=credit.attribution,
+                )
+                for credit in build.credits
+            ),
             tags=tuple(
                 PublicBuildTag(
                     key=assignment.definition.stable_key,

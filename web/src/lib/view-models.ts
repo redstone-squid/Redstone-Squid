@@ -1,4 +1,8 @@
-import type { BuildSummary, BuildTag, Dimensions } from "../generated/types.gen";
+import type {
+  PublicBuildSummary,
+  PublicBuildTag,
+  PublicBuildDimensions,
+} from "../generated/types.gen";
 import { formatNumber, translate, translateTaxonomy, type Locale } from "./i18n";
 
 export type MediaItem = { kind: "render" | "image"; url: string; label: string };
@@ -13,7 +17,7 @@ export function safeHttpsUrl(value: string): string | undefined {
   }
 }
 
-export function formatDimensions(locale: Locale, dimensions: Dimensions): string {
+export function formatDimensions(locale: Locale, dimensions: PublicBuildDimensions): string {
   const values = [dimensions.width, dimensions.height, dimensions.depth];
   if (values.every((value) => value === null)) return translate(locale, "common.notAvailable");
   return values.map((value) => (value === null ? "?" : formatNumber(locale, value))).join(" × ");
@@ -25,7 +29,7 @@ export function formatTiming(locale: Locale, value: number | null): string {
     : `${formatNumber(locale, value)} ${translateTaxonomy(locale, "gt")}`;
 }
 
-export function formatTag(locale: Locale, tag: BuildTag): string {
+export function formatTag(locale: Locale, tag: PublicBuildTag): string {
   const name = translateTaxonomy(locale, tag.key, tag.name);
   if (tag.value === null) return name;
   const value =
@@ -51,7 +55,7 @@ export function buildMedia(build: { links: { renders: string[]; images: string[]
   ].filter((item): item is MediaItem => safeHttpsUrl(item.url) !== undefined);
 }
 
-export function cardPreview(build: BuildSummary): string | undefined {
+export function cardPreview(build: PublicBuildSummary): string | undefined {
   return build.preview ? safeHttpsUrl(build.preview.url) : undefined;
 }
 

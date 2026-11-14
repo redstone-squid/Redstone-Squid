@@ -19,9 +19,7 @@ from squid.api.pagination import (
     parse_page_sort,
     resolve_selector,
 )
-from squid.api.v1.schemas.builds import BuildSummary
-from squid.api.v1.schemas.records import RecordDetail, RecordSummary
-from squid.records.application.models import PublishedTitle
+from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.records.errors import RecordNotFoundError
 
 
@@ -59,16 +57,12 @@ _SORT_FIELDS = frozenset({"id"})
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
-async def get_record(record_id: FromPath[int], records: PublicRecords) -> RecordDetail:
+async def get_record(record_id: FromPath[int], records: PublicRecords) -> PublicRecordDetail:
     """Return one result only while its computation run is active."""
     detail = await records.get(record_id)
     if detail is None:
         raise RecordNotFoundError(record_id)
-    summary = RecordSummary.from_domain(detail.result)
-    return RecordDetail(
-        **summary.model_dump(),
-        holder_builds=[BuildSummary.from_public_summary(build) for build in detail.holder_builds],
-    )
+    return detail
 
 
 @get(

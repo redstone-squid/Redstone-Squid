@@ -69,17 +69,6 @@ export type BaseTitle = 'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 
 export type BuildCategory = 'Door' | 'Extender' | 'Utility' | 'Entrance' | 'Other';
 
 /**
- * BuildCreditSummary
- */
-export type BuildCreditSummary = {
-    name: string;
-    kind: CreditKind;
-    username: string | null;
-    role: CreditRole;
-    attribution: CreditAttribution;
-};
-
-/**
  * BuildDetail
  */
 export type BuildDetail = {
@@ -89,17 +78,17 @@ export type BuildDetail = {
     display_name: string | null;
     status: string;
     category: string;
-    dimensions: Dimensions;
+    dimensions: PublicBuildDimensions;
     creators: Array<string>;
-    credits?: Array<BuildCreditSummary>;
-    tags: Array<BuildTag>;
-    preview: BuildPreview | null;
+    tags: Array<PublicBuildTag>;
+    preview: PublicBuildPreview | null;
     version_spec: string | null;
     versions: Array<string>;
     opening_time: number | null;
     closing_time: number | null;
     created_at: string | null;
     updated_at: string | null;
+    credits?: Array<PublicBuildCredit>;
     details: DoorDetails | ExtenderDetails | GeneralDetails;
     restrictions: {
         [key: string]: Array<string>;
@@ -163,20 +152,12 @@ export type BuildPatch = {
 };
 
 /**
- * BuildPreview
- */
-export type BuildPreview = {
-    kind: 'render' | 'image';
-    url: string;
-};
-
-/**
  * BuildSearchResult
  */
 export type BuildSearchResult = {
     resource_kind?: 'build';
     score: number | null;
-    build: BuildSummary;
+    build: PublicBuildSummary;
     grouped?: boolean;
     records?: Array<RecordSearchEntry>;
     matches?: Array<SearchMatch>;
@@ -200,39 +181,6 @@ export type BuildSponsor = {
  * Moderation state selectable on the authoritative build collection.
  */
 export type BuildStatusFilter = 'pending' | 'confirmed' | 'denied';
-
-/**
- * BuildSummary
- */
-export type BuildSummary = {
-    id: number;
-    revision: number;
-    title: string;
-    display_name: string | null;
-    status: string;
-    category: string;
-    dimensions: Dimensions;
-    creators: Array<string>;
-    credits?: Array<BuildCreditSummary>;
-    tags: Array<BuildTag>;
-    preview: BuildPreview | null;
-    version_spec: string | null;
-    versions: Array<string>;
-    opening_time: number | null;
-    closing_time: number | null;
-    created_at: string | null;
-    updated_at: string | null;
-};
-
-/**
- * BuildTag
- */
-export type BuildTag = {
-    key: string;
-    name: string;
-    value: string | boolean | null;
-    unit: string | null;
-};
 
 /**
  * CategoryFormResponse
@@ -468,20 +416,11 @@ export type CsrfTokenResponse = {
 };
 
 /**
- * Dimensions
- */
-export type Dimensions = {
-    width: number | null;
-    height: number | null;
-    depth: number | null;
-};
-
-/**
  * DoorDetails
  */
 export type DoorDetails = {
     category?: 'Door';
-    door_dimensions: Dimensions;
+    door_dimensions: PublicBuildDimensions;
     orientation: string | null;
     patterns: Array<string>;
     visible_opening_time: number | null;
@@ -1173,16 +1112,6 @@ export type PageLitestarDtoBackendTagDetail = {
 };
 
 /**
- * Page[BuildSummary]
- */
-export type PageSquidApiV1SchemasBuildsBuildSummary = {
-    items: Array<BuildSummary>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
  * Page[ErrorReportSummary]
  */
 export type PageSquidApiV1SchemasDiagnosticsErrorReportSummary = {
@@ -1207,6 +1136,16 @@ export type PageSquidApiV1SchemasSchematicsSchematicSummary = {
  */
 export type PageSquidApiV1SchemasVersionsVersionDetail = {
     items: Array<VersionDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[PublicBuildSummary]
+ */
+export type PageSquidBuildsApplicationQueriesPublicBuildSummary = {
+    items: Array<PublicBuildSummary>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -1315,6 +1254,85 @@ export type ProtocolInterval = {
 };
 
 /**
+ * PublicBuildCredit
+ */
+export type PublicBuildCredit = {
+    name: string;
+    kind: CreditKind;
+    username: string | null;
+    role: CreditRole;
+    attribution: CreditAttribution;
+};
+
+/**
+ * PublicBuildDimensions
+ */
+export type PublicBuildDimensions = {
+    width: number | null;
+    height: number | null;
+    depth: number | null;
+};
+
+/**
+ * PublicBuildPreview
+ */
+export type PublicBuildPreview = {
+    kind: 'render' | 'image';
+    url: string;
+};
+
+/**
+ * PublicBuildSummary
+ */
+export type PublicBuildSummary = {
+    id: number;
+    revision: number;
+    title: string;
+    display_name: string | null;
+    status: string;
+    category: string;
+    dimensions: PublicBuildDimensions;
+    creators: Array<string>;
+    tags: Array<PublicBuildTag>;
+    preview: PublicBuildPreview | null;
+    version_spec: string | null;
+    versions: Array<string>;
+    opening_time: number | null;
+    closing_time: number | null;
+    created_at: string | null;
+    updated_at: string | null;
+    credits?: Array<PublicBuildCredit>;
+};
+
+/**
+ * PublicBuildTag
+ */
+export type PublicBuildTag = {
+    key: string;
+    name: string;
+    value: string | boolean | null;
+    unit: string | null;
+};
+
+/**
+ * PublicRecordDetail
+ */
+export type PublicRecordDetail = {
+    id: number;
+    definition_id: number;
+    title_id: string;
+    title: string;
+    subtitle: string | null;
+    base_title: BaseTitle;
+    build_kind: BuildKind;
+    version_scope: VersionScope;
+    status: ResolutionStatus;
+    holder_build_ids: Array<number>;
+    computed_at: string;
+    holder_builds: Array<PublicBuildSummary>;
+};
+
+/**
  * PublishedTitle
  */
 export type PublishedTitle = {
@@ -1382,24 +1400,6 @@ export type RecalculationProposalResponse = {
     };
     expires_at: string;
     applied_revision: number | null;
-};
-
-/**
- * RecordDetail
- */
-export type RecordDetail = {
-    id: number;
-    definition_id: number;
-    title_id: string;
-    title: string;
-    subtitle: string | null;
-    base_title: string;
-    build_kind: string;
-    version_scope: string;
-    status: string;
-    holder_build_ids: Array<number>;
-    computed_at: string;
-    holder_builds: Array<BuildSummary>;
 };
 
 /**
@@ -2502,7 +2502,7 @@ export type BuildsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageSquidApiV1SchemasBuildsBuildSummary;
+    200: PageSquidBuildsApplicationQueriesPublicBuildSummary;
 };
 
 export type BuildsListResponse = BuildsListResponses[keyof BuildsListResponses];
@@ -3738,7 +3738,7 @@ export type AccountBuildsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageSquidApiV1SchemasBuildsBuildSummary;
+    200: PageSquidBuildsApplicationQueriesPublicBuildSummary;
 };
 
 export type AccountBuildsListResponse = AccountBuildsListResponses[keyof AccountBuildsListResponses];
@@ -4964,7 +4964,7 @@ export type RecordsGetResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: RecordDetail;
+    200: PublicRecordDetail;
 };
 
 export type RecordsGetResponse = RecordsGetResponses[keyof RecordsGetResponses];

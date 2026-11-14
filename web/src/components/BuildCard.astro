@@ -1,10 +1,10 @@
 ---
-import type { BuildSummary } from "../generated/types.gen";
+import type { PublicBuildSummary } from "../generated/types.gen";
 import { localizePath, translate, translateTaxonomy, type Locale } from "../lib/i18n";
 import { cardPreview, formatDimensions, formatTiming } from "../lib/view-models";
 import RemoteImage from "./RemoteImage.astro";
 
-type Props = { build: BuildSummary; locale: Locale };
+type Props = { build: PublicBuildSummary; locale: Locale };
 const { build, locale } = Astro.props;
 const preview = cardPreview(build);
 const href = localizePath(`/builds/${build.id}`, locale);

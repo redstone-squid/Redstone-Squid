@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   BuildDetail,
-  BuildSummary,
+  PublicBuildSummary,
   BuildsListResponse,
   RecordsListResponse,
   PublishedTitle,
   BuildSchematicsListResponse,
-  RecordDetail,
+  PublicRecordDetail,
 } from "../../src/generated/types.gen";
 import {
   asCatalogueError,
@@ -30,7 +30,7 @@ const config: RuntimeConfig = {
   botInviteUrl: "https://discord.com/oauth2/authorize",
 };
 
-const summary: BuildSummary = {
+const summary: PublicBuildSummary = {
   id: 1,
   revision: 2,
   title: "Compact Door",
@@ -75,7 +75,7 @@ const record = {
   holder_build_ids: [1],
   computed_at: "2026-08-10T00:00:00Z",
   holder_builds: [summary],
-} satisfies RecordDetail & PublishedTitle;
+} satisfies PublicRecordDetail & PublishedTitle;
 
 const fetchMock = vi.fn<typeof fetch>();
 

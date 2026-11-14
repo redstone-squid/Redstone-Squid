@@ -451,10 +451,7 @@ class PublicRecordQueryService:
                 msg,
                 context={"record_id": result.id, "unavailable_holder_build_ids": unavailable_ids},
             )
-        return PublicRecordDetail(
-            result=result,
-            holder_builds=tuple(by_id[build_id] for build_id in result.holder_build_ids),
-        )
+        return PublicRecordDetail.with_holders(result, [by_id[build_id] for build_id in result.holder_build_ids])
 
 
 def _observed_thresholds(

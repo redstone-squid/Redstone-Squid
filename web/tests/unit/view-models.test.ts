@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { BuildSummary } from "../../src/generated/types.gen";
+import type { PublicBuildSummary } from "../../src/generated/types.gen";
 import {
   buildMedia,
   cardPreview,
@@ -11,7 +11,7 @@ import {
   safeHttpsUrl,
 } from "../../src/lib/view-models";
 
-const summary: BuildSummary = {
+const summary: PublicBuildSummary = {
   id: 1,
   revision: 1,
   title: "Compact Door",

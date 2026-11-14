@@ -36,7 +36,7 @@ from squid.api.pagination import (
 )
 from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
-from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
+from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.api.v1.schemas.consent import ConsentGrantRequest
 from squid.api.v1.schemas.me import (
     IdentityVisibilityRequest,
@@ -47,6 +47,7 @@ from squid.api.v1.schemas.me import (
     ProfileUpdateRequest,
     UserMe,
 )
+from squid.builds.application import PublicBuildSummary
 from squid.builds.domain import Status
 from squid.core.errors import AuthenticationError
 from squid.edits.domain import EditCommand, EditValues, Revision
@@ -510,7 +511,7 @@ async def list_my_builds(
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
-) -> Page[BuildSummary]:
+) -> Page[PublicBuildSummary]:
     """List the caller's own submissions, including the ones still awaiting review.
 
     This is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own
@@ -523,7 +524,7 @@ async def list_my_builds(
     page = await build_queries.list_page(
         statuses=statuses, submitter_account_id=caller.account_id, selector=selector, page_size=page_size
     )
-    return Page[BuildSummary].from_domain(page, BuildSummary.from_domain)
+    return Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build)
 
 
 router = Router(

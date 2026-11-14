@@ -3,7 +3,7 @@ import BuildCard from "../components/BuildCard.astro";
 import ErrorState from "../components/ErrorState.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, CatalogueApiError, fetchRecord } from "../lib/api";
-import type { RecordDetail } from "../generated/types.gen";
+import type { PublicRecordDetail } from "../generated/types.gen";
 import { formatDate, localizePath, translate, translateTaxonomy, type Locale } from "../lib/i18n";
 import { readPositiveInteger } from "../lib/search";
 
@@ -11,7 +11,7 @@ type Props = { locale: Locale; id: string };
 const { locale } = Astro.props;
 const recordId = readPositiveInteger(Astro.props.id);
 let error;
-let record: RecordDetail | undefined;
+let record: PublicRecordDetail | undefined;
 if (!recordId) {
   error = new CatalogueApiError(404);
   Astro.locals.responseStatus = 404;

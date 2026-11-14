@@ -1,8 +1,10 @@
 """Application data transferred between record computation and persistence."""
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, fields
 from datetime import datetime
 from decimal import Decimal
+from typing import Self
 from uuid import UUID
 
 from squid.builds.application.queries import PublicBuildSummary
@@ -174,11 +176,22 @@ class PublishedTitle:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicRecordDetail:
-    """One published result with its complete ordered public holders."""
+class PublicRecordDetail(PublishedTitle):
+    """One published result with its complete ordered public holders.
 
-    result: PublishedTitle
+    `holder_builds` follows the order of `holder_build_ids`. The REST API serializes
+    this type as it is, so a new field changes the published contract.
+    """
+
     holder_builds: tuple[PublicBuildSummary, ...]
+
+    @classmethod
+    def with_holders(cls, result: PublishedTitle, holder_builds: Sequence[PublicBuildSummary]) -> Self:
+        """Attach the holders' public summaries to a published result."""
+        return cls(
+            **{field.name: getattr(result, field.name) for field in fields(result)},
+            holder_builds=tuple(holder_builds),
+        )
 
 
 @dataclass(frozen=True, slots=True)

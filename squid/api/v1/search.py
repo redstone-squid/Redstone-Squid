@@ -13,7 +13,6 @@ from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Search, get_build_queries, get_search
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageAnchor, PageSizeParam
-from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.search import (
     BuildSearchResult,
     MetadataSearchEntry,
@@ -23,7 +22,7 @@ from squid.api.v1.schemas.search import (
     SearchResult,
     SearchSuggestions,
 )
-from squid.builds.application import BuildQueryService
+from squid.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.errors import DataIntegrityError
 from squid.search.application.fields import FieldDefinition
 from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
@@ -160,7 +159,7 @@ def build_hit_id(source_id: str) -> int:
         raise DataIntegrityError(msg, context={"source_id": source_id}) from error
 
 
-async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:
+async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, PublicBuildSummary]:
     """Load current build rows for search hits and log any missing rows.
 
     Build descriptions and other facts may have changed since indexing. Render
@@ -170,7 +169,7 @@ async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[Search
     if not hit_ids:
         return {}
     builds = await build_queries.get_many(hit_ids)
-    summaries = {build.id: BuildSummary.from_domain(build) for build in builds if build.id is not None}
+    summaries = {build.id: PublicBuildSummary.from_build(build) for build in builds if build.id is not None}
     missing = [identifier for identifier in hit_ids if identifier not in summaries]
     if missing:
         logger.warning("Search projection referenced missing builds", extra={"build_ids": missing})

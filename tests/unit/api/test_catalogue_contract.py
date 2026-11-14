@@ -7,8 +7,8 @@ from uuid import UUID
 import pytest
 
 from squid.api.v1.records import get_record
-from squid.api.v1.schemas.builds import BuildDetail, BuildSummary, DoorDetails, ExtenderDetails, GeneralDetails
-from squid.builds.application import PublicBuildSummary
+from squid.api.v1.schemas.builds import BuildDetail, DoorDetails, ExtenderDetails, GeneralDetails
+from squid.builds.application import PublicBuildPreview, PublicBuildSummary
 from squid.builds.domain import MediaTypeLiteral, Status
 from squid.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
@@ -76,7 +76,7 @@ class PublicRecordFake(PublicRecordQueryService):
         self.requests.append(result_id)
         if result_id != self.record.id:
             return None
-        return PublicRecordDetail(result=self.record, holder_builds=self.builds)
+        return PublicRecordDetail.with_holders(self.record, self.builds)
 
 
 def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> None:
@@ -97,18 +97,15 @@ def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> No
         image_urls=["https://media.example/submitted.png"],
     )
 
-    summary = BuildSummary.from_domain(build)
-    public_summary = BuildSummary.from_public_summary(PublicBuildSummary.from_build(build))
+    summary = PublicBuildSummary.from_build(build)
 
-    assert summary.preview is not None
     assert summary.display_name == "Vault prototype"
-    assert summary.preview.model_dump() == {"kind": "render", "url": "https://media.example/render.png"}
+    assert summary.preview == PublicBuildPreview(kind="render", url="https://media.example/render.png")
     assert summary.version_spec == ">=1.21"
-    assert summary.versions == ["Java 1.21.5"]
+    assert summary.versions == ("Java 1.21.5",)
     assert summary.opening_time == 8
     assert summary.closing_time == 10
     assert summary.tags[0].key == "official_seamless"
-    assert public_summary == summary
 
 
 @pytest.mark.parametrize(
@@ -125,11 +122,9 @@ def test_build_summary_uses_only_valid_https_previews(
     expected: tuple[str, str] | None,
 ) -> None:
     build = catalogue_build(42, render_urls=renders, image_urls=images)
-    preview = BuildSummary.from_domain(build).preview
-    public_preview = BuildSummary.from_public_summary(PublicBuildSummary.from_build(build)).preview
+    preview = PublicBuildSummary.from_build(build).preview
 
     assert ((preview.kind, preview.url) if preview is not None else None) == expected
-    assert public_preview == preview
 
 
 def test_build_detail_inherits_card_fields_without_duplicate_constructor_values() -> None:
@@ -142,7 +137,7 @@ def test_build_detail_inherits_card_fields_without_duplicate_constructor_values(
     )
 
     assert detail.preview is not None
-    assert detail.versions == ["Java 1.21.5"]
+    assert detail.versions == ("Java 1.21.5",)
     assert detail.opening_time == 8
     assert detail.description == "A compact door."
 
@@ -179,7 +174,7 @@ async def test_record_detail_hydrates_holders_in_record_order() -> None:
 
     detail = await get_record.fn(7, records)
 
-    assert detail.holder_build_ids == [41, 42]
+    assert detail.holder_build_ids == (41, 42)
     assert [build.id for build in detail.holder_builds] == [41, 42]
     assert records.requests == [7]
 

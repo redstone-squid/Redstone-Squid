@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from squid.api.v1.schemas.builds import BuildSummary
+from squid.builds.application.queries import PublicBuildSummary
 from squid.core.errors import ValidationError
 from squid.search.domain import MetadataSearchHit, RecordSearchHit, SearchMatch, SearchText
 
@@ -86,7 +86,7 @@ class BuildSearchResult(BaseModel):
 
     resource_kind: Literal["build"] = "build"
     score: float | None
-    build: BuildSummary
+    build: PublicBuildSummary
     grouped: bool = False
     records: list[RecordSearchEntry] = Field(default_factory=list)
     matches: list[SearchMatch] = Field(default_factory=list)

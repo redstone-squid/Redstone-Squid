@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 
-from squid.builds.application.queries import PublicBuildSummary
+from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.core.errors import DataIntegrityError, ValidationError
 from squid.records.application.models import (
     CandidateBuild,
@@ -158,7 +158,7 @@ def _public_build(build_id: int) -> PublicBuildSummary:
         display_name=None,
         status="confirmed",
         category="Door",
-        dimensions=(2, 3, 4),
+        dimensions=PublicBuildDimensions(width=2, height=3, depth=4),
         creators=(),
         tags=(),
         preview=None,

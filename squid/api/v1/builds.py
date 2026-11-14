@@ -32,13 +32,14 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.security import Caller, requires
-from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary
+from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.builds.application import (
     BUILD_SORT_FIELDS,
     BuildEditPatch,
     BuildListSort,
     BuildSortField,
+    PublicBuildSummary,
 )
 from squid.builds.application.edits import BUILD_EDIT, build_target, patch_values
 from squid.builds.errors import (
@@ -138,7 +139,7 @@ async def list_builds(
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
-) -> Page[BuildSummary]:
+) -> Page[PublicBuildSummary]:
     """Search confirmed builds, or list builds with a selected moderation status.
 
     Supplying q selects indexed search and cannot be combined with status. Search
@@ -187,7 +188,7 @@ async def list_builds(
         selector=selector,
         page_size=page_size,
     )
-    return Page[BuildSummary].from_domain(page, BuildSummary.from_domain)
+    return Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build)
 
 
 async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:
