@@ -9453,6 +9453,110 @@
         }
       }
     },
+    "/v1/records/lookup/door": {
+      "post": {
+        "tags": [
+          "records"
+        ],
+        "summary": "LookupDoor",
+        "description": "Compare fixed doors and expandable configurations without creating a title.",
+        "operationId": "records_lookup_door",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoorRecordLookup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveDoorRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/builds/{build_id}/schematics": {
       "get": {
         "tags": [
@@ -17278,7 +17382,8 @@
           "smallest_fastest"
         ],
         "title": "BaseTitle",
-        "description": "A metric by which records are classified."
+        "description": "A metric by which records are classified.",
+        "default": "smallest"
       },
       "BuildCategory": {
         "type": "string",
@@ -18005,6 +18110,22 @@
         ],
         "title": "BuildStatusFilter",
         "description": "Moderation state selectable on the authoritative build collection."
+      },
+      "CandidateGap": {
+        "properties": {
+          "build_id": {
+            "type": "integer"
+          },
+          "field": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id",
+          "field"
+        ],
+        "title": "CandidateGap"
       },
       "CategoryFormResponse": {
         "properties": {
@@ -18928,6 +19049,98 @@
         "required": [],
         "title": "DoorPatch"
       },
+      "DoorRecordLookup": {
+        "properties": {
+          "opening": {
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "base_title": {
+            "$ref": "#/components/schemas/BaseTitle"
+          },
+          "orientation": {
+            "type": "string",
+            "enum": [
+              "Door",
+              "Skydoor",
+              "Trapdoor"
+            ],
+            "default": "Door"
+          },
+          "type_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "default": []
+          },
+          "restriction_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "default": []
+          },
+          "restriction_values": {
+            "items": {
+              "oneOf": [
+                {
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string",
+                      "enum": [
+                        "exact",
+                        "at_most",
+                        "at_least"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "default": []
+          },
+          "version_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "opening"
+        ],
+        "title": "DoorRecordLookup"
+      },
       "DraftChangeRequest": {
         "properties": {
           "base_revision": {
@@ -19695,6 +19908,26 @@
         "type": "object",
         "required": [],
         "title": "ExpansionBranch"
+      },
+      "ExpansionDiagnostic": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "path"
+        ],
+        "title": "ExpansionDiagnostic"
       },
       "ExpansionEvidence": {
         "properties": {
@@ -20813,6 +21046,165 @@
         ],
         "title": "LinkedIdentityDetail"
       },
+      "LiveDoorConfiguration": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "build_id": {
+            "type": "integer"
+          },
+          "branch_index": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "membership": {
+            "$ref": "#/components/schemas/PointStatus"
+          },
+          "parameters": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array",
+            "default": []
+          },
+          "volume": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timing_variants": {
+            "items": {
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "default": []
+          },
+          "completion_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ExpansionDiagnostic"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "branch_index",
+          "build_id",
+          "id",
+          "membership"
+        ],
+        "title": "LiveDoorConfiguration"
+      },
+      "LiveDoorRecord": {
+        "properties": {
+          "opening": {
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "base_title": {
+            "$ref": "#/components/schemas/BaseTitle"
+          },
+          "version_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/TitleResolution"
+          },
+          "holder_configuration_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "provisional_configuration_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "configurations": {
+            "items": {
+              "$ref": "#/components/schemas/LiveDoorConfiguration"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "base_title",
+          "configurations",
+          "evaluated_at",
+          "holder_configuration_ids",
+          "opening",
+          "provisional_configuration_ids",
+          "resolution",
+          "version_id"
+        ],
+        "title": "LiveDoorRecord"
+      },
       "MediaKind": {
         "type": "string",
         "enum": [
@@ -21582,6 +21974,15 @@
           "device_code"
         ],
         "title": "PaperChallengeExchangeRequest"
+      },
+      "PointStatus": {
+        "type": "string",
+        "enum": [
+          "supported",
+          "outside_domain",
+          "unresolved"
+        ],
+        "title": "PointStatus"
       },
       "PollScope": {
         "type": "string",
@@ -23909,6 +24310,39 @@
         ],
         "title": "TagValueType",
         "description": "The scalar value attached to a tag."
+      },
+      "TitleResolution": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ResolutionStatus"
+          },
+          "holder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          },
+          "provisional_holder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateGap"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "TitleResolution"
       },
       "UploadCapabilities": {
         "properties": {

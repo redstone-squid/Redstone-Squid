@@ -2,10 +2,10 @@
 
 from typing import Annotated
 
-from litestar import Router, get
+from litestar import Router, get, post
 from litestar.di import Provide
 from litestar.dto import DataclassDTO, DTOConfig
-from litestar.params import FromPath, QueryParameter
+from litestar.params import FromPath, JSONBody, QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import PublicRecords, Records, get_public_records, get_records
@@ -19,6 +19,7 @@ from squid.api.pagination import (
     parse_page_sort,
     resolve_selector,
 )
+from squid.records.application.live import DoorRecordLookup, LiveDoorRecord
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.records.errors import RecordNotFoundError
 
@@ -88,9 +89,22 @@ async def list_records(
     return Page[PublishedTitle].from_domain(page)
 
 
+@post(
+    "/lookup/door",
+    status_code=200,
+    responses=responses(400, 422, 503),
+    operation_id="records_lookup_door",
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+)
+async def lookup_door(data: JSONBody[DoorRecordLookup], records: Records) -> LiveDoorRecord:
+    """Compare fixed doors and expandable configurations without creating a title."""
+    return await records.lookup_door(data)
+
+
 router = Router(
     dependencies={"records": Provide(get_records, sync_to_thread=False)},
     path="/records",
     tags=["records"],
-    route_handlers=[get_record, list_records],
+    route_handlers=[get_record, list_records, lookup_door],
 )

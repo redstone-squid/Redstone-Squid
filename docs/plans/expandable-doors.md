@@ -22,7 +22,7 @@ Implementation order:
 2. **Arithmetic feasibility spike:** validate exact one-variable crossovers,
    periodic domains, three-axis comparisons, fixed-build exceptions, missing
    timings, and timeouts before committing to computation schemas.
-3. **Concrete evaluation (implemented) and point lookup (pending):** compare supported configurations
+3. **Concrete evaluation and live point lookup (implemented):** compare supported configurations
    through the existing ranking semantics, without materializing query sizes.
 4. **Symbolic regions and publication:** compute regions, prove nonemptiness
    where possible, persist snapshots, and expose results.
@@ -165,8 +165,48 @@ completion text do not become eligibility constraints or verified completion dat
 The result retains separate alternatives, so callers cannot silently combine the
 smallest branch's volume with the fastest branch's timing. Record integration must
 check membership, retain unresolved competitors, and apply existing ranking rules
-with explicit completion evidence. Tests demonstrate compatibility with the current
-concrete resolver, but the live loader remains unchanged at this stage.
+with explicit completion evidence. The live lookup below applies those rules;
+published record runs still exclude families until snapshot integration is ready.
+
+## Live point lookup
+
+`RecordService.lookup_door` and anonymous `POST /v1/records/lookup/door` compare
+current confirmed builds at one opening. For example:
+
+```json
+{"opening": [9999, 3, 1], "base_title": "smallest", "orientation": "Door"}
+```
+
+All five base titles are supported. Optional `type_ids` match the complete pattern
+set; the empty set matches builds without explicit pattern tags. `restriction_ids`
+select a subset. Parameterized restrictions also need `restriction_values`, for
+example `[[7, "at_most", "4"]]` with tag 7 in `restriction_ids`. Thresholds that
+cannot match the tag's value type do not qualify. `version_id` restricts candidates
+to builds assigned that Minecraft version; omitting it compares all versions.
+
+The loader reads fixed doors at that size and expandable families in a fresh,
+read-only PostgreSQL repeatable-read transaction. It releases the transaction
+before normalization and ranking. Queries create no category, computation run,
+queue entry, or persistent cache. Sizes fit positive PostgreSQL integer coordinates;
+this includes 9999×3 without enumerating intermediate sizes.
+
+Results expose build-level holders, local configuration IDs, evaluated metrics,
+branch indices, parameter assignments, and diagnostics. Alternatives retain their
+own volume and timing variants. Unproven membership conservatively blocks an
+official result; proven exclusions do not compete. Missing primary measurements
+follow the existing exclusion rule, while missing decisive tie-breakers produce
+unresolved results. If tied alternatives all belong to one build, the build can
+hold the record even when its exact winning branch remains provisional.
+
+Family configurations do not inherit sample measurements or completion dates.
+Until verified per-configuration completion evidence is modeled, families cannot
+win `first`, and completion ties across builds remain unresolved. Source completion
+text remains unverified.
+
+These results are live evaluations, not published records. Immutable candidate
+snapshots, caching by snapshot, symbolic winning regions, and published point
+views remain part of the publication stage below. Discord/UI integration is also
+pending; the API and application service are the current entry points.
 
 ## Common coordinates and formula branches
 

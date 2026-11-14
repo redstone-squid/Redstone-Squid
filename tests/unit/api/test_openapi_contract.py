@@ -83,6 +83,11 @@ def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
             operation = path_item.get(method)
             if operation is None:
                 continue
+            # This POST accepts a structured query body and never reserves a
+            # mutation key or persists a result.
+            if (path, method) == ("/v1/records/lookup/door", "post"):
+                assert operation["operationId"] == "records_lookup_door"
+                continue
             parameters = [*path_item.get("parameters", []), *operation.get("parameters", [])]
             if (path, method) in streaming_retries:
                 assert any(
