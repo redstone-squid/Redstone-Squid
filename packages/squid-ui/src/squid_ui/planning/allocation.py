@@ -109,7 +109,7 @@ def allocate_family[RenderTargetT, ContextT, PayloadT](
             child = pending.pop()
             child_offer = child.candidate.offer
             if child_offer.region is not None:
-                nested.append((child_offer.occurrence.sources, child_offer.occurrence.reference))
+                nested.append((child_offer.occurrence.sources, child_offer.occurrence.page_source))
             else:
                 pending.extend(child.children)
         anchor_units: list[frozenset[SemanticRef]] = []
@@ -214,7 +214,7 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
                         region.source_order,
                         self._contract(identity).owner,
                         self._contract(identity).cursor_key or region.key,
-                        region.pages[0].offer.occurrence.reference.keys,
+                        region.pages[0].offer.occurrence.page_source.keys,
                     )
                     for identity, region in self.family.regions.items()
                 }

@@ -343,6 +343,8 @@ def navigation_candidate[RenderTargetT, ContextT](
 
 def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[RenderTargetT, ContextT]) -> str:
     """Keep layout-policy wrappers out of public region cursor paths."""
+    if occurrence.origin is not None:
+        return "$/" + "/".join(quote(key, safe="") for key in occurrence.page_source.keys[1:])
     parts: list[str] = []
     ref: SemanticRef | None = occurrence.reference
     while ref is not None:

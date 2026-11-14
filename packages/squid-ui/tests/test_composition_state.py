@@ -13,9 +13,10 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.navigation import TurnPage, default_nav, page_select_nav
-from squid_ui.planning.resources import Axis
+from squid_ui.planning.resources import Axis, TargetLimits
+from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.target_types import DiscordAdapter
+from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "test", ">=1"))
 REGION = OccurrenceId(("root", "r"))
@@ -216,3 +217,93 @@ def test_changed_callback_rebuilds_bindings_in_a_retained_owner() -> None:
     assert isinstance(binding.handler, TurnPage)
     assert isinstance(binding.handler.commit.owner, Controlled)
     assert binding.handler.commit.owner.on_change is second
+
+
+@pytest.mark.parametrize(
+    "target",
+    [V2, sl.html.target(), sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "state.slack", ">=1"))],
+    ids=["v2", "html", "slack"],
+)
+def test_production_list_recovers_a_deleted_anchor_across_targets[
+    LimitsT: TargetLimits,
+    BodyT: scene.Body,
+    RenderTargetT,
+    AdapterT,
+](target: Target[LimitsT, BodyT, RenderTargetT, AdapterT]) -> None:
+    session = PresentationState()
+    original = sl.semantic.List(tuple(sl.semantic.ListItem(key, key) for key in "abcd"), key="items", page_size=2)
+    first = plan(original, target=target, session=session, nav=default_nav, positions={"items": PagePosition(page=1)})
+    assert first.allocation is not None
+    session.apply_updates(first.session_updates)
+    assert session.cursor("items").position.anchor == "c"
+    changed = replace(original, items=tuple(item for item in original.items if item.key != "c"))
+    recovered = plan(changed, target=target, session=session, nav=default_nav)
+    assert recovered.report.regions[0].anchor == "d"
+    assert session.cursor("items").position.anchor == "c"
+    session.apply_updates(recovered.session_updates)
+    assert session.cursor("items").source_order == tuple("abd")
+
+
+def test_recovery_follows_source_order_when_a_presentation_omits_the_anchor() -> None:
+    source = sl.stack(*(sl.paragraph(key, key=key) for key in "abcd"), key="source")
+    alternatives = sl.alternatives(
+        sl.alternative(source, key="full", fidelity=sl.equivalent()),
+        sl.alternative(
+            sl.stack(*(sl.paragraph(key, key=key) for key in "adb"), key="compact"),
+            key="compact",
+            fidelity=sl.losses(sl.omit("c")),
+        ),
+        content=source,
+        key="choice",
+    )
+    document = sl.region(alternatives, key="r", title="R")
+    session = PresentationState()
+    choice = OccurrenceId(("root", "r", "choice"))
+    full = replace(OPTIONS, selections={choice: "full"})
+    first = plan(
+        document, target=V2, session=session, nav=default_nav, composition=full, positions={"$/r": PagePosition(page=1)}
+    )
+    session.apply_updates(first.session_updates)
+    assert session.cursor("$/r").position.anchor == "choice/source/c"
+    compact = replace(OPTIONS, selections={choice: "compact"}, partitions={REGION: (2, 3)})
+    result = plan(document, target=V2, session=session, nav=default_nav, composition=compact)
+    assert result.report.regions[0].anchor == "choice/source/d"
+    assert result.report.regions[0].page == 0
+
+
+def test_controlled_region_inside_alternatives_reuses_allocation_with_current_owner() -> None:
+    async def changed(event: sl.PageEvent) -> None:
+        pytest.fail("planning invoked the owner")
+
+    def document(page: int) -> sl.Renderable:
+        source = replace(content(), page=sl.controlled(page, changed))
+        return sl.alternatives(
+            sl.alternative(source, key="full", fidelity=sl.equivalent()), content=source, key="choice"
+        )
+
+    session = PresentationState()
+    identity = OccurrenceId(("root", "choice", "@presentation"))
+    options = CompositionOptions(automatic=True, partitions={identity: (2, 4)})
+    first = plan(document(0), target=V2, session=session, nav=default_nav, composition=options)
+    session.apply_updates(first.session_updates)
+    second = plan(document(1), target=V2, session=session, nav=default_nav, composition=options)
+    assert second.allocation is first.allocation
+    assert second.report.regions[0].page == 1
+    assert second.report.regions[0].key == "$/choice/r"
+    assert not session.cursors
+
+
+def test_alternate_list_cannot_change_its_page_owner() -> None:
+    async def changed(event: sl.PageEvent) -> None:
+        pytest.fail("planning invoked the owner")
+
+    source = sl.semantic.List(
+        tuple(sl.semantic.ListItem(key, key) for key in "ab"), key="items", page_size=1, page=sl.controlled(1, changed)
+    )
+    node = sl.alternatives(
+        sl.alternative(replace(source, page=sl.uncontrolled(0)), key="wrong-owner", fidelity=sl.equivalent()),
+        content=source,
+        key="choice",
+    )
+    with pytest.raises(sl.errors.LayoutInvariantError, match="preserve the List boundary"):
+        plan(node, target=V2, nav=default_nav)

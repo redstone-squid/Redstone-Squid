@@ -449,13 +449,40 @@ class SourceScope[RenderTargetT, ContextT]:
         }
         return frozenset(result for source in sources for result in self.source_references(source))
 
+    def page_boundary(self, presentation: SemanticRef) -> SemanticRef:
+        """Locate a preserved pager in the authored graph, across nested alternatives."""
+        value = self.checked.presentation.units[presentation].value
+        if not isinstance(value, sem.Region | sem.Paged | sem.List | TextPages):
+            message = "page boundary resolution needs a pagination scope"
+            raise LayoutInvariantError(message)
+        covered = frozenset(
+            source
+            for target, sources in self.checked.coverage.items()
+            if target.keys[: len(presentation.keys)] == presentation.keys
+            for source in sources
+        )
+        matches = [
+            reference
+            for reference, unit in self.checked.source.units.items()
+            if isinstance(unit.value, sem.Region | sem.Paged | sem.List | TextPages)
+            and type(unit.value) is type(value)
+            and unit.value.key == value.key
+            and covered <= self.checked.source.atoms(reference)
+        ]
+        if len(matches) != 1:
+            message = "an alternate pager needs one unambiguous authored boundary"
+            raise LayoutInvariantError(message)
+        scoped = SemanticRef((*self.group.keys, *matches[0].keys))
+        return self.parent.page_boundary(scoped) if self.parent is not None else scoped
+
 
 def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[RenderTargetT, ContextT]) -> None:
     """Preserve hard layout scopes even when presentations rearrange their contents."""
     for reference, unit in checked.source.units.items():
         constraint = unit.value
         if not isinstance(
-            constraint, Budget | sem.Budgeted | sem.Unbreakable | sem.KeepWithNext | sem.Paged | sem.Region
+            constraint,
+            Budget | sem.Budgeted | sem.Unbreakable | sem.KeepWithNext | sem.Paged | sem.Region | sem.List | TextPages,
         ):
             continue
         inside = checked.source.atoms(reference)
@@ -499,6 +526,21 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.header,
                         other.footer,
                     )
+                case sem.List(), sem.List():
+                    preserved = (constraint.key, constraint.page, constraint.page_size) == (
+                        other.key,
+                        other.page,
+                        other.page_size,
+                    )
+                case TextPages(), TextPages():
+                    preserved = (
+                        constraint.key,
+                        constraint.page,
+                        constraint.per,
+                        constraint.min_fill,
+                        constraint.widows,
+                        constraint.footer,
+                    ) == (other.key, other.page, other.per, other.min_fill, other.widows, other.footer)
                 case (sem.Unbreakable(), sem.Unbreakable()) | (sem.KeepWithNext(), sem.KeepWithNext()):
                     preserved = True
             if preserved:

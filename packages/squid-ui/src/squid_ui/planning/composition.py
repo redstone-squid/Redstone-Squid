@@ -124,6 +124,10 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
             return self.fragment.sources | self.fragment.repeated
         return self.origin.references(self.reference) if self.origin is not None else self.graph.atoms(self.reference)
 
+    @property
+    def page_source(self) -> SemanticRef:
+        return self.origin.page_boundary(self.reference) if self.origin is not None else self.reference
+
     def scope_effects(self, effects: tuple[FidelityEffect, ...]) -> tuple[FidelityEffect, ...]:
         """Resolve an extension's local effect references into the shared source graph."""
         scoped: list[FidelityEffect] = []
