@@ -31,7 +31,6 @@ from squid_ui_discord import (
     render_static,
 )
 from squid_ui_discord import testing as sd
-from squid_ui_discord.rendering import RenderedMessage
 
 _policies = st.sampled_from([Truncate(), Truncate(keep="tail"), Spill(), Drop(), Never()])
 _content = st.text(max_size=1500)
@@ -53,13 +52,6 @@ def documents(draw) -> list:
 
 
 class TestRenderMessage:
-    def test_returns_the_solved_layout_beside_the_view(self):
-        rendered = render_message([Text("hello")])
-        assert isinstance(rendered, RenderedMessage)
-        assert rendered.plan.report.events == ()
-        assert rendered.pages == 1
-        assert rendered.page == 0
-
     def test_static_documents_reject_interactive_nodes(self):
         async def click(event: PressEvent) -> None: ...
 

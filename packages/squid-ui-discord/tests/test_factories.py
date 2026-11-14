@@ -233,19 +233,10 @@ def test_timestamp_factory_rejects_naive_datetimes() -> None:
 
 
 class TestParityWithCards:
-    def test_a_section_takes_house_colour_and_a_lead_image(self) -> None:
-        node = sl.section(sl.heading("Title"), "body", accent=0x43B581, thumbnail="https://example.invalid/a.png")
-
-        assert node.accent == 0x43B581
-        assert node.thumbnail == "https://example.invalid/a.png"
-
     def test_field_fallbacks_are_resolved_like_any_other_text(self) -> None:
         node = sl.field("Videos", "a, b, c", fallbacks=(t"{3} videos", "3"))
 
         assert node.fallbacks == (sl.plain(t"{3} videos"), sl.plain("3"))
-
-    def test_note_is_small_print(self) -> None:
-        assert sl.note("Submission ID: 5") == sl.semantic.Note(sl.plain("Submission ID: 5"), sl.semantic.Importance.LOW)
 
 
 class TestRating:

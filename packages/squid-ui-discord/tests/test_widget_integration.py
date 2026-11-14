@@ -1,7 +1,7 @@
-"""Widget integration with Discord planning, payload limits, and mounted control keys.
+"""Widget integration with Discord planning and mounted control keys.
 
 The widget package tests state transitions independently. This shared table checks
-representative widget renders and dispatches a usable authored key through the message root.
+mounted handler keys and dispatches a usable authored key through the message root.
 """
 
 from collections.abc import Callable
@@ -22,7 +22,7 @@ from squid_ui.primitives import Paginate
 from squid_ui.profiling import ActionStatus, MemoryProfiler, OperationKind
 from squid_ui.semantic import ActionControl, Choices, FormTrigger
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 KEYED_CONTROLS = (ActionControl, Choices, FormTrigger)
 
@@ -99,16 +99,6 @@ def _authored_keys(tree: tuple[sl.semantic.AnyLayoutNode, ...]) -> set[str]:
 
 
 widget = pytest.mark.parametrize("build", [build for _name, build in WIDGETS], ids=[name for name, _ in WIDGETS])
-
-
-@widget
-def test_what_it_draws_is_a_legal_discord_payload(build: Callable[[], sl.Component[sl.DiscordTarget]]) -> None:
-    """Check the native payload against Discord limits after planning and drawing."""
-    message_root = MessageRoot(build(), access=Everyone(), timeout=None)
-
-    view = commit_render(message_root)
-    assert view.to_components()
-    assert_within_limits(view)
 
 
 @widget

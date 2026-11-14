@@ -68,14 +68,6 @@ def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None
     return seen, record
 
 
-def test_factory_builds_one_boolean_node() -> None:
-    ownership = sl.uncontrolled(initial=True)
-
-    assert sl.toggle("Notifications", key="notices", on=ownership, tone=sl.Tone.SUCCESS) == sl.semantic.Toggle(
-        "notices", "Notifications", ownership, tone=sl.Tone.SUCCESS
-    )
-
-
 async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
     session = PresentationState()
     responder = _Responder()

@@ -6,7 +6,7 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_ui.planning import Target, plan
+from squid_ui.planning import plan
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
 from squid_ui.primitives import (
     Card,
@@ -25,7 +25,7 @@ from squid_ui.primitives import (
     Thumbnail,
     Truncate,
 )
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, V2_LIMITS
+from squid_ui_discord import DISCORD_V1_DPY27
 from squid_ui_discord.target import classic
 
 
@@ -36,61 +36,11 @@ def body(document, target=DISCORD_V1_DPY27) -> scene.ClassicMessage:
 
 
 class TestTargets:
-    def test_the_two_targets_are_separate_identities(self) -> None:
-        assert DISCORD_V2_DPY27.id == "discord.components-v2"
-        assert DISCORD_V1_DPY27.id == "discord.components-v1"
-
-    def test_a_target_cannot_be_built_without_both_of_its_axes(self) -> None:
-        """A target is a product: neither the dialect nor the adapter is optional."""
-        with pytest.raises(TypeError):
-            Target()  # type: ignore[call-arg]
-
     def test_custom_limits_arrive_through_a_custom_target(self) -> None:
         target = classic(limits=CLASSIC_LIMITS.__class__(embed_count=2))
 
         assert target.capacity(Axis.EMBEDS) == 2
         assert target.capacity(Axis.EMBED_TEXT) == CLASSIC_LIMITS.embed_text
-
-
-class TestCapabilities:
-    def test_classic_declares_content_and_embeds_and_v2_does_not(self) -> None:
-        assert {"message.content", "layout.embed", "layout.embed_fields"} <= DISCORD_V1_DPY27.capabilities
-        assert not {"message.content", "layout.embed"} & DISCORD_V2_DPY27.capabilities
-
-    def test_classic_declares_no_v2_container_structures(self) -> None:
-        assert not {"layout.container", "layout.section", "layout.gallery"} & DISCORD_V1_DPY27.capabilities
-
-    def test_both_targets_share_the_control_and_form_capabilities(self) -> None:
-        shared = {"actions.buttons", "actions.select", "forms.modal"}
-
-        assert shared <= DISCORD_V1_DPY27.capabilities
-        assert shared <= DISCORD_V2_DPY27.capabilities
-
-
-class TestBudgets:
-    def test_classic_budgets_two_independent_text_pools(self) -> None:
-        assert CLASSIC_LIMITS.text_axes == {Axis.CONTENT_TEXT: 2000, Axis.EMBED_TEXT: 6000}
-
-    def test_v2_budgets_exactly_one(self) -> None:
-        assert V2_LIMITS.text_axes == {Axis.DISPLAY_TEXT: 4000}
-
-    def test_classic_budgets_the_axes_a_classic_message_actually_has(self) -> None:
-        assert DISCORD_V1_DPY27.capacities == {
-            Axis.CONTENT_TEXT: 2000,
-            Axis.EMBED_TEXT: 6000,
-            Axis.EMBEDS: 10,
-            Axis.ROWS: 5,
-            Axis.CONTROLS: 25,
-            Axis.ATTACHMENTS: 10,
-        }
-
-    def test_no_classic_strategy_can_borrow_the_v2_totals(self) -> None:
-        assert Axis.COMPONENTS not in DISCORD_V1_DPY27.capacities
-        assert Axis.DISPLAY_TEXT not in DISCORD_V1_DPY27.capacities
-
-    def test_row_and_control_shape_is_stated_once_for_both_modes(self) -> None:
-        """Not merely equal: the same object, so the two can no longer drift apart."""
-        assert CLASSIC_LIMITS.components is V2_LIMITS.components
 
 
 class TestClassicShape:

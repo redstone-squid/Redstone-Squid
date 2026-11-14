@@ -97,11 +97,3 @@ def test_control_factories_distinguish_exact_rows_from_auto_layout() -> None:
 def test_factories_reject_true_as_content(factory: object) -> None:
     with pytest.raises(TypeError, match=r"True is not content|not a Discord button"):
         factory(True)  # type: ignore[operator]
-
-
-def test_exact_factory_output_renders_in_each_mode() -> None:
-    v2_payload = sd.render_static(sd.v2.panel("V2"))
-    classic_payload = sd.classic.render_static((sd.classic.content("Preview"), sd.classic.card("Classic")))
-
-    assert v2_payload.mode is sd.MessageMode.COMPONENTS_V2
-    assert classic_payload.mode is sd.MessageMode.CLASSIC

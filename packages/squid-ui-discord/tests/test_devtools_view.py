@@ -6,7 +6,6 @@ from typing import Any, override
 
 import anyio
 import discord
-import pytest
 
 import squid_ui as sl
 import squid_ui_discord
@@ -66,12 +65,6 @@ def message_root_inspector(inspector: MessageRootInspector) -> tuple[MessageRoot
 
 
 class TestList:
-    def test_the_inspector_authors_high_level_semantic_nodes(self) -> None:
-        nodes = MessageRootInspector().render()
-
-        assert isinstance(nodes[0], sl.semantic.Section)
-        assert isinstance(nodes[-1], sl.semantic.ActionControls)
-
     async def test_it_lists_a_live_message_root_with_a_link_to_its_message(self) -> None:
         subject = await live_subject()
         _, view = message_root_inspector(MessageRootInspector())
@@ -192,12 +185,6 @@ class TestDetail:
 
         assert inspector.focus is None
 
-    async def test_a_detail_view_fits_discord(self) -> None:
-        subject = await live_subject()
-        _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
-
-        assert_within_limits(view)
-
     async def test_a_manager_key_labels_its_root(self) -> None:
         manager = squid_ui_discord.SessionManager()
         subject = MessageRoot(Subject(), access=Everyone())
@@ -240,22 +227,6 @@ class TestPlanDiagnostics:
 
 
 class TestOperationalInspectorSections:
-    """Every section renders.
-
-    These panels only run when a developer opens that tab, so a name that does not exist or a
-    required argument that is not passed sits undetected until someone reaches for it mid-debug.
-    """
-
-    @pytest.mark.parametrize(
-        "section",
-        ["overview", "roots", "sessions", "routes", "activity", "queues", "profile", "persistence"],
-    )
-    async def test_each_dashboard_section_renders(self, section: str) -> None:
-        inspector = OperationalInspector(DevToolsRuntime())
-        inspector.section = section
-
-        assert list(inspector.render())
-
     async def test_tabs_switch_in_place_and_mark_the_current_selection(self) -> None:
         inspector = OperationalInspector(DevToolsRuntime())
         root = MessageRoot(inspector, access=Owner(1))

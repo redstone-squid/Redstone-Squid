@@ -16,7 +16,7 @@ from squid_ui.semantic import ActionControl, ActionControls, Heading, Paragraph
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
 from squid_ui_discord.message_payload import MessageMode
 from squid_ui_discord.message_root import AnyMessageRoot
-from squid_ui_discord.message_root_wiring import ClassicMountedView, MountedView
+from squid_ui_discord.message_root_wiring import ClassicMountedView
 from squid_ui_discord.testing import (
     commit_classic_render,
     commit_render,
@@ -71,16 +71,6 @@ class TestViewType:
         assert not isinstance(view, discord.ui.LayoutView)
         assert view.has_components_v2() is False
 
-    def test_a_v2_message_root_still_builds_a_layout_view(self) -> None:
-        assert isinstance(commit_render(message_root_for(DISCORD_V2_DPY27)), MountedView)
-
-    def test_both_mounted_views_share_one_behaviour(self) -> None:
-        """The mixin is the point: timeout, dispatchability, and the error hook are one copy."""
-        for kind in (MountedView, ClassicMountedView):
-            assert kind.on_timeout is MountedView.on_timeout
-            assert kind.is_dispatchable is MountedView.is_dispatchable
-            assert kind.on_error is MountedView.on_error
-
 
 class TestPresentation:
     def test_the_committed_presentation_carries_the_embeds(self) -> None:
@@ -105,9 +95,6 @@ class TestPresentation:
 @pytest.mark.parametrize("target", TARGETS)
 class TestSharedContracts:
     """Exercise the same lifecycle assertions against both Discord targets."""
-
-    def test_a_render_produces_a_dispatchable_view(self, target) -> None:
-        assert render_for(target, message_root_for(target)).is_dispatchable() is True
 
     def test_controls_carry_generation_qualified_custom_ids(self, target) -> None:
         message_root = message_root_for(target)

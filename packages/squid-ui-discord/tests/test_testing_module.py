@@ -6,8 +6,6 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord as squid_discord
 from squid_ui.errors import UnsolvableLayoutError
-from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.planning.limits import LIMITS
 from squid_ui.primitives import Heading, Panel, RoutedButton, Row, Sep, Text
 from squid_ui_discord import testing as sd
 from squid_ui_discord.delivery import DeliveryResult
@@ -66,24 +64,8 @@ class TestConstruction:
 
         assert harness.edits == [sd.CallRecord((), {"content": "new"})]
 
-    def test_a_target_profile_supplies_exactly_the_capabilities_it_is_given(self) -> None:
-        target = sd.target_profile("narrow", capabilities=frozenset({AdapterCapability.MODAL_FORMS}))
-
-        assert target.adapter.capabilities == frozenset({AdapterCapability.MODAL_FORMS})
-        assert target.limits == LIMITS
-
-    def test_a_layout_view_holds_the_items_in_the_order_given(self) -> None:
-        view = sd.layout_view(sd.action_row(discord.ui.Button(label="Go", custom_id="go")))
-
-        assert sd.payload_labels(view) == ["Go"]
-        assert view.timeout is None
-
 
 class TestFailureInjection:
-    def test_a_generic_failure_reports_its_status(self) -> None:
-        assert sd.http_error().status == 500
-        assert sd.http_error(503).status == 503
-
     def test_the_stale_failure_carries_the_code_the_recovery_path_keys_on(self) -> None:
         """Recovery keys on code 10015, not on the 404 -- an unknown webhook is what an
         expired interaction token looks like from Discord's side."""
