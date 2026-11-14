@@ -16,7 +16,7 @@ class Counter(Component[DiscordTarget]):
 
     first: int = state(0)
     second: int = state(0)
-    flag: bool = state(default=True)
+    flag: bool = state(True)
 
     def __init__(self) -> None:
         self.runs: dict[str, int] = {}

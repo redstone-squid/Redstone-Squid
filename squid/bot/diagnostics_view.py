@@ -162,8 +162,8 @@ class ErrorReportScreen(sd.Screen[int]):
         live_updates=True,
     )
 
-    work_lost_only: bool = sl.state(default=False)
-    confirming_clear: bool = sl.state(default=False)
+    work_lost_only: bool = sl.state(False)
+    confirming_clear: bool = sl.state(False)
     cleared_count: int | None = sl.state(None)
     _reports: tuple[ErrorReport, ...] = sl.state((), persist=False, opaque=True)
     _updates: _ReportUpdates | None = sl.state(None, persist=False, opaque=True)

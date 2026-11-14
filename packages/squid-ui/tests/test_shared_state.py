@@ -33,7 +33,7 @@ class Workspace(Reactive):
 
 
 class Anonymous(Reactive):
-    flag: bool = state(default=False)
+    flag: bool = state(False)
 
 
 type Follow = Callable[[CellAddress, Callable[[Address], None]], Callable[[], None]]
@@ -397,7 +397,7 @@ def test_local_state_rolls_back_with_a_conflict(follow: Follow, here: Member) ->
     preferences = Preferences()
 
     class Panel(Component[DiscordTarget]):
-        open: bool = state(default=False)
+        open: bool = state(False)
 
         @override
         def render(self):

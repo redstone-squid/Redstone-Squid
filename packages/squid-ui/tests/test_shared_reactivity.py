@@ -41,7 +41,7 @@ def address(preferences: Preferences, name: str) -> CellAddress:
 
 
 class Panel(Component[DiscordTarget]):
-    show_locale: bool = state(default=False)
+    show_locale: bool = state(False)
 
     def __init__(self, preferences: Preferences) -> None:
         self.preferences = preferences

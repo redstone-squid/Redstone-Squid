@@ -31,8 +31,8 @@ class Counter(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
 
 class Parent(sd.Screen):
-    reversed: bool = sl.state(default=False)
-    shown: bool = sl.state(default=True)
+    reversed: bool = sl.state(False)
+    shown: bool = sl.state(True)
 
     def __init__(self) -> None:
         self.first = Counter()

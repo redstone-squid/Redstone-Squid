@@ -98,7 +98,7 @@ async def test_removing_owner_waits_for_cleanup_but_keeps_message_root_live() ->
         panel = Panel()
 
         class Root(Component[ComponentsV2Target]):
-            visible: bool = state(default=True)
+            visible: bool = state(True)
 
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
@@ -121,7 +121,7 @@ async def test_failed_replacement_keeps_visible_owner_active_until_successful_de
         first, replacement = Panel(), Panel()
 
         class Root(Component[ComponentsV2Target]):
-            replaced: bool = state(default=False)
+            replaced: bool = state(False)
 
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
@@ -262,7 +262,7 @@ async def test_failed_terminal_render_and_teardown_callback_still_stop_services(
     async with running_host() as host:
 
         class BrokenRender(Panel):
-            broken: bool = state(default=False)
+            broken: bool = state(False)
 
             @override
             def render(self) -> Text:

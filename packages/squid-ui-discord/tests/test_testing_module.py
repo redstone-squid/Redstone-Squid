@@ -93,7 +93,7 @@ class TestFailureInjection:
 
 
 class OverflowingScreen(squid_discord.Screen):
-    expanded: bool = sl.state(default=False)
+    expanded: bool = sl.state(False)
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, squid_discord.Request], ...]:
         if self.expanded:

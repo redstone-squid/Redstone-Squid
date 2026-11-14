@@ -259,7 +259,7 @@ async def test_failed_discovery_releases_new_model_reads() -> None:
             return sl.paragraph("unreachable")
 
     class Switch(sl.Component[sl.ComponentsV2Target]):
-        changed: bool = sl.state(default=False)
+        changed: bool = sl.state(False)
 
         def __init__(self) -> None:
             self.child = BrokenChild()

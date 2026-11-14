@@ -55,7 +55,7 @@ class Workspace(Reactive):
 class Panel(Component[DiscordTarget]):
     history: History = history(limit=3)
     page: int = state(1)
-    open: bool = state(default=False)
+    open: bool = state(False)
 
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace

@@ -29,7 +29,7 @@ class Reviewer(sl.Reactive):
 
 class ReviewRoom(sl.Reactive):
     seats: tuple[Reviewer, ...] = sl.state((), persist=False, opaque=True)
-    closed: bool = sl.state(default=False)
+    closed: bool = sl.state(False)
     activity: tuple[str, ...] = sl.state(())
 
     def log(self, line: str) -> None:

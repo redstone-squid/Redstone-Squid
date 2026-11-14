@@ -311,7 +311,7 @@ class _Gate(sd.Screen):
     policy = sd.ResponseSpec(session=sd.SessionSpec("gate"), timeout=None)
 
     presses: int = sl.state(default=0)
-    granted: bool = sl.state(default=False)
+    granted: bool = sl.state(False)
     abandoned: int = sl.state(default=0)
 
     @override
@@ -424,7 +424,7 @@ async def test_rejected_prompt_leaves_cleanup_to_the_caller_once() -> None:
 
 async def test_failed_parent_work_does_not_publish_consent_and_can_retry() -> None:
     class FailingGate(_Gate):
-        fail: bool = sl.state(default=True)
+        fail: bool = sl.state(True)
 
         @override
         async def _answered(self, event: sd.ActionEvent, consent: AccountConsent | None) -> None:

@@ -63,7 +63,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     _revision: int = sl.state(1, persist=False)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
     _identities: tuple[AccountIdentity, ...] = sl.state((), persist=False)
-    _needs_consent: bool = sl.state(default=False, persist=False)
+    _needs_consent: bool = sl.state(False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
     _profile_editor: ProfileEditor | None = sl.state(None, persist=False, opaque=True)

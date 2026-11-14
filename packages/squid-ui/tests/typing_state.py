@@ -53,7 +53,7 @@ assert_type(state(factory=int), int)
 
 
 class Anonymous(Reactive):
-    flag: bool = state(default=False)
+    flag: bool = state(False)
 
 
 class UserSettings(Reactive):

@@ -236,7 +236,7 @@ async def test_terminal_application_view_is_discarded_without_mounting_children(
             mounts.append("child")
 
     class Parent(Component[ComponentsV2Target]):
-        show_child: bool = state(default=False)
+        show_child: bool = state(False)
 
         def __init__(self) -> None:
             self.child = Child()

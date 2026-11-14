@@ -268,7 +268,7 @@ class Consumer(Component[ComponentsV2Target]):
 
 
 class Panel(Component[ComponentsV2Target]):
-    visible: bool = state(default=True)
+    visible: bool = state(True)
 
     def __init__(self, borrowed: Recorder | None = None) -> None:
         self.service = borrowed if borrowed is not None else self.own(Recorder())
@@ -339,7 +339,7 @@ async def test_nearest_provider_changes_without_transferring_service_ownership()
         consumer = Consumer()
 
         class Nested(Panel):
-            overridden: bool = state(default=True)
+            overridden: bool = state(True)
 
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
@@ -379,7 +379,7 @@ async def test_injected_service_renders_before_readiness_and_publishes_ready_sta
         release = asyncio.Event()
 
         class Status(Reactive):
-            ready: bool = state(default=False)
+            ready: bool = state(False)
 
         class Loading(Recorder):
             def __init__(self) -> None:
@@ -545,7 +545,7 @@ async def test_actual_component_remount_preserves_object_and_restarts_activity()
         panel = Panel()
 
         class Root(Component[ComponentsV2Target]):
-            visible: bool = state(default=True)
+            visible: bool = state(True)
 
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:

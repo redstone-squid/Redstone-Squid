@@ -179,7 +179,7 @@ class AgreementParticipant:
 
 class Agreement(Component):
     approved: tuple[str, ...] = state((), persist=False)
-    resolved: bool = state(default=False, persist=False)
+    resolved: bool = state(False, persist=False)
 
     def __init__(
         self,

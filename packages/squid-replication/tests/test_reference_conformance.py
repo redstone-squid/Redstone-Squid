@@ -53,7 +53,7 @@ def Replica(replica_id: str) -> _Replica:
 
 
 class LocalModel(Reactive):
-    selected: bool = state(default=False)
+    selected: bool = state(False)
 
 
 def _outside(callback, *args) -> None:

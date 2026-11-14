@@ -320,7 +320,7 @@ class PollScreen(sd.Screen[str]):
     history: sl.runtime.History = sl.runtime.history(limit=20)
 
     published_url: str | None = sl.state(None)
-    cancelled: bool = sl.state(default=False)
+    cancelled: bool = sl.state(False)
 
     def __init__(
         self,

@@ -153,7 +153,7 @@ def _normalized(view: discord.ui.LayoutView) -> list[dict[str, object]]:
 
 
 class _ButtonRow(sl.Component[sl.ComponentsV2Target]):
-    alternate: bool = sl.state(default=False)
+    alternate: bool = sl.state(False)
 
     def __init__(self, offset: int, size: int) -> None:
         self.offset = offset

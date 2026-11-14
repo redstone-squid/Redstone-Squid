@@ -211,9 +211,9 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
     )
 
     _base_revision: int = sl.state(0)
-    confirming: bool = sl.state(default=False)
-    saved: bool = sl.state(default=False)
-    conflict: bool = sl.state(default=False)
+    confirming: bool = sl.state(False)
+    saved: bool = sl.state(False)
+    conflict: bool = sl.state(False)
     """The build changed after the staged answers were loaded, so they cannot be saved."""
 
     def __init__(

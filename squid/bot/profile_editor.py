@@ -32,7 +32,7 @@ def _link_count(count: int) -> sl.text.Text:
 class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Own a profile draft and its local history until save or cancel."""
 
-    _active: bool = sl.state(default=True, persist=False)
+    _active: bool = sl.state(True, persist=False)
     history: sl.runtime.History = sl.runtime.history(limit=20)
 
     def __init__(

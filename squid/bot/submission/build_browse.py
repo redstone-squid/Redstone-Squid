@@ -168,7 +168,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     _review: BoundEdit | None = sl.state(None, opaque=True)
     _pending_review: str | None = sl.state(None, persist=False)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
-    _show_schematics: bool = sl.state(default=False)
+    _show_schematics: bool = sl.state(False)
 
     def __init__(
         self,
@@ -388,8 +388,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     _results: SearchScreen | None = sl.state(None, opaque=True)
     _record_categories: frozenset[str] = sl.state(frozenset())
-    _show_search_help: bool = sl.state(default=False)
-    _show_standings: bool = sl.state(default=False)
+    _show_search_help: bool = sl.state(False)
+    _show_standings: bool = sl.state(False)
     _query: str = sl.state("")
     _sort: str = sl.state("")
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")

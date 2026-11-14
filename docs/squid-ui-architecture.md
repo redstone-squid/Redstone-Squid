@@ -1391,7 +1391,7 @@ from squid_ui.runtime import ContextKey, ManagedService, Topic, TopicBus
 
 
 class BuildUpdates(ManagedService):
-    changed: bool = state(default=False)
+    changed: bool = state(False)
 
     def __init__(self, bus: TopicBus, build_id: int) -> None:
         self.bus = bus

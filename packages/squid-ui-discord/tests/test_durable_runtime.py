@@ -63,7 +63,7 @@ class Counter(sl.Component[sl.ComponentsV2Target]):
 
 
 class HiddenDraft(sl.Component[sl.ComponentsV2Target]):
-    advanced: bool = sl.state(default=False)
+    advanced: bool = sl.state(False)
 
     @override
     def render(self):

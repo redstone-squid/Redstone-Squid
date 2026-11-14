@@ -254,8 +254,8 @@ class TestRenderCaching:
 
         class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
-            wrapped: bool = state(default=False)
-            child_visible: bool = state(default=False)
+            wrapped: bool = state(False)
+            child_visible: bool = state(False)
 
             def __init__(self) -> None:
                 self.child = Child()
@@ -395,7 +395,7 @@ class TestRenderCaching:
                 self.unmounts += 1
 
         class Leaf(Component[sl.ComponentsV2Target]):
-            visible: bool = state(default=False)
+            visible: bool = state(False)
 
             def __init__(self) -> None:
                 self.child = Child()
@@ -591,7 +591,7 @@ class TestRenderCaching:
 
     def test_equal_computed_value_refreshes_changed_dependency_addresses(self) -> None:
         class Values(Reactive):
-            use_b: bool = state(default=False)
+            use_b: bool = state(False)
             a: int = state(1)
             b: int = state(1)
 

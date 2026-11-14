@@ -15,7 +15,7 @@ from squid_ui_discord.testing import commit_classic_render, commit_render, inter
 
 class JumpPages(sl.Component[sl.DiscordTarget]):
     count: int = sl.state(100)
-    visible: bool = sl.state(default=True)
+    visible: bool = sl.state(True)
     page: int = sl.state(0)
 
     def __init__(self, *, controlled: bool = False) -> None:

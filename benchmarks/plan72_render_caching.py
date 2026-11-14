@@ -244,7 +244,7 @@ class _ValueRoot(Component[sl.ComponentsV2Target]):
 
 
 class _BranchLeaf(Component[sl.ComponentsV2Target]):
-    alternate: bool = state(default=False)
+    alternate: bool = state(False)
 
     def __init__(self) -> None:
         self.renders = 0
@@ -258,7 +258,7 @@ class _BranchLeaf(Component[sl.ComponentsV2Target]):
 
 
 class _TextLeaf(Component[sl.ComponentsV2Target]):
-    long: bool = state(default=False)
+    long: bool = state(False)
 
     def __init__(self) -> None:
         self.renders = 0
@@ -288,7 +288,7 @@ class _MountedChild(Component[sl.ComponentsV2Target]):
 
 
 class _MountingLeaf(Component[sl.ComponentsV2Target]):
-    mounted: bool = state(default=False)
+    mounted: bool = state(False)
 
     def __init__(self) -> None:
         self.child = _MountedChild()

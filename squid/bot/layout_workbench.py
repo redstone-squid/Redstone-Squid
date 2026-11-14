@@ -178,7 +178,7 @@ class Workbench(InspectablePanel):
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
     notice: str = sl.state("Edit the build, then undo. Watch the preview follow both changes.", persist=False)
-    fail_next: bool = sl.state(default=False)
+    fail_next: bool = sl.state(False)
 
     def __init__(self, draft: BuildDraft) -> None:
         self.draft = draft

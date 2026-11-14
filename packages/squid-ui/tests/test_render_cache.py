@@ -24,7 +24,7 @@ class MountingCounter(Counter):
 
 
 class Switch(ui.Component):
-    shown: bool = ui.state(default=False)
+    shown: bool = ui.state(False)
 
     def __init__(self, child: ui.Component) -> None:
         self.child = child
@@ -131,7 +131,7 @@ def test_deferred_discovery_can_expand_the_child_on_retry() -> None:
 @pytest.mark.parametrize("nested", [False, True])
 async def test_new_atomic_resource_suspends_without_accepting_an_old_render(nested: bool) -> None:
     class Model(ui.Reactive):
-        shown: bool = ui.state(default=False)
+        shown: bool = ui.state(False)
 
     model = Model()
 

@@ -330,7 +330,7 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Own voting kind selection, configuration forms, and reset confirmation."""
 
     kind: VoteKind = sl.state(VoteKind.BUILD)
-    confirming_reset: bool = sl.state(default=False)
+    confirming_reset: bool = sl.state(False)
 
     def __init__(
         self,

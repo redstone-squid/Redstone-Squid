@@ -487,7 +487,7 @@ class Panel(Component[sl.ComponentsV2Target]):
     """A pager, a button and an optional child — one of each thing a commit publishes."""
 
     entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)))
-    show_child: bool = state(default=False)
+    show_child: bool = state(False)
 
     def __init__(self, mounted: list[str]) -> None:
         self.child = Child(mounted)
@@ -2117,8 +2117,8 @@ class TestDeliveryAtomicity:
 
     async def test_a_two_press_confirmation_cannot_complete_on_a_refused_arm(self, monkeypatch):
         class Danger(Component[sl.ComponentsV2Target]):
-            armed: bool = state(default=False)
-            deleted: bool = state(default=False)
+            armed: bool = state(False)
+            deleted: bool = state(False)
 
             @override
             def render(self):
@@ -3547,7 +3547,7 @@ class TestResourceLoading:
                 return Text(str(status.value))
 
         class Parent(Component[sl.ComponentsV2Target]):
-            visible: bool = state(default=True)
+            visible: bool = state(True)
 
             def __init__(self) -> None:
                 self.child = Child()
@@ -3747,7 +3747,7 @@ class TestResourceLoading:
         loads: list[str] = []
 
         class Conditional(Component[sl.ComponentsV2Target]):
-            shown: bool = state(default=False)
+            shown: bool = state(False)
 
             @resource
             async def value(self) -> str:
@@ -3870,7 +3870,7 @@ class Leaf(Component[sl.ComponentsV2Target]):
 class Host(Component[sl.ComponentsV2Target]):
     """A loading parent whose child is only reachable through its loaded render."""
 
-    ready: bool = state(default=False)
+    ready: bool = state(False)
 
     def __init__(self, log: list[str], child: Component[sl.ComponentsV2Target]) -> None:
         self.log = log
@@ -3949,7 +3949,7 @@ class TestDeferredExpansion:
 class Nested(Component[sl.ComponentsV2Target]):
     """A parent whose on_load reveals a child that also needs to load before rendering."""
 
-    ready: bool = state(default=False)
+    ready: bool = state(False)
 
     def __init__(self, log: list[str]) -> None:
         self.log = log
@@ -4048,7 +4048,7 @@ class TestLoading:
         log: list[str] = []
 
         class OpenContext(Component[sl.ComponentsV2Target]):
-            open: bool = state(default=False)
+            open: bool = state(False)
 
             def __init__(self) -> None:
                 self.child = Leaf(log, "child")

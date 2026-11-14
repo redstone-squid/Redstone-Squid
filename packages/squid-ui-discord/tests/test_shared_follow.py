@@ -35,7 +35,7 @@ class Workspace(Reactive):
 
 
 class Panel(Component[sl.ComponentsV2Target]):
-    show_detail: bool = state(default=False)
+    show_detail: bool = state(False)
 
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
@@ -93,7 +93,7 @@ class Swapper(Component[sl.ComponentsV2Target]):
     that the old read remains observed until the replacement has reached Discord.
     """
 
-    other: bool = state(default=False)
+    other: bool = state(False)
 
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
@@ -196,7 +196,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
 
 async def test_equal_computed_value_switches_the_mounts_followed_branch() -> None:
     class Values(Reactive):
-        use_b: bool = state(default=False)
+        use_b: bool = state(False)
         a: int = state(1)
         b: int = state(1)
 

@@ -31,7 +31,7 @@ from squid_ui_discord.testing import assert_within_limits, commit_render, delive
 class Subject(sl.Component[sl.ComponentsV2Target]):
     """A stand-in for whatever panel the owner is actually debugging."""
 
-    opened: bool = sl.state(default=False)
+    opened: bool = sl.state(False)
 
     @sl.computed
     def label(self) -> str:
