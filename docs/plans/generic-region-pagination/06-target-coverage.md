@@ -1,6 +1,6 @@
 # Target coverage and migration
 
-Status: implemented and validated.
+Status: in progress. The initial rollout is validated, but vocabulary integration is incomplete.
 
 ## Evidence and decisions
 
@@ -120,6 +120,18 @@ checks. Whole-project Pyrefly reports zero errors. Installed Ruff/format hooks a
 `git diff --check` pass. Async delivery tests ran outside the sandbox because its
 thread wakeups stall the file-delivery tests, as observed in earlier phases.
 
-The roadmap is complete for the documented shared vocabulary and target matrix.
-The deferred adapters above remain explicit extension work; no target family is
-excluded merely because it is not V2, and no obsolete region solver remains.
+The roadmap remains open. The implementation gaps above are phase 6 work, not
+accepted reductions of scope. The original completion claim was too broad.
+
+## Remaining implementation sequence
+
+1. Carry palette overrides through shared occurrences, including alternative
+   presentations, and verify scope isolation and retained-allocation invalidation.
+2. Integrate status/progress content and section thumbnails with target resource
+   accounting and faithful representations.
+3. Integrate disclosure, item/navigation ownership and native entity controls,
+   including hidden content, delivery staging and changed state.
+4. Translate legacy adaptation permissions and fragment policies explicitly;
+   remove each remaining pagination compatibility route once its contracts pass.
+5. Re-run target and application conformance and reconcile the final matrix before
+   marking phase 6 complete. Platform limits remain distinct from implementation gaps.
