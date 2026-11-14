@@ -7,7 +7,7 @@ their contributions when several branches find the same document.
 """
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
@@ -43,15 +43,6 @@ class RankedCandidate:
     normalized_title: str
     score: float = 0
     branches: tuple[RankingBranch, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class SearchDocumentOrder:
-    """Fields required to order an unranked, filter-only result."""
-
-    source_id: str
-    resource_kind: Literal["record", "build", "metadata"]
-    normalized_title: str
 
 
 def reciprocal_rank_fusion(
@@ -109,16 +100,6 @@ def reciprocal_rank_fusion(
         for key, document in documents.items()
     )
     return tuple(sorted(fused, key=_ranked_sort_key))
-
-
-def sort_filter_only(documents: Iterable[SearchDocumentOrder]) -> tuple[SearchDocumentOrder, ...]:
-    """Sort filter-only matches independently of database return order."""
-    return tuple(
-        sorted(
-            documents,
-            key=lambda item: (item.normalized_title.casefold(), item.resource_kind, item.source_id),
-        )
-    )
 
 
 def _ranked_sort_key(candidate: RankedCandidate) -> tuple[float, str, str, str]:

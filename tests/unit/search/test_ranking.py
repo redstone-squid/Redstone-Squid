@@ -5,9 +5,7 @@ import pytest
 from squid.search.application import (
     RankedCandidate,
     RankingBranch,
-    SearchDocumentOrder,
     reciprocal_rank_fusion,
-    sort_filter_only,
 )
 
 
@@ -57,16 +55,6 @@ def test_rrf_uses_deterministic_tie_order() -> None:
     )
 
     assert [candidate.source_id for candidate in ranked] == ["1", "2"]
-
-
-def test_filter_only_order_is_title_kind_and_id() -> None:
-    documents = (
-        SearchDocumentOrder("2", "record", "alpha"),
-        SearchDocumentOrder("1", "record", "Alpha"),
-        SearchDocumentOrder("3", "build", "Beta"),
-    )
-
-    assert [document.source_id for document in sort_filter_only(documents)] == ["1", "2", "3"]
 
 
 def test_rrf_rejects_invalid_configuration() -> None:

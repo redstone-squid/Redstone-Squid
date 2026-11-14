@@ -2,14 +2,13 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import cast, override
+from typing import cast
 
 from sqlalchemy import and_, false, func, not_, or_, select, true
 from sqlalchemy.sql.elements import ColumnElement
 from whenever import Instant
 
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry, FieldType
-from squid.search.application.ports import SearchQueryCompiler
 from squid.search.domain import (
     BooleanExpression,
     BooleanOperator,
@@ -30,13 +29,12 @@ _VECTOR_FIELDS = {
 }
 
 
-class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
+class PostgresSearchQueryCompiler:
     """Compile allowlisted expressions without emitting user-controlled identifiers."""
 
     def __init__(self, registry: FieldRegistry = DEFAULT_FIELD_REGISTRY) -> None:
         self._registry = registry
 
-    @override
     def compile(self, query: SearchQuery) -> ColumnElement[bool]:
         """Compile the full expression; an empty query matches every document."""
         if query.expression is None:

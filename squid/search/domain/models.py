@@ -1,7 +1,6 @@
 """Search requests and results, built the same way by the bot and the API."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
@@ -170,4 +169,3 @@ class SearchPage:
     next: PageAnchor | None
     prev: PageAnchor | None
     warnings: tuple[str, ...] = ()
-    generated_at: datetime | None = None

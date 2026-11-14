@@ -7,14 +7,6 @@ from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistr
 from squid.search.domain import SearchHit, SearchQuery, SearchRequest
 
 
-class SearchQueryCompiler[CompiledQueryT](Protocol):
-    """Turn a parsed query into the parameterized form used by a storage backend."""
-
-    def compile(self, query: SearchQuery) -> CompiledQueryT:
-        """Compile without interpreting user text as identifiers or code."""
-        ...
-
-
 @dataclass(frozen=True, slots=True)
 class SearchSlice:
     """A page of backend results and the total available for pagination.

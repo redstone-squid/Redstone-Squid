@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import Literal, cast, override
 
-from sqlalchemy import case, func, or_, select, true
+from sqlalchemy import func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -275,11 +275,9 @@ class PostgresSearchBackend(SearchBackend):
     async def _exact_candidates(
         self, session: AsyncSession, predicate: ColumnElement[bool], terms: str
     ) -> tuple[RankedCandidate, ...]:
-        score = case((SearchDocument.normalized_title == terms.casefold(), 1.0), else_=0.0)
+        # Every exact match is equally good, so the candidate tie-break alone orders this branch.
         return await self._candidate_rows(
-            session,
-            predicate & (SearchDocument.normalized_title == terms.casefold()),
-            score,
+            session, predicate & (SearchDocument.normalized_title == terms.casefold()), literal(1.0)
         )
 
     async def _fts_candidates(
