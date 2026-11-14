@@ -17,7 +17,7 @@ from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.autocomplete import suggests
-from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor
+from squid.bot.utils.permissions import allows
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
@@ -211,7 +211,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         build_id: int | None = None,
         initial_records: bool = False,
     ) -> BuildBrowseScreen:
-        subject = await actor_for_interaction(request)
+        subject = await request.client.actors.resolve(request)
         permissions = self.bot.services.permissions
 
         async def held(node: PermissionNode) -> bool:
@@ -249,7 +249,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
             self.queries,
             self.builds,
             self.bot.services.edits,
-            lambda: current_edit_actor(request),
+            lambda: request.client.actors.resolve(request, refresh=True),
             self.bot.services.schematics,
             topics=self.bot.topic_bus,
             initial_id=build_id,

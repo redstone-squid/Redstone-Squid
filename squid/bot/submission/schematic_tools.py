@@ -14,7 +14,7 @@ from squid.bot.submission.schematics import (
     _parse_position,
 )
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import actor_for_interaction, allows
+from squid.bot.utils.permissions import allows
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
@@ -167,7 +167,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
 
     async def _video(self, event: sd.SubmitEvent[RedstoneSquid]) -> None:
         request = event.context
-        actor = await actor_for_interaction(request)
+        actor = await request.client.actors.resolve(request)
         stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
         service = self._schematics.videos
         if stored is None or service is None or actor.account_id is None:
@@ -235,7 +235,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
 
     async def _deliver_video_once(self, request: SchematicRequest, job_id: int) -> bool:
         service = self._schematics.videos
-        actor = await actor_for_interaction(request)
+        actor = await request.client.actors.resolve(request)
         if service is None or actor.account_id is None:
             return True
         can_view = await allows(request, BUILD_SCHEMATIC_VIEW_PRIVATE)

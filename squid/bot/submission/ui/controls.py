@@ -12,7 +12,6 @@ from squid.bot.routes._root import _feature_group
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import drafts, inference, opening, recalculation
 from squid.bot.ui import text_node
-from squid.bot.utils.permissions import actor_for_interaction, current_edit_actor
 from squid.core.i18n import tr
 
 if TYPE_CHECKING:
@@ -60,7 +59,7 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
         interaction.client.services,
         UUID(draft_id),
         changes=interaction.client.topic_bus.topic("submission_draft", draft_id),
-        resolve_actor=partial(current_edit_actor, request),
+        resolve_actor=partial(request.client.actors.resolve, request, refresh=True),
         render_card=lambda build: render_build_card(
             build,
             interaction.client.media_previews,
@@ -88,7 +87,7 @@ async def reopen_inference(interaction: Interaction[RedstoneSquid], run_id: str)
     request = await sd.request(interaction)
     if await ensure_consented_account(request, interaction.client.services.accounts) is None:
         return
-    actor = await actor_for_interaction(request)
+    actor = await request.client.actors.resolve(request)
     candidates = await interaction.client.services.submission_inference.get(UUID(run_id), actor)
     await request.respond(
         inference.InferenceCandidatesScreen(interaction.client.services, UUID(run_id), candidates), audience="personal"

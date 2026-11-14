@@ -13,6 +13,7 @@ import pytest_asyncio
 from discord.ext import commands
 
 import squid_ui_discord as sd
+from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import (
     DEVELOPMENT_EXTENSIONS,
     EXTENSIONS,
@@ -24,7 +25,6 @@ from squid.bot.app import (
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
 from squid.bot.reactions import ReactionRouter
-from squid.bot.utils.permissions import AccountIdCache
 from squid.config import BuildConfig
 from squid.runtime import BackgroundTaskSupervisor
 from squid.voting.application import VoteService
@@ -69,6 +69,7 @@ class StubBot(commands.Bot):
         self.reactions = ReactionRouter(cast(RedstoneSquid, self), BackgroundTaskSupervisor())
         self.post_reconciler = unconfigured(PostReconciler)
         self.account_ids = AccountIdCache()
+        self.actors = DiscordActorResolver(cast(RedstoneSquid, self))
         self.build_config = BuildConfig()
         self.catbox = unconfigured(CatboxClient)
         self.media_previews = unconfigured(MediaPreviewClient)

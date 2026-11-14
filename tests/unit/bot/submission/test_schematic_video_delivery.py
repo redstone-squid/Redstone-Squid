@@ -29,9 +29,8 @@ def delivery(monkeypatch: pytest.MonkeyPatch) -> tuple[SchematicTools, Mock, Moc
     request.interaction = Mock(filesize_limit=100)
     request.interaction.is_expired.return_value = False
     request.respond = AsyncMock()
-    monkeypatch.setattr(
-        "squid.bot.submission.schematic_tools.actor_for_interaction", AsyncMock(return_value=Actor(account_id=10))
-    )
+    request.client = Mock()
+    request.client.actors.resolve = AsyncMock(return_value=Actor(account_id=10))
     monkeypatch.setattr("squid.bot.submission.schematic_tools.allows", AsyncMock(return_value=True))
     return component, request, service
 
@@ -150,6 +149,7 @@ async def test_automatic_delivery_sends_a_visible_video_followup(
         VideoStatus(id=41, build_id=7, schematic_id=1, status="succeeded"),
     ]
     client = Mock(spec=discord.Client)
+    client.actors = Mock(resolve=AsyncMock(return_value=Actor(account_id=10)))
     runtime = sd.install(client)
     scope = runtime.scope(object())
     interaction = InteractionHarness(client=client)

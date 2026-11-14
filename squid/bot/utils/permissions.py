@@ -9,16 +9,10 @@ from collections.abc import Callable
 from functools import cache
 from typing import TYPE_CHECKING, Any
 
-import discord
 from discord import app_commands
 from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
-from whenever import Instant
 
 import squid_ui_discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import IdentityProvider
-from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError
 from squid.permissions.domain import CATALOGUE, CheckMode, PermissionNode
 from squid.permissions.errors import PermissionDeniedError, require_check
 
@@ -27,126 +21,14 @@ if TYPE_CHECKING:
 
     import squid.bot.app
 
-ACTOR_ATTRIBUTE = "_squid_actor"
-"""Where a resolved subject is memoized for the rest of one invocation.
-
-Checks run *before* `before_invoke`, and a command in a group runs the group's
-checks too, so the memo lives on the context object rather than in a hook.
-"""
-
 
 class PermissionNodeRequired(PermissionDeniedError, CheckFailure):
     """Discord command-check form of the shared ACL denial."""
 
 
-class AccountIdCache:
-    """Cache Discord-to-account lookups without creating accounts.
-
-    Known accounts live for `ttl_seconds`; missing accounts use the shorter
-    `miss_ttl_seconds` so new links become visible sooner. Reaching `max_entries`
-    clears the whole cache rather than evicting one entry. `forget` invalidates
-    a known identity change immediately.
-    """
-
-    def __init__(self, *, ttl_seconds: float = 300, miss_ttl_seconds: float = 30, max_entries: int = 4096) -> None:
-        self._entries: dict[int, tuple[int | None, Instant]] = {}
-        self._ttl_seconds = ttl_seconds
-        self._miss_ttl_seconds = miss_ttl_seconds
-        self._max_entries = max_entries
-
-    async def resolve(self, accounts: AccountService, discord_id: int) -> int | None:
-        """The account id behind a Discord id, or None when there is no account."""
-        now = Instant.now()
-        cached = self._entries.get(discord_id)
-        if cached is not None and cached[1] > now:
-            return cached[0]
-
-        account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(discord_id))
-        account_id = account.id if account is not None else None
-        ttl = self._ttl_seconds if account_id is not None else self._miss_ttl_seconds
-        if len(self._entries) >= self._max_entries:
-            self._entries.clear()
-        self._entries[discord_id] = (account_id, now.add(seconds=ttl))
-        return account_id
-
-    def forget(self, discord_id: int) -> None:
-        """Drop one entry, for when an account has just been linked."""
-        self._entries.pop(discord_id, None)
-
-
-def has_manage_server(member: discord.Member) -> bool:
-    """Return whether the member owns the guild or has Administrator or Manage Server."""
-    permissions = member.guild_permissions
-    return member.id == member.guild.owner_id or permissions.administrator or permissions.manage_guild
-
-
-async def build_actor(
-    bot: squid.bot.app.RedstoneSquid,
-    user: discord.User | discord.Member | discord.abc.User,
-    guild_id: int | None,
-) -> Actor:
-    """Build a permission subject from the supplied Discord user and guild context.
-
-    Member roles come from the supplied object without a REST refresh. Account
-    identity uses the shared lookup cache; the owner check is delegated to the bot.
-    """
-    member = user if isinstance(user, discord.Member) else None
-    return Actor(
-        discord_user_id=user.id,
-        account_id=await bot.account_ids.resolve(bot.services.accounts, user.id),
-        discord_role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
-        guild_id=guild_id,
-        is_bot_owner=await bot.is_owner(user),  # pyright: ignore[reportArgumentType]
-        discord_guild_admin=member is not None and has_manage_server(member),
-    )
-
-
-async def actor_for(ctx: Context[squid.bot.app.RedstoneSquid]) -> Actor:
-    """The caller's subject, resolved once per invocation."""
-    memoized = getattr(ctx, ACTOR_ATTRIBUTE, None)
-    if isinstance(memoized, Actor):
-        return memoized
-    subject = await build_actor(ctx.bot, ctx.author, ctx.guild.id if ctx.guild is not None else None)
-    setattr(ctx, ACTOR_ATTRIBUTE, subject)
-    return subject
-
-
-async def actor_for_interaction(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> Actor:
-    """Build the permission subject for a command, component, or modal request."""
-    guild_id = None if caller.guild is None else caller.guild.id
-    return await build_actor(caller.client, caller.user, guild_id)
-
-
-async def current_edit_actor(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> Actor:
-    """Refresh identity and guild membership for a long-lived editor action.
-
-    An editor can outlive a role change or account merge. Its opening request is
-    sufficient to identify the user, but not to authorize a later save or undo.
-    Discord failures abort the edit; they must not fall back to stale roles.
-    """
-    bot = caller.client
-    user = caller.user
-    guild = caller.guild
-    member: discord.Member | None = None
-    if guild is not None:
-        try:
-            member = await guild.fetch_member(user.id)
-        except discord.NotFound as error:
-            raise AuthorizationError from error
-    account = await bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
-    return Actor(
-        account_id=None if account is None else account.id,
-        discord_role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
-        guild_id=None if guild is None else guild.id,
-        is_bot_owner=await bot.is_owner(user),
-        discord_guild_admin=member is not None and has_manage_server(member),
-        discord_user_id=user.id,
-    )
-
-
 async def allows(caller: sd.Request[Any, squid.bot.app.RedstoneSquid], node: PermissionNode | str) -> bool:
     """Whether the user behind `caller` holds `node`."""
-    subject = await actor_for_interaction(caller)
+    subject = await caller.client.actors.resolve(caller)
     return (await caller.client.services.permissions.check(subject, node)).allowed
 
 
@@ -164,7 +46,7 @@ async def enforce(
         PermissionNodeRequired: The caller does not satisfy the requested mode.
     """
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
-    subject = await actor_for_interaction(caller)
+    subject = await caller.client.actors.resolve(caller)
     result = await caller.client.services.permissions.check(subject, *resolved, mode=mode)
     require_check(result, error_type=PermissionNodeRequired)
 
@@ -189,7 +71,7 @@ def requires(
     async def predicate(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:
         if guild_only and ctx.guild is None:
             raise NoPrivateMessage()
-        subject = await actor_for(ctx)
+        subject = await ctx.bot.actors.resolve(ctx)
         result = await ctx.bot.services.permissions.check(subject, *resolved, mode=mode)
         require_check(result, error_type=PermissionNodeRequired)
         return True

@@ -13,12 +13,10 @@ import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account
+from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
-    AccountIdCache,
     PermissionNodeRequired,
-    actor_for,
-    current_edit_actor,
     requires,
 )
 from squid.permissions.application import PermissionService
@@ -81,6 +79,7 @@ class Bot:
         self.owner_ids = None
         self.services = services
         self.account_ids = AccountIdCache()
+        self.actors = DiscordActorResolver(cast(RedstoneSquid, self))
         self.guild = guild
 
     def get_guild(self, server_id: int) -> Guild | None:
@@ -195,8 +194,8 @@ class TestSubject:
         bot, guild = _bot(member_id=8)
         context = _context(bot, guild, _member(8, guild))
 
-        first = await actor_for(context)
-        second = await actor_for(context)
+        first = await bot.actors.resolve(context)
+        second = await bot.actors.resolve(context)
 
         assert first is second
         assert cast(FakeAccountService, bot.services.accounts).lookups == 1
@@ -206,7 +205,7 @@ class TestSubject:
         author = _member(9, guild, manage_guild=True)
         context = _context(bot, guild, author)
 
-        subject = await actor_for(context)
+        subject = await bot.actors.resolve(context)
 
         assert subject.discord_guild_admin is True
         assert subject.guild_id == 100
@@ -246,8 +245,8 @@ async def test_editor_actor_refreshes_discord_roles_and_bypasses_identity_cache(
     request.guild = live_guild
     request.user = old_member
     await bot.account_ids.resolve(bot.services.accounts, 8)
-    first = await current_edit_actor(request)
-    second = await current_edit_actor(request)
+    first = await bot.actors.resolve(request, refresh=True)
+    second = await bot.actors.resolve(request, refresh=True)
     assert first.discord_role_ids == frozenset()
     assert not first.discord_guild_admin
     assert second.account_id == 8

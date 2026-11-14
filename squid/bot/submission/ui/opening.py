@@ -6,7 +6,6 @@ import squid_ui_discord as sd
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui.build_edit import BuildEditScreen, BuildEditWorkspace
 from squid.bot.ui import error_node, tr
-from squid.bot.utils.permissions import current_edit_actor
 from squid.builds.application import BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build
@@ -35,7 +34,7 @@ async def prepare_build_editor(
     prepared: BuildEditScreen | None = None
 
     async def actor() -> Actor:
-        return await current_edit_actor(request)
+        return await request.client.actors.resolve(request, refresh=True)
 
     async def authorize() -> bool:
         current = build if prepared is None else prepared.build

@@ -9,7 +9,7 @@ import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
 from squid.bot.notifications_view import NotificationScreen
-from squid.bot.utils.permissions import allows, current_edit_actor
+from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
 from squid.notifications import (
@@ -62,7 +62,7 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
             return None
 
         async def actor() -> Actor:
-            return await current_edit_actor(request)
+            return await request.client.actors.resolve(request, refresh=True)
 
         async def visibility() -> InboxVisibility:
             current = await actor()

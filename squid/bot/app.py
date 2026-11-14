@@ -19,6 +19,7 @@ from squid.bootstrap import create_bot_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
+from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.errors import UI_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
@@ -26,7 +27,6 @@ from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
 from squid.bot.routes import router as control_router
 from squid.bot.ui import HOST_DEFAULTS
-from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
 from squid.config import (
@@ -167,6 +167,7 @@ class RedstoneSquid(Bot):
         # Permission checks resolve a Discord id to an account on every command,
         # and must never create one, so the lookup is cached rather than avoided.
         self.account_ids = AccountIdCache()
+        self.actors = DiscordActorResolver(self)
         self.layout_profiler = MemoryProfiler()
         self.action_ledger = EventLedger(limit=200)
         self.topic_bus = LocalTopicBus()

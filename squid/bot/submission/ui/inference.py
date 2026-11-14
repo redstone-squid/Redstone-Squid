@@ -8,7 +8,6 @@ import squid_ui_discord as sd
 from squid.bot.submission.ingestion import admit_candidates
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import actor_for_interaction
 from squid.builds.domain import BuildCategory
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
@@ -139,7 +138,7 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
 
     async def _retry(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await event.acknowledge()
-        actor = await actor_for_interaction(event.context)
+        actor = await event.context.client.actors.resolve(event.context)
         try:
             candidates = await self.services.submission_inference.resume(self.run_id, actor)
             if candidates is not None:
@@ -175,7 +174,7 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
             self.category = None
 
     async def _open(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        actor = await actor_for_interaction(event.context)
+        actor = await event.context.client.actors.resolve(event.context)
         candidates = await self.services.submission_inference.get(self.run_id, actor)
         current = next((item for item in candidates if str(item.id) == self.selected), None)
         if current is None:

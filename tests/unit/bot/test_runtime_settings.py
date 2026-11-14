@@ -34,12 +34,14 @@ async def test_runtime_edit_uses_internal_account_or_refuses_unlinked_owner(
             )
         )
     )
-    monkeypatch.setattr("squid.bot.admin.actor_for_interaction", AsyncMock(return_value=Actor(account_id=17)))
     settings = SimpleNamespace()
     owner = SimpleNamespace(
-        bot=SimpleNamespace(services=SimpleNamespace(accounts=accounts, settings=settings, edits=edits))
+        bot=SimpleNamespace(
+            services=SimpleNamespace(accounts=accounts, settings=settings, edits=edits),
+            actors=SimpleNamespace(resolve=AsyncMock(return_value=Actor(account_id=17))),
+        )
     )
-    request = SimpleNamespace(user=SimpleNamespace(id=999999))
+    request = SimpleNamespace(user=SimpleNamespace(id=999999), client=owner.bot)
 
     callback = cast(Any, Admin)._runtime_settings
     await callback(owner, request, "welcome_forward_chance", value="0.25", revision=revision)

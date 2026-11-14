@@ -292,15 +292,14 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
     cog.bot.inference_model = "test-model"
     cog.bot.inference_reasoning_effort = None
     monkeypatch.setattr("squid.bot.submission.submit.assemble_bundle", AsyncCallRecorder(result="retained-input"))
-    monkeypatch.setattr(
-        "squid.bot.submission.submit.actor_for_interaction", AsyncCallRecorder(result=Actor(account_id=7))
-    )
-    context = ContextHarness().source
-    context.interaction = InteractionHarness().source
+    monkeypatch.setattr(cog.bot.actors, "resolve", AsyncCallRecorder(result=Actor(account_id=7)))
+    context = ContextHarness(bot=cog.bot).source
+    context.interaction = InteractionHarness(client=cog.bot).source
     context.interaction.id = 55
+    request = await cog.ui.request(context)
     result = await BuildSubmitCommands.propose_recalculation(
         cog,
-        context,
+        request,
         MessageHarness(message_id=123).source,
         owner_account_id=1,
     )

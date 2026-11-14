@@ -12,7 +12,7 @@ import squid_ui_discord as sd
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
-from squid.bot.utils.permissions import allows, current_edit_actor, enforce, hide_unless
+from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
@@ -238,7 +238,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 )
 
         async def actor() -> Actor:
-            return await current_edit_actor(request)
+            return await request.client.actors.resolve(request, refresh=True)
 
         return StarboardScreen(
             self.service,

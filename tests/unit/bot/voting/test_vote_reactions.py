@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast, override
+from unittest.mock import Mock
 
 import anyio
 import discord
@@ -14,8 +15,8 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account, AccountIdentity
+from squid.bot.actors import AccountIdCache
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
-from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.voting.vote import VoteCog
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
@@ -71,21 +72,21 @@ class NotFoundResponse:
     reason: str = "Not Found"
 
 
-@dataclass
-class Member:
-    guild: Guild
-    id: int = 70
-    bot: bool = False
-    roles: tuple[discord.Role, ...] = ()
-
-    @property
-    def mention(self) -> str:
-        return f"<@{self.id}>"
+class Member(Mock):
+    def __init__(self, guild: Guild, *, id: int = 70) -> None:
+        super().__init__(spec=discord.Member)
+        self.guild = guild
+        self.id = id
+        self.bot = False
+        self.roles = ()
+        self.guild_permissions = discord.Permissions.none()
+        self.mention = f"<@{id}>"
 
 
 @dataclass
 class Guild:
     id: int
+    owner_id: int = 1
 
     def get_member(self, user_id: int) -> discord.Member:
         return cast(discord.Member, Member(self, id=user_id))

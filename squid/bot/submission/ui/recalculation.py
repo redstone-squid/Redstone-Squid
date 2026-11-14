@@ -6,7 +6,6 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import actor_for_interaction
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
 from squid.submissions.application.recalculation_values import RecalculationProposal
@@ -36,7 +35,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
     @classmethod
     async def load(cls, services: BotServices, proposal_id: UUID, request: sd.Request[Any, RedstoneSquid]) -> Self:
         """Reload retained review state and current target choices after restart."""
-        actor = await actor_for_interaction(request)
+        actor = await request.client.actors.resolve(request)
         proposal = await services.submission_recalculations.get(proposal_id, actor)
         targets = tuple(await services.builds.list_ids_for_source_message(proposal.source_message_id))
         return cls(services, proposal, targets)
@@ -92,7 +91,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         return nodes
 
     async def _match(self, event: sd.ChoiceEvent[RedstoneSquid]) -> None:
-        actor = await actor_for_interaction(event.context)
+        actor = await event.context.client.actors.resolve(event.context)
         try:
             self.proposal = await self.services.submission_recalculations.match(
                 self.proposal.id, int(event.selected[0]), actor
@@ -102,14 +101,14 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
 
     async def _approve(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await event.acknowledge()
-        actor = await actor_for_interaction(event.context)
+        actor = await event.context.client.actors.resolve(event.context)
         try:
             self.proposal = await self.services.submission_recalculations.approve(self.proposal.id, actor)
         except SquidError as error:
             self.notice = error.public_text()
 
     async def _renew(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        actor = await actor_for_interaction(event.context)
+        actor = await event.context.client.actors.resolve(event.context)
         if self.proposal.build_id is not None:
             self.proposal = await self.services.submission_recalculations.match(
                 self.proposal.id, self.proposal.build_id, actor, renew=True

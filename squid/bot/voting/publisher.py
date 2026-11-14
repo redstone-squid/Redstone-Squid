@@ -16,7 +16,6 @@ import discord
 from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
-from squid.bot.utils.permissions import build_actor
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
 from squid_ui_discord import send_to
@@ -146,7 +145,7 @@ class DiscordPollPublisher:
 
     async def may_create_network(self, member: discord.Member) -> bool:
         """Whether `member` may publish a poll into every server's vote channel."""
-        subject = await build_actor(self._bot, member, member.guild.id)
+        subject = await self._bot.actors.resolve(member)
         return (await self._bot.services.permissions.check(subject, VOTE_POLL_NETWORK_CREATE)).allowed
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> PollPublication:

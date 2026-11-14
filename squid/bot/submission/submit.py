@@ -30,7 +30,7 @@ from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import draft_editor, field_names
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import suggests
-from squid.bot.utils.permissions import actor_for_interaction, current_edit_actor, enforce
+from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
     BuildInferenceService,
@@ -272,7 +272,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             locale=None,
         )
         unresolved: tuple[str, ...] = ()
-        actor = await current_edit_actor(request)
+        actor = await request.client.actors.resolve(request, refresh=True)
         if stored.snapshot.revision == 0:
             prefill = await prefill_submission(draft, services.submission_forms, origin=SubmissionOrigin.DISCORD)
             unresolved = prefill.unresolved
@@ -300,7 +300,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             services,
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
-            resolve_actor=partial(current_edit_actor, request),
+            resolve_actor=partial(request.client.actors.resolve, request, refresh=True),
             render_card=lambda build: render_build_card(
                 build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
             ),
@@ -325,7 +325,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         account_id = await ensure_consented_account(request, self.bot.services.accounts)
         if account_id is None:
             return None
-        actor = await actor_for_interaction(request)
+        actor = await request.client.actors.resolve(request)
         drafts = (
             await self.bot.services.submission_drafts.attention_inbox(actor, limit=10)
             if inbox
@@ -444,7 +444,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         owner_account_id: int,
     ) -> sd.CommandResult:
         """Retain inferred candidates and return review controls without submitting builds."""
-        actor = await actor_for_interaction(request)
+        actor = await request.client.actors.resolve(request)
         run_id = (
             uuid5(NAMESPACE_URL, f"discord-recalculation:{request.interaction.id}")
             if request.interaction is not None

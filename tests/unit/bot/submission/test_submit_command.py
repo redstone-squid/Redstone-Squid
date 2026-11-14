@@ -13,11 +13,11 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account
+from squid.bot.actors import AccountIdCache
 from squid.bot.errors import build_error_notice
 from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
-from squid.bot.utils.permissions import AccountIdCache
 from squid.builds.application import BuildService
 from squid.core.actors import Actor
 from squid.messages.domain import MessageSnapshot

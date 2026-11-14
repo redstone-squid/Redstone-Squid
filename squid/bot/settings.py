@@ -6,7 +6,7 @@ from discord import app_commands
 
 import squid_ui_discord as sd
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
-from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor, enforce, hide_unless
+from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
@@ -41,7 +41,7 @@ class SettingsCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Setting
         )
         guild = request.guild
         assert guild is not None
-        subject = await actor_for_interaction(request)
+        subject = await request.client.actors.resolve(request)
         permissions = self.bot.services.permissions
         capabilities = SettingsCapabilities(
             view_server=(await permissions.check(subject, SETTINGS_SERVER_VIEW)).allowed,
@@ -53,7 +53,7 @@ class SettingsCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Setting
             return await allows(request, node)
 
         async def actor() -> Actor:
-            return await current_edit_actor(request)
+            return await request.client.actors.resolve(request, refresh=True)
 
         return SettingsPanel(
             settings=self.settings_service,
