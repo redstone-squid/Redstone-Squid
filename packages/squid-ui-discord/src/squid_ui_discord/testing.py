@@ -665,6 +665,9 @@ class StagedForm:
             value = remaining.pop(key)
             if isinstance(item, discord.ui.TextInput):
                 item._value = str(value)  # pyrefly: ignore[missing-attribute]
+            elif isinstance(item, discord.ui.RadioGroup):
+                selected = _sequence(value)
+                item._value = str(selected[0]) if selected else None  # pyrefly: ignore[missing-attribute]
             elif isinstance(item, discord.ui.Checkbox):
                 item._value = bool(value)  # pyrefly: ignore[missing-attribute]
             elif isinstance(item, discord.ui.Select):

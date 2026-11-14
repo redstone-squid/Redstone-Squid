@@ -26,6 +26,7 @@ from squid.bot.submission.ui.drafts import (
 )
 from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
 from squid.builds.application.input import parse_build_ticks
+from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
 from squid.builds.models import Build, DoorBuild
 from squid.core.actors import Actor
 from squid.edits.domain import Revision, RevisionConflictError
@@ -70,7 +71,7 @@ from squid_ui.runtime import transaction
 from squid_ui.testing import find, find_all, labels, texts
 from squid_ui.text import source_text
 from squid_ui_discord.modal import build_form_modal
-from squid_ui_discord.testing import commit_render, payload_problems
+from squid_ui_discord.testing import commit_render, payload_problems, stage
 from tests.support.draft_edits import DraftEditRecorder
 from tests.support.services import bot_services
 
@@ -744,3 +745,42 @@ async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch:
     if operation == "failed-add":
         fail.assert_awaited_once()
         assert fail.call_args.args[:2] == (draft_id, actor)
+
+
+async def test_catalogue_search_keeps_selections_outside_the_results() -> None:
+    services, drafts = setup()
+    editor = await open_editor(services, drafts)
+    ws = editor.workspace
+    with transaction():
+        await ws.save_values({"restrictions": ["funnel"]})
+    child = SectionEditorScreen(ws, "taxonomy")
+    with transaction():
+        await child._search_options("restrictions", Mock(spec=sd.SubmitEvent, values={"query": "lamp"}))
+        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, values=("full_lamp",)))
+    assert ws.stored_answers["restrictions"] == ["funnel", "full_lamp"]
+    with transaction():
+        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, values=()))
+    assert ws.stored_answers["restrictions"] == ["funnel"]
+
+
+async def test_credit_row_edit_keeps_provider_identity_and_evidence() -> None:
+    services, drafts = setup()
+    editor = await open_editor(services, drafts)
+    ws = editor.workspace
+    original = Credit(
+        name="Old display",
+        kind=CreditKind.DISCORD,
+        username="handle",
+        subject="123",
+        attribution=CreditAttribution.CONFIRMED,
+        source_message_id=456,
+    )
+    with transaction():
+        await ws.save_values({"credits": [original.to_json()]})
+    child = SectionEditorScreen(ws, "identity")
+    revision = ws.revision
+    async with stage(child, owner=object()) as ui:
+        form = await ui.press_for_form(ui.key_for("edit-0"))
+        await form.submit({"name": "New display", "role": ["designer"]})
+    assert ws.stored_answers["credits"] == [replace(original, name="New display", role=CreditRole.DESIGNER).to_json()]
+    assert drafts.changes[-1].base_revision == revision

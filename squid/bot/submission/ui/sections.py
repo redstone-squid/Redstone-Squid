@@ -23,6 +23,7 @@ from typing import Any, Protocol, cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
+from squid.bot.submission.ui.credits import CreditEditor
 from squid.builds.application.input import parse_build_ticks
 from squid.builds.domain.credits import read_credits
 from squid.core.errors import JSONValue, ValidationError
@@ -166,10 +167,17 @@ class SectionEditorScreen(sd.Screen[None]):
     policy = sd.ResponseSpec(audience="personal", timeout=600, live_updates=True, session=DETAIL_SESSION)
     picker_pages: Mapping[str, int] = sl.state({})
     """The page each catalogue field's select menu shows, keyed by field ID."""
+    picker_queries: Mapping[str, str] = sl.state({})
 
     def __init__(self, workspace: AnswerWorkspace, section_id: str) -> None:
         self.workspace = workspace
         self.section_id = section_id
+        section = workspace.section(section_id)
+        self.credits = {
+            field.id: CreditEditor(workspace, field.id)
+            for field in (() if section is None else section.fields)
+            if field.value_kind is ValueKind.CREDIT_LIST
+        }
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
@@ -188,6 +196,18 @@ class SectionEditorScreen(sd.Screen[None]):
         for field in section.fields:
             if field.option_source is not None:
                 children.extend(self._picker(field, answers.get(field.id)))
+            elif field.value_kind is ValueKind.CREDIT_LIST:
+                children.append(self.credits[field.id])
+                children.append(
+                    sl.action_controls(
+                        sl.action_control(
+                            tr(t"credits-advanced = Advanced credit lines"),
+                            partial(self._advanced_credits, field),
+                            key=f"advanced_{field.id}",
+                        ),
+                        key=f"advanced_credit_{field.id}",
+                    )
+                )
             elif (chunk := chunks.get(field.id)) is not None:
                 children.append(
                     sd.v2.section(
@@ -199,6 +219,9 @@ class SectionEditorScreen(sd.Screen[None]):
                 )
         children.extend((sd.v2.separator(), done_row(self._done)))
         return (sl.block(*children, accent=sl.AccentRole.BRAND), *self.workspace.history_controls())
+
+    async def _advanced_credits(self, field: FormField, event: sd.PressEvent) -> None:
+        await present_chunk_form(self.workspace, FormSection(field.id, field.label, (field,)), event)
 
     def _picker(self, field: FormField, value: JSONValue) -> list[Any]:
         """A catalogue field's current choice and one page of its options."""
@@ -215,9 +238,27 @@ class SectionEditorScreen(sd.Screen[None]):
             name,
             md(t"{chosen}") if chosen else md_tr(t"draft-editor-nothing-chosen = *Nothing chosen yet.*"),
         ]
+        search = sl.form(
+            tr(t"draft-options-search = Search choices"),
+            sl.forms.FormSpec[sd.Request](
+                field.label,
+                (
+                    sl.forms.TextField(
+                        key="query",
+                        label=tr(t"draft-options-name = Name contains"),
+                        required=False,
+                        default=self.picker_queries.get(field.id, ""),
+                        maximum=100,
+                    ),
+                ),
+            ),
+            key=f"search_{field.id}",
+            on_submit=partial(self._search_options, field.id),
+        )
+        options = self._matching_options(field)
         if not options:
-            lines.append(tr(t"draft-editor-no-options = No options are available right now."))
-            return [sd.v2.text(Text.join("\n", lines))]
+            lines.append(tr(t"draft-options-empty = No matching choices. Clear the search to see all choices."))
+            return [sd.v2.text(Text.join("\n", lines)), search]
         pages = (len(options) - 1) // PICKER_PAGE_SIZE + 1
         page = self._picker_page(field, options)
         multiple = field.value_kind is ValueKind.STRING_LIST
@@ -234,6 +275,7 @@ class SectionEditorScreen(sd.Screen[None]):
             )
         children: list[Any] = [
             sd.v2.text(Text.join("\n", lines)),
+            search,
             sd.v2.select(
                 *(sd.v2.option(option.label[:100], option.value, default=option.value in selected) for option in shown),
                 on_select=partial(self._select_value, field.id),
@@ -263,6 +305,18 @@ class SectionEditorScreen(sd.Screen[None]):
             )
         return children
 
+    def _matching_options(self, field: FormField) -> tuple[ChoiceOption, ...]:
+        query = self.picker_queries.get(field.id, "").casefold().strip()
+        return tuple(
+            option
+            for option in self.workspace.option_sets.get(field.option_source or "", ())
+            if not query or query in option.label.casefold() or query in option.value.casefold()
+        )
+
+    async def _search_options(self, field_id: str, event: sd.SubmitEvent) -> None:
+        self.picker_queries = {**self.picker_queries, field_id: str(event.values.get("query") or "")}
+        self.picker_pages = {**self.picker_pages, field_id: 0}
+
     def _picker_page(self, field: FormField, options: Sequence[ChoiceOption]) -> int:
         """The page a picker shows: the one last turned to, else the page with the first choice."""
         pages = (len(options) - 1) // PICKER_PAGE_SIZE + 1
@@ -283,7 +337,7 @@ class SectionEditorScreen(sd.Screen[None]):
         field = next(field for field in ws.fields if field.id == field_id)
         value: JSONValue
         if field.value_kind is ValueKind.STRING_LIST:
-            options = ws.option_sets.get(field.option_source or "", ())
+            options = self._matching_options(field)
             page = self._picker_page(field, options)
             visible = {option.value for option in options[page * PICKER_PAGE_SIZE : (page + 1) * PICKER_PAGE_SIZE]}
             # A select menu reports only its own page; keep the choices made on other pages.
@@ -607,7 +661,11 @@ def _dimensions_entry(
 
 def modal_chunks(section: FormSection) -> tuple[FormSection, ...]:
     """Split a section's typed fields into modal-sized groups; catalogue fields are left out."""
-    typed = tuple(field for field in section.fields if field.option_source is None)
+    typed = tuple(
+        field
+        for field in section.fields
+        if field.option_source is None and field.value_kind is not ValueKind.CREDIT_LIST
+    )
     return tuple(
         FormSection(
             f"{section.id}_{offset // MAX_MODAL_FIELDS}",
