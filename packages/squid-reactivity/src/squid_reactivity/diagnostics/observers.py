@@ -1,0 +1,155 @@
+"""Deliver diagnostic events within execution scopes, isolating sink failures.
+
+Registrations inherited by child tasks expire with their originating scope.
+Each sink receives one snapshot under its innermost active redaction policy.
+"""
+
+import logging
+import uuid
+from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import Context, ContextVar
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Protocol
+
+from squid_reactivity.actions import ActionCommit, ActionResult, ActionRollback, ExceptionReport
+from squid_reactivity.diagnostics.snapshots import (
+    DEFAULT_REDACTION,
+    ActionResultSnapshot,
+    CausalEventSnapshot,
+    ContinuationFailureSnapshot,
+    RedactionPolicy,
+)
+
+_log = logging.getLogger(__name__)
+
+
+class EventSink(Protocol):
+    """A synchronous consumer of retention-safe diagnostic events."""
+
+    def accept(self, event: CausalEventSnapshot, /) -> None: ...
+
+
+class EventLedger:
+    """Keep the most recent diagnostic events, up to the configured limit.
+
+    Pass this ledger to observe_events to collect events within an execution scope.
+    """
+
+    def __init__(self, limit: int = 100) -> None:
+        if limit < 1:
+            message = "an event ledger needs room for at least one event"
+            raise ValueError(message)
+        self._events: deque[CausalEventSnapshot] = deque(maxlen=limit)
+
+    def accept(self, result: CausalEventSnapshot) -> None:
+        self._events.append(result)
+
+    @property
+    def events(self) -> tuple[CausalEventSnapshot, ...]:
+        return tuple(self._events)
+
+    @property
+    def results(self) -> tuple[ActionResultSnapshot, ...]:
+        return tuple(event for event in self._events if isinstance(event, ActionResultSnapshot))
+
+
+@dataclass(slots=True)
+class _Observer:
+    sink: EventSink | None
+    redaction: RedactionPolicy
+
+
+_observers: ContextVar[tuple[_Observer, ...]] = ContextVar("squid_reactivity_observers", default=())
+
+
+@contextmanager
+def observe_events(sink: EventSink, *, redaction: RedactionPolicy = DEFAULT_REDACTION) -> Iterator[EventSink]:
+    """Observe work in this execution scope and tasks started within it.
+
+    Exiting disables delivery even in child tasks that inherited the scope. The
+    scope owns the registration, not the sink. Nested scopes for the same sink
+    deliver once using the innermost active scope's policy.
+    """
+    registration = _Observer(sink, redaction)
+    token = _observers.set((*_observers.get(), registration))
+    try:
+        yield sink
+    finally:
+        registration.sink = None
+        _observers.reset(token)
+
+
+def copy_event_observers(base: Context) -> Context:
+    """Copy a host context with the submitting scope's diagnostic registrations.
+
+    Schedulers that discard caller-local state can use this for submitted work.
+    Registrations keep their original lifetimes; this does not extend a scope.
+    """
+    context = base.copy()
+    inherited = context.get(_observers, ())
+    registrations = {id(observer): observer for observer in (*inherited, *_observers.get())}
+    context.run(_observers.set, tuple(registrations.values()))
+    return context
+
+
+def has_event_observers() -> bool:
+    """Whether this execution scope has any active diagnostic observers."""
+    return any(observer.sink is not None for observer in _observers.get())
+
+
+def _deliver(event: ActionResult | CausalEventSnapshot) -> None:
+    seen: set[int] = set()
+    snapshots: dict[RedactionPolicy, CausalEventSnapshot] = {}
+    failures: list[tuple[str, Exception]] = []
+    for observer in reversed(_observers.get()):
+        sink = observer.sink
+        if sink is None or id(sink) in seen:
+            continue
+        seen.add(id(sink))
+        try:
+            snapshot = snapshots.get(observer.redaction)
+            if snapshot is None:
+                snapshot = (
+                    ActionResultSnapshot.from_result(event, observer.redaction)
+                    if isinstance(event, (ActionCommit, ActionRollback))
+                    else observer.redaction.redact(event)
+                )
+                snapshots[observer.redaction] = snapshot
+            sink.accept(snapshot)
+        except Exception as error:
+            _log.exception("a diagnostic event sink failed")
+            failures.append((type(sink).__qualname__, error))
+    # Only action-result delivery generates failure events. A failed delivery of
+    # those diagnostics is logged without producing another diagnostic recursively.
+    if isinstance(event, (ActionCommit, ActionRollback)):
+        for callback, error in failures:
+            emit_continuation_failure(event, "result_sink", callback, error)
+
+
+def emit_result(result: ActionResult) -> None:
+    _deliver(result)
+
+
+def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
+    """Apply each observer's policy and isolate failures during delivery."""
+    _deliver(snapshot)
+
+
+def emit_continuation_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
+    """Report a callback failure linked to its action."""
+    if not has_event_observers():
+        return
+    emit_causal_event(
+        ContinuationFailureSnapshot(
+            str(uuid.uuid7()),
+            str(result.context.root_action_id),
+            result.context.causal_ref(),
+            stage,
+            callback,
+            datetime.now(UTC),
+            ExceptionReport.capture(error),
+        )
+    )
