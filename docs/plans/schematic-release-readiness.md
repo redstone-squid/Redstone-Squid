@@ -10,13 +10,13 @@ downloadable. Native parsing remains isolated behind file-size, inflation, dimen
 Public REST downloads return the original bytes with the corresponding format extension. Rendering operates on the
 original stored schematic. The Minecraft snapshot encoder preserves supplied NBT and validates structural consistency.
 
-## Nucleation 0.12.0
+## Nucleation 0.12.2
 
-The exact engine pin is `nucleation==0.12.0`, published on
-[GitHub](https://github.com/Schem-at/Nucleation/releases/tag/v0.12.0) and
-[PyPI](https://pypi.org/project/nucleation/0.12.0/) on 2026-10-23. The release satisfies the normal seven-day dependency
-soak window. Native parsing, translation-invariant fingerprints, comparison, lattice detection, autostack,
-format conversion, piston simulation, and worker recovery passed integration testing on this wheel.
+The exact engine pin is `nucleation==0.12.2`, published on
+[GitHub](https://github.com/Schem-at/Nucleation/releases/tag/v0.12.2) and
+[PyPI](https://pypi.org/project/nucleation/0.12.2/) on 2026-11-13. Nucleation is exempt from the normal seven-day dependency
+soak window, so future explicit pin updates can use the latest published release. The native video helper uses the matching
+release revision, and its renderer version advances to `nucleation-0.12.2-video-1`.
 
 ## Remaining rollout work
 
@@ -49,11 +49,11 @@ restore the previous contract for populated schematic artifact references.
 ## Fingerprints after the engine upgrade
 
 Keep existing analyses labelled with their original analyzer version; never relabel old hashes as
-`nucleation-0.12.0`. New analyses use the new version automatically. Byte-identity lookup works across versions,
+`nucleation-0.12.2`. New analyses use the new version automatically. Byte-identity lookup works across versions,
 and metric-shortlisted candidates are compared from bytes with the current engine. Direct fingerprint matches exclude
 older analyses until they are recomputed.
 
-Inventory existing analyses by `analyzer_version`. Re-analyze retained artifacts with 0.12.0, replacing their metrics,
+Inventory existing analyses by `analyzer_version`. Re-analyze retained artifacts with 0.12.2, replacing their metrics,
 fingerprints, and version together through `record_analysis` while preserving attachment identity, primary status,
 filename, uploader, and publication facts. Verify the remaining old-version row count and duplicate detection after
 the backfill. There is no automated backfill command in this change.

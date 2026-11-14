@@ -1,8 +1,8 @@
 # Native schematic video renderer
 
 This server-side executable adapts Nucleation's simulation-video example at
-v0.12.0. The engine and mesher revisions are pinned in Cargo.lock. It reconstructs
-moving blocks from the simulation trace and renders their intermediate positions,
+v0.12.0 and uses the v0.12.2 engine. The engine and mesher revisions are pinned in
+Cargo.lock. It reconstructs moving blocks from the simulation trace and renders their intermediate positions,
 including retracting piston heads. FFmpeg must be on PATH.
 
 Build and test:

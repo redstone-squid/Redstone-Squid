@@ -53,7 +53,7 @@ dependencies = [
 #
 # Pinned exactly, not ranged: fingerprints and data-version loss reports are version-scoped
 # outputs we persist, so upgrading is a deliberate act that requires a backfill plan.
-schematics = ["nucleation==0.12.0"]
+schematics = ["nucleation==0.12.2"]
 observability = [
     "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
     "opentelemetry-instrumentation-aiohttp-client>=0.65b0,<1",
@@ -141,6 +141,8 @@ squid-storage = { workspace = true }
 [tool.uv]
 package = false
 exclude-newer = "7 days"
+# Always allow the latest Nucleation release when updating its exact pin.
+exclude-newer-package = { nucleation = "0 days" }
 
 # The pinned replication test adapters use PyO3 versions predating Python 3.15.
 # Build against the stable ABI until those adapters update PyO3.

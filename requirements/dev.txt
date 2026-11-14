@@ -825,11 +825,11 @@ multipart==2.0.1 \
     --hash=sha256:5dfea7ce4260e10a9e620369449e7d41c269a94e192db9ea4af1a0059cddd370 \
     --hash=sha256:ac54d6bd0353ee30d2703af75adacd8b2052d4adb634e9e74dc7c5b06e0bcd86
     # via litestar
-nucleation==0.12.0 \
-    --hash=sha256:8152d0e2025acc42b57e821ab230a55013afae7c85a293d6fac225b87623466a \
-    --hash=sha256:ade12f71233002d93eeb89bfc4bf9f49f27c02bb9cbec41e33a7da9df9031fb8 \
-    --hash=sha256:da51e74420e43921876e5ef07435606373e45606d235923702cff2cf277fd9ef \
-    --hash=sha256:e90ca78bbb6a79dda5785f0f1d45ec62bbd635a40d25a4d2044d8d4cfcf0873a
+nucleation==0.12.2 \
+    --hash=sha256:32d12c9ce02a7d6525a8cd51817b896738741abce347ee483c0a3e3536e69ed5 \
+    --hash=sha256:42628494b4217588bd856096fe43fac485e067090dc86a1bd79cf3a9f6f60978 \
+    --hash=sha256:70f3dc0c6801543b82d5ba093aa1a6e82930ebf24ab1a1e946411c070b2b5e68 \
+    --hash=sha256:e2bf1afbdec53f9823ef0d9f0717f326685ecf27be123cebcf6e9d6699f6a76a
     # via redstone-squid
 oauthlib==4.0.1 \
     --hash=sha256:3d73febdb6faa00f277c81fb04be7b7586fb96fc3b7f0b9c772dada69a25ede7 \

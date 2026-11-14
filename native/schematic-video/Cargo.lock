@@ -134,6 +134,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -928,7 +934,7 @@ dependencies = [
 [[package]]
 name = "mc-tick"
 version = "0.1.0"
-source = "git+https://github.com/Schem-at/Nucleation.git?rev=346733e9f47f50d0ecfac56160b9c6b9a597685f#346733e9f47f50d0ecfac56160b9c6b9a597685f"
+source = "git+https://github.com/Schem-at/Nucleation.git?rev=836690d121740ef270aa8547a824fd9110f7f58f#836690d121740ef270aa8547a824fd9110f7f58f"
 dependencies = [
  "blake3",
  "smallvec",
@@ -938,7 +944,7 @@ dependencies = [
 [[package]]
 name = "mc-tick-trace"
 version = "0.1.0"
-source = "git+https://github.com/Schem-at/Nucleation.git?rev=346733e9f47f50d0ecfac56160b9c6b9a597685f#346733e9f47f50d0ecfac56160b9c6b9a597685f"
+source = "git+https://github.com/Schem-at/Nucleation.git?rev=836690d121740ef270aa8547a824fd9110f7f58f#836690d121740ef270aa8547a824fd9110f7f58f"
 dependencies = [
  "serde",
  "serde_json",
@@ -1060,10 +1066,11 @@ dependencies = [
 
 [[package]]
 name = "nucleation"
-version = "0.12.0"
-source = "git+https://github.com/Schem-at/Nucleation.git?rev=346733e9f47f50d0ecfac56160b9c6b9a597685f#346733e9f47f50d0ecfac56160b9c6b9a597685f"
+version = "0.12.2"
+source = "git+https://github.com/Schem-at/Nucleation.git?rev=836690d121740ef270aa8547a824fd9110f7f58f#836690d121740ef270aa8547a824fd9110f7f58f"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "bincode",
  "blake3",
  "bytemuck",
@@ -1603,7 +1610,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b91f7eff05f748767f183df4320a63d6936e9c6107d97c9e6bdd9784f4289c94"
 dependencies = [
- "base64",
+ "base64 0.21.7",
  "bitflags 2.13.2",
  "serde",
  "serde_derive",
@@ -1643,8 +1650,8 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "schematic-mesher"
-version = "0.2.0"
-source = "git+https://github.com/Schem-at/Schematic-Mesher.git?rev=286323e472cd8a5363b66a035a3be02ecdd4f164#286323e472cd8a5363b66a035a3be02ecdd4f164"
+version = "0.2.1"
+source = "git+https://github.com/Schem-at/Schematic-Mesher.git?rev=dcc0e0aad6133109448f21a5c568236b48b3d967#dcc0e0aad6133109448f21a5c568236b48b3d967"
 dependencies = [
  "glam",
  "gltf-json",

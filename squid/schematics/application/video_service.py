@@ -95,7 +95,7 @@ class SchematicVideoService:
                     "build_id": build_id,
                     "schematic_id": schematic_id,
                     "source_sha256": stored.file_sha256,
-                    "renderer_version": "nucleation-0.12.0-video-1",
+                    "renderer_version": "nucleation-0.12.2-video-1",
                 },
             },
             keys,
