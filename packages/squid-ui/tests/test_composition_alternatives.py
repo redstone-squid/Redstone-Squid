@@ -7,6 +7,7 @@ import pytest
 
 import squid_ui as sl
 from squid_ui.assets import Asset
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
@@ -24,8 +25,9 @@ from squid_ui.planning.composition_html import HtmlCompositionRules
 from squid_ui.planning.composition_slack import SlackCompositionRules
 from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.realizations import Realization, TextRealization, select_composition
+from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import semantic_graph
-from squid_ui.presentations import alternative, alternatives, equivalent, losses, present_text, ref, shorten
+from squid_ui.presentations import alternative, alternatives, budget, equivalent, losses, present_text, ref, shorten
 from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.text import NEUTRAL, Localization
 
@@ -158,3 +160,39 @@ def test_unsupported_rich_shortening_rejects_a_candidate_without_flattening() ->
     )
     assert isinstance(result, UnsupportedCapability)
     assert result.occurrence == OccurrenceId(("root", "@presentation"))
+
+
+def test_alternative_preserves_inner_budget_but_can_rearrange_inside_it() -> None:
+
+    source = sl.stack(
+        sl.paragraph("Title", key="title"),
+        budget(sl.stack(sl.paragraph("A", key="a"), sl.paragraph("B", key="b")), limits={Axis.DISPLAY_TEXT: 10}),
+    )
+    presentation = sl.stack(
+        budget(present_text(ref("b"), ref("a"), key="combined"), limits={Axis.DISPLAY_TEXT: 5}),
+        sl.paragraph("Title", key="title"),
+    )
+    group = alternatives(alternative(presentation, key="reordered", fidelity=equivalent()), content=source, key="group")
+    _, result = compose(group, V2CompositionRules[RenderTarget, object]())
+    assert isinstance(result, BuiltComposition)
+    assert result.evaluation.text == ("BA", "Title")
+
+
+@pytest.mark.parametrize("change", ["merge", "remove", "relax"])
+def test_alternative_cannot_cross_remove_or_relax_an_inner_budget(change: str) -> None:
+
+    description = sl.paragraph("Description", key="description")
+    title = sl.paragraph("Title", key="title")
+    source = sl.stack(title, budget(description, limits={Axis.DISPLAY_TEXT: 100}))
+    match change:
+        case "merge":
+            presentation = budget(
+                present_text(ref("title"), ref("description"), key="combined"), limits={Axis.DISPLAY_TEXT: 100}
+            )
+        case "remove":
+            presentation = sl.stack(title, description)
+        case _:
+            presentation = sl.stack(title, budget(description, limits={Axis.DISPLAY_TEXT: 101}))
+    group = alternatives(alternative(presentation, key="changed", fidelity=equivalent()), content=source, key="group")
+    with pytest.raises(LayoutInvariantError, match="Budget boundary"):
+        compose(group, V2CompositionRules[RenderTarget, object]())

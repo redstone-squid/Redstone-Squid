@@ -153,7 +153,11 @@ HTML currently exposes no protocol resource axes. Requesting an unsupported axis
 candidate rather than treating its cost as zero. Field-specific limits, such as Slack section
 text, remain target constraints and are not interchangeable with a message-wide text budget.
 
-Limits apply to the chosen representation of the wrapped subtree. Every enclosing budget is
+Limits apply to the chosen representation of the wrapped subtree. Budgets are structural
+boundaries: an alternative may rearrange content inside one, but replacing a larger region must
+preserve its inner boundaries with equal or tighter limits. It cannot merge budgeted content with
+outside content into one widget. Moving the budget outward explicitly gives the larger region a
+shared limit. Boundaries do not require visible containers. Every enclosing budget is
 checked, and shared resources count once within each scope even when siblings also use them.
 Platform limits always apply: a larger author limit cannot relax them. A budget does not authorize
 shortening or omission. Allocation preferences and visual-length preferences are separate future

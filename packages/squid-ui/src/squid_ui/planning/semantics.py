@@ -377,9 +377,11 @@ def check_alternative[RenderTargetT, ContextT](
     if missing != omitted:
         msg = f"declared omissions do not match missing semantic units: {missing ^ omitted}"
         raise LayoutInvariantError(msg)
-    return CheckedAlternative(
+    checked = CheckedAlternative(
         choice, source, presentation, MappingProxyType(coverage), frozenset(omitted), frozenset(asserted)
     )
+    _check_boundaries(checked)
+    return checked
 
 
 def source_text[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, ContextT]) -> TextLike:
@@ -414,3 +416,61 @@ class SourceScope[RenderTargetT, ContextT]:
             for source in covered
         }
         return frozenset(result for source in sources for result in self.source_references(source))
+
+
+def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[RenderTargetT, ContextT]) -> None:
+    """Preserve hard layout scopes even when presentations rearrange their contents."""
+    for reference, unit in checked.source.units.items():
+        constraint = unit.value
+        if not isinstance(
+            constraint, Budget | sem.Budgeted | sem.Unbreakable | sem.KeepWithNext | sem.Paged | sem.Region
+        ):
+            continue
+        inside = checked.source.atoms(reference)
+        targets = frozenset(target for target, covered in checked.coverage.items() if covered & inside)
+        if not targets:
+            continue
+        if any(checked.coverage[target] - inside for target in targets):
+            message = f"alternative merges content across a {type(constraint).__name__} boundary at {reference.keys!r}"
+            raise LayoutInvariantError(message)
+        matches = [
+            other.value
+            for target, other in checked.presentation.units.items()
+            if type(other.value) is type(constraint) and checked.presentation.atoms(target) == targets
+        ]
+        preserved = False
+        for other in matches:
+            match constraint, other:
+                case Budget(), Budget():
+                    preserved = all(
+                        axis in other.limits and other.limits[axis] <= cap for axis, cap in constraint.limits.items()
+                    )
+                case sem.Budgeted(), sem.Budgeted():
+                    preserved = (constraint.minimum, constraint.preferred, constraint.stretch) == (
+                        other.minimum,
+                        other.preferred,
+                        other.stretch,
+                    )
+                case sem.Paged(), sem.Paged():
+                    preserved = (
+                        constraint.key,
+                        constraint.page,
+                        constraint.chars,
+                        constraint.min_fill,
+                        constraint.widows,
+                        constraint.footer,
+                    ) == (other.key, other.page, other.chars, other.min_fill, other.widows, other.footer)
+                case sem.Region(), sem.Region():
+                    preserved = (constraint.key, constraint.page, constraint.header, constraint.footer) == (
+                        other.key,
+                        other.page,
+                        other.header,
+                        other.footer,
+                    )
+                case (sem.Unbreakable(), sem.Unbreakable()) | (sem.KeepWithNext(), sem.KeepWithNext()):
+                    preserved = True
+            if preserved:
+                break
+        if not preserved:
+            message = f"alternative must preserve the {type(constraint).__name__} boundary at {reference.keys!r}"
+            raise LayoutInvariantError(message)
