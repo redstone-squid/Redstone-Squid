@@ -165,6 +165,74 @@ async def test_video_repairs_reserved_color_tags_and_preserves_valid_tags(
             assert metadata.get(field, "unknown") == "unknown"
 
 
+async def test_video_color_repair_ignores_malformed_filler_packets(tmp_path: Path) -> None:
+    assert FFMPEG is not None
+    original = tmp_path / "original.mp4"
+    raw = tmp_path / "stream.h264"
+    source = tmp_path / "padding.mp4"
+    _generate_video(original, b_frames=0)
+    subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-i",
+            str(original),
+            "-map",
+            "0:v:0",
+            "-c:v",
+            "copy",
+            "-bsf:v",
+            "h264_mp4toannexb,h264_metadata=matrix_coefficients=3:colour_primaries=0",
+            "-f",
+            "h264",
+            str(raw),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    data = raw.read_bytes()
+    first_picture = data.index(b"\x00\x00\x01\x65")
+    # Some recorders omit the filler packet's trailing stop bit. It carries no picture data.
+    raw.write_bytes(data[:first_picture] + b"\x00\x00\x01\x0c" + data[first_picture:])
+    subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-r",
+            "24",
+            "-i",
+            str(raw),
+            "-i",
+            str(original),
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-c",
+            "copy",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
+        MediaNormalizationRequest(
+            kind=MediaKind.VIDEO,
+            source_path=source,
+            output_path=tmp_path / "out.mp4",
+            poster_path=tmp_path / "poster.jpg",
+        )
+    )
+
+    assert (result.report.output_probe.width, result.report.output_probe.height) == (320, 180)
+    assert result.report.output_probe.frame_count == result.report.input_probe.frame_count == 24
+    assert result.report.output_probe.has_audio
+    assert result.report.poster is not None
+
+
 async def test_4k_video_fits_the_default_process_memory_limit(tmp_path: Path) -> None:
     assert FFMPEG is not None
     source = tmp_path / "4k.mp4"
@@ -329,7 +397,7 @@ async def test_rotated_video_preserves_display_orientation(tmp_path: Path, rotat
     assert sum(abs(a - b) for a, b in zip(*frames, strict=True)) / len(frames[0]) < 6
 
 
-def _generate_video(destination: Path, *, variable_timestamps: bool = False) -> None:
+def _generate_video(destination: Path, *, variable_timestamps: bool = False, b_frames: int | None = None) -> None:
     assert FFMPEG is not None
     encoders = subprocess.run(
         [FFMPEG, "-hide_banner", "-encoders"],
@@ -375,6 +443,7 @@ def _generate_video(destination: Path, *, variable_timestamps: bool = False) -> 
             "libx264",
             "-pix_fmt",
             "yuv420p",
+            *([] if b_frames is None else ["-bf", str(b_frames)]),
             "-c:a",
             "aac",
             str(destination),

@@ -249,7 +249,11 @@ class FfmpegMediaNormalizer:
         ]
         # Reserved H.264 VUI values break FFmpeg's color conversion. Mark only
         # those fields unspecified before decoding, preserving valid color tags.
-        return ("-bsf:v:0", "h264_metadata=" + ":".join(replacements)) if replacements else ()
+        # Remove padding before the metadata parser: some recorders emit filler
+        # packets without a trailing stop bit. Picture and timing data stay intact.
+        return (
+            ("-bsf:v:0", "filter_units=remove_types=12,h264_metadata=" + ":".join(replacements)) if replacements else ()
+        )
 
     async def _normalize_video(
         self,
