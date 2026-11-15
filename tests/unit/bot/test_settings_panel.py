@@ -10,7 +10,7 @@ import pytest
 
 import squid.bot.settings.screen as settings_view
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.settings.screen import SettingsCapabilities, SettingsPanel
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
@@ -32,8 +32,8 @@ from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid.voting.domain.models import VoteConfiguration
 from squid_i18n import Localization, resolve_text
 from squid_reactivity.transactions import readonly_transaction
+from squid_ui.ext.discord.testing import commit_render, http_error, interaction_harness
 from squid_ui.testing import submit_event
-from squid_ui_discord.testing import commit_render, http_error, interaction_harness
 from tests.support.discord import make_layout_bot
 from tests.support.edits import bound_revisions
 

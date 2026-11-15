@@ -4,11 +4,13 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
-import squid_ui_slack
+import squid_ui.ext.html
+import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
+from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
@@ -17,17 +19,15 @@ from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 from squid_ui.presentations import alternative, alternatives, budget, corresponds, equivalent
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
-from squid_ui_discord.limits import ClassicLimits, V2Limits
-from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 DISCORD = AdapterProfile(DiscordAdapter, "fallback.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "fallback.slack", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(DISCORD),
     classic_target(DISCORD),
-    squid_ui_html.target(),
-    squid_ui_slack.message_target(adapter=SLACK),
-    squid_ui_slack.home_target(adapter=SLACK),
+    squid_ui.ext.html.target(),
+    squid_ui.ext.slack.message_target(adapter=SLACK),
+    squid_ui.ext.slack.home_target(adapter=SLACK),
 ]
 SMALL_TARGETS = [
     components_v2_target(DISCORD, limits=V2Limits(total_components=1)),

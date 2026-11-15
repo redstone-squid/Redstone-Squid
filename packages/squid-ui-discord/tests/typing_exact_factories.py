@@ -1,6 +1,6 @@
 """Pins mode safety for exact Discord factories. Nothing here runs."""
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 
 classic = sd.classic.card("classic")
 v2 = sd.v2.panel("v2")

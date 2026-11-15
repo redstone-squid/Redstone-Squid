@@ -7,7 +7,7 @@ Status: accepted (2026-08-28)
 The planner and renderer pipeline in `packages/squid-ui` walks four node representations: the semantic IR authors
 write (`semantic.py`), the Discord-shaped widget IR (`primitives/nodes.py`), the target-resolved scene
 (`scene/model.py`), and each renderer's private draw program (for example `_V2Instruction` in
-`squid_ui_discord/renderer.py`). Every one of them is a PEP 695 `type` union of frozen `slots=True` dataclasses with
+`squid_ui.ext.discord/renderer.py`). Every one of them is a PEP 695 `type` union of frozen `slots=True` dataclasses with
 no behaviour, and every traversal over them is a free function or small class containing a `match` that closes with a
 raised `LayoutInvariantError` or `DrawInvariantError`.
 

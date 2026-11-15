@@ -7,20 +7,20 @@ from typing import Any, override
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
-import squid_ui_discord.durability
+import squid_ui.ext.discord
+import squid_ui.ext.discord.durability
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
+from squid_ui.ext.discord.adapter import discord_py_adapter_profile
+from squid_ui.ext.discord.durability import DEFAULT_TARGETS, ComponentRegistry, MessageRootStateCodec
+from squid_ui.ext.discord.limits import ClassicLimits
+from squid_ui.ext.discord.target import classic
+from squid_ui.ext.discord.targets import TargetRegistry
+from squid_ui.ext.discord.testing import commit_classic_render, commit_render
 from squid_ui.planning import Target
 from squid_ui.planning.adapter import (
     AdapterCapability,
 )
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
-from squid_ui_discord.adapter import discord_py_adapter_profile
-from squid_ui_discord.durability import DEFAULT_TARGETS, ComponentRegistry, MessageRootStateCodec
-from squid_ui_discord.limits import ClassicLimits
-from squid_ui_discord.target import classic
-from squid_ui_discord.targets import TargetRegistry
-from squid_ui_discord.testing import commit_classic_render, commit_render
 
 
 class Screen(sl.Component[sl.RenderTarget]):
@@ -88,7 +88,7 @@ class TestSnapshot:
         payload = MessageRootStateCodec.dumps(snapshot).replace('"protocol":1', '"protocol":2', 1)
 
         with pytest.raises(
-            squid_ui_discord.durability.MessageRootStateError, match="unsupported mount state protocol 2"
+            squid_ui.ext.discord.durability.MessageRootStateError, match="unsupported mount state protocol 2"
         ):
             MessageRootStateCodec.loads(payload)
 
@@ -98,7 +98,7 @@ class TestSnapshot:
         raw["target"].pop("adapter_capabilities")
         payload = json.dumps(raw)
 
-        with pytest.raises(squid_ui_discord.durability.MessageRootStateError, match="adapter_capabilities"):
+        with pytest.raises(squid_ui.ext.discord.durability.MessageRootStateError, match="adapter_capabilities"):
             MessageRootStateCodec.loads(payload)
 
 

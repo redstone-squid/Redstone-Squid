@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Self
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.diagnostics.screen import ErrorReportScreen
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ

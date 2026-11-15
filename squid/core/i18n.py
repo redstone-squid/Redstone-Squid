@@ -22,7 +22,7 @@ def locales_dir() -> Path:
 @cache
 def _resources(locale: str) -> tuple[str, ...]:
     resources = [path.read_text() for path in sorted((locales_dir() / locale).glob("*.ftl"))]
-    for package in ("squid_ui", "squid_ui_widgets", "squid_ui_discord"):
+    for package in ("squid_ui", "squid_ui_widgets", "squid_ui.ext.discord"):
         # Locate resources without importing the framework or Discord adapter into API processes.
         spec = find_spec(package)
         if spec is not None and spec.submodule_search_locations is not None:

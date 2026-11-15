@@ -4,7 +4,7 @@
 
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid_i18n import plain
 from squid_ui.assets import Asset, InlineAsset
 from squid_ui.interactions import PressEvent

@@ -11,12 +11,12 @@ from discord import app_commands
 from discord.ext import commands
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.help import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpCog, HelpScreen
+from squid_ui.ext.discord import SessionSpec
+from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness
 from squid_ui.planning.navigation import default_nav
 from squid_ui.testing import labels, texts, walk
-from squid_ui_discord import SessionSpec
-from squid_ui_discord.testing import ContextHarness, InteractionHarness
 
 
 @app_commands.command()

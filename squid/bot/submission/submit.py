@@ -15,7 +15,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str

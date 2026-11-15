@@ -7,12 +7,12 @@ import anyio
 import pytest
 
 from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, state
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.sessions import Opened, SessionManager
+from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import transaction
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.sessions import Opened, SessionManager
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 @pytest.mark.parametrize("submit", [False, True])

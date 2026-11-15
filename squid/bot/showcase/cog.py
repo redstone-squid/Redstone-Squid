@@ -7,11 +7,11 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.showcase.review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
 from squid.bot.showcase.workbench import BuildDraft, BuildPreview, Workbench
 from squid_i18n import tr
-from squid_ui_discord.i18n import to_locale_str
+from squid_ui.ext.discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app

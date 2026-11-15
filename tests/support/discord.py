@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.bot.actors import DiscordActorResolver
 from squid.bot.errors import UI_ERRORS
@@ -22,9 +22,9 @@ from squid.permissions.domain import CheckMode, Decision, PermissionCheck, Permi
 from squid.runtime import BotServices
 from squid.suggestions.application import SuggestionService
 from squid_reactivity import LocalTopicBus
+from squid_ui.ext.discord.testing import AsyncCallRecorder
+from squid_ui.ext.discord.testing import InteractionHarness as UIInteractionHarness
 from squid_ui.text import NEUTRAL, Localization
-from squid_ui_discord.testing import AsyncCallRecorder
-from squid_ui_discord.testing import InteractionHarness as UIInteractionHarness
 from tests.support.services import bot_services, is_configured
 
 if TYPE_CHECKING:

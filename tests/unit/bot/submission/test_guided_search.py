@@ -13,7 +13,7 @@ from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import BooleanExpression, BooleanOperator, ComparisonOperator, FieldExpression
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
-from squid_ui_discord.testing import iter_component_payloads, stage
+from squid_ui.ext.discord.testing import iter_component_payloads, stage
 from tests.unit.suggestions.test_services import RecordingProvider
 
 

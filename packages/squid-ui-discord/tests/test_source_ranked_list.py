@@ -12,12 +12,12 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.planning.navigation import NavigationContext, page_jump_nav, page_select_nav
 from squid_ui.primitives import Button, Row
 from squid_ui.sources import Position, Window
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 def _texts(view: discord.ui.View | discord.ui.LayoutView) -> list[str]:

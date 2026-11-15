@@ -7,7 +7,7 @@ import anyio
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import account_target
@@ -26,7 +26,7 @@ from squid.edits.application import EditRunner
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
 from squid_i18n import md_tr
-from squid_ui_discord.modal import EntityField
+from squid_ui.ext.discord.modal import EntityField
 
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 

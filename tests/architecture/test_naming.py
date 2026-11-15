@@ -20,8 +20,8 @@ import squid_reactivity
 import squid_replication
 import squid_storage
 import squid_ui
-import squid_ui_discord
-import squid_ui_slack
+import squid_ui.ext.discord
+import squid_ui.ext.slack
 import squid_ui_widgets
 from tests.support.source_tree import source_tree
 
@@ -36,8 +36,8 @@ PACKAGE_SOURCE_ROOTS = (
 )
 
 PUBLIC_PACKAGES = (
-    squid_ui_discord,
-    squid_ui_slack,
+    squid_ui.ext.discord,
+    squid_ui.ext.slack,
     squid_ui,
     squid_ui_widgets,
     squid_reactivity,
@@ -46,8 +46,8 @@ PUBLIC_PACKAGES = (
 )
 
 UI_PUBLIC_PACKAGES = (
-    squid_ui_discord,
-    squid_ui_slack,
+    squid_ui.ext.discord,
+    squid_ui.ext.slack,
     squid_ui,
     squid_ui_widgets,
     squid_reactivity,
@@ -404,7 +404,7 @@ def test_replaced_package_and_module_names_stay_retired() -> None:
                 elif isinstance(node, ast.ImportFrom) and node.module is not None:
                     imported.append(node.module.split(".", maxsplit=1)[0])
     old_imports = sorted(set(imported) & RETIRED_PACKAGE_IMPORTS)
-    discord_root = Path("packages/squid-ui-discord/src/squid_ui_discord")
+    discord_root = Path("packages/squid-ui-discord/src/squid_ui/ext/discord")
     old_modules = sorted(path.stem for path in discord_root.glob("*.py") if path.stem in RETIRED_DISCORD_MODULES)
     assert not old_imports, f"use the renamed package roots: {old_imports}"
     assert not old_modules, f"use the renamed Discord modules: {old_modules}"

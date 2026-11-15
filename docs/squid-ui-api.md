@@ -12,25 +12,25 @@ composition and adapter contracts.
 | Author layout | lowercase `squid_ui` factories such as `section`, `heading`, `choices` |
 | Evaluate explicit composition choices | `squid_ui.planning.CompositionOptions`, `plan(..., composition=...)` |
 | Plan portable output | `squid_ui.planning.plan`, an explicit target |
-| Select native HTML | `squid_ui_html.target` |
+| Select native HTML | `squid_ui.ext.html.target` |
 | Encode a scene | `squid_ui.scene.Codec` |
-| Draw a native HTML scene | `squid_ui_html.Renderer` |
-| Preview Components V2 as HTML | `squid_ui_discord.preview.DiscordPreviewRenderer` |
-| Compile a Slack message | `squid_ui_slack.SLACK_MESSAGE_SDK343`, `MessageRenderer` |
-| Compile a Slack modal | `squid_ui_slack.SLACK_MODAL_SDK343`, `ModalRenderer` |
-| Compile an App Home view | `squid_ui_slack.SLACK_HOME_SDK343`, `HomeRenderer` |
-| Install a Discord host | `squid_ui_discord.install`, `DiscordUIRuntime` |
+| Draw a native HTML scene | `squid_ui.ext.html.Renderer` |
+| Preview Components V2 as HTML | `squid_ui.ext.discord.preview.DiscordPreviewRenderer` |
+| Compile a Slack message | `squid_ui.ext.slack.SLACK_MESSAGE_SDK343`, `MessageRenderer` |
+| Compile a Slack modal | `squid_ui.ext.slack.SLACK_MODAL_SDK343`, `ModalRenderer` |
+| Compile an App Home view | `squid_ui.ext.slack.SLACK_HOME_SDK343`, `HomeRenderer` |
+| Install a Discord host | `squid_ui.ext.discord.install`, `DiscordUIRuntime` |
 | Bind UI authority to an owner | `DiscordUIRuntime.scope`, `Scope` |
-| Resolve a native command or component event | `squid_ui_discord.request`, `Request` |
+| Resolve a native command or component event | `squid_ui.ext.discord.request`, `Request` |
 | Resolve a listener in its cog scope | `Scope.request` |
-| Declare opening policy and typed screen results | `squid_ui_discord.Screen`, `ResponseSpec` |
+| Declare opening policy and typed screen results | `squid_ui.ext.discord.Screen`, `ResponseSpec` |
 | Open an owned child screen | `Screen.open_child`, `Screen.complete`, `Screen.cancel` |
 | Declare session identity and admission | `SessionSpec`, `SessionManager` |
 | Own one live message | `MessageRoot` |
 | Render Components V2 | `render_static`, `render_message`, `DISCORD_V2_DPY27` |
 | Render classic messages | `classic.render_static`, `classic.render_message`, `DISCORD_V1_DPY27` |
-| Test roots and payloads without a gateway | `squid_ui_discord.testing` |
-| Stage the complete Discord facade | `squid_ui_discord.testing.stage`, `invoke` |
+| Test roots and payloads without a gateway | `squid_ui.ext.discord.testing` |
+| Stage the complete Discord facade | `squid_ui.ext.discord.testing.stage`, `invoke` |
 | Persist scoped bytes | `squid_storage.ScopedStore`, `MemoryScopedStore`, `PostgresScopedStore` |
 | Persist reactive state | `squid_storage.PersistentStatePool` |
 | Replicate state | `squid_replication.Replica` and a selected backend |
@@ -56,7 +56,7 @@ native Discord objects, and expiring runtime authority never enter that protocol
 
 ```python
 import squid_ui as sl
-import squid_ui_slack as ss
+import squid_ui.ext.slack as ss
 
 planned = sl.planning.plan(sl.paragraph("Ready for review."), target=ss.SLACK_MESSAGE_SDK343)
 payload = ss.MessageRenderer().draw(planned.scene, plan=planned)
@@ -70,15 +70,15 @@ action and view-submission listeners, routing, retries, and delivery. Action IDs
 ## Native HTML
 
 ```python
-import squid_ui_html
+import squid_ui.ext.html
 import squid_ui as sl
 
 document = sl.article(
     sl.heading("Submission"),
     sl.paragraph("Ready for review."),
 )
-planned = sl.planning.plan(document, target=squid_ui_html.target())
-html = squid_ui_html.Renderer().draw(planned.scene, plan=planned)
+planned = sl.planning.plan(document, target=squid_ui.ext.html.target())
+html = squid_ui.ext.html.Renderer().draw(planned.scene, plan=planned)
 ```
 
 HTML planning retains semantic content, emits native controls and forms, and exposes action,
@@ -94,12 +94,12 @@ durability, and ownership—is in [architecture and API interactions](squid-ui-a
 All built-in targets use shared composition. Pass options to configure automatic search or fixed choices:
 
 ```python
-import squid_ui_html
+import squid_ui.ext.html
 from squid_ui.planning import CompositionOptions
 
 planned = sl.planning.plan(
     sl.paragraph("Ready for review."),
-    target=squid_ui_html.target(),
+    target=squid_ui.ext.html.target(),
     composition=CompositionOptions(automatic=True),
 )
 ```

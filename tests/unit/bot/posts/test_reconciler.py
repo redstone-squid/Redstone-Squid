@@ -12,7 +12,7 @@ import discord
 import pytest
 from whenever import Instant
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost

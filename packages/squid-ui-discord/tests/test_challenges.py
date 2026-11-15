@@ -16,15 +16,15 @@ import squid_ui_widgets as sp
 from squid_reactivity.transactions import readonly_transaction, transaction
 from squid_ui import ActionEvent, Component, state
 from squid_ui import form as sl_form
+from squid_ui.ext.discord import Everyone, MessageRoot, delivery
+from squid_ui.ext.discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui.ext.discord.message_root_contracts import ChallengeRequest
+from squid_ui.ext.discord.sessions import SessionManager
+from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
 from squid_ui.interactions import ActionMode
 from squid_ui.profiling import DispatchDisposition, MemoryProfiler, OperationKind
-from squid_ui_discord import Everyone, MessageRoot, delivery
-from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.message_root_contracts import ChallengeRequest
-from squid_ui_discord.sessions import SessionManager
-from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class _Panel(Component[sl.ComponentsV2Target]):

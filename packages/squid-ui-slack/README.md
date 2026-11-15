@@ -18,7 +18,7 @@ application already owns:
 
 ```python
 import squid_ui as sl
-import squid_ui_slack as ss
+import squid_ui.ext.slack as ss
 
 result = sl.plan(document, ss.SLACK_MESSAGE_SDK343)
 payload = ss.MessageRenderer().draw(result.scene, plan=result)

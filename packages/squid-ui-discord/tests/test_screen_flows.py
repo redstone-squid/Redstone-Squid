@@ -7,10 +7,10 @@ import pytest
 from anyio.abc import TaskStatus
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
+from squid_ui.ext.discord.testing import StagedUI
 from squid_ui.runtime import ManagedService, transaction
-from squid_ui_discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
-from squid_ui_discord.testing import StagedUI
 
 
 class Choice(sd.Screen[str]):

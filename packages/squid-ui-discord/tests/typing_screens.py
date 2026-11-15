@@ -3,8 +3,8 @@
 from typing import Any, assert_type, override
 
 import squid_ui as sl
-import squid_ui_discord as sd
-from squid_ui_discord import Scope, Screen
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord import Scope, Screen
 
 
 class RequiredArguments(Screen):

@@ -12,12 +12,12 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import Component, PressEvent, state
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, handle_for
+from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.target import DISCORD_V2_DPY27
+from squid_ui.ext.discord.testing import interaction_harness, message_harness, payload_texts
 from squid_ui.primitives import Button, Row
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.delivery import DeliveryResult, MessageDestination, handle_for
-from squid_ui_discord.message_payload import MessagePayload
-from squid_ui_discord.target import DISCORD_V2_DPY27
-from squid_ui_discord.testing import interaction_harness, message_harness, payload_texts
 
 # A paragraph costs one component and a button row two, so a message holds four paragraphs.
 TARGET = replace(DISCORD_V2_DPY27, limits=replace(DISCORD_V2_DPY27.limits, total_components=4))

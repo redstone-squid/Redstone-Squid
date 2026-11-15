@@ -6,27 +6,27 @@ from typing import Any, cast, override
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
-from squid_ui_discord import (
+import squid_ui.ext.discord
+from squid_ui.ext.discord import (
     Everyone,
     OpenContext,
     ScopeKind,
     SessionSpec,
 )
-from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
+from squid_ui.ext.discord.testing import ContextHarness, interaction_harness, message_harness
 
 
 @pytest.mark.parametrize(
     ("scope", "open_context", "expected"),
     [
-        (ScopeKind.USER, OpenContext(7, 42), squid_ui_discord.SessionKey.user("panel", 7)),
-        (ScopeKind.GUILD, OpenContext(7, 42), squid_ui_discord.SessionKey.guild("panel", 42)),
-        (ScopeKind.USER_GUILD, OpenContext(7, 42), squid_ui_discord.SessionKey.user_guild("panel", 7, 42)),
-        (ScopeKind.GLOBAL, OpenContext(7, 42), squid_ui_discord.SessionKey.global_("panel")),
+        (ScopeKind.USER, OpenContext(7, 42), squid_ui.ext.discord.SessionKey.user("panel", 7)),
+        (ScopeKind.GUILD, OpenContext(7, 42), squid_ui.ext.discord.SessionKey.guild("panel", 42)),
+        (ScopeKind.USER_GUILD, OpenContext(7, 42), squid_ui.ext.discord.SessionKey.user_guild("panel", 7, 42)),
+        (ScopeKind.GLOBAL, OpenContext(7, 42), squid_ui.ext.discord.SessionKey.global_("panel")),
     ],
 )
 def test_session_spec_key_uses_its_declared_scope(
-    scope: ScopeKind, open_context: OpenContext, expected: squid_ui_discord.SessionKey
+    scope: ScopeKind, open_context: OpenContext, expected: squid_ui.ext.discord.SessionKey
 ) -> None:
     assert SessionSpec("panel", scope=scope).key(open_context) == expected
 
@@ -57,10 +57,10 @@ def test_guild_session_spec_key_requires_a_guild(scope: ScopeKind) -> None:
 @pytest.mark.parametrize(
     ("build", "expected"),
     [
-        (OpenContext.user, squid_ui_discord.sessions.UserScope(7)),
-        (OpenContext.guild, squid_ui_discord.sessions.GuildScope(42)),
-        (OpenContext.user_guild, squid_ui_discord.sessions.UserGuildScope(7, 42)),
-        (OpenContext.global_, squid_ui_discord.sessions.GlobalScope()),
+        (OpenContext.user, squid_ui.ext.discord.sessions.UserScope(7)),
+        (OpenContext.guild, squid_ui.ext.discord.sessions.GuildScope(42)),
+        (OpenContext.user_guild, squid_ui.ext.discord.sessions.UserGuildScope(7, 42)),
+        (OpenContext.global_, squid_ui.ext.discord.sessions.GlobalScope()),
     ],
 )
 def test_an_open_context_builds_each_scope_as_a_value(build: Callable[[OpenContext], object], expected: object) -> None:
@@ -87,8 +87,8 @@ def test_keys_require_a_resolved_nonempty_session_name(name: str | None) -> None
 
 
 async def test_session_policy_is_applied_through_the_scope_opening_path() -> None:
-    class Panel(squid_ui_discord.Screen):
-        policy = squid_ui_discord.ResponseSpec(
+    class Panel(squid_ui.ext.discord.Screen):
+        policy = squid_ui.ext.discord.ResponseSpec(
             session=SessionSpec("lobby", capacity=4, quota=1, domain="games"),
             access=Everyone(),
             timeout=20,
@@ -98,13 +98,13 @@ async def test_session_policy_is_applied_through_the_scope_opening_path() -> Non
         def render(self) -> sl.LayoutNode:
             return sl.heading("Lobby")
 
-    async with squid_ui_discord.testing.stage(Panel(), owner=object(), user_id=7, timeout=None) as ui:
+    async with squid_ui.ext.discord.testing.stage(Panel(), owner=object(), user_id=7, timeout=None) as ui:
         session = ui.result.session
         assert session is not None
         assert session.capacity == 4
         assert session.remaining_capacity == 3
         assert session.quota == 1
         assert session.domain == "games"
-        assert session.key == squid_ui_discord.SessionKey.user("lobby", 7)
+        assert session.key == squid_ui.ext.discord.SessionKey.user("lobby", 7)
         assert ui.root.access == Everyone()
         assert ui.root.timeout is None

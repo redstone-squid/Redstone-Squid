@@ -14,14 +14,16 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
+import squid_ui.ext.discord as sd
 import squid_ui.runtime.expansion as expansion_module
 import squid_ui.runtime.owner as owner_module
-import squid_ui_discord as sd
 from squid_reactivity import Reactive
 from squid_reactivity.topics import CellAddress
 from squid_ui import Component, ContextKey, PressEvent, state
 from squid_ui.document import Asset, Document, InlineAsset
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.testing import commit_render, interaction_harness, payload_texts
 from squid_ui.planning.planner import plan
 from squid_ui.primitives import (
     Boundary,
@@ -50,8 +52,6 @@ from squid_ui.semantic import (
     List,
     ListItem,
 )
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, interaction_harness, payload_texts
 
 
 class Counter(Component[sl.ComponentsV2Target]):

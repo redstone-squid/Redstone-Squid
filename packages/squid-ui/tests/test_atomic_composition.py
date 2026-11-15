@@ -10,6 +10,8 @@ from squid_i18n import tree
 from squid_ui import scene
 from squid_ui.assets import Asset
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
+from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.planning import CompositionRejectedError, FixedComposition
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import (
@@ -26,8 +28,6 @@ from squid_ui.planning.realizations import DownloadRealization, Realization, Tex
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import AtomicNode, budget
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
-from squid_ui_discord.planning.composition_v2 import V2CompositionRules
-from squid_ui_discord.planning.discord import components_v2_target
 
 TARGET = components_v2_target(AdapterProfile(DiscordAdapter, "composition.atoms", ">=1"))
 

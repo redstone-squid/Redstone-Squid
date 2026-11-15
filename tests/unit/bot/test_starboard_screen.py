@@ -5,7 +5,7 @@ from typing import Any, cast, override
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.starboard import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
 from squid.core.actors import Actor

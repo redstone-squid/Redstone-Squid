@@ -5,8 +5,8 @@ from typing import Any, override
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
-from squid_ui_discord.delivery import DeliveryResult
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.delivery import DeliveryResult
 
 
 class FailingPanel(sd.Screen):

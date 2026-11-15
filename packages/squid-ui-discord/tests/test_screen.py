@@ -6,13 +6,13 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid_i18n import tr
 from squid_reactivity import LocalTopicBus
 from squid_ui.chrome import Chrome
-from squid_ui_discord.response import UNSET
-from squid_ui_discord.sessions import AdmissionSpec, Reject
-from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
+from squid_ui.ext.discord.response import UNSET
+from squid_ui.ext.discord.sessions import AdmissionSpec, Reject
+from squid_ui.ext.discord.testing import ContextHarness, interaction_harness, message_harness
 
 CHROME = Chrome()
 

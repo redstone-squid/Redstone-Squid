@@ -10,10 +10,10 @@ from typing import Any, override
 import discord
 
 import squid_ui as sl
-import squid_ui_discord
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, message_harness
+import squid_ui.ext.discord
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.testing import delivered_to, message_harness
 
 TOPIC = sl.runtime.TopicName("build", "1")
 
@@ -168,7 +168,7 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
     async def destination(presentation) -> Any:
         sent.append(presentation.layout)
-        from squid_ui_discord.delivery import DeliveryResult, handle_for
+        from squid_ui.ext.discord.delivery import DeliveryResult, handle_for
 
         return DeliveryResult(message, handle_for(message))
 
@@ -184,7 +184,7 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
 async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
     bus = sl.runtime.LocalTopicBus()
-    scheduler = squid_ui_discord.MessageRootScheduler(bus)
+    scheduler = squid_ui.ext.discord.MessageRootScheduler(bus)
     panel = Chain(changes=bus.topic("build", "1"))
     message: Any = message_harness()
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)

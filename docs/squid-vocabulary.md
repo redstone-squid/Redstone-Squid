@@ -316,7 +316,7 @@ require more exceptions than rules. New synonyms fail without constraining new c
 Scene, durability, profiler, and durable-store formats use the vocabulary-correct shape as
 protocol or schema v1; no pre-reset wire compatibility is retained.
 
-Redundant `Discord*` prefixes inside `squid_ui_discord` were removed from message-local roles:
+Redundant `Discord*` prefixes inside `squid_ui.ext.discord` were removed from message-local roles:
 `MessagePayload`, `MessageMode`, and `MessageReservation` already say what they describe.
 `DiscordPyAdapter` and the portable `DiscordTarget` marker retain the prefix because it names
 a real variant rather than repeating their module.

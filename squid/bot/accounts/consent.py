@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,

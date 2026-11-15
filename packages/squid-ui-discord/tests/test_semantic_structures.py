@@ -5,6 +5,7 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
+from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointInfeasibleError
@@ -30,7 +31,6 @@ from squid_ui.semantic import (
     TableRow,
 )
 from squid_ui.text import Markup
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
 
 
 def test_single_choices_use_a_picker_at_both_sizes() -> None:

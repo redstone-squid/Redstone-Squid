@@ -9,9 +9,9 @@ from typing import assert_type
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.document import DocumentLike
+from squid_ui.ext.discord.target import classic, v2
 from squid_ui.planning import ClassicTarget, ComponentsV2Target, plan
 from squid_ui.primitives import Panel, Text
-from squid_ui_discord.target import classic, v2
 
 v2_tab = sp.Tab("details", "Details", Panel((Text("V2 only"),)))
 assert_type(v2_tab, sp.Tab[ComponentsV2Target])

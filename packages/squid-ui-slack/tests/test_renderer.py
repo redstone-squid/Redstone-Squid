@@ -25,7 +25,7 @@ from slack_sdk.models.blocks import (
 from slack_sdk.models.views import View
 
 import squid_ui as sl
-import squid_ui_slack as ss
+import squid_ui.ext.slack as ss
 from squid_ui import forms, scene
 from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.interactions import ActionEvent, SubmitEvent

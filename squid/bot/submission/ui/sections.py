@@ -21,7 +21,7 @@ from functools import partial
 from typing import Any, Protocol, cast, override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui.credits import CreditEditor
 from squid.builds.application.input import parse_build_ticks

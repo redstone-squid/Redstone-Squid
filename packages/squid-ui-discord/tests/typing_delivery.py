@@ -7,8 +7,8 @@ from typing import Any
 
 import discord
 
-from squid_ui_discord import MessageDestination, deliver_to, edit_to, send_to
-from squid_ui_discord.delivery import Messageable, Replyable
+from squid_ui.ext.discord import MessageDestination, deliver_to, edit_to, send_to
+from squid_ui.ext.discord.delivery import Messageable, Replyable
 
 
 def channel_send(channel: discord.TextChannel) -> MessageDestination:

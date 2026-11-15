@@ -37,13 +37,13 @@ migration. It is recorded here rather than changing a production backend during 
 Run the visible-table probe with `uv run --no-sync python` and this input:
 
 ```python
-import squid_ui_slack
+import squid_ui.ext.slack
 from dataclasses import replace
 import squid_ui as sl
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.target_types import SlackAdapter
 
-target = squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "probe.slack", "1"))
+target = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "probe.slack", "1"))
 target = replace(
     target,
     limits=replace(
@@ -80,7 +80,7 @@ Reproduce with `uv run --no-sync python` and this input:
 ```python
 import squid_ui as sl
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui_discord.planning.discord import components_v2_target
+from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.target_types import DiscordAdapter
 

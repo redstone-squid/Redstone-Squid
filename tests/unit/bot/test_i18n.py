@@ -7,7 +7,7 @@ from typing import Any, cast
 import discord
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
 from squid.runtime import BotServices
 from squid.settings.application import SettingsService

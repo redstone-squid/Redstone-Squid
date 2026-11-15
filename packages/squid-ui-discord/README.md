@@ -17,7 +17,7 @@ a declarative screen:
 
 ```python
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 
 
 runtime = sd.install(bot)
@@ -155,7 +155,7 @@ The optional `tab` selects the starting section; it defaults to `overview`.
 `sd.devtools_runtime.DevToolsPolicy()` is read-only; mutations require `full_access()` or an
 explicit `allow(...)` list. Persistence records load only when the dashboard visits that section.
 
-Storage stays optional. Importing `squid_ui_discord` without a durability extra does not import or
+Storage stays optional. Importing `squid_ui.ext.discord` without a durability extra does not import or
 require `squid-storage`.
 
 - [Quickstart](https://redstone-squid.github.io/Redstone-Squid/squid-ui-quickstart/)

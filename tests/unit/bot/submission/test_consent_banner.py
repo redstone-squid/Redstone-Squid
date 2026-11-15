@@ -21,8 +21,8 @@ from squid.bot.submission.submit import BuildSubmitCommands
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.errors import DraftCapacityExceededError
-from squid_ui_discord import Cancelled, Completed
-from squid_ui_discord.testing import AsyncCallRecorder, InteractionHarness, MessageHarness
+from squid_ui.ext.discord import Cancelled, Completed
+from squid_ui.ext.discord.testing import AsyncCallRecorder, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 

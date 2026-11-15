@@ -5,14 +5,14 @@ from dataclasses import replace
 import pytest
 
 from squid_ui import paragraph, scene
+from squid_ui.ext.discord import V2_LIMITS as LIMITS
+from squid_ui.ext.discord import testing as sd
 from squid_ui.planning import plan
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.presentations import Replacement, corresponds, losses, ref
 from squid_ui.primitives import Fidelity, Panel, Text, Variant, Variants
 from squid_ui.text import Markup
-from squid_ui_discord import V2_LIMITS as LIMITS
-from squid_ui_discord import testing as sd
 
 TARGET = sd.target_profile("test")
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Self, override
 from discord.ext import commands
 from discord.ext.commands import Context, when_mentioned
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.navigation.destinations import BuildDetail, BuildIndex
 from squid.bot.navigation.router import NavigationRequest
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities

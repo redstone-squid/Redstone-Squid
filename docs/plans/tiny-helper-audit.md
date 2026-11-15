@@ -179,7 +179,7 @@ existing transaction session. Keep methods that express publication state change
 
 ### H11: MessageRoot returns a callable only to call it immediately
 
-`packages/squid-ui-discord/src/squid_ui_discord/message_root.py:1071`: `_render_message` returns
+`packages/squid-ui-discord/src/squid_ui/ext/discord/message_root.py:1071`: `_render_message` returns
 `self._binding.render_message`. The sole call at 1017 spells this as `self._render_message()(...)`.
 Call `self._binding.render_message(...)` directly. This is an accessor, not the renderer-selection policy;
 that policy already lives in the binding. Check private patch targets when implementing.
@@ -225,7 +225,7 @@ they have different contracts, including Unicode compatibility normalization and
 
 ### H16: Developer tools maintain duplicate display rules
 
-`packages/squid-ui-discord/src/squid_ui_discord/devtools.py` has `_scheduler_text` (542), `_topics_text` (548),
+`packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py` has `_scheduler_text` (542), `_topics_text` (548),
 and `_recovery_text` (554). The inspector repeats their exact bodies as `_scheduler_summary` (940),
 `_topic_summary` (946), and `_recovery_summary` (963) in `devtools_view.py`.
 Use one small presentation module for these shared developer-tool summaries. Keep command delivery and

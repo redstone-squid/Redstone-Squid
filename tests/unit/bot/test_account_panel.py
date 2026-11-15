@@ -10,7 +10,7 @@ import pytest
 from whenever import Instant
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.domain import (
     AccountConsent,
@@ -37,9 +37,9 @@ from squid.bot.follows import FollowCard
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
+from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.testing import find, keys, labels, render_tree
 from squid_ui.text import NEUTRAL, resolve_text, source_text
-from squid_ui_discord.testing import commit_render, interaction_harness
 from tests.support.account_edits import AccountEditRecorder, SnapshotAccountService
 
 ACCOUNT_ID = 42

@@ -4,12 +4,14 @@ from dataclasses import replace
 from typing import Literal
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
-import squid_ui_slack
+import squid_ui.ext.html
+import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError
+from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.planning import CompositionOptions, CompositionRejectedError, PlanCache, PlanMemo
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import CapacityExceeded, OccurrenceId
@@ -17,11 +19,9 @@ from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
 from squid_ui.presentations import budget
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
-from squid_ui_discord.limits import V2Limits
-from squid_ui_discord.planning.discord import components_v2_target
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "composition.discord", ">=1"))
-SLACK = squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "composition.slack", ">=1"))
+SLACK = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "composition.slack", ">=1"))
 
 
 @pytest.mark.parametrize("target", ["v2", "slack", "html"])
@@ -40,7 +40,7 @@ def test_public_opt_in_builds_a_selected_alternative(target: Literal["v2", "slac
         case "slack":
             result = sl.planning.plan(content, target=SLACK, composition=options, strict=True)
         case "html":
-            result = sl.planning.plan(content, target=squid_ui_html.target(), composition=options, strict=True)
+            result = sl.planning.plan(content, target=squid_ui.ext.html.target(), composition=options, strict=True)
     assert "Reworded" in scene.Codec.dumps(result.scene)
     assert "Description" not in scene.Codec.dumps(result.scene)
     assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene
@@ -79,9 +79,9 @@ def test_platform_reservation_remains_mandatory() -> None:
 
 def test_unbounded_html_does_not_invent_a_character_limit() -> None:
     result = sl.planning.plan(
-        sl.paragraph("x" * 12000), target=squid_ui_html.target(), composition=CompositionOptions()
+        sl.paragraph("x" * 12000), target=squid_ui.ext.html.target(), composition=CompositionOptions()
     )
-    assert "x" * 12000 in squid_ui_html.Renderer().draw(result.scene, plan=result)
+    assert "x" * 12000 in squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
 
 
 def test_opt_in_does_not_replay_a_cached_callback_or_publish_session_state() -> None:
@@ -96,7 +96,7 @@ def test_opt_in_does_not_replay_a_cached_callback_or_publish_session_state() -> 
     for handler in (first, second):
         result = sl.planning.plan(
             sl.action_controls(sl.action_control("Open", handler, key="open"), key="actions"),
-            target=squid_ui_html.target(),
+            target=squid_ui.ext.html.target(),
             composition=CompositionOptions(),
             cache=cache,
             memo=memo,

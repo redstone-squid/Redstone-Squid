@@ -12,14 +12,14 @@ from discord.ext.commands.view import StringView
 from pydantic import SecretStr
 from pytest_mock import MockerFixture
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot import app as bot_app
 from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, DiscordConfig, VerificationConfig
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
 from squid_reactivity import EventLedger, transaction
+from squid_ui.ext.discord.devtools import DevTools
+from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
 from squid_ui.text import Localization, current_localization
-from squid_ui_discord.devtools import DevTools
-from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
 from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services
 

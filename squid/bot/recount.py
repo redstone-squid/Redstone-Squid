@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Self, cast
 
 from discord import app_commands
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import enforce
 from squid.core.i18n import tr

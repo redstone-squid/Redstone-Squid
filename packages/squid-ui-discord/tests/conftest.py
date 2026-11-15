@@ -10,8 +10,8 @@ import anyio
 import pytest
 from hypothesis import settings
 
+from squid_ui.ext.discord import MessageRoot, live, runtime
 from squid_ui.runtime import UIExecutionHost
-from squid_ui_discord import MessageRoot, live, runtime
 
 settings.register_profile(
     "ci",

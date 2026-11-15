@@ -14,7 +14,7 @@ The local branch is `schematics-phase-0-stack-23`; PR 200 publishes
 PR contains it. Recheck both heads before implementation or reporting completion.
 An outdated GitHub anchor also does not establish that its concern is resolved.
 
-Paths below are relative to `packages/squid-ui-discord/src/squid_ui_discord/`.
+Paths below are relative to `packages/squid-ui-discord/src/squid_ui/ext/discord/`.
 The former `DiscordUI` is now `Scope`, `DiscordRequest` is now `Request`, and
 `ext/cog.py` has moved to `cog.py`.
 

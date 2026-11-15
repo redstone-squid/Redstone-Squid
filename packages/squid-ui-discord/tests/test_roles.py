@@ -9,15 +9,15 @@ import anyio
 import discord
 import pytest
 
-import squid_ui_discord
-from squid_ui.primitives.nodes import ControlGroup, RoutedButton, RoutedSelect, Variants
-from squid_ui_discord.roles import (
+import squid_ui.ext.discord
+from squid_ui.ext.discord.roles import (
     RoleMutationForbidden,
     RolesUnchanged,
     RoleTransitionResult,
 )
-from squid_ui_discord.routing import Router
-from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
+from squid_ui.ext.discord.routing import Router
+from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness
+from squid_ui.primitives.nodes import ControlGroup, RoutedButton, RoutedSelect, Variants
 
 
 class FakeRole:
@@ -66,20 +66,20 @@ class Guild:
 
 def panel_for(
     *,
-    cardinality: squid_ui_discord.Cardinality = squid_ui_discord.ANY,
-    notice: squid_ui_discord.RoleNoticeHandler | None = None,
-) -> tuple[squid_ui_discord.RolePanel, squid_ui_discord.routing.RouteGroup[discord.Client]]:
-    group = squid_ui_discord.routing.RouteGroup("roles")
-    panel = squid_ui_discord.RolePanel(
+    cardinality: squid_ui.ext.discord.Cardinality = squid_ui.ext.discord.ANY,
+    notice: squid_ui.ext.discord.RoleNoticeHandler | None = None,
+) -> tuple[squid_ui.ext.discord.RolePanel, squid_ui.ext.discord.routing.RouteGroup[discord.Client]]:
+    group = squid_ui.ext.discord.routing.RouteGroup("roles")
+    panel = squid_ui.ext.discord.RolePanel(
         group,
         title="Server roles",
         categories=(
-            squid_ui_discord.RoleCategory(
+            squid_ui.ext.discord.RoleCategory(
                 "colour",
                 "Colour",
                 (
-                    squid_ui_discord.RoleOption(101, "Red", emoji="🔴"),
-                    squid_ui_discord.RoleOption(102, "Blue", emoji="🔵"),
+                    squid_ui.ext.discord.RoleOption(101, "Red", emoji="🔴"),
+                    squid_ui.ext.discord.RoleOption(102, "Blue", emoji="🔵"),
                 ),
                 cardinality=cardinality,
                 description="Choose a colour.",
@@ -91,7 +91,7 @@ def panel_for(
 
 
 def interaction_for(
-    panel: squid_ui_discord.RolePanel,
+    panel: squid_ui.ext.discord.RolePanel,
     roles: dict[int, FakeRole],
     *,
     held: tuple[int, ...] = (),
@@ -115,31 +115,31 @@ def interaction_for(
 
 def test_models_validate_panel_wide_invariants() -> None:
     with pytest.raises(ValueError, match="positive"):
-        squid_ui_discord.RoleOption(0, "Nope")
+        squid_ui.ext.discord.RoleOption(0, "Nope")
     with pytest.raises(ValueError, match="route-safe"):
-        squid_ui_discord.RoleCategory("bad:key", "Bad", (squid_ui_discord.RoleOption(1, "One"),))
+        squid_ui.ext.discord.RoleCategory("bad:key", "Bad", (squid_ui.ext.discord.RoleOption(1, "One"),))
     with pytest.raises(ValueError, match="impossible"):
-        squid_ui_discord.RoleCategory(
+        squid_ui.ext.discord.RoleCategory(
             "one",
             "One",
-            (squid_ui_discord.RoleOption(1, "One"),),
-            cardinality=squid_ui_discord.Cardinality(minimum=2),
+            (squid_ui.ext.discord.RoleOption(1, "One"),),
+            cardinality=squid_ui.ext.discord.Cardinality(minimum=2),
         )
 
-    group = squid_ui_discord.routing.RouteGroup("roles")
+    group = squid_ui.ext.discord.routing.RouteGroup("roles")
     existing = group.define("existing")
     group.add(existing, AsyncCallRecorder())
     with pytest.raises(ValueError, match="dedicated"):
-        squid_ui_discord.RolePanel(
+        squid_ui.ext.discord.RolePanel(
             group,
             title="Roles",
-            categories=(squid_ui_discord.RoleCategory("one", "One", (squid_ui_discord.RoleOption(1, "One"),)),),
+            categories=(squid_ui.ext.discord.RoleCategory("one", "One", (squid_ui.ext.discord.RoleOption(1, "One"),)),),
         )
     assert [route.format for route in group._definitions] == ["roles:existing"]
 
 
 def test_routes_and_rendering_are_stable_and_unselected() -> None:
-    panel, group = panel_for(cardinality=squid_ui_discord.EXACTLY_ONE)
+    panel, group = panel_for(cardinality=squid_ui.ext.discord.EXACTLY_ONE)
     descriptions = Router(namespace=group, on_gone=AsyncCallRecorder()).describe()
     assert [description.format for description in descriptions] == [
         "roles:toggle:{category}:{role_id:int}",
@@ -164,7 +164,7 @@ def test_routes_and_rendering_are_stable_and_unselected() -> None:
     assert select.max_values == 1
     assert all(not option.default for option in select.options)
 
-    presentation = squid_ui_discord.render_static(panel)
+    presentation = squid_ui.ext.discord.render_static(panel)
     view = cast(discord.ui.LayoutView, presentation.view)
     # BasedPyright does not narrow `hasattr`, so the guard above is invisible to it.
     custom_ids = [item.custom_id for item in view.walk_children() if hasattr(item, "custom_id")]  # pyright: ignore[reportAttributeAccessIssue]
@@ -172,7 +172,7 @@ def test_routes_and_rendering_are_stable_and_unselected() -> None:
 
 
 async def test_exactly_one_button_replaces_stale_selection_and_preserves_other_roles() -> None:
-    panel, _ = panel_for(cardinality=squid_ui_discord.EXACTLY_ONE)
+    panel, _ = panel_for(cardinality=squid_ui.ext.discord.EXACTLY_ONE)
     roles = {
         101: FakeRole(101, 10),
         102: FakeRole(102, 11),
@@ -271,7 +271,7 @@ async def test_uneditable_role_is_forbidden_before_edit(role: FakeRole) -> None:
 
 
 async def test_invalid_cardinality_is_reported_and_different_members_do_not_share_locks() -> None:
-    panel, _ = panel_for(cardinality=squid_ui_discord.EXACTLY_ONE)
+    panel, _ = panel_for(cardinality=squid_ui.ext.discord.EXACTLY_ONE)
     roles = {101: FakeRole(101, 10), 102: FakeRole(102, 11)}
     first, _member, _fetch, first_edit = interaction_for(panel, roles)
     second, _member, _fetch, second_edit = interaction_for(panel, roles)
@@ -303,11 +303,11 @@ async def test_invalid_cardinality_is_reported_and_different_members_do_not_shar
 
     assert first_edit.await_count == 1
     assert second_edit.await_count == 1
-    assert squid_ui_discord.roles._MEMBER_LOCKS == {}
+    assert squid_ui.ext.discord.roles._MEMBER_LOCKS == {}
 
 
 async def test_minimum_prevents_removing_the_last_required_role() -> None:
-    panel, _ = panel_for(cardinality=squid_ui_discord.EXACTLY_ONE)
+    panel, _ = panel_for(cardinality=squid_ui.ext.discord.EXACTLY_ONE)
     roles = {101: FakeRole(101, 10), 102: FakeRole(102, 11)}
     interaction, _member, _fetch_member, edit = interaction_for(panel, roles, held=(101,))
 

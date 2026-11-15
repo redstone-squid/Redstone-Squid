@@ -42,17 +42,18 @@ on those packages or their SDKs.
 Install `squid-ui-html` to plan a portable document as native HTML:
 
 ```python
-import squid_ui_html
+import squid_ui.ext.html
+
 document = sl.section(
     sl.heading("Build details"),
     sl.paragraph("**Compact**, semantic, and accessible."),
 )
-planned = sl.planning.plan(document, target=squid_ui_html.target())
-fragment = squid_ui_html.Renderer().draw(planned.scene, plan=planned)
+planned = sl.planning.plan(document, target=squid_ui.ext.html.target())
+fragment = squid_ui.ext.html.Renderer().draw(planned.scene, plan=planned)
 ```
 
 `Renderer(standalone=True)` adds the document shell and neutral responsive CSS. It accepts only
-HTML scenes; `squid_ui_discord.preview.DiscordPreviewRenderer` is available when a tool specifically needs to inspect
+HTML scenes; `squid_ui.ext.discord.preview.DiscordPreviewRenderer` is available when a tool specifically needs to inspect
 a planned Discord Components V2 scene in a browser.
 
 Install the package directly when you are writing a renderer or portable component library:
@@ -168,7 +169,7 @@ from squid_ui.selectors import parse
 
 save = parse('Editor[key="editor"] ActionControl[key="save"]', types={"Editor": Editor})
 query(tree, save).one()
-query(tree, 'ActionControls:has(> ActionControl[available=false])').all()
+query(tree, "ActionControls:has(> ActionControl[available=false])").all()
 query(tree, 'Editor[key="editor"]', types={"Editor": Editor}).one()
 ```
 

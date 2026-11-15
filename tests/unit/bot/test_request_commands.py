@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot import notifications
 from squid.bot.diagnostics import cog as diagnostics
 from squid.bot.utils.permissions import PermissionNodeRequired
@@ -13,7 +13,7 @@ from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.models import ErrorReport
 from squid.permissions.domain import Decision, Reason
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
-from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
+from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 

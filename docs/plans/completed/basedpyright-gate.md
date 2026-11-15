@@ -42,7 +42,7 @@ declaration typing every match capture in its function (12), and scope alignment
   uncallable unless the source's item type is spelled exactly `RankedEntry | EntryT`
   (`squid_ui/sources.py`); `_OperationDescriptor[OwnerT]` forbids overriding an
   `@sl.operation` in a subclass (`squid_reactivity/operations.py`); and
-  `squid_ui_discord.durability` types as `object` for every consumer because it is in
+  `squid_ui.ext.discord.durability` types as `object` for every consumer because it is in
   `__all__` with no static binding, which a `TYPE_CHECKING` import in the package
   `__init__` would fix globally.
 
@@ -59,7 +59,7 @@ document had that backwards.
 
 Four classes hit it, accounting for roughly twenty errors across eleven files:
 `AdapterProfile` (`squid_ui/planning/adapter.py`), `PlanResult` (`squid_ui/scene/model.py`),
-`Document` (`squid_ui/document.py`) and `Presented` (`squid_ui_discord/response.py`).
+`Document` (`squid_ui/document.py`) and `Presented` (`squid_ui.ext.discord/response.py`).
 
 ### The fix to apply later
 

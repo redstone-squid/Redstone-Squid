@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from functools import partial
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.follows import follow_control
 from squid.bot.ui import tr, truncate_display_text

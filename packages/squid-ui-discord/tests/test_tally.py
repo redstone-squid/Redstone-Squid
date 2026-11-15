@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
+import squid_ui.ext.discord
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
 
@@ -16,7 +16,7 @@ OPTIONS = (
 
 
 def test_inert_tally_renders_counts_bars_and_reader_emphasis() -> None:
-    result = sl.planning.plan(sl.tally(OPTIONS, key="vote"), target=squid_ui_discord.DISCORD_V2_DPY27)
+    result = sl.planning.plan(sl.tally(OPTIONS, key="vote"), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
     text = [item.content for item in testing.walk(result.scene.body) if isinstance(item, scene.Text)]
 
     assert any(value.startswith("Yes:") and value.endswith("75%") for value in text)
@@ -31,7 +31,7 @@ async def test_mounted_tally_dispatches_the_selected_value() -> None:
     async def vote(event: sl.SelectionEvent) -> None:
         seen.append(event)
 
-    result = sl.planning.plan(sl.tally(OPTIONS, key="vote", on_vote=vote), target=squid_ui_discord.DISCORD_V2_DPY27)
+    result = sl.planning.plan(sl.tally(OPTIONS, key="vote", on_vote=vote), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
     select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
     await result.bindings[select.action].handler(
         sl.SelectionEvent(
@@ -49,7 +49,7 @@ def test_mounted_tally_inherits_select_adaptation_for_many_options() -> None:
     async def vote(_event: sl.SelectionEvent) -> None: ...
 
     options = tuple(sp.TallyOption(str(index), f"Option {index}", index) for index in range(6))
-    result = sl.planning.plan(sl.tally(options, key="vote", on_vote=vote), target=squid_ui_discord.DISCORD_V2_DPY27)
+    result = sl.planning.plan(sl.tally(options, key="vote", on_vote=vote), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
 
     assert any(isinstance(item, scene.Select) for item in testing.walk(result.scene.body))
 
@@ -57,7 +57,7 @@ def test_mounted_tally_inherits_select_adaptation_for_many_options() -> None:
 def test_routed_tally_uses_one_restart_surviving_selection_route() -> None:
     result = sl.planning.plan(
         sl.tally(OPTIONS, key="vote", route_id="poll:vote"),
-        target=squid_ui_discord.DISCORD_V2_DPY27,
+        target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
     select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.RoutedSelect))
 

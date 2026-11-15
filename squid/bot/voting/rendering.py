@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from typing import cast
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls

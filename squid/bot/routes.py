@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, override
 
 import discord
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.errors import handle_interaction_error
 from squid.bot.ui import text_node
 from squid.core.i18n import tr

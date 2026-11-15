@@ -1,6 +1,6 @@
 # UI ergonomics
 
-Design decisions about the application-facing API of `squid_ui_discord` — what a cog author
+Design decisions about the application-facing API of `squid_ui.ext.discord` — what a cog author
 touches. The maintained entry-point guidance lives in
 [`docs/squid-ui-architecture.md`](../../../squid-ui-architecture.md#which-entry-point-to-use);
 this directory records why it is shaped that way.

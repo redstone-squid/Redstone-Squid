@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.navigation import factories
 from squid.bot.navigation.assembly import build_screen_router
 from squid.bot.navigation.commands import NavigationCommands, setup
@@ -26,7 +26,7 @@ from squid.bot.submission.ui.controls import reopen_draft
 from squid.builds.domain import Status
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
-from squid_ui_discord.testing import InteractionHarness
+from squid_ui.ext.discord.testing import InteractionHarness
 from tests.support.discord import make_layout_bot
 
 

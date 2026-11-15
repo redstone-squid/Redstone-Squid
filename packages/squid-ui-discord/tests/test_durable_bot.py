@@ -8,7 +8,7 @@ import discord
 import pytest
 from discord.ext import commands
 
-from squid_ui_discord.durability import DurableBot, DurableSessionRuntime, RecoveryReport
+from squid_ui.ext.discord.durability import DurableBot, DurableSessionRuntime, RecoveryReport
 
 
 @dataclass(slots=True)

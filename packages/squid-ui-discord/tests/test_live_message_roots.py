@@ -1,14 +1,14 @@
-"""The weak registry behind squid_ui_discord.live.message_roots()."""
+"""The weak registry behind squid_ui.ext.discord.live.message_roots()."""
 
 import gc
 from typing import override
 
 import squid_ui as sl
 from squid_ui import Component, PressEvent, state
+from squid_ui.ext.discord import Everyone, MessageRoot, Owner, live
+from squid_ui.ext.discord.delivery import DeliveryResult
+from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import Button, Heading, Row, Text
-from squid_ui_discord import Everyone, MessageRoot, Owner, live
-from squid_ui_discord.delivery import DeliveryResult
-from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class Panel(Component[sl.ComponentsV2Target]):

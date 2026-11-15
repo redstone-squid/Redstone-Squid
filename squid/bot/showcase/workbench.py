@@ -9,7 +9,7 @@ from uuid import uuid4
 import anyio
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.edit_history import history_controls
 from squid.bot.showcase.inspector import InspectablePanel
 from squid.bot.ui import tr

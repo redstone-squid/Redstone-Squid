@@ -15,7 +15,7 @@ import pytest
 # are exempt by convention; public ones must be enumerated here with their contract.
 CONTROL_FLOW_SIGNALS = {
     # A MessageDestination declining to deliver after already telling the user why.
-    "squid_ui_discord.delivery.DeliveryAbandoned",
+    "squid_ui.ext.discord.delivery.DeliveryAbandoned",
 }
 
 # Package root -> the base class every exception defined inside must derive from.
@@ -26,8 +26,8 @@ HIERARCHIES = {
     "squid_reactivity": ("squid_reactivity", "ReactivityError"),
     "squid_ui": ("squid_ui", "SquidUiError"),
     "squid_ui_widgets": ("squid_ui", "SquidUiError"),
-    "squid_ui_discord": ("squid_ui", "SquidUiError"),
-    "squid_ui_slack": ("squid_ui", "SquidUiError"),
+    "squid_ui.ext.discord": ("squid_ui", "SquidUiError"),
+    "squid_ui.ext.slack": ("squid_ui", "SquidUiError"),
     "squid_storage": ("squid_storage", "StorageError"),
     "squid_replication": ("squid_replication", "ReplicationError"),
 }

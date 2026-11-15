@@ -8,9 +8,9 @@ The tests distinguish the response sent by each check.
 
 from typing import Any
 
-import squid_ui_discord
+import squid_ui.ext.discord
 import squid_ui_widgets as sp
-from squid_ui_discord.testing import commit_render, interaction_harness
+from squid_ui.ext.discord.testing import commit_render, interaction_harness
 
 
 def _agreement(**overrides: Any) -> sp.Agreement:
@@ -27,7 +27,7 @@ async def test_an_outsider_admitted_by_access_is_still_refused_by_the_participan
     It refuses by deferring: the interaction is consumed, and nothing changes.
     """
     agreement = _agreement(require=1)
-    message_root = squid_ui_discord.MessageRoot(agreement, access=squid_ui_discord.Everyone(), timeout=None)
+    message_root = squid_ui.ext.discord.MessageRoot(agreement, access=squid_ui.ext.discord.Everyone(), timeout=None)
     commit_render(message_root)
     interaction = interaction_harness(user_id=99)
 
@@ -41,7 +41,7 @@ async def test_an_outsider_admitted_by_access_is_still_refused_by_the_participan
 async def test_users_access_refuses_before_the_agreement_is_reached_at_all() -> None:
     """MessageRoot sends an access denial before dispatching to Agreement."""
     agreement = _agreement(require=1)
-    message_root = squid_ui_discord.MessageRoot(agreement, access=squid_ui_discord.Users({1, 2}), timeout=None)
+    message_root = squid_ui.ext.discord.MessageRoot(agreement, access=squid_ui.ext.discord.Users({1, 2}), timeout=None)
     commit_render(message_root)
     interaction = interaction_harness(user_id=99)
 

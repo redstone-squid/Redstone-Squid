@@ -9,6 +9,10 @@ from squid_i18n import tr
 from squid_ui import Document, paragraph, scene, zoned_timestamp
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.renderer import V2Renderer
+from squid_ui.ext.discord.target import NativeItem
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterCapability
@@ -31,10 +35,6 @@ from squid_ui.primitives import (
 )
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Localization, Markup
-from squid_ui_discord import DISCORD_V2_DPY27
-from squid_ui_discord import testing as sd
-from squid_ui_discord.renderer import V2Renderer
-from squid_ui_discord.target import NativeItem
 
 
 async def _click(event) -> None: ...

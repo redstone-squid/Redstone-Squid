@@ -13,7 +13,7 @@ from discord.ext import commands
 from discord.ext.commands import Bot
 from whenever import Instant
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bootstrap import create_bot_runtime
 
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
@@ -53,9 +53,9 @@ from squid.runtime import (
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_reactivity import EventLedger, LocalTopicBus, observe_events
 from squid_storage import PostgresTopicBridge
+from squid_ui.ext.discord import Config, DiscordUIRuntime, SessionManager, install
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
-from squid_ui_discord import Config, DiscordUIRuntime, SessionManager, install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]

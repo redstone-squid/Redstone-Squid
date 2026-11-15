@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.accounts.models import AliasClaim

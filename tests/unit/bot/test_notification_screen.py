@@ -9,7 +9,7 @@ import pytest
 from whenever import Instant
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.notifications_view import NotificationScreen
 from squid.core.actors import Actor
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
@@ -26,9 +26,9 @@ from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.suggestions.domain import Suggestion
 from squid.tags.domain import TagValueType
+from squid_ui.ext.discord import SessionSpec
+from squid_ui.ext.discord.testing import stage
 from squid_ui.testing import RecordingResponder, choose, find_all, keys, labels, press, render_tree, submit
-from squid_ui_discord import SessionSpec
-from squid_ui_discord.testing import stage
 from tests.support.notification_edits import NotificationEditRecorder
 
 

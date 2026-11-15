@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast, override
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.i18n import localization_for
 from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor

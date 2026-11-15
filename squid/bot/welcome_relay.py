@@ -12,7 +12,7 @@ from squid.bot.ui import render_payload, text_node
 from squid.community.domain import WelcomeRelayDecision, WelcomeRelayPolicy
 from squid.settings.domain.runtime import RuntimeSettings
 from squid_i18n import Text, mention
-from squid_ui_discord import send_to
+from squid_ui.ext.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

@@ -3,7 +3,7 @@
 from typing import override
 
 import squid_ui as sl
-from squid_ui_discord import MessageRoot, Owner
+from squid_ui.ext.discord import MessageRoot, Owner
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):

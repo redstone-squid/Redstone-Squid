@@ -6,7 +6,7 @@ from uuid import UUID
 
 import discord
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
 from squid.accounts.models import Account
 from squid.bot.accounts.consent import request_consent

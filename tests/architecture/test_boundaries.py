@@ -41,9 +41,9 @@ FRAMEWORK_DISTRIBUTIONS = {
     "squid_replication": "squid-replication",
     "squid_storage": "squid-storage",
     "squid_ui": "squid-ui",
-    "squid_ui_discord": "squid-ui-discord",
-    "squid_ui_slack": "squid-ui-slack",
-    "squid_ui_html": "squid-ui-html",
+    "squid_ui.ext.discord": "squid-ui-discord",
+    "squid_ui.ext.slack": "squid-ui-slack",
+    "squid_ui.ext.html": "squid-ui-html",
     "squid_ui_widgets": "squid-ui-widgets",
 }
 
@@ -82,6 +82,14 @@ FRAMEWORK_DOCUMENTATION = {
 
 def _scanned_files(roots: tuple[Path, ...] = SCAN_ROOTS) -> list[Path]:
     return [path for root in roots for path in root.rglob("*.py")]
+
+
+def _import_distribution(module: str) -> str | None:
+    """Resolve the owning distribution, including extensions under a shared parent."""
+    for prefix in sorted(FRAMEWORK_DISTRIBUTIONS, key=len, reverse=True):
+        if module == prefix or module.startswith(f"{prefix}."):
+            return FRAMEWORK_DISTRIBUTIONS[prefix]
+    return None
 
 
 def _dependency_name(requirement: str) -> str:
@@ -215,13 +223,13 @@ def test_framework_runtime_imports_are_declared_in_package_metadata() -> None:
         for path in source.rglob("*.py"):
             for node in ast.walk(source_tree(path)):
                 if isinstance(node, ast.Import):
-                    modules = (alias.name.partition(".")[0] for alias in node.names)
+                    modules = (alias.name for alias in node.names)
                 elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                    modules = (node.module.partition(".")[0],)
+                    modules = (f"{node.module}.{alias.name}" for alias in node.names)
                 else:
                     continue
                 for module in modules:
-                    distribution = FRAMEWORK_DISTRIBUTIONS.get(module)
+                    distribution = _import_distribution(module)
                     if distribution is not None and distribution not in {own_distribution, *declared}:
                         violations.append((str(path), distribution))
 
@@ -250,7 +258,11 @@ def test_framework_distributions_share_publishable_alpha_metadata() -> None:
         assert project["urls"] == FRAMEWORK_URLS | {"Documentation": documentation}
         assert (package / "README.md").is_file()
         assert (package / "LICENSE").read_text(encoding="utf-8") == root_license
-        assert (package / "src" / name.replace("-", "_") / "py.typed").is_file()
+        metadata = tomllib.loads(metadata_path.read_text(encoding="utf-8"))
+        module = (
+            metadata.get("tool", {}).get("uv", {}).get("build-backend", {}).get("module-name", name.replace("-", "_"))
+        )
+        assert (package / "src" / module.replace(".", "/") / "py.typed").is_file()
 
         requirements = list(project.get("dependencies", ()))
         requirements.extend(
@@ -268,8 +280,8 @@ def test_generic_planning_modules_do_not_depend_on_the_discord_backend() -> None
     """The public target seam must not acquire Discord's IR or layout solver types."""
     generic = tuple(COMPILER_PASS_ROOT / name for name in ("dialect.py", "planner.py", "target.py"))
     blocked_modules = (
-        "squid_ui_discord.limits",
-        "squid_ui_discord.planning.measurement",
+        "squid_ui.ext.discord.limits",
+        "squid_ui.ext.discord.planning.measurement",
         "squid_ui.primitives",
         "squid_ui.target_types",
     )
@@ -296,15 +308,16 @@ def test_layouts_package_stays_standalone() -> None:
     (
         archrule("squid-ui stays independent from the host application")
         .match("squid_ui*")
+        .exclude("squid_ui.ext*")
         .should_not_import("squid")
         .should_not_import("squid.*")
         .should_not_import("sqlalchemy*")
         .should_not_import("fastapi*")
         .should_not_import("litestar*")
         .should_not_import("nucleation*")
-        .should_not_import("squid_ui_discord*")
-        .should_not_import("squid_ui_slack*")
-        .should_not_import("squid_ui_html*")
+        .should_not_import("squid_ui.ext.discord*")
+        .should_not_import("squid_ui.ext.slack*")
+        .should_not_import("squid_ui.ext.html*")
         .should_not_import("squid_ui_widgets*")
         .check("squid_ui", only_direct_imports=True)
     )
@@ -314,14 +327,14 @@ def test_discord_package_stays_a_leaf() -> None:
     """Keep Discord adapter imports independent of the host application and its frameworks."""
     (
         archrule("squid-ui-discord depends on the engine, not on the host")
-        .match("squid_ui_discord*")
+        .match("squid_ui.ext.discord*")
         .should_not_import("squid")
         .should_not_import("squid.*")
         .should_not_import("sqlalchemy*")
         .should_not_import("fastapi*")
         .should_not_import("litestar*")
         .should_not_import("nucleation*")
-        .check("squid_ui_discord", only_direct_imports=True)
+        .check("squid_ui.ext.discord", only_direct_imports=True)
     )
 
 
@@ -329,14 +342,14 @@ def test_slack_package_stays_a_leaf() -> None:
     """The Slack SDK renderer depends on the engine, never a host or sibling adapter."""
     (
         archrule("squid-ui-slack depends on the engine, not on runtimes or the host")
-        .match("squid_ui_slack*")
+        .match("squid_ui.ext.slack*")
         .should_not_import("squid")
         .should_not_import("squid.*")
-        .should_not_import("squid_ui_discord*")
+        .should_not_import("squid_ui.ext.discord*")
         .should_not_import("squid_ui_widgets*")
         .should_not_import("squid_storage*")
         .should_not_import("anyio*")
-        .check("squid_ui_slack", only_direct_imports=True)
+        .check("squid_ui.ext.slack", only_direct_imports=True)
     )
 
 
@@ -346,28 +359,17 @@ def test_private_names_do_not_cross_distribution_boundaries() -> None:
     Modules within one distribution may share private names. Sibling packages use public
     exports, including the supported exports in `squid_reactivity.internals`.
     """
-    framework_packages = {
-        "squid_i18n",
-        "squid_reactivity",
-        "squid_replication",
-        "squid_storage",
-        "squid_ui",
-        "squid_ui_discord",
-        "squid_ui_slack",
-        "squid_ui_html",
-        "squid_ui_widgets",
-    }
     violations: list[tuple[str, int, str]] = []
     for root in SCAN_ROOTS:
         if root == Path("squid"):
             continue
-        own = root.parent.name.replace("-", "_")
+        own = root.parent.name
         for path in root.rglob("*.py"):
             for node in ast.walk(source_tree(path)):
                 if not isinstance(node, ast.ImportFrom) or node.module is None or node.level:
                     continue
-                source = node.module.partition(".")[0]
-                if source == own or source not in framework_packages:
+                source = _import_distribution(node.module)
+                if source is None or source == own:
                     continue
                 violations.extend(
                     (str(path), node.lineno, f"{node.module}.{alias.name}")
@@ -420,7 +422,7 @@ def test_patterns_package_is_transport_free() -> None:
         .match("squid_ui_widgets*")
         .should_not_import("discord*")
         .should_not_import("anyio*")
-        .should_not_import("squid_ui_discord*")
+        .should_not_import("squid_ui.ext.discord*")
         .should_not_import("squid_storage*")
         .should_not_import("squid")
         .should_not_import("squid.*")
@@ -488,7 +490,7 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
             resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
             # Resolve the spelling used at the call site through its import alias.
             # This checks the public facade paths, not the function's defining module.
-            if resolved in {"squid_ui_discord.render_message", "squid_ui_discord.render_static"}:
+            if resolved in {"squid_ui.ext.discord.render_message", "squid_ui.ext.discord.render_static"}:
                 violations.append(f"{path}:{node.lineno}")
 
     assert violations == []
@@ -820,21 +822,26 @@ def test_the_engine_needs_no_transport_install() -> None:
         "discord",
         "slack_sdk",
         "squid_storage",
-        "squid_ui_discord",
-        "squid_ui_slack",
-        "squid_ui_html",
+        "squid_ui.ext.discord",
+        "squid_ui.ext.slack",
+        "squid_ui.ext.html",
         "squid_ui_widgets",
     }
     violations: list[str] = []
     for path in root.rglob("*.py"):
         for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Import):
-                imported = {alias.name.split(".", 1)[0] for alias in node.names}
+                imported = {alias.name for alias in node.names}
             elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                imported = {node.module.split(".", 1)[0]}
+                imported = {node.module}
             else:
                 continue
-            if found := imported & blocked:
+            if found := {
+                prefix
+                for prefix in blocked
+                for module in imported
+                if module == prefix or module.startswith(f"{prefix}.")
+            }:
                 # Owned services are an optional execution extra. Its backend imports AnyIO
                 # optionally; ordinary authoring and rendering must still import without it.
                 if path in {root / "runtime" / "services.py", root / "runtime" / "tasks.py"} and found == {"anyio"}:
@@ -872,8 +879,8 @@ def test_planner_traversals_keep_their_exhaustiveness_proof() -> None:
     this rule.
     """
     traversals = (
-        Path("packages/squid-ui-discord/src/squid_ui_discord/planning/adaptation") / "lowering.py",
-        Path("packages/squid-ui-discord/src/squid_ui_discord/planning/adaptation") / "decisions.py",
+        Path("packages/squid-ui-discord/src/squid_ui/ext/discord/planning/adaptation") / "lowering.py",
+        Path("packages/squid-ui-discord/src/squid_ui/ext/discord/planning/adaptation") / "decisions.py",
     )
     violations: list[tuple[Path, int]] = []
     for path in traversals:

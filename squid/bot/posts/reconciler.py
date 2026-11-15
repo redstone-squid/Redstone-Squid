@@ -20,13 +20,13 @@ from typing import TYPE_CHECKING
 
 import discord
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.posts.domain import ResourceKind, Surface
 from squid.posts.models import DiscordPost
-from squid_ui_discord import send_to
+from squid_ui.ext.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

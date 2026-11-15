@@ -1,8 +1,8 @@
 """Structured degradation ranking and measured-layout accounting."""
 
+from squid_ui.ext.discord.planning import measure
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.primitives import Drop, Text, Truncate, alts
-from squid_ui_discord.planning import measure
 
 
 def profile(effect: DegradationEffect) -> DegradationProfile:

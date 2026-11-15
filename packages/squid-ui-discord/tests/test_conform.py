@@ -5,13 +5,13 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_ui_discord import (
+from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui_discord import LimitViolationError, conform
-from squid_ui_discord import testing as sd
-from squid_ui_discord.conformance import ELLIPSIS, conform_modal, trim
-from squid_ui_discord.testing import assert_within_limits, payload_problems
+from squid_ui.ext.discord import LimitViolationError, conform
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.conformance import ELLIPSIS, conform_modal, trim
+from squid_ui.ext.discord.testing import assert_within_limits, payload_problems
 
 
 class TestTrim:

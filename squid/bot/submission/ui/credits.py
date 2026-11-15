@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, cast, override
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
 from squid.builds.domain.credits import Credit, CreditKind, CreditRole, read_credits
-from squid_ui_discord.form_fields import EntityField
+from squid_ui.ext.discord.form_fields import EntityField
 
 if TYPE_CHECKING:
     from squid.bot.submission.ui.sections import AnswerWorkspace

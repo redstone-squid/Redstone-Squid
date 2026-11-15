@@ -27,7 +27,7 @@ from squid.submissions.application.inference_runs import InferenceCandidate, Sub
 from squid.submissions.application.recalculation import RecalculationProposalService
 from squid.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
 from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid_ui_discord.testing import (
+from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
     InteractionHarness,

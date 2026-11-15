@@ -23,7 +23,7 @@ from squid.submissions.application.inference_runs import (
     candidate_id,
 )
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
-from squid_ui_discord.testing import AsyncCallRecorder, CallRecord
+from squid_ui.ext.discord.testing import AsyncCallRecorder, CallRecord
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 

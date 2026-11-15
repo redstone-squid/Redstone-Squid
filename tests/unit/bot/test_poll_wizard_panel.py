@@ -6,15 +6,15 @@ from typing import Any, cast
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import render_payload
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness
 from squid_ui.runtime import transaction
 from squid_ui.testing import labels
-from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
 from squid_ui_widgets import testing as wt
 from tests.support.discord import make_layout_bot
 from tests.support.voting import GENERIC_OPTIONS

@@ -8,8 +8,8 @@ import anyio
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
-from squid_ui_discord.testing import ContextHarness, InteractionHarness, MessageHarness
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness, MessageHarness
 
 
 class Owner:

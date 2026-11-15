@@ -6,14 +6,14 @@ from typing import override
 import anyio
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
 from squid_reactivity import CellAddress, Topic
-from squid_ui_discord import Everyone
-from squid_ui_discord.testing import delivered_to, message_harness
+from squid_ui.ext.discord import Everyone
+from squid_ui.ext.discord.testing import delivered_to, message_harness
 from tests.support.services import bot_services
 
 

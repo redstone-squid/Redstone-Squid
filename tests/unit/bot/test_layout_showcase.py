@@ -7,9 +7,9 @@ import pytest
 from discord.ext import commands
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.showcase.cog import LayoutShowcaseCog
-from squid_ui_discord.testing import ContextHarness, InteractionHarness, MessageHarness
+from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 
 

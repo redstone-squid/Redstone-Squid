@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.navigation.destinations import (
     AccountDestination,
     BuildDetail,

@@ -173,7 +173,7 @@ The existing `runtime.component` import path is a facade over these definitions.
     shared composition -- representations, allocation, pagination, bindings
         |
         +-- Discord rules --> Scene[ComponentsV2 | ClassicMessage] --> sd.Renderer
-        +-- HTML rules ----> Scene[HtmlBody] ----------------------> squid_ui_html.Renderer
+        +-- HTML rules ----> Scene[HtmlBody] ----------------------> squid_ui.ext.html.Renderer
         +-- Slack rules ---> Scene[SlackMessage | SlackHomeView | SlackModalView]
                                                                     |
                                                                     v
@@ -207,8 +207,8 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Region in a host-owned classic message | sd.classic.contribute(document, to=...) | AttachedClassicContribution |
 | Discord message plus diagnostics | sd.render_message(document) | RenderedMessage |
 | Portable planning | plan(document, target=...) | PlanResult |
-| Native browser document | plan(document, target=squid_ui_html.target()), then squid_ui_html.Renderer().draw(scene) | semantic HTML string |
-| Components V2 browser preview | squid_ui_discord.preview.DiscordPreviewRenderer().draw(scene) | preview HTML string |
+| Native browser document | plan(document, target=squid_ui.ext.html.target()), then squid_ui.ext.html.Renderer().draw(scene) | semantic HTML string |
+| Components V2 browser preview | squid_ui.ext.discord.preview.DiscordPreviewRenderer().draw(scene) | preview HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
 | Resume an opted-in session | sd.durability.DurableSessionRuntime | recovered Session graph |
 | Stateful root on a message the bot owns | `sd.edit_to(message)` | `MessageDestination` writing that message |
@@ -451,7 +451,7 @@ primitive nodes: `Panel`, `Section`, `Gallery`, `File`, `Sep` and `Thumbnail` ar
 only, while `Card` and `Content` are classic only. The mode is a *type parameter*, and it
 propagates: a primitive container factory takes the meet of its children's modes, so one `Panel`
 nested three levels down makes the whole document `ComponentsV2Target`, and planning that against
-`classic()` or `squid_ui_html.target()` is a static error rather than a runtime one.
+`classic()` or `squid_ui.ext.html.target()` is a static error rather than a runtime one.
 
 That reaches `Component` through `render`, so a component that uses a dialect-specific
 primitive declares which dialect it is for:
@@ -778,7 +778,7 @@ between panels, retain them in an application-owned attribute or dictionary. For
 construction per user, an ordinary lookup is enough:
 
 ```python
-from squid_ui_discord.sessions import UserScope
+from squid_ui.ext.discord.sessions import UserScope
 
 
 def make_search(key: UserScope) -> Search:
@@ -1219,14 +1219,14 @@ PlanResult.bindings and PlanResult.resources are ephemeral side tables for a liv
 and `schema_json`. Protocol 1 is current and additively includes `HtmlBody`; incompatible changes
 increment the protocol.
 
-`squid_ui_html.Renderer` accepts only `Scene[HtmlBody]`. It mechanically emits escaped, accessible
+`squid_ui.ext.html.Renderer` accepts only `Scene[HtmlBody]`. It mechanically emits escaped, accessible
 semantic markup with native forms and controls plus action, route, selection, and pager metadata.
 Fragment output is the default; standalone mode adds a document shell, escaped title, locale,
 viewport metadata, and neutral colour-scheme-aware responsive CSS. Caller-supplied CSS is trusted
 host configuration. There is no raw-HTML scene node, unrestricted scene style attribute,
 JavaScript runtime, or transport implementation.
 
-`squid_ui_discord.preview.DiscordPreviewRenderer` preserves the former browser preview for Components V2 scenes.
+`squid_ui.ext.discord.preview.DiscordPreviewRenderer` preserves the former browser preview for Components V2 scenes.
 It is useful for Discord tooling but is not an HTML planning target and cannot draw `HtmlBody`.
 
 ### How a traversal dispatches
@@ -1832,7 +1832,7 @@ distinct last words, 179 used exactly once, so the table would have had to rejec
 owe instead is consistency, which needs no dictionary:
 
 1. **One meaning per word.** `MountSnapshot` named both a view of a live mount and the
-   serialized state that outlives it, and both were exported from `squid_ui_discord`.
+   serialized state that outlives it, and both were exported from `squid_ui.ext.discord`.
 2. **A name uses the same word its own members use.** `MemorySnapshotStore`'s methods were
    `list_records`/`load` and its field was `_records`; only the class name said "snapshot".
 3. **Identity and authority are never one type**, as above.

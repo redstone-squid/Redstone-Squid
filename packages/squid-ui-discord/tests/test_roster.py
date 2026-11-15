@@ -6,7 +6,7 @@ from typing import cast, override
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
+import squid_ui.ext.discord
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
 from squid_ui.chrome import Chrome
@@ -78,7 +78,7 @@ def test_roster_uses_active_chrome_and_renders_routed_slots() -> None:
     )
     result = sl.planning.plan(
         node,
-        target=squid_ui_discord.DISCORD_V2_DPY27,
+        target=squid_ui.ext.discord.DISCORD_V2_DPY27,
         chrome=Chrome(
             waitlist="Queue", full="No seats", slot_count=lambda count, capacity: f"Seats {count}/{capacity}"
         ),
@@ -99,7 +99,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
 
     result = sl.planning.plan(
         sl.roster(sp.place_roster((), SLOTS), key="raid", on_join=join),
-        target=squid_ui_discord.DISCORD_V2_DPY27,
+        target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
     button = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Button))
     await result.bindings[button.action].handler(

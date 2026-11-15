@@ -11,11 +11,15 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
+import squid_ui.ext.discord
 from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.document import Document
 from squid_ui.emoji import Emoji
 from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.adoption import AdoptionError, adopt
+from squid_ui.ext.discord.message_root_wiring import _EntityValues
+from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import (
     ActionStyle,
     Button,
@@ -32,10 +36,6 @@ from squid_ui.primitives import (
     Text,
     Thumbnail,
 )
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.adoption import AdoptionError, adopt
-from squid_ui_discord.message_root_wiring import _EntityValues
-from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class Paginator(discord.ui.View):
@@ -785,7 +785,7 @@ async def test_the_adopted_scene_conforms_strictly() -> None:
     await message_root.dispatch("next", interaction)
 
     drawn = interaction.response.edit_message.await_args.kwargs["view"]
-    assert squid_ui_discord.conform(drawn, strict=True) == []
+    assert squid_ui.ext.discord.conform(drawn, strict=True) == []
 
 
 async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
@@ -817,7 +817,7 @@ def _record(errors: list[BaseException]) -> Any:
 
 def test_adoption_error_is_a_layout_error() -> None:
     assert issubclass(AdoptionError, sl.errors.LayoutError)
-    assert AdoptionError in (squid_ui_discord.AdoptionError,)
+    assert AdoptionError in (squid_ui.ext.discord.AdoptionError,)
 
 
 def test_button_translation_keeps_style_and_emoji() -> None:

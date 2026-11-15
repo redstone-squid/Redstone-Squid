@@ -17,7 +17,7 @@ def test_patterns_import_without_a_transport_installed() -> None:
         "discord",
         "anyio",
         "squid_storage",
-        "squid_ui_discord",
+        "squid_ui.ext.discord",
     )
 
 

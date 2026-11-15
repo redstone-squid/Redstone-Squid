@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-import squid_ui_slack as slack
+import squid_ui.ext.slack as slack
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile

@@ -9,10 +9,10 @@ negative example needs review.
 from typing import assert_type
 
 import squid_ui as sl
+from squid_ui.ext.discord.target import classic, v2
 from squid_ui.planning import ClassicTarget, ComponentsV2Target, plan
 from squid_ui.primitives import Boundary, Card, Panel, Text
 from squid_ui.semantic import Stack
-from squid_ui_discord.target import classic, v2
 
 # --- a container takes the meet of its children's modes ----------------------------------
 

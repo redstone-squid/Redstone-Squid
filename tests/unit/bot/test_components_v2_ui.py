@@ -8,7 +8,7 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission import build_card as build_card_module
 from squid.bot.submission.build_card import build_description, build_metadata_fields, render_build_card
 from squid.bot.submission.search_view import SearchScreen
@@ -27,8 +27,8 @@ from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
 from squid_i18n import source_text
-from squid_ui_discord import SessionSpec
-from squid_ui_discord.testing import (
+from squid_ui.ext.discord import SessionSpec
+from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     assert_within_limits,
     commit_render,

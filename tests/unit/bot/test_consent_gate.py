@@ -14,7 +14,7 @@ import pytest
 from whenever import Instant
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
@@ -33,11 +33,9 @@ from squid.bot.accounts.consent import (
     request_consent,
 )
 from squid.core.sentinel import NOT_ASKED
-from squid_ui.testing import RecordingResponder, press
-from squid_ui.text import NEUTRAL, resolve_text
-from squid_ui_discord import Everyone, SessionKey
-from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import (
+from squid_ui.ext.discord import Everyone, SessionKey
+from squid_ui.ext.discord.sessions import Opened
+from squid_ui.ext.discord.testing import (
     ContextHarness,
     InteractionHarness,
     MessageHarness,
@@ -46,6 +44,8 @@ from squid_ui_discord.testing import (
     interaction_harness,
     message_harness,
 )
+from squid_ui.testing import RecordingResponder, press
+from squid_ui.text import NEUTRAL, resolve_text
 from tests.support.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)

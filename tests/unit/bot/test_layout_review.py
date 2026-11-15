@@ -2,8 +2,8 @@
 
 import squid_ui as sl
 from squid.bot.showcase.review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
-from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner
-from squid_ui_discord.testing import (
+from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler, Owner
+from squid_ui.ext.discord.testing import (
     assert_within_limits,
     commit_render,
     delivered_to,

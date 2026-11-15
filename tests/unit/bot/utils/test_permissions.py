@@ -9,7 +9,7 @@ import pytest
 from discord.ext.commands import Context
 from whenever import Instant
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account

@@ -7,15 +7,15 @@ import discord
 import pytest
 from discord.ext import commands
 
-import squid_ui_discord
+import squid_ui.ext.discord
 from squid_reactivity import EventLedger, observe_events, transaction
 from squid_reactivity.diagnostics import OperationEventSnapshot
-from squid_ui_discord import Owner, live
-from squid_ui_discord.devtools import DevTools, open_devtools
-from squid_ui_discord.devtools_runtime import DevToolsRuntime
-from squid_ui_discord.devtools_view import DevToolsSection
-from squid_ui_discord.routing import Router
-from squid_ui_discord.testing import (
+from squid_ui.ext.discord import Owner, live
+from squid_ui.ext.discord.devtools import DevTools, open_devtools
+from squid_ui.ext.discord.devtools_runtime import DevToolsRuntime
+from squid_ui.ext.discord.devtools_view import DevToolsSection
+from squid_ui.ext.discord.routing import Router
+from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
     assert_within_limits,
@@ -36,7 +36,7 @@ class FakeBot:
 class DevContext(ContextHarness):
     def __init__(self, *, bot: FakeBot | None = None) -> None:
         super().__init__(message=message_harness(), bot=FakeBot() if bot is None else bot, user_id=1)
-        squid_ui_discord.install(cast(Any, self.bot))
+        squid_ui.ext.discord.install(cast(Any, self.bot))
         self.send_help = AsyncCallRecorder()
 
 
@@ -69,7 +69,7 @@ class TestGate:
 class TestDashboardCommand:
     async def test_command_tree_has_one_optional_tab_choice(self) -> None:
         async with commands.Bot(command_prefix="!", intents=discord.Intents.none()) as bot:
-            runtime = squid_ui_discord.install(bot)
+            runtime = squid_ui.ext.discord.install(bot)
             await bot.add_cog(DevTools(bot))
 
             command = bot.get_command("dev ui")
@@ -180,7 +180,7 @@ class TestDashboardCommand:
 
     async def test_routes_uses_the_context_client(self) -> None:
         async with commands.Bot(command_prefix="!", intents=discord.Intents.none()) as bot:
-            runtime = squid_ui_discord.install(bot)
+            runtime = squid_ui.ext.discord.install(bot)
             router = Router()
 
             async def close(_interaction: discord.Interaction) -> None: ...

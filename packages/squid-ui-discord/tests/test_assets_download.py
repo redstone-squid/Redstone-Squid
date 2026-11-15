@@ -9,15 +9,15 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
+import squid_ui.ext.discord
 from squid_ui import scene
 from squid_ui.document import DocumentLike
+from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
+from squid_ui.ext.discord.preview import DiscordPreviewRenderer
+from squid_ui.ext.discord.renderer import V2Renderer
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime.component import Component
 from squid_ui.text import Markup
-from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
-from squid_ui_discord.preview import DiscordPreviewRenderer
-from squid_ui_discord.renderer import V2Renderer
 
 
 def _inline() -> sl.document.Asset:
@@ -98,7 +98,7 @@ class _DownloadComponent(Component[sl.ComponentsV2Target]):
 async def _send(message_root: MessageRoot) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     delivered: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def destination(payload: squid_ui_discord.message_payload.MessagePayload) -> delivery.DeliveryResult:
+    async def destination(payload: squid_ui.ext.discord.message_payload.MessagePayload) -> delivery.DeliveryResult:
         # Materializing the files is the destination's job, so this is where an asset the
         # host never resolved is refused.
         delivered.append((payload.layout, payload.build_files()))
@@ -156,7 +156,7 @@ async def test_stream_delivery_reads_off_loop_and_replays_after_close() -> None:
     stream = Stream(b"prefix-image")
     stream.seek(7)
     asset = sl.file(stream, filename="image.png")
-    payload = squid_ui_discord.render_static(
+    payload = squid_ui.ext.discord.render_static(
         sl.stack(sl.media(asset, key="preview"), sl.download(asset, key="download"))
     )
     assert read_threads == []
@@ -183,14 +183,14 @@ async def test_stream_delivery_reads_off_loop_and_replays_after_close() -> None:
 @pytest.mark.parametrize("classic", [False, True])
 def test_url_download_needs_no_upload(classic: bool) -> None:
     node = sl.download("https://example.org/report.txt", label="Report", key="report")
-    rendered = squid_ui_discord.classic.render_static(node) if classic else squid_ui_discord.render_static(node)
+    rendered = squid_ui.ext.discord.classic.render_static(node) if classic else squid_ui.ext.discord.render_static(node)
     assert rendered.build_files() == []
 
 
 def test_path_media_and_download_share_one_upload(tmp_path: Path) -> None:
     path = tmp_path / "image.png"
     document = sl.stack(sl.media(path, key="preview"), sl.download(path, key="download"))
-    rendered = squid_ui_discord.render_static(document)
+    rendered = squid_ui.ext.discord.render_static(document)
     path.write_bytes(b"image")
     files = rendered.build_files()
     try:
@@ -209,4 +209,4 @@ def test_different_files_cannot_share_an_attachment_name() -> None:
         key="gallery",
     )
     with pytest.raises(sl.errors.LayoutInvariantError, match="share filename"):
-        squid_ui_discord.render_static(document)
+        squid_ui.ext.discord.render_static(document)

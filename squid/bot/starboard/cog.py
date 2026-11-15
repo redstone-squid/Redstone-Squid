@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from whenever import Instant
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
@@ -29,7 +29,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.posts.domain import starboard_entry_key
 from squid.starboard.models import OriginMessage
-from squid_ui_discord.i18n import to_locale_str
+from squid_ui.ext.discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app

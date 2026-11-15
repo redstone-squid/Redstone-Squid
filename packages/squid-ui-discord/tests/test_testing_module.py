@@ -4,11 +4,11 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as squid_discord
+import squid_ui.ext.discord as squid_discord
 from squid_ui.errors import UnsolvableLayoutError
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.delivery import DeliveryResult
 from squid_ui.primitives import Heading, Panel, RoutedButton, Row, Sep, Text
-from squid_ui_discord import testing as sd
-from squid_ui_discord.delivery import DeliveryResult
 
 
 class TestPayloadQueries:

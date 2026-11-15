@@ -18,7 +18,7 @@ from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
-from squid_ui_discord import send_to
+from squid_ui.ext.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

@@ -5,13 +5,13 @@ import pytest
 
 import squid_ui as sl
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.renderer import V2Renderer
+from squid_ui.ext.discord.target import NativeItem, v2
 from squid_ui.planning import plan
 from squid_ui.planning.resources import Axis
 from squid_ui.primitives import Panel, Text
-from squid_ui_discord import DISCORD_V2_DPY27
-from squid_ui_discord.limits import V2Limits
-from squid_ui_discord.renderer import V2Renderer
-from squid_ui_discord.target import NativeItem, v2
 
 
 def test_native_items_prepare_once_and_publish_only_visible_resources() -> None:

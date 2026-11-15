@@ -10,19 +10,19 @@ import discord
 import pytest
 from whenever import Instant
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.diagnostics.screen import ERROR_CHROME, ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.models import ErrorReport
+from squid_ui.ext.discord import (
+    V2_LIMITS as LIMITS,
+)
+from squid_ui.ext.discord import MessageRoot, Owner, Private, SessionSpec
+from squid_ui.ext.discord.testing import AsyncCallRecorder, assert_within_limits, commit_render, interaction_harness
 from squid_ui.pages import PagePosition
 from squid_ui.runtime import UIExecutionHost
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
-from squid_ui_discord import (
-    V2_LIMITS as LIMITS,
-)
-from squid_ui_discord import MessageRoot, Owner, Private, SessionSpec
-from squid_ui_discord.testing import AsyncCallRecorder, assert_within_limits, commit_render, interaction_harness
 from tests.support.discord import make_layout_bot
 
 

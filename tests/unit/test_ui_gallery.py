@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from tests.support.ui_gallery import GalleryRecorder
 
 

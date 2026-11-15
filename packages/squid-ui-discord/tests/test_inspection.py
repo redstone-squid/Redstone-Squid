@@ -9,13 +9,13 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_ui as sl
-import squid_ui_discord
-import squid_ui_discord.target
-from squid_ui_discord import V2_LIMITS as LIMITS
-from squid_ui_discord import ExistingLayoutError, LimitViolationError, conform
-from squid_ui_discord import testing as sd
-from squid_ui_discord.inspection import ViolationCode, audit, cost, measure
-from squid_ui_discord.limits import Axis
+import squid_ui.ext.discord
+import squid_ui.ext.discord.target
+from squid_ui.ext.discord import V2_LIMITS as LIMITS
+from squid_ui.ext.discord import ExistingLayoutError, LimitViolationError, conform
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.inspection import ViolationCode, audit, cost, measure
+from squid_ui.ext.discord.limits import Axis
 
 
 def _rich_view() -> discord.ui.LayoutView:
@@ -212,18 +212,18 @@ class TestReservationAxes:
     """A reservation is a smaller target, so every axis behaves the same way."""
 
     def test_text_reservation_shrinks_the_text_budget(self):
-        target = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: 1000}))
+        target = squid_ui.ext.discord.target.v2().reserve(squid_ui.ext.discord.ResourceCost({Axis.DISPLAY_TEXT: 1000}))
         assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_text == LIMITS.total_text - 1000
 
     def test_component_reservation_shrinks_the_component_budget(self):
-        target = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({Axis.COMPONENTS: 6}))
+        target = squid_ui.ext.discord.target.v2().reserve(squid_ui.ext.discord.ResourceCost({Axis.COMPONENTS: 6}))
         assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_components == LIMITS.total_components - 6
 
     def test_local_caps_are_untouched(self):
-        reserved = squid_ui_discord.target.v2().reserve(
-            squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: 500, Axis.COMPONENTS: 5, Axis.ATTACHMENTS: 2})
+        reserved = squid_ui.ext.discord.target.v2().reserve(
+            squid_ui.ext.discord.ResourceCost({Axis.DISPLAY_TEXT: 500, Axis.COMPONENTS: 5, Axis.ATTACHMENTS: 2})
         )
         assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.components.row_buttons == LIMITS.components.row_buttons
@@ -233,19 +233,19 @@ class TestReservationAxes:
     def test_unknown_resources_are_rejected(self):
         with pytest.raises(sl.errors.LayoutInvariantError, match="no reservable resource"):
             # An axis the type system cannot name; the runtime rejection is the behaviour under test.
-            squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({cast(Axis, "pixels"): 1}))
+            squid_ui.ext.discord.target.v2().reserve(squid_ui.ext.discord.ResourceCost({cast(Axis, "pixels"): 1}))
 
     def test_reservation_never_goes_negative(self):
-        reserved = squid_ui_discord.target.v2().reserve(
-            squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: LIMITS.total_text * 2})
+        reserved = squid_ui.ext.discord.target.v2().reserve(
+            squid_ui.ext.discord.ResourceCost({Axis.DISPLAY_TEXT: LIMITS.total_text * 2})
         )
         assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.total_text == 0
 
     def test_identity_is_preserved(self):
-        reserved = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({Axis.COMPONENTS: 1}))
+        reserved = squid_ui.ext.discord.target.v2().reserve(squid_ui.ext.discord.ResourceCost({Axis.COMPONENTS: 1}))
         assert reserved.id == "discord.components-v2"
-        assert reserved.capabilities == squid_ui_discord.target.v2().capabilities
+        assert reserved.capabilities == squid_ui.ext.discord.target.v2().capabilities
         assert "discord.item" in reserved.extensions
 
 
@@ -254,8 +254,8 @@ class TestReservedPlanning:
 
     def test_text_reservation_shrinks_the_composed_view(self):
         body = sl.primitives.Text("x" * 5000)
-        reserved = squid_ui_discord.render_message(
-            [body], reservation=squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: 1500})
+        reserved = squid_ui.ext.discord.render_message(
+            [body], reservation=squid_ui.ext.discord.ResourceCost({Axis.DISPLAY_TEXT: 1500})
         ).view
         assert reserved.content_length() <= LIMITS.total_text - 1500
 
@@ -263,13 +263,15 @@ class TestReservedPlanning:
         # Twelve text components fit an unreserved message and cannot fit five, so the
         # reservation has to be the difference between composing and refusing.
         document = [sl.primitives.Text(f"line {index}", overflow=sl.primitives.Never()) for index in range(12)]
-        assert len(list(squid_ui_discord.render_message(document).view.walk_children())) == 12
+        assert len(list(squid_ui.ext.discord.render_message(document).view.walk_children())) == 12
         with pytest.raises(sl.errors.UnsolvableLayoutError):
-            squid_ui_discord.render_message(document, reservation=squid_ui_discord.ResourceCost({Axis.COMPONENTS: 35}))
+            squid_ui.ext.discord.render_message(
+                document, reservation=squid_ui.ext.discord.ResourceCost({Axis.COMPONENTS: 35})
+            )
 
     def test_a_reserved_plan_plus_the_host_fits_the_real_budget(self):
         host = sd.layout_view(discord.ui.TextDisplay("h" * 2000))
-        fragment_view = squid_ui_discord.render_message(
+        fragment_view = squid_ui.ext.discord.render_message(
             [sl.primitives.Text("f" * 5000)], reservation=measure(host).cost
         ).view
         combined = host.content_length() + fragment_view.content_length()

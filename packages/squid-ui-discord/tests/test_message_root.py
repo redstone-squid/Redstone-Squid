@@ -19,8 +19,8 @@ import pytest
 from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 import squid_ui as sl
-import squid_ui_discord
-import squid_ui_discord.message_root_contracts
+import squid_ui.ext.discord
+import squid_ui.ext.discord.message_root_contracts
 from squid_i18n import tr
 from squid_reactivity import EventLedger, current_transaction, observe_events
 from squid_ui import (
@@ -38,6 +38,30 @@ from squid_ui import form as sl_form
 from squid_ui.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import (
+    Everyone,
+    MessageRoot,
+    MessageRootScheduler,
+    Owner,
+    PauseUpdates,
+    RenewEphemeral,
+    Users,
+    delivery,
+)
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.access import Allowed, Check, Denied
+from squid_ui.ext.discord.message_root_candidates import _BusyPaint
+from squid_ui.ext.discord.message_root_contracts import MessageRootStatus
+from squid_ui.ext.discord.message_root_wiring import _custom_id
+from squid_ui.ext.discord.testing import (
+    AsyncCallRecorder,
+    ContextHarness,
+    assert_within_limits,
+    commit_render,
+    delivered_to,
+    interaction_harness,
+    message_harness,
+)
 from squid_ui.forms import FormField, FormSpec, TextField
 from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest, InteractionKind
 from squid_ui.primitives import (
@@ -72,30 +96,6 @@ from squid_ui.runtime import (
 from squid_ui.semantic import Paragraph
 from squid_ui.testing import text_component
 from squid_ui.text import Localization
-from squid_ui_discord import (
-    Everyone,
-    MessageRoot,
-    MessageRootScheduler,
-    Owner,
-    PauseUpdates,
-    RenewEphemeral,
-    Users,
-    delivery,
-)
-from squid_ui_discord import testing as sd
-from squid_ui_discord.access import Allowed, Check, Denied
-from squid_ui_discord.message_root_candidates import _BusyPaint
-from squid_ui_discord.message_root_contracts import MessageRootStatus
-from squid_ui_discord.message_root_wiring import _custom_id
-from squid_ui_discord.testing import (
-    AsyncCallRecorder,
-    ContextHarness,
-    assert_within_limits,
-    commit_render,
-    delivered_to,
-    interaction_harness,
-    message_harness,
-)
 
 
 @dataclass(slots=True)
@@ -271,8 +271,8 @@ class TestCandidateSettlement:
 async def _armed_root(
     component: Component[Any, Any] | None = None,
     *,
-    access: squid_ui_discord.AccessPolicy | None = None,
-    on_error: squid_ui_discord.message_root_contracts.ErrorHook | None = None,
+    access: squid_ui.ext.discord.AccessPolicy | None = None,
+    on_error: squid_ui.ext.discord.message_root_contracts.ErrorHook | None = None,
 ) -> tuple[MessageRoot, Any, MessageRootScheduler]:
     """Deliver an ephemeral root with a token inside its warning window and arm renewal."""
     now = datetime.now(UTC)
@@ -436,7 +436,7 @@ class TestEphemeralRenewal:
         class StaleHandle:
             permanent = False
             expires_at: datetime | None = datetime.now(UTC) + timedelta(seconds=30)
-            mode = squid_ui_discord.MessageMode.COMPONENTS_V2
+            mode = squid_ui.ext.discord.MessageMode.COMPONENTS_V2
 
             def expired(self) -> bool:
                 return False
@@ -510,7 +510,7 @@ class _RefusingHandle:
 
     permanent = False
     expires_at: datetime | None = None
-    mode = squid_ui_discord.MessageMode.COMPONENTS_V2
+    mode = squid_ui.ext.discord.MessageMode.COMPONENTS_V2
 
     def expired(self) -> bool:
         return False
@@ -2400,7 +2400,7 @@ class _Destination:
         self.raises = raises
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def __call__(self, presentation: squid_ui_discord.message_payload.MessagePayload) -> Any:
+    async def __call__(self, presentation: squid_ui.ext.discord.message_payload.MessagePayload) -> Any:
         self.calls.append((presentation.layout, presentation.build_files()))
         if self.raises is not None:
             raise self.raises
@@ -3091,7 +3091,7 @@ class TestEditHandles:
         class _Stale:
             permanent = False
             expires_at: datetime | None = None
-            mode = squid_ui_discord.MessageMode.COMPONENTS_V2
+            mode = squid_ui.ext.discord.MessageMode.COMPONENTS_V2
             writes = 0
 
             def expired(self) -> bool:
@@ -4676,14 +4676,14 @@ class _OverlongText(Component[sl.ComponentsV2Target]):
 
 async def test_an_ordinary_layout_choice_is_not_logged_as_degraded(caplog: pytest.LogCaptureFixture) -> None:
     # The planner reports which strategy it chose for every ActionControls, even the preferred one.
-    with caplog.at_level("WARNING", logger="squid_ui_discord.message_root"):
+    with caplog.at_level("WARNING", logger="squid_ui.ext.discord.message_root"):
         commit_render(MessageRoot(_ActionsOnly(), access=Everyone(), timeout=None))
 
     assert "layout degraded" not in caplog.text
 
 
 async def test_truncated_content_is_logged_as_degraded(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level("WARNING", logger="squid_ui_discord.message_root"):
+    with caplog.at_level("WARNING", logger="squid_ui.ext.discord.message_root"):
         commit_render(MessageRoot(_OverlongText(), access=Everyone(), timeout=None))
 
     assert "layout degraded" in caplog.text

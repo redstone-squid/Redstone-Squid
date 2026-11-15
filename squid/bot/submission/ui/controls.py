@@ -6,7 +6,7 @@ from uuid import UUID
 
 from discord import Interaction
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.navigation.destinations import DraftDetail
 from squid.bot.routes import routes

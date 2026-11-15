@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from discord import app_commands
 from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.permissions.domain import CATALOGUE, CheckMode, PermissionNode
 from squid.permissions.errors import PermissionDeniedError, require_check
 

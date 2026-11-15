@@ -12,9 +12,9 @@ DISTRIBUTIONS = {
     "squid-replication": "squid_replication",
     "squid-storage": "squid_storage",
     "squid-ui": "squid_ui",
-    "squid-ui-discord": "squid_ui_discord",
-    "squid-ui-slack": "squid_ui_slack",
-    "squid-ui-html": "squid_ui_html",
+    "squid-ui-discord": "squid_ui/ext/discord",
+    "squid-ui-slack": "squid_ui/ext/slack",
+    "squid-ui-html": "squid_ui/ext/html",
     "squid-ui-widgets": "squid_ui_widgets",
 }
 
@@ -39,6 +39,13 @@ def _validate_wheel(path: Path, distribution: str, package: str, version: str) -
         assert metadata["Requires-Python"] == ">=3.14"
         assert metadata.get_all("License-File") == ["LICENSE"]
         assert f"{package}/py.typed" in members
+        assert f"{package}/__init__.py" in members
+        if package.startswith("squid_ui/ext/"):
+            assert "squid_ui/__init__.py" not in members
+            assert "squid_ui/ext/__init__.py" not in members
+            assert all(
+                name.startswith(f"{package}/") or ".dist-info/" in name for name in members if not name.endswith("/")
+            )
         assert any(name.endswith(".dist-info/licenses/LICENSE") for name in members)
         for raw_requirement in metadata.get_all("Requires-Dist", []):
             name, specifier = _requirement_name_and_specifier(raw_requirement)
@@ -47,7 +54,7 @@ def _validate_wheel(path: Path, distribution: str, package: str, version: str) -
 
 
 def _validate_sdist(path: Path, distribution: str, package: str, version: str) -> None:
-    prefix = f"{package}-{version}"
+    prefix = f"{distribution.replace('-', '_')}-{version}"
     with tarfile.open(path, "r:gz") as sdist:
         members = {member.name for member in sdist.getmembers()}
     for required in ("LICENSE", "README.md", "pyproject.toml", f"src/{package}/py.typed"):
@@ -62,8 +69,9 @@ def main() -> None:
     args = parser.parse_args()
     expected_files: set[str] = set()
     for distribution, package in DISTRIBUTIONS.items():
-        wheel_name = f"{package}-{args.version}-py3-none-any.whl"
-        sdist_name = f"{package}-{args.version}.tar.gz"
+        artifact_name = distribution.replace("-", "_")
+        wheel_name = f"{artifact_name}-{args.version}-py3-none-any.whl"
+        sdist_name = f"{artifact_name}-{args.version}.tar.gz"
         expected_files.update({wheel_name, sdist_name})
         _validate_wheel(args.directory / wheel_name, distribution, package, args.version)
         _validate_sdist(args.directory / sdist_name, distribution, package, args.version)

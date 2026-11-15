@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.navigation.destinations import Destination
 from squid.bot.navigation.router import InvalidAddress, ScreenRouter
 from squid.bot.routes import routes

@@ -2,14 +2,14 @@ import pytest
 
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning import plan
-from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.primitives import Text
-from squid_ui_discord.adapter import (
+from squid_ui.ext.discord.adapter import (
     discord_py_adapter_profile,
     require_discord_py_capability,
 )
-from squid_ui_discord.target import v2
+from squid_ui.ext.discord.target import v2
+from squid_ui.planning import plan
+from squid_ui.planning.adapter import AdapterCapability
+from squid_ui.primitives import Text
 
 
 def test_discord_py_boundary_rejects_unmatched_version() -> None:

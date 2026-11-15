@@ -16,12 +16,12 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import Component, PressEvent, Reactive, state
+from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.profiling import PresentationStatus
 from squid_ui.runtime import CellAddress, LocalTopicBus, transaction
-from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
-from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 @dataclass(frozen=True, slots=True)

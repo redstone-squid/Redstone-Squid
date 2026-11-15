@@ -3,7 +3,7 @@
 import discord
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.ui import (
     CardField,
     card_node,

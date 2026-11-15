@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import cast, override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.domain import (
     MAX_BIO_LENGTH,

@@ -4,13 +4,15 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
-import squid_ui_slack
+import squid_ui.ext.html
+import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord.limits import ClassicLimits, EmbedLimits, V2Limits
+from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
@@ -19,25 +21,23 @@ from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.semantic import Importance, ListItem
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
-from squid_ui_discord.limits import ClassicLimits, EmbedLimits, V2Limits
-from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 DISCORD = AdapterProfile(DiscordAdapter, "spill.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "spill.slack", "1")
 SLACK_TARGETS: list[Target[Any, Any, Any, Any]] = [
-    squid_ui_slack.message_target(adapter=SLACK),
-    squid_ui_slack.home_target(adapter=SLACK),
+    squid_ui.ext.slack.message_target(adapter=SLACK),
+    squid_ui.ext.slack.home_target(adapter=SLACK),
 ]
 TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(DISCORD),
     classic_target(DISCORD),
-    squid_ui_html.target(),
+    squid_ui.ext.html.target(),
     *SLACK_TARGETS,
 ]
 SMALL_TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(DISCORD, limits=V2Limits(total_text=9)),
     classic_target(DISCORD, limits=ClassicLimits(embeds=EmbedLimits(field_value=4))),
-    squid_ui_html.target(),
+    squid_ui.ext.html.target(),
     *(
         replace(target, limits=replace(target.limits, components=replace(target.limits.components, section_text=10)))
         for target in SLACK_TARGETS
@@ -80,7 +80,7 @@ def test_spilled_list_keeps_original_ordered_number_and_source(target: Target[An
     assert [event.path.split("/")[-1] for event in result.report.events] == ["low"]
     assert result.allocation is not None
     if isinstance(result.scene.body, scene.HtmlBody):
-        assert 'value="2"' in squid_ui_html.Renderer().draw(result.scene, plan=result)
+        assert 'value="2"' in squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
     else:
         assert "2. High" in wire
 
@@ -190,7 +190,7 @@ def test_intermediate_shortening_probes_keep_useful_content_with_bounded_work(co
 
 
 @pytest.mark.parametrize(
-    "target", [components_v2_target(DISCORD), squid_ui_html.target()], ids=lambda target: target.id
+    "target", [components_v2_target(DISCORD), squid_ui.ext.html.target()], ids=lambda target: target.id
 )
 def test_positive_stretch_is_a_finite_allowance(target: Target[Any, Any, Any, Any]) -> None:
     options = CompositionOptions(automatic=True)

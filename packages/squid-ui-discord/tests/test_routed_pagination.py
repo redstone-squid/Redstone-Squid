@@ -8,6 +8,10 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
+from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
+from squid_ui.ext.discord.modal import build_form_modal
+from squid_ui.ext.discord.routing import Router
+from squid_ui.ext.discord.testing import interaction_harness
 from squid_ui.ownership import Controlled, Uncontrolled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, Target, plan
@@ -15,10 +19,6 @@ from squid_ui.planning.navigation import default_nav, page_jump_form, page_jump_
 from squid_ui.presentation import CursorUpdate, PresentationState
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import RoutedPage
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
-from squid_ui_discord.modal import build_form_modal
-from squid_ui_discord.routing import Router
-from squid_ui_discord.testing import interaction_harness
 from squid_ui_widgets import testing as wt
 
 

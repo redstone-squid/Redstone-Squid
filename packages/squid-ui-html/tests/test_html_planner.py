@@ -4,11 +4,12 @@ from datetime import UTC, date, datetime, time
 from typing import Any, cast, override
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
+import squid_ui.ext.html
 from squid_ui import grids, scene, testing
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.ext.discord.limits import Axis
 from squid_ui.forms import (
     BoolField,
     ChoiceField,
@@ -37,7 +38,6 @@ from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.runtime.presentation_state import PresentationState, SelectionState
 from squid_ui.target_types import HtmlTarget, Renderable
 from squid_ui.temporal import ZonedDateTime
-from squid_ui_discord.limits import Axis
 
 
 async def _pressed(_event: ActionEvent) -> None:
@@ -57,7 +57,7 @@ def _elements(result: PlanResult[scene.HtmlBody]) -> tuple[scene.HtmlElement, ..
 
 
 def test_html_target_has_an_unbounded_semantic_identity() -> None:
-    target = squid_ui_html.target()
+    target = squid_ui.ext.html.target()
 
     assert target.triple == "html.semantic+squid-ui.html"
     assert target.capacities == {}
@@ -70,7 +70,7 @@ def test_html_target_has_an_unbounded_semantic_identity() -> None:
 
 def test_discord_primitives_are_rejected_by_html_planning() -> None:
     with pytest.raises(JointUnsupportedError):
-        sl.planning.plan(sl.primitives.Text("exact"), target=squid_ui_html.target())  # type: ignore[arg-type]
+        sl.planning.plan(sl.primitives.Text("exact"), target=squid_ui.ext.html.target())  # type: ignore[arg-type]
 
 
 def test_unknown_renderables_are_rejected_by_html_planning() -> None:
@@ -80,7 +80,7 @@ def test_unknown_renderables_are_rejected_by_html_planning() -> None:
     # A Renderable subclass nobody taught the vocabulary about is refused by name, not
     # misdescribed as a Discord primitive.
     with pytest.raises(JointUnsupportedError):
-        sl.planning.plan(cast(Any, Unregistered()), target=squid_ui_html.target())
+        sl.planning.plan(cast(Any, Unregistered()), target=squid_ui.ext.html.target())
 
 
 def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
@@ -162,7 +162,7 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
         key="semantic",
     )
 
-    result = sl.planning.plan(document, target=squid_ui_html.target(), localization=sl.text.Localization("en-GB"))
+    result = sl.planning.plan(document, target=squid_ui.ext.html.target(), localization=sl.text.Localization("en-GB"))
     elements = _elements(result)
     tags = {element.tag for element in elements}
 
@@ -237,7 +237,7 @@ def test_html_planner_renders_portable_forms_inline_with_prefill(shared: bool) -
 
     result = sl.planning.plan(
         sl.form("Save", spec, key="edit", on_submit=_submitted),
-        target=squid_ui_html.target(),
+        target=squid_ui.ext.html.target(),
         composition=sl.planning.CompositionOptions(automatic=True) if shared else None,
     )
     elements = _elements(result)
@@ -266,7 +266,7 @@ def test_html_planner_renders_portable_forms_inline_with_prefill(shared: bool) -
 
 
 def test_html_only_applies_authored_budgets_and_paging() -> None:
-    unconstrained = sl.planning.plan(sl.paragraph("x" * 8000), target=squid_ui_html.target())
+    unconstrained = sl.planning.plan(sl.paragraph("x" * 8000), target=squid_ui.ext.html.target())
     assert (
         sum(
             len(node.content)
@@ -279,7 +279,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
 
     constrained = sl.planning.plan(
         sl.budget(sl.truncate(sl.paragraph("abcdefghij")), min=2, prefer=4),
-        target=squid_ui_html.target(),
+        target=squid_ui.ext.html.target(),
     )
     assert any(event.code == "composition.effect" for event in constrained.report.events)
     assert "abc" in [
@@ -288,7 +288,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     with pytest.raises(JointInfeasibleError):
         sl.planning.plan(
             sl.budget(sl.truncate(sl.paragraph("abcdefghij")), min=2, prefer=4),
-            target=squid_ui_html.target(),
+            target=squid_ui.ext.html.target(),
             strict=True,
         )
 
@@ -297,7 +297,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
         key="manual",
         chars=5,
     )
-    second = sl.planning.plan(paged, target=squid_ui_html.target(), positions={"manual": PagePosition(page=1)})
+    second = sl.planning.plan(paged, target=squid_ui.ext.html.target(), positions={"manual": PagePosition(page=1)})
     assert second.scene.pagers[0].page == 1
     assert "bbbb" in [
         node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
@@ -310,8 +310,8 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
 def test_html_searches_authored_fallbacks_only_under_an_explicit_budget() -> None:
     fallback = sl.fallback(sl.paragraph("preferred is too long"), sl.paragraph("short"))
 
-    preferred = sl.planning.plan(fallback, target=squid_ui_html.target())
-    constrained = sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=squid_ui_html.target())
+    preferred = sl.planning.plan(fallback, target=squid_ui.ext.html.target())
+    constrained = sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=squid_ui.ext.html.target())
 
     assert "preferred is too long" in [
         node.content for node in testing.walk(preferred.scene.body.children) if isinstance(node, scene.HtmlText)
@@ -324,7 +324,7 @@ def test_html_searches_authored_fallbacks_only_under_an_explicit_budget() -> Non
         event.code == "composition.effect" and event.message == "Replacement" for event in constrained.report.events
     )
     with pytest.raises(JointInfeasibleError):
-        sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=squid_ui_html.target(), strict=True)
+        sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=squid_ui.ext.html.target(), strict=True)
 
 
 def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> None:
@@ -333,13 +333,13 @@ def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> No
     memo = PlanMemo()
     first = sl.planning.plan(
         sl.download(asset, label="Report", key="report"),
-        target=squid_ui_html.target(),
+        target=squid_ui.ext.html.target(),
         cache=cache,
         memo=memo,
     )
     exact = sl.planning.plan(
         sl.download(asset, label="Report", key="report"),
-        target=squid_ui_html.target(),
+        target=squid_ui.ext.html.target(),
         cache=cache,
     )
 
@@ -359,7 +359,7 @@ def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
         sl.navigation(sl.nav_option("Home", key="home"), sl.nav_option("Away", key="away"), key="nav"),
     )
 
-    result = sl.planning.plan(document, target=squid_ui_html.target(), session=session)
+    result = sl.planning.plan(document, target=squid_ui.ext.html.target(), session=session)
 
     current = [
         attribute.value
@@ -391,17 +391,19 @@ def test_html_paging_honors_min_fill() -> None:
             if isinstance(child, scene.HtmlText) and child.content in {"aaaa", "bbbb", "cccc", "dddd"}
         )
 
-    default = sl.planning.plan(build(0), target=squid_ui_html.target())
+    default = sl.planning.plan(build(0), target=squid_ui.ext.html.target())
     assert default.allocation is not None
     assert default.scene.pagers[0].pages == 2
 
-    filled = sl.planning.plan(build(9), target=squid_ui_html.target())
+    filled = sl.planning.plan(build(9), target=squid_ui.ext.html.target())
     assert first_page_text(filled) == "aaaabbbbcccc"
 
 
 def test_html_character_pages_reconstruct_styled_prose_without_counting_chrome() -> None:
     result = sl.planning.plan(
-        sl.paged(sl.paragraph(sl.strong("x" * 90)), key="body", chars=30), target=squid_ui_html.target(), strict=True
+        sl.paged(sl.paragraph(sl.strong("x" * 90)), key="body", chars=30),
+        target=squid_ui.ext.html.target(),
+        strict=True,
     )
     assert result.allocation is not None
     identity = next(iter(result.allocation.regions))
@@ -423,7 +425,7 @@ def test_html_character_pages_reconstruct_styled_prose_without_counting_chrome()
 def test_html_character_pages_keep_unbreakable_groups_intact() -> None:
     document = sl.paged(sl.unbreakable(sl.group(sl.paragraph("a" * 4), sl.paragraph("b" * 4))), key="body", chars=5)
     with pytest.raises(UnsolvableLayoutError):
-        sl.planning.plan(document, target=squid_ui_html.target())
+        sl.planning.plan(document, target=squid_ui.ext.html.target())
 
 
 async def test_html_list_page_ownership_drives_navigation_without_cursor_writes() -> None:
@@ -434,7 +436,7 @@ async def test_html_list_page_ownership_drives_navigation_without_cursor_writes(
 
     result = sl.planning.plan(
         sl.bullets("a", "b", "c", key="list", ordered=True, page_size=2, page=sl.controlled(1, changed)),
-        target=squid_ui_html.target(),
+        target=squid_ui.ext.html.target(),
     )
     entries = [item for item in _elements(result) if item.tag is scene.HtmlTag.LI]
     assert len(entries) == 1
@@ -459,7 +461,7 @@ def test_html_routed_paging_rebuilds_route_ids_with_a_shared_cache() -> None:
                     -1, lambda page, prefix=prefix: f"{prefix}:{page}", lambda prefix=prefix: f"{prefix}:seek"
                 ),
             ),
-            target=squid_ui_html.target(),
+            target=squid_ui.ext.html.target(),
             cache=cache,
         )
         assert result.scene.pagers[0].page == 1
@@ -476,8 +478,8 @@ def test_custom_roles_preserve_builtin_target_behavior(base: sl.Tone) -> None:
             sl.action_controls(sl.action_control("Go", _pressed, key="go", tone=tone), key="actions"),
         )
 
-    builtin = sl.planning.plan(document(base), target=squid_ui_html.target())
-    custom = sl.planning.plan(document(sl.Role("app.custom", base)), target=squid_ui_html.target())
+    builtin = sl.planning.plan(document(base), target=squid_ui.ext.html.target())
+    custom = sl.planning.plan(document(sl.Role("app.custom", base)), target=squid_ui.ext.html.target())
     assert custom.scene == builtin.scene
 
 
@@ -489,9 +491,9 @@ def test_html_list_reveal_is_consumed_by_the_delivered_cursor() -> None:
         page_size=2,
         page=sl.pages.RevealPage(anchor="4", request="visit"),
     )
-    planned = sl.planning.plan(document, target=squid_ui_html.target(), session=presentation)
+    planned = sl.planning.plan(document, target=squid_ui.ext.html.target(), session=presentation)
     assert planned.scene.pagers[0].page == 2
     presentation.apply_updates(planned.session_updates)
     presentation.move_cursor("entries", PagePosition(page=0))
-    manual = sl.planning.plan(document, target=squid_ui_html.target(), session=presentation)
+    manual = sl.planning.plan(document, target=squid_ui.ext.html.target(), session=presentation)
     assert manual.scene.pagers[0].page == 0

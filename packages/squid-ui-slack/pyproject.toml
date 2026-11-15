@@ -33,3 +33,6 @@ build-backend = "uv_build"
 
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]
+
+[tool.uv.build-backend]
+module-name = "squid_ui.ext.slack"

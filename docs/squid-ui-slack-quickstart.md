@@ -11,7 +11,7 @@ target and draw the planned scene:
 
 ```python
 import squid_ui as sl
-import squid_ui_slack as ss
+import squid_ui.ext.slack as ss
 
 document = sl.stack(
     sl.heading("Build review"),

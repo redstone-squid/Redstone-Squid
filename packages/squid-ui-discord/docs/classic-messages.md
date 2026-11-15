@@ -12,7 +12,7 @@ saying which one you mean:
 
 ```python
 import squid_ui as sl
-from squid_ui_discord import CLASSIC_TARGET, V2_TARGET, classic
+from squid_ui.ext.discord import CLASSIC_TARGET, V2_TARGET, classic
 
 document = [
     sl.heading("Piston door"),
@@ -190,8 +190,8 @@ The two built-in targets are registered by default; a custom target needs explic
 registration:
 
 ```python
-from squid_ui_discord import Target, TargetRegistry
-from squid_ui_discord.limits import ClassicLimits
+from squid_ui.ext.discord import Target, TargetRegistry
+from squid_ui.ext.discord.limits import ClassicLimits
 
 compact = Target.classic(limits=ClassicLimits(embeds=2))
 targets = TargetRegistry(compact)

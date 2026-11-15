@@ -10,16 +10,16 @@ import pytest
 
 import squid_ui as sl
 from squid_ui.entity import EntityKind, EntityRef, EntityType
-from squid_ui.forms import FormText
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.modal import (
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.modal import (
     CheckboxGroupField,
     EntityField,
     FileField,
     _entity_defaults,
     build_form_modal,
 )
-from squid_ui_discord.testing import commit_render, interaction_harness
+from squid_ui.ext.discord.testing import commit_render, interaction_harness
+from squid_ui.forms import FormText
 
 
 async def _ignore_raw(interaction, values) -> None: ...

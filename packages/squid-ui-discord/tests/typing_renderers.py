@@ -3,14 +3,13 @@
 Assignments exercise generic compatibility that runtime rendering tests do not check.
 """
 
-from squid_ui_html import Renderer as HtmlRenderer
-
 from squid_ui import scene
+from squid_ui.ext.discord.classic_renderer import ClassicRenderer
+from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.preview import DiscordPreviewRenderer
+from squid_ui.ext.discord.renderer import MountedRenderer, V2Renderer
+from squid_ui.ext.html import Renderer as HtmlRenderer
 from squid_ui.renderer import Renderer
-from squid_ui_discord.classic_renderer import ClassicRenderer
-from squid_ui_discord.message_payload import MessagePayload
-from squid_ui_discord.preview import DiscordPreviewRenderer
-from squid_ui_discord.renderer import MountedRenderer, V2Renderer
 
 
 def accepts_v2_renderer(value: Renderer[scene.ComponentsV2, MessagePayload]) -> None:

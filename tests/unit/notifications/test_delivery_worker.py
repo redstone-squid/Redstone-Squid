@@ -11,7 +11,7 @@ import pytest
 from aiohttp import ClientResponse
 from pytest_mock import MockerFixture
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.app import RedstoneSquid
 from squid.bot.notifications import NotificationCog
 from squid.notifications import NotificationService, PendingNotificationDelivery

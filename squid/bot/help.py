@@ -9,7 +9,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.suggestions.application import Candidate, rank

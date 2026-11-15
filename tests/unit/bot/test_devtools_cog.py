@@ -5,10 +5,10 @@ from typing import Any, cast
 
 from squid.bot.devtools import _authorized, setup
 from squid_reactivity import EventLedger
+from squid_ui.ext.discord import MessageRootScheduler, SessionManager, install
+from squid_ui.ext.discord.devtools import DevTools
+from squid_ui.ext.discord.testing import AsyncCallRecorder
 from squid_ui.profiling import MemoryProfiler
-from squid_ui_discord import MessageRootScheduler, SessionManager, install
-from squid_ui_discord.devtools import DevTools
-from squid_ui_discord.testing import AsyncCallRecorder
 
 
 @dataclass(frozen=True)

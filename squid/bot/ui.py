@@ -15,7 +15,7 @@ from typing import Any
 import discord
 
 import squid_ui as ui
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.core.i18n import tr
 from squid_i18n import Text, md_tr
 

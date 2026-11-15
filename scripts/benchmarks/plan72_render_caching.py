@@ -14,10 +14,10 @@ from typing import Any, cast, override
 
 import squid_ui as sl
 from squid_ui import Component, computed, state
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.testing import commit_render, delivered_to, message_harness
 from squid_ui.primitives import Panel, Text
 from squid_ui.profiling import MemoryProfiler, OperationKind, PresentationStatus
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, delivered_to, message_harness
 
 
 class _Leaf(Component[sl.ComponentsV2Target]):

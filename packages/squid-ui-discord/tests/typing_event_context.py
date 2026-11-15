@@ -3,7 +3,7 @@
 from typing import assert_type
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid_ui.semantic import ActionControl
 
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from typing import Literal, override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.showcase.inspector import InspectablePanel
 from squid.bot.showcase.workbench import history_outcome
 from squid.bot.ui import tr

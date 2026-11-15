@@ -11,10 +11,8 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import Component, state
-from squid_ui.pages import PagePosition
-from squid_ui.primitives import Lines, Paginate, Text
-from squid_ui_discord import Everyone, MessageRoot, SessionKey
-from squid_ui_discord.durability import (
+from squid_ui.ext.discord import Everyone, MessageRoot, SessionKey
+from squid_ui.ext.discord.durability import (
     ComponentRegistry,
     ComponentState,
     DurableSessionStore,
@@ -26,8 +24,10 @@ from squid_ui_discord.durability import (
     encode_session_scope,
     migrate_component_state,
 )
-from squid_ui_discord.durability.session_records import decode_session_key
-from squid_ui_discord.testing import commit_render
+from squid_ui.ext.discord.durability.session_records import decode_session_key
+from squid_ui.ext.discord.testing import commit_render
+from squid_ui.pages import PagePosition
+from squid_ui.primitives import Lines, Paginate, Text
 
 
 class DurableChild(Component[sl.ComponentsV2Target]):

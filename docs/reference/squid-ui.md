@@ -258,11 +258,11 @@ markers appear in component base classes when a component uses target-specific p
 
 ## Native HTML
 
-::: squid_ui_html.target
+::: squid_ui.ext.html.target
 
-::: squid_ui_html.Renderer
+::: squid_ui.ext.html.Renderer
 
-::: squid_ui_discord.preview.DiscordPreviewRenderer
+::: squid_ui.ext.discord.preview.DiscordPreviewRenderer
 
 ## Theming
 
@@ -319,7 +319,7 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.errors` | Typed failures raised at the logical, planning, and drawing boundaries. |
 | `squid_ui.forms` | Portable form schemas, typed fields, and descriptor-based form sugar. |
 | `squid_ui.guards` | Per-action admission: may *this* press execute right now? |
-| `squid_ui_html` | First-class semantic HTML planning and safe scene drawing. |
+| `squid_ui.ext.html` | First-class semantic HTML planning and safe scene drawing. |
 | `squid_ui.interactions` | Frontend-neutral action events and dispatch metadata. |
 | `squid_ui.operations` | Public operation vocabulary supplied by the reactive runtime. |
 | `squid_ui.planning` | Portable planning, adaptation, and layout measurement APIs. |
@@ -330,7 +330,7 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.runtime` | Frontend-neutral component runtime and presentation state. |
 | `squid_ui.scene` | Immutable resolved scenes and protocol serialization. |
 | `squid_ui.semantic` | Frontend-neutral semantic layout vocabulary. |
-| `squid_ui_slack` | Slack Block Kit target identities and hard limits. |
+| `squid_ui.ext.slack` | Slack Block Kit target identities and hard limits. |
 | `squid_ui.sources` | Source addresses, continuations, and asynchronous window loading. |
 | `squid_ui.pages` | Layout page positions and keyed-entry reveal requests. |
 | `squid_ui.temporal` | Portable exact-time values and local-time resolution. |

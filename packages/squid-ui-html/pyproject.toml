@@ -30,3 +30,6 @@ build-backend = "uv_build"
 # Include source files in the wheel cache key so persistent Docker caches do not
 # reuse an old wheel after a source-only change.
 cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]
+
+[tool.uv.build-backend]
+module-name = "squid_ui.ext.html"

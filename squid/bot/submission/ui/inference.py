@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, override
 from uuid import UUID
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission.ingestion import admit_candidates
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr

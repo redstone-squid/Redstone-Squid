@@ -8,6 +8,7 @@ import pytest
 
 from squid_ui import fallback, scene, testing, truncate
 from squid_ui.document import Asset, InlineAsset
+from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
@@ -33,7 +34,6 @@ from squid_ui.semantic import (
     Paragraph,
     Stack,
 )
-from squid_ui_discord import DISCORD_V2_DPY27
 
 
 async def _act(event: ActionEvent) -> None: ...

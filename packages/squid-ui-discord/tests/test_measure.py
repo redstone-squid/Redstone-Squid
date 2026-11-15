@@ -8,6 +8,16 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import (
+    V2_LIMITS as LIMITS,
+)
+from squid_ui.ext.discord import conform, render_static
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.conformance import ELLIPSIS
+from squid_ui.ext.discord.planning import measure
+from squid_ui.ext.discord.planning.measurement.model import MeasuredText
+from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout
+from squid_ui.ext.discord.testing import assert_within_limits
 from squid_ui.planning import LayoutOverflowError, SolveNoteCode
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.primitives import (
@@ -31,16 +41,6 @@ from squid_ui.primitives import (
     Truncate,
     Variants,
 )
-from squid_ui_discord import (
-    V2_LIMITS as LIMITS,
-)
-from squid_ui_discord import conform, render_static
-from squid_ui_discord import testing as sd
-from squid_ui_discord.conformance import ELLIPSIS
-from squid_ui_discord.planning import measure
-from squid_ui_discord.planning.measurement.model import MeasuredText
-from squid_ui_discord.planning.measurement.solver import MeasuredLayout
-from squid_ui_discord.testing import assert_within_limits
 
 
 def _text_of(view: discord.ui.LayoutView) -> str:

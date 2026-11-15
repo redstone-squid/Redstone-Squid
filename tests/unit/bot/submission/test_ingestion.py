@@ -30,7 +30,7 @@ from squid.submissions.domain import (
 from squid.submissions.domain.finalization import FinalizationJobStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftCapacityExceededError
-from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
+from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.services import bot_services
 
 

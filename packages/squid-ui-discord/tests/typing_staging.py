@@ -2,9 +2,9 @@
 
 from typing import assert_type
 
+from squid_ui.ext.discord.message_root import MessageRoot
+from squid_ui.ext.discord.message_root_candidates import _ApplicationCandidate, _Candidate
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui_discord.message_root import MessageRoot
-from squid_ui_discord.message_root_candidates import _ApplicationCandidate, _Candidate
 
 
 async def staging(root: MessageRoot[ComponentsV2Target], preflight: bool, disabled: bool) -> None:

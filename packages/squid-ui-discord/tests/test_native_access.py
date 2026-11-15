@@ -7,16 +7,16 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid_ui import Component, PressEvent, TextLike
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.actions import ActionResponder
+from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, Visibility
 from squid_ui.interactions import ActionResponder as ActionResponderProtocol
 from squid_ui.primitives import Button, Row
 from squid_ui.testing import text_component
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.actions import ActionResponder
-from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 class Client:

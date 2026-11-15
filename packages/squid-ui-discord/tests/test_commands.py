@@ -8,13 +8,13 @@ from discord import app_commands
 from discord.ext import commands
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid_i18n import tr
 from squid_ui import paragraph
+from squid_ui.ext.discord.delivery import DeliveryResult
+from squid_ui.ext.discord.i18n import to_locale_str
+from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness, payload_texts
 from squid_ui.forms import FormSpec, TextField
-from squid_ui_discord.delivery import DeliveryResult
-from squid_ui_discord.i18n import to_locale_str
-from squid_ui_discord.testing import ContextHarness, InteractionHarness, payload_texts
 
 
 def installed_bot(config: sd.Config | None = None) -> commands.Bot:
@@ -118,7 +118,7 @@ async def test_the_request_is_memoized_on_the_interaction() -> None:
     await run(cog.build, cog, interaction.source, 1)
 
     assert await sd.request(interaction.source) is cog.request
-    assert interaction.extras["squid_ui_discord.request"] is cog.request
+    assert interaction.extras["squid_ui.ext.discord.request"] is cog.request
 
 
 async def test_hybrid_command_answers_a_prefix_context() -> None:
@@ -467,7 +467,7 @@ async def test_missing_native_command_owner_is_not_an_application_request() -> N
 
     with pytest.raises(RuntimeError, match="no live UI scope"):
         await sd.request(harness.source)
-    assert "squid_ui_discord.request" not in harness.extras
+    assert "squid_ui.ext.discord.request" not in harness.extras
 
 
 async def test_unloaded_cog_dispatch_does_not_open_application_owned_panels() -> None:

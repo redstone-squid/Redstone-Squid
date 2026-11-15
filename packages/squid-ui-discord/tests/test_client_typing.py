@@ -12,7 +12,7 @@ from typing import Any, Self, assert_type
 import discord
 from discord.ext import commands
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 
 class AppBot(commands.Bot):
     services: str

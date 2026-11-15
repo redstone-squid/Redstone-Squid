@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner

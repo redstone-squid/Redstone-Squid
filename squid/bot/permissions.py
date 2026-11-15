@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Self
 import discord
 from discord import app_commands
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import allows, enforce, hide_unless

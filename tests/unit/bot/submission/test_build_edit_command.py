@@ -7,7 +7,7 @@ from typing import Any, cast, override
 
 import discord
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account
@@ -28,8 +28,8 @@ from squid.settings.application import SettingsService
 from squid.submissions.application import FormOptionSet, SubmissionFormService
 from squid.submissions.application.forms import build_edit_manifest
 from squid.submissions.domain import FormManifest
+from squid_ui.ext.discord.testing import InteractionHarness
 from squid_ui.testing import RecordingResponder, press_event
-from squid_ui_discord.testing import InteractionHarness
 from tests.support.build_edit_runner import EDIT_OPTIONS
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services

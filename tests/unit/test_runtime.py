@@ -6,7 +6,7 @@ from typing import Any, cast
 import anyio
 
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
-from squid_ui_discord.testing import AsyncCallRecorder
+from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.services import bot_services
 
 

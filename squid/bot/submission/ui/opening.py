@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui.build_edit import BuildEditScreen, BuildEditWorkspace
 from squid.bot.ui import error_node, tr

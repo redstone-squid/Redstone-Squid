@@ -11,9 +11,9 @@ import pytest
 
 import squid_ui as sl
 from squid_reactivity import CellAddress
-from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
-from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, message_harness
+from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.testing import delivered_to, message_harness
 
 
 class Prefs(sl.Reactive):

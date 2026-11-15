@@ -5,7 +5,7 @@ from typing import override
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 
 
 class Shared(sl.Reactive):

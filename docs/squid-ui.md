@@ -19,9 +19,9 @@ pip install squid-ui-slack==0.1.0a1
 | `squid-reactivity` | `squid_reactivity` | Transactions, computed state, topics, operations |
 | `squid-ui` | `squid_ui` | Semantic nodes, shared planning, runtime, and scene vocabulary |
 | `squid-ui-widgets` | `squid_ui_widgets` | Portable wizards, editors, menus, votes, and pickers |
-| `squid-ui-discord` | `squid_ui_discord` | Discord composition, limits, rendering, delivery, sessions, and routing |
-| `squid-ui-slack` | `squid_ui_slack` | Slack composition, limits, and SDK rendering |
-| `squid-ui-html` | `squid_ui_html` | HTML composition and rendering |
+| `squid-ui-discord` | `squid_ui.ext.discord` | Discord composition, limits, rendering, delivery, sessions, and routing |
+| `squid-ui-slack` | `squid_ui.ext.slack` | Slack composition, limits, and SDK rendering |
+| `squid-ui-html` | `squid_ui.ext.html` | HTML composition and rendering |
 | `squid-storage` | `squid_storage` | Versioned scoped stores and persisted state pools |
 | `squid-replication` | `squid_replication` | Reference, Loro, and experimental pycrdt replicas |
 
@@ -32,7 +32,7 @@ use that exact version, so one environment cannot silently mix incompatible alph
 
 - Follow the [Discord quickstart](squid-ui-quickstart.md) for a first live screen.
 - Follow the [Slack compile quickstart](squid-ui-slack-quickstart.md) to produce SDK blocks and views.
-- Plan with `squid_ui_html.target()` and draw with `squid_ui_html.Renderer` for native HTML.
+- Plan with `squid_ui.ext.html.target()` and draw with `squid_ui.ext.html.Renderer` for native HTML.
 - Use the [API map](squid-ui-api.md) to find the supported entry point for each job.
 - Look up any supported name in the per-package [reference](reference/squid-ui.md).
 - Read [architecture and API interactions](squid-ui-architecture.md) for planning, ownership,

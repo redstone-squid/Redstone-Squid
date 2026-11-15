@@ -13,7 +13,7 @@ Discord message shape am I compiling to* — is therefore encoded five times and
 | `mode` marker type (`ComponentsV2Target`) | `target_types.py:11-16` |
 | `limits` subclass (`V2Limits`) | `planning/limits.py:112,143` |
 | `dialect` singleton (`V2_DIALECT`) | `planning/v2.py:442`, `planning/classic.py:479` |
-| `DiscordMode` enum | `squid_ui_discord/presentation.py:29` |
+| `DiscordMode` enum | `squid_ui.ext.discord/presentation.py:29` |
 
 Nothing keeps them in step, so use sites re-derive the axis from whichever encoding is nearest —
 and they reach for the worst one. `mount.py:874-875` recovers the mode by `isinstance`-ing the
@@ -237,9 +237,9 @@ class DiscordLimits:  # abstract; message-wide budgets live on subclasses
 
 - Rename `TargetProfile` to `Target` in `squid_ui.planning`; it becomes the only such class.
 - Fields collapse to the four above; the rest become derived properties.
-- Delete `squid_ui_discord.Target` (`squid-ui-discord/src/squid_ui_discord/target.py:31-88`) — its only job
+- Delete `squid_ui.ext.discord.Target` (`squid-ui-discord/src/squid_ui/ext/discord/target.py:31-88`) — its only job
   was two classmethods plus `_from`, an eleven-field manual copy that silently drops any new base
-  field. The conveniences become module-level `v2()` / `classic()` constructors in `squid_ui_discord`,
+  field. The conveniences become module-level `v2()` / `classic()` constructors in `squid_ui.ext.discord`,
   keeping their `@overload` pairs so the adapter-less call still infers `DiscordPy27Adapter`.
 - Delete, with reasons:
   - `TargetProfile.resources` (`target.py:47`) — never populated; `budgets` always falls through to
@@ -284,7 +284,7 @@ class DiscordLimits:  # abstract; message-wide budgets live on subclasses
   `Renderer[...]` at the type level. A declared protocol nothing implements is how defect 3 survived.
 - **Dedupe `Wire`.** The identical
   `type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]` at `renderer.py:51` and
-  `classic_renderer.py:54` collapses into one definition. It stays in `squid_ui_discord` — it returns a
+  `classic_renderer.py:54` collapses into one definition. It stays in `squid_ui.ext.discord` — it returns a
   discord.py object and cannot move into the portable package.
 - **Drop `html/renderer.py:87`'s `scene.target != V2_TARGET_ID` check.** The body-type check two
   lines below (`isinstance(scene.body, SceneComponentsV2)`) is the real gate, and it is both

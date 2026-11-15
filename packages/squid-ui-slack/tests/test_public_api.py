@@ -1,7 +1,7 @@
 """The public Slack convenience target composes with the planner and SDK renderer."""
 
 import squid_ui as sl
-import squid_ui_slack as ss
+import squid_ui.ext.slack as ss
 from squid_ui import testing
 
 
@@ -12,4 +12,4 @@ def test_convenience_target_renders_a_message_for_the_sdk() -> None:
 
 
 def test_slack_adapter_imports_without_other_transports_or_a_bot_framework() -> None:
-    testing.assert_imports_without(["squid_ui_slack"], "slack_bolt", "discord", "squid_ui_discord")
+    testing.assert_imports_without(["squid_ui.ext.slack"], "slack_bolt", "discord", "squid_ui.ext.discord")

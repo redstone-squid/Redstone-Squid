@@ -12,7 +12,7 @@ import discord
 import pytest_asyncio
 from discord.ext import commands
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import (
     DEVELOPMENT_EXTENSIONS,

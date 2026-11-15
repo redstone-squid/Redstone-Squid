@@ -7,6 +7,7 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.composition import (
     BuiltComposition,
@@ -30,7 +31,6 @@ from squid_ui.planning.realizations import Realization
 from squid_ui.planning.semantics import semantic_graph
 from squid_ui.semantic import Paragraph
 from squid_ui.target_types import RenderTarget
-from squid_ui_discord.planning.composition_v2 import V2CompositionRules
 
 
 def occurrence(node: sl.Renderable[RenderTarget, object]) -> SemanticOccurrence[RenderTarget, object]:

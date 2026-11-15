@@ -11,9 +11,9 @@ import discord
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.testing import submit_event
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 @dataclass(frozen=True, slots=True)

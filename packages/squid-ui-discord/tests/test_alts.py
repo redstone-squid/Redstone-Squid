@@ -5,6 +5,14 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
+from squid_ui.ext.discord import (
+    conform,
+)
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.planning import measure
+from squid_ui.ext.discord.planning.measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
+from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout
+from squid_ui.ext.discord.testing import assert_within_limits
 from squid_ui.planning import SolveNoteCode
 from squid_ui.primitives import (
     Alt,
@@ -14,14 +22,6 @@ from squid_ui.primitives import (
     Text,
     alts,
 )
-from squid_ui_discord import (
-    conform,
-)
-from squid_ui_discord import testing as sd
-from squid_ui_discord.planning import measure
-from squid_ui_discord.planning.measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
-from squid_ui_discord.planning.measurement.solver import MeasuredLayout
-from squid_ui_discord.testing import assert_within_limits
 
 
 def _solved_texts(solved: MeasuredLayout) -> list[str]:

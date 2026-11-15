@@ -10,7 +10,7 @@ import pytest
 
 from squid.bot.submission import message_context
 from squid.bot.submission.message_context import collect_images, group_messages
-from squid_ui_discord.testing import AsyncCallRecorder
+from squid_ui.ext.discord.testing import AsyncCallRecorder
 
 
 @dataclass(frozen=True)

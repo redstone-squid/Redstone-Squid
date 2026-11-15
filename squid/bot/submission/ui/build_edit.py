@@ -22,7 +22,7 @@ from types import MappingProxyType
 from typing import Any, override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.edit_history import history_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection

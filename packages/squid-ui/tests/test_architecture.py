@@ -81,9 +81,9 @@ def test_entrypoints_import_in_fresh_processes(entrypoint: str) -> None:
         "anyio",
         "squid_storage",
         "squid_ui_widgets",
-        "squid_ui_discord",
-        "squid_ui_slack",
-        "squid_ui_html",
+        "squid_ui.ext.discord",
+        "squid_ui.ext.slack",
+        "squid_ui.ext.html",
     )
 
 
@@ -149,7 +149,7 @@ def test_handler_composition_does_not_import_planning_or_runtime() -> None:
 
 
 def test_core_does_not_import_target_implementations() -> None:
-    adapters = ("squid_ui_discord", "squid_ui_slack", "squid_ui_html")
+    adapters = ("squid_ui.ext.discord", "squid_ui.ext.slack", "squid_ui.ext.html")
     violations = {
         str(path.relative_to(SOURCE)): sorted(name for name in runtime_imports(path) if name.startswith(adapters))
         for path in SOURCE.rglob("*.py")

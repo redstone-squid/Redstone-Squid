@@ -8,7 +8,7 @@ from uuid import uuid4
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
 from squid.voting.domain import VoteChoice, VoteKind, VoteOption, normalize_vote_options
 

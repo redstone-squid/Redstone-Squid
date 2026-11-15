@@ -9,13 +9,13 @@ import pytest
 import squid_ui as sl
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME
+from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
+from squid_ui.ext.discord.testing import commit_classic_render, commit_render, interaction_harness
 from squid_ui.forms import IntField
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, plan
 from squid_ui.planning.navigation import NavigationContext, materialized_navigation_state, page_jump_nav
 from squid_ui.primitives import Lines, Paginate, Row, Text
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
-from squid_ui_discord.testing import commit_classic_render, commit_render, interaction_harness
 
 
 class JumpPages(sl.Component[sl.DiscordTarget]):

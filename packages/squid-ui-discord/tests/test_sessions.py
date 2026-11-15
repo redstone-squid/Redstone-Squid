@@ -11,13 +11,12 @@ import anyio
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
-import squid_ui_discord.message_root_contracts
+import squid_ui.ext.discord
+import squid_ui.ext.discord.message_root_contracts
 from squid_i18n import tr
-from squid_ui.primitives import Button, Heading, Row
-from squid_ui_discord import CloseReason, Everyone, MessageRootDefaults, SessionKey, SessionManager
-from squid_ui_discord.delivery import Abandoned
-from squid_ui_discord.sessions import (
+from squid_ui.ext.discord import CloseReason, Everyone, MessageRootDefaults, SessionKey, SessionManager
+from squid_ui.ext.discord.delivery import Abandoned
+from squid_ui.ext.discord.sessions import (
     AdmissionRequest,
     AdmissionSpec,
     MembershipStatus,
@@ -31,7 +30,8 @@ from squid_ui_discord.sessions import (
     Session,
     Unprotected,
 )
-from squid_ui_discord.testing import AsyncCallRecorder, message_harness
+from squid_ui.ext.discord.testing import AsyncCallRecorder, message_harness
+from squid_ui.primitives import Button, Heading, Row
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -43,52 +43,52 @@ class Panel(sl.Component[sl.ComponentsV2Target]):
         return None
 
 
-def a_root() -> squid_ui_discord.MessageRoot:
-    return squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None)
+def a_root() -> squid_ui.ext.discord.MessageRoot:
+    return squid_ui.ext.discord.MessageRoot(Panel(), access=Everyone(), timeout=None)
 
 
 _DEFAULT_MESSAGE = object()
 
 
-def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui_discord.MessageDestination:
+def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui.ext.discord.MessageDestination:
     """Return a destination using a fresh harness by default; explicit None yields no edit handle."""
     delivered = message_harness() if message is _DEFAULT_MESSAGE else message
 
     async def send(
-        payload: squid_ui_discord.message_payload.MessagePayload,
-    ) -> squid_ui_discord.delivery.DeliveryResult:
-        handle = None if delivered is None else squid_ui_discord.delivery.handle_for(delivered)
-        return squid_ui_discord.delivery.DeliveryResult(delivered, handle)
+        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+    ) -> squid_ui.ext.discord.delivery.DeliveryResult:
+        handle = None if delivered is None else squid_ui.ext.discord.delivery.handle_for(delivered)
+        return squid_ui.ext.discord.delivery.DeliveryResult(delivered, handle)
 
     return send
 
 
-def slowly() -> squid_ui_discord.MessageDestination:
+def slowly() -> squid_ui.ext.discord.MessageDestination:
     """Yield during delivery so concurrent admissions can pass their preliminary checks."""
 
     async def send(
-        payload: squid_ui_discord.message_payload.MessagePayload,
-    ) -> squid_ui_discord.delivery.DeliveryResult:
+        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+    ) -> squid_ui.ext.discord.delivery.DeliveryResult:
         await anyio.sleep(0)
         message = message_harness()
-        return squid_ui_discord.delivery.DeliveryResult(message, squid_ui_discord.delivery.handle_for(message))
+        return squid_ui.ext.discord.delivery.DeliveryResult(message, squid_ui.ext.discord.delivery.handle_for(message))
 
     return send
 
 
-def abandoning() -> squid_ui_discord.MessageDestination:
+def abandoning() -> squid_ui.ext.discord.MessageDestination:
     async def send(
-        payload: squid_ui_discord.message_payload.MessagePayload,
-    ) -> squid_ui_discord.delivery.DeliveryResult:
-        raise squid_ui_discord.delivery.DeliveryAbandoned
+        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+    ) -> squid_ui.ext.discord.delivery.DeliveryResult:
+        raise squid_ui.ext.discord.delivery.DeliveryAbandoned
 
     return send
 
 
-def failing(error: Exception) -> squid_ui_discord.MessageDestination:
+def failing(error: Exception) -> squid_ui.ext.discord.MessageDestination:
     async def send(
-        payload: squid_ui_discord.message_payload.MessagePayload,
-    ) -> squid_ui_discord.delivery.DeliveryResult:
+        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+    ) -> squid_ui.ext.discord.delivery.DeliveryResult:
         raise error
 
     return send
@@ -98,11 +98,11 @@ KEY = SessionKey.user_guild("panel", 7, 42)
 
 
 def test_session_keys_use_typed_frozen_scopes() -> None:
-    assert SessionKey.user("account", 7).scope == squid_ui_discord.sessions.UserScope(7)
-    assert SessionKey.guild("roles", 42).scope == squid_ui_discord.sessions.GuildScope(42)
-    assert SessionKey.user_guild("settings", 7, 42).scope == squid_ui_discord.sessions.UserGuildScope(7, 42)
-    assert SessionKey.global_("status").scope == squid_ui_discord.sessions.GlobalScope()
-    assert SessionKey.custom("edit", (7, 99)).scope == squid_ui_discord.sessions.CustomScope((7, 99))
+    assert SessionKey.user("account", 7).scope == squid_ui.ext.discord.sessions.UserScope(7)
+    assert SessionKey.guild("roles", 42).scope == squid_ui.ext.discord.sessions.GuildScope(42)
+    assert SessionKey.user_guild("settings", 7, 42).scope == squid_ui.ext.discord.sessions.UserGuildScope(7, 42)
+    assert SessionKey.global_("status").scope == squid_ui.ext.discord.sessions.GlobalScope()
+    assert SessionKey.custom("edit", (7, 99)).scope == squid_ui.ext.discord.sessions.CustomScope((7, 99))
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
 
 
@@ -205,7 +205,7 @@ class TestReplacement:
             assert isinstance(opened, Opened)
             victims.append(opened.session)
 
-        async def fail(_root: squid_ui_discord.MessageRoot) -> None:
+        async def fail(_root: squid_ui.ext.discord.MessageRoot) -> None:
             raise ValueError("retired callback failed")
 
         victims[0].root.on_finish(fail)
@@ -311,7 +311,7 @@ class TestCardinality:
     async def test_a_custom_collision_policy_selects_exact_victims(self) -> None:
         class ReplaceNewest:
             async def select(
-                self, request: AdmissionRequest, occupants: tuple[squid_ui_discord.sessions.SessionSnapshot, ...]
+                self, request: AdmissionRequest, occupants: tuple[squid_ui.ext.discord.sessions.SessionSnapshot, ...]
             ):
                 return Replace(occupants[-request.required_victims :])
 
@@ -333,7 +333,7 @@ class TestCardinality:
     async def test_a_custom_policy_must_select_the_exact_required_victims(self) -> None:
         class SelectNobody:
             async def select(
-                self, request: AdmissionRequest, occupants: tuple[squid_ui_discord.sessions.SessionSnapshot, ...]
+                self, request: AdmissionRequest, occupants: tuple[squid_ui.ext.discord.sessions.SessionSnapshot, ...]
             ):
                 return Replace(())
 
@@ -458,7 +458,7 @@ class TestMembership:
                 seen.append(None if session is None else session.members)
                 return Heading("Roster")
 
-        message_root = squid_ui_discord.MessageRoot(Roster(), access=Everyone(), timeout=None)
+        message_root = squid_ui.ext.discord.MessageRoot(Roster(), access=Everyone(), timeout=None)
         opened = await manager.open(message_root, to_message(), key=KEY, actor_id=7)
 
         assert isinstance(opened, Opened)

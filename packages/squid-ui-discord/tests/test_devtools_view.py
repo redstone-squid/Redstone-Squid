@@ -8,13 +8,12 @@ import anyio
 import discord
 
 import squid_ui as sl
-import squid_ui_discord
+import squid_ui.ext.discord
 from squid_storage import MemorySessionStore, SessionRecord
-from squid_ui.primitives import Button, Heading, Row, Text
-from squid_ui_discord import Everyone, MessageRoot, Owner
-from squid_ui_discord import testing as sd
-from squid_ui_discord.devtools_runtime import DevToolsPolicy, DevToolsRuntime
-from squid_ui_discord.devtools_view import (
+from squid_ui.ext.discord import Everyone, MessageRoot, Owner
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.devtools_runtime import DevToolsPolicy, DevToolsRuntime
+from squid_ui.ext.discord.devtools_view import (
     DevToolsSection,
     MessageRootInspector,
     OperationalInspector,
@@ -23,8 +22,9 @@ from squid_ui_discord.devtools_view import (
     plan_text,
     scene_attachment,
 )
-from squid_ui_discord.durability import ComponentRegistry, DiscordFrontend, DurableSessionRuntime
-from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, interaction_harness
+from squid_ui.ext.discord.durability import ComponentRegistry, DiscordFrontend, DurableSessionRuntime
+from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, interaction_harness
+from squid_ui.primitives import Button, Heading, Row, Text
 
 
 class Subject(sl.Component[sl.ComponentsV2Target]):
@@ -55,7 +55,7 @@ class Subject(sl.Component[sl.ComponentsV2Target]):
 
 async def live_subject(**kwargs: Any) -> MessageRoot:
     message_root = MessageRoot(Subject(), access=kwargs.pop("access", Everyone()), **kwargs)
-    await message_root.send(delivered_to(squid_ui_discord.testing.message_harness(message_id=42)))
+    await message_root.send(delivered_to(squid_ui.ext.discord.testing.message_harness(message_id=42)))
     return message_root
 
 
@@ -114,7 +114,7 @@ class TestDetail:
 
     async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
         now = datetime.now(UTC)
-        scheduler = squid_ui_discord.MessageRootScheduler(clock=lambda: now)
+        scheduler = squid_ui.ext.discord.MessageRootScheduler(clock=lambda: now)
         interaction = interaction_harness(message_id=42)
         interaction.expires_at = now + timedelta(seconds=30)
         subject = MessageRoot(
@@ -122,12 +122,12 @@ class TestDetail:
             access=Everyone(),
             scheduler=scheduler,
             timeout=None,
-            expiry=squid_ui_discord.RenewEphemeral(warning=60),
+            expiry=squid_ui.ext.discord.RenewEphemeral(warning=60),
         )
         await subject.send(
             delivered_to(
-                squid_ui_discord.testing.message_harness(message_id=42, ephemeral=True),
-                handle=squid_ui_discord.delivery.handle_from(interaction),
+                squid_ui.ext.discord.testing.message_harness(message_id=42, ephemeral=True),
+                handle=squid_ui.ext.discord.delivery.handle_from(interaction),
             )
         )
         assert subject.handle is not None
@@ -186,9 +186,9 @@ class TestDetail:
         assert inspector.focus is None
 
     async def test_a_manager_key_labels_its_root(self) -> None:
-        manager = squid_ui_discord.SessionManager()
+        manager = squid_ui.ext.discord.SessionManager()
         subject = MessageRoot(Subject(), access=Everyone())
-        await manager.open(subject, delivered_to(squid_ui_discord.testing.message_harness()), key=("editor", 7))
+        await manager.open(subject, delivered_to(squid_ui.ext.discord.testing.message_harness()), key=("editor", 7))
 
         _, view = message_root_inspector(MessageRootInspector(manager=manager))
 
@@ -268,10 +268,10 @@ class TestOperationalInspectorSections:
         assert inspector.selected_records == ()
 
     async def test_root_and_session_detail_panels_render(self) -> None:
-        manager = squid_ui_discord.SessionManager()
+        manager = squid_ui.ext.discord.SessionManager()
         subject = MessageRoot(Subject(), access=Everyone())
         opened = await manager.open(subject, delivered_to(sd.message_harness()))
-        assert isinstance(opened, squid_ui_discord.sessions.Opened)
+        assert isinstance(opened, squid_ui.ext.discord.sessions.Opened)
         runtime = DevToolsRuntime(sessions=manager)
         inspector = OperationalInspector(runtime)
 
@@ -312,10 +312,10 @@ class TestOperationalInspectorSections:
 
 
 async def test_confirm_close_session_runs_after_inspector_action_commits() -> None:
-    manager = squid_ui_discord.SessionManager()
+    manager = squid_ui.ext.discord.SessionManager()
     subject = MessageRoot(Subject(), access=Everyone())
     opened = await manager.open(subject, delivered_to(sd.message_harness()))
-    assert isinstance(opened, squid_ui_discord.sessions.Opened)
+    assert isinstance(opened, squid_ui.ext.discord.sessions.Opened)
     inspector = OperationalInspector(DevToolsRuntime(sessions=manager, policy=DevToolsPolicy.full_access()))
     inspector.section = "sessions"
     inspector.session_id = opened.session.id
@@ -367,7 +367,7 @@ async def test_persistence_records_load_on_demand_and_purge_after_confirmation()
     store = InspectableStore()
     client = discord.Client(intents=discord.Intents.none())
     durable = DurableSessionRuntime(
-        sessions=squid_ui_discord.SessionManager(),
+        sessions=squid_ui.ext.discord.SessionManager(),
         components=ComponentRegistry(),
         store=store,
         frontend=DiscordFrontend(client),
@@ -413,7 +413,7 @@ async def test_persistence_record_failure_is_displayed_and_can_be_retried() -> N
     store.unavailable = True
     client = discord.Client(intents=discord.Intents.none())
     durable = DurableSessionRuntime(
-        sessions=squid_ui_discord.SessionManager(),
+        sessions=squid_ui.ext.discord.SessionManager(),
         components=ComponentRegistry(),
         store=store,
         frontend=DiscordFrontend(client),

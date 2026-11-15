@@ -5,6 +5,8 @@ from dataclasses import replace
 import pytest
 
 import squid_ui as sl
+from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache
@@ -13,8 +15,6 @@ from squid_ui.planning.navigation import TurnPage, default_nav
 from squid_ui.planning.result import PlanReuse
 from squid_ui.presentation import PresentationState
 from squid_ui.target_types import DiscordAdapter
-from squid_ui_discord.limits import V2Limits
-from squid_ui_discord.planning.discord import components_v2_target
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "reuse", ">=1"))
 REGION = OccurrenceId(("root", "r"))

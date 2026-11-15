@@ -10,11 +10,11 @@ import pytest
 from anyio.abc import TaskStatus
 
 from squid_ui import Component, ComponentsV2Target, DocumentLike, state
+from squid_ui.ext.discord import Everyone, MessageRoot, SessionManager
+from squid_ui.ext.discord.sessions import Opened
+from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import Text
 from squid_ui.runtime import ManagedService, UIExecutionHost
-from squid_ui_discord import Everyone, MessageRoot, SessionManager
-from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 
 
 @asynccontextmanager

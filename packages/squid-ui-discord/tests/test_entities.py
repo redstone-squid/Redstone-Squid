@@ -7,16 +7,16 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
+import squid_ui.ext.discord
 from squid_ui import scene
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.limits import Axis
+from squid_ui.ext.discord.planning import measure
+from squid_ui.ext.discord.testing import commit_render, interaction_harness, without_capabilities
 from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.primitives import EntitySelect
 from squid_ui.runtime import PresentationState
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.limits import Axis
-from squid_ui_discord.planning import measure
-from squid_ui_discord.testing import commit_render, interaction_harness, without_capabilities
 
 
 async def _select(_event: sl.EntitySelectionEvent) -> None: ...
@@ -88,7 +88,7 @@ def test_entity_select_costs_an_action_row_and_control() -> None:
 
 def test_native_semantic_picker_lowers_to_entity_scene() -> None:
     plan = sl.planning.plan(
-        sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=squid_ui_discord.DISCORD_V2_DPY27
+        sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=squid_ui.ext.discord.DISCORD_V2_DPY27
     )
 
     assert isinstance(plan.scene.components_v2.children[0], scene.EntitySelect)
@@ -101,7 +101,7 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
         entity_type=sl.entity.EntityType.USER,
         selection=sl.uncontrolled(()),
     )
-    first = sl.planning.plan(node, target=squid_ui_discord.DISCORD_V2_DPY27, session=session)
+    first = sl.planning.plan(node, target=squid_ui.ext.discord.DISCORD_V2_DPY27, session=session)
     handler = first.bindings["moderator"].handler
     await handler(
         EntitySelectionEvent(
@@ -109,7 +109,7 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
         )
     )
 
-    second = sl.planning.plan(node, target=squid_ui_discord.DISCORD_V2_DPY27, session=session)
+    second = sl.planning.plan(node, target=squid_ui.ext.discord.DISCORD_V2_DPY27, session=session)
 
     assert isinstance(second.scene.components_v2.children[0], scene.EntitySelect)
     assert second.scene.components_v2.children[0].default_values == (
@@ -183,7 +183,7 @@ async def test_channel_select_dispatches_resolved_channels_and_threads(channel_t
 
 
 def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
-    target = without_capabilities(squid_ui_discord.DISCORD_V2_DPY27, "actions.entity")
+    target = without_capabilities(squid_ui.ext.discord.DISCORD_V2_DPY27, "actions.entity")
     plan = sl.planning.plan(
         sl.entities(
             sl.entity_choice(sl.entity.EntityRef(sl.entity.EntityKind.USER, 1), "Ada"),
@@ -197,7 +197,7 @@ def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
 
 
 def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
-    target = without_capabilities(squid_ui_discord.DISCORD_V2_DPY27, "actions.entity")
+    target = without_capabilities(squid_ui.ext.discord.DISCORD_V2_DPY27, "actions.entity")
     session = PresentationState()
     session.select(
         "users",
@@ -217,7 +217,7 @@ def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
 
 
 def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None:
-    target = without_capabilities(squid_ui_discord.DISCORD_V2_DPY27, "actions.entity")
+    target = without_capabilities(squid_ui.ext.discord.DISCORD_V2_DPY27, "actions.entity")
 
     with pytest.raises(JointUnsupportedError):
         sl.planning.plan(sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=target)
@@ -240,7 +240,7 @@ def test_entity_scene_round_trips_mixed_mentionable_defaults() -> None:
             default_values=node.default_values,
             max_values=2,
         ),
-        target=squid_ui_discord.DISCORD_V2_DPY27,
+        target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
 
     assert scene.Codec.loads(scene.Codec.dumps(plan.scene)) == plan.scene

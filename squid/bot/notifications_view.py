@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import JsonValue
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController

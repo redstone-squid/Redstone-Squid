@@ -5,11 +5,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
-import squid_ui_slack
+import squid_ui.ext.html
+import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.ext.discord.limits import ClassicLimits
+from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.slack.protocol import SlackHomeLimits, SlackMessageLimits
 from squid_ui.palette import Palette
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -21,18 +24,15 @@ from squid_ui.primitives import nodes as native
 from squid_ui.semantic import TimeStyle
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 from squid_ui.temporal import ZonedDateTime
-from squid_ui_discord.limits import ClassicLimits
-from squid_ui_discord.planning.discord import classic_target, components_v2_target
-from squid_ui_slack.protocol import SlackHomeLimits, SlackMessageLimits
 
 DISCORD = AdapterProfile(DiscordAdapter, "displays", "1")
 SLACK = AdapterProfile(SlackAdapter, "displays", "1")
 TARGETS = [
     components_v2_target(DISCORD),
     classic_target(DISCORD),
-    squid_ui_html.target(),
-    squid_ui_slack.message_target(adapter=SLACK),
-    squid_ui_slack.home_target(adapter=SLACK),
+    squid_ui.ext.html.target(),
+    squid_ui.ext.slack.message_target(adapter=SLACK),
+    squid_ui.ext.slack.home_target(adapter=SLACK),
 ]
 INSTANT = datetime(2026, 10, 25, 1, 30, tzinfo=UTC)
 ZONED = ZonedDateTime(INSTANT, "Europe/Brussels")

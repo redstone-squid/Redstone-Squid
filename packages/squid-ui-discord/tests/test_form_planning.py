@@ -10,18 +10,18 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, LimitViolationError
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.actions import ActionResponder
+from squid_ui.ext.discord.form_fields import CheckboxGroupField, EntityField
+from squid_ui.ext.discord.form_planning import ChoiceControl, DiscordFormPlan, FieldPlan, TextControl, plan_form
+from squid_ui.ext.discord.limits import COMPONENT_LIMITS
+from squid_ui.ext.discord.modal import render_form_modal
+from squid_ui.ext.discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
+from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.forms import ChoiceField, ChoiceOption, FormSpec, ScaleField, TextField
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.planner import plan
 from squid_ui.planning.target import AnyTarget
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.actions import ActionResponder
-from squid_ui_discord.form_fields import CheckboxGroupField, EntityField
-from squid_ui_discord.form_planning import ChoiceControl, DiscordFormPlan, FieldPlan, TextControl, plan_form
-from squid_ui_discord.limits import COMPONENT_LIMITS
-from squid_ui_discord.modal import render_form_modal
-from squid_ui_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
-from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 @pytest.mark.parametrize("count,kind", [(1, "select"), (2, "radio"), (10, "radio"), (11, "select"), (25, "select")])
@@ -130,7 +130,7 @@ async def test_declared_form_opens_the_prepared_plan_without_replanning() -> Non
     prepared = root.plan.form_plans["open"]
     assert isinstance(prepared, DiscordFormPlan)
     interaction = interaction_harness()
-    with patch("squid_ui_discord.actions.build_form_modal", side_effect=AssertionError("replanned declared form")):
+    with patch("squid_ui.ext.discord.actions.build_form_modal", side_effect=AssertionError("replanned declared form")):
         await root.dispatch("open", interaction)
     modal = interaction.response.send_modal.await_args.args[0]
     label = modal.children[0]

@@ -66,8 +66,8 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
         "discord",
         "anyio",
         "squid_storage",
-        "squid_ui_discord",
-        "squid_ui_slack",
-        "squid_ui_html",
+        "squid_ui.ext.discord",
+        "squid_ui.ext.slack",
+        "squid_ui.ext.html",
         "squid_ui_widgets",
     )

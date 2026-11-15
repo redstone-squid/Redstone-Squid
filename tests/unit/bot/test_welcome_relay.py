@@ -15,7 +15,7 @@ from squid.community.domain import WelcomeRelayPolicy
 from squid.runtime import BotServices
 from squid.settings.domain.runtime import RuntimeSettings
 from squid_i18n.text import NEUTRAL, discord_text, resolve_text
-from squid_ui_discord.testing import AsyncCallRecorder
+from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.services import bot_services
 from tests.support.settings import RuntimeSettingsStub
 

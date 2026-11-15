@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Self, cast, override
 import discord
 from discord import app_commands
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot._types import GuildMessageable
 from squid.bot.accounts.consent import ensure_consented_account
@@ -21,7 +21,7 @@ from squid.core.i18n import tr
 from squid.voting.domain import PollScope, VoteKind, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
-from squid_ui_discord.i18n import to_locale_str
+from squid_ui.ext.discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app

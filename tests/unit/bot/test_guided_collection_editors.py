@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor
 from squid.bot.submission.video_editor import VideoEditor
 from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
 from squid.voting.domain import VoteChoice, VoteKind, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_ui_discord.testing import stage
+from squid_ui.ext.discord.testing import stage
 
 
 async def test_vote_row_edit_preserves_option_identity_and_weight() -> None:

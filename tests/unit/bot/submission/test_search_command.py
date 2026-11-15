@@ -27,7 +27,7 @@ from squid.search.domain import (
 )
 from squid.settings.application import SettingsService
 from squid_i18n import source_text
-from squid_ui_discord.testing import stage
+from squid_ui.ext.discord.testing import stage
 from tests.support.services import bot_services
 
 

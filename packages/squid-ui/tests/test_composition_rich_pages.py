@@ -8,6 +8,8 @@ import pytest
 import squid_ui as sl
 from squid_i18n import tree
 from squid_ui import scene
+from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
@@ -17,8 +19,6 @@ from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.target_types import DiscordAdapter
 from squid_ui.text import NEUTRAL, Text, resolve_text, timestamp_text
-from squid_ui_discord.limits import V2Limits
-from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 ADAPTER = AdapterProfile(DiscordAdapter, "rich-pages", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [components_v2_target(ADAPTER), classic_target(ADAPTER)]

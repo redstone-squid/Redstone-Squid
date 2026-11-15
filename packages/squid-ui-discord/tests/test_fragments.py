@@ -6,17 +6,17 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
+import squid_ui.ext.discord
 from squid_ui.assets import Asset, InlineAsset
 from squid_ui.document import Document
-from squid_ui_discord import (
+from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui_discord import ExistingLayoutError, ResourceCost, contribute
-from squid_ui_discord import testing as sd
-from squid_ui_discord.fragments import FragmentOwnershipError, StaleReservationError, fragment
-from squid_ui_discord.inspection import audit
-from squid_ui_discord.limits import Axis
+from squid_ui.ext.discord import ExistingLayoutError, ResourceCost, contribute
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.fragments import FragmentOwnershipError, StaleReservationError, fragment
+from squid_ui.ext.discord.inspection import audit
+from squid_ui.ext.discord.limits import Axis
 
 
 def _text(content: str) -> list:
@@ -129,12 +129,12 @@ class TestPreflight:
 class TestInteractionBoundary:
     def test_routed_controls_are_allowed(self):
         host = sd.layout_view()
-        routed = squid_ui_discord.renderer.RoutedItem(label="go", custom_id="r:go")
+        routed = squid_ui.ext.discord.renderer.RoutedItem(label="go", custom_id="r:go")
         contribute(_text("body"), to=host, followed_by=(sd.action_row(routed),))
         assert routed in list(host.walk_children())
 
     def test_a_dispatchable_native_item_is_refused(self):
-        native = squid_ui_discord.target.NativeItem(
+        native = squid_ui.ext.discord.target.NativeItem(
             lambda: sd.action_row(discord.ui.Button(label="local", custom_id="local")),
             fallback=sl.primitives.Text("fallback"),
         )
@@ -142,7 +142,7 @@ class TestInteractionBoundary:
             fragment([native], alongside=sd.layout_view())
 
     def test_a_native_display_item_is_fine(self):
-        native = squid_ui_discord.target.NativeItem(
+        native = squid_ui.ext.discord.target.NativeItem(
             lambda: discord.ui.TextDisplay("native"),
             fallback=sl.primitives.Text("fallback"),
         )
@@ -207,7 +207,7 @@ class TestRelease:
 def test_a_fragment_never_exceeds_whole_document_planning():
     """The combined result must obey the same limits as composing everything at once."""
     body = "x" * 6000
-    whole = squid_ui_discord.render_message([sl.primitives.Text("header"), sl.primitives.Text(body)]).view
+    whole = squid_ui.ext.discord.render_message([sl.primitives.Text("header"), sl.primitives.Text(body)]).view
 
     host = sd.layout_view(discord.ui.TextDisplay("header"))
     contribute([sl.primitives.Text(body)], to=host)

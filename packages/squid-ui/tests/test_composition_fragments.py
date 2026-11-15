@@ -1,8 +1,10 @@
 import pytest
-from squid_ui_html.composition import HtmlCompositionRules
 
 import squid_ui as sl
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
+from squid_ui.ext.html.composition import HtmlCompositionRules
+from squid_ui.ext.slack.composition import SlackCompositionRules
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
@@ -18,8 +20,6 @@ from squid_ui.planning.realizations import Realization, TableRealization, select
 from squid_ui.planning.semantics import semantic_graph
 from squid_ui.presentations import ref
 from squid_ui.target_types import RenderTarget
-from squid_ui_discord.planning.composition_v2 import V2CompositionRules
-from squid_ui_slack.composition import SlackCompositionRules
 
 
 def check_table_fragments[ResourceT, BodyT, PreparationT](

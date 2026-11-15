@@ -36,7 +36,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.infrastructure.discord_cards import DiscordVoteCards
-from squid_ui_discord.testing import MessageHarness
+from squid_ui.ext.discord.testing import MessageHarness
 from tests.support.discord import make_layout_bot, make_reaction_payload
 from tests.support.services import bot_services
 from tests.support.voting import GENERIC_OPTIONS, poll_snapshot

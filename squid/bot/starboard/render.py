@@ -3,7 +3,7 @@
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.i18n import localization_for
 from squid.bot.ui import render_payload
 from squid.core.i18n import tr

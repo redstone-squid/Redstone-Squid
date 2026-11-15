@@ -6,10 +6,10 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.actions import ActionResponder
+from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness
 from squid_ui.interactions import ActionEvent, Actor
-from squid_ui_discord.actions import ActionResponder
-from squid_ui_discord.testing import ContextHarness, InteractionHarness
 
 
 class FakeClient:
@@ -248,7 +248,7 @@ async def test_bound_resolution_rejects_a_different_client() -> None:
 
     with pytest.raises(ValueError, match="different Discord runtime"):
         await ui.request(interaction.source)
-    assert "squid_ui_discord.request" not in interaction.extras
+    assert "squid_ui.ext.discord.request" not in interaction.extras
 
 
 async def test_closed_scopes_and_their_memoized_requests_are_rejected() -> None:

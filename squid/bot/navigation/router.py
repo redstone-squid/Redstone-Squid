@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAliasType, cast, g
 from urllib.parse import parse_qsl, urlencode, urlsplit
 from uuid import UUID
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.navigation.destinations import Destination
 
 if TYPE_CHECKING:

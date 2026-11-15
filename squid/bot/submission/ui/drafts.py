@@ -32,7 +32,7 @@ from typing import Any, cast, override
 from uuid import UUID, uuid4
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.navigation.destinations import DraftDetail
 from squid.bot.navigation.router import screen_route
@@ -76,8 +76,8 @@ from squid.submissions.domain.finalization import (
 from squid.submissions.domain.intake import IntakeStatus
 from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
+from squid_ui.ext.discord.modal import FileField
 from squid_ui.text import TextLike, md
-from squid_ui_discord.modal import FileField
 
 MAX_FILES_PER_UPLOAD = 4
 """Files accepted by one Add files modal, matching the four file options of /build submit."""

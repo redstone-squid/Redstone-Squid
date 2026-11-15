@@ -3,9 +3,9 @@
 from typing import override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.testing import stage
 from squid_ui.primitives import Lines, Paginate
-from squid_ui_discord.testing import stage
 
 
 class Counter(sl.Component[sl.ComponentsV2Target, sd.Request]):

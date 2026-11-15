@@ -4,13 +4,13 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
+from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.planning import measure
+from squid_ui.ext.discord.target import v2
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import Paginate, Text
-from squid_ui_discord import DISCORD_V2_DPY27
-from squid_ui_discord.limits import V2Limits
-from squid_ui_discord.planning import measure
-from squid_ui_discord.target import v2
 
 
 class TestBudgetContract:

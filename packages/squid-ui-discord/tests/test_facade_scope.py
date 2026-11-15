@@ -6,8 +6,8 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
-from squid_ui_discord.testing import delivered_to, message_harness
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.testing import delivered_to, message_harness
 
 
 class FakeClient:

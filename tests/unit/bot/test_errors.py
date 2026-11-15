@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 from pytest_mock import MockerFixture
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.bot.errors import (
     SquidCommandTree,

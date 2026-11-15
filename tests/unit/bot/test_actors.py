@@ -7,7 +7,7 @@ import discord
 import pytest
 from discord.ext.commands import Context
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import RedstoneSquid

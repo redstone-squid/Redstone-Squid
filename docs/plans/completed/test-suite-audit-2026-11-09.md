@@ -57,7 +57,7 @@ permission-node gating; update it in the same change that renames a command. Do 
 
 There are two layers:
 
-- `squid_ui_discord.testing` (`InteractionHarness`, `MessageHarness`, `ContextHarness`, `AsyncCallRecorder`) is the
+- `squid_ui.ext.discord.testing` (`InteractionHarness`, `MessageHarness`, `ContextHarness`, `AsyncCallRecorder`) is the
   framework's public test support. Package tests and bot tests that exercise a screen or session without bot services
   use it directly.
 - `tests/support/discord.py` wraps it with `BotServices`, permissions, localization, and error reporting. Bot tests

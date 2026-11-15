@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from functools import partial
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.builds.domain import BuildCategory

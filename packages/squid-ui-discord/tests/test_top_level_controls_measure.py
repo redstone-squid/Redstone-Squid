@@ -6,8 +6,8 @@ them as unnormalized input or silently drop them before target conversion.
 
 import pytest
 
+from squid_ui.ext.discord.planning import measure
 from squid_ui.primitives.nodes import LinkButton, PremiumButton, RoutedButton
-from squid_ui_discord.planning import measure
 
 CONTROLS = (
     pytest.param(LinkButton(label="x", url="https://example.test"), id="link"),

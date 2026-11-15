@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 import anyio
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.lookup import pick
 from squid.bot.submission.schematics import (
     WRITABLE_EXTENSIONS,

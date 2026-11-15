@@ -12,19 +12,19 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
-import squid_ui_discord.preview
+import squid_ui.ext.discord
+import squid_ui.ext.discord.preview
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import render_static
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.routing import Router
+from squid_ui.ext.discord.routing._client import _dispatch_item
+from squid_ui.ext.discord.testing import interaction_harness
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
-from squid_ui_discord import render_static
-from squid_ui_discord import testing as sd
-from squid_ui_discord.routing import Router
-from squid_ui_discord.routing._client import _dispatch_item
-from squid_ui_discord.testing import interaction_harness
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.routing.Route("poll:close")
@@ -116,7 +116,9 @@ class TestRouter:
         async def localize(_source) -> sl.text.Localization:
             return sl.text.Localization(locale="en-GB")
 
-        runtime = squid_ui_discord.install(cast(discord.Client, client), squid_ui_discord.Config(localization=localize))
+        runtime = squid_ui.ext.discord.install(
+            cast(discord.Client, client), squid_ui.ext.discord.Config(localization=localize)
+        )
         interaction = interaction_harness()
         interaction.client = client
         seen: list[str | None] = []
@@ -176,7 +178,7 @@ class TestRouter:
         await router.dispatch(
             interaction_harness(),
             "edit:build:42",
-            component=squid_ui_discord.routing.RouteComponent.SELECT,
+            component=squid_ui.ext.discord.routing.RouteComponent.SELECT,
             values=("one", "two"),
         )  # type: ignore[arg-type]
         assert seen == [(("one", "two"), 42)]
@@ -205,7 +207,7 @@ class TestRouter:
         await router.dispatch(
             interaction_harness(),
             "poll:close",
-            component=squid_ui_discord.routing.RouteComponent.SELECT,
+            component=squid_ui.ext.discord.routing.RouteComponent.SELECT,
             values=("now",),
         )  # type: ignore[arg-type]
 
@@ -218,8 +220,8 @@ class TestRouter:
         async def edit(_interaction, _values: tuple[str, ...], build_id: int) -> None: ...
 
         assert router.describe() == (
-            squid_ui_discord.routing.RouteDescription(
-                component=squid_ui_discord.routing.RouteComponent.SELECT,
+            squid_ui.ext.discord.routing.RouteDescription(
+                component=squid_ui.ext.discord.routing.RouteComponent.SELECT,
                 format=EDIT_BUILD.format,
                 params=(("build_id", "int"),),
                 aliases=EDIT_BUILD.aliases,
@@ -464,7 +466,7 @@ class TestRouter:
 
 class TestRouteGroups:
     async def test_child_groups_build_stable_routes_and_dispatch_them(self) -> None:
-        root = squid_ui_discord.routing.RouteGroup("r")
+        root = squid_ui.ext.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         close = polls.define("close", aliases=("poll:close",))
         seen: list[str] = []
@@ -482,7 +484,7 @@ class TestRouteGroups:
         assert router.template().fullmatch("r:polls:close")
 
     def test_a_namespace_group_is_an_ordinary_one_segment_group(self) -> None:
-        nested = squid_ui_discord.routing.RouteGroup("r", "polls")
+        nested = squid_ui.ext.discord.routing.RouteGroup("r", "polls")
 
         with pytest.raises(ValueError, match="exactly one prefix segment"):
             Router(namespace=nested, on_gone=_noop)
@@ -490,10 +492,10 @@ class TestRouteGroups:
     @pytest.mark.parametrize("prefix", [(), ("{kind}",), ("bad:prefix",)])
     def test_group_prefixes_are_nonempty_literal_segments(self, prefix: tuple[str, ...]) -> None:
         with pytest.raises(ValueError, match=r"route group|literal segment"):
-            squid_ui_discord.routing.RouteGroup(*prefix)
+            squid_ui.ext.discord.routing.RouteGroup(*prefix)
 
     def test_sibling_groups_are_checked_for_identity_overlap(self) -> None:
-        root = squid_ui_discord.routing.RouteGroup("r")
+        root = squid_ui.ext.discord.routing.RouteGroup("r")
         first = root.group("polls")
         second = root.group("polls")
         first.define("{action}")
@@ -503,13 +505,13 @@ class TestRouteGroups:
 
     def test_a_group_from_another_namespace_is_rejected(self) -> None:
         router = Router(namespace="r", on_gone=_noop)
-        foreign = squid_ui_discord.routing.RouteGroup("other")
+        foreign = squid_ui.ext.discord.routing.RouteGroup("other")
 
         with pytest.raises(ValueError, match="does not belong"):
             router.include(foreign)
 
     def test_including_an_existing_descendant_is_a_no_op(self) -> None:
-        root = squid_ui_discord.routing.RouteGroup("r")
+        root = squid_ui.ext.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         assert polls.define("close") is route
@@ -522,7 +524,7 @@ class TestRouteGroups:
         assert router.describe()[0].group_prefix == "r:polls"
 
     def test_every_defined_identity_needs_a_handler_before_registration(self) -> None:
-        root = squid_ui_discord.routing.RouteGroup("r")
+        root = squid_ui.ext.discord.routing.RouteGroup("r")
         root.group("polls").define("close")
         router = Router(namespace=root, on_gone=_noop)
 
@@ -530,7 +532,7 @@ class TestRouteGroups:
             router.register(_FakeClient())  # type: ignore[arg-type]
 
     def test_identity_and_group_structure_freeze_at_registration(self) -> None:
-        root = squid_ui_discord.routing.RouteGroup("r")
+        root = squid_ui.ext.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -547,7 +549,7 @@ class TestRouteGroups:
             root.group("builds")
 
     async def test_a_frozen_group_accepts_same_identity_handler_replacement(self) -> None:
-        root = squid_ui_discord.routing.RouteGroup("r")
+        root = squid_ui.ext.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -567,26 +569,26 @@ class TestRouteGroups:
 class TestMiddleware:
     def test_the_base_class_requires_dispatch(self) -> None:
         with pytest.raises(TypeError, match="abstract"):
-            cast(Any, squid_ui_discord.routing.Middleware)()
+            cast(Any, squid_ui.ext.discord.routing.Middleware)()
 
     @pytest.mark.parametrize("on_group", [False, True])
     async def test_keyed_middleware_reloads_in_place_after_registration(self, on_group: bool) -> None:
         seen: list[str] = []
 
-        class Record(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Record(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             def __init__(self, name: str) -> None:
                 self.name = name
 
             @override
             async def dispatch(
                 self,
-                request: squid_ui_discord.routing.RouteRequest[discord.Client],
-                proceed: squid_ui_discord.routing.RouteProceed,
+                request: squid_ui.ext.discord.routing.RouteRequest[discord.Client],
+                proceed: squid_ui.ext.discord.routing.RouteProceed,
             ) -> None:
                 seen.append(self.name)
                 await proceed()
 
-        root = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        root = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         router = Router(namespace=root, on_gone=_noop)
         owner = root if on_group else router
         owner.add_middleware(Record("old"), key="policy")
@@ -607,7 +609,7 @@ class TestMiddleware:
     async def test_router_and_group_middleware_compose_outermost_first(self) -> None:
         seen: list[str] = []
 
-        class Record(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Record(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             def __init__(self, name: str) -> None:
                 self.name = name
 
@@ -617,7 +619,7 @@ class TestMiddleware:
                 await proceed()
                 seen.append(f"{self.name}:after")
 
-        root = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        root = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         router = Router(namespace=root, on_gone=_noop)
@@ -644,7 +646,7 @@ class TestMiddleware:
     async def test_returning_without_calling_next_short_circuits_and_still_acknowledges(self) -> None:
         seen: list[str] = []
 
-        class Stop(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Stop(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 seen.append("stopped")
@@ -668,7 +670,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             seen.append("router-error")
 
-        class Catch(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Catch(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 try:
@@ -693,7 +695,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             seen.append("router-error")
 
-        class Observe(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Observe(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 seen.append("before")
@@ -719,7 +721,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             errors.append(error)
 
-        class Twice(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Twice(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
@@ -735,9 +737,9 @@ class TestMiddleware:
         assert "only be called once" in str(errors[0])
 
     async def test_proceed_expires_when_middleware_returns(self) -> None:
-        saved: list[squid_ui_discord.routing.RouteProceed] = []
+        saved: list[squid_ui.ext.discord.routing.RouteProceed] = []
 
-        class Save(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Save(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 saved.append(proceed)
@@ -753,7 +755,7 @@ class TestMiddleware:
     async def test_instances_are_idempotent_only_by_identity(self) -> None:
         seen: list[str] = []
 
-        class Record(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Record(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 seen.append("middleware")
@@ -771,15 +773,15 @@ class TestMiddleware:
         assert seen == ["middleware", "middleware"]
 
     async def test_request_facts_are_immutable_and_distinguish_aliases(self) -> None:
-        requests: list[squid_ui_discord.routing.RouteRequest[discord.Client]] = []
+        requests: list[squid_ui.ext.discord.routing.RouteRequest[discord.Client]] = []
 
-        class Capture(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Capture(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 requests.append(request)
                 await proceed()
 
-        root = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        root = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         builds = root.group("builds")
         edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
         builds.add(edit, _noop)
@@ -802,17 +804,17 @@ class TestMiddleware:
         assert not gone.matched_alias
 
     def test_descriptions_include_effective_middleware_provenance(self) -> None:
-        class RouterPolicy(squid_ui_discord.routing.Middleware[discord.Client]):
+        class RouterPolicy(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        class GroupPolicy(squid_ui_discord.routing.Middleware[discord.Client]):
+        class GroupPolicy(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        root = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        root = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         polls.add(close, _noop)
@@ -826,12 +828,12 @@ class TestMiddleware:
         )
 
     def test_middleware_freezes_at_registration(self) -> None:
-        class Policy(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Policy(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        root = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        root = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         polls.add(close, _noop)
@@ -901,7 +903,7 @@ class TestAcknowledgement:
 
         @router.route(POLL_CLOSE)
         async def respond(current: discord.Interaction[Any]) -> None:
-            destination = squid_ui_discord.respond_to(current, ephemeral=True, wait=True)
+            destination = squid_ui.ext.discord.respond_to(current, ephemeral=True, wait=True)
             result = await destination(render_static([sl.paragraph("editor")]))
             assert result.message_id == 42
 
@@ -998,7 +1000,7 @@ class TestAcknowledgement:
 
 class TestProfiling:
     async def test_route_trace_profiles_middleware_handler_and_acknowledgement(self) -> None:
-        class Continue(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Continue(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
@@ -1030,7 +1032,7 @@ class TestProfiling:
         )
 
     async def test_short_circuit_and_caught_failure_remain_distinct(self) -> None:
-        class Stop(squid_ui_discord.routing.Middleware[discord.Client]):
+        class Stop(squid_ui.ext.discord.routing.Middleware[discord.Client]):
             @override
             async def dispatch(self, request, proceed) -> None:
                 pass
@@ -1116,7 +1118,7 @@ class TestDrawing:
             sl.action_controls(sl.routed_action_control("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c")
         )
 
-        planned = sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene
+        planned = sl.planning.plan(document, target=squid_ui.ext.discord.DISCORD_V2_DPY27).scene
         payload = sl.scene.Codec.dumps(planned)
 
         assert "routed_button" in sl.scene.Codec.schema()["$defs"]
@@ -1129,7 +1131,7 @@ class TestDrawing:
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
         document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
-        payload = sl.scene.Codec.to_dict(sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene)
+        payload = sl.scene.Codec.to_dict(sl.planning.plan(document, target=squid_ui.ext.discord.DISCORD_V2_DPY27).scene)
         routed = payload["body"]["children"][0]["items"][0]
         routed["custom_id"] = routed.pop("route_id")
 
@@ -1139,8 +1141,8 @@ class TestDrawing:
     def test_the_html_preview_emits_the_route(self) -> None:
         document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
 
-        html = squid_ui_discord.preview.DiscordPreviewRenderer().draw(
-            sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene
+        html = squid_ui.ext.discord.preview.DiscordPreviewRenderer().draw(
+            sl.planning.plan(document, target=squid_ui.ext.discord.DISCORD_V2_DPY27).scene
         )
 
         assert 'data-route-id="poll:close"' in html
@@ -1154,7 +1156,7 @@ class TestDrawing:
             placeholder="Choose",
         )
 
-        planned = sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene
+        planned = sl.planning.plan(document, target=squid_ui.ext.discord.DISCORD_V2_DPY27).scene
         assert planned.components_v2.children == (
             scene.RoutedSelect(
                 (sl.scene.Option("One", "one", "First"), sl.scene.Option("Two", "two")),
@@ -1172,7 +1174,7 @@ class TestDrawing:
         assert [option.value for option in select.options] == ["one", "two"]
         assert not select.is_dispatchable()
 
-        html = squid_ui_discord.preview.DiscordPreviewRenderer().draw(planned)
+        html = squid_ui.ext.discord.preview.DiscordPreviewRenderer().draw(planned)
         assert 'data-route-id="pick:build:3"' in html
 
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:
@@ -1191,7 +1193,7 @@ class TestDrawing:
         )
 
         with pytest.raises(JointInfeasibleError):
-            sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27)
+            sl.planning.plan(document, target=squid_ui.ext.discord.DISCORD_V2_DPY27)
 
     def test_routed_choices_need_an_available_option(self) -> None:
         document = sl.routed_choices(
@@ -1201,7 +1203,7 @@ class TestDrawing:
         )
 
         with pytest.raises(JointInfeasibleError):
-            sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27)
+            sl.planning.plan(document, target=squid_ui.ext.discord.DISCORD_V2_DPY27)
 
 
 class _FakeClient:
@@ -1257,7 +1259,7 @@ class TestClientRegistration:
         first.register(client)  # type: ignore[arg-type]
         second.register(client)  # type: ignore[arg-type]
 
-        assert squid_ui_discord.routing.routers(client) == (first, second)  # type: ignore[arg-type]
+        assert squid_ui.ext.discord.routing.routers(client) == (first, second)  # type: ignore[arg-type]
 
     def test_registering_the_same_pair_again_is_a_no_op(self) -> None:
         client = _FakeClient()
@@ -1334,12 +1336,14 @@ class TestRouteHandles:
     @pytest.mark.parametrize("grouped", [False, True])
     @pytest.mark.parametrize("select", [False, True])
     async def test_imported_handle_uses_reloaded_handler_and_metadata(self, grouped: bool, select: bool) -> None:
-        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        group = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         router = Router(namespace=group, on_gone=_noop) if grouped else Router[discord.Client]()
         owner = group if grouped else router
         decorate = owner.select if select else owner.route
         component = (
-            squid_ui_discord.routing.RouteComponent.SELECT if select else squid_ui_discord.routing.RouteComponent.BUTTON
+            squid_ui.ext.discord.routing.RouteComponent.SELECT
+            if select
+            else squid_ui.ext.discord.routing.RouteComponent.BUTTON
         )
         seen: list[tuple[str, int | None]] = []
 
@@ -1368,7 +1372,7 @@ class TestRouteHandles:
         assert seen == [("replacement", None), ("replacement", None)]
 
     async def test_rejected_reload_leaves_imported_handle_and_dispatch_unchanged(self) -> None:
-        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        group = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         seen: list[int] = []
 
         @group.route("edit:{build_id:int}", aliases=("old:{build_id:int}",))
@@ -1395,7 +1399,7 @@ class TestRouteHandles:
         assert seen == [4, 5]
 
     async def test_rebinding_keeps_in_flight_calls_on_the_original_handler(self) -> None:
-        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        group = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         started = anyio.Event()
         finish = anyio.Event()
         seen: list[str] = []
@@ -1430,7 +1434,7 @@ class TestRouteHandles:
         assert seen == ["edit"]
 
     async def test_reload_replaces_parameter_filter_with_handler(self) -> None:
-        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        group = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         seen: list[int] = []
 
         @group.route("{build_id:int}:{unused}")
@@ -1447,7 +1451,7 @@ class TestRouteHandles:
         assert seen == [5]
 
     async def test_button_and_select_keep_independent_handles_for_one_identity(self) -> None:
-        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        group = squid_ui.ext.discord.routing.RouteGroup[discord.Client]("r")
         seen: list[str] = []
 
         @group.route("edit")

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Self, override
 from uuid import UUID
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
 from squid.core.errors import SquidError
 from squid.runtime import BotServices

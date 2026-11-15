@@ -17,12 +17,12 @@ import discord
 import squid_ui as sl
 from squid_reactivity import TransactionCommit, strong_read
 from squid_ui import Component, resource, state
+from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.delivery import DeliveryResult, handle_for
+from squid_ui.ext.discord.testing import delivered_to, message_harness
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, LocalTopicBus, PendingMode, Topic, TopicName
-from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
-from squid_ui_discord import testing as sd
-from squid_ui_discord.delivery import DeliveryResult, handle_for
-from squid_ui_discord.testing import delivered_to, message_harness
 
 BUILD = TopicName("build", "1")
 OTHER = TopicName("build", "2")

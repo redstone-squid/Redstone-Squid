@@ -9,7 +9,7 @@ a discord.py upgrade.
 import discord
 import pytest
 
-from squid_ui_discord import V2_LIMITS as LIMITS
+from squid_ui.ext.discord import V2_LIMITS as LIMITS
 
 
 def test_view_child_count_matches_discordpy():

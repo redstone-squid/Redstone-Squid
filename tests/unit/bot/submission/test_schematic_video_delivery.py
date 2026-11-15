@@ -7,15 +7,15 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission.schematic_tools import SchematicTools, _video_failure_reason
 from squid.bot.submission.video_editor import VideoEditor
 from squid.core.actors import Actor
 from squid.schematics.application.services import SchematicService
 from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
+from squid_ui.ext.discord.testing import InteractionHarness
 from squid_ui.text import source_text
-from squid_ui_discord.testing import InteractionHarness
 
 
 @pytest.fixture

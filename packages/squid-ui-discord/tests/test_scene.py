@@ -148,7 +148,7 @@ def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
 
 def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
     import squid_ui as sl
-    from squid_ui_discord import DISCORD_V2_DPY27
+    from squid_ui.ext.discord import DISCORD_V2_DPY27
 
     instant = datetime(2026, 8, 22, 16, 30, tzinfo=timezone(timedelta(hours=2)))
     result = sl.planning.plan(
@@ -160,7 +160,7 @@ def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
 
 def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
     import squid_ui as sl
-    from squid_ui_discord import DISCORD_V2_DPY27
+    from squid_ui.ext.discord import DISCORD_V2_DPY27
 
     value = sl.temporal.ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")
 

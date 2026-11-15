@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.builds.application import BuildService
 from squid.builds.domain import Status, UnresolvedTaxonomy
@@ -16,8 +16,8 @@ from squid.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
 from squid.submissions.domain import FormManifest
 from squid.submissions.domain.forms import VisibilityOperator, VisibilityRule
+from squid_ui.ext.discord.testing import assert_within_limits, commit_render
 from squid_ui.testing import press_event, texts
-from squid_ui_discord.testing import assert_within_limits, commit_render
 from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace
 
 

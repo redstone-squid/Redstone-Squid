@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 
 import pytest
-from squid_ui_html._text import html_text
 
 from squid_i18n import (
     Localization,
@@ -25,6 +24,7 @@ from squid_i18n import (
     tr,
 )
 from squid_ui import scene
+from squid_ui.ext.html._text import html_text
 
 
 def discord(value: str | Text) -> str:

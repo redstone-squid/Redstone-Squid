@@ -11,7 +11,7 @@ from typing import Protocol, override
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import PROFILE_EDIT, UNLINK_EDIT, VISIBILITY_EDIT, ProfileValues, account_target

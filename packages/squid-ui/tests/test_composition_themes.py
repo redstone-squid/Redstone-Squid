@@ -3,21 +3,21 @@
 from typing import Any
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
-import squid_ui_slack
+import squid_ui.ext.html
+import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.palette import Palette
 from squid_ui.planning import CompositionOptions, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
-from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 ADAPTER = AdapterProfile(DiscordAdapter, "themes", "1")
-TARGETS = [components_v2_target(ADAPTER), classic_target(ADAPTER), squid_ui_html.target()]
+TARGETS = [components_v2_target(ADAPTER), classic_target(ADAPTER), squid_ui.ext.html.target()]
 
 
 def colours(body: scene.Body) -> list[int | None]:
@@ -81,7 +81,7 @@ def test_palette_changes_invalidate_delivered_allocation(target: Target[Any, Any
 def test_slack_accepts_themed_portable_content(home: bool) -> None:
     adapter = AdapterProfile(SlackAdapter, "themes.slack", "1")
     target: Target[Any, Any, Any, Any] = (
-        squid_ui_slack.home_target(adapter=adapter) if home else squid_ui_slack.message_target(adapter=adapter)
+        squid_ui.ext.slack.home_target(adapter=adapter) if home else squid_ui.ext.slack.message_target(adapter=adapter)
     )
     node = sl.themed(Palette(brand=0x112233), sl.region(sl.paragraph("body"), key="r", title="R"))
     result = plan(node, target=target)
@@ -92,8 +92,8 @@ def test_slack_accepts_themed_portable_content(home: bool) -> None:
     "target",
     [
         *TARGETS,
-        squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "status", "1")),
-        squid_ui_slack.home_target(adapter=AdapterProfile(SlackAdapter, "status", "1")),
+        squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "status", "1")),
+        squid_ui.ext.slack.home_target(adapter=AdapterProfile(SlackAdapter, "status", "1")),
     ],
     ids=lambda target: target.id,
 )
@@ -121,7 +121,7 @@ def test_html_status_resolves_its_colour_from_the_nearest_palette() -> None:
     palette = Palette(success=0x123456)
     result = plan(
         sl.themed(palette, sl.region(sl.status("Ready", tone=sl.Tone.SUCCESS), key="r", title="R")),
-        target=squid_ui_html.target(),
+        target=squid_ui.ext.html.target(),
     )
     status = result.scene.body.children[0]
     assert isinstance(status, scene.HtmlElement)

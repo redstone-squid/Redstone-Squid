@@ -12,6 +12,8 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.planning.navigation import (
     MATERIALIZED_NEXT_KEY,
     MATERIALIZED_PREVIOUS_KEY,
@@ -21,8 +23,6 @@ from squid_ui.planning.navigation import (
 from squid_ui.primitives import Paginate
 from squid_ui.profiling import ActionStatus, MemoryProfiler, OperationKind
 from squid_ui.semantic import ActionControl, Choices, FormTrigger
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, interaction_harness
 
 KEYED_CONTROLS = (ActionControl, Choices, FormTrigger)
 

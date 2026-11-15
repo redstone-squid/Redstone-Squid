@@ -11,11 +11,11 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import Component
+from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
 from squid_ui.runtime import LocalTopicBus, TopicName
-from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
-from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 
 
 class Empty(Component[sl.ComponentsV2Target]):

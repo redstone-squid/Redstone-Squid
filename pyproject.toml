@@ -204,8 +204,8 @@ extend-allowed-calls = ["squid_reactivity._core.state", "squid_reactivity.state"
 [tool.ruff.lint.isort]
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
 known-first-party = [
-    "squid_ui_discord",
-    "squid_ui_slack",
+    "squid_ui.ext.discord",
+    "squid_ui.ext.slack",
     "squid_ui",
     "squid_i18n",
     "squid_ui_widgets",
@@ -377,8 +377,8 @@ addopts = [
     "--cov=squid_ui",
     "--cov=squid_i18n",
     "--cov=squid_replication",
-    "--cov=squid_ui_discord",
-    "--cov=squid_ui_slack",
+    "--cov=squid_ui.ext.discord",
+    "--cov=squid_ui.ext.slack",
     "--cov=squid_ui_widgets",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings

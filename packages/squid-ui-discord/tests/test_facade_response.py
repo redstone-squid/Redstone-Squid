@@ -7,9 +7,9 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
-from squid_ui_discord.response import UNSET
-from squid_ui_discord.testing import InteractionHarness, stage
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.response import UNSET
+from squid_ui.ext.discord.testing import InteractionHarness, stage
 
 
 class FakeClient:

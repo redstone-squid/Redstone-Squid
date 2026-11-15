@@ -7,13 +7,13 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.showcase.workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
 from squid_i18n import source_text
 from squid_reactivity import transaction
 from squid_replication import LoroBackend, Replica
-from squid_ui_discord import MessageRoot, MessageRootScheduler, Owner
-from squid_ui_discord.testing import (
+from squid_ui.ext.discord import MessageRoot, MessageRootScheduler, Owner
+from squid_ui.ext.discord.testing import (
     assert_within_limits,
     commit_render,
     delivered_to,

@@ -1,6 +1,6 @@
 # 02 — Request-centric application layer
 
-Agreed 2026-09-02. Redesigns the application-facing half of `squid_ui_discord` — the part a
+Agreed 2026-09-02. Redesigns the application-facing half of `squid_ui.ext.discord` — the part a
 cog author touches — around one object, the request. Rendering, sessions, message roots and
 routing below the facade are untouched.
 
@@ -313,7 +313,7 @@ Found while porting:
   `ext` is deleted. `permissions.allows/enforce` accept a transitional `Caller` union of
   `Request` and the native sources until the last native caller is gone.
 - Pre-existing, not from this work: `test_ui_ownership.py::test_localized_ui_literals_use_template_strings`
-  fails on the branch, and `tests/architecture/test_naming.py` needs `squid_ui_slack`
+  fails on the branch, and `tests/architecture/test_naming.py` needs `squid_ui.ext.slack`
   installed to collect.
 
 ## Order

@@ -4,8 +4,8 @@ import anyio
 import pytest
 
 import squid_ui_widgets as sp
+from squid_ui.ext.discord.testing import stage
 from squid_ui.sources import Position, SourceCapabilities, Window, list_source
-from squid_ui_discord.testing import stage
 
 
 async def test_detail_steps_cross_windows_and_return_to_the_containing_overview() -> None:

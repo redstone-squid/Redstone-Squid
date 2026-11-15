@@ -64,7 +64,7 @@ Use the classic adapter when the message needs `content`, embeds, or a normal `d
 The host may contribute a region to an existing presentation or render a complete static one.
 
 ```python
-from squid_ui_discord import MessagePayload, classic
+from squid_ui.ext.discord import MessagePayload, classic
 
 host = MessagePayload.classic(content="@here", embeds=(legacy_embed,), view=legacy_view)
 contribution = classic.contribute(document, to=host)
@@ -374,7 +374,7 @@ Use one request API for commands, native callbacks, and component events:
 | `sd.responder(event).message_root` | `event.context.root` |
 | `sd.native(event)` | `event.context.interaction` |
 | `responder(event).send_modal(modal)` | `await event.context.form(modal)` |
-| `squid_ui_discord.ext` | `squid_ui_discord` |
+| `squid_ui.ext.discord.ext` | `squid_ui.ext.discord` |
 | `ext.testing.stage` / `invoke` | `sd.testing.stage` / `invoke` |
 | `run_managed_result` | A command's `pending=` card and returned document |
 | Application `MessageRootDefaults.on_error` | `Config.errors=sd.ErrorPolicy(render=..., observe=...)` |

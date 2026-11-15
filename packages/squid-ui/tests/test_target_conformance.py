@@ -11,12 +11,13 @@ from types import UnionType
 from typing import Any, TypeAliasType, get_args, get_origin
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
-import squid_ui_slack
+import squid_ui.ext.html
+import squid_ui.ext.slack
 from squid_ui import scene, semantic
 from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.grids import GridCell
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
@@ -26,7 +27,6 @@ from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.semantic import PortableNode
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 from squid_ui.temporal import ZonedDateTime
-from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 
 async def _pressed(_event: ActionEvent) -> None:
@@ -129,11 +129,13 @@ _MINIMAL: dict[type, Callable[[], semantic.AnyLayoutNode]] = {
 }
 
 _TARGETS: dict[str, Callable[[], Any]] = {
-    "html": lambda: squid_ui_html.target(),
+    "html": lambda: squid_ui.ext.html.target(),
     "discord-v2": lambda: components_v2_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
     "discord-classic": lambda: classic_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
-    "slack-message": lambda: squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
-    "slack-home": lambda: squid_ui_slack.home_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
+    "slack-message": lambda: squid_ui.ext.slack.message_target(
+        adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")
+    ),
+    "slack-home": lambda: squid_ui.ext.slack.home_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
 }
 
 # Character-only wrappers require a shared character axis. Use resource budgets

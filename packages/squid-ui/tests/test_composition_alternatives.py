@@ -4,10 +4,12 @@ from collections.abc import Mapping
 from typing import Literal
 
 import pytest
-from squid_ui_html.composition import HtmlCompositionRules
 
 import squid_ui as sl
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
+from squid_ui.ext.html.composition import HtmlCompositionRules
+from squid_ui.ext.slack.composition import SlackCompositionRules
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
@@ -27,8 +29,6 @@ from squid_ui.planning.semantics import semantic_graph
 from squid_ui.presentations import alternative, alternatives, budget, equivalent, losses, present_text, ref, shorten
 from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.text import NEUTRAL, Localization
-from squid_ui_discord.planning.composition_v2 import V2CompositionRules
-from squid_ui_slack.composition import SlackCompositionRules
 
 
 def compose[BodyT, PreparationT, ResourceT](

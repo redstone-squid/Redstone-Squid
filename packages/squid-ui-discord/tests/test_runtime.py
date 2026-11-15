@@ -8,19 +8,19 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid_reactivity import LocalTopicBus
 from squid_reactivity.topics import TopicName
-from squid_ui.primitives import Heading
-from squid_ui_discord import DiscordUIRuntime, install
-from squid_ui_discord.runtime import _INSTALLED, DiscordUIRuntimeMissing
-from squid_ui_discord.testing import (
+from squid_ui.ext.discord import DiscordUIRuntime, install
+from squid_ui.ext.discord.runtime import _INSTALLED, DiscordUIRuntimeMissing
+from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
     delivered_to,
     interaction_harness,
     message_harness,
 )
+from squid_ui.primitives import Heading
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):

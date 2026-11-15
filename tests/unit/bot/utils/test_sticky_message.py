@@ -8,10 +8,10 @@ import anyio
 import discord
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
-from squid_ui_discord.testing import MessageHarness
+from squid_ui.ext.discord.testing import MessageHarness
 
 
 class StubStickyMessage(StickyMessage):

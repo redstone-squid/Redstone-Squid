@@ -12,7 +12,7 @@ from discord.ext import commands
 from discord.ext.commands import Greedy
 from pydantic import ValidationError
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
@@ -34,7 +34,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
 from squid_i18n import md_tr
-from squid_ui_discord.i18n import to_locale_str
+from squid_ui.ext.discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app

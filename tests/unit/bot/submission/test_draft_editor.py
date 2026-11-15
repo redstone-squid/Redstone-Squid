@@ -15,7 +15,7 @@ import pytest
 from whenever import Instant
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission import draft_intake
 from squid.bot.submission.ui.drafts import (
     BuildPreviewScreen,
@@ -65,13 +65,13 @@ from squid.tags.application import TagService
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_reactivity import LocalTopicBus
+from squid_ui.ext.discord.modal import build_form_modal
+from squid_ui.ext.discord.testing import commit_render, payload_problems, stage
 from squid_ui.forms import FormValueError
 from squid_ui.primitives import SelectMenu
 from squid_ui.runtime import transaction
 from squid_ui.testing import find, find_all, labels, texts
 from squid_ui.text import source_text
-from squid_ui_discord.modal import build_form_modal
-from squid_ui_discord.testing import commit_render, payload_problems, stage
 from tests.support.draft_edits import DraftEditRecorder
 from tests.support.services import bot_services
 

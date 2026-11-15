@@ -10,7 +10,7 @@ from discord.ext import commands
 from pytest_mock import MockerFixture
 
 from squid.bot.log import LoggingCog
-from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness
+from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness
 from tests.support.discord import make_layout_bot
 
 

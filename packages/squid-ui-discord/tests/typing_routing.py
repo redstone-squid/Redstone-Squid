@@ -5,8 +5,8 @@ from typing import assert_type
 
 import discord
 
+from squid_ui.ext.discord.routing import RouteGroup, Router
 from squid_ui.routing import Route
-from squid_ui_discord.routing import RouteGroup, Router
 
 router = Router[discord.Client]()
 builds = RouteGroup[discord.Client]("builds")

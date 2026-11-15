@@ -22,7 +22,7 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
-from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
+from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import build_snapshot

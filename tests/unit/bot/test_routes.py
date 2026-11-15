@@ -5,7 +5,7 @@ from importlib import import_module, reload
 import pytest
 
 from squid.bot.routes import router, routes
-from squid_ui_discord.routing import RouteHandle
+from squid_ui.ext.discord.routing import RouteHandle
 
 
 @pytest.mark.parametrize(

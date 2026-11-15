@@ -19,6 +19,8 @@ from squid_reactivity.diagnostics import (
 )
 from squid_reactivity.operations import Failed, Pending, Succeeded
 from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, Reactive, state
+from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import (
@@ -30,8 +32,6 @@ from squid_ui.runtime import (
     history,
     transaction,
 )
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 class Panel(Component[ComponentsV2Target]):

@@ -9,7 +9,7 @@ including its dependencies and explicit access policy; snapshots never import ap
 
 ```python
 import squid_ui as sl
-from squid_ui_discord.durability import (
+from squid_ui.ext.discord.durability import (
     ComponentRegistry,
     DiscordFrontend,
     DurableSessionRuntime,

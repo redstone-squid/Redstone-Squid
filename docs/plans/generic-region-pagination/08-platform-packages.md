@@ -15,12 +15,12 @@ native documents retain their existing contracts. Distributions remain regular p
 
 ## Import migration
 
-Use `squid_ui_html.target()` and `squid_ui_html.Renderer` instead of `squid_ui.html`.
-Slack's SDK-bound targets remain `squid_ui_slack.message`, `modal`, and `home`;
-protocol constructors and limits are in `squid_ui_slack.protocol` and `.limits`.
-Discord's public targets remain `squid_ui_discord.target.v2()` and `.classic()`;
-its limits and native measurement are in `squid_ui_discord.limits` and `.planning`.
-`DiscordPreviewRenderer` now lives in `squid_ui_discord.preview`.
+Use `squid_ui.ext.html.target()` and `squid_ui.ext.html.Renderer` instead of `squid_ui.html`.
+Slack's SDK-bound targets remain `squid_ui.ext.slack.message`, `modal`, and `home`;
+protocol constructors and limits are in `squid_ui.ext.slack.protocol` and `.limits`.
+Discord's public targets remain `squid_ui.ext.discord.target.v2()` and `.classic()`;
+its limits and native measurement are in `squid_ui.ext.discord.limits` and `.planning`.
+`DiscordPreviewRenderer` now lives in `squid_ui.ext.discord.preview`.
 
 The core no longer re-exports platform constructors or measurement. The widget
 `testing.routed` helper requires an explicit target when testing routed pagination;

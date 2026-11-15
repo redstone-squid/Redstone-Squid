@@ -9,7 +9,7 @@ import pytest
 
 from squid_reactivity.topics import BusAddress, CellAddress, DelimitedTopicCodec, LocalTopicBus, TopicBus, TopicName
 from squid_ui import Reactive, state
-from squid_ui_discord.durability import PostgresTopicBridge
+from squid_ui.ext.discord.durability import PostgresTopicBridge
 
 
 class Workspace(Reactive):

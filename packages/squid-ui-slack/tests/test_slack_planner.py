@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 
 import squid_ui as sl
-import squid_ui_slack
+import squid_ui.ext.slack
 from squid_ui import forms, scene
 from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.interactions import ActionEvent, SubmitEvent
@@ -21,9 +21,9 @@ from squid_ui.runtime import PresentationState
 from squid_ui.target_types import SlackAdapter, SlackMessageTarget
 
 ADAPTER = AdapterProfile(SlackAdapter, "tests.slack", ">=3.43,<4")
-MESSAGE = squid_ui_slack.message_target(adapter=ADAPTER)
-MODAL = squid_ui_slack.modal_target(adapter=ADAPTER)
-HOME = squid_ui_slack.home_target(adapter=ADAPTER)
+MESSAGE = squid_ui.ext.slack.message_target(adapter=ADAPTER)
+MODAL = squid_ui.ext.slack.modal_target(adapter=ADAPTER)
+HOME = squid_ui.ext.slack.home_target(adapter=ADAPTER)
 
 
 async def _pressed(_event: ActionEvent) -> None: ...

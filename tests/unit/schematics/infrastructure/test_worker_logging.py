@@ -36,7 +36,7 @@ from squid.schematics.infrastructure.worker import (
     _worker_log_record,
     current_schematic_job_id,
 )
-from squid_ui_discord.testing import AsyncCallRecorder
+from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.services import unconfigured
 
 

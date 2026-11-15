@@ -16,7 +16,7 @@ from squid.core.actors import Actor
 from squid.runtime import BackgroundTaskSupervisor
 from squid.starboard.application import StarboardService
 from squid.starboard.models import OriginMessage
-from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
+from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 
 
 @dataclass

@@ -1,7 +1,7 @@
 # squid-ui-html
 
-::: squid_ui_html
+::: squid_ui.ext.html
 
-::: squid_ui_html.target
+::: squid_ui.ext.html.target
 
-::: squid_ui_html.renderer
+::: squid_ui.ext.html.renderer

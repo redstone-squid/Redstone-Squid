@@ -4,11 +4,11 @@ import discord
 import pytest
 
 from squid_ui.errors import UnsolvableLayoutError
+from squid_ui.ext.discord import ExistingLayoutError, classic
+from squid_ui.ext.discord.inspection import measure
+from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis
+from squid_ui.ext.discord.message_payload import MessageModeError, MessagePayload
 from squid_ui.semantic import Block, Heading, Paragraph
-from squid_ui_discord import ExistingLayoutError, classic
-from squid_ui_discord.inspection import measure
-from squid_ui_discord.limits import CLASSIC_LIMITS, Axis
-from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 
 
 def host(*, content=None, embeds=(), controls=()) -> MessagePayload:
@@ -183,7 +183,7 @@ class TestPreflight:
 
 class TestEffectiveRows:
     def test_the_private_row_state_is_cross_checked_against_the_payload(self) -> None:
-        from squid_ui_discord.inspection import effective_rows
+        from squid_ui.ext.discord.inspection import effective_rows
 
         view = discord.ui.View(timeout=None)
         view.add_item(button("a"))

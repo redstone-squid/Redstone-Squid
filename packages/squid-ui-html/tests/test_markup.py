@@ -1,7 +1,8 @@
 """Discord syntax stays opt-in and preserves Markdown escaping and code boundaries."""
 
 import pytest
-from squid_ui_html.markup import markdown
+
+from squid_ui.ext.html.markup import markdown
 
 
 def test_subtext_is_one_line_and_can_interrupt_a_paragraph() -> None:

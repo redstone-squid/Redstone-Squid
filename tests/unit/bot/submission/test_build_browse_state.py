@@ -10,7 +10,7 @@ import anyio
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities, _BuildDetail
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.records import RecordsScreen
@@ -31,8 +31,8 @@ from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchMode, Sea
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid_reactivity import LocalTopicBus
+from squid_ui.ext.discord.testing import StagedUI, stage
 from squid_ui.testing import press_event, submit_event
-from squid_ui_discord.testing import StagedUI, stage
 from tests.unit.suggestions.test_services import RecordingProvider
 
 

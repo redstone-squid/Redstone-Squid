@@ -12,6 +12,8 @@ reads so changes can trigger another render. Frontends, such as squid-ui-discord
 deliver the result and dispatch interactions to the bound handlers.
 """
 
+from pkgutil import extend_path
+
 from squid_reactivity import Reactive, computed, state
 from squid_reactivity.operations import operation
 from squid_reactivity.resources import resource
@@ -192,6 +194,9 @@ from squid_ui.text import (
     text_link,
     tr,
 )
+
+# Adapters can contribute squid_ui.ext packages from separate editable source trees.
+__path__ = extend_path(__path__, __name__)
 
 __all__ = [
     "INHERIT",

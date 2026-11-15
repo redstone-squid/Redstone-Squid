@@ -8,9 +8,9 @@ import anyio
 import discord
 from discord import TextChannel
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
-from squid_ui_discord import send_to
+from squid_ui.ext.discord import send_to
 
 logger = logging.getLogger(__name__)
 

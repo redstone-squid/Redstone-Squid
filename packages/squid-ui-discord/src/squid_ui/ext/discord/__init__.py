@@ -1,0 +1,441 @@
+"""Present Squid layouts and live components through discord.py.
+
+Static rendering plans a document, converts its scene to a MessagePayload, and leaves
+delivery to the caller. A live component instead belongs to a MessageRoot: the frontend
+that delivers its message, dispatches interactions, and refreshes the display as state
+changes. The message root survives the native views replaced by each render.
+
+Install one DiscordUIRuntime per client to share services and defaults. Its scopes tie
+message-root lifetimes to application owners such as cogs, while Request supplies the
+reply and acknowledgement context for a particular command or interaction.
+"""
+
+# Deeper-tier namespaces: no names of their own promoted to squid_ui.ext.discord's root, reachable
+# as squid_ui.ext.discord.<name>.X. One namespace per physical module (modal.py -> modals, to avoid
+# reading like sl.forms; navigation_controls named apart from discord.navigation because
+# they are two distinct source modules that would otherwise collide on one attribute).
+from importlib import import_module
+
+# `target.v2()` and `target.classic()` are deliberately not promoted here: `classic` at this
+# level already names the classic-composition submodule, and one name may not mean two things.
+from squid_ui.errors import (
+    ExistingLayoutError,
+    LimitViolationError,
+)
+from squid_ui.ext.discord import (
+    access,
+    actions,
+    adapter,
+    audience,
+    challenges,
+    classic,
+    classic_renderer,
+    cog,
+    commands,
+    config,
+    conformance,
+    contracts,
+    delivery,
+    devtools,
+    devtools_runtime,
+    facade,
+    fragments,
+    grids,
+    guards,
+    inspection,
+    live,
+    message_payload,
+    message_root,
+    navigation,
+    renderer,
+    rendering,
+    response,
+    roles,
+    routing,
+    runtime,
+    screen,
+    session_specs,
+    sessions,
+    target,
+    targets,
+    testing,
+    v2,
+)
+from squid_ui.ext.discord import limits as limits
+from squid_ui.ext.discord import (
+    modal as modals,
+)
+from squid_ui.ext.discord.access import (
+    AccessPolicy,
+    Everyone,
+    Owner,
+    Users,
+)
+from squid_ui.ext.discord.adoption import (
+    AdoptionError,
+    adopt,
+)
+from squid_ui.ext.discord.audience import Audience, Private, Visibility
+from squid_ui.ext.discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui.ext.discord.closure import CloseReason
+from squid_ui.ext.discord.cog import Cog
+from squid_ui.ext.discord.command_options import Choice, Option
+from squid_ui.ext.discord.commands import (
+    CommandPolicy,
+    CommandResult,
+    Group,
+    HybridGroup,
+    NativeCommandKwargs,
+    NativeContextMenuKwargs,
+    NativeHybridKwargs,
+    NativePrefixKwargs,
+    PendingCard,
+    autocomplete,
+    command,
+    context_menu,
+    hybrid_command,
+    hybrid_group,
+    prefix_command,
+)
+from squid_ui.ext.discord.config import Config, ErrorObserver, ErrorPolicy, ErrorRenderer
+from squid_ui.ext.discord.conformance import conform
+from squid_ui.ext.discord.contracts import LocalizationResolver, RequestSource, ResponseSource
+from squid_ui.ext.discord.delivery import (
+    MessageDestination,
+    deliver_to,
+    edit_to,
+    reply_to,
+    respond_to,
+    send_to,
+)
+from squid_ui.ext.discord.devtools import open_devtools
+from squid_ui.ext.discord.devtools_view import DevToolsSection
+from squid_ui.ext.discord.events import (
+    ActionEvent,
+    ChoiceEvent,
+    EntityEvent,
+    EntitySelectionEvent,
+    InvalidSubmitEvent,
+    NavigateEvent,
+    OpenEvent,
+    PressEvent,
+    ScaleEvent,
+    SelectionEvent,
+    SubmitEvent,
+    ToggleEvent,
+    on_choice,
+    on_entity,
+    on_entity_selection,
+    on_invalid_submit,
+    on_navigate,
+    on_press,
+    on_scale,
+    on_selection,
+    on_submit,
+    on_toggle,
+)
+from squid_ui.ext.discord.facade import Scope
+from squid_ui.ext.discord.fragments import contribute
+from squid_ui.ext.discord.grids import button_grid
+from squid_ui.ext.discord.limits import LIMITS as V2_LIMITS
+from squid_ui.ext.discord.live import message_roots
+from squid_ui.ext.discord.message_payload import (
+    MessageMode,
+    MessageModeError,
+    MessagePayload,
+    message_mode,
+)
+from squid_ui.ext.discord.message_root import (
+    MessageRoot,
+    owner_message_root,
+)
+from squid_ui.ext.discord.message_root_contracts import (
+    DEFAULT_MESSAGE_ROOT_CONFIG,
+    ChallengePresenter,
+    ChallengeRequest,
+    ChallengeSupervisor,
+    MessageRootConfig,
+    MessageRootSnapshot,
+    MessageRootStatus,
+    PauseUpdates,
+    RenewEphemeral,
+)
+from squid_ui.ext.discord.message_root_options import (
+    MessageRootDefaults,
+    MessageRootOptions,
+)
+from squid_ui.ext.discord.message_root_scheduler import (
+    MessageRootScheduler,
+    MessageRootSchedulerSnapshot,
+)
+from squid_ui.ext.discord.navigation import StackNavigator
+from squid_ui.ext.discord.rendering import (
+    RenderedMessage,
+    render_item,
+    render_message,
+    render_static,
+)
+from squid_ui.ext.discord.request import Deferral, Request, RequestOrigin, request
+from squid_ui.ext.discord.response import (
+    Abandoned,
+    Presented,
+    Rejected,
+    Response,
+    ResponseResult,
+    ResponseSpec,
+    Sent,
+    invoker_only,
+)
+from squid_ui.ext.discord.roles import (
+    ANY,
+    AT_LEAST_ONE,
+    AT_MOST_ONE,
+    EXACTLY_ONE,
+    Cardinality,
+    RoleCategory,
+    RoleConfigurationUnavailable,
+    RoleMutationFailed,
+    RoleMutationForbidden,
+    RoleNoticeHandler,
+    RoleOption,
+    RolePanel,
+    RoleSelectionInvalid,
+    RolesUnchanged,
+    RolesUpdated,
+    RoleTransitionResult,
+)
+from squid_ui.ext.discord.runtime import (
+    DiscordUIRuntime,
+    DiscordUIRuntimeMissing,
+    install,
+)
+from squid_ui.ext.discord.screen import Screen
+from squid_ui.ext.discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
+from squid_ui.ext.discord.session_specs import OpenContext, ScopeKind, SessionSpec
+from squid_ui.ext.discord.sessions import (
+    AdmissionSpec,
+    Reject,
+    SessionKey,
+    SessionManager,
+)
+from squid_ui.ext.discord.target import (
+    DISCORD_V1_DPY27,
+    DISCORD_V2_DPY27,
+)
+from squid_ui.planning import navigation as navigation_controls
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+
+_LAZY_NAMESPACES = frozenset({"durability"})
+"""Namespaces imported on first use rather than by the bundle above.
+
+`durability` is the only part of this package that reaches outside its base dependencies: it
+is built on `squid_storage`, which arrives with the `durable` extra. Importing it eagerly would
+make `import squid_ui.ext.discord` fail on an install that never persists a panel. It stays in
+`__all__` because it is documented surface, and `from squid_ui.ext.discord import durability` still
+works -- the import system consults this hook before falling back to the submodule.
+`devtools_runtime`, `devtools` and `devtools_view` name its types under `TYPE_CHECKING` for the same
+reason; every use there is an annotation.
+"""
+
+
+def __getattr__(name: str) -> object:
+    if name in _LAZY_NAMESPACES:
+        module = import_module(f"squid_ui.ext.discord.{name}")
+        globals()[name] = module  # bind it, so this hook runs at most once per name
+        return module
+    raise AttributeError(name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | _LAZY_NAMESPACES)
+
+
+__all__ = [
+    "ANY",
+    "AT_LEAST_ONE",
+    "AT_MOST_ONE",
+    "DEFAULT_MESSAGE_ROOT_CONFIG",
+    "DISCORD_V1_DPY27",
+    "DISCORD_V2_DPY27",
+    "EMPTY_COST",
+    "EXACTLY_ONE",
+    "V2_LIMITS",
+    "Abandoned",
+    "AccessPolicy",
+    "ActionEvent",
+    "AdmissionSpec",
+    "AdoptionError",
+    "Audience",
+    "Cancelled",
+    "Cardinality",
+    "ChallengePresenter",
+    "ChallengeRequest",
+    "ChallengeRunner",
+    "ChallengeSupervisor",
+    "Choice",
+    "ChoiceEvent",
+    "CloseReason",
+    "Cog",
+    "CommandPolicy",
+    "CommandResult",
+    "Completed",
+    "Config",
+    "Deferral",
+    "DevToolsSection",
+    "DialogPresenter",
+    "DiscordUIRuntime",
+    "DiscordUIRuntimeMissing",
+    "EntityEvent",
+    "EntitySelectionEvent",
+    "ErrorObserver",
+    "ErrorPolicy",
+    "ErrorRenderer",
+    "Everyone",
+    "ExistingLayoutError",
+    "Group",
+    "HybridGroup",
+    "InvalidSubmitEvent",
+    "LimitViolationError",
+    "LocalizationResolver",
+    "MessageDestination",
+    "MessageMode",
+    "MessageModeError",
+    "MessagePayload",
+    "MessageRoot",
+    "MessageRootConfig",
+    "MessageRootDefaults",
+    "MessageRootOptions",
+    "MessageRootScheduler",
+    "MessageRootSchedulerSnapshot",
+    "MessageRootSnapshot",
+    "MessageRootStatus",
+    "NativeCommandKwargs",
+    "NativeContextMenuKwargs",
+    "NativeHybridKwargs",
+    "NativePrefixKwargs",
+    "NavigateEvent",
+    "OpenContext",
+    "OpenEvent",
+    "Option",
+    "Owner",
+    "PauseUpdates",
+    "PendingCard",
+    "Presented",
+    "PressEvent",
+    "Private",
+    "Reject",
+    "Rejected",
+    "RenderedMessage",
+    "RenewEphemeral",
+    "Request",
+    "RequestOrigin",
+    "RequestSource",
+    "ResourceCost",
+    "Response",
+    "ResponseResult",
+    "ResponseSource",
+    "ResponseSpec",
+    "RoleCategory",
+    "RoleConfigurationUnavailable",
+    "RoleMutationFailed",
+    "RoleMutationForbidden",
+    "RoleNoticeHandler",
+    "RoleOption",
+    "RolePanel",
+    "RoleSelectionInvalid",
+    "RoleTransitionResult",
+    "RolesUnchanged",
+    "RolesUpdated",
+    "ScaleEvent",
+    "Scope",
+    "ScopeKind",
+    "Screen",
+    "ScreenCancelReason",
+    "ScreenResultEvent",
+    "SelectionEvent",
+    "Sent",
+    "SessionKey",
+    "SessionManager",
+    "SessionSpec",
+    "StackNavigator",
+    "SubmitEvent",
+    "ToggleEvent",
+    "Users",
+    "Visibility",
+    "access",
+    "actions",
+    "adapter",
+    "adopt",
+    "audience",
+    "autocomplete",
+    "button_grid",
+    "challenges",
+    "classic",
+    "classic_renderer",
+    "cog",
+    "command",
+    "commands",
+    "config",
+    "conform",
+    "conformance",
+    "context_menu",
+    "contracts",
+    "contribute",
+    "deliver_to",
+    "delivery",
+    "devtools",
+    "devtools_runtime",
+    "durability",
+    "edit_to",
+    "facade",
+    "fragments",
+    "grids",
+    "guards",
+    "hybrid_command",
+    "hybrid_group",
+    "inspection",
+    "install",
+    "invoker_only",
+    "limits",
+    "live",
+    "message_mode",
+    "message_payload",
+    "message_root",
+    "message_roots",
+    "modals",
+    "navigation",
+    "navigation_controls",
+    "on_choice",
+    "on_entity",
+    "on_entity_selection",
+    "on_invalid_submit",
+    "on_navigate",
+    "on_press",
+    "on_scale",
+    "on_selection",
+    "on_submit",
+    "on_toggle",
+    "open_devtools",
+    "owner_message_root",
+    "prefix_command",
+    "render_item",
+    "render_message",
+    "render_static",
+    "renderer",
+    "rendering",
+    "reply_to",
+    "request",
+    "respond_to",
+    "response",
+    "roles",
+    "routing",
+    "runtime",
+    "screen",
+    "send_to",
+    "session_specs",
+    "sessions",
+    "target",
+    "targets",
+    "testing",
+    "v2",
+]

@@ -11,7 +11,7 @@ from functools import partial
 from typing import Any
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.submission.ui.sections import AnswerWorkspace, SectionEditorScreen, modal_chunks, present_chunk_form
 from squid.core.i18n import tr
 

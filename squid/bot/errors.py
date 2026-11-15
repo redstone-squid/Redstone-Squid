@@ -16,7 +16,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
 from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError

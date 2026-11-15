@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Self
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.navigation.assembly import build_screen_router
 from squid.bot.navigation.controls import invalid_address_response
 from squid.bot.navigation.router import InvalidAddress

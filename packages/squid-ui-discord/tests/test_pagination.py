@@ -13,6 +13,16 @@ import squid_ui as sl
 from squid_ui import Component, field, fields, paragraph, section, truncate
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
+from squid_ui.ext.discord import V2_LIMITS as LIMITS
+from squid_ui.ext.discord.limits import Axis
+from squid_ui.ext.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_ui.ext.discord.planning import measure
+from squid_ui.ext.discord.planning.adaptation.lowering import lower_semantics
+from squid_ui.ext.discord.planning.measurement.costing import component_count
+from squid_ui.ext.discord.planning.measurement.model import MeasuredText
+from squid_ui.ext.discord.planning.measurement.text import split_pages
+from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness
 from squid_ui.pages import PagePosition, resolve_page_position
 from squid_ui.planning import SolveNoteCode
 from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
@@ -29,16 +39,6 @@ from squid_ui.primitives import (
 from squid_ui.runtime import PresentationState
 from squid_ui.semantic import Item, Items, Paragraph
 from squid_ui.text import NEUTRAL
-from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
-from squid_ui_discord import V2_LIMITS as LIMITS
-from squid_ui_discord.limits import Axis
-from squid_ui_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_ui_discord.planning import measure
-from squid_ui_discord.planning.adaptation.lowering import lower_semantics
-from squid_ui_discord.planning.measurement.costing import component_count
-from squid_ui_discord.planning.measurement.model import MeasuredText
-from squid_ui_discord.planning.measurement.text import split_pages
-from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
 
 class TestSplitPages:
@@ -300,7 +300,7 @@ class TestMountPagination:
 
     def test_the_message_root_draws_once_per_render(self, monkeypatch):
         """One committed render must make one planner call, including cursor fingerprinting."""
-        from squid_ui_discord import message_root as message_root_module
+        from squid_ui.ext.discord import message_root as message_root_module
 
         calls = 0
         planner = message_root_module.plan_document  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here

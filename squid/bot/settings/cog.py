@@ -4,14 +4,14 @@ from typing import TYPE_CHECKING, Self
 
 from discord import app_commands
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.settings.screen import SettingsCapabilities, SettingsPanel
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
 from squid_i18n import tr
-from squid_ui_discord.i18n import to_locale_str
+from squid_ui.ext.discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app

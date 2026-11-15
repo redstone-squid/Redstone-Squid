@@ -12,6 +12,8 @@ import pytest
 from squid_i18n import Text as DeferredText
 from squid_i18n import md, tr
 from squid_ui import Palette, Role, Tone, fallback, form, scene
+from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
+from squid_ui.ext.discord import testing as sd
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.ownership import Controlled
 from squid_ui.planning import PlanCache, PlanMemo, plan
@@ -47,8 +49,6 @@ from squid_ui.semantic import (
     Uncontrolled,
 )
 from squid_ui.text import Localization, Markup
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
-from squid_ui_discord import testing as sd
 
 
 async def _first(_event) -> None: ...

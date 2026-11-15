@@ -8,7 +8,7 @@ from typing import Any, Protocol, cast, override
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
@@ -35,7 +35,7 @@ from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_i18n import Text, emoji_text, md_tr
-from squid_ui_discord.form_fields import EntityField
+from squid_ui.ext.discord.form_fields import EntityField
 
 type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ChannelValidator = Callable[[int], Awaitable[None]]

@@ -12,7 +12,7 @@ from functools import partial
 from typing import Any, Literal, Protocol, override
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import pick

@@ -2,6 +2,7 @@
 
 from squid_ui import Tone, scene
 from squid_ui.document import Asset, InlineAsset
+from squid_ui.ext.discord import DISCORD_V1_DPY27
 from squid_ui.planning import plan
 from squid_ui.semantic import (
     Article,
@@ -19,7 +20,6 @@ from squid_ui.semantic import (
     Table,
     TableRow,
 )
-from squid_ui_discord import DISCORD_V1_DPY27
 
 
 def message(document, **kwargs) -> scene.ClassicMessage:

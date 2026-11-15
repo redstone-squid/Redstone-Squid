@@ -4,12 +4,12 @@ from dataclasses import replace
 from typing import Any, cast
 
 import pytest
-import squid_ui_html
-from squid_ui_html import DEFAULT_CSS, Renderer
 
 import squid_ui as sl
+import squid_ui.ext.html
 from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.html import DEFAULT_CSS, Renderer
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.text import Markup
@@ -43,7 +43,7 @@ def test_renderer_draws_native_controls_and_host_dispatch_metadata() -> None:
         sl.choices(*(sl.choice(str(index), key=str(index)) for index in range(30)), key="choice", maximum=3),
         sl.form("Submit", form, key="edit", on_submit=_submitted),
     )
-    result = sl.planning.plan(document, target=squid_ui_html.target(), localization=sl.text.Localization("en-GB"))
+    result = sl.planning.plan(document, target=squid_ui.ext.html.target(), localization=sl.text.Localization("en-GB"))
 
     rendered = Renderer().draw(result.scene, plan=result)
 
@@ -115,7 +115,7 @@ def test_renderer_resolves_declared_inline_assets_without_exposing_callbacks() -
         "text/plain",
         sl.document.InlineAsset(b"hello"),
     )
-    result = sl.planning.plan(sl.download(asset, label="Report", key="report"), target=squid_ui_html.target())
+    result = sl.planning.plan(sl.download(asset, label="Report", key="report"), target=squid_ui.ext.html.target())
 
     rendered = Renderer().draw(result.scene, plan=result)
 
@@ -168,7 +168,7 @@ def test_renderer_rejects_non_html_bodies_versions_and_invalid_reference_placeme
 def test_renderer_resolves_media_assets(figure: bool) -> None:
     asset = sl.document.Asset("image", "image.png", "image/png", sl.document.InlineAsset(b"image"))
     document = sl.figure(asset) if figure else sl.media(asset, key="image")
-    result = sl.planning.plan(document, target=squid_ui_html.target())
+    result = sl.planning.plan(document, target=squid_ui.ext.html.target())
     assert result.resources["asset:image"] == asset
     assert 'src="data:image/png;base64,aW1hZ2U="' in Renderer().draw(result.scene, plan=result)
 
@@ -177,7 +177,7 @@ def test_translated_markdown_and_literal_bindings_share_a_structured_html_path()
     name = "**Ada** <script>"
     value = sl.md_tr(t"Hello **{name}**", key="hello")
     locale = sl.text.Localization("fr", ("hello = **Bonjour** { $name }",))
-    result = sl.planning.plan(sl.paragraph(value), target=squid_ui_html.target(), localization=locale)
+    result = sl.planning.plan(sl.paragraph(value), target=squid_ui.ext.html.target(), localization=locale)
     html = Renderer().draw(result.scene, plan=result)
     assert "<strong>Bonjour</strong> **Ada** &lt;script&gt;" in html
     assert "<strong>Ada</strong>" not in html
@@ -185,7 +185,7 @@ def test_translated_markdown_and_literal_bindings_share_a_structured_html_path()
 
 def test_separately_authored_markdown_fragments_stay_separate_in_html() -> None:
     value = sl.md("**") + "Ada" + sl.md("**")
-    result = sl.planning.plan(sl.paragraph(value), target=squid_ui_html.target())
+    result = sl.planning.plan(sl.paragraph(value), target=squid_ui.ext.html.target())
     html = Renderer().draw(result.scene, plan=result)
     assert "**Ada**" in html
     assert "<strong>Ada</strong>" not in html
@@ -198,7 +198,7 @@ def test_semantic_accents_use_scoped_palette_colours() -> None:
         sl.article(sl.heading("brand"), accent=sl.AccentRole.BRAND),
     )
     result = sl.planning.plan(
-        document, target=squid_ui_html.target(), palette=sl.Palette(success=0x445566, brand=0x778899)
+        document, target=squid_ui.ext.html.target(), palette=sl.Palette(success=0x445566, brand=0x778899)
     )
 
     rendered = Renderer().draw(result.scene)
@@ -211,7 +211,7 @@ def test_custom_role_marker_preserves_status_markup_and_escapes_html() -> None:
     pending = sl.Role("build.pending", sl.Tone.WARNING, marker="<pending> ")
     result = sl.planning.plan(
         sl.status(sl.md("**Review**"), tone=pending),
-        target=squid_ui_html.target(),
+        target=squid_ui.ext.html.target(),
         palette=sl.Palette(roles={pending.name: 0x123456}),
     )
     rendered = Renderer().draw(result.scene)

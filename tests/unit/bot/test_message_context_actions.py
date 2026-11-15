@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.admin import Admin
 from squid.bot.give_redstoner import RedstonerScreen
+from squid_ui.ext.discord.testing import AsyncCallRecorder
 from squid_ui.testing import RecordingResponder, labels, press, press_event
-from squid_ui_discord.testing import AsyncCallRecorder
 
 
 @dataclass

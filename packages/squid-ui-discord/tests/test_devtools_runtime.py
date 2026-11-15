@@ -6,21 +6,21 @@ from typing import override
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
-from squid_ui.profiling import MemoryProfiler, OperationKind
-from squid_ui.runtime import TopicBusStats
-from squid_ui_discord import Everyone, SessionKey, SessionManager
-from squid_ui_discord.devtools_runtime import (
+import squid_ui.ext.discord
+from squid_ui.ext.discord import Everyone, SessionKey, SessionManager
+from squid_ui.ext.discord.devtools_runtime import (
     ActionDisabled,
     ConfirmationRequired,
     DevToolsAction,
     DevToolsPolicy,
     DevToolsRuntime,
 )
-from squid_ui_discord.durability import DurableSessionRuntime, PurgeResult
-from squid_ui_discord.message_root_scheduler import MessageRootSchedulerSnapshot
-from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, message_harness
+from squid_ui.ext.discord.durability import DurableSessionRuntime, PurgeResult
+from squid_ui.ext.discord.message_root_scheduler import MessageRootSchedulerSnapshot
+from squid_ui.ext.discord.sessions import Opened
+from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, message_harness
+from squid_ui.profiling import MemoryProfiler, OperationKind
+from squid_ui.runtime import TopicBusStats
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -34,7 +34,7 @@ class Panel(sl.Component[sl.ComponentsV2Target]):
 
 async def open_panel(registry: SessionManager, *, key: SessionKey | None = None) -> Opened:
     result = await registry.open(
-        squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
+        squid_ui.ext.discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
         delivered_to(message_harness()),
         key=key,
     )
@@ -60,7 +60,7 @@ async def test_snapshot_and_message_root_inspection_include_sessions_history_and
 async def test_session_inspection_reports_membership_and_capacity() -> None:
     registry = SessionManager()
     opened = await registry.open(
-        squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
+        squid_ui.ext.discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
         delivered_to(message_harness()),
         key=SessionKey.global_("devtools"),
         actor_id=7,

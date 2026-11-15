@@ -262,9 +262,9 @@ previews without overfilling the modal.
 Most controls already exist. The main additions belong in feature workflows
 and in a small adapter between domain lookups and shared widgets.
 
-- [form_planning.py](../../packages/squid-ui-discord/src/squid_ui_discord/form_planning.py)
+- [form_planning.py](../../packages/squid-ui-discord/src/squid_ui/ext/discord/form_planning.py)
   already renders choice, boolean, and native entity fields.
-  [EntityField](../../packages/squid-ui-discord/src/squid_ui_discord/form_fields.py)
+  [EntityField](../../packages/squid-ui-discord/src/squid_ui/ext/discord/form_fields.py)
   handles users, roles, channels, and mentionables. It currently lacks a
   channel-type filter property; use the message selector pattern from settings
   for restricted destinations, or extend that field deliberately.

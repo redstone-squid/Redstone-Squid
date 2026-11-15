@@ -9,7 +9,7 @@ import discord
 from discord import Interaction, app_commands
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.routes import routes
@@ -19,9 +19,9 @@ from squid.community.application import RedstonerService
 from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 from squid_i18n import md_tr
+from squid_ui.ext.discord import send_to
+from squid_ui.ext.discord.i18n import to_locale_str
 from squid_ui.text import localization_scope
-from squid_ui_discord import send_to
-from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app

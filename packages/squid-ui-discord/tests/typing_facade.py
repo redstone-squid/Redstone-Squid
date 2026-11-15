@@ -7,7 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 
 
 class Panel(sd.Screen[None, object]):

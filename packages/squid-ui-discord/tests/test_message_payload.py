@@ -11,18 +11,18 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord
-import squid_ui_discord.durability
+import squid_ui.ext.discord
+import squid_ui.ext.discord.durability
 from squid_ui.assets import Asset, InlineAsset
 from squid_ui.errors import LimitViolationError
+from squid_ui.ext.discord import delivery
+from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.durability import FrontendAddress
+from squid_ui.ext.discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
+from squid_ui.ext.discord.limits import LIMITS
+from squid_ui.ext.discord.message_payload import MessageMode, MessageModeError, MessagePayload, message_mode
+from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import Text
-from squid_ui_discord import delivery
-from squid_ui_discord import testing as sd
-from squid_ui_discord.durability import FrontendAddress
-from squid_ui_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
-from squid_ui_discord.limits import LIMITS
-from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload, message_mode
-from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 
 CLASSIC = MessageMode.CLASSIC
 V2 = MessageMode.COMPONENTS_V2
@@ -397,7 +397,7 @@ class TestDurableMode:
 
     async def test_promotion_records_the_mode_and_recovery_restores_it(self) -> None:
         message = message_harness()
-        message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
+        message_root = squid_ui.ext.discord.MessageRoot(Panel(), access=squid_ui.ext.discord.Everyone(), timeout=None)
         sent = await message_root.send(delivered_to(message))
         assert isinstance(sent, delivery.Delivered)
         client = _Client(message)
@@ -410,7 +410,7 @@ class TestDurableMode:
 
         # The stored mode wins over the flag on the message that comes back, which is what
         # makes it a restored fact rather than a re-derived one.
-        restored = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
+        restored = squid_ui.ext.discord.MessageRoot(Panel(), access=squid_ui.ext.discord.Everyone(), timeout=None)
         address = FrontendAddress("discord", {**promoted.address.values, "mode": "classic"})
         message.edit.records.clear()
 
@@ -422,7 +422,7 @@ class TestDurableMode:
 
     async def test_a_record_written_before_the_mode_existed_falls_back_to_the_flag(self) -> None:
         message = message_harness()
-        message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
+        message_root = squid_ui.ext.discord.MessageRoot(Panel(), access=squid_ui.ext.discord.Everyone(), timeout=None)
         client = _Client(message)
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
         address = FrontendAddress("discord", {"channel_id": message.channel.id, "message_id": message.id})
@@ -434,24 +434,24 @@ class TestDurableMode:
 
     def test_the_mode_survives_a_durable_record_round_trip(self) -> None:
         address = FrontendAddress("discord", {"channel_id": 5, "message_id": 99, "mode": "components_v2"})
-        record = squid_ui_discord.durability.DurableMessageRootRecord(
+        record = squid_ui.ext.discord.durability.DurableMessageRootRecord(
             protocol=1,
-            state=squid_ui_discord.durability.MessageRootState(
-                protocol=squid_ui_discord.durability.MessageRootStateCodec.protocol,
+            state=squid_ui.ext.discord.durability.MessageRootState(
+                protocol=squid_ui.ext.discord.durability.MessageRootStateCodec.protocol,
                 component_key="panel",
                 component_version=1,
                 components=(),
-                presentation=squid_ui_discord.durability.PresentationSnapshot({}, {}, {}, {}),
-                target_fingerprint=squid_ui_discord.DISCORD_V2_DPY27.fingerprint,
+                presentation=squid_ui.ext.discord.durability.PresentationSnapshot({}, {}, {}, {}),
+                target_fingerprint=squid_ui.ext.discord.DISCORD_V2_DPY27.fingerprint,
             ),
             address=address,
         )
 
-        encoded = squid_ui_discord.durability.DurableMessageRootCodec.dumps(record)
+        encoded = squid_ui.ext.discord.durability.DurableMessageRootCodec.dumps(record)
         assert '"state"' in encoded
         assert '"address"' in encoded
         assert '"snapshot"' not in encoded
         assert '"locator"' not in encoded
 
-        restored = squid_ui_discord.durability.DurableMessageRootCodec.loads(encoded)
+        restored = squid_ui.ext.discord.durability.DurableMessageRootCodec.loads(encoded)
         assert restored.address.values["mode"] == "components_v2"

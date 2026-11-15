@@ -8,8 +8,8 @@ from typing import Any
 import anyio
 import pytest
 
+from squid_ui.ext.discord import MessageRoot
 from squid_ui.runtime import UIExecutionHost
-from squid_ui_discord import MessageRoot
 
 
 @pytest.fixture(autouse=True)

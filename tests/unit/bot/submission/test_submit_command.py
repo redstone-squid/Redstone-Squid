@@ -44,8 +44,8 @@ from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRE
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.domain import DraftChange, DraftSnapshot, DraftStatus, FormManifest, SubmissionOrigin
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid_ui.ext.discord.testing import InteractionHarness, iter_component_payloads, stage
 from squid_ui.text import source_text
-from squid_ui_discord.testing import InteractionHarness, iter_component_payloads, stage
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 

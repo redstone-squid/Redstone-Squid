@@ -6,7 +6,7 @@ from typing import Protocol
 
 import discord
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.posts.domain import ResourceKind, Surface
 
 

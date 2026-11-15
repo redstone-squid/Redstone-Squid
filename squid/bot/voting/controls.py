@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 import discord
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.routes import routes
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor

@@ -3,7 +3,7 @@
 from functools import partial
 from typing import Any
 
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
 from squid.bot.accounts.cog import make_account_workspace
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.navigation.destinations import AccountDestination, BuildDetail, BuildIndex, DraftDetail, DraftIndex

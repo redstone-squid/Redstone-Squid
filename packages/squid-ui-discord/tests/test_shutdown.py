@@ -11,12 +11,12 @@ import anyio
 import pytest
 
 from squid_ui import Component, ComponentsV2Target
+from squid_ui.ext.discord import CloseReason, Everyone, MessageRoot, SessionManager
+from squid_ui.ext.discord.message_root_wiring import ClassicMountedView, MountedView
+from squid_ui.ext.discord.sessions import Opened
+from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import Text
 from squid_ui.runtime import UIExecutionHost
-from squid_ui_discord import CloseReason, Everyone, MessageRoot, SessionManager
-from squid_ui_discord.message_root_wiring import ClassicMountedView, MountedView
-from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 class Panel(Component[ComponentsV2Target]):
@@ -122,7 +122,7 @@ async def test_discord_timeout_consumes_logged_shutdown_failure(
     await view.on_timeout()
 
     assert root.close_reason is CloseReason.TIMEOUT
-    assert [record.message for record in caplog.records if record.name == "squid_ui_discord._shutdown"] == [
+    assert [record.message for record in caplog.records if record.name == "squid_ui.ext.discord._shutdown"] == [
         "shutdown failed"
     ]
     with pytest.raises(ExceptionGroup) as failure:

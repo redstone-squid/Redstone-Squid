@@ -11,7 +11,7 @@ removed state and coordination, rather than smaller files alone.
 
 ## Scope and evidence
 
-The main work is in `packages/squid-ui-discord/src/squid_ui_discord/`:
+The main work is in `packages/squid-ui-discord/src/squid_ui/ext/discord/`:
 
 - `message_root.py` coordinates candidate preparation, delivery, interaction admission,
   action execution, challenges, refresh scheduling, and closure. It is about 3,100 lines.

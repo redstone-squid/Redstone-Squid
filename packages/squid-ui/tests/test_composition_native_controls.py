@@ -4,13 +4,14 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-import squid_ui_html
 
 import squid_ui as sl
+import squid_ui.ext.html
 from squid_ui import scene
 from squid_ui.capabilities import Capability
 from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.forms import FormBinding, FormSpec, SubmitEvent, TextField
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -22,7 +23,6 @@ from squid_ui.presentations import alternative, alternatives, equivalent
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never
 from squid_ui.target_types import DiscordAdapter
-from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-controls.discord", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [components_v2_target(ADAPTER), classic_target(ADAPTER)]
@@ -209,7 +209,7 @@ def test_native_callback_change_invalidates_retained_allocation(target: Target[A
 
 
 def test_native_discord_rows_have_a_concrete_non_discord_capability_error() -> None:
-    target: Target[Any, Any, Any, Any] = squid_ui_html.target()
+    target: Target[Any, Any, Any, Any] = squid_ui.ext.html.target()
     with pytest.raises(JointUnsupportedError) as error:
         plan(
             sl.region(native.Row((native.Button("Action", untouched, "action"),)), key="r", title="R"),

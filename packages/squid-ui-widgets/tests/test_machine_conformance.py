@@ -13,6 +13,7 @@ from hypothesis import strategies as st
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
+from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.semantic import (
     ActionControl,
     Choices,
@@ -20,7 +21,6 @@ from squid_ui.semantic import (
     RoutedActionControl,
     RoutedChoices,
 )
-from squid_ui_discord.target import DISCORD_V2_DPY27
 from squid_ui_widgets import testing as wt
 
 KEYED_CONTROLS = (ActionControl, Choices, FormTrigger, RoutedActionControl, RoutedChoices)
