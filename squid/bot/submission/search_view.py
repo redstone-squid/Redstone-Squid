@@ -125,7 +125,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
                 (
                     sl.action_controls(
                         sl.action_control(
-                            tr(t"bot-submission-search-view-view-build = View build"),
+                            tr(t"bot-submission-search-view-view-build = Expand"),
                             self._open_build,
                             key="open-build",
                         ),

@@ -1338,7 +1338,7 @@ bot-submission-search-view-value =
 bot-submission-search-view-version = Version
 
 # squid/bot/submission/search_view.py:128
-bot-submission-search-view-view-build = View build
+bot-submission-search-view-view-build = Expand
 
 # squid/bot/submission/submit.py:400
 bot-submission-submit-author-has-not-consented = Author has not consented
