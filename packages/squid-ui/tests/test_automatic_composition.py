@@ -1,6 +1,6 @@
 import logging
 from dataclasses import replace
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 
@@ -17,7 +17,7 @@ from squid_ui.planning import (
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.composition_v2 import V2CompositionRules
-from squid_ui.planning.discord import components_v2_target
+from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
@@ -188,3 +188,17 @@ def test_shared_html_assets_reach_the_delivery_renderer() -> None:
 
     assert result.resources[f"asset:{asset.key}"] is asset
     assert "data:text/plain;base64," in sl.html.Renderer().draw(result.scene, plan=result)
+
+
+@pytest.mark.parametrize("target", [classic_target(V2.adapter), SLACK])
+def test_shared_downloads_retain_the_delivery_asset(target: Any) -> None:
+    asset = sl.file(b"report contents", filename="report.txt")
+    result = sl.planning.plan(
+        sl.download(asset, label="Report", key="report"),
+        target=target,
+        composition=CompositionOptions(automatic=True),
+    )
+
+    assert result.resources[f"asset:{asset.key}"] is asset
+    assert result.scene.assets == (scene.Asset(asset.key, asset.name, asset.media_type),)
+    assert "Report" in scene.Codec.dumps(result.scene)

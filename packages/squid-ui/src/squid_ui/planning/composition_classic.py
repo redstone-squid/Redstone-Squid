@@ -419,9 +419,17 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                             ),
                         )
                     )
-                case DownloadRealization():
-                    # Classic attachments have no inline file widget or spoiler metadata.
-                    violations.append(UnsupportedCapability(identity, "inline classic download; use document assets"))
+                case DownloadRealization() as download:
+                    uses.append(
+                        SharedUse(
+                            ResourceIdentity("attachment", download.asset.key),
+                            download.asset,
+                            ResourceCost({Axis.ATTACHMENTS: int(download.asset.url is None)}),
+                        )
+                    )
+                    label = markdown(download.label) or download.asset.name
+                    text(f"[{label}]({download.asset.url})" if download.asset.url else label)
+                    text(markdown(download.description))
                 case FlowRealization():
                     for child in part.children:
                         visit(child, output, embedded=embedded, row=row)

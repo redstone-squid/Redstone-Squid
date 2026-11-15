@@ -24,11 +24,14 @@ from squid_ui.planning.composition import (
     PlanningContext,
     RealizationOffer,
     SemanticOccurrence,
+    SharedResources,
+    SharedUse,
     UnsupportedCapability,
 )
 from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
+    DownloadRealization,
     EntityRealization,
     FieldsRealization,
     FlowRealization,
@@ -45,7 +48,7 @@ from squid_ui.planning.realizations import (
     record_text,
     semantic_offers,
 )
-from squid_ui.planning.resources import Axis, ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, ResourceIdentity
 from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
@@ -144,11 +147,8 @@ class SlackCompositionRules[
     ) -> Evaluation[Asset, BodyT]:
         texts: list[str] = []
         scopes: dict[OccurrenceId, ResourceCost] = {}
-        violations: list[CandidateViolation] = (
-            [UnsupportedCapability(candidate.offer.occurrence.identity, "Slack document attachments")]
-            if context.assets
-            else []
-        )
+        violations: list[CandidateViolation] = []
+        uses = [SharedUse(ResourceIdentity("attachment", asset.key), asset, EMPTY_COST) for asset in context.assets]
         effects: list[FidelityEffect] = []
         interactions: set[SemanticRef] = set()
         blocks = 0
@@ -514,6 +514,41 @@ class SlackCompositionRules[
                         packed = [scene.SlackActions(elements[i : i + size]) for i in range(0, len(elements), size)]
                         prepared_blocks[start:] = packed
                         blocks += len(packed) - len(group)
+                case DownloadRealization() as download:
+                    label = text(
+                        download.label or resolve_text(context.chrome.download, context.localization).nodes,
+                        capacity=self.limits.components.button_label,
+                        name="download.label",
+                    )
+                    if download.spoiler:
+                        violations.append(UnsupportedCapability(identity, "Slack download spoilers"))
+                    uses.append(
+                        SharedUse(ResourceIdentity("attachment", download.asset.key), download.asset, EMPTY_COST)
+                    )
+                    prepared_blocks.append(
+                        scene.SlackActions(
+                            (
+                                scene.SlackButton(
+                                    scene.SlackText(label or ""),
+                                    asset=scene.SlackAssetRef(
+                                        download.asset.key, download.asset.name, download.asset.media_type
+                                    ),
+                                ),
+                            )
+                        )
+                    )
+                    blocks += 1
+                    if download.description:
+                        description = _mrkdwn(download.description)
+                        if description is None:
+                            violations.append(UnsupportedCapability(identity, "download description markup"))
+                        else:
+                            limit("download.description", len(description), self.limits.components.section_text)
+                            texts.append(description)
+                            prepared_blocks.append(
+                                scene.SlackSection(scene.SlackText(description, scene.SlackTextKind.MARKDOWN))
+                            )
+                            blocks += 1
                 case ImageRealization() as media:
                     if isinstance(media.source, Asset) or media.spoiler:
                         violations.append(
@@ -611,6 +646,7 @@ class SlackCompositionRules[
             body = scene.SlackHomeView(tuple(prepared_blocks))
         return Evaluation(
             cost,
+            resources=SharedResources.combine(uses),
             violations=tuple(violations),
             effects=tuple(effects),
             interactions=frozenset(interactions),
