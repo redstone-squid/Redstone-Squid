@@ -182,11 +182,12 @@ async def test_review_confirmation_can_open_and_cancel(action: str) -> None:
     async with stage(_screen(status=Status.PENDING), owner=object()) as ui:
         await ui.press(ui.key_for(action))
 
-        assert "## Confirm review decision" in ui.texts()
+        heading = f"## {action.title()} build #7?"
+        assert heading in ui.texts()
 
         await ui.press(ui.key_for("build-review.cancel"))
 
-        assert "## Confirm review decision" not in ui.texts()
+        assert heading not in ui.texts()
         ui.control(ui.key_for(action))
 
 
@@ -834,10 +835,8 @@ async def test_collapsed_query_and_sort_share_summary_with_reset() -> None:
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, "width:3", "-height")
         await ui.press(ui.key_for("guided-search"))
-        summaries = [text for text in ui.texts() if "Query:" in text]
-        assert len(summaries) == 1
-        assert "width:3" in summaries[0]
-        assert "Height ↓" in summaries[0]
+        summaries = [text for text in ui.texts() if "Width is 3" in text]
+        assert summaries == ["Width is 3 · Height, largest first"]
         assert screen._guided is None
         assert not any(key.endswith("reset") for key in ui.root.snapshot().handler_keys)
         await ui.press(ui.key_for("guided-search"))

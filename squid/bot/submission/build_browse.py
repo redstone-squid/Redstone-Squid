@@ -16,16 +16,19 @@ from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.navigation.destinations import BuildDetail, BuildIndex
 from squid.bot.navigation.router import screen_route
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
+from squid.bot.submission.query_clauses import query_leaves
 from squid.bot.submission.record_browser import record_browser
 from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.schematic_tools import SchematicTools
 from squid.bot.submission.search_help import search_help
+from squid.bot.submission.search_labels import filter_label, sort_label
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr, truncate_display_text
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.builds.domain import Status
+from squid.builds.domain.titles import format_build_display_title
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.core.pagination import PageSelector
@@ -40,8 +43,10 @@ from squid.permissions.domain.catalogue import (
 from squid.records.application import RecordService
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
+from squid.search.application.parser import SearchQueryParser
 from squid.search.domain import SearchRequest, SearchScope, SearchSort
-from squid_i18n import md_tr
+from squid.search.domain.query import BooleanExpression, BooleanOperator, NotExpression, QueryExpression
+from squid_i18n import Text
 from squid_reactivity import Topic, TopicBus
 from squid_ui.sources import window_fingerprint
 
@@ -169,7 +174,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         sl.state(None, opaque=True)
     )
     _review: BoundEdit | None = sl.state(None, opaque=True)
-    _pending_review: str | None = sl.state(None)
+    _pending_review: Literal["approve", "reject"] | None = sl.state(None)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
     _show_schematics: bool = sl.state(False)
 
@@ -233,7 +238,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
             assert state.previous is not None
             build, node = state.previous.value
         if self._decision is not None:
-            return (node, self._review_prompt(), self._decision)
+            return (node, self._decision)
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [node]
         nodes.append(self._detail_actions(build))
         nodes.extend(self.controller.controls())
@@ -305,15 +310,17 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         return sl.action_controls(*actions, key="build-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
 
     def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
-        action = self._pending_review or "review"
         build_id = self._build_id
+        if self._pending_review == "approve":
+            return sl.section(
+                sl.heading(tr(t"build-review-approve-title = Approve build #{build_id!s}?")),
+                sl.paragraph(tr(t"build-review-approve-effect = The build becomes visible in the public catalogue.")),
+                accent=sl.Tone.SUCCESS,
+            )
         return sl.section(
-            sl.heading(tr(t"build-review-confirmation-title = Confirm review decision")),
-            sl.paragraph(
-                md_tr(
-                    t"bot-submission-build-browse-build = {action} build #{build_id!s}?",
-                )
-            ),
+            sl.heading(tr(t"build-review-reject-title = Reject build #{build_id!s}?")),
+            sl.paragraph(tr(t"build-review-reject-effect = The build is marked as denied and leaves the catalogue.")),
+            accent=sl.Tone.DANGER,
         )
 
     async def _request_approve(self, revision: int, _event: sl.PressEvent) -> None:
@@ -322,13 +329,18 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     async def _request_reject(self, revision: int, _event: sl.PressEvent) -> None:
         self._request_review("reject", revision)
 
-    def _request_review(self, action: str, revision: int) -> None:
+    def _request_review(self, action: Literal["approve", "reject"], revision: int) -> None:
         self._review = self.controller.bind(BUILD_STATUS_EDIT, build_target(self._build_id), revision)
         self._pending_review = action
+        confirm = (
+            sp.DecisionOption("confirm", tr(t"bot-submission-build-browse-approve = Approve"), sl.Tone.SUCCESS)
+            if action == "approve"
+            else sp.DecisionOption("confirm", tr(t"bot-submission-build-browse-reject = Reject"), sl.Tone.DANGER)
+        )
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]](
-            tr(t"build-review-state-warning = This changes the build's review state."),
+            self._review_prompt(),
             (
-                sp.DecisionOption("confirm", tr(t"bot-submission-build-browse-confirm = Confirm"), sl.Tone.DANGER),
+                confirm,
                 sp.DecisionOption("cancel", tr(t"bot-submission-build-browse-cancel = Cancel")),
             ),
             key="build-review",
@@ -460,7 +472,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             _BuildSource(queries, frozenset(statuses)),
             key="builds",
             identity=lambda build: str(build.id),
-            label=lambda build: truncate_display_text(f"#{build.id} {build.title}", 100),
+            label=_build_label,
             # `_BuildSource` filters on `submission_status`, so every listed build carries one; the
             # domain type stays optional only for a build that has not been submitted yet.
             summary=_build_summary,
@@ -560,13 +572,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _find_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
-        query = self._query or ("All standings" if self._mode == "records" else "All builds")
-        sort = self._sort.removeprefix("-").replace("_", " ").title() if self._sort else "Default"
-        if self._sort:
-            sort += " ↓" if self._sort.startswith("-") else " ↑"
+        query = _query_summary(self._query, records=self._mode == "records")
+        sort = sort_label(self._sort)
         nodes.append(
             sd.v2.section(
-                tr(t"browse-query-summary = Query: {query} · Sort: {sort}"),
+                tr(t"browse-query-summary = {query} · {sort}"),
                 accessory=sd.v2.button(
                     tr(t"build-browser-edit-search = Edit"),
                     self._guided_search,
@@ -671,7 +681,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         browser = sp.Browser(
             session,
             key="linked-build",
-            label=lambda item: truncate_display_text(f"#{item.id} {item.title}", 100),
+            label=_build_label,
             detail=self._detail,
             chronology=sl.sources.Chronology.NEWEST_FIRST,
         )
@@ -762,6 +772,40 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _back(self, _event: sl.PressEvent) -> None:
         self._selected = None
+
+
+def _query_summary(query: str, *, records: bool) -> sl.TextLike:
+    """Describe the active query as its filters, or as everything when it is empty.
+
+    A query with OR keeps its syntax, because a flat list of filters would hide the grouping.
+    """
+    expression = SearchQueryParser().parse(query).expression if query.strip() else None
+    if expression is None:
+        return (
+            tr(t"browse-query-all-standings = All standings")
+            if records
+            else tr(t"browse-query-all-builds = All builds")
+        )
+    if _has_or(expression):
+        return Text(t"`{query}`")
+    return Text.join(" · ", [filter_label(leaf) for _, leaf in query_leaves(expression)])
+
+
+def _has_or(expression: QueryExpression) -> bool:
+    match expression:
+        case BooleanExpression(operator=BooleanOperator.OR):
+            return True
+        case BooleanExpression(operands=operands):
+            return any(_has_or(item) for item in operands)
+        case NotExpression(operand=operand):
+            return _has_or(operand)
+        case _:
+            return False
+
+
+def _build_label(build: Build) -> str:
+    """A plain-text label for selection menus, which cannot show the title's Markdown."""
+    return truncate_display_text(f"#{build.id} {format_build_display_title(build, markdown=False)}", 100)
 
 
 def _build_summary(build: Build) -> sl.TextLike:
