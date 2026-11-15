@@ -706,5 +706,7 @@ class BuildInferenceService:
             # Untyped references have no media field, so keep their URLs in the description too.
             if not any(link.url in note for note in notes):
                 notes.append(f"Reference: {link.url}")
-        notes.extend(f"Needs review: {note}" for note in inferred.review_notes)
+        if inferred.review_notes:
+            # Keep model commentary available in retained candidates, outside the author's description.
+            build.extra_info["inference_review_notes"] = list(inferred.review_notes)
         build.description = "\n".join(notes) or None

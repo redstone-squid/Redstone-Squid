@@ -261,7 +261,7 @@ async def test_qualified_timings_and_volume_survive_submission_prefill() -> None
     assert "936 blocks" not in str(build.extra_info)
 
 
-async def test_unparseable_timings_and_ambiguous_claims_remain_reviewable() -> None:
+async def test_unparseable_timings_preserve_source_facts_without_model_review_commentary() -> None:
     service = BuildInferenceService(
         FakeTextGenerator(
             InferenceResult(
@@ -283,7 +283,13 @@ async def test_unparseable_timings_and_ambiguous_claims_remain_reviewable() -> N
     assert build.normal_opening_time is None
     assert build.description is not None
     assert "Opening: between 1 and 2 seconds" in build.description
-    assert "Needs review: Unclear whether flush + funnel" in build.description
+    assert "Needs review:" not in build.description
+    assert "Unclear whether" not in build.description
+    assert build.extra_info["inference_review_notes"] == [
+        "Unclear whether flush + funnel describes one build or two variants."
+    ]
+    prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+    assert prefill.answers["description"] == "Opening: between 1 and 2 seconds"
 
 
 async def test_source_links_survive_prefill_without_inventing_or_inheriting_urls() -> None:

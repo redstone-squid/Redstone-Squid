@@ -96,6 +96,7 @@ class Info(TypedDict, total=False):
     server_info: ServerInfo
     schematic_duplicates: list[SchematicDuplicateInfo]
     attachment_failures: list[AttachmentFailureInfo]
+    inference_review_notes: list[str]
     submission_provenance: dict[str, Any]
 
 
