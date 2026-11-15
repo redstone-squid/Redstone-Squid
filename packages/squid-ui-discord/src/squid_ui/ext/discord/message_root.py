@@ -91,7 +91,7 @@ from squid_ui.ext.discord.message_root_contracts import (
     RenewEphemeral,
 )
 from squid_ui.ext.discord.message_root_lifecycle import _CandidateLifecycle
-from squid_ui.ext.discord.message_root_spread import _Continuations
+from squid_ui.ext.discord.message_root_spread import _Continuations, _DeliveryOutcome
 from squid_ui.ext.discord.message_root_wiring import (
     AnyMountedView,
     ClassicMountedView,
@@ -212,10 +212,6 @@ def _binding_for(target: AnyTarget) -> _DiscordBinding:
 _NOOP_PROFILER = NoOpProfiler()
 
 _MAX_LOAD_PASSES = 16
-
-# What `_deliver` returns when a spread render reached some message, but not through the
-# handle the caller passed. Callers only test the result against None and that handle.
-_WROTE_ELSEWHERE = cast(deliver.EditHandle, object())
 """Maximum discovery passes for component loads and atomic resources per delivery.
 
 Each loaded tier can reveal another, so very deep finite trees and recursive loading
@@ -597,8 +593,8 @@ class MessageRoot[
             if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
                 candidate = await self._stage_loaded()
                 with self._candidates.attempt(candidate):
-                    wrote = await self._deliver(candidate, through=handle)
-                    if wrote is None:
+                    outcome = await self._deliver(candidate, through=handle)
+                    if not outcome.committable:
                         return
                     self._candidates.commit_presented(candidate)
                     await self._settle_visible(candidate, through=handle)
@@ -762,8 +758,8 @@ class MessageRoot[
         if isinstance(policy, RenewEphemeral):
             candidate = self._draw_renewal(profile=profile)
             with self._candidates.attempt(candidate):
-                wrote = await self._deliver(candidate, files=False, profile=profile)
-                if wrote is None:
+                outcome = await self._deliver(candidate, files=False, profile=profile)
+                if not outcome.committable:
                     logger.debug("mount %s could not arm renewal before its edit handle expired", self.id)
                     return PresentationStatus.ABANDONED
                 self._candidates.commit_renewal(candidate)
@@ -1537,11 +1533,11 @@ class MessageRoot[
                     self._candidates.suppress(candidate, profile)
                     return candidate
                 candidate = _drawn(candidate)
-                wrote = await self._deliver(candidate, through=through, profile=profile)
+                outcome = await self._deliver(candidate, through=through, profile=profile)
             except Exception:
                 logger.exception("mount %s could not deliver an async binding update", self.id)
                 return None
-            if wrote is None:
+            if not outcome.committable:
                 return None
             if profile is None:
                 self._candidates.commit_presented(candidate)
@@ -1641,13 +1637,11 @@ class MessageRoot[
         profile: OperationRecorder | None = None,
         interaction: discord.Interaction | None = None,
         everything: bool = False,
-    ) -> deliver.EditHandle | None:
+    ) -> _DeliveryOutcome:
         """Show a staged render, through `through` when it is usable and the standing handle otherwise.
 
-        Returns the handle that wrote, or `None` when none of them could. Which one it was
-        matters: only the interaction's own handle answers the click as a side effect of
-        editing, so a caller holding an interaction has to read this to know whether it still
-        owes an acknowledgement.
+        The outcome separates whether to commit from which messages were written and
+        whether an interaction edit answered the click.
 
         `files=False` leaves the message's attachments alone; a terminal disable-edit changes
         only the controls, and an empty asset set would otherwise strip them.
@@ -1672,7 +1666,12 @@ class MessageRoot[
                     interaction=interaction,
                     everything=everything,
                 )
-            return await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
+            handle = await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
+            return _DeliveryOutcome(
+                committable=handle is not None,
+                written=frozenset({0}) if handle is not None else frozenset(),
+                interaction_written=handle is not None and handle is through,
+            )
 
     async def _deliver_spread(
         self,
@@ -1683,14 +1682,13 @@ class MessageRoot[
         profile: OperationRecorder | None,
         interaction: discord.Interaction | None,
         everything: bool,
-    ) -> deliver.EditHandle | None:
+    ) -> _DeliveryOutcome:
         """Write the messages of a spread render that do not already show it.
 
         Marks on the candidate which messages were reached, for the commit to publish.
-        Returns `through` when a write went through it, which answers the press it came
-        from, and another non-None value otherwise.
+        Reports an interaction write only when its own handle performed an edit.
 
-        The result is never None, so the caller commits even when no message could be
+        The result is committable even when no message could be
         reached. The commit then records each missed message as stale. Rolling back
         instead would leave the reachable messages unable to act: every later press
         would find the root behind its state and only try the same repaint again.
@@ -1702,7 +1700,7 @@ class MessageRoot[
         needed = (True,) * (1 + len(candidate.continuations)) if everything else self._candidates.needs_write(candidate)
         source = None if through is None else self._continuations.index_of(getattr(through, "message_id", None))
         delivered = len(self._continuations.slots)
-        wrote: deliver.EditHandle | None = None
+        written: set[int] = set()
         answered = False
         candidate.primary_written = False
         for index in sorted(range(len(needed)), key=lambda index: index != source):
@@ -1725,9 +1723,9 @@ class MessageRoot[
                 )
                 drawn.written = handle is not None
             if handle is not None:
-                wrote = handle
+                written.add(index)
                 answered = answered or handle is through
-        for drawn in candidate.continuations[delivered:]:
+        for index, drawn in enumerate(candidate.continuations[delivered:], start=delivered + 1):
             destination = self._continuations.follow_up
             if interaction is not None and not interaction.is_expired():
                 if not interaction.response.is_done():
@@ -1737,9 +1735,10 @@ class MessageRoot[
                 # Later messages must follow this one, so they wait for it too.
                 break
             drawn.written = True
+            written.add(index)
         if len(self._continuations.slots) > len(candidate.continuations):
             await self._continuations.trim(len(candidate.continuations))
-        return through if answered else wrote or _WROTE_ELSEWHERE
+        return _DeliveryOutcome(committable=True, written=frozenset(written), interaction_written=answered)
 
     async def _write(
         self,
@@ -1987,13 +1986,13 @@ class MessageRoot[
                 else:
                     with self._candidates.attempt(candidate):
                         try:
-                            wrote = await self._deliver(candidate, through=source, profile=profile.operation)
+                            outcome = await self._deliver(candidate, through=source, profile=profile.operation)
                         except Exception as error:
                             with profile.operation.span("rollback"):
                                 self._rollback(candidate)
                             failure = error
                         else:
-                            if wrote is None:
+                            if not outcome.committable:
                                 self._rollback(candidate)
                                 acknowledge = True
                             else:
@@ -2001,9 +2000,9 @@ class MessageRoot[
                                     self._candidates.commit_presented(candidate)
                                 await self._settle_visible(candidate, through=source, profile=profile.operation)
                                 profile.presentation = PresentationStatus.WRITTEN
-                                if wrote is source:
+                                if outcome.interaction_written:
                                     profile.acknowledge("interaction_write")
-                                acknowledge = wrote is not source
+                                acknowledge = not outcome.interaction_written
         if failure is not None:
             profile.presentation = PresentationStatus.FAILED
             await self.handle_error(interaction, failure, "renewal")
@@ -2871,14 +2870,14 @@ class MessageRoot[
                     else:
                         candidate = _drawn(candidate)
                         try:
-                            wrote = await self._deliver(
+                            outcome = await self._deliver(
                                 candidate, through=source, profile=operation, interaction=interaction
                             )
                         except Exception:
                             with operation.span("rollback"):
                                 self._rollback(candidate)
                             raise
-                        if wrote is None:
+                        if not outcome.committable:
                             with operation.span("rollback"):
                                 self._rollback(candidate)
                             acknowledge = True
@@ -2888,12 +2887,12 @@ class MessageRoot[
                                 self._candidates.commit_presented(candidate)
                             await self._settle_visible(candidate, through=source, profile=operation)
                             presentation = PresentationStatus.WRITTEN
-                            if dispatch is not None and wrote is source:
+                            if dispatch is not None and outcome.interaction_written:
                                 dispatch.acknowledge("interaction_write")
                             # Only the interaction's own handle answers the click by editing through
                             # it. Delivery through the standing handle leaves the click unanswered,
                             # and Discord shows the user "This interaction failed" three seconds later.
-                            acknowledge = wrote is not source
+                            acknowledge = not outcome.interaction_written
         if acknowledge:
             await self._acknowledge(interaction, profile=dispatch, source="flush")
             if presentation is PresentationStatus.NO_CHANGE:
@@ -2988,7 +2987,7 @@ class MessageRoot[
                         return PresentationStatus.UNCHANGED
                     candidate = _drawn(candidate)
                     try:
-                        delivered = await self._deliver(candidate, profile=profile) is not None
+                        delivered = (await self._deliver(candidate, profile=profile)).committable
                     except Exception:
                         with profile.span("rollback"):
                             self._rollback(candidate)
@@ -3181,8 +3180,8 @@ class MessageRoot[
                                         if isinstance(target, RoutedItem | RoutedSelectItem):
                                             target.disabled = False
                             source = None if interaction is None else deliver.handle_from(interaction)
-                            wrote = await self._deliver(candidate, through=source, files=False, everything=True)
-                            if interaction is not None and (wrote is None or wrote is not source):
+                            outcome = await self._deliver(candidate, through=source, files=False, everything=True)
+                            if interaction is not None and not outcome.interaction_written:
                                 await self._acknowledge(interaction)
                     except discord.NotFound:
                         pass

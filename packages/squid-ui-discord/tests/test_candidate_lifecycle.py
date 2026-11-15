@@ -272,7 +272,7 @@ async def test_terminal_acknowledgement_error_does_not_settle_twice(monkeypatch:
     async def fail_acknowledgement(*args: Any, **kwargs: Any) -> None:
         raise failure
 
-    monkeypatch.setattr(root, "_deliver", abandoned)
+    monkeypatch.setattr(root, "_write", abandoned)
     monkeypatch.setattr(root, "_acknowledge", fail_acknowledgement)
 
     with pytest.raises(ExceptionGroup) as caught:

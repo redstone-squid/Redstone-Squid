@@ -20,6 +20,19 @@ from squid_ui.ext.discord.message_payload import MessagePayload
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class _DeliveryOutcome:
+    """Separate candidate acceptance from visible writes and interaction acknowledgement.
+
+    Spread candidates remain committable when some or all messages are unreachable;
+    publication records those messages as stale so later interactions can repair them.
+    """
+
+    committable: bool
+    written: frozenset[int]
+    interaction_written: bool
+
+
 @dataclass(slots=True)
 class _Slot:
     """One delivered continuation message."""

@@ -258,3 +258,30 @@ async def test_editing_another_ephemeral_message_acknowledges_before_the_webhook
     assert len(interaction.deferrals) == 1
     assert len(credentials[1].edit_original_response.records) == 1
     assert interaction.response.edit_message.records == []
+
+
+async def test_unreachable_spread_commits_for_recovery_without_claiming_a_write() -> None:
+    delivery = Delivery()
+    root, panel = await mounted(delivery)
+    root._handle = None
+    for slot in root._continuations.slots:
+        slot.handle = None
+    panel.title = "Changed while unreachable"
+    panel.count = 7
+
+    candidate = root._stage()
+    with root._candidates.attempt(candidate):
+        outcome = await root._deliver(candidate)
+        assert outcome.committable
+        assert outcome.written == frozenset()
+        assert not outcome.interaction_written
+        root._commit(candidate)
+
+    assert root._candidates.stale == {0, 1}
+    assert root.pending
+    # The next press repairs what its reader sees, without applying that stale action.
+    interaction = press_from(delivery, 1)
+    await root.dispatch("inc", interaction, generation=root.generation)
+    assert panel.count == 7
+    assert root._candidates.stale == {0}
+    assert "count: 7" in payload_texts(interaction.response.edit_message.records[0].kwargs["view"])
