@@ -12,11 +12,12 @@ from squid_ui import scene
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.limits import Axis
 from squid_ui.ext.discord.planning import measure
-from squid_ui.ext.discord.testing import commit_render, interaction_harness, without_capabilities
+from squid_ui.ext.discord.testing import commit_render, interaction_harness, query, without_capabilities
 from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.primitives import EntitySelect
 from squid_ui.runtime import PresentationState
+from squid_ui.selectors import select as select_node
 
 
 async def _select(_event: sl.EntitySelectionEvent) -> None: ...
@@ -172,7 +173,7 @@ async def test_channel_select_dispatches_resolved_channels_and_threads(channel_t
 
     root = MessageRoot(Picker(), access=Everyone(), timeout=None)
     view = commit_render(root)
-    select = next(item for item in view.walk_children() if isinstance(item, discord.ui.ChannelSelect))
+    select = query(view, select_node(discord.ui.ChannelSelect)).all()[0].node
     # Discord delivers partial application-command objects even for cached guild channels.
     select._values = [selected]
 

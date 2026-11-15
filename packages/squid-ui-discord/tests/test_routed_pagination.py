@@ -11,7 +11,7 @@ from squid_ui import scene, testing
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
 from squid_ui.ext.discord.modal import build_form_modal
 from squid_ui.ext.discord.routing import Router
-from squid_ui.ext.discord.testing import interaction_harness
+from squid_ui.ext.discord.testing import interaction_harness, query
 from squid_ui.ownership import Controlled, Uncontrolled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, Target, plan
@@ -19,6 +19,7 @@ from squid_ui.planning.navigation import default_nav, page_jump_form, page_jump_
 from squid_ui.presentation import CursorUpdate, PresentationState
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import RoutedPage
+from squid_ui.selectors import select as select_node
 from squid_ui_widgets import testing as wt
 
 
@@ -196,7 +197,7 @@ def test_discord_draws_persistent_buttons_and_jump_options() -> None:
         nav=page_select_nav,
     )
     buttons = [item for item in rendered.view.walk_children() if isinstance(item, discord.ui.Button)]
-    select = next(item for item in rendered.view.walk_children() if isinstance(item, discord.ui.Select))
+    select = query(rendered.view, select_node(discord.ui.Select)).all()[0].node
     assert [button.custom_id for button in buttons] == ["page:0", "page:2"]
     assert select.custom_id == "page:seek"
     assert [option.value for option in select.options if option.default] == ["1"]

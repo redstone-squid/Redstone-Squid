@@ -22,7 +22,7 @@ from squid_ui.ext.discord.planning.adaptation.lowering import lower_semantics
 from squid_ui.ext.discord.planning.measurement.costing import component_count
 from squid_ui.ext.discord.planning.measurement.model import MeasuredText
 from squid_ui.ext.discord.planning.measurement.text import split_pages
-from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness
+from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness, query
 from squid_ui.pages import PagePosition, resolve_page_position
 from squid_ui.planning import SolveNoteCode
 from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
@@ -37,6 +37,7 @@ from squid_ui.primitives import (
     Text,
 )
 from squid_ui.runtime import PresentationState
+from squid_ui.selectors import select as select_node
 from squid_ui.semantic import Item, Items, Paragraph
 from squid_ui.text import NEUTRAL
 
@@ -368,7 +369,7 @@ class TestMountPagination:
     async def test_a_materialized_cursor_seeks_to_a_page(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
         view = commit_render(message_root)
-        jump = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
+        jump = query(view, select_node(discord.ui.Select)).all()[0].node
         assert jump.custom_id is not None and jump.custom_id.endswith("__cursor_seek.entries")
 
         await message_root.dispatch("__cursor_seek.entries", interaction_harness(), ["3"])
@@ -397,7 +398,7 @@ class TestMountPagination:
         """`page_select_nav` is opt-in: a select costs a whole component row."""
         view = commit_render(MessageRoot(Browser(), access=Everyone(), timeout=None))
 
-        assert not [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
+        assert not query(view, "Select").exists()
 
     async def test_prev_at_first_page_is_a_clean_noop(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None)

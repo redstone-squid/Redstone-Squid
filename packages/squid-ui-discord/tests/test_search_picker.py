@@ -12,7 +12,8 @@ import discord
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.ext.discord import Everyone, MessageRoot
-from squid_ui.ext.discord.testing import commit_render, interaction_harness
+from squid_ui.ext.discord.testing import commit_render, interaction_harness, query
+from squid_ui.selectors import select as select_node
 from squid_ui.testing import submit_event
 
 
@@ -89,9 +90,7 @@ async def test_single_lookup_replaces_and_minimum_gates_removal() -> None:
     assert lookup.picked == (Entry("b", "Beta"),)
     assert commits == [(Entry("b", "Beta"),)]
     rendered = commit_render(message_root)
-    remove = next(
-        child for child in rendered.walk_children() if isinstance(child, discord.ui.Button) and child.label == "Remove"
-    )
+    remove = query(rendered, select_node(discord.ui.Button).label("Remove")).one().node
     assert remove.disabled
 
 

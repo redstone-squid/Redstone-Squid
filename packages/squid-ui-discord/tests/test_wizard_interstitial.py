@@ -11,7 +11,8 @@ import discord
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.ext.discord import Everyone, MessageRoot
-from squid_ui.ext.discord.testing import commit_render, interaction_harness
+from squid_ui.ext.discord.testing import commit_render, interaction_harness, query
+from squid_ui.selectors import select as select_node
 
 
 def _form(title: str, key: str) -> sl.forms.FormSpec:
@@ -50,9 +51,7 @@ async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> N
 
     assert wizard.machine_state.current == "detail"
     view = commit_render(message_root)
-    button = next(
-        item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.label == "Continue"
-    )
+    button = query(view, select_node(discord.ui.Button).label("Continue")).one().node
     assert button.custom_id is not None and button.custom_id.endswith(":wizard.detail")
 
 

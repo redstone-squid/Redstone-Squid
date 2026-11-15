@@ -15,8 +15,10 @@ from squid_ui.document import DocumentLike
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.ext.discord.renderer import V2Renderer
+from squid_ui.ext.discord.testing import query
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime.component import Component
+from squid_ui.selectors import select as select_node
 from squid_ui.text import Markup
 
 
@@ -75,14 +77,14 @@ def test_scene_file_codec_round_trips() -> None:
 def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
     inline = sl.planning.plan(sl.download(_inline(), label="Report", key="report-download"), target=DISCORD_V2_DPY27)
     inline_view = V2Renderer().view(inline.scene, plan=inline)
-    assert any(isinstance(item, discord.ui.File) for item in inline_view.walk_children())
+    assert query(inline_view, "File").exists()
 
     stored = sl.document.Asset(
         "report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt")
     )
     linked = sl.planning.plan(sl.download(stored, label="Report", key="report-download"), target=DISCORD_V2_DPY27)
     linked_view = V2Renderer().view(linked.scene, plan=linked)
-    link = next(item for item in linked_view.walk_children() if isinstance(item, discord.ui.Button))
+    link = query(linked_view, select_node(discord.ui.Button)).all()[0].node
     assert link.url == "https://example.com/report.txt"
 
 

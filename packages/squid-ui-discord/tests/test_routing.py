@@ -20,11 +20,12 @@ from squid_ui.ext.discord import render_static
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.routing._client import _dispatch_item
-from squid_ui.ext.discord.testing import interaction_harness
+from squid_ui.ext.discord.testing import interaction_harness, query
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
+from squid_ui.selectors import select as select_node
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.routing.Route("poll:close")
@@ -1095,7 +1096,7 @@ class TestDrawing:
         document = Panel((Row((RoutedButton("Close", "poll:close"),)),))
         view = sd.static_view(document)
 
-        button = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
+        button = query(view, select_node(discord.ui.Button)).all()[0].node
         assert button.custom_id == "poll:close"
         assert not button.is_dispatchable()
 
@@ -1169,7 +1170,7 @@ class TestDrawing:
         assert sl.scene.Codec.loads(payload) == planned
 
         view = sd.static_view(document)
-        select = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
+        select = query(view, select_node(discord.ui.Select)).all()[0].node
         assert select.custom_id == "pick:build:3"
         assert [option.value for option in select.options] == ["one", "two"]
         assert not select.is_dispatchable()
@@ -1180,9 +1181,7 @@ class TestDrawing:
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:
         document = RoutedSelect((Option("One", "one"),), "pick:one")
 
-        select = next(
-            item for item in render_static(document).layout.walk_children() if isinstance(item, discord.ui.Select)
-        )
+        select = query(render_static(document).layout, select_node(discord.ui.Select)).all()[0].node
         assert select.custom_id == "pick:one"
 
     def test_routed_choices_do_not_invent_session_pagination(self) -> None:

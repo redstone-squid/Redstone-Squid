@@ -10,12 +10,13 @@ import squid_ui as sl
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
-from squid_ui.ext.discord.testing import commit_classic_render, commit_render, interaction_harness
+from squid_ui.ext.discord.testing import commit_classic_render, commit_render, interaction_harness, query
 from squid_ui.forms import IntField
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, plan
 from squid_ui.planning.navigation import NavigationContext, materialized_navigation_state, page_jump_nav
 from squid_ui.primitives import Lines, Paginate, Row, Text
+from squid_ui.selectors import select as select_node
 
 
 class JumpPages(sl.Component[sl.DiscordTarget]):
@@ -98,7 +99,7 @@ async def test_invalid_page_offers_private_retry_without_moving(value: str) -> N
     assert root.presentation.cursor("entries").position.page == 0
     reply = submitted.response.send_message.await_args.kwargs
     assert reply["ephemeral"]
-    retry = next(item for item in reply["view"].walk_children() if isinstance(item, discord.ui.Button))
+    retry = query(reply["view"], select_node(discord.ui.Button)).all()[0].node
     interaction = interaction_harness()
     await retry.callback(interaction)
     reopened = interaction.response.send_modal.await_args.args[0]
@@ -120,7 +121,7 @@ async def test_submission_uses_refreshed_range_and_retry_survives_removed_pager(
     await modal.on_submit(submitted)
     assert root.presentation.cursor("entries").position.page == 0
     reply = submitted.response.send_message.await_args.kwargs
-    retry = next(item for item in reply["view"].walk_children() if isinstance(item, discord.ui.Button))
+    retry = query(reply["view"], select_node(discord.ui.Button)).all()[0].node
     component.visible = False
     commit_render(root)
     interaction = interaction_harness()
@@ -130,11 +131,7 @@ async def test_submission_uses_refreshed_range_and_retry_survives_removed_pager(
     unavailable = interaction_harness()
     await reopened.on_submit(unavailable)
     notice = unavailable.response.send_message.await_args.kwargs["view"]
-    assert any(
-        "no longer available" in item.content
-        for item in notice.walk_children()
-        if isinstance(item, discord.ui.TextDisplay)
-    )
+    assert query(notice, 'TextDisplay[text*="no longer available"]').exists()
 
 
 async def test_refreshed_form_accepts_pages_added_after_opening() -> None:

@@ -18,8 +18,9 @@ from squid_ui.ext.discord.modal import (
     _entity_defaults,
     build_form_modal,
 )
-from squid_ui.ext.discord.testing import commit_render, interaction_harness
+from squid_ui.ext.discord.testing import commit_render, interaction_harness, query
 from squid_ui.forms import FormText
+from squid_ui.selectors import select as select_node
 
 
 async def _ignore_raw(interaction, values) -> None: ...
@@ -336,7 +337,7 @@ async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     retry_view = submission.response.send_message.await_args.kwargs["view"]
     texts = [item.content for item in retry_view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
     assert any("Duration" in text and "30m" in text for text in texts)
-    retry = next(item for item in retry_view.walk_children() if isinstance(item, discord.ui.Button))
+    retry = query(retry_view, select_node(discord.ui.Button)).all()[0].node
 
     retry_interaction = interaction_harness()
     await retry.callback(retry_interaction)
@@ -367,7 +368,7 @@ async def test_shared_error_displays_both_labels_and_message_once() -> None:
     text = "\n".join(item.content for item in retry_view.walk_children() if isinstance(item, discord.ui.TextDisplay))
     assert text.count("Invalid range") == 1
     assert "Start, End" in text
-    retry = next(item for item in retry_view.walk_children() if isinstance(item, discord.ui.Button))
+    retry = query(retry_view, select_node(discord.ui.Button)).all()[0].node
     assert retry.label == "Try again"
 
 
@@ -536,7 +537,7 @@ async def test_descriptor_form_hooks_keep_invalid_attempts_out_of_on_submit(cust
         assert invalid[0].attempted == {"duration": "bad", "note": ""}
         assert invalid[0].values == {"note": None}
     view = attempt.response.send_message.await_args.kwargs["view"]
-    retry = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
+    retry = query(view, select_node(discord.ui.Button)).all()[0].node
     opening = interaction_harness()
     await retry.callback(opening)
     modal = opening.response.send_modal.await_args.args[0]
