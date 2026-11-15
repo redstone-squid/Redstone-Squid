@@ -10,9 +10,9 @@ from typing import Any, Concatenate
 import discord
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui.ext.discord.message_root_contracts import ErrorHook
+from squid_ui.interactions.routing import Route
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.profiling import NoOpProfiler, Profiler
-from squid_ui.routing import Route
 from squid_ui.target_types import DiscordPyAdapter
 
 from ._client import install

@@ -16,7 +16,7 @@ from squid_ui.ext.discord.form_planning import DiscordFormPlan, plan_form
 from squid_ui.ext.discord.inspection import _walk, audit_items, cost
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.extensions import ExtensionKind
-from squid_ui.forms import FormSpec
+from squid_ui.interactions.forms import FormSpec
 from squid_ui.planning.adapter import (
     AdapterCapability,
     AdapterProfile,

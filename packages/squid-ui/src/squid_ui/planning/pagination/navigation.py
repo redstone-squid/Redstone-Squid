@@ -19,10 +19,10 @@ from squid_i18n import md_tr, tr
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import TextLike
 from squid_ui.context import ContextKey
-from squid_ui.forms import FormBinding, FormSpec, IntField
-from squid_ui.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent, SelectionEvent, SubmitEvent
-from squid_ui.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
+from squid_ui.interactions.forms import FormBinding, FormSpec, IntField
+from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
+from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
 from squid_ui.pages import PagePosition
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState

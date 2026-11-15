@@ -13,7 +13,8 @@ from squid_ui.authoring.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord.limits import Axis
-from squid_ui.forms import (
+from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
+from squid_ui.interactions.forms import (
     BoolField,
     ChoiceField,
     ChoiceOption,
@@ -32,7 +33,6 @@ from squid_ui.forms import (
     TimeField,
     ZonedDateTimeField,
 )
-from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError

@@ -12,7 +12,7 @@ import discord
 from squid_ui import interactions
 from squid_ui.authoring import semantic
 from squid_ui.ext.discord.request import Request
-from squid_ui.handlers import FrontendHandler
+from squid_ui.interactions.handlers import FrontendHandler
 
 type ActionEvent[ClientT: discord.Client = discord.Client] = interactions.ActionEvent[Request[Any, ClientT]]
 type PressEvent[ClientT: discord.Client = discord.Client] = interactions.PressEvent[Request[Any, ClientT]]

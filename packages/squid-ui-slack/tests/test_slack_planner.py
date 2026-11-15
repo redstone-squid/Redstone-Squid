@@ -7,9 +7,9 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.slack
-from squid_ui import forms, scene
+from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
-from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError

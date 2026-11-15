@@ -2,7 +2,7 @@
 
 from typing import assert_type
 
-from squid_ui.forms import Form, IntField, TextField
+from squid_ui.interactions.forms import Form, IntField, TextField
 
 
 class Example(Form):

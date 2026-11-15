@@ -22,7 +22,7 @@ from squid.core.errors import ValidationError
 from squid.runtime import BotServices
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid_ui.forms import UploadedFile
+from squid_ui.interactions.forms import UploadedFile
 
 logger = logging.getLogger(__name__)
 

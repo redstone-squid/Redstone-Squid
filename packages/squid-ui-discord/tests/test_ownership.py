@@ -18,8 +18,8 @@ from squid_ui.authoring.semantic import (
     Uncontrolled,
 )
 from squid_ui.ext.discord import DISCORD_V2_DPY27
-from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, SelectionEvent, Visibility
+from squid_ui.interactions.forms import FormLike, SubmitHandler
 from squid_ui.planning import plan
 from squid_ui.runtime import PresentationState
 

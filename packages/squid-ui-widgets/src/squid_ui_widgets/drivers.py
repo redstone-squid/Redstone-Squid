@@ -36,8 +36,8 @@ from squid_ui.factories import (
     routed_action_control,
     routed_choices,
 )
-from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.interactions.forms import Form, FormLike, FormSpec
 from squid_ui.palette import Role
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import PageEvent, RoutedPage

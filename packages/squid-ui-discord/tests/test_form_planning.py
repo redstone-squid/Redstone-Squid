@@ -18,7 +18,7 @@ from squid_ui.ext.discord.limits import COMPONENT_LIMITS
 from squid_ui.ext.discord.modal import render_form_modal
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
-from squid_ui.forms import ChoiceField, ChoiceOption, FormSpec, ScaleField, TextField
+from squid_ui.interactions.forms import ChoiceField, ChoiceOption, FormSpec, ScaleField, TextField
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.planner import plan
 from squid_ui.planning.target import AnyTarget

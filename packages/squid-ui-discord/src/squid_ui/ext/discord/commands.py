@@ -29,7 +29,7 @@ from squid_ui.ext.discord.contracts import DocumentContent, FacadeContent, Reque
 from squid_ui.ext.discord.modal import ModalSpec
 from squid_ui.ext.discord.request import Deferral, Request, _request_for_binding
 from squid_ui.ext.discord.response import Abandoned, Presented, Rejected, Response, ResponseResult, Sent
-from squid_ui.forms import FormSpec
+from squid_ui.interactions.forms import FormSpec
 
 type CommandResult = (
     FacadeContent[Any] | Response[Any] | FormSpec | ModalSpec | discord.ui.Modal | ResponseResult | None

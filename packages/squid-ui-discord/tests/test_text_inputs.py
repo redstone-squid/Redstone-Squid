@@ -8,7 +8,7 @@ import squid_ui_widgets as sp
 from squid_i18n import Localization, Text, resolve_text, source_text, tr
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord.form_planning import FieldPlan, StaticTextPlan, plan_form
-from squid_ui.forms import ChoiceOption, FormSpec, FormText, TextField
+from squid_ui.interactions.forms import ChoiceOption, FormSpec, FormText, TextField
 from squid_ui.planning import PlanCache, plan
 from squid_ui.primitives import Text as PrimitiveText
 

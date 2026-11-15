@@ -36,7 +36,7 @@ from squid_ui.ext.discord.planning.measurement.model import (
 )
 from squid_ui.ext.discord.planning.measurement.realization import Builder
 from squid_ui.ext.discord.planning.measurement.text import TextUnit, entry_page_anchors
-from squid_ui.ownership import Controlled
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition, RevealPage
 from squid_ui.planning.adapter import EMPTY_COST, ResourceCost
 from squid_ui.planning.degradation import DegradationProfile, DegradationRecorder

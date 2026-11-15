@@ -8,8 +8,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
+from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.allocation import AllocationSelection
 from squid_ui.planning.allocation_policy import SearchDiagnostics
 from squid_ui.planning.composition import OccurrenceId

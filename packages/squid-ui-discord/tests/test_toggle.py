@@ -6,8 +6,8 @@ from typing import override
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
-from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, PressEvent, Visibility
+from squid_ui.interactions.forms import FormLike, SubmitHandler
 from squid_ui.planning.result import PlanResult
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime import PresentationState

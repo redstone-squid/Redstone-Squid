@@ -15,8 +15,8 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import Axis, MessageLimits
 from squid_ui.ext.discord.planning.measurement.model import Realized
 from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout
-from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
+from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.pagination.cursors import CursorCoordinator
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resolved import emoji as resolved_emoji

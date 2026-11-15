@@ -23,8 +23,8 @@ from squid_ui.authoring.semantic import PortableNode
 from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
-from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
+from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.palette import Palette
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.target_types import DiscordAdapter, SlackAdapter

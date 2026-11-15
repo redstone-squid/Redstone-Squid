@@ -16,8 +16,8 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.assets import Asset
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
-from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
+from squid_ui.interactions.forms import FormBinding
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLimits

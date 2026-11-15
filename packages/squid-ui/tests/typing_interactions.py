@@ -3,8 +3,8 @@
 from collections.abc import Awaitable, Callable
 from typing import assert_type
 
-from squid_ui.handlers import _HandlerBinder
 from squid_ui.interactions import ActionBinding, PressEvent, SelectionEvent
+from squid_ui.interactions.handlers import _HandlerBinder
 
 
 async def press(_event: PressEvent) -> None: ...

@@ -12,7 +12,7 @@ from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_mess
 from squid_ui.ext.discord.modal import build_form_modal
 from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.testing import interaction_harness, query
-from squid_ui.ownership import Controlled, Uncontrolled
+from squid_ui.interactions.ownership import Controlled, Uncontrolled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, Target, plan
 from squid_ui.planning.pagination.navigation import default_nav, page_jump_form, page_jump_nav, page_select_nav

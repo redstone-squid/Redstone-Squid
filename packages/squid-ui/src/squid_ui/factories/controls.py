@@ -43,9 +43,9 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.content.assets import FileInput, file
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
-from squid_ui.forms import FormLike, SubmitHandler, bind_form
-from squid_ui.guards import Guard
 from squid_ui.interactions import ActionMode, BusySpec, PressHandler
+from squid_ui.interactions.forms import FormLike, SubmitHandler, bind_form
+from squid_ui.interactions.guards import Guard
 from squid_ui.palette import Role
 
 if TYPE_CHECKING:
@@ -187,7 +187,7 @@ def routed_action_control(
 ) -> RoutedActionControl:
     """A control the router dispatches, surviving the process that drew it.
 
-    Build ``route_id`` with a `squid_ui.routing.Route` rather than by hand, so an id
+    Build ``route_id`` with a `squid_ui.interactions.routing.Route` rather than by hand, so an id
     over Discord's budget fails here and not at send time.
     """
     label = Text(label)

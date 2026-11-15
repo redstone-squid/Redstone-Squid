@@ -17,7 +17,7 @@ from squid_ui.errors import LayoutInvariantError, LimitViolationError
 from squid_ui.ext.discord.conformance import trim
 from squid_ui.ext.discord.form_fields import CheckboxGroupField, EntityField, FileField
 from squid_ui.ext.discord.limits import COMPONENT_LIMITS, ComponentLimits
-from squid_ui.forms import (
+from squid_ui.interactions.forms import (
     BoolField,
     ChoiceField,
     DateField,

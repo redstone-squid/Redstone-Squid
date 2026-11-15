@@ -9,7 +9,7 @@ from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import Choice, ControlDisplay, Tone, fallback
 from squid_ui.content.text import Text, TextLike, tr
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
-from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
+from squid_ui.interactions.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_ui_widgets._actions import (
     MachineKeySegment,
     PageAction,

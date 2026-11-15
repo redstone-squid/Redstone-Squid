@@ -14,14 +14,15 @@ deliver the result and dispatch interactions to the bound handlers.
 
 from pkgutil import extend_path
 
+# Adapters can contribute squid_ui.ext packages from separate editable source trees.
+__path__ = extend_path(__path__, __name__)
+
 from squid_reactivity import Reactive, computed, state
 from squid_reactivity.operations import operation
 from squid_reactivity.resources import resource
 from squid_ui import (
     chrome,
     errors,
-    forms,
-    guards,
     interactions,
     operations,
     pages,
@@ -30,7 +31,6 @@ from squid_ui import (
     primitives,
     profiling,
     resources,
-    routing,
     runtime,
     scene,
     sources,
@@ -182,7 +182,6 @@ from squid_ui.factories import (
     uncontrolled,
     zoned_timestamp,
 )
-from squid_ui.handlers import handlers
 from squid_ui.interactions import (
     ActionEvent,
     EntitySelectionEvent,
@@ -191,6 +190,11 @@ from squid_ui.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
+from squid_ui.interactions import forms as forms
+from squid_ui.interactions import guards as guards
+from squid_ui.interactions import ownership as ownership
+from squid_ui.interactions import routing as routing
+from squid_ui.interactions.handlers import handlers
 from squid_ui.palette import INHERIT, Accent, AccentRole, Palette, PaletteRegistry, Role
 from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.definition import Component
@@ -206,9 +210,6 @@ from squid_ui.target_types import (
     SlackModalTarget,
     SlackTarget,
 )
-
-# Adapters can contribute squid_ui.ext packages from separate editable source trees.
-__path__ = extend_path(__path__, __name__)
 
 __all__ = [
     "INHERIT",

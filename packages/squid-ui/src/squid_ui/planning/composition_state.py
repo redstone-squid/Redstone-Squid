@@ -11,7 +11,7 @@ from squid_ui.authoring.document import Document, DocumentLike, as_document
 from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.ownership import Controlled
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions

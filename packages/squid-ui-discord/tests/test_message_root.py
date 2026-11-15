@@ -64,8 +64,8 @@ from squid_ui.ext.discord.testing import (
     interaction_harness,
     message_harness,
 )
-from squid_ui.forms import FormField, FormSpec, TextField
 from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest, InteractionKind
+from squid_ui.interactions.forms import FormField, FormSpec, TextField
 from squid_ui.primitives import (
     Button,
     ControlGroup,

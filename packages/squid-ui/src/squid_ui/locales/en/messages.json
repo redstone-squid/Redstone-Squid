@@ -617,7 +617,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:382"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:382"
     ]
   },
   "ui-form-date-maximum": {
@@ -632,7 +632,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:393"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:393"
     ]
   },
   "ui-form-date-minimum": {
@@ -647,7 +647,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:386"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:386"
     ]
   },
   "ui-form-datetime-format": {
@@ -656,8 +656,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:475",
-      "packages/squid-ui/src/squid_ui/forms.py:549"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:475",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:549"
     ]
   },
   "ui-form-datetime-maximum": {
@@ -672,8 +672,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:500",
-      "packages/squid-ui/src/squid_ui/forms.py:584"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:500",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:584"
     ]
   },
   "ui-form-datetime-minimum": {
@@ -688,8 +688,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:493",
-      "packages/squid-ui/src/squid_ui/forms.py:577"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:493",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:577"
     ]
   },
   "ui-form-duration-format": {
@@ -698,7 +698,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:339"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:339"
     ]
   },
   "ui-form-duration-maximum": {
@@ -713,7 +713,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:351"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:351"
     ]
   },
   "ui-form-duration-minimum": {
@@ -728,7 +728,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:344"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:344"
     ]
   },
   "ui-form-integer-format": {
@@ -737,7 +737,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:252"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:252"
     ]
   },
   "ui-form-invalid-boolean": {
@@ -746,7 +746,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:781"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:781"
     ]
   },
   "ui-form-invalid-choice": {
@@ -755,7 +755,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:688"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:688"
     ]
   },
   "ui-form-invalid-choices": {
@@ -764,7 +764,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:730"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:730"
     ]
   },
   "ui-form-number-finite": {
@@ -773,7 +773,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:287"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:287"
     ]
   },
   "ui-form-number-format": {
@@ -782,7 +782,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:285"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:285"
     ]
   },
   "ui-form-number-maximum": {
@@ -797,8 +797,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:263",
-      "packages/squid-ui/src/squid_ui/forms.py:298"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:263",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:298"
     ]
   },
   "ui-form-number-minimum": {
@@ -813,8 +813,8 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:256",
-      "packages/squid-ui/src/squid_ui/forms.py:291"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:256",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:291"
     ]
   },
   "ui-form-required": {
@@ -823,9 +823,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:197",
-      "packages/squid-ui/src/squid_ui/forms.py:218",
-      "packages/squid-ui/src/squid_ui/forms.py:725"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:197",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:218",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:725"
     ]
   },
   "ui-form-scale-integer": {
@@ -845,7 +845,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:635"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:635"
     ]
   },
   "ui-form-scale-range": {
@@ -865,7 +865,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:643"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:643"
     ]
   },
   "ui-form-selection-maximum": {
@@ -880,7 +880,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:742"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:742"
     ]
   },
   "ui-form-selection-minimum": {
@@ -895,7 +895,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:736"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:736"
     ]
   },
   "ui-form-text-maximum": {
@@ -910,7 +910,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:225"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:225"
     ]
   },
   "ui-form-text-minimum": {
@@ -925,7 +925,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:221"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:221"
     ]
   },
   "ui-form-time-ambiguous": {
@@ -934,8 +934,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:481",
-      "packages/squid-ui/src/squid_ui/forms.py:558"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:481",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:558"
     ]
   },
   "ui-form-time-format": {
@@ -944,7 +944,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:419"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:419"
     ]
   },
   "ui-form-time-maximum": {
@@ -959,7 +959,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:430"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:430"
     ]
   },
   "ui-form-time-minimum": {
@@ -974,7 +974,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:423"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:423"
     ]
   },
   "ui-form-time-nonexistent": {
@@ -983,8 +983,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:488",
-      "packages/squid-ui/src/squid_ui/forms.py:564"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:488",
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:564"
     ]
   },
   "ui-form-timezone-offset-mismatch": {
@@ -993,7 +993,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui/src/squid_ui/forms.py:567"
+      "packages/squid-ui/src/squid_ui/interactions/forms.py:567"
     ]
   },
   "ui-page-jump-number": {

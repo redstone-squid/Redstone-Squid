@@ -18,8 +18,8 @@ from squid_ui.content.entity import EntityRef
 from squid_ui.content.text import TextLike
 
 if TYPE_CHECKING:
-    from squid_ui.forms import FormIssue, FormLike, SubmitHandler
-    from squid_ui.guards import Guard
+    from squid_ui.interactions.forms import FormIssue, FormLike, SubmitHandler
+    from squid_ui.interactions.guards import Guard
     from squid_ui.runtime.continuations import PostCommitOperation
     from squid_ui.runtime.histories import History
 

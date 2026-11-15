@@ -1,6 +1,9 @@
 """Public namespace and packaging contracts for the portable engine."""
 
+from importlib import import_module
 from types import ModuleType
+
+import pytest
 
 import squid_ui as sl
 from squid_ui import testing
@@ -31,6 +34,20 @@ ROOT_NAMESPACES = (
     "temporal",
     "text",
 )
+
+
+@pytest.mark.parametrize(
+    ("package", "names"),
+    (
+        ("authoring", ("document", "semantic", "presentations", "grids", "rosters", "tallies")),
+        ("content", ("assets", "emoji", "entity", "temporal", "text")),
+        ("interactions", ("forms", "guards", "ownership", "routing")),
+    ),
+)
+def test_grouped_modules_preserve_root_shortcuts(package: str, names: tuple[str, ...]) -> None:
+    for name in names:
+        assert getattr(sl, name) is import_module(f"squid_ui.{package}.{name}")
+    assert callable(sl.handlers)
 
 
 def test_namespaces_are_modules_not_shadowed_callables() -> None:

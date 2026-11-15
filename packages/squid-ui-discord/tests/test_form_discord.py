@@ -19,7 +19,7 @@ from squid_ui.ext.discord.modal import (
     build_form_modal,
 )
 from squid_ui.ext.discord.testing import commit_render, interaction_harness, query
-from squid_ui.forms import FormText
+from squid_ui.interactions.forms import FormText
 from squid_ui.selectors import select as select_node
 
 

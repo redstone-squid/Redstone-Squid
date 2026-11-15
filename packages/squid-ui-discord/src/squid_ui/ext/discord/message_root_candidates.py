@@ -19,8 +19,8 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.message_payload import MessagePayload
 from squid_ui.ext.discord.message_root_wiring import AnyMountedView
 from squid_ui.ext.discord.rendering import RenderedMessage
-from squid_ui.forms import FormBinding, FormSpec
 from squid_ui.interactions import ActionBinding, BusySpec
+from squid_ui.interactions.forms import FormBinding, FormSpec
 from squid_ui.palette import Palette
 from squid_ui.planning.pagination.navigation import NavFactory
 from squid_ui.planning.result import PlanResult

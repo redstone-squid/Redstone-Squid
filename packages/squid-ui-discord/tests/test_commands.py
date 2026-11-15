@@ -14,7 +14,7 @@ from squid_ui import paragraph
 from squid_ui.ext.discord.delivery import DeliveryResult
 from squid_ui.ext.discord.i18n import to_locale_str
 from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness, payload_texts
-from squid_ui.forms import FormSpec, TextField
+from squid_ui.interactions.forms import FormSpec, TextField
 
 
 def installed_bot(config: sd.Config | None = None) -> commands.Bot:

@@ -30,8 +30,8 @@ from squid_ui.authoring.semantic import (
 from squid_ui.content.text import Localization, Markup
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
 from squid_ui.ext.discord import testing as sd
-from squid_ui.forms import FormSpec, TextField
-from squid_ui.ownership import Controlled
+from squid_ui.interactions.forms import FormSpec, TextField
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.planning import PlanCache, PlanMemo, plan
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.interaction_handlers import SelectChoices

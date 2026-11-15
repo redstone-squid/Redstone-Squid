@@ -23,8 +23,8 @@ from squid_ui.factories import (
     paragraph,
     stack,
 )
-from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.runtime.component import Component
 from squid_ui.sources import WindowSource, window_footer
 from squid_ui_widgets._content import require_key

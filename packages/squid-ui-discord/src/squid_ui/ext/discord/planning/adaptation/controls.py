@@ -36,7 +36,7 @@ from squid_ui.ext.discord.planning.adaptation.decisions import (
 from squid_ui.ext.discord.planning.adaptation.model import (
     LoweringContext,
 )
-from squid_ui.forms import FormBinding
+from squid_ui.interactions.forms import FormBinding
 from squid_ui.pages import PagePosition
 from squid_ui.planning.control_style import button_style as _button_style
 from squid_ui.planning.interaction_handlers import (

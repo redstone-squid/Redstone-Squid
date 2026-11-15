@@ -7,7 +7,7 @@ import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.authoring.semantic import ActionControl, Choices, FormTrigger
 from squid_ui.content.text import NEUTRAL, TextLike, resolve_text
-from squid_ui.ownership import Controlled
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.selectors import query, select, snapshot
 from squid_ui_widgets import testing as wt
 

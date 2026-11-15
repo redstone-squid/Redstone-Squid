@@ -12,7 +12,7 @@ from squid_ui.chrome import Chrome
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
-from squid_ui.handlers import FrontendHandler, handlers
+from squid_ui.interactions.handlers import FrontendHandler, handlers
 from squid_ui.planning import (
     AutomaticComposition,
     CompositionOptions,

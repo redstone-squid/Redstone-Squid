@@ -11,8 +11,8 @@ from collections.abc import Set as AbstractSet
 import discord
 from squid_ui.content.text import TextLike
 from squid_ui.ext.discord.actions import _responder
-from squid_ui.guards import Guard, permission
 from squid_ui.interactions import ActionEvent
+from squid_ui.interactions.guards import Guard, permission
 
 
 def requires_role(role_id: int | AbstractSet[int], *, reason: TextLike | None = None) -> Guard:

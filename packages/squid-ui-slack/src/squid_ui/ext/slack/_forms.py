@@ -7,13 +7,14 @@ from string.templatelib import Template
 from typing import Any
 
 from squid_i18n import Text as TextExpression
-from squid_ui import forms, scene
+from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.document import DocumentLike, as_document
 from squid_ui.content.text import Localization, resolve_text
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.slack.limits import SlackModalLimits
 from squid_ui.factories import is_portable_node
+from squid_ui.interactions import forms
 from squid_ui.planning.composition import CandidateViolation, LocalCapacityExceeded, OccurrenceId
 
 

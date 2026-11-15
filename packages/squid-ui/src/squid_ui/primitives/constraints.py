@@ -13,7 +13,7 @@ from typing import Literal
 
 from squid_ui.content.text import TextLike
 from squid_ui.interactions import ActionEvent
-from squid_ui.ownership import Controlled, Ownership, Uncontrolled
+from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled
 
 # --- Who keeps a pager's page ---------------------------------------------------------
 

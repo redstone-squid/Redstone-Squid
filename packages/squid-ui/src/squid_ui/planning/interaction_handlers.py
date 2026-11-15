@@ -27,8 +27,6 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.content.entity import EntityRef
 from squid_ui.content.text import TextLike
-from squid_ui.forms import FormSpec, SubmitHandler
-from squid_ui.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
@@ -37,7 +35,9 @@ from squid_ui.interactions import (
     PressEvent,
     SelectionEvent,
 )
-from squid_ui.ownership import bind_ownership
+from squid_ui.interactions.forms import FormSpec, SubmitHandler
+from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
+from squid_ui.interactions.ownership import bind_ownership
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState
 

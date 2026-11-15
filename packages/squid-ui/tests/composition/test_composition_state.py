@@ -10,7 +10,7 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
-from squid_ui.ownership import Controlled
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile

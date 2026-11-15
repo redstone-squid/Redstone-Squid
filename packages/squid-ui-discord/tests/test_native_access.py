@@ -12,9 +12,9 @@ from squid_ui import Component, PressEvent, TextLike
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
-from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, Visibility
 from squid_ui.interactions import ActionResponder as ActionResponderProtocol
+from squid_ui.interactions.forms import FormLike, SubmitHandler
 from squid_ui.primitives import Button, Row
 from squid_ui.testing import text_component
 

@@ -13,7 +13,7 @@ from squid_ui.scene.model import JsonValue
 
 if TYPE_CHECKING:
     from squid_ui.content.text import Localization
-    from squid_ui.forms import FormSpec
+    from squid_ui.interactions.forms import FormSpec
     from squid_ui.planning.target import AnyTarget
 
 

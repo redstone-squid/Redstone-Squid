@@ -8,7 +8,8 @@ frontend presents it and resumes the original action after approval.
 from dataclasses import dataclass
 
 from squid_ui.content.text import TextLike
-from squid_ui.guards import (
+from squid_ui.interactions import ActionEvent
+from squid_ui.interactions.guards import (
     ADMIT,
     Challenge,
     ChallengeResolver,
@@ -17,7 +18,6 @@ from squid_ui.guards import (
     GuardResult,
     approvals,
 )
-from squid_ui.interactions import ActionEvent
 from squid_ui.palette import Tone
 from squid_ui.runtime.component import Component
 from squid_ui_widgets.decision import DecisionState

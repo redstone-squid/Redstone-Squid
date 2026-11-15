@@ -16,7 +16,6 @@ from typing import Any
 
 from squid_ui.authoring.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
 from squid_ui.content.text import NEUTRAL, Text, TextLike, resolve_text
-from squid_ui.forms import FormIssue, FormLike, SubmitHandler
 from squid_ui.interactions import (
     ActionMode,
     ActionResponder,
@@ -26,6 +25,7 @@ from squid_ui.interactions import (
     SubmitEvent,
     Visibility,
 )
+from squid_ui.interactions.forms import FormIssue, FormLike, SubmitHandler
 from squid_ui.primitives.constraints import PageEvent
 from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component

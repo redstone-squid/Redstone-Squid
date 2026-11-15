@@ -23,10 +23,10 @@ from squid_ui.content.assets import Asset
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import Text, TextLike, timestamp_text
-from squid_ui.forms import FormSpec, SubmitHandler
-from squid_ui.guards import Guard
 from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
-from squid_ui.ownership import Controlled, Ownership, Uncontrolled
+from squid_ui.interactions.forms import FormSpec, SubmitHandler
+from squid_ui.interactions.guards import Guard
+from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled
 from squid_ui.palette import INHERIT, Accent, Palette, Role, Tone
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import Node

@@ -317,8 +317,8 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | Module | Purpose |
 |---|---|
 | `squid_ui.errors` | Typed failures raised at the logical, planning, and drawing boundaries. |
-| `squid_ui.forms` | Portable form schemas, typed fields, and descriptor-based form sugar. |
-| `squid_ui.guards` | Per-action admission: may *this* press execute right now? |
+| `squid_ui.interactions.forms` | Portable form schemas, typed fields, and descriptor-based form sugar. |
+| `squid_ui.interactions.guards` | Per-action admission: may *this* press execute right now? |
 | `squid_ui.ext.html` | First-class semantic HTML planning and safe scene drawing. |
 | `squid_ui.interactions` | Frontend-neutral action events and dispatch metadata. |
 | `squid_ui.operations` | Public operation vocabulary supplied by the reactive runtime. |
@@ -326,7 +326,7 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.primitives` | Exact target-shaped primitives for layouts that require presentation control. |
 | `squid_ui.profiling` | Bounded in-process runtime profiling. |
 | `squid_ui.resources` | Public resource vocabulary supplied by the reactive runtime. |
-| `squid_ui.routing` | Stateless control identity: routes that own their own custom id format. |
+| `squid_ui.interactions.routing` | Stateless control identity: routes that own their own custom id format. |
 | `squid_ui.runtime` | Frontend-neutral component runtime and presentation state. |
 | `squid_ui.scene` | Immutable resolved scenes and protocol serialization. |
 | `squid_ui.authoring.semantic` | Frontend-neutral semantic layout vocabulary. |

@@ -7,9 +7,9 @@ from typing import Any, override
 import pytest
 
 from squid_ui.authoring.semantic import Controlled, Details, Summary, Toggle
-from squid_ui.forms import FormBinding, FormSpec, TextField
-from squid_ui.handlers import FrontendHandler, HandlerSet, bind_handlers, handlers
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, PressEvent
+from squid_ui.interactions.forms import FormBinding, FormSpec, TextField
+from squid_ui.interactions.handlers import FrontendHandler, HandlerSet, bind_handlers, handlers
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.planning.interaction_handlers import (
     ChoiceCommit,

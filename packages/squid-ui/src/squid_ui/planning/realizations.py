@@ -34,9 +34,9 @@ from squid_ui.content.emoji import Emoji, normalize_emoji
 from squid_ui.content.entity import EntityRef
 from squid_ui.content.text import Text, TextLike, resolve_text, timestamp_text
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
-from squid_ui.ownership import Controlled
+from squid_ui.interactions.forms import FormBinding
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.planning.classic_content import CardSlot
 from squid_ui.planning.composition import (
     CandidateComposition,

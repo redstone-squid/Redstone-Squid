@@ -13,7 +13,7 @@ from squid_ui.capabilities import Capability
 from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
-from squid_ui.forms import FormBinding, FormSpec, SubmitEvent, TextField
+from squid_ui.interactions.forms import FormBinding, FormSpec, SubmitEvent, TextField
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError

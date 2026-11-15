@@ -65,7 +65,11 @@ def test_existing_contract_imports_preserve_identity() -> None:
     "entrypoint",
     (
         "squid_ui.chrome",
+        "squid_ui.authoring.semantic",
+        "squid_ui.content.text",
         "squid_ui.context",
+        "squid_ui.interactions.forms",
+        "squid_ui.interactions.handlers",
         "squid_ui.presentation",
         "squid_ui.scene",
         "squid_ui.planning",
@@ -92,7 +96,7 @@ def test_scene_sources_do_not_depend_on_live_execution() -> None:
         "squid_ui.runtime",
         "squid_ui.planning",
         "squid_ui.presentation",
-        "squid_ui.forms",
+        "squid_ui.interactions.forms",
         "squid_ui.interactions",
     )
     violations = {
@@ -144,7 +148,7 @@ def test_component_facade_preserves_existing_imports() -> None:
 
 
 def test_handler_composition_does_not_import_planning_or_runtime() -> None:
-    imports = runtime_imports(SOURCE / "handlers.py")
+    imports = runtime_imports(SOURCE / "interactions" / "handlers.py")
     assert not {name for name in imports if name.startswith(("squid_ui.planning", "squid_ui.runtime"))}
 
 

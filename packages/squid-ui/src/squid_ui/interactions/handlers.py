@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Self, cast
 from squid_ui.interactions import ActionBinding, ActionEvent
 
 if TYPE_CHECKING:
-    from squid_ui.forms import FormBinding, FormSpec
+    from squid_ui.interactions.forms import FormBinding, FormSpec
 
 
 @dataclass(frozen=True, slots=True)

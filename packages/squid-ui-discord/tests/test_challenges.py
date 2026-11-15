@@ -21,9 +21,9 @@ from squid_ui.ext.discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui.ext.discord.message_root_contracts import ChallengeRequest
 from squid_ui.ext.discord.sessions import SessionManager
 from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
-from squid_ui.forms import FormSpec, TextField
-from squid_ui.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
 from squid_ui.interactions import ActionMode
+from squid_ui.interactions.forms import FormSpec, TextField
+from squid_ui.interactions.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
 from squid_ui.profiling import DispatchDisposition, MemoryProfiler, OperationKind
 
 

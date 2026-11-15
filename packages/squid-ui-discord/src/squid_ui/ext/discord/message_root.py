@@ -107,8 +107,6 @@ from squid_ui.ext.discord.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_I
 from squid_ui.ext.discord.render_cache import RenderProgramCache
 from squid_ui.ext.discord.renderer import MountedRenderer, RoutedItem, RoutedSelectItem, V2Renderer
 from squid_ui.ext.discord.rendering import RenderedMessage, render_message
-from squid_ui.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
-from squid_ui.guards import Challenge, GuardLedger, approvals
 from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
@@ -124,6 +122,8 @@ from squid_ui.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
+from squid_ui.interactions.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
+from squid_ui.interactions.guards import Challenge, GuardLedger, approvals
 from squid_ui.palette import Palette
 from squid_ui.planning.adapter import (
     AdapterCapability,

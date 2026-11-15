@@ -22,7 +22,7 @@ from squid.submissions.application.intake import SubmissionAttachmentIntake, Sup
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid_ui.forms import UploadedFile
+from squid_ui.interactions.forms import UploadedFile
 from tests.support.services import bot_services
 
 

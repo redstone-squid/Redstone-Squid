@@ -10,7 +10,7 @@ from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, s
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.sessions import Opened, SessionManager
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
-from squid_ui.forms import FormSpec, TextField
+from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import transaction
 

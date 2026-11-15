@@ -39,8 +39,8 @@ from squid_ui.ext.discord.message_root import MessageRoot
 from squid_ui.ext.discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_ui.ext.discord.response import Response, ResponseOverrides, ResponseResult
 from squid_ui.ext.discord.sessions import Session
-from squid_ui.forms import FormSpec
 from squid_ui.interactions import ActionEvent
+from squid_ui.interactions.forms import FormSpec
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 

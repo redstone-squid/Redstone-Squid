@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import replace
 
 from squid_ui import scene
-from squid_ui.handlers import bind_handlers
+from squid_ui.interactions.handlers import bind_handlers
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult
 

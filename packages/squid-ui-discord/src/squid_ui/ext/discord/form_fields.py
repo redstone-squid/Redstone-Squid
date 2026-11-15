@@ -7,7 +7,7 @@ import discord
 from squid_ui.capabilities import Capability
 from squid_ui.content.entity import EntityType
 from squid_ui.content.text import TextLike
-from squid_ui.forms import ChoiceOption, ExtensionField, FormValueError, MultiChoiceField, UploadedFile
+from squid_ui.interactions.forms import ChoiceOption, ExtensionField, FormValueError, MultiChoiceField, UploadedFile
 
 
 @dataclass(frozen=True, slots=True)

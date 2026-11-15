@@ -19,8 +19,8 @@ from squid_ui.content.text import NEUTRAL, Localization, TextLike
 from squid_ui.ext.discord.access import AccessPolicy
 from squid_ui.ext.discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
-from squid_ui.guards import Challenge
 from squid_ui.interactions import ActionMiddleware
+from squid_ui.interactions.guards import Challenge
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.pagination.navigation import NavFactory
 from squid_ui.planning.result import PlanMetrics, PlanReport

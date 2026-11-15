@@ -139,6 +139,18 @@ the selected target and everything below it solve, draw, deliver, and route one 
 
 ## Internal dependency boundaries
 
+The core groups its author-facing vocabulary by responsibility:
+
+| Package | Contents |
+|---|---|
+| `squid_ui.authoring` | Documents, semantic nodes, structured collections, and presentation choices. |
+| `squid_ui.content` | Text, files, emoji, entity references, and time values. |
+| `squid_ui.interactions` | Events, forms, guards, handlers, value ownership, and routing. |
+
+Use these package paths for direct module imports. Root shortcuts such as `sl.Document`,
+`sl.semantic`, `sl.forms`, and `sl.text` still refer to the same definitions. Internal code
+imports defining modules so it does not depend on the root facade's initialization order.
+
 Semantic factories live in `squid_ui.factories`, grouped into containers, content,
 collections, and controls. The package facade preserves the existing factory imports.
 Pagination internals live together in `squid_ui.planning.pagination`: `content` defines
@@ -1005,7 +1017,7 @@ win over fallback. The adapter profile declares its `frontend` identity; plannin
 registrations, including generated semantic handlers and forms, before exposing controls.
 Duplicate registrations and missing implementations are errors. Function annotations are
 never inspected for dispatch. Other adapters can register their typed implementations using
-`FrontendHandler` from `squid_ui.handlers`.
+`FrontendHandler` from `squid_ui.interactions.handlers`.
 
 Binding follows explicit callback fields in action bindings, forms, and generated
 semantic handlers. Application callback objects and their data are opaque: the planner

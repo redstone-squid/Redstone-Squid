@@ -5,8 +5,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 import squid_ui as sl
-from squid_ui import guards, testing
-from squid_ui.guards import GuardDecision, GuardLedger, GuardScope
+from squid_ui import testing
+from squid_ui.interactions import guards
+from squid_ui.interactions.guards import GuardDecision, GuardLedger, GuardScope
 
 
 def _event(actor: str = "7") -> sl.PressEvent:

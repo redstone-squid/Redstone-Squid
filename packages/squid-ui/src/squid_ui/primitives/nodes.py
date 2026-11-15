@@ -17,8 +17,6 @@ from squid_ui.content.entity import ConversationType, EntityRef, EntityType
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import TextLike
 from squid_ui.extensions import ExtensionKind
-from squid_ui.forms import FormBinding
-from squid_ui.guards import Guard
 from squid_ui.interactions import (
     ActionBinding,
     ActionMode,
@@ -27,6 +25,8 @@ from squid_ui.interactions import (
     PressHandler,
     SelectionHandler,
 )
+from squid_ui.interactions.forms import FormBinding
+from squid_ui.interactions.guards import Guard
 from squid_ui.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable, RenderTarget
@@ -191,7 +191,7 @@ class RoutedButton(Renderable[DiscordTarget]):
     The host can register the route after a restart and recover application state from
     its parameters. A mount's author lock and generation checks do not apply to routed
     buttons, even inside a mounted message; the route handler must check authorization.
-    Build the ID with squid_ui.routing.Route so its format and length are validated.
+    Build the ID with squid_ui.interactions.routing.Route so its format and length are validated.
     """
 
     label: TextLike | None

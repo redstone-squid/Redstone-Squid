@@ -11,7 +11,7 @@ live beside `Paginate` in `squid_ui.primitives.constraints`.
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 
-from squid_ui.handlers import _HandlerBinder
+from squid_ui.interactions.handlers import _HandlerBinder
 
 
 @dataclass(frozen=True, slots=True)

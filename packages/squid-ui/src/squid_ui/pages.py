@@ -3,7 +3,7 @@
 from dataclasses import dataclass, replace
 from typing import Protocol
 
-from squid_ui.ownership import Uncontrolled
+from squid_ui.interactions.ownership import Uncontrolled
 
 
 @dataclass(frozen=True, slots=True)

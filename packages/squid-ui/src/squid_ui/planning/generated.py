@@ -6,7 +6,7 @@ its live callbacks with those from the current document.
 
 from abc import abstractmethod
 
-from squid_ui.handlers import _HandlerComposition
+from squid_ui.interactions.handlers import _HandlerComposition
 
 
 class GeneratedHandler[EventT](_HandlerComposition):

@@ -10,7 +10,7 @@ from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import ControlDisplay, FormTrigger, Tone
 from squid_ui.content.text import Text, TextLike, tr
 from squid_ui.factories import action_controls, choice, heading, stack, status
-from squid_ui.forms import Form, FormLike, FormSpec
+from squid_ui.interactions.forms import Form, FormLike, FormSpec
 from squid_ui_widgets._actions import MachineKeySegment, WindowSelection
 from squid_ui_widgets._option_window import OptionWindow
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
