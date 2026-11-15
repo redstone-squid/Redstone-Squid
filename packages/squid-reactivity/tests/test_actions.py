@@ -10,29 +10,33 @@ from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from squid_reactivity import (
-    ActorRef,
-    CausalEventSnapshot,
-    ContinuationFailureSnapshot,
     EventLedger,
     Reactive,
     ReactiveConflictError,
     ReactiveWriteError,
-    RedactionPolicy,
     TransactionCommit,
-    TransactionContext,
-    TransactionPurpose,
-    TransactionResultSnapshot,
     TransactionRollback,
     TransactionValidationError,
-    apply_conditional_patches,
     computed,
-    enlist,
     observe_events,
     readonly_transaction,
     relaxed_read,
     state,
     strong_read,
     transaction,
+)
+from squid_reactivity.diagnostics import (
+    CausalEventSnapshot,
+    ContinuationFailureSnapshot,
+    RedactionPolicy,
+    TransactionResultSnapshot,
+)
+from squid_reactivity.transactions import (
+    ActorRef,
+    TransactionContext,
+    TransactionPurpose,
+    apply_conditional_patches,
+    enlist,
 )
 from squid_reactivity.transactions.state import _CURRENT_TRANSACTION
 

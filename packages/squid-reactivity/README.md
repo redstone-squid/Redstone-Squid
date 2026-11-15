@@ -217,6 +217,10 @@ queues or network delivery, implement the `TopicBus` protocol.
 
 ## Code layout
 
+The top-level package exports what models and their readers need. Patches, participants,
+and causal context are in `squid_reactivity.transactions`; event snapshots and redaction are
+in `squid_reactivity.diagnostics`.
+
 `core` declares models, `cells` stores versioned values, and `tracking` captures and checks
 dependencies. The `transactions` package separates the `with transaction(...)` block (`scope`), execution
 (`engine`), reversible changes (`patches`), identity (`context`), outcomes (`results`),

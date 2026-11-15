@@ -10,15 +10,10 @@ from typing import cast, override
 import anyio
 import pytest
 
-from squid_reactivity import (
-    EventLedger,
-    OperationEventSnapshot,
-    TransactionContribution,
-    enlist,
-    observe_events,
-)
+from squid_reactivity import EventLedger, observe_events
+from squid_reactivity.diagnostics import OperationEventSnapshot
 from squid_reactivity.operations import OperationContext
-from squid_reactivity.transactions import readonly_transaction
+from squid_reactivity.transactions import TransactionContribution, enlist, readonly_transaction
 from squid_reactivity.transactions.results import (
     ChangeToken,
 )

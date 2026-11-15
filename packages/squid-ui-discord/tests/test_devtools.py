@@ -8,7 +8,8 @@ import pytest
 from discord.ext import commands
 
 import squid_ui_discord
-from squid_reactivity import EventLedger, OperationEventSnapshot, observe_events, transaction
+from squid_reactivity import EventLedger, observe_events, transaction
+from squid_reactivity.diagnostics import OperationEventSnapshot
 from squid_ui_discord import Owner, live
 from squid_ui_discord.devtools import DevTools, open_devtools
 from squid_ui_discord.devtools_runtime import DevToolsRuntime

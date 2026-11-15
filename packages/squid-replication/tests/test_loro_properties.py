@@ -5,11 +5,8 @@ import uuid
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid_reactivity import (
-    ConflictDetail,
-    TransactionCommit,
-    transaction,
-)
+from squid_reactivity import TransactionCommit, transaction
+from squid_reactivity.transactions import ConflictDetail
 from squid_replication import LoroBackend, PreparedReplicationInverse, Replica, ReplicatedDocument
 
 

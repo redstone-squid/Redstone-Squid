@@ -29,17 +29,17 @@ and publish together on success; failure discards them.
 
 ::: squid_reactivity.Signal
 
-::: squid_reactivity.block_writes
+::: squid_reactivity.transactions.block_writes
 
-::: squid_reactivity.enlist
+::: squid_reactivity.transactions.enlist
 
 ::: squid_reactivity.Reactive
 
-::: squid_reactivity.TransactionView
+::: squid_reactivity.transactions.TransactionView
 
-::: squid_reactivity.TransactionParticipant
+::: squid_reactivity.transactions.TransactionParticipant
 
-::: squid_reactivity.TransactionContribution
+::: squid_reactivity.transactions.TransactionContribution
 
 ## Reads
 
@@ -51,7 +51,7 @@ and publish together on success; failure discards them.
 
 ::: squid_reactivity.capture_reads
 
-::: squid_reactivity.read_only
+::: squid_reactivity.transactions.read_only
 
 ::: squid_reactivity.Dependencies
 
@@ -73,9 +73,9 @@ bridge can publish events received from another process.
 
 ::: squid_reactivity.LocalTopicBus
 
-::: squid_reactivity.TopicCodec
+::: squid_reactivity.topics.TopicCodec
 
-::: squid_reactivity.DelimitedTopicCodec
+::: squid_reactivity.topics.DelimitedTopicCodec
 
 ::: squid_reactivity.Subscriptions
 
@@ -86,35 +86,35 @@ this type. `BusAddress` also accepts `TopicName`, which the receiving bus resolv
 
 ::: squid_reactivity.DependencyAddress
 
-::: squid_reactivity.BusAddress
+::: squid_reactivity.topics.BusAddress
 
 ::: squid_reactivity.CellAddress
 
-::: squid_reactivity.addresses
+::: squid_reactivity.tracking.addresses
 
-::: squid_reactivity.inspect_cells
+::: squid_reactivity.core.inspect_cells
 
-::: squid_reactivity.inspect_computed
+::: squid_reactivity.core.inspect_computed
 
 ::: squid_reactivity.export_state
 
 ::: squid_reactivity.restore_state
 
-::: squid_reactivity.CellReport
+::: squid_reactivity.core.CellReport
 
-::: squid_reactivity.ComputedReport
+::: squid_reactivity.core.ComputedReport
 
 ## Patches
 
 Apply targeted cell changes, optionally conditioned on what the writer last saw.
 
-::: squid_reactivity.CellPatch
+::: squid_reactivity.transactions.CellPatch
 
-::: squid_reactivity.CellPatchSet
+::: squid_reactivity.transactions.CellPatchSet
 
-::: squid_reactivity.ConditionalCellPatch
+::: squid_reactivity.transactions.ConditionalCellPatch
 
-::: squid_reactivity.apply_conditional_patches
+::: squid_reactivity.transactions.apply_conditional_patches
 
 ## Scoped execution state
 
@@ -149,11 +149,11 @@ block finishes. Nested blocks share the handle. Callbacks receive a `Transaction
 
 ::: squid_reactivity.current_transaction
 
-::: squid_reactivity.fresh_transaction
+::: squid_reactivity.transactions.fresh_transaction
 
-::: squid_reactivity.TransactionContext
+::: squid_reactivity.transactions.TransactionContext
 
-::: squid_reactivity.TransactionPurpose
+::: squid_reactivity.transactions.TransactionPurpose
 
 ::: squid_reactivity.TransactionCommit
 
@@ -161,19 +161,19 @@ block finishes. Nested blocks share the handle. Callbacks receive a `Transaction
 
 ::: squid_reactivity.Transaction
 
-::: squid_reactivity.TransactionRelation
+::: squid_reactivity.transactions.TransactionRelation
 
-::: squid_reactivity.ActorRef
+::: squid_reactivity.transactions.ActorRef
 
-::: squid_reactivity.CausalRef
+::: squid_reactivity.transactions.CausalRef
 
-::: squid_reactivity.CommitSequence
+::: squid_reactivity.transactions.CommitSequence
 
-::: squid_reactivity.RollbackReason
+::: squid_reactivity.transactions.RollbackReason
 
-::: squid_reactivity.ConflictDetail
+::: squid_reactivity.transactions.ConflictDetail
 
-::: squid_reactivity.ChangeReport
+::: squid_reactivity.transactions.ChangeReport
 
 ## Observing results
 
@@ -184,7 +184,7 @@ sinks do not register themselves; applications own serialization, storage, and r
 
 ::: squid_reactivity.observe_events
 
-::: squid_reactivity.EventSink
+::: squid_reactivity.diagnostics.EventSink
 
 ::: squid_reactivity.Transaction.after_commit
 
@@ -194,25 +194,25 @@ sinks do not register themselves; applications own serialization, storage, and r
 
 ::: squid_reactivity.TransactionResult
 
-::: squid_reactivity.PreconditionSnapshot
+::: squid_reactivity.diagnostics.PreconditionSnapshot
 
-::: squid_reactivity.TransactionValidationSnapshot
+::: squid_reactivity.diagnostics.TransactionValidationSnapshot
 
-::: squid_reactivity.TransactionResultSnapshot
+::: squid_reactivity.diagnostics.TransactionResultSnapshot
 
 ::: squid_reactivity.EventLedger
 
-::: squid_reactivity.RedactionPolicy
+::: squid_reactivity.diagnostics.RedactionPolicy
 
-::: squid_reactivity.CausalEventSnapshot
+::: squid_reactivity.diagnostics.CausalEventSnapshot
 
-::: squid_reactivity.OperationEventSnapshot
+::: squid_reactivity.diagnostics.OperationEventSnapshot
 
-::: squid_reactivity.ResourceEventSnapshot
+::: squid_reactivity.diagnostics.ResourceEventSnapshot
 
-::: squid_reactivity.ContinuationFailureSnapshot
+::: squid_reactivity.diagnostics.ContinuationFailureSnapshot
 
-::: squid_reactivity.ExceptionReport
+::: squid_reactivity.transactions.ExceptionReport
 
 ## Errors
 

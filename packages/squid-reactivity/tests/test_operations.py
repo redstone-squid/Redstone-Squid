@@ -3,18 +3,11 @@ import asyncio
 import anyio
 import pytest
 
-from squid_reactivity import (
-    EventLedger,
-    OperationEventSnapshot,
-    Reactive,
-    ResourceEventSnapshot,
-    TransactionContext,
-    observe_events,
-    state,
-    transaction,
-)
+from squid_reactivity import EventLedger, Reactive, observe_events, state, transaction
+from squid_reactivity.diagnostics import OperationEventSnapshot, ResourceEventSnapshot
 from squid_reactivity.operations import Cancelled, Failed, Pending, ProgressReporter, Succeeded, operation
 from squid_reactivity.resources import resource
+from squid_reactivity.transactions import TransactionContext
 
 
 class Owner:

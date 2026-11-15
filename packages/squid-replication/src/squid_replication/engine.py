@@ -8,7 +8,7 @@ containers to application code.
 
 from typing import Any, Protocol
 
-from squid_reactivity import ConflictDetail
+from squid_reactivity.transactions import ConflictDetail
 
 
 class ReplicaBranch[SnapshotT, OperationT, PreparedT](Protocol):

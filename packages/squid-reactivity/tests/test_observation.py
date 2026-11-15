@@ -12,10 +12,10 @@ from squid_reactivity import (
     capture_reads,
     computed,
     observe_reads,
-    read_only,
     state,
     untracked,
 )
+from squid_reactivity.transactions import read_only
 
 
 class Model(Reactive):

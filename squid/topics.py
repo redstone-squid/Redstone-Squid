@@ -13,7 +13,8 @@ import asyncpg
 from squid.config import DatabaseConfig
 from squid.persistence.wake_listener import asyncpg_dsn
 from squid.posts.domain import ResourceKind
-from squid_reactivity import BusAddress, TopicBus, TopicName
+from squid_reactivity import TopicBus, TopicName
+from squid_reactivity.topics import BusAddress
 from squid_storage import PostgresTopicBridge
 
 RESOURCE_TOPIC_CHANNEL = "squid_resource_topics"

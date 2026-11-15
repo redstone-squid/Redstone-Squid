@@ -6,11 +6,8 @@ from typing import Any, cast
 
 import pytest
 
-from squid_reactivity import (
-    ConflictDetail,
-    TransactionCommit,
-    transaction,
-)
+from squid_reactivity import TransactionCommit, transaction
+from squid_reactivity.transactions import ConflictDetail
 from squid_replication import (
     LoroBackend,
     Replica,

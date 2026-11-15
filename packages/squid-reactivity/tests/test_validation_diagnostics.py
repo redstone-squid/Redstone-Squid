@@ -8,19 +8,18 @@ from typing import override
 import pytest
 
 from squid_reactivity import (
-    CausalEventSnapshot,
     EventLedger,
     Reactive,
     ReactiveConflictError,
     TransactionCommit,
-    TransactionValidationSnapshot,
-    apply_conditional_patches,
     observe_events,
     relaxed_read,
     state,
     strong_read,
     transaction,
 )
+from squid_reactivity.diagnostics import CausalEventSnapshot, TransactionValidationSnapshot
+from squid_reactivity.transactions import apply_conditional_patches
 from squid_reactivity.transactions.patches import ConditionalCellPatch, SlotValue
 
 

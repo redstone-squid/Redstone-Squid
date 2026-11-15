@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from squid_reactivity import ConflictDetail
+from squid_reactivity.transactions import ConflictDetail
 
 _MAX_UPDATE_BYTES = 1_048_576
 _MAX_OPERATIONS = 10_000

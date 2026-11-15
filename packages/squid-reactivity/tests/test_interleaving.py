@@ -13,14 +13,13 @@ from squid_reactivity import (
     EventLedger,
     Reactive,
     ReactiveConflictError,
-    TransactionParticipant,
-    enlist,
     observe_events,
     state,
     strong_read,
     transaction,
 )
 from squid_reactivity.testing import InterleavingHarness
+from squid_reactivity.transactions import TransactionParticipant, enlist
 
 
 class Model(Reactive):

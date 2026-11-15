@@ -19,7 +19,7 @@ from importlib.metadata import version as distribution_version
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast
 
-from squid_reactivity import ConflictDetail
+from squid_reactivity.transactions import ConflictDetail
 
 if TYPE_CHECKING:
     # `loro` is an optional backend imported lazily inside the engines, so its types are

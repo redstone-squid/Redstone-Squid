@@ -6,24 +6,26 @@ from typing import Literal
 import pytest
 
 from squid_reactivity import (
-    ActorRef,
     FrameworkIntegrityError,
     Reactive,
     StaleReactiveContextError,
     TransactionCommit,
-    TransactionContext,
-    TransactionPurpose,
-    TransactionRelation,
-    TransactionResultSnapshot,
     TransactionRollback,
-    apply_conditional_patches,
     current_transaction,
-    inspect_cells,
     readonly_transaction,
     state,
     transaction,
 )
+from squid_reactivity.core import inspect_cells
+from squid_reactivity.diagnostics import TransactionResultSnapshot
 from squid_reactivity.testing import InterleavingHarness
+from squid_reactivity.transactions import (
+    ActorRef,
+    TransactionContext,
+    TransactionPurpose,
+    TransactionRelation,
+    apply_conditional_patches,
+)
 
 
 class Counter(Reactive):

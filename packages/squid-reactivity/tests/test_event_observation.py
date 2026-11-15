@@ -7,22 +7,16 @@ from datetime import UTC, datetime
 import anyio
 import pytest
 
-from squid_reactivity import (
-    EventLedger,
-    ExceptionReport,
-    OperationEventSnapshot,
-    Reactive,
-    RedactionPolicy,
-    TransactionCommit,
-    TransactionValidationSnapshot,
-    observe_events,
-    transaction,
-)
+from squid_reactivity import EventLedger, Reactive, TransactionCommit, observe_events, transaction
 from squid_reactivity.diagnostics import (
+    OperationEventSnapshot,
+    RedactionPolicy,
+    TransactionValidationSnapshot,
     emit_causal_event,
 )
 from squid_reactivity.operations import ProgressReporter, operation
 from squid_reactivity.resources import resource
+from squid_reactivity.transactions import ExceptionReport
 
 
 async def test_scopes_isolate_siblings_and_expire_in_inherited_tasks() -> None:

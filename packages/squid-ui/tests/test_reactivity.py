@@ -6,7 +6,7 @@ from typing import Any, override
 
 import pytest
 
-from squid_reactivity import CellReport, inspect_cells
+from squid_reactivity.core import CellReport, inspect_cells
 from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
 

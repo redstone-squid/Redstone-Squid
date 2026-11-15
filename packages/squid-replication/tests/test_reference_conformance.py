@@ -14,20 +14,19 @@ import pytest
 
 from squid_reactivity import (
     CellAddress,
-    ChangeReport,
-    ConflictDetail,
     EventLedger,
     Reactive,
     ReactiveConflictError,
     Subscriptions,
     TransactionCommit,
-    addresses,
     observe_events,
     state,
     strong_read,
     transaction,
 )
 from squid_reactivity.testing import InterleavingHarness
+from squid_reactivity.tracking import addresses
+from squid_reactivity.transactions import ChangeReport, ConflictDetail
 from squid_reactivity.transactions.state import _CURRENT_TRANSACTION
 from squid_replication import (
     PreparedReplicationInverse,
