@@ -1,6 +1,7 @@
 """Standalone contracts for the transactional state kernel."""
 
 import asyncio
+from collections.abc import Mapping
 from typing import override
 
 import pytest
@@ -12,6 +13,7 @@ from squid_reactivity import (
     StaleReactiveContextError,
     computed,
     observe_reads,
+    restore_state,
     state,
     strong_read,
     transaction,
@@ -249,3 +251,12 @@ def test_a_failing_owner_cannot_fail_a_published_assignment(caplog: pytest.LogCa
     model.value = 1
     assert model.value == 1
     assert "owner failed" in caplog.text
+
+
+def test_restore_returns_tuples_for_sequences_nested_in_mappings() -> None:
+    class Model(Reactive):
+        groups: Mapping[str, tuple[int, ...]] = state(factory=dict)
+
+    model = Model()
+    restore_state(model, {"groups": {"first": [1, 2]}})
+    assert model.groups == {"first": (1, 2)}

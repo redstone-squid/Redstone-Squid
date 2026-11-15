@@ -107,7 +107,7 @@ class Reactive(ReactiveStateOwner):
             raise TypeError(message)
         _, descriptor = holders[0]
         # No notification of its own: the staged write carries one, delivered at the commit
-        # outside an transaction and at `finalize_commit` inside one.
+        # outside a transaction and at `finalize_commit` inside one.
         descriptor.mutated(self)
 
     def on_state_commit(self, names: frozenset[str]) -> None:
@@ -189,8 +189,6 @@ class _State[ValueT]:
         cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
         # `read()` answers with this transaction's staged value wherever it has one, so a slot the
         # transaction emptied reads as empty rather than handing back the sentinel that spells it.
-        # Asking the cell first is what keeps that sentinel private: deciding on `cell.value`
-        # and only then reading meant a staged absence was returned to the caller verbatim.
         held = _MISSING if cell is None else cell.read()
         if held is not _MISSING:
             return held
@@ -421,7 +419,7 @@ class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
         """Return the version after validating this read view and its dependencies."""
         current = _active()
         view = None if current is None else (current.read_view, _READ_CONSISTENCY.get())
-        # A cache belongs to one read view. Re-evaluate on entry to an transaction or
+        # A cache belongs to one read view. Re-evaluate on entry to a transaction or
         # a different read policy so cache hits cannot bypass conflict observations.
         if self._view == view:
             if self._epoch == _runtime.epoch:
@@ -610,10 +608,13 @@ def _frozen(value: Any) -> Any:
     """Return a restored snapshot value in the shape it was exported from.
 
     JSON has one sequence type, so an exported tuple comes back as a list. A field declared
-    `Sequence` reads either; one declared `tuple[...]` needs the tuple back.
+    `Sequence` reads either; one declared `tuple[...]` needs the tuple back. Sequences
+    inside mappings are converted too.
     """
     if isinstance(value, list | tuple):
         return tuple(_frozen(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _frozen(item) for key, item in value.items()}
     return value
 
 
