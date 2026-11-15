@@ -70,6 +70,25 @@ no retained results, so replaying those later groups calls the model again. The 
 reports the resume point in its output; it does not write a checkpoint file or recover a
 cursor after a process crash or forced termination.
 
+## Asset-only repair
+
+`reindex_media_assets.py` reprocesses retained images and videos from checksum-verified
+originals. It uses object storage when the raw file remains, otherwise fetches fresh
+Discord attachment URLs from the retained source messages. It never calls inference,
+submits drafts, changes build facts, or rewrites user-supplied external links.
+
+Preview with `uv run --locked python scripts/reindex_media_assets.py --limit 100`.
+Add `--execute --audit /durable/path/media-repair.jsonl` to apply the selected batch.
+Use `--upload-id UUID` for a canary, and `--concurrency` to bound parallel downloads
+and thumbnail processing (default two). Each replacement records its previous metadata
+before publication; failures leave the current artifacts in place. Completed originals
+are skipped by checksum, so rerunning resumes remaining work. Discarded uploads are
+excluded to preserve review decisions. A nonzero exit means at least one repair failed;
+the JSONL console output identifies the upload and error.
+
+This repairs private retained artifacts. Public delivery of those artifacts is separate
+from external build links and is not provided by this script.
+
 ## Termux
 
 From the repository root, run `sh scripts/termux.sh` to install the locked dependencies.
