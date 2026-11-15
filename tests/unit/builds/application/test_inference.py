@@ -1064,3 +1064,49 @@ async def test_reset_only_qualification_does_not_become_a_movement_duration() ->
 
     assert build.normal_closing_time is None
     assert "10s reset on closing" in (build.description or "")
+
+
+@pytest.mark.parametrize("mention", ["<@123456789012345678>", "<@!123456789012345678>"])
+@pytest.mark.parametrize("subject", [None, "123456789012345678"])
+def test_unavailable_discord_mentions_keep_observed_ids_without_invented_usernames(
+    mention: str, subject: str | None
+) -> None:
+    message = ContextMessage(10, "Poster", 20, f"top slider setup developed with {mention}", "", "primary")
+    value = inferred(
+        credits=[
+            {
+                "name": "123456789012345678",
+                "kind": "discord",
+                "subject": subject,
+                "username": "invented_current_username",
+                "role": "contributor",
+                "source_message_id": 10,
+            }
+        ]
+    )
+
+    sender, contributor = BuildInferenceService._credits(value, [message])
+
+    assert sender.attribution is CreditAttribution.ASSUMED_SENDER
+    assert contributor.subject == "123456789012345678"
+    assert contributor.username is None
+    assert contributor.role is CreditRole.CONTRIBUTOR
+
+
+def test_bare_numeric_credit_names_do_not_establish_discord_ids() -> None:
+    message = ContextMessage(10, "Poster", 20, "component by 123456789012345678", "", "primary")
+    value = inferred(
+        credits=[
+            {
+                "name": "123456789012345678",
+                "kind": "discord",
+                "subject": "123456789012345678",
+                "role": "contributor",
+                "source_message_id": 10,
+            }
+        ]
+    )
+
+    _, contributor = BuildInferenceService._credits(value, [message])
+
+    assert contributor.subject is None

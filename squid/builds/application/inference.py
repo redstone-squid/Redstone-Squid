@@ -451,9 +451,17 @@ class BuildInferenceService:
                     ContextIdentity(message.author_id, message.author_name, message.author_username),
                     *message.mentions,
                 )
+                mentioned_ids = set(re.findall(r"<@!?(\d+)>", message.content))
+                if subject is None and name.strip() in mentioned_ids:
+                    subject = name.strip()
                 identity = next((person for person in known if str(person.user_id) == subject), None)
                 if identity is None:
-                    subject = None
+                    # Deleted or unavailable users can still have an explicit mention.
+                    # Preserve its ID without inventing a current Discord username.
+                    if subject in mentioned_ids:
+                        username = None
+                    else:
+                        subject = None
                 else:
                     # An old post may use an alias while Discord supplies today's
                     # display name. Both can refer to the same observed ID.
