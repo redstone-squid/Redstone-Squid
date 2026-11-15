@@ -122,10 +122,6 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
         """
         return Boundary(self, str(key))
 
-    def boundary(self, child: Component[RenderTargetT, ContextT], *, key: str) -> Boundary[RenderTargetT, ContextT]:
-        """Compatibility spelling for child.keyed(key)."""
-        return child.keyed(key)
-
     async def on_load(self) -> None:
         """Fetch what this component cannot render without, before its first render.
 

@@ -267,7 +267,7 @@ async def test_failed_discovery_releases_new_model_reads() -> None:
         @override
         def render(self):
             if self.changed:
-                return [sl.paragraph(new.full), self.boundary(self.child, key="child")]
+                return [sl.paragraph(new.full), self.child.keyed("child")]
             return sl.paragraph(old.full)
 
     panel = Switch()

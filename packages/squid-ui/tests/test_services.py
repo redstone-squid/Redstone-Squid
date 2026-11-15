@@ -277,7 +277,7 @@ class Panel(Component[ComponentsV2Target]):
     @override
     def render(self) -> DocumentLike[ComponentsV2Target]:
         self.provide(KEY, self.service)
-        return self.boundary(self.child, key="child") if self.visible else Text("empty")
+        return self.child.keyed("child") if self.visible else Text("empty")
 
 
 class OwnedPanel(Component[ComponentsV2Target]):
@@ -345,7 +345,7 @@ async def test_nearest_provider_changes_without_transferring_service_ownership()
             def render(self) -> DocumentLike[ComponentsV2Target]:
                 if self.overridden:
                     self.provide(KEY, self.service)
-                return self.boundary(consumer, key="consumer")
+                return consumer.keyed("consumer")
 
         nested = Nested(inner)
 
@@ -353,7 +353,7 @@ async def test_nearest_provider_changes_without_transferring_service_ownership()
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
                 self.provide(KEY, self.service)
-                return self.boundary(nested, key="nested")
+                return nested.keyed("nested")
 
         application = ServiceOwner()
         application.own(outer)
@@ -409,7 +409,7 @@ async def test_injected_service_renders_before_readiness_and_publishes_ready_sta
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
                 self.provide(key, self.service)
-                return self.boundary(self.reader, key="reader")
+                return self.reader.keyed("reader")
 
         panel = Owner()
         runtime = ComponentRuntime(panel, execution_host=host)
@@ -442,7 +442,7 @@ async def test_independent_owners_and_unmount_hook_failure() -> None:
         class Root(Component[ComponentsV2Target]):
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
-                return self.boundary(first, key="first"), self.boundary(second, key="second")
+                return first.keyed("first"), second.keyed("second")
 
         runtime = ComponentRuntime(Root(), execution_host=host)
         runtime.commit(runtime.render())
@@ -549,7 +549,7 @@ async def test_actual_component_remount_preserves_object_and_restarts_activity()
 
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
-                return self.boundary(panel, key="panel") if self.visible else Text("empty")
+                return panel.keyed("panel") if self.visible else Text("empty")
 
         root = Root()
         runtime = ComponentRuntime(root, execution_host=host)
@@ -820,7 +820,7 @@ async def test_runtime_readiness_observes_all_committed_owners() -> None:
         class Root(Component[ComponentsV2Target]):
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
-                return self.boundary(first, key="first"), self.boundary(second, key="second")
+                return first.keyed("first"), second.keyed("second")
 
         runtime = ComponentRuntime(Root(), execution_host=host)
         await runtime.wait_services_ready()
@@ -1107,9 +1107,7 @@ async def test_failed_shutdown_does_not_retain_successfully_removed_services() -
 
         @override
         def render(self) -> DocumentLike[ComponentsV2Target]:
-            return tuple(self.boundary(child, key=str(index)) for index, child in enumerate(self.children)) or Text(
-                "empty"
-            )
+            return tuple(child.keyed(str(index)) for index, child in enumerate(self.children)) or Text("empty")
 
     async with running_host() as host:
         good = OwnedPanel(Recorder())
@@ -1385,7 +1383,7 @@ async def test_parent_service_outlives_child_cleanup(fail_child: bool) -> None:
 
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
-                return self.boundary(child, key="child")
+                return child.keyed("child")
 
         runtime = ComponentRuntime(Parent(), execution_host=host)
         runtime.commit(runtime.render())

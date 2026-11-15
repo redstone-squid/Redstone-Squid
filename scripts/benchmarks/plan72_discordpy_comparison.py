@@ -187,7 +187,7 @@ class _ButtonRoot(sl.Component[sl.ComponentsV2Target]):
     @override
     def render(self):
         self.renders += 1
-        return tuple(self.boundary(row, key=str(index)) for index, row in enumerate(self.rows))
+        return tuple(row.keyed(str(index)) for index, row in enumerate(self.rows))
 
 
 def _measure_pipeline(controls: int, samples: int) -> tuple[int, int]:

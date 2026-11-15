@@ -131,7 +131,7 @@ def test_toggle_key_is_prefixed_through_embed() -> None:
 
         @override
         def render(self):
-            return self.boundary(self.child, key="settings")
+            return self.child.keyed("settings")
 
     tree = render_component_tree(Parent())
 

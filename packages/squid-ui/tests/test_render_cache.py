@@ -31,7 +31,7 @@ class Switch(ui.Component):
 
     @override
     def render(self) -> ui.LayoutNode:
-        return self.boundary(self.child, key="child") if self.shown else ui.paragraph("hidden")
+        return self.child.keyed("child") if self.shown else ui.paragraph("hidden")
 
 
 class Root(ui.Component):
@@ -40,7 +40,7 @@ class Root(ui.Component):
 
     @override
     def render(self) -> ui.LayoutNode:
-        return ui.block(*(self.boundary(child, key=str(index)) for index, child in enumerate(self.children)))
+        return ui.block(*(child.keyed(str(index)) for index, child in enumerate(self.children)))
 
 
 def commit(runtime: ComponentRuntime, *, incremental: bool = True) -> None:

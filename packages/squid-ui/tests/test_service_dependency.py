@@ -73,7 +73,7 @@ async def test_child_observes_one_parent_run_across_panel_remount(outcome: str) 
 
         @override
         def render(self) -> DocumentLike[ComponentsV2Target]:
-            return self.boundary(self.child, key="child")
+            return self.child.keyed("child")
 
     async def report(error: Exception) -> None:
         reports.append(error)

@@ -54,20 +54,17 @@ plan(sl.stack(Panel(())).optional(), target=classic())  # pyright: ignore[report
 def boundaries(
     portable_child: sl.Component,
     v2_child: sl.Component[ComponentsV2Target],
-    classic_parent: sl.Component[ClassicTarget],
 ) -> None:
     direct = Boundary(v2_child, key="direct")
     assert_type(direct, Boundary[ComponentsV2Target])
     assert_type(direct.component, sl.Component[ComponentsV2Target])
-    wrapped = v2_child.boundary(v2_child, key="child")
+    wrapped = v2_child.keyed("child")
     assert_type(wrapped, Boundary[ComponentsV2Target])
-    assert_type(v2_child.boundary(portable_child, key="portable"), Boundary[ComponentsV2Target])
+    assert_type(portable_child.keyed("portable"), Boundary[sl.RenderTarget])
     nested = sl.stack(sl.section(sl.heading("child"), wrapped))
     assert_type(nested, Stack[ComponentsV2Target])
     plan(nested, target=v2())
     plan(nested, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
-    classic_parent.boundary(v2_child, key="wrong")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
-    portable_child.boundary(v2_child, key="wrong")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 def direct_children(v2_child: sl.Component[ComponentsV2Target], portable_child: sl.Component) -> None:

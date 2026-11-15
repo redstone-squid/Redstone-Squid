@@ -102,7 +102,7 @@ def test_discovery_candidate_must_be_discarded_instead_of_committed() -> None:
 
         @override
         def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
-            return self.boundary(self.child, key="child")
+            return self.child.keyed("child")
 
     runtime = ComponentRuntime(Parent())
     candidate = runtime.stage(runtime.render(defer=lambda _: True))

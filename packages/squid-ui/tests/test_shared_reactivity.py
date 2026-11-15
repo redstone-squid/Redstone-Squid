@@ -173,7 +173,7 @@ def test_component_construction_during_render_is_rejected() -> None:
     class Parent(Component[DiscordTarget]):
         @override
         def render(self) -> Boundary[DiscordTarget]:
-            return self.boundary(Child("hi"), key="child")
+            return Child("hi").keyed("child")
 
     with pytest.raises(LayoutInvariantError, match="constructed during rendering"):
         render_component_tree(Parent())
@@ -196,7 +196,7 @@ def test_retained_child_cannot_write_during_its_render() -> None:
 
         @override
         def render(self) -> Boundary[DiscordTarget]:
-            return self.boundary(self.child, key="child")
+            return self.child.keyed("child")
 
     with pytest.raises(ReactiveWriteError, match="factory="):
         render_component_tree(Parent())

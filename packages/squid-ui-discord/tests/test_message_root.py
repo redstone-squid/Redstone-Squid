@@ -497,7 +497,7 @@ class Panel(Component[sl.ComponentsV2Target]):
             Row((Button("add", self.add, "add"),)),
         ]
         if self.show_child:
-            nodes.append(self.boundary(self.child, key="child"))
+            nodes.append(self.child.keyed("child"))
         return nodes
 
     async def add(self, event: PressEvent) -> None:
@@ -3554,7 +3554,7 @@ class TestResourceLoading:
 
             @override
             def render(self):
-                return self.boundary(self.child, key="child") if self.visible else Text("removed")
+                return self.child.keyed("child") if self.visible else Text("removed")
 
         panel = Parent()
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
@@ -3590,7 +3590,7 @@ class TestResourceLoading:
 
             @override
             def render(self):
-                return tuple(self.boundary(child, key=str(index)) for index, child in enumerate(self.children))
+                return tuple(child.keyed(str(index)) for index, child in enumerate(self.children))
 
         panel = Parent()
         profiler = MemoryProfiler()
@@ -3731,7 +3731,7 @@ class TestResourceLoading:
                     case Failed(error=error):
                         return Text(f"parent:Failed:{error}")
                     case Ready():
-                        return [Text("parent:Ready"), self.boundary(self.child, key="child")]
+                        return [Text("parent:Ready"), self.child.keyed("child")]
 
         message: Any = message_harness()
         message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
@@ -3886,7 +3886,7 @@ class Host(Component[sl.ComponentsV2Target]):
         self.log.append("render:host")
         nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text("host")]
         if self.ready:
-            nodes.append(self.boundary(self.child, key="child"))
+            nodes.append(self.child.keyed("child"))
         return nodes
 
 
@@ -3965,7 +3965,7 @@ class Nested(Component[sl.ComponentsV2Target]):
         self.log.append("render:parent")
         nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text("parent")]
         if self.ready:
-            nodes.append(self.boundary(self.child, key="child"))
+            nodes.append(self.child.keyed("child"))
         return nodes
 
 
@@ -3985,7 +3985,7 @@ class Siblings(Component[sl.ComponentsV2Target]):
 
     @override
     def render(self):
-        return [self.boundary(self.first, key="first"), self.boundary(self.second, key="second")]
+        return [self.first.keyed("first"), self.second.keyed("second")]
 
 
 class TestLoading:
@@ -4057,7 +4057,7 @@ class TestLoading:
             def render(self):
                 nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Row((Button("open", self.reveal, "open"),))]
                 if self.open:
-                    nodes.append(self.boundary(self.child, key="child"))
+                    nodes.append(self.child.keyed("child"))
                 return nodes
 
             async def reveal(self, event: PressEvent) -> None:
@@ -4230,7 +4230,7 @@ class TestLoading:
             def render(self):
                 nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text(f"depth {self.depth}")]
                 if self.child is not None:
-                    nodes.append(self.boundary(self.child, key="child"))
+                    nodes.append(self.child.keyed("child"))
                 return nodes
 
         message_root = MessageRoot(Endless(), access=Everyone(), timeout=None)

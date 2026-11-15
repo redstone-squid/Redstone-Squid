@@ -91,7 +91,7 @@ These placements share component state, loading, and services. Each renders in i
 context with separate control and presentation keys. Mounting happens at the first delivered
 placement, and unmounting at the last removal. An instance can belong to only one runtime
 at a time; cycles remain invalid. Replacing a child at the same key mounts the new instance
-with its own state. `parent.boundary(child, key="editor")` remains available for compatibility.
+with its own state.
 
 Keep dynamic children by an application key and update the collection in an action. The runtime
 mounts and unmounts children when the delivered tree changes. Reusing a cached render therefore

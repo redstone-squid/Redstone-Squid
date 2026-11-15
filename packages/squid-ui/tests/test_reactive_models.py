@@ -79,7 +79,7 @@ def test_a_sibling_reading_component_state_is_invalidated_with_its_owner() -> No
 
         @override
         def render(self):
-            return [self.boundary(source, key="source"), self.boundary(self.sibling, key="sibling")]
+            return [source.keyed("source"), self.sibling.keyed("sibling")]
 
     runtime = ComponentRuntime(Parent())
     runtime.commit(runtime.render())

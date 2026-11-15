@@ -243,7 +243,7 @@ async def test_terminal_application_view_is_discarded_without_mounting_children(
 
         @override
         def render(self) -> Any:
-            return self.boundary(self.child, key="child") if self.show_child else Text("parent")
+            return self.child.keyed("child") if self.show_child else Text("parent")
 
     parent = Parent()
     root = MessageRoot(parent, access=Everyone(), timeout=None)

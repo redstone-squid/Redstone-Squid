@@ -47,7 +47,7 @@ class _Root(Component[sl.ComponentsV2Target]):
     @override
     def render(self):
         self.renders += 1
-        return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+        return tuple(leaf.keyed(str(index)) for index, leaf in enumerate(self.leaves))
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,7 +240,7 @@ class _ValueRoot(Component[sl.ComponentsV2Target]):
     @override
     def render(self):
         self.renders += 1
-        return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+        return tuple(leaf.keyed(str(index)) for index, leaf in enumerate(self.leaves))
 
 
 class _BranchLeaf(Component[sl.ComponentsV2Target]):
@@ -297,7 +297,7 @@ class _MountingLeaf(Component[sl.ComponentsV2Target]):
     @override
     def render(self):
         self.renders += 1
-        return self.boundary(self.child, key="child") if self.mounted else Text("unmounted")
+        return self.child.keyed("child") if self.mounted else Text("unmounted")
 
 
 class _ResourceLeaf(Component[sl.ComponentsV2Target]):

@@ -168,7 +168,7 @@ def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
 
         @override
         def render(self):
-            return self.boundary(self.child, key="child")
+            return self.child.keyed("child")
 
     tree = render_component_tree(Parent())
     grid = cast(sl.semantic.Grid, tree.nodes[0])

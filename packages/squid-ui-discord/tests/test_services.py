@@ -102,7 +102,7 @@ async def test_removing_owner_waits_for_cleanup_but_keeps_message_root_live() ->
 
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
-                return self.boundary(panel, key="editor") if self.visible else Text("closed")
+                return panel.keyed("editor") if self.visible else Text("closed")
 
         component = Root()
         root = MessageRoot(component, access=Everyone(), execution_host=host)
@@ -126,7 +126,7 @@ async def test_failed_replacement_keeps_visible_owner_active_until_successful_de
             @override
             def render(self) -> DocumentLike[ComponentsV2Target]:
                 panel = replacement if self.replaced else first
-                return Text("replacement" if self.replaced else "original"), self.boundary(panel, key="editor")
+                return Text("replacement" if self.replaced else "original"), panel.keyed("editor")
 
         component = Root()
         root = MessageRoot(component, access=Everyone(), execution_host=host)

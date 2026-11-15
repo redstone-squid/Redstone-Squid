@@ -183,7 +183,7 @@ the message root, though it runs outside the dispatch funnel, so it takes no aut
 generation check.
 
 An adopted component composes like any other, which is how a migration finishes — embed it under
-`self.boundary(child, key=...)` and move controls out of the legacy view one at a time.
+`child.keyed(...)` and move controls out of the legacy view one at a time.
 
 ## Hand one whole message to a MessageRoot
 

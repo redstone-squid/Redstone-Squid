@@ -795,7 +795,7 @@ async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
 
         @override
         def render(self):
-            return [sl.semantic.Paragraph("Legacy controls below"), self.boundary(self.child, key="legacy")]
+            return [sl.semantic.Paragraph("Legacy controls below"), self.child.keyed("legacy")]
 
     message_root = MessageRoot(Screen(adopt(Paginator())), access=Everyone(), timeout=None)
     commit_render(message_root)

@@ -87,7 +87,7 @@ class Pair(Component[sl.ComponentsV2Target]):
 
     @override
     def render(self):
-        return [Heading("Pair"), self.boundary(self.left, key="left"), self.boundary(self.right, key="right")]
+        return [Heading("Pair"), self.left.keyed("left"), self.right.keyed("right")]
 
 
 def _custom_ids(view: discord.ui.LayoutView) -> list[str]:
@@ -166,7 +166,7 @@ class TestRenderCaching:
             @override
             def render(self):
                 self.provide(service_key, EqualService(self.value))
-                return self.boundary(self.child, key="child")
+                return self.child.keyed("child")
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -208,7 +208,7 @@ class TestRenderCaching:
             def render(self):
                 _ = self.unrelated
                 self.provide(service_key, Service(self.service_version))
-                return self.boundary(self.child, key="child")
+                return self.child.keyed("child")
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -265,7 +265,7 @@ class TestRenderCaching:
             def render(self):
                 value = Text(str(self.value))
                 body = Panel(children=(value,)) if self.wrapped else value
-                child = (self.boundary(self.child, key="child"),) if self.child_visible else ()
+                child = (self.child.keyed("child"),) if self.child_visible else ()
                 return (body, *child, Row((Button("Run", self.press, "run"),)))
 
         class Root(Component[sl.ComponentsV2Target]):
@@ -275,7 +275,7 @@ class TestRenderCaching:
 
             @override
             def render(self) -> Document[sl.ComponentsV2Target]:
-                children = tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+                children = tuple(leaf.keyed(str(index)) for index, leaf in enumerate(self.leaves))
                 return Document(children, (self.asset,), key="oracle")
 
         root = Root()
@@ -321,7 +321,7 @@ class TestRenderCaching:
 
             @override
             def render(self):
-                return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+                return tuple(leaf.keyed(str(index)) for index, leaf in enumerate(self.leaves))
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -357,7 +357,7 @@ class TestRenderCaching:
 
             @override
             def render(self):
-                return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+                return tuple(leaf.keyed(str(index)) for index, leaf in enumerate(self.leaves))
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -400,7 +400,7 @@ class TestRenderCaching:
 
             @override
             def render(self):
-                return self.boundary(self.child, key="child") if self.visible else Text("empty")
+                return self.child.keyed("child") if self.visible else Text("empty")
 
         class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
@@ -408,7 +408,7 @@ class TestRenderCaching:
 
             @override
             def render(self):
-                return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+                return tuple(leaf.keyed(str(index)) for index, leaf in enumerate(self.leaves))
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -453,7 +453,7 @@ class TestRenderCaching:
 
             @override
             def render(self) -> Panel:
-                return Panel(children=(Text("before"), self.boundary(self.leaf, key="leaf"), Text("after")))
+                return Panel(children=(Text("before"), self.leaf.keyed("leaf"), Text("after")))
 
         class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
@@ -461,7 +461,7 @@ class TestRenderCaching:
 
             @override
             def render(self):
-                return self.boundary(self.middle, key="middle")
+                return self.middle.keyed("middle")
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -505,7 +505,7 @@ class TestRenderCaching:
             @override
             def render(self):
                 self.renders += 1
-                return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
+                return (self.left.keyed("left"), self.right.keyed("right"))
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -660,7 +660,7 @@ class TestRenderCaching:
             @override
             def render(self):
                 self.renders += 1
-                return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
+                return (self.left.keyed("left"), self.right.keyed("right"))
 
         root = Root()
         runtime = ComponentRuntime(root)
@@ -720,8 +720,8 @@ class TestRenderCaching:
             @override
             def render(self):
                 return (
-                    self.boundary(self.inline, key="inline"),
-                    self.boundary(self.stable, key="stable"),
+                    self.inline.keyed("inline"),
+                    self.stable.keyed("stable"),
                 )
 
         root = Root()
@@ -757,7 +757,7 @@ def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
     class Parent(Component[Any, Any]):
         @override
         def render(self) -> Node:
-            return wrap((self.boundary(child, key="child"),))
+            return wrap((child.keyed("child"),))
 
     container = render_component_tree(Parent()).nodes[0]
     assert isinstance(container, Card | Budget | Break)
@@ -790,7 +790,7 @@ class Nest(Component[sl.ComponentsV2Target]):
     def render(self):
         nodes: list[Node | Boundary] = [Row((Button(label="x", on_click=self._click, key="click"),))]
         if self.child is not None:
-            nodes.append(self.boundary(self.child, key=f"level{self.depth}" + "_padding" * 4))
+            nodes.append(self.child.keyed(f"level{self.depth}" + "_padding" * 4))
         return [Panel(children=tuple(nodes))]
 
     async def _click(self, event: PressEvent) -> None: ...
@@ -821,7 +821,7 @@ class PagedPair(Component[sl.ComponentsV2Target]):
 
     @override
     def render(self):
-        return [self.boundary(self.left, key="left"), self.boundary(self.right, key="right")]
+        return [self.left.keyed("left"), self.right.keyed("right")]
 
 
 def test_embed_namespaces_pager_state_and_controls() -> None:
@@ -844,7 +844,7 @@ def test_duplicate_sibling_embed_keys_are_rejected() -> None:
 
         @override
         def render(self):
-            return [self.boundary(self.one, key="same"), self.boundary(self.two, key="same")]
+            return [self.one.keyed("same"), self.two.keyed("same")]
 
     with pytest.raises(LayoutInvariantError, match="duplicate Boundary key"):
         commit_render(MessageRoot(Duplicate(), access=Everyone(), timeout=None))
@@ -856,7 +856,7 @@ def test_one_component_instance_can_occupy_two_paths() -> None:
     class Duplicate(Component[sl.ComponentsV2Target]):
         @override
         def render(self):
-            return [self.boundary(child, key="one"), self.boundary(child, key="two")]
+            return [child.keyed("one"), child.keyed("two")]
 
     message_root = MessageRoot(Duplicate(), access=Everyone(), timeout=None)
     commit_render(message_root)
@@ -870,7 +870,7 @@ def test_component_embedding_cycles_are_rejected() -> None:
     class Cycle(Component[sl.ComponentsV2Target]):
         @override
         def render(self):
-            return self.boundary(self, key="self")
+            return self.keyed("self")
 
     with pytest.raises(LayoutInvariantError, match="embedding cycle"):
         commit_render(MessageRoot(Cycle(), access=Everyone(), timeout=None))
@@ -904,7 +904,7 @@ async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None
 
         @override
         def render(self):
-            return self.boundary(self.child, key="child")
+            return self.child.keyed("child")
 
     parent = Parent()
     message_root = MessageRoot(parent, access=Everyone(), timeout=None)
@@ -935,7 +935,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
         @override
         def render(self):
             self.provide(greeting, "hello from context")
-            return self.boundary(self.child, key="child")
+            return self.child.keyed("child")
 
     view = commit_render(MessageRoot(Parent(), access=Everyone(), timeout=None))
 
@@ -957,7 +957,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
 
         @override
         def render(self):
-            return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
+            return (self.left.keyed("left"), self.right.keyed("right"))
 
     message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
     commit_render(message_root)
@@ -993,7 +993,7 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
 
         @override
         def render(self):
-            return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
+            return (self.left.keyed("left"), self.right.keyed("right"))
 
     message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
     commit_render(message_root)
