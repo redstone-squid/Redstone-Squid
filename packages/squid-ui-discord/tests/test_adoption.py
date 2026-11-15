@@ -831,3 +831,37 @@ def test_button_translation_keeps_style_and_emoji() -> None:
     assert isinstance(button, Button)
     assert button.style is ActionStyle.DANGER
     assert button.emoji == Emoji("\N{FIRE}")
+
+
+@pytest.mark.parametrize("layout", [False, True])
+async def test_custom_keys_use_the_same_escaping_for_render_and_dispatch(layout: bool) -> None:
+    view = discord.ui.LayoutView(timeout=None) if layout else discord.ui.View(timeout=None)
+    button = discord.ui.Button(label="Run")
+    calls: list[int] = []
+
+    async def callback(interaction: discord.Interaction) -> None:
+        calls.append(interaction.user.id)
+
+    button.callback = callback
+    view.add_item(discord.ui.ActionRow(button) if layout else button)
+    root = MessageRoot(adopt(view, keys=lambda item: "run.action"), access=Everyone(), timeout=None)
+    await root.send(delivered_to(message_harness()))
+    interaction = interaction_harness()
+
+    await root.dispatch("run-action", interaction)
+
+    assert calls == [interaction.user.id]
+
+
+@pytest.mark.parametrize("layout", [False, True])
+@pytest.mark.parametrize("keys", [("",), ("same.key", "same-key")])
+def test_custom_keys_reject_empty_names_and_escaped_collisions(layout: bool, keys: tuple[str, ...]) -> None:
+    view = discord.ui.LayoutView(timeout=None) if layout else discord.ui.View(timeout=None)
+    names: dict[int, str] = {}
+    for key in keys:
+        button = discord.ui.Button(label="Run")
+        names[id(button)] = key
+        view.add_item(discord.ui.ActionRow(button) if layout else button)
+
+    with pytest.raises(AdoptionError, match=r"non-empty|share the key"):
+        adopt(view, keys=lambda item: names[id(item)])

@@ -140,7 +140,8 @@ def adopt(
 
     Args:
         view: An unsent, never-dispatched `discord.ui.View` or Components V2 `LayoutView`.
-        keys: Names each item instead of the `custom_id`/position default.
+        keys: Names each item instead of the `custom_id`/position default. Names must be
+            non-empty; dots become hyphens and the resulting names must be unique.
         assets: Assets referenced by an adopted `LayoutView` or carried by its document.
         discard_timeout: Accept that an overridden `on_timeout` will never run.
 
@@ -357,10 +358,11 @@ class _AdoptedView(Component[Any, Any]):
             return key
         if self._keys is not None:
             return _escape_key(self._keys(item))
+        # Generated SDK ids are random; only author-provided ids define identity.
         custom_id = getattr(item, "custom_id", None)
         if getattr(item, "_provided_custom_id", False) and isinstance(custom_id, str) and custom_id:
             return _escape_key(custom_id)
-        return _layout_path(path)
+        return _layout_path(path) if isinstance(self._view, discord.ui.LayoutView) else f"adopted-{path[0]}"
 
     @staticmethod
     def _is_callback_button(item: Item) -> bool:
@@ -369,17 +371,11 @@ class _AdoptedView(Component[Any, Any]):
     def _layout_key_map(self) -> dict[str, Item]:
         """Validate and index every dispatchable item in the current native tree."""
         found: dict[str, Item] = {}
-        seen: set[str] = set()
 
         def walk(item: Item, path: tuple[int, ...]) -> None:
             self._reject_dynamic(item, path)
             if (isinstance(item, discord.ui.Button) and self._is_callback_button(item)) or isinstance(item, _SELECTS):
-                key = self._key_for(item, path)
-                if key in seen:
-                    message = f"two adopted controls share the key {key!r}; pass keys= to tell them apart"
-                    raise AdoptionError(message)
-                seen.add(key)
-                found[key] = item
+                self._index_control(found, item, path)
             if isinstance(item, discord.ui.Section):
                 for index, child in enumerate(item.children):
                     if not isinstance(child, discord.ui.TextDisplay):
@@ -440,29 +436,19 @@ class _AdoptedView(Component[Any, Any]):
 
     # --- translation ---------------------------------------------------------------------
 
+    def _index_control(self, found: dict[str, Item], item: Item, path: tuple[int, ...]) -> None:
+        key = self._key_for(item, path)
+        if key in found:
+            message = f"two adopted controls share the key {key!r}; pass keys= to tell them apart"
+            raise AdoptionError(message)
+        found[key] = item
+
     def _key_map(self, children: Sequence[Item]) -> list[str]:
         """Name every child, refusing a collision rather than sharing a handler between two."""
-        keys: list[str] = []
-        seen: set[str] = set()
+        found: dict[str, Item] = {}
         for index, item in enumerate(children):
-            key = self._key(item, index)
-            if key in seen:
-                message = f"two adopted controls share the key {key!r}; pass keys= to tell them apart"
-                raise AdoptionError(message)
-            seen.add(key)
-            keys.append(key)
-        return keys
-
-    def _key(self, item: Item, index: int) -> str:
-        if self._keys is not None:
-            return self._keys(item)
-        # discord.py hands every dispatchable item a random custom_id when the author gave
-        # none, so the id alone is not identity: `_provided_custom_id` is what says which
-        # happened. `.` is the boundary-path separator, so an author's id cannot carry one.
-        custom_id = getattr(item, "custom_id", None)
-        if getattr(item, "_provided_custom_id", False) and isinstance(custom_id, str) and custom_id:
-            return custom_id.replace(".", "-")
-        return f"adopted-{index}"
+            self._index_control(found, item, (index,))
+        return list(found)
 
     def _node(self, item: Item, key: str) -> Node | Button | LinkButton:
         if isinstance(item, discord.ui.DynamicItem):
