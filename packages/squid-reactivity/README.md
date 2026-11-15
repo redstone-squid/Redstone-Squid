@@ -106,10 +106,15 @@ call, after it commits; one that rolls back causes none.
 its own `transaction(...)`. Models hold listeners weakly: keep the listener for as long as
 you want the calls, and close it when you are done.
 
+Listeners run after the commit has told its other subscribers and run its `after_commit`
+callbacks, one at a time, in the order they were notified. When a callback commits a
+transaction of its own, the listeners that transaction affects wait behind the ones already
+queued, so every listener hears about a change before it hears about what that change led to.
+
 ### Doing it yourself
 
-`on_change` recomputes as soon as it is notified. A consumer that needs to choose when to
-recompute, such as a renderer that delivers its result later, uses the parts underneath.
+`on_change` recomputes as soon as the commit has been announced. A consumer that needs to
+choose when to recompute, such as a renderer that delivers its result later, uses the parts underneath.
 
 `observe_reads()`, used above, yields a `Dependencies` object and adds to it every field the
 block reads, directly or through computed values. Use it after the block has finished. It

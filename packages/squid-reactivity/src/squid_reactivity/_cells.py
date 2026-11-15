@@ -9,6 +9,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Final, override
 
 from squid_reactivity._addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
+from squid_reactivity._delivery import hold
 from squid_reactivity._runtime import _bump_epoch
 from squid_reactivity._tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource
 from squid_reactivity.transactions._state import _READ_CONSISTENCY, _active, _ReadConsistency
@@ -140,7 +141,8 @@ class Signal(_ReactiveSource, SubscriptionSource):
         """Tell readers that tracked this signal that the state behind it changed."""
         self.version += 1
         _bump_epoch()
-        publish(self.address)
+        with hold():
+            publish(self.address)
 
     @override
     def dependencies(self) -> tuple[_ReactiveSource, ...]:

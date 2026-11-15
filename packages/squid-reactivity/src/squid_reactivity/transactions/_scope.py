@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
+from squid_reactivity._delivery import hold
 from squid_reactivity._errors import (
     FreshTransactionError,
     StaleReactiveContextError,
@@ -238,7 +239,10 @@ def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> 
             yield current.handle
         except BaseException as error:
             _CURRENT_TRANSACTION.reset(token)
-            current.rollback(error)
+            with hold():
+                current.rollback(error)
             raise
         _CURRENT_TRANSACTION.reset(token)
-        current.finish()
+        # Change listeners wait until subscribers and result callbacks have all run.
+        with hold():
+            current.finish()

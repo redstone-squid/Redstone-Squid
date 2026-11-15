@@ -18,6 +18,7 @@ from threading import Thread, current_thread
 from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
 from squid_reactivity._cells import _Cell, _Missing
+from squid_reactivity._delivery import hold
 from squid_reactivity._errors import (
     FrameworkIntegrityError,
     ReactiveConflictError,
@@ -626,13 +627,14 @@ def _write[ValueT](owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], va
     if current is not None and not current.writable():
         current.reject_stale(f"{type(owner).__name__}.{name}")
     if current is None or not current.protects(owner):
-        cell.write(value)
-        # The value is already published, so a failing owner cannot fail the assignment,
-        # just as it cannot fail a commit in `finalize_commit`.
-        try:
-            owner._state_changed(frozenset((name,)))
-        except Exception:
-            _log.exception("a reactive owner failed to process its committed state")
+        with hold():
+            cell.write(value)
+            # The value is already published, so a failing owner cannot fail the assignment,
+            # just as it cannot fail a commit in `finalize_commit`.
+            try:
+                owner._state_changed(frozenset((name,)))
+            except Exception:
+                _log.exception("a reactive owner failed to process its committed state")
         return
     current.stage(owner, name, cell, value)
 

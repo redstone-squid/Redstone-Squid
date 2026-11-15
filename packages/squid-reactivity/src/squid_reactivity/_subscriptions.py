@@ -12,6 +12,7 @@ from typing import Self
 
 from squid_reactivity._addresses import CellAddress, subscribe
 from squid_reactivity._core import _equal
+from squid_reactivity._delivery import schedule
 from squid_reactivity._tracking import Dependencies, observe_reads, untracked
 from squid_reactivity.topics import DependencyAddress, Topic
 from squid_reactivity.transactions._context import continuation_callback
@@ -161,13 +162,16 @@ class ChangeListener[ValueT]:
         self._subscriptions.commit()
 
     def _notified(self, address: DependencyAddress) -> None:
+        schedule(self._deliver)
+
+    def _deliver(self) -> None:
         if self._closed:
             return
-        # Read committed state even when the notification arrives inside an open transaction,
-        # as one from a signal or a topic can: its staged writes may still be discarded.
+        # The queue never runs under an open transaction, but it may run in a task that
+        # inherited a finished one. Either way this listener reads committed state.
         with _CURRENT_TRANSACTION.set(None):
-            # A commit notifies once per written field, after all of its values are published.
-            # The first notification recomputes; the rest find nothing newer and stop here.
+            # Several notifications queue this listener once. One that was a false alarm,
+            # such as a write under a computed whose value stayed the same, stops here.
             if self._dependencies.current():
                 return
             try:
@@ -197,12 +201,20 @@ def on_change[ValueT](read: Callable[[], ValueT], callback: Callable[[ValueT], N
     when the new result differs from the last one, so a write that leaves the result
     equal is not reported. It is not called for the initial value.
 
-    One transaction produces at most one call, made after its writes are published.
-    A transaction that rolls back produces none. Both functions see committed state.
+    One transaction produces at most one call, and one that rolls back produces
+    none. The call is made after the commit has notified its other subscribers and
+    run its result callbacks. Both functions see committed state.
+
+    Listeners run one after another, in the order they were first notified, and
+    never while the code that caused the change still has a transaction open.
 
     `callback` may not assign reactive state directly; to write, it opens its own
-    transaction(...). An exception from either function is logged and does not
-    reach the code that made the change.
+    transaction(...). Listeners affected by that transaction run after those
+    already waiting, so each sees a cause before its consequences. A listener
+    that reruns 100 times for one change is treated as a loop and stopped.
+
+    An exception from either function is logged and does not reach the code that
+    made the change.
 
     For example, ``on_change(lambda: cart.total, update_badge)`` calls
     ``update_badge(total)`` after a commit changes the total, but not after one

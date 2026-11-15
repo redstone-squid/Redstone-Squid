@@ -1,6 +1,8 @@
 """Bookkeeping shared by tasks on one thread, independent of copied task contexts."""
 
 import uuid
+from collections import deque
+from collections.abc import Callable
 from threading import local
 
 
@@ -9,6 +11,10 @@ class _ThreadState(local):
         self.identity = uuid.uuid4()
         self.sequence = 0
         self.epoch = 0
+        self.listeners: deque[Callable[[], None]] = deque()
+        """Change listeners waiting to run. See `_delivery`."""
+        self.holds = 0
+        """Open `_delivery.hold()` blocks, plus one while the queue is running."""
 
 
 _runtime = _ThreadState()

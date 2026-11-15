@@ -5,7 +5,17 @@ import logging
 
 import pytest
 
-from squid_reactivity import Reactive, Signal, computed, on_change, state, transaction
+from squid_reactivity import (
+    LocalTopicBus,
+    Reactive,
+    Signal,
+    Subscriptions,
+    addresses,
+    computed,
+    on_change,
+    state,
+    transaction,
+)
 
 
 class Cart(Reactive):
@@ -139,3 +149,82 @@ def test_closing_or_dropping_the_listener_stops_the_calls() -> None:
     cart.apples = 2
 
     assert seen == []
+
+
+def test_the_callback_runs_after_subscribers_and_result_callbacks() -> None:
+    cart = Cart()
+    events: list[str] = []
+    subscriptions = Subscriptions(lambda address: events.append("subscriber"))
+    subscriptions.stage(addresses(lambda: cart.pears))
+    subscriptions.commit()
+
+    with on_change(lambda: cart.apples, lambda apples: events.append("listener")), transaction() as tx:
+        tx.after_commit(lambda commit: events.append("result callback"))
+        cart.apples = 1
+        cart.pears = 1
+
+    assert events == ["subscriber", "result callback", "listener"]
+    subscriptions.close()
+
+
+def test_listeners_hear_a_cause_before_its_consequences() -> None:
+    """A callback's own commit waits behind listeners already notified of the first one."""
+    cart = Cart()
+    events: list[str] = []
+
+    def restock(apples: int) -> None:
+        with transaction():
+            cart.pears = apples
+
+    with (
+        on_change(lambda: cart.apples, restock),
+        on_change(lambda: cart.pears, lambda pears: events.append(f"pears {pears}")),
+        on_change(lambda: cart.apples, lambda apples: events.append(f"apples {apples}")),
+    ):
+        cart.apples = 3
+
+    assert events == ["apples 3", "pears 3"]
+
+
+def test_a_topic_published_inside_a_transaction_is_reported_when_it_ends() -> None:
+    bus = LocalTopicBus()
+    topic = bus.topic("build", "42")
+    reads: list[int] = []
+    seen: list[int] = []
+
+    def read() -> int:
+        topic.watch()
+        reads.append(len(reads))
+        return len(reads)
+
+    with on_change(read, seen.append):
+        with transaction():
+            topic.publish()
+            assert seen == []
+        assert seen == [2]
+
+
+def test_listeners_that_keep_retriggering_each_other_are_stopped(caplog: pytest.LogCaptureFixture) -> None:
+    cart = Cart()
+
+    def bump_pears(apples: int) -> None:
+        with transaction():
+            cart.pears += 1
+
+    def bump_apples(pears: int) -> None:
+        with transaction():
+            cart.apples += 1
+
+    with (
+        caplog.at_level(logging.ERROR),
+        on_change(lambda: cart.apples, bump_pears),
+        on_change(lambda: cart.pears, bump_apples),
+    ):
+        cart.apples = 1
+        assert cart.pears == 100
+        assert "keeps changing what it reads" in caplog.text
+
+        # The loop was cut, not the listeners: a later change is still reported.
+        caplog.clear()
+        cart.pears = 0
+        assert cart.apples > 100

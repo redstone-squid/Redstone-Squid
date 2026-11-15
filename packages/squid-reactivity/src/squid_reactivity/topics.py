@@ -8,6 +8,7 @@ from weakref import WeakValueDictionary
 
 from squid_reactivity._addresses import CellAddress
 from squid_reactivity._cells import _Cell
+from squid_reactivity._delivery import hold
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,10 @@ class LocalTopicBus(TopicBus):
 
     @override
     def publish(self, *addresses: BusAddress) -> None:
+        with hold():
+            self._publish(addresses)
+
+    def _publish(self, addresses: tuple[BusAddress, ...]) -> None:
         for address in addresses:
             if isinstance(address, Topic):
                 address.publish()
