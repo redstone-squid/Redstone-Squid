@@ -5,7 +5,8 @@ changes directly for work such as operation progress and history bookkeeping.
 """
 
 import uuid
-from typing import TYPE_CHECKING, Any
+from enum import Enum, auto
+from typing import TYPE_CHECKING, Final
 
 from squid_reactivity._runtime import _bump_epoch
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
@@ -16,11 +17,15 @@ if TYPE_CHECKING:
     from squid_reactivity.topics import DependencyAddress
 
 
-_MISSING = object()
+class _Missing(Enum):
+    VALUE = auto()
+
+
+_MISSING: Final = _Missing.VALUE
 """A cell that has never been assigned. Distinct from None, which is a real value."""
 
 
-class _Cell:
+class _Cell[ValueT]:
     """Store one field's value, version, and optional publication address.
 
     Reactive fields, including component fields, have CellAddress values. Topics
@@ -30,9 +35,11 @@ class _Cell:
 
     __slots__ = ("__weakref__", "address", "identity", "value", "version")
 
-    def __init__(self, value: Any = _MISSING, version: int = 0, address: DependencyAddress | None = None) -> None:
+    def __init__(
+        self, value: ValueT | _Missing = _MISSING, version: int = 0, address: DependencyAddress | None = None
+    ) -> None:
         self.identity = uuid.uuid7()
-        self.value = value
+        self.value: ValueT | _Missing = value
         self.version = version
         self.address = address
 
@@ -41,7 +48,7 @@ class _Cell:
         """Return the readable address, or an opaque slot ID for an unaddressed cell."""
         return f"slot:{self.identity}" if self.address is None else str(self.address)
 
-    def staged_value(self) -> Any:
+    def staged_value(self) -> ValueT | _Missing:
         """Return the active transaction's pending value, or _MISSING if none is staged."""
         current = _active()
         if current is None:
@@ -67,7 +74,7 @@ class _Cell:
         if consumer is not None:
             consumer.sources[self] = version
 
-    def read(self) -> Any:
+    def read(self) -> ValueT | _Missing:
         """Return the value this reader should see, staged write included, and record it."""
         current = _active()
         if current is not None:
@@ -83,7 +90,7 @@ class _Cell:
         self.track(self.version)
         return self.value
 
-    def write(self, value: Any) -> None:
+    def write(self, value: ValueT | _Missing) -> None:
         self.value = value
         self.touch()
 

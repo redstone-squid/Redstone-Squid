@@ -41,17 +41,17 @@ class CellTarget:
     """
 
     _owner: weakref.ReferenceType[ReactiveStateOwner]
-    _cell: weakref.ReferenceType[_Cell]
+    _cell: weakref.ReferenceType[_Cell[Any]]
     name: str
     identity: str
 
-    def __init__(self, owner: ReactiveStateOwner, name: str, cell: _Cell) -> None:
+    def __init__(self, owner: ReactiveStateOwner, name: str, cell: _Cell[Any]) -> None:
         object.__setattr__(self, "_owner", weakref.ref(owner))
         object.__setattr__(self, "_cell", weakref.ref(cell))
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "identity", f"slot:{cell.identity}")
 
-    def resolve(self, expected_version: int) -> tuple[ReactiveStateOwner, _Cell]:
+    def resolve(self, expected_version: int) -> tuple[ReactiveStateOwner, _Cell[Any]]:
         """Return the live slot or report an expired conditional inverse."""
         owner = self._owner()
         cell = self._cell()
@@ -60,7 +60,7 @@ class CellTarget:
             raise ReactiveConflictError(detail, f"{self.identity} no longer exists; nothing was published")
         return owner, cell
 
-    def live_cell(self) -> _Cell | None:
+    def live_cell(self) -> _Cell[Any] | None:
         """Return the slot for non-mutating diagnostics, or ``None`` after collection."""
         return self._cell()
 

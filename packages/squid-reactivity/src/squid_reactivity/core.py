@@ -10,11 +10,11 @@ import logging
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from typing import Any, ClassVar, Self, overload, override
+from typing import Any, ClassVar, Self, cast, overload, override
 
 from squid_reactivity._runtime import _runtime
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
-from squid_reactivity.cells import _MISSING, _Cell
+from squid_reactivity.cells import _MISSING, _Cell, _Missing
 from squid_reactivity.evaluation import settling
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource, untracked
 from squid_reactivity.transactions import transaction
@@ -53,14 +53,14 @@ def _frozen(value: Any) -> Any:
     return value
 
 
-class _State:
+class _State[ValueT]:
     """Descriptor backing a declared reactive state field."""
 
     def __init__(
         self,
-        default: Any = _MISSING,
+        default: ValueT | _Missing = _MISSING,
         *,
-        factory: Callable[[], Any] | None = None,
+        factory: Callable[[], ValueT] | None = None,
         persist: bool | None = None,
         opaque: bool = False,
     ) -> None:
@@ -91,22 +91,23 @@ class _State:
     def has_initial(self) -> bool:
         return self._default is not _MISSING or self._factory is not None
 
-    def _initial(self, instance: ReactiveStateOwner) -> Any:
+    def _initial(self, instance: ReactiveStateOwner) -> ValueT:
         if self._factory is None:
             # No copy: a state value is replaced, never mutated, so instances may share it.
+            assert self._default is not _MISSING
             return self._default
         return self._factory()
 
-    def cell(self, instance: ReactiveStateOwner) -> _Cell:
+    def cell(self, instance: ReactiveStateOwner) -> _Cell[ValueT]:
         """Return this field's storage on `instance`, empty until something assigns it."""
-        cell = instance.__dict__.get(self._name)
+        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
         if cell is None:
-            cell = instance.__dict__[self._name] = _Cell(address=CellAddress(instance, self.public_name))
+            cell = instance.__dict__[self._name] = _Cell[ValueT](address=CellAddress(instance, self.public_name))
         return cell
 
     def is_set(self, instance: ReactiveStateOwner) -> bool:
         """Whether this field currently holds a value of its own rather than its default."""
-        cell = instance.__dict__.get(self._name)
+        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
         return cell is not None and (cell.value is not _MISSING or cell.staged_value() is not _MISSING)
 
     def mutated(self, instance: ReactiveStateOwner) -> None:
@@ -122,10 +123,16 @@ class _State:
             held = cell.value
         _write(instance, self._name, cell, held)
 
-    def __get__(self, instance: ReactiveStateOwner | None, owner: type | None = None) -> Any:
+    @overload
+    def __get__(self, instance: None, owner: type | None = None) -> _State[ValueT]: ...
+
+    @overload
+    def __get__(self, instance: ReactiveStateOwner, owner: type | None = None) -> ValueT: ...
+
+    def __get__(self, instance: ReactiveStateOwner | None, owner: type | None = None) -> ValueT | _State[ValueT]:
         if instance is None:
             return self
-        cell = instance.__dict__.get(self._name)
+        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
         # `read()` answers with this action's staged value wherever it has one, so a slot the
         # action emptied reads as empty rather than handing back the sentinel that spells it.
         # Asking the cell first is what keeps that sentinel private: deciding on `cell.value`
@@ -140,16 +147,18 @@ class _State:
         if cell.value is _MISSING:
             # Materializing a default is not a write: no version bump, no invalidation.
             cell.value = self._initial(instance)
-            return cell.read()
+            value = cell.read()
+            assert value is not _MISSING
+            return value
         # The action in flight emptied this slot. Empty reads as the declared default, and
         # that default is not installed over the committed value: outside the action the
         # committed value is still what everyone sees, and the commit is about to remove it
         # rather than replace it with this.
         return self._initial(instance)
 
-    def __set__(self, instance: ReactiveStateOwner, value: Any) -> None:
+    def __set__(self, instance: ReactiveStateOwner, value: ValueT) -> None:
         _check_write(instance, self.public_name)
-        cell = instance.__dict__.get(self._name)
+        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
         if cell is not None:
             held = cell.staged_value()
             if held is _MISSING:
@@ -330,13 +339,13 @@ def inspect_computed(owner: ReactiveStateOwner) -> dict[str, ComputedReport]:
     return reports
 
 
-def declared_cells(owner: ReactiveStateOwner) -> dict[_Cell, int]:
+def declared_cells(owner: ReactiveStateOwner) -> dict[_Cell[Any], int]:
     """Return all declared cells and their current versions.
 
     Resources use these as initial dependencies when replace supplies a value
     before the loader has run. The first load records the actual dependencies.
     """
-    presumed: dict[_Cell, int] = {}
+    presumed: dict[_Cell[Any], int] = {}
     for klass in type(owner).__mro__:
         for descriptor in vars(klass).values():
             if isinstance(descriptor, _State):
@@ -345,7 +354,7 @@ def declared_cells(owner: ReactiveStateOwner) -> dict[_Cell, int]:
     return presumed
 
 
-def _state_fields(owner: ReactiveStateOwner) -> dict[str, _State]:
+def _state_fields(owner: ReactiveStateOwner) -> dict[str, _State[Any]]:
     return {name: descriptor for name, descriptor in _descriptors(type(owner), _State) if descriptor.persist}
 
 
@@ -483,7 +492,7 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
 
 def _checked_init(
     original: Callable[..., None],
-    required: tuple[tuple[str, _State], ...],
+    required: tuple[tuple[str, _State[Any]], ...],
 ) -> Callable[..., None]:
     """Wrap an initializer so required reactive state is assigned before it returns."""
 
@@ -521,8 +530,8 @@ class Reactive:
     _reactive_subscribers: SubscriberRegistry
 
     _state_names: ClassVar[frozenset[str]] = frozenset()
-    _state_descriptors: ClassVar[dict[str, _State]] = {}
-    _opaque_state: ClassVar[tuple[tuple[str, _State], ...]] = ()
+    _state_descriptors: ClassVar[dict[str, _State[Any]]] = {}
+    _opaque_state: ClassVar[tuple[tuple[str, _State[Any]], ...]] = ()
     _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
     _reactive_internal_attributes: ClassVar[frozenset[str]] = frozenset()
     _reactive_require_state: ClassVar[bool] = True

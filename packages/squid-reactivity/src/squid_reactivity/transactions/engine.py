@@ -13,10 +13,10 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import Enum, auto
 from threading import Thread, current_thread
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from squid_reactivity._runtime import _bump_epoch, _runtime
-from squid_reactivity.cells import _Cell
+from squid_reactivity.cells import _Cell, _Missing
 from squid_reactivity.diagnostics import (
     emit_causal_event,
     emit_continuation_failure,
@@ -120,7 +120,7 @@ class TransactionParticipant[PreparedT](Protocol):
 
 
 @dataclass(slots=True)
-class _Staged:
+class _Staged[ValueT]:
     """A pending replacement with a revision for reads inside its transaction.
 
     Rollback discards the entry. Publication determines committed version lineage
@@ -129,12 +129,12 @@ class _Staged:
 
     owner: ReactiveStateOwner
     name: str
-    cell: _Cell
-    value: Any
+    cell: _Cell[ValueT]
+    value: ValueT | _Missing
     version: int
 
 
-def _write(owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> None:
+def _write[ValueT](owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], value: ValueT | _Missing) -> None:
     """Stage a write into the transaction in flight, or land it now if there is none.
 
     `enlist` already returns `None` when no transaction is open; this is the same
@@ -180,16 +180,16 @@ class _TransactionEngine:
     """The task that opened this transaction, or `None` outside a running loop."""
     read_view: object = field(default_factory=object)
     """Cache identity without retaining the transaction and its owners."""
-    writes: dict[_Cell, _Staged] = field(default_factory=dict)
-    observed: dict[_Cell, int] = field(default_factory=dict)
+    writes: dict[_Cell[Any], _Staged[Any]] = field(default_factory=dict)
+    observed: dict[_Cell[Any], int] = field(default_factory=dict)
     """Committed versions this transaction read out of addressed cells, first read per cell.
 
     Keep reads even before their cells are written: a later write makes the first
     observed version a commit precondition.
     """
-    strong: dict[_Cell, int] = field(default_factory=dict)
+    strong: dict[_Cell[Any], int] = field(default_factory=dict)
     """The subset of `observed` taken inside `strong_read()`, which must still hold at commit."""
-    preconditions: dict[_Cell, int] = field(default_factory=dict)
+    preconditions: dict[_Cell[Any], int] = field(default_factory=dict)
     # Identity keys support unhashable owners; values retain them in first-write order.
     changed: dict[int, tuple[ReactiveStateOwner, set[str]]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
@@ -287,11 +287,13 @@ class _TransactionEngine:
         """
         return id(owner) not in self.born
 
-    def staged(self, cell: _Cell) -> _Staged | None:
+    def staged[ValueT](self, cell: _Cell[ValueT]) -> _Staged[ValueT] | None:
         """This transaction's pending write to `cell`, if it has made one."""
-        return self.writes.get(cell)
+        # stage() stores each value under its matching cell; the dictionary erases
+        # their shared type only so it can hold fields of different types.
+        return cast(_Staged[ValueT] | None, self.writes.get(cell))
 
-    def observe(self, cell: _Cell, *, strong: bool) -> None:
+    def observe(self, cell: _Cell[Any], *, strong: bool) -> None:
         """Record the first committed version read from a shared cell.
 
         Strong reads have a separate first-read version. An earlier ordinary read
@@ -310,7 +312,7 @@ class _TransactionEngine:
         precondition. Blind writes have no read precondition, so the last commit wins.
         """
         _checkpoint("commit.before_validation")
-        required: dict[_Cell, int] = {}
+        required: dict[_Cell[Any], int] = {}
         if self.writes or self.participants:
             required = {cell: version for cell, version in self.observed.items() if cell in self.writes}
             required.update(self.strong)
@@ -346,21 +348,23 @@ class _TransactionEngine:
             raise ReactiveConflictError(detail, message)
         _checkpoint("commit.after_validation")
 
-    def require_version(self, cell: _Cell, version: int) -> None:
+    def require_version(self, cell: _Cell[Any], version: int) -> None:
         existing = self.preconditions.get(cell)
         if existing is not None and existing != version:
             detail = ConflictDetail(cell.label, existing, version)
             raise ReactiveConflictError(detail, "incompatible inverse preconditions")
         self.preconditions[cell] = version
 
-    def stage(self, owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> None:
+    def stage[ValueT](
+        self, owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], value: ValueT | _Missing
+    ) -> None:
         """Hold a write for commit, visible only to readers of this transaction."""
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
             message = "read-only transactions cannot mutate component state"
             raise ReactiveWriteError(message)
-        entry = self.writes.get(cell)
+        entry = self.staged(cell)
         if entry is None:
             self.writes[cell] = _Staged(owner, name, cell, value, cell.version + 1)
         else:

@@ -34,7 +34,7 @@ class Topic:
     def __init__(self, bus: TopicBus, name: TopicName) -> None:
         self._bus = bus
         self.name = name
-        self._cell = _Cell(address=self)
+        self._cell = _Cell[None](address=self)
 
     def watch(self) -> None:
         """Track invalidation without adding a transaction commit precondition."""
