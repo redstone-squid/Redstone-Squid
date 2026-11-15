@@ -99,3 +99,21 @@ def test_runtime_inspection_mappings_cannot_be_reassigned_or_deleted(attribute: 
     with pytest.raises(AttributeError):
         delattr(runtime, attribute)
     runtime.finish()
+
+
+def test_render_retains_authored_boundaries_and_local_keys() -> None:
+    child = Label()
+    root = Switch(child)
+    runtime = ComponentRuntime(root, context={LABEL: "child"})
+    root.shown = True
+    tree = runtime.render()
+    assert tree.authored_nodes["$"][0].component is child
+    assert testing.texts(tree.authored_nodes["child"]) == ["child"]
+    with pytest.raises(TypeError):
+        tree.authored_nodes["$"] = ()  # type: ignore  # Inspection must not rewrite a render.
+    runtime.commit(tree)
+    root.shown = False
+    updated = runtime.render(reuse_committed=True)
+    assert set(updated.authored_nodes) == {"$"}
+    assert set(tree.authored_nodes) == {"$", "child"}
+    runtime.finish()

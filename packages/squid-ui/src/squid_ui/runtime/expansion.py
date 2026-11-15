@@ -6,6 +6,7 @@ produces a candidate tree without running mount or unmount lifecycle hooks.
 
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from types import MappingProxyType
 from typing import Any
 
 from squid_reactivity import capture_reads
@@ -357,13 +358,24 @@ def render_component_tree[RenderTargetT: RenderTarget, ContextT = object](
 
     ``incremental`` is the caller's reuse state, updated in place. Omitting it renders cold.
     """
-    return _TreeRender(
+    incremental = incremental if incremental is not None else IncrementalRender()
+    tree = _TreeRender(
         root,
         runtime=runtime,
         context=context,
         defer=defer,
-        incremental=incremental if incremental is not None else IncrementalRender(),
+        incremental=incremental,
     ).run()
+    return replace(
+        tree,
+        authored_nodes=MappingProxyType(
+            {
+                path: rendered.nodes
+                for path, component in tree.components.items()
+                if (rendered := incremental.render_cache.get((component, path))) is not None
+            }
+        ),
+    )
 
 
 def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](

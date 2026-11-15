@@ -4,6 +4,7 @@ Expansion updates the supplied cache collections in place. The runtime owns thei
 lifetime and reconciles candidate trees only after successful delivery.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Generic
 
@@ -50,6 +51,11 @@ class ComponentTree(Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported
 
     suspended: bool = False
     """An atomic resource interrupted expansion; load it and render again before planning."""
+
+    authored_nodes: Mapping[str, tuple[LayoutNode[RenderTargetT, ContextT], ...]] = field(
+        default_factory=dict, compare=False, repr=False
+    )
+    """Original nodes by component placement, retaining boundaries and local keys for inspection."""
 
 
 @dataclass(slots=True)
