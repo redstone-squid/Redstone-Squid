@@ -578,7 +578,7 @@ route id, or a frontend message root. The same specification therefore has two e
 
 | Shell | State location | Controls | Interaction result |
 |---|---|---|---|
-| `ComponentDriver` | its declared `machine_state = sl.state(persist=False)` | closure-backed `ActionControl`, `Choices`, and `FormTrigger` | mutate state and let the message root redraw |
+| `ComponentDriver` | its declared `machine_state = sl.state()` | closure-backed `ActionControl`, `Choices`, and `FormTrigger` | mutate state and let the message root redraw |
 | `RouteDriver` | caller-defined route parameters | `RoutedActionControl` and `RoutedChoices` | decode state and replace the complete document |
 
 `TransitionRoute(action, state, phase)` is the route-builder boundary. A deterministic button has
@@ -609,7 +609,7 @@ instances expose their definitions through read-only `.machine` and their curren
 through `.machine_state`. Other machine-based widgets still use `build_component()`.
 
 `Agreement` deliberately sits beside the pure pattern catalogue rather than inside it. Its
-transition is actor-keyed, so it is a mounted component with two explicitly non-persistent
+transition is actor-keyed, so it is a mounted component with two runtime-only
 state cells (`approved` and `resolved`). Participant display names are host data, actor identity
 comes from the event, and `ActionMode.EXCLUSIVE` serializes approval and withdrawal. Discord
 hosts should mount it under `sd.Users(...)`; the component repeats membership validation
@@ -865,15 +865,16 @@ outside the transaction. It takes the object rather than a field name -- identit
 field, which is how an opaque field settles anyway -- so the call is typed, and it fails if
 no opaque field holds the object, so the manual signal cannot drift from the declaration.
 
-`sl.state(persist=False)` marks runtime-only data that durable snapshots omit. Persistent state
-must be JSON-safe, so use it for any value that is not: a frozen dataclass, a tuple of domain
-objects, a mapping of them. Such a field still settles on equality, so assigning an equal value
-notifies nobody.
+State is runtime-only unless it asks otherwise. `sl.state(persist=True)` adds a field to what
+durable snapshots and `PersistentStatePool` save, so its value must be JSON-safe. The persisted
+fields of a durable component are its stored schema: adding, renaming, or removing one is a
+change that its registered version and migrations must account for.
 
 `sl.state(opaque=True)` is for a collaborator rather than a value -- a service, a guild, a
 session, a child component. It settles on identity rather than equality, because `==` on a
-collaborator is the author's code, and it is never persisted. Do not reach for it only to keep
-a value out of snapshots; that is what `persist=False` says:
+collaborator is the author's code, and it cannot be persisted. A value that merely is not
+JSON-safe, such as a frozen dataclass or a tuple of domain objects, is ordinary state and
+settles on equality. For example:
 
     class Panel(sl.Component):
         page: str = sl.state("server")

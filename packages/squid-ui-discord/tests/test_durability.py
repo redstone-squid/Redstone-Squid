@@ -31,7 +31,7 @@ from squid_ui_discord.testing import commit_render
 
 
 class DurableChild(Component[sl.ComponentsV2Target]):
-    entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)))
+    entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)), persist=True)
 
     @override
     def render(self):
@@ -39,8 +39,8 @@ class DurableChild(Component[sl.ComponentsV2Target]):
 
 
 class DurableRoot(Component[sl.ComponentsV2Target]):
-    count: int = state(0)
-    transient: object = state(factory=object, persist=False)
+    count: int = state(0, persist=True)
+    transient: object = state(factory=object)
 
     def __init__(self) -> None:
         self.child = DurableChild()
@@ -207,7 +207,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
 
 def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
     class Invalid(Component[sl.ComponentsV2Target]):
-        value: object = state(factory=object)
+        value: object = state(factory=object, persist=True)
 
         @override
         def render(self):

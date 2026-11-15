@@ -142,7 +142,7 @@ def test_models_and_components_have_identity_addresses(follow: Follow, here: Mem
 def test_explicit_persistence_uses_declared_fields() -> None:
     class Model(Reactive):
         saved: int = state(1, persist=True)
-        transient: int = state(2, persist=False)
+        transient: int = state(2)
 
     assert export_state(Model()) == {"saved": 1}
 

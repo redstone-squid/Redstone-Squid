@@ -139,7 +139,7 @@ class _State[ValueT]:
         default: ValueT | _Missing = _MISSING,
         *,
         factory: Callable[[], ValueT] | None = None,
-        persist: bool | None = None,
+        persist: bool = False,
         opaque: bool = False,
     ) -> None:
         if default is not _MISSING and factory is not None:
@@ -153,13 +153,7 @@ class _State[ValueT]:
         self._name = ""
         self.public_name = ""
         self.opaque = opaque
-        self.persist = (not opaque) if persist is None else persist
-        self.persist_declared = persist is not None
-        """Whether the author asked for persistence, as opposed to taking the default.
-
-        An owner that cannot persist anything needs to tell the difference, so it can refuse
-        `persist=True` without refusing every field that merely defaulted to it.
-        """
+        self.persist = persist
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = f"__state_{name}"
@@ -262,7 +256,7 @@ class _State[ValueT]:
 def state[KeyT, ValueT](
     default: dict[KeyT, ValueT],
     *,
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> Mapping[KeyT, ValueT]: ...
 
@@ -271,7 +265,7 @@ def state[KeyT, ValueT](
 def state[ValueT](
     default: list[ValueT],
     *,
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> Sequence[ValueT]: ...
 
@@ -280,7 +274,7 @@ def state[ValueT](
 def state[ValueT](
     default: set[ValueT],
     *,
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> AbstractSet[ValueT]: ...
 
@@ -289,7 +283,7 @@ def state[ValueT](
 def state[ValueT](
     default: ValueT,
     *,
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> ValueT: ...
 
@@ -298,7 +292,7 @@ def state[ValueT](
 def state[KeyT, ValueT](
     *,
     factory: Callable[[], dict[KeyT, ValueT]],
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> Mapping[KeyT, ValueT]: ...
 
@@ -307,7 +301,7 @@ def state[KeyT, ValueT](
 def state[ValueT](
     *,
     factory: Callable[[], list[ValueT]],
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> Sequence[ValueT]: ...
 
@@ -316,7 +310,7 @@ def state[ValueT](
 def state[ValueT](
     *,
     factory: Callable[[], set[ValueT]],
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> AbstractSet[ValueT]: ...
 
@@ -325,20 +319,20 @@ def state[ValueT](
 def state[ValueT](
     *,
     factory: Callable[[], ValueT],
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> ValueT: ...
 
 
 @overload
-def state(*, persist: bool | None = None, opaque: bool = False) -> Any: ...
+def state(*, persist: bool = False, opaque: bool = False) -> Any: ...
 
 
 def state(
     default: Any = _MISSING,
     *,
     factory: Callable[[], Any] | None = None,
-    persist: bool | None = None,
+    persist: bool = False,
     opaque: bool = False,
 ) -> Any:
     """Declare a reactive field whose assignments participate in transactions.
@@ -354,9 +348,11 @@ def state(
     Args:
         default: Initial value, shared by reference across instances.
         factory: Build an initial value for each instance on demand.
-        persist: Include the field in exported state. Defaults to True unless opaque.
+        persist: Include the field in export_state() and accept it in restore_state().
+            Code that saves a model stores only these fields, so their values must
+            survive that code's serialization.
         opaque: Hold a collaborator such as a service or session. Compare changes
-            by identity and exclude the field from persistence.
+            by identity. An opaque field cannot be persisted.
     """
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 

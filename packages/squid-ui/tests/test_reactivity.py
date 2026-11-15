@@ -25,9 +25,9 @@ def cell_of(component: Component[Any, Any], name: str) -> CellReport:
 
 
 class Panel(Component[DiscordTarget]):
-    rows: Sequence[str] = state([])
-    channels: Mapping[str, int | None] = state({"log": None})
-    filters: Filters = state(Filters())
+    rows: Sequence[str] = state([], persist=True)
+    channels: Mapping[str, int | None] = state({"log": None}, persist=True)
+    filters: Filters = state(Filters(), persist=True)
     service: Service = state(opaque=True)
 
     def __init__(self, service: Service) -> None:
@@ -94,7 +94,7 @@ class TestOpaqueFields:
         panel = Panel(service)
         assert panel.service is service
 
-    def test_they_are_not_persisted_by_default(self):
+    def test_they_are_left_out_of_exported_state(self):
         from squid_reactivity import export_state
 
         assert set(export_state(Panel(Service()))) == {"rows", "channels", "filters"}

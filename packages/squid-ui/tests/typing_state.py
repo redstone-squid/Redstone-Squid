@@ -39,7 +39,7 @@ assert_type(state(0), int)
 assert_type(state(factory=int), int)
 assert_type(sl.state(True), bool)
 assert_type(state(False), bool)
-assert_type(state(True, persist=False, opaque=True), bool)
+assert_type(state(True, opaque=True), bool)
 
 assert_type(state({"a": 1}), Mapping[str, int])
 assert_type(state(["a"]), Sequence[str])

@@ -169,8 +169,8 @@ class MessageRootInspector(sl.Component):
         children.append(
             sl.section(
                 sl.heading("Component state"),
-                sl.note("persisted fields only"),
-                sl.code(_dump(_exported_state(message_root))),
+                sl.note("declared fields; collaborators omitted"),
+                sl.code(_dump(_component_state(message_root))),
             )
         )
         children.append(
@@ -339,7 +339,7 @@ class OperationalInspector(sl.Component):
                         sl.section(sl.heading("Plan"), sl.code(plan_text(detail.snapshot))),
                         sl.section(
                             sl.heading("Component state"),
-                            sl.code(_dump(_exported_state(message_root))),
+                            sl.code(_dump(_component_state(message_root))),
                         ),
                         sl.section(sl.heading("Reactivity"), sl.code(_dump_lines(_reactivity(message_root)))),
                         sl.section(
@@ -988,19 +988,24 @@ def _durable_summary(snapshot: DurableRuntimeSnapshot | None) -> str:
     return f"running={snapshot.running} active={len(snapshot.active)} dirty={len(snapshot.dirty)}"
 
 
-def _exported_state(message_root: squid_ui_discord.MessageRoot) -> dict[str, object]:
-    """Declared persistent state for every component in the committed tree, by path.
+def _component_state(message_root: squid_ui_discord.MessageRoot) -> dict[str, object]:
+    """Declared field values for every component in the committed tree, by path.
 
-    Each component is exported on its own, so one field whose value refuses to be formatted
-    does not cost the whole dump.
+    Opaque fields are left out: they hold collaborators, whose representations say little.
+    Each component is read on its own, so one field that cannot be read does not cost the
+    whole dump.
     """
-    exported: dict[str, object] = {}
+    states: dict[str, object] = {}
     for path, component in message_root.runtime.components.items():
         try:
-            exported[path] = sl.runtime.export_state(component)
+            states[path] = {
+                name: getattr(component, name)
+                for name, cell in sl.runtime.inspect_cells(component).items()
+                if not cell.opaque
+            }
         except Exception as error:
-            exported[path] = f"<unreadable: {type(error).__name__}: {error}>"
-    return exported
+            states[path] = f"<unreadable: {type(error).__name__}: {error}>"
+    return states
 
 
 def _reactivity(message_root: squid_ui_discord.MessageRoot) -> list[str]:

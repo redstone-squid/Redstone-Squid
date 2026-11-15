@@ -23,7 +23,7 @@ class Uncopyable:
 
 
 class Panel(Component[DiscordTarget]):
-    declared: int = state(0)
+    declared: int = state(0, persist=True)
     service: Uncopyable = state(opaque=True)
     handles: list[Uncopyable] = state(opaque=True)
 
@@ -296,7 +296,7 @@ class TestStateWithoutAnInitialValue:
 
     def test_it_round_trips_through_a_snapshot(self):
         class Late(Component[DiscordTarget]):
-            value: int = state()
+            value: int = state(persist=True)
 
             def __init__(self, value: int) -> None:
                 self.value = value

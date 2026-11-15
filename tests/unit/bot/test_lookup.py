@@ -65,7 +65,7 @@ async def test_lookup_returns_the_selected_identity_only_after_confirmation(conf
     class Parent(sd.Screen):
         policy = sd.ResponseSpec(session=sd.SessionSpec("lookup-test"))
         value: str = sl.state("")
-        presented: sd.Presented[Any] | None = sl.state(None, persist=False, opaque=True)
+        presented: sd.Presented[Any] | None = sl.state(None, opaque=True)
 
         @override
         def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:

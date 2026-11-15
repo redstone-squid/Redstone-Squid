@@ -174,9 +174,10 @@ existing state raises `ReactiveWriteError`, though an object created there may s
 its own fields. `capture_reads()` records without that restriction, and `untracked()` hides
 reads from the recording.
 
-To save and restore state across restarts, `export_state(model)` returns the model's
-persistent fields as a dictionary, and `restore_state(model, values)` assigns them back in
-one transaction. Declare a field with `state(persist=False)` to leave it out.
+To save and restore state across restarts, declare the fields to keep with
+`state(persist=True)`. `export_state(model)` returns those fields as a dictionary, and
+`restore_state(model, values)` assigns them back in one transaction. Other fields are
+runtime-only: they are not exported, and restoring one is an error.
 
 ## Finding out what happened
 

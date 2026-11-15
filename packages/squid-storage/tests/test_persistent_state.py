@@ -12,8 +12,8 @@ from squid_storage import MemoryScopedStore, PersistentStatePool, Slot, json_cod
 
 
 class Preferences(Reactive):
-    theme: str = state("dark")
-    preview: str = state("", persist=False)
+    theme: str = state("dark", persist=True)
+    preview: str = state("")
 
 
 def make_preferences(key: str) -> Preferences:
@@ -286,7 +286,7 @@ async def test_a_closed_pool_stops_persisting(slot: Slot[str, Mapping[str, objec
 
 async def test_the_factory_can_build_a_model_without_key_metadata(slot: Slot[str, Mapping[str, object]]) -> None:
     class Unscoped(Reactive):
-        theme: str = state("dark")
+        theme: str = state("dark", persist=True)
 
     def make(key: str) -> Unscoped:
         return Unscoped()
