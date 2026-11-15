@@ -222,6 +222,36 @@ class _TransactionEngine:
         """Terminal transactions no longer expose their overlay, including during notifications."""
         return self.phase in (_Phase.COMMITTED, _Phase.ABORTED)
 
+    def add_commit_hook(self, callback: Callable[[TransactionCommit], None], *, key: object | None) -> None:
+        self._add_hook(self.commit_hooks, callback, key=key)
+
+    def add_rollback_hook(self, callback: Callable[[TransactionRollback], None], *, key: object | None) -> None:
+        self._add_hook(self.rollback_hooks, callback, key=key)
+
+    def add_result_hook(self, callback: Callable[[TransactionResult], None], *, key: object | None) -> None:
+        self._add_hook(self.result_hooks, callback, key=key)
+
+    def has_hook(self, key: object) -> bool:
+        return any(
+            registered is key
+            for hooks in (self.commit_hooks, self.rollback_hooks, self.result_hooks)
+            for registered, _ in hooks
+        )
+
+    def _add_hook[ResultT: TransactionResult](
+        self,
+        hooks: list[tuple[object | None, Callable[[ResultT], None]]],
+        callback: Callable[[ResultT], None],
+        *,
+        key: object | None,
+    ) -> None:
+        if not self.writable():
+            self.reject_stale("a result hook")
+        if key is not None and self.has_hook(key):
+            message = f"{key!r} already registered a result hook for this transaction"
+            raise RuntimeError(message)
+        hooks.append((key, callback))
+
     def note_born(self, owner: object) -> None:
         """Record an object created after this transaction began."""
         self.born[id(owner)] = owner

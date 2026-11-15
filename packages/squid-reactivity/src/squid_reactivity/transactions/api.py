@@ -63,15 +63,15 @@ class Transaction:
 
     def after_commit(self, callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
         """Run after commit; callback failures cannot change the committed result."""
-        self._add_hook(self._check_current().commit_hooks, callback, key=key)
+        self._check_current().add_commit_hook(callback, key=key)
 
     def after_rollback(self, callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
         """Run after rollback; callback failures cannot change the discarded result."""
-        self._add_hook(self._check_current().rollback_hooks, callback, key=key)
+        self._check_current().add_rollback_hook(callback, key=key)
 
     def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
         """Run after either outcome. Further writes require a new transaction."""
-        self._add_hook(self._check_current().result_hooks, callback, key=key)
+        self._check_current().add_result_hook(callback, key=key)
 
     @property
     def readonly(self) -> bool:
@@ -80,27 +80,7 @@ class Transaction:
 
     def has_hook(self, key: object) -> bool:
         """Check whether this active transaction has a result callback registered under key."""
-        current = self._check_current()
-        return any(
-            registered is key
-            for hooks in (current.commit_hooks, current.rollback_hooks, current.result_hooks)
-            for registered, _ in hooks
-        )
-
-    def _add_hook[ResultT: TransactionResult](
-        self,
-        hooks: list[tuple[object | None, Callable[[ResultT], None]]],
-        callback: Callable[[ResultT], None],
-        *,
-        key: object | None,
-    ) -> None:
-        current = self._check_current()
-        if not current.writable():
-            current.reject_stale("a result hook")
-        if key is not None and self.has_hook(key):
-            message = f"{key!r} already registered a result hook for this transaction"
-            raise RuntimeError(message)
-        hooks.append((key, callback))
+        return self._check_current().has_hook(key)
 
     def _check_current(self) -> _TransactionEngine:
         current = _current_transaction()
