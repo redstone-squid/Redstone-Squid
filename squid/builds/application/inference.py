@@ -41,7 +41,7 @@ _TIMING_CONTEXT = re.compile(
 )
 _SOURCE_QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
 _SOURCE_EMPHASIS = re.compile(r"(?<!\\)(?P<marker>\*\*|__)(?P<body>\S(?:.*?\S)?)(?<!\\)(?P=marker)")
-_SOURCE_OUTDATED = re.compile(r"^[\s*_]*(\[OUTDATED\])", re.IGNORECASE)
+_SOURCE_OUTDATED = re.compile(r"^[\s*_]*(\[OUTDATED\]|\(OUTDATED\))", re.IGNORECASE)
 
 
 def _without_source_emphasis(text: str) -> tuple[str, list[int]]:

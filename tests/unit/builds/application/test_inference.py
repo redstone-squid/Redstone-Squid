@@ -1124,6 +1124,8 @@ def test_bare_numeric_credit_names_do_not_establish_discord_ids() -> None:
         ("[OUTDATED] 3x3 door", "[OUTDATED]"),
         ("**[OUTDATED]** 3x3 door", "[OUTDATED]"),
         ("__[outdated]__ 3x3 door", "[outdated]"),
+        ("(Outdated) 3x3 door", "(Outdated)"),
+        ("**(OUTDATED)** 3x3 door", "(OUTDATED)"),
     ],
 )
 async def test_leading_outdated_status_survives_omitted_model_notes(text: str, marker: str) -> None:
