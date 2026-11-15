@@ -49,7 +49,7 @@ OPTIONAL_FILES = (
 # profiles state a compatibility *floor*, which does not move on every bump.
 EXEMPT_FILES = frozenset(
     {
-        Path("packages/squid-ui/src/squid_ui/html/target.py"),
+        Path("packages/squid-ui-html/src/squid_ui/ext/html/target.py"),
         # This script names versions in its own docstring and example text.
         Path("scripts/bump_squid_ui_version.py"),
     }
