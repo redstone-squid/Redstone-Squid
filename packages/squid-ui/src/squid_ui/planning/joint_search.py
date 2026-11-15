@@ -68,6 +68,13 @@ class JointExhaustedError(LayoutSearchExhaustedError):
     def __init__(self, diagnostics: SearchDiagnostics) -> None:
         self.diagnostics = diagnostics
         super().__init__("joint allocation exhausted its allowance before certifying a complete page family")
+        self.context.update(
+            work_used=diagnostics.work_used,
+            work_limit=diagnostics.work_limit,
+            generated_states=diagnostics.generated_states,
+            target_evaluations=diagnostics.target_evaluations,
+            certified_combinations=diagnostics.certified_combinations,
+        )
 
 
 @dataclass(frozen=True, slots=True)

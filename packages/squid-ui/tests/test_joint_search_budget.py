@@ -112,6 +112,15 @@ def test_exhaustion_at_each_stage_never_returns_an_uncertified_output(stage: str
         with pytest.raises(JointExhaustedError) as caught:
             search_composition(occurrence(alternatives()), rules, context, finalize=rules.finalize)
         assert not caught.value.diagnostics.optimal
+        diagnostics = caught.value.diagnostics
+        assert caught.value.context == {
+            "reason": "search_budget_exhausted",
+            "work_used": diagnostics.work_used,
+            "work_limit": diagnostics.work_limit,
+            "generated_states": diagnostics.generated_states,
+            "target_evaluations": diagnostics.target_evaluations,
+            "certified_combinations": diagnostics.certified_combinations,
+        }
     else:
         result = search_composition(occurrence(alternatives()), rules, context, finalize=rules.finalize)
         assert result.diagnostics.completion == SearchCompletion.EXHAUSTED
