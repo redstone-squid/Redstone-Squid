@@ -18,6 +18,7 @@ proposals instead.
 
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
 from copy import deepcopy
+from types import MappingProxyType
 from typing import Any, override
 
 import squid_ui as sl
@@ -101,20 +102,25 @@ class BuildEditWorkspace(sl.Reactive):
 
     @property
     def answers(self) -> dict[str, JSONValue]:
-        return self.manifest.apply_defaults(self.category, self.staged, origin=self.origin)
+        """Return a fresh shallow copy of the normalized answers."""
+        return dict(self._normalized_answers)
+
+    @sl.computed
+    def _normalized_answers(self) -> Mapping[str, JSONValue]:
+        return MappingProxyType(self.manifest.apply_defaults(self.category, self.staged, origin=self.origin))
 
     @property
     def stored_answers(self) -> Mapping[str, JSONValue]:
         return self.staged
 
-    @property
+    @sl.computed
     def fields(self) -> tuple[FormField, ...]:
-        answers = self.answers
+        answers = self._normalized_answers
         return tuple(
             field for field in self.manifest.fields_for(self.category) if field.is_visible(answers, self.origin)
         )
 
-    @property
+    @sl.computed
     def sections(self) -> tuple[FormSection, ...]:
         return form_sections(self.manifest, self.category, self.fields)
 

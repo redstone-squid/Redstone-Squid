@@ -1,7 +1,8 @@
 """Editing a saved build through the build form's sections, staged until the user applies them."""
 
+from dataclasses import replace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -13,6 +14,8 @@ from squid.builds.domain import Status, UnresolvedTaxonomy
 from squid.builds.domain.credits import name_credits
 from squid.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
+from squid.submissions.domain import FormManifest
+from squid.submissions.domain.forms import VisibilityOperator, VisibilityRule
 from squid_ui.testing import press_event, texts
 from squid_ui_discord.testing import assert_within_limits, commit_render
 from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace
@@ -54,6 +57,7 @@ async def test_every_category_renders_its_form_sections_within_discord_limits(bu
 async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     build = _door(version_spec="1.20")
     workspace = editor(build).workspace
+    assert workspace.answers["version_compatibility"] == "1.20"
 
     with sl.runtime.transaction() as tx:
         await workspace.save_values(tx, {"version_compatibility": "1.21"})
@@ -63,8 +67,76 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     assert workspace.patch().attributes() == {"version_spec": "1.21", "credits": name_credits(["Alice", "Bob"])}
     assert build.version_spec == "1.20"
     assert build.creators_ign == []
+    assert workspace.answers["credits"] == [credit.to_json() for credit in name_credits(["Alice", "Bob"])]
     await workspace.history.undo()
     assert workspace.patch().attributes() == {"version_spec": "1.21"}
+    assert workspace.answers["credits"] == []
+    assert workspace.answers["version_compatibility"] == "1.21"
+
+
+def test_editor_derivations_share_normalization_without_sharing_answer_dicts() -> None:
+    workspace = edit_workspace(_door(version_spec="1.20"))
+    with patch.object(
+        FormManifest, "apply_defaults", autospec=True, side_effect=FormManifest.apply_defaults
+    ) as normalize:
+        answers = workspace.answers
+        fields = workspace.fields
+        sections = workspace.sections
+        answers["version_compatibility"] = "changed by caller"
+
+        assert workspace.answers["version_compatibility"] == "1.20"
+        assert workspace.fields is fields
+        assert workspace.sections is sections
+        assert normalize.call_count == 1
+
+        assert workspace.prefill({"version_compatibility": "1.21"}) is None
+        assert workspace.answers["version_compatibility"] == "1.21"
+        assert workspace.fields == fields
+        assert workspace.sections == sections
+
+        workspace.reset(_door(version_spec="1.22"))
+        assert workspace.answers["version_compatibility"] == "1.22"
+
+
+def test_editor_visibility_follows_staged_answers_and_rollback() -> None:
+    workspace = edit_workspace(_door(version_spec="1.20"))
+    workspace.manifest = replace(
+        workspace.manifest,
+        common_sections=tuple(
+            replace(
+                section,
+                fields=tuple(
+                    replace(
+                        field, visible_when=VisibilityRule("version_compatibility", VisibilityOperator.EQUALS, "1.21")
+                    )
+                    if field.id == "display_name"
+                    else field
+                    for field in section.fields
+                ),
+            )
+            for section in workspace.manifest.common_sections
+        ),
+    )
+    assert "display_name" not in {field.id for field in workspace.fields}
+    before = workspace.sections
+
+    def stage_and_abort() -> None:
+        with sl.runtime.transaction():
+            assert workspace.prefill({"version_compatibility": "1.21"}) is None
+            assert "display_name" in {field.id for field in workspace.fields}
+            assert "display_name" in {field.id for section in workspace.sections for field in section.fields}
+            raise ValueError("abort")
+
+    with pytest.raises(ValueError, match="abort"):
+        stage_and_abort()
+    assert workspace.answers["version_compatibility"] == "1.20"
+    assert workspace.sections is before
+    assert "display_name" not in {field.id for field in workspace.fields}
+
+    with sl.runtime.transaction():
+        assert workspace.prefill({"version_compatibility": "1.21"}) is None
+    assert "display_name" in {field.id for field in workspace.fields}
+    assert "display_name" in {field.id for section in workspace.sections for field in section.fields}
 
 
 async def test_an_invalid_value_stages_nothing_and_says_why() -> None:
