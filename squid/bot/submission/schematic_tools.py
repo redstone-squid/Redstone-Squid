@@ -308,7 +308,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
 
 
 class _ConvertForm(sl.forms.Form):
-    title = tr(t"bot-submission-build-browse-convert-schematic = Convert schematic")
+    title = tr(t"bot-submission-build-browse-convert-schematic = Other format or version")
 
     format = sl.forms.ChoiceField(
         label=tr(t"bot-submission-build-browse-output-format = Output format"),

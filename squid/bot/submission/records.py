@@ -326,7 +326,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     async def _choose_version(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        await pick(event, "version_ids", tr(t"records-choose-version = Choose version"), self._version_picked)
+        await pick(event, "version_ids", tr(t"records-choose-version = Use another version"), self._version_picked)
 
     async def _version_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
         self._version = item
@@ -340,7 +340,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         await pick(
             event,
             "restriction_ids",
-            tr(t"records-choose-restriction = Add category restriction"),
+            tr(t"records-choose-restriction = Add restriction"),
             self._restriction_picked,
         )
 
@@ -372,7 +372,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         await pick(
             event,
             "title_definitions",
-            tr(t"records-choose-definition = Find definition by name"),
+            tr(t"records-choose-definition = Recompute a category"),
             selected,
             confirm=tr(t"records-recompute-definition = Recompute definition"),
         )
@@ -492,7 +492,7 @@ class _LookupForm(sl.forms.Form):
 
 
 class _RebuildForm(sl.forms.Form):
-    title = tr(t"bot-submission-records-rebuild-records = Rebuild records")
+    title = tr(t"bot-submission-records-rebuild-records = Rebuild all records")
 
     kind = RecordsScreen._kind_field(required=False)
     version_id = sl.forms.IntField(
