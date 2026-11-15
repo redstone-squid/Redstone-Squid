@@ -86,7 +86,7 @@ class MediaProcessLimits:
 
 
 class FfmpegMediaNormalizer:
-    """Normalize images to PNG and videos to H.264/AAC MP4 with a JPEG thumbnail.
+    """Normalize images to PNG and preserve original videos with a JPEG thumbnail.
 
     Each probe or encoding step runs in a separate subprocess. Outputs are staged
     beside their destinations and published only after size and stream checks pass.
@@ -155,6 +155,8 @@ class FfmpegMediaNormalizer:
         """Produce normalized artifacts, committing them only after validation."""
         if request.kind is MediaKind.IMAGE:
             return await self._normalize_image(request, probe=probe, source_bytes=source_bytes, limits=limits)
+        if not request.strip_audio:
+            return await self._preserve_video(request, probe=probe, source_bytes=source_bytes, limits=limits)
         return await self._normalize_video(request, probe=probe, source_bytes=source_bytes, limits=limits)
 
     async def aclose(self) -> None:
@@ -231,6 +233,118 @@ class FfmpegMediaNormalizer:
             ),
         )
         return MediaNormalizationResult(output_path=request.output_path, poster_path=None, report=report)
+
+    async def _preserve_video(
+        self,
+        request: MediaNormalizationRequest,
+        *,
+        probe: MediaProbe,
+        source_bytes: int,
+        limits: MediaLimits,
+    ) -> MediaNormalizationResult:
+        assert request.poster_path is not None
+        containers = set(probe.container_names)
+        if "mp4" in containers:
+            metadata = json.loads(await self._probe_output(request.source_path, "format_tags=major_brand"))
+            brand = metadata.get("format", {}).get("tags", {}).get("major_brand", "")
+            content_type = "video/quicktime" if brand.strip() == "qt" else "video/mp4"
+        elif "webm" in containers:
+            content_type = "video/webm" if probe.video_codec in {"vp8", "vp9", "av1"} else "video/x-matroska"
+        elif "matroska" in containers:
+            content_type = "video/x-matroska"
+        elif "avi" in containers:
+            content_type = "video/x-msvideo"
+        elif "mpeg" in containers:
+            content_type = "video/mpeg"
+        else:
+            raise InvalidMediaError(MediaFailureReason.PROBE_INVALID)
+        with _staged_outputs((request.output_path, ".video"), (request.poster_path, ".jpg")) as (video, poster):
+            await asyncio.to_thread(shutil.copyfile, request.source_path, video)
+            video_size = _bounded_size(video, limits.max_output_bytes)
+            await self._generate_poster(video, poster, probe, limits)
+            poster_size = _bounded_size(poster, limits.max_output_bytes)
+            _validate_combined_size(video_size, poster_size, limit=limits.max_output_bytes)
+            poster_probe = await self.probe(poster)
+            _validate_poster_output(poster_probe)
+            output = _artifact(video, content_type, probe, byte_size=video_size)
+            thumbnail = _artifact(poster, "image/jpeg", poster_probe, byte_size=poster_size)
+        actions = [MediaNormalizationAction.POSTER_GENERATED]
+        if probe.has_audio:
+            actions.append(MediaNormalizationAction.AUDIO_PRESERVED)
+        return MediaNormalizationResult(
+            output_path=request.output_path,
+            poster_path=request.poster_path,
+            report=MediaNormalizationReport(
+                kind=MediaKind.VIDEO,
+                source_bytes=source_bytes,
+                input_probe=probe,
+                output_probe=probe,
+                output=output,
+                poster=thumbnail,
+                actions=tuple(actions),
+            ),
+        )
+
+    async def _generate_poster(
+        self, source_path: Path, poster_temporary: Path, probe: MediaProbe, limits: MediaLimits
+    ) -> None:
+        color_arguments = await self._video_color_arguments(source_path, probe)
+        seek_milliseconds = min((probe.duration_milliseconds or 0) // 2, 30_000)
+        await self._run(
+            self._ffmpeg,
+            (
+                "-y",
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-xerror",
+                "-protocol_whitelist",
+                _INPUT_PROTOCOLS,
+                "-protocol_blacklist",
+                _NETWORK_PROTOCOLS,
+                "-threads",
+                str(self._process_limits.threads),
+                "-filter_threads",
+                str(self._process_limits.threads),
+                *color_arguments,
+                "-ss",
+                _format_milliseconds(seek_milliseconds),
+                "-i",
+                str(source_path),
+                "-map",
+                "0:v:0",
+                "-frames:v",
+                "1",
+                "-an",
+                "-sn",
+                "-dn",
+                "-vf",
+                "scale=w='min(1920,iw)':h=-2",
+                "-map_metadata",
+                "-1",
+                "-c:v",
+                "mjpeg",
+                "-threads",
+                str(self._process_limits.threads),
+                "-q:v",
+                "2",
+                "-pix_fmt",
+                "yuvj420p",
+                "-fflags",
+                "+bitexact",
+                "-flags:v",
+                "+bitexact",
+                "-update",
+                "1",
+                "-f",
+                "image2",
+                str(poster_temporary),
+            ),
+            operation="generate_poster",
+            timeout_seconds=self._process_limits.poster_timeout_seconds,
+            max_file_bytes=limits.max_output_bytes,
+        )
 
     async def _video_color_arguments(self, source_path: Path, probe: MediaProbe) -> tuple[str, ...]:
         if probe.video_codec != "h264":
@@ -346,62 +460,7 @@ class FfmpegMediaNormalizer:
                 timestamps_verified=timestamps_verified,
             )
 
-            # Derive the thumbnail from the normalized video so both show the same content.
-            seek_milliseconds = min((probe.duration_milliseconds or 0) // 2, 30_000)
-            await self._run(
-                self._ffmpeg,
-                (
-                    "-y",
-                    "-nostdin",
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-xerror",
-                    "-protocol_whitelist",
-                    _INPUT_PROTOCOLS,
-                    "-protocol_blacklist",
-                    _NETWORK_PROTOCOLS,
-                    "-threads",
-                    str(self._process_limits.threads),
-                    "-filter_threads",
-                    str(self._process_limits.threads),
-                    "-ss",
-                    _format_milliseconds(seek_milliseconds),
-                    "-i",
-                    str(video_temporary),
-                    "-map",
-                    "0:v:0",
-                    "-frames:v",
-                    "1",
-                    "-an",
-                    "-sn",
-                    "-dn",
-                    "-vf",
-                    "scale=w='min(1920,iw)':h=-2",
-                    "-map_metadata",
-                    "-1",
-                    "-c:v",
-                    "mjpeg",
-                    "-threads",
-                    str(self._process_limits.threads),
-                    "-q:v",
-                    "2",
-                    "-pix_fmt",
-                    "yuvj420p",
-                    "-fflags",
-                    "+bitexact",
-                    "-flags:v",
-                    "+bitexact",
-                    "-update",
-                    "1",
-                    "-f",
-                    "image2",
-                    str(poster_temporary),
-                ),
-                operation="generate_poster",
-                timeout_seconds=self._process_limits.poster_timeout_seconds,
-                max_file_bytes=limits.max_output_bytes,
-            )
+            await self._generate_poster(video_temporary, poster_temporary, output_probe, limits)
             poster_size = _bounded_size(poster_temporary, limits.max_output_bytes)
             _validate_combined_size(video_size, poster_size, limit=limits.max_output_bytes)
             poster_probe = await self.probe(poster_temporary)

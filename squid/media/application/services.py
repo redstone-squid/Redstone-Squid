@@ -62,7 +62,7 @@ class MediaNormalizationService:
             )
 
         probe = await self._normalizer.probe(request.source_path)
-        self._validate_probe(request.kind, probe)
+        self._validate_probe(request.kind, probe, strip_audio=request.strip_audio)
         _require_unchanged(request.source_path, source)
 
         result = await self._normalizer.normalize(
@@ -83,7 +83,11 @@ class MediaNormalizationService:
         """Release normalizer resources."""
         await self._normalizer.aclose()
 
-    def _validate_probe(self, kind: MediaKind, probe: MediaProbe) -> None:
+    def _validate_probe(self, kind: MediaKind, probe: MediaProbe, *, strip_audio: bool = False) -> None:
+        # Original videos are copied; only a single thumbnail is decoded. Encoding
+        # constraints on duration, rate, and even dimensions do not apply.
+        if kind is MediaKind.VIDEO and not strip_audio:
+            return
         if kind is MediaKind.VIDEO:
             if probe.duration_milliseconds is None or probe.duration_milliseconds <= 0:
                 raise InvalidMediaError(MediaFailureReason.VIDEO_DURATION_UNKNOWN)

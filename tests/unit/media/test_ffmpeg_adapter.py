@@ -232,7 +232,7 @@ async def test_cancelled_normalization_removes_every_staged_output(
         poster_path=tmp_path / "poster" if kind is MediaKind.VIDEO else None,
     )
     probe = MediaProbe(
-        container_names=("png_pipe",),
+        container_names=("mp4",) if kind is MediaKind.VIDEO else ("png_pipe",),
         video_codec="png",
         width=1,
         height=1,
@@ -348,13 +348,13 @@ async def test_video_header_mismatch_is_checked_against_decoded_frames(
     )
 
     if output_frames == 215:
-        result = await normalizer.normalize(request, probe=source, source_bytes=1, limits=MediaLimits())
+        result = await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
         assert result.output_path.exists()
         assert result.report.input_probe.frame_count == 216
         assert result.report.output_probe.frame_count == 215
     else:
         with pytest.raises(MediaProcessingError):
-            await normalizer.normalize(request, probe=source, source_bytes=1, limits=MediaLimits())
+            await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
         assert not request.output_path.exists()
     assert count_frames.await_count == 2
 
@@ -419,13 +419,13 @@ async def test_rate_metadata_fallback_requires_matching_frame_timestamps(
     )
 
     if change == "offset":
-        result = await normalizer.normalize(request, probe=source, source_bytes=1, limits=MediaLimits())
+        result = await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
         assert result.output_path.exists()
         assert result.report.input_probe == source
         assert result.report.output_probe == output
     else:
         with pytest.raises(MediaProcessingError):
-            await normalizer.normalize(request, probe=source, source_bytes=1, limits=MediaLimits())
+            await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
         assert not request.output_path.exists()
     assert timestamps.await_count == 2
 

@@ -9,6 +9,7 @@ from squid.core.errors import InvalidStateError
 from squid.media.application.jobs import MediaJobSnapshot, StoredMediaArtifact
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.media.domain.models import VIDEO_CONTENT_TYPES
 from squid.submissions.domain.finalization import (
     SchematicArtifactState,
     SubmissionArtifactReadiness,
@@ -167,8 +168,10 @@ def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
     artifacts = {artifact.role: artifact for artifact in job.artifacts}
     output = artifacts[MediaArtifactRole.OUTPUT]
     report = artifacts[MediaArtifactRole.REPORT]
-    expected_output_type = "image/png" if job.upload.kind is MediaKind.IMAGE else "video/mp4"
-    if output.content_type != expected_output_type or not _valid_visual_artifact(output, limits):
+    expected_output_types = {"image/png"} if job.upload.kind is MediaKind.IMAGE else VIDEO_CONTENT_TYPES
+    if output.content_type not in expected_output_types or output.width is None or output.height is None:
+        return False
+    if job.upload.kind is MediaKind.IMAGE and not _valid_visual_artifact(output, limits):
         return False
     if report.content_type != "application/json" or report.width is not None or report.height is not None:
         return False

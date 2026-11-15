@@ -1,4 +1,8 @@
-# Media normalization deployment
+# Media processing deployment
+
+Videos retain their original bytes, container, audio, timing, rotation, and metadata. The worker decodes a JPEG
+thumbnail without transcoding the video. Explicit audio removal still uses the H.264/AAC conversion path.
+Original videos can require a player that supports their source codec; processing does not guarantee browser playback.
 
 Submission media processing is optional and disabled by default. The API streams an owned draft upload into private
 object storage, and only the database worker claims the durable normalization job. Enabling the feature does not make
@@ -112,8 +116,10 @@ additional concurrent job, budget another 3 GiB memory and 1.5 GiB scratch disk.
 PID, and writable-layer limits in the deployment platform; the repository does not choose a one-size-fits-all machine
 budget.
 
-The submission contract separately rejects more than 10 images, 3 videos, five minutes per video, 33.2 megapixels per
-frame, or 250 million decoded pixels per second. Source resolution and frame rate are otherwise preserved.
+The submission contract rejects more than 10 images or 3 videos. Image decoding is limited to 33.2 megapixels.
+Videos copied unchanged are not subject to encoder limits on duration, frame rate, or even dimensions; thumbnail
+decoding remains bounded by subprocess memory and time limits. Explicit audio removal retains the five-minute,
+33.2-megapixel, and 250-million-decoded-pixels-per-second encoding limits.
 
 ## Verification
 

@@ -8,6 +8,10 @@ from squid.core.i18n import tr
 
 MEBIBYTE = 1024 * 1024
 
+VIDEO_CONTENT_TYPES = frozenset(
+    {"video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/x-msvideo", "video/mpeg"}
+)
+
 
 class MediaKind(StrEnum):
     """A hosted media type accepted by a submission."""
@@ -228,7 +232,11 @@ class MediaNormalizationReport:
             msg = tr(t"media-normalized-images-png = Normalized images must be PNG artifacts.")
             raise ValidationError(msg)
         if self.kind is MediaKind.VIDEO and (
-            self.output.content_type != "video/mp4" or self.poster is None or self.poster.content_type != "image/jpeg"
+            self.output.content_type not in VIDEO_CONTENT_TYPES
+            or self.poster is None
+            or self.poster.content_type != "image/jpeg"
         ):
-            msg = tr(t"media-video-format-unsupported = Normalized videos must contain MP4 and JPEG artifacts.")
+            msg = tr(
+                t"media-video-format-unsupported = Processed videos must contain a supported video and JPEG thumbnail."
+            )
             raise ValidationError(msg)

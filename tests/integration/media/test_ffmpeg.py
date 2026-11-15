@@ -96,7 +96,10 @@ async def test_video_preserves_dimensions_and_fps_with_optional_audio_removal(
         check=True,
         capture_output=True,
     ).stdout
-    assert b"private-marker" not in metadata
+    if strip_audio:
+        assert b"private-marker" not in metadata
+    else:
+        assert output.read_bytes() == source.read_bytes()
 
 
 @pytest.mark.parametrize(
@@ -162,7 +165,7 @@ async def test_video_repairs_reserved_color_tags_and_preserves_valid_tags(
         elif value == 6:
             assert metadata[field] == "smpte170m"
         else:
-            assert metadata.get(field, "unknown") == "unknown"
+            assert metadata.get(field, "unknown") in {"unknown", "reserved"}
 
 
 async def test_video_color_repair_ignores_malformed_filler_packets(tmp_path: Path) -> None:
@@ -383,8 +386,9 @@ async def test_rotated_video_preserves_display_orientation(tmp_path: Path, rotat
         capture_output=True,
     )
     stream = json.loads(raw_output.stdout)["streams"][0]
-    assert (stream["width"], stream["height"]) == expected
-    assert all(side.get("rotation", 0) == 0 for side in stream.get("side_data_list", []))
+    assert (stream["width"], stream["height"]) == (320, 180)
+    assert any(side.get("rotation", 0) % 360 == rotation % 360 for side in stream.get("side_data_list", []))
+    assert result.output_path.read_bytes() == source.read_bytes()
     frames = [
         subprocess.run(
             [FFMPEG, "-v", "error", "-i", str(path), "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"],
@@ -453,3 +457,41 @@ def _generate_video(destination: Path, *, variable_timestamps: bool = False, b_f
     )
     if process.returncode != 0:
         pytest.skip("local ffmpeg could not generate the integration fixture")
+
+
+async def test_webm_is_preserved_with_odd_dimensions_and_unknown_duration(tmp_path: Path) -> None:
+    source = tmp_path / "source.webm"
+    subprocess.run(
+        [
+            FFMPEG or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=321x181:rate=12",
+            "-t",
+            "1",
+            "-c:v",
+            "libvpx-vp9",
+            "-live",
+            "1",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
+        MediaNormalizationRequest(
+            kind=MediaKind.VIDEO,
+            source_path=source,
+            output_path=tmp_path / "output",
+            poster_path=tmp_path / "poster.jpg",
+        )
+    )
+    assert result.output_path.read_bytes() == source.read_bytes()
+    assert result.report.output.content_type == "video/webm"
+    assert result.report.input_probe.duration_milliseconds is None
+    assert result.report.output_probe == result.report.input_probe
+    assert result.poster_path is not None
+    assert result.poster_path.read_bytes().startswith(b"\xff\xd8")

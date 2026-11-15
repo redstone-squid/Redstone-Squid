@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -158,7 +159,7 @@ async def test_unsafe_video_probe_facts_are_rejected_before_decode(
     service = MediaNormalizationService(normalizer)
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.normalize(request(tmp_path))
+        await service.normalize(replace(request(tmp_path), strip_audio=True))
 
     assert raised.value.reason is reason
     assert normalizer.normalize_calls == []
@@ -169,7 +170,7 @@ async def test_decoded_work_budget_is_checked_before_decode(tmp_path: Path) -> N
     service = MediaNormalizationService(normalizer)
 
     with pytest.raises(MediaLimitExceededError) as raised:
-        await service.normalize(request(tmp_path))
+        await service.normalize(replace(request(tmp_path), strip_audio=True))
 
     assert raised.value.violations[0].measure is MediaLimitMeasure.DECODED_PIXELS_PER_SECOND
     assert normalizer.normalize_calls == []
@@ -261,3 +262,18 @@ def test_image_request_cannot_hide_a_video_option(tmp_path: Path) -> None:
             output_path=tmp_path / "normalized.png",
             strip_audio=True,
         )
+
+
+@pytest.mark.parametrize(
+    "inspected",
+    [
+        video_probe(width=321),
+        video_probe(duration_milliseconds=None),
+        video_probe(fps_numerator=0),
+        video_probe(fps_numerator=1000),
+    ],
+)
+async def test_original_video_does_not_require_encoder_constraints(tmp_path: Path, inspected: MediaProbe) -> None:
+    normalizer = FakeMediaNormalizer(inspected)
+    await MediaNormalizationService(normalizer).normalize(request(tmp_path))
+    assert len(normalizer.normalize_calls) == 1
