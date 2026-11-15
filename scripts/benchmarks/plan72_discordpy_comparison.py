@@ -21,8 +21,8 @@ import discord
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot
-from squid_ui.ext.discord.render_cache import RenderProgramCache
-from squid_ui.ext.discord.renderer import V2Renderer
+from squid_ui.ext.discord.rendering.cache import RenderProgramCache
+from squid_ui.ext.discord.rendering.v2 import V2Renderer
 from squid_ui.ext.discord.testing import commit_render
 from squid_ui.primitives import ActionStyle, RoutedButton, Row
 from squid_ui.scene import Codec

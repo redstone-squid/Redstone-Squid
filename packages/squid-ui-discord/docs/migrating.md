@@ -451,3 +451,12 @@ Low-level message modules now live under `squid_ui.ext.discord.messages`:
 `message_root_*`, `message_payload`, and `message_delivery` modules are removed.
 Application imports such as `sd.MessageRoot` and `sd.MessagePayload` remain available;
 use `sd.messages.payload` when importing the payload module itself.
+
+## Rendering modules
+
+Native drawing now lives in `squid_ui.ext.discord.rendering`: `v2` and `classic`
+contain the renderers, `controls` draws shared controls, and `cache` owns program
+reuse. `contracts` defines `MountedRenderer`, and `result` defines `RenderedMessage`.
+The `rendering` package still exports `RenderedMessage`, `render_message`,
+`render_static`, and `render_item`. Replace imports from the former `renderer`,
+`classic_renderer`, `native_controls`, and `render_cache` modules with these paths.

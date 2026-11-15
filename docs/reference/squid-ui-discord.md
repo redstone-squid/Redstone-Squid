@@ -273,7 +273,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui.ext.discord.challenges` | Showing a guard's challenge, and running the approved press. |
 | `squid_ui.ext.discord.classic` | Composing classic Discord messages. |
 | `squid_ui.ext.discord.v2` | Exact Components V2 layout factories. |
-| `squid_ui.ext.discord.classic_renderer` | Mechanical drawing of resolved classic messages. |
+| `squid_ui.ext.discord.rendering.classic` | Mechanical drawing of resolved classic messages. |
 | `squid_ui.ext.discord.conformance` | Boundary gate that keeps built views inside Discord's limits. |
 | `squid_ui.ext.discord.delivery` | Send/edit mechanics for rendered Discord messages. |
 | `squid_ui.ext.discord.devtools` | Owner-only operational diagnostics for live runtimes. |
@@ -291,7 +291,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui.ext.discord.modals` | Declarative modals: specs in, clamped discord.py modals out. |
 | `squid_ui.ext.discord.navigation` | Stack navigation by composition. |
 | `squid_ui.ext.discord.navigation_controls` | One navigation factory for materialized and loaded cursors. |
-| `squid_ui.ext.discord.renderer` | Mechanical drawing of resolved Components V2 scenes. |
+| `squid_ui.ext.discord.rendering.v2` | Mechanical drawing of resolved Components V2 scenes. |
 | `squid_ui.ext.discord.rendering` | Plan documents and render complete message payloads. |
 | `squid_ui.ext.discord.roles` | Persistent, router-owned self-role panels. |
 | `squid_ui.ext.discord.routing` | Dispatch for stateless routed controls. |

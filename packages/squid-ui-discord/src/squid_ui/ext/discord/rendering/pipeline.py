@@ -12,7 +12,8 @@ from typing import Any
 from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.ext.discord.messages.payload import MessagePayload
-from squid_ui.ext.discord.renderer import MountedRenderer, Wire
+from squid_ui.ext.discord.rendering.contracts import MountedRenderer
+from squid_ui.ext.discord.rendering.controls import Wire
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest

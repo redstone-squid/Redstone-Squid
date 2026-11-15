@@ -21,7 +21,6 @@ from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import NEUTRAL, Localization, TextLike
 from squid_ui.content.text import Text as TextExpression
 from squid_ui.errors import ExistingLayoutError
-from squid_ui.ext.discord._draw import plan_and_draw
 from squid_ui.ext.discord._factories import (
     button,
     check_content,
@@ -41,7 +40,6 @@ from squid_ui.ext.discord._factories import (
     text,
 )
 from squid_ui.ext.discord.adapter import require_discord_py_target
-from squid_ui.ext.discord.classic_renderer import ClassicRenderer, Wire
 from squid_ui.ext.discord.fragments import _reject_dispatchable
 from squid_ui.ext.discord.inspection import (
     CustomIdSite,
@@ -53,7 +51,9 @@ from squid_ui.ext.discord.inspection import (
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.ext.discord.messages.attachments import files_for
 from squid_ui.ext.discord.messages.payload import MessageMode, MessageModeError, MessagePayload
-from squid_ui.ext.discord.rendering import RenderedMessage
+from squid_ui.ext.discord.rendering.classic import ClassicRenderer, Wire
+from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
+from squid_ui.ext.discord.rendering.result import RenderedMessage
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette

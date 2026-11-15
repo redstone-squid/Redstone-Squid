@@ -7,15 +7,15 @@ from typing import override
 import discord
 
 import squid_ui as sl
-import squid_ui.ext.discord.classic_renderer as classic_renderer_module
-import squid_ui.ext.discord.renderer as renderer_module
+import squid_ui.ext.discord.rendering.classic as classic_renderer_module
+import squid_ui.ext.discord.rendering.v2 as renderer_module
 from squid_ui import Component, state
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.semantic import ActionControl, ActionControls
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
-from squid_ui.ext.discord.classic_renderer import ClassicRenderer
-from squid_ui.ext.discord.render_cache import RenderProgramCache
-from squid_ui.ext.discord.renderer import StaticView, V2Renderer
+from squid_ui.ext.discord.rendering.cache import RenderProgramCache
+from squid_ui.ext.discord.rendering.classic import ClassicRenderer
+from squid_ui.ext.discord.rendering.v2 import StaticView, V2Renderer
 from squid_ui.ext.discord.testing import delivered_to, message_harness
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.planner import plan

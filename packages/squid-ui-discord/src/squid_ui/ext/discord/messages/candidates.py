@@ -19,7 +19,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.messages.attachments import attachment_assets
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.messages.wiring import AnyMountedView
-from squid_ui.ext.discord.rendering import RenderedMessage
+from squid_ui.ext.discord.rendering.result import RenderedMessage
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.interactions.forms import FormBinding, FormSpec
 from squid_ui.palette import Palette

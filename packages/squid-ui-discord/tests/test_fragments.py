@@ -129,7 +129,7 @@ class TestPreflight:
 class TestInteractionBoundary:
     def test_routed_controls_are_allowed(self):
         host = sd.layout_view()
-        routed = squid_ui.ext.discord.renderer.RoutedItem(label="go", custom_id="r:go")
+        routed = squid_ui.ext.discord.rendering.v2.RoutedItem(label="go", custom_id="r:go")
         contribute(_text("body"), to=host, followed_by=(sd.action_row(routed),))
         assert routed in list(host.walk_children())
 

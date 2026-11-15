@@ -6,29 +6,26 @@ whose bindings and proposed presentation-state updates a live frontend needs aft
 delivery. These helpers construct messages without sending them or mounting components.
 """
 
-import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Unpack, cast
+from typing import TYPE_CHECKING, Any, Unpack
 
 import discord
 from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.content.assets import Asset
 from squid_ui.content.text import NEUTRAL, Localization
-from squid_ui.ext.discord._draw import plan_and_draw
 from squid_ui.ext.discord.adapter import require_discord_py_target
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.messages.payload import MessageModeError, MessagePayload
-from squid_ui.ext.discord.renderer import V2Renderer, Wire
+from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
+from squid_ui.ext.discord.rendering.result import RenderedMessage
+from squid_ui.ext.discord.rendering.v2 import V2Renderer, Wire
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.planning.result import PlanResult
 from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.definition import Component
@@ -36,45 +33,6 @@ from squid_ui.target_types import ComponentsV2Target, DiscordPyAdapter
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True)
-class RenderedMessage[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT = scene.ComponentsV2]:
-    """A resolved plan beside the complete Discord message it draws to.
-
-    Generic over the view because the two modes differ in what they promise. A Components V2
-    composition always has a `LayoutView` — it *is* the message. A classic composition has a
-    `View` only when the document produced controls, and its embeds carry the rest.
-    """
-
-    payload: MessagePayload
-    plan: PlanResult[BodyT]
-
-    @property
-    def view(self) -> ViewT:
-        """The drawn view, typed by which message mode this render is for."""
-        return cast(ViewT, self.payload.view)
-
-    @property
-    def assets(self) -> tuple[Asset, ...]:
-        """Declarative files this rendered message expects to upload."""
-        return self.payload.assets
-
-    def build_files(self) -> list[discord.File]:
-        """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
-        return self.payload.build_files()
-
-    @property
-    def page(self) -> int:
-        """Zero-based active page, or zero when the scene is not paginated."""
-        return self.plan.scene.pagers[0].page if self.plan.scene.pagers else 0
-
-    @property
-    def pages(self) -> int:
-        """Total page count, or one when the scene is not paginated."""
-        return self.plan.scene.pagers[0].pages if self.plan.scene.pagers else 1
 
 
 def render_message(

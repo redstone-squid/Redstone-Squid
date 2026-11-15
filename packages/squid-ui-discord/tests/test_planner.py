@@ -14,7 +14,7 @@ from squid_ui.content.text import Localization, Markup
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord import testing as sd
-from squid_ui.ext.discord.renderer import V2Renderer
+from squid_ui.ext.discord.rendering.v2 import V2Renderer
 from squid_ui.ext.discord.target import NativeItem
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan

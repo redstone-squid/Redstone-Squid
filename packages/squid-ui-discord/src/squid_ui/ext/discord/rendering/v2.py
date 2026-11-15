@@ -9,7 +9,7 @@ routed controls carry their route ID and are dispatched separately by a Router.
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol, override
+from typing import Any
 from urllib.parse import urlsplit
 
 import discord
@@ -23,21 +23,20 @@ from squid_ui.ext.discord.conformance import LimitViolationError, conform
 from squid_ui.ext.discord.limits import LIMITS, V2Limits
 from squid_ui.ext.discord.messages.attachments import attachment_assets
 from squid_ui.ext.discord.messages.payload import MessagePayload
-from squid_ui.ext.discord.native_controls import Control as Control
-from squid_ui.ext.discord.native_controls import RoutedItem as RoutedItem
-from squid_ui.ext.discord.native_controls import RoutedSelectItem as RoutedSelectItem
-from squid_ui.ext.discord.native_controls import Wire as Wire
-from squid_ui.ext.discord.native_controls import (
+from squid_ui.ext.discord.rendering.cache import RenderProgramCache
+from squid_ui.ext.discord.rendering.controls import Control as Control
+from squid_ui.ext.discord.rendering.controls import RoutedItem as RoutedItem
+from squid_ui.ext.discord.rendering.controls import RoutedSelectItem as RoutedSelectItem
+from squid_ui.ext.discord.rendering.controls import Wire as Wire
+from squid_ui.ext.discord.rendering.controls import (
     draw_control,
     draw_link,
     draw_routed_button,
     draw_routed_select,
 )
-from squid_ui.ext.discord.render_cache import RenderProgramCache
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.result import PlanResult
-from squid_ui.renderer import Renderer
 from squid_ui.target_types import DiscordPyAdapter
 
 type Accessory = (
@@ -45,23 +44,6 @@ type Accessory = (
 )
 """What may sit beside a section or inside a row -- `scene.Section.accessory`'s own type."""
 type ViewFactory = Callable[[], discord.ui.LayoutView]
-
-
-class MountedRenderer[BodyT: scene.Body](Renderer[BodyT, MessagePayload], Protocol):
-    """A message renderer that accepts a mount's control-wiring callback.
-
-    wire builds SDK items bound to the current mount generation using the matching
-    plan's bindings. Both classic and Components V2 renderers implement this contract.
-    """
-
-    @override
-    def draw(
-        self,
-        document: scene.Scene[BodyT],
-        *,
-        plan: PlanResult[BodyT] | None = None,
-        wire: Wire | None = None,
-    ) -> MessagePayload: ...
 
 
 @dataclass(frozen=True, slots=True)

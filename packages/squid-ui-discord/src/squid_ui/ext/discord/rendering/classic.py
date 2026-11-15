@@ -18,15 +18,15 @@ from squid_ui.ext.discord.inspection import audit_classic_payload
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_ui.ext.discord.messages.attachments import attachment_assets
 from squid_ui.ext.discord.messages.payload import MessagePayload
-from squid_ui.ext.discord.native_controls import Control as Control
-from squid_ui.ext.discord.native_controls import Wire as Wire
-from squid_ui.ext.discord.native_controls import (
+from squid_ui.ext.discord.rendering.cache import RenderProgramCache
+from squid_ui.ext.discord.rendering.controls import Control as Control
+from squid_ui.ext.discord.rendering.controls import Wire as Wire
+from squid_ui.ext.discord.rendering.controls import (
     draw_control,
     draw_link,
     draw_routed_button,
     draw_routed_select,
 )
-from squid_ui.ext.discord.render_cache import RenderProgramCache
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.result import PlanResult
