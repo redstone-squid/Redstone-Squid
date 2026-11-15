@@ -122,25 +122,45 @@ def _agreement_participant(mark: str, display: ui.TextLike) -> ui.TextLike:
 
 def _collection_too_few(minimum: int) -> ui.TextLike:
     return tr(
-        t"\n                    widgets-collection-too-few = {{ {NUMBER(minimum)} ->\n                        [one] Add at least {NUMBER(minimum)} entry.\n                       *[other] Add at least {NUMBER(minimum)} entries.\n                    }}\n                    "
+        t"""
+        widgets-collection-too-few = {{ {NUMBER(minimum)} ->
+            [one] Add at least {NUMBER(minimum)} entry.
+           *[other] Add at least {NUMBER(minimum)} entries.
+        }}
+        """
     )
 
 
 def _collection_too_many(maximum: int) -> ui.TextLike:
     return tr(
-        t"\n                    widgets-collection-too-many = {{ {NUMBER(maximum)} ->\n                        [one] Keep no more than {NUMBER(maximum)} entry.\n                       *[other] Keep no more than {NUMBER(maximum)} entries.\n                    }}\n                    "
+        t"""
+        widgets-collection-too-many = {{ {NUMBER(maximum)} ->
+            [one] Keep no more than {NUMBER(maximum)} entry.
+           *[other] Keep no more than {NUMBER(maximum)} entries.
+        }}
+        """
     )
 
 
 def _multi_choice_too_few(minimum: int) -> ui.TextLike:
     return tr(
-        t"\n                    widgets-multi-choice-too-few = {{ {NUMBER(minimum)} ->\n                        [one] Select at least {NUMBER(minimum)} option.\n                       *[other] Select at least {NUMBER(minimum)} options.\n                    }}\n                    "
+        t"""
+        widgets-multi-choice-too-few = {{ {NUMBER(minimum)} ->
+            [one] Select at least {NUMBER(minimum)} option.
+           *[other] Select at least {NUMBER(minimum)} options.
+        }}
+        """
     )
 
 
 def _multi_choice_too_many(maximum: int) -> ui.TextLike:
     return tr(
-        t"\n                    widgets-multi-choice-too-many = {{ {NUMBER(maximum)} ->\n                        [one] Select no more than {NUMBER(maximum)} option.\n                       *[other] Select no more than {NUMBER(maximum)} options.\n                    }}\n                    "
+        t"""
+        widgets-multi-choice-too-many = {{ {NUMBER(maximum)} ->
+            [one] Select no more than {NUMBER(maximum)} option.
+           *[other] Select no more than {NUMBER(maximum)} options.
+        }}
+        """
     )
 
 
