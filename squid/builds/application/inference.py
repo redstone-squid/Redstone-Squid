@@ -187,7 +187,11 @@ class InferredBuild(BaseModel):
     )
     extender_orientation: Literal["Horizontal", "Upward", "Downward"] | None = None
     extension_length: int | None = Field(
-        default=None, description="Extender stroke in blocks; double/triple piston extenders have length 2/3."
+        default=None,
+        description=(
+            "Extender stroke in blocks: double=2, triple=3, quad/quadruple=4. "
+            "Folded circuit dimensions do not determine stroke length."
+        ),
     )
     extension_time: InferredTiming | None = Field(default=None, description="Explicit extender extension duration.")
     retraction_time: InferredTiming | None = Field(default=None, description="Explicit extender retraction duration.")
