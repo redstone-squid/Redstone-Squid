@@ -19,8 +19,6 @@ and publish together on success; failure discards them.
 
 ::: squid_reactivity.transaction
 
-::: squid_reactivity.batch
-
 ::: squid_reactivity.readonly_transaction
 
 ::: squid_reactivity.untracked

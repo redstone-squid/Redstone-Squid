@@ -66,7 +66,7 @@ def test_publish_moves_a_watched_version_without_subscribers() -> None:
 
     bus.publish(BUILD)
 
-    assert source.settle() != version
+    assert source.validated_version() != version
 
 
 def test_subscriptions_keeps_committed_and_one_staged_set() -> None:
@@ -212,10 +212,10 @@ def test_handles_follow_their_owner_without_an_explicit_bus() -> None:
     subscriptions.commit()
 
     second.publish(handle.name)
-    assert source.settle() == version
+    assert source.validated_version() == version
     assert seen == []
     first.publish(handle.name)
-    assert source.settle() != version
+    assert source.validated_version() != version
     assert seen == [handle]
     handle.publish()
     assert seen == [handle, handle]

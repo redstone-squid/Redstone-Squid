@@ -99,7 +99,7 @@ class _Cell[ValueT](_ReactiveSource):
         return ()
 
     @override
-    def settle(self) -> int:
+    def validated_version(self) -> int:
         """Return the staged version when present, otherwise the committed version."""
         current = _active()
         if current is not None:
@@ -147,5 +147,5 @@ class Signal(_ReactiveSource, SubscriptionSource):
         return ()
 
     @override
-    def settle(self) -> int:
+    def validated_version(self) -> int:
         return self.version

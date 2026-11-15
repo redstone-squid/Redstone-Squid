@@ -668,8 +668,8 @@ mutate it, and assign it back; the last line is the ordinary write.
 `computed` records what its body read and recomputes when one of those values moves --
 nothing is declared, so a conditional dependency is exact. It is lazy: one nobody renders is
 never evaluated, and one that raises fails where its value is used. `untracked()` reads
-without subscribing. batch coalesces related writes. transaction rolls back every write if an
-exception escapes, and `sd.MessageRoot` dispatch wraps mutating actions in one.
+without subscribing. `transaction` publishes related writes together and rolls back every
+write if an exception escapes, and `sd.MessageRoot` dispatch wraps mutating actions in one.
 
 That guarantee reaches declared state, and only declared state:
 

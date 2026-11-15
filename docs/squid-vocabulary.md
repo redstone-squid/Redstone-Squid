@@ -28,7 +28,7 @@ wider convention. Exemptions are listed, not assumed, and the list is part of th
 | Category | Keeps | Because |
 |---|---|---|
 | Stdlib and protocol shapes | `dumps`/`loads`, `keys`/`items`/`values`, `__init__`, `__getattr__` | the reader's `json`/`Mapping` expectation outranks internal consistency |
-| Reactive-framework terms | `state`, `computed`, `resource`, `batch`, `untracked`, `transaction`, `watch` | borrowed from Vue/Solid/MobX; the docs already say "Vue-inspired" and renaming costs recognition |
+| Reactive-framework terms | `state`, `computed`, `resource`, `untracked`, `transaction`, `watch` | borrowed from Vue/Solid/MobX; the docs already say "Vue-inspired" and renaming costs recognition |
 | discord.py mirroring | `send`, `respond`, `ephemeral`, `followup`, `defer`, `interaction` | a name that shadows discord.py on purpose matches discord.py's spelling |
 | Domain terms of art | `prepare`/`apply`/`abort`, `commit`/`rollback`, `claim`/`lease`/`release` | two-phase commit and lease vocabulary are established outside this codebase |
 

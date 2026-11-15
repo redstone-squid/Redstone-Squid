@@ -153,7 +153,9 @@ class RenderCache[RenderTargetT: RenderTarget]:
                 if async_render_policy(binding).pending_mode is PendingMode.ATOMIC
             }
             moved = tuple(
-                source for source, version in tuple(cached.observation.sources.items()) if source.settle() != version
+                source
+                for source, version in tuple(cached.observation.sources.items())
+                if source.validated_version() != version
             )
             if not moved or any(id(source) not in atomic for source in moved):
                 continue

@@ -404,7 +404,7 @@ class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
         return self._settled
 
     def read(self) -> Any:
-        self.settle()
+        self.validated_version()
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = self.version
@@ -415,7 +415,7 @@ class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
         return self.sources
 
     @override
-    def settle(self) -> int:
+    def validated_version(self) -> int:
         """Return the version after validating this read view and its dependencies."""
         current = _active()
         view = None if current is None else (current.read_view, _READ_CONSISTENCY.get())
@@ -424,7 +424,7 @@ class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
         if self._view == view:
             if self._epoch == _runtime.epoch:
                 return self.version
-            if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
+            if self._settled and all(source.validated_version() == seen for source, seen in self.sources.items()):
                 self._epoch = _runtime.epoch
                 return self.version
         # Cleared before the run, not after: a body that raises must leave the node asking to
@@ -517,7 +517,7 @@ def inspect_cells(owner: ReactiveStateOwner) -> dict[str, CellReport]:
     reports: dict[str, CellReport] = {}
     for name, descriptor in _descriptors(type(owner), _State):
         cell = descriptor.cell(owner)
-        reports[name] = CellReport(id(cell), cell.settle(), descriptor.is_set(owner), descriptor.opaque)
+        reports[name] = CellReport(id(cell), cell.validated_version(), descriptor.is_set(owner), descriptor.opaque)
     return reports
 
 
@@ -541,7 +541,7 @@ def declared_cells(owner: ReactiveStateOwner) -> dict[_Cell[Any], int]:
         for descriptor in vars(klass).values():
             if isinstance(descriptor, _State):
                 cell = descriptor.cell(owner)
-                presumed[cell] = cell.settle()
+                presumed[cell] = cell.validated_version()
     return presumed
 
 

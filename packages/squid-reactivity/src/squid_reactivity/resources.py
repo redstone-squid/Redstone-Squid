@@ -343,7 +343,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         return self.sources
 
     @override
-    def settle(self) -> int:
+    def validated_version(self) -> int:
         """Recheck dependencies and return the resulting version without starting a load."""
         self._recheck()
         return self.version
@@ -370,7 +370,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         try:
             # Snapshotted: `settle()` re-checks a source, which can reach back into this
             # resource, and a load still recording would otherwise resize the dict under us.
-            moved = watched and any(source.settle() != seen for source, seen in tuple(watched.items()))
+            moved = watched and any(source.validated_version() != seen for source, seen in tuple(watched.items()))
         finally:
             self._rechecking = False
         if moved:
@@ -386,7 +386,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
 
     def _replace_now(self, value: ValueT, *, baseline: dict[_ReactiveSource, int] | None = None) -> None:
         if baseline is None:
-            baseline = {source: source.settle() for source in self.sources}
+            baseline = {source: source.validated_version() for source in self.sources}
         self._new_generation()
         self._status = Ready(value)
         self._moved()
@@ -719,7 +719,7 @@ class _Replacement(TransactionParticipant[dict[_ReactiveSource, int] | None]):
         """
         if isinstance(self.value, _Missing):
             return None
-        return {source: source.settle() for source in self._resource.sources}
+        return {source: source.validated_version() for source in self._resource.sources}
 
     @override
     def describe_change(self, prepared: dict[_ReactiveSource, int] | None) -> None:

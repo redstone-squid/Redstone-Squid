@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class _ReactiveSource(Protocol):
     """A versioned value with explicit upstream dependencies and a notification address.
 
-    Settling may change the upstream graph without changing the value's version.
+    Validation may change the dependency graph without changing the value's version.
     Address traversal therefore follows the live graph after validation.
     """
 
@@ -30,7 +30,14 @@ class _ReactiveSource(Protocol):
 
     def dependencies(self) -> Iterable[_ReactiveSource]: ...
 
-    def settle(self) -> int: ...
+    def validated_version(self) -> int:
+        """Validate dependencies synchronously and return the resulting version.
+
+        Computed values may recompute; resources may become pending. This method
+        never starts asynchronous work. Cells and signals simply return their
+        current version, including staged changes where applicable.
+        """
+        ...
 
 
 class _DependencyCollector(Protocol):
@@ -66,11 +73,11 @@ class Dependencies(_DependencyCollector):
     def current(self) -> bool:
         """Whether every directly observed reactive source still yields the seen version.
 
-        Settling a computed here preserves its backdating contract: an upstream write that
+        Validating a computed here preserves its version when its value is unchanged: an upstream write that
         recomputes to the same value leaves the computed's version unchanged and therefore does
         not invalidate a cached pure projection.
         """
-        return all(source.settle() == seen for source, seen in tuple(self.sources.items()))
+        return all(source.validated_version() == seen for source, seen in tuple(self.sources.items()))
 
     def addresses(self) -> tuple[DependencyAddress, ...]:
         """Every addressed cell this run reached, deduplicated, in read order.

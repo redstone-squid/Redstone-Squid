@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from squid_reactivity.transactions.results import TransactionRollback as TransactionRollback
     from squid_reactivity.transactions.scope import Transaction as Transaction
     from squid_reactivity.transactions.scope import apply_conditional_patches as apply_conditional_patches
-    from squid_reactivity.transactions.scope import batch as batch
     from squid_reactivity.transactions.scope import current_transaction as current_transaction
     from squid_reactivity.transactions.scope import enlist as enlist
     from squid_reactivity.transactions.scope import fresh_transaction as fresh_transaction
@@ -53,7 +52,6 @@ _EXPORT_MODULES = {
     "transaction": "scope",
     "readonly_transaction": "scope",
     "fresh_transaction": "scope",
-    "batch": "scope",
     "current_transaction": "scope",
     "enlist": "scope",
     "transaction_participant": "scope",
@@ -131,7 +129,6 @@ __all__ = [
     "TransactionRollback",
     "TransactionView",
     "apply_conditional_patches",
-    "batch",
     "block_writes",
     "current_transaction",
     "enlist",

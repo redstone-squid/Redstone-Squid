@@ -67,7 +67,6 @@ from squid_ui.runtime import (
     PendingMode,
     ReactiveWriteError,
     Ready,
-    batch,
     transaction,
 )
 from squid_ui.semantic import Paragraph
@@ -2832,7 +2831,7 @@ class TestStateDescriptor:
                 return Text(f"{self.left}:{self.right}")
 
         component = Pair()
-        with batch():
+        with transaction():
             component.left = 1
             component.right = 2
 

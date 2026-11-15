@@ -27,7 +27,7 @@ from squid_reactivity.errors import (
 from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import CellAddress, DependencyAddress, LocalTopicBus, Topic, TopicBus, TopicName, watch
 from squid_reactivity.tracking import Dependencies, capture_reads, observe_reads, untracked
-from squid_reactivity.transactions import Transaction, batch, current_transaction, readonly_transaction, transaction
+from squid_reactivity.transactions import Transaction, current_transaction, readonly_transaction, transaction
 from squid_reactivity.transactions.results import TransactionCommit, TransactionResult, TransactionRollback
 from squid_reactivity.transactions.state import relaxed_read, strong_read
 
@@ -56,7 +56,6 @@ __all__ = [
     "TransactionRollback",
     "TransactionValidationError",
     "UndeclaredStateError",
-    "batch",
     "capture_reads",
     "computed",
     "current_transaction",

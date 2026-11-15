@@ -174,13 +174,6 @@ def readonly_transaction(*, transaction_context: TransactionContext | None = Non
 
 
 @contextmanager
-def batch() -> Iterator[None]:
-    """Group related writes into one change notification per model on commit."""
-    with transaction():
-        yield
-
-
-@contextmanager
 def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Transaction]:
     """Start an independent transaction while an enclosing transaction has staged no work.
 
