@@ -12,6 +12,7 @@ from squid_ui.assets import Asset
 from squid_ui.document import DocumentLike, as_document
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.html.target import HtmlLimits
+from squid_ui.planning._slack_forms import modal_form
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
 from squid_ui.planning.cache import PlanCache
@@ -42,7 +43,7 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 from squid_ui.semantic import Group
-from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits
+from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 
 _logger = logging.getLogger(__name__)
 
@@ -331,6 +332,15 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
             options.selections,
             options,
             cast(PlanCache[scene.SlackHomeView] | None, cache),
+        )
+    elif isinstance(effective.limits, SlackModalLimits) and effective.body_type is scene.SlackModalView:
+        result = _plan(
+            rendered,
+            cast(PlanRequest[scene.SlackModalView, RenderTargetT, AdapterT], request),
+            SlackCompositionRules[RenderTargetT, object, scene.SlackModalView](effective.limits, modal_form(rendered)),
+            options.selections,
+            options,
+            cast(PlanCache[scene.SlackModalView] | None, cache),
         )
     elif isinstance(effective.limits, SlackMessageLimits) and effective.body_type is scene.SlackMessage:
         slack_request = cast(PlanRequest[scene.SlackMessage, RenderTargetT, AdapterT], request)

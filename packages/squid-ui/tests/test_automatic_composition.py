@@ -12,7 +12,6 @@ from squid_ui.planning import (
     AutomaticComposition,
     CompositionOptions,
     JointExhaustedError,
-    JointUnsupportedError,
     SearchCompletion,
 )
 from squid_ui.planning.adapter import AdapterProfile
@@ -173,9 +172,7 @@ def test_custom_automatic_rules_share_the_public_boundary() -> None:
     assert result.metrics.target_evaluations == 1
 
 
-def test_unsupported_automatic_target_has_structured_capability_diagnostics() -> None:
+def test_shared_modal_requires_one_top_level_form() -> None:
     target = sl.slack.modal_target(adapter=AdapterProfile(SlackAdapter, "joint.modal", ">=1"))
-    with pytest.raises(JointUnsupportedError) as caught:
+    with pytest.raises(sl.LayoutInvariantError, match="one top-level"):
         sl.planning.plan(sl.paragraph("Body"), target=target, composition=CompositionOptions(automatic=True))
-    assert caught.value.diagnostics.completion == SearchCompletion.UNSUPPORTED
-    assert caught.value.diagnostics.violations

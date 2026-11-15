@@ -142,7 +142,8 @@ def test_message_form_is_a_modal_trigger_button_with_form_binding(shared: bool) 
     assert set(result.form_bindings) == {"edit"}
 
 
-def test_modal_requires_one_top_level_form_and_maps_portable_fields() -> None:
+@pytest.mark.parametrize("shared", [False, True])
+def test_modal_requires_one_top_level_form_and_maps_portable_fields(shared: bool) -> None:
     spec = forms.FormSpec(
         "Edit build",
         (
@@ -170,6 +171,7 @@ def test_modal_requires_one_top_level_form_and_maps_portable_fields() -> None:
             )
         ),
         target=MODAL,
+        composition=sl.planning.CompositionOptions(automatic=True) if shared else None,
     )
 
     body = result.scene.body

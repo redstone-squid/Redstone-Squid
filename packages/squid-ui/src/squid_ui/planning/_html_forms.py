@@ -28,7 +28,7 @@ def _scalar(value: object) -> str:
 class HtmlFormRenderer:
     localization: Localization
 
-    def render(self, binding: form_types.FormBinding) -> scene.HtmlElement:
+    def render[ContextT](self, binding: form_types.FormBinding[ContextT]) -> scene.HtmlElement:
         spec = binding.spec
         children: list[scene.HtmlNode] = [self.element(scene.HtmlTag.H3, self.text(spec.title))]
         for item in spec.items:
@@ -70,8 +70,8 @@ class HtmlFormRenderer:
     ) -> scene.HtmlElement:
         return scene.HtmlElement(tag, tuple(children), attributes, action=action, form=form)
 
-    def _form_field(
-        self, form_key: str, spec: form_types.FormSpec, field: form_types.FormField[Any]
+    def _form_field[ContextT](
+        self, form_key: str, spec: form_types.FormSpec[ContextT], field: form_types.FormField[Any]
     ) -> scene.HtmlElement:
         control_id = f"squid-{form_key}-{field.key}"
         description_id = f"{control_id}-description"

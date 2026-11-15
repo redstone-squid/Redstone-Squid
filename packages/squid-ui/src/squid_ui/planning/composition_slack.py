@@ -1,15 +1,17 @@
 """Direct Slack realization rules; no HTML planning or HTML scene is involved."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import cast
 
 from squid_i18n import tree
 from squid_ui import scene
+from squid_ui import semantic as sem
 from squid_ui.assets import Asset
 from squid_ui.capabilities import Capability
 from squid_ui.entity import ConversationType, EntityType
 from squid_ui.errors import DrawInvariantError
+from squid_ui.planning._slack_forms import SlackFormRenderer, form_texts
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
@@ -46,7 +48,8 @@ from squid_ui.planning.realizations import (
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits
+from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
+from squid_ui.text import resolve_text
 
 
 def _plain(nodes: tuple[tree.Node, ...]) -> str | None:
@@ -104,9 +107,10 @@ def _mrkdwn(nodes: tuple[tree.Node, ...]) -> str | None:
 class SlackCompositionRules[
     RenderTargetT,
     ContextT,
-    BodyT: scene.SlackMessage | scene.SlackHomeView = scene.SlackMessage,
+    BodyT: scene.SlackMessage | scene.SlackHomeView | scene.SlackModalView = scene.SlackMessage,
 ]:
-    limits: SlackMessageLimits | SlackHomeLimits = SlackMessageLimits()
+    limits: SlackMessageLimits | SlackHomeLimits | SlackModalLimits = SlackMessageLimits()
+    modal: sem.FormTrigger | None = None
 
     def offers(
         self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
@@ -114,7 +118,11 @@ class SlackCompositionRules[
         tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
         | OfferDiscovery[RenderTargetT, ContextT, Realization]
     ):
-        return semantic_offers(
+        if self.modal is not None and isinstance(
+            occurrence.graph.units[occurrence.reference].value, sem.Region | sem.Paged
+        ):
+            return ()
+        discovered = semantic_offers(
             occurrence,
             context,
             table_forms=(TableForm.NATIVE, TableForm.RECORDS),
@@ -124,6 +132,12 @@ class SlackCompositionRules[
             heading_limit=self.limits.components.header_text,
             grid_columns=self.limits.components.actions_elements,
         )
+
+        if self.modal is None:
+            return discovered
+        offers = discovered.offers if isinstance(discovered, OfferDiscovery) else discovered
+        offers = tuple(replace(offer, binding=None) if offer.form is not None else offer for offer in offers)
+        return replace(discovered, offers=offers) if isinstance(discovered, OfferDiscovery) else offers
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
@@ -163,6 +177,14 @@ class SlackCompositionRules[
 
             match part.offer.payload:
                 case ControlRealization() as control:
+                    if part.offer.form is not None and isinstance(self.limits, SlackModalLimits):
+                        renderer = SlackFormRenderer(self.limits, context.localization, identity)
+                        inputs = renderer.blocks(part.offer.form, "/".join(identity.path))
+                        prepared_blocks.extend(inputs)
+                        texts.extend(value.content for value in form_texts(inputs))
+                        violations.extend(renderer.violations)
+                        blocks += len(inputs)
+                        return
                     if control.disabled:
                         violations.append(UnsupportedCapability(identity, "disabled Slack button"))
                     if not control.label:
@@ -552,17 +574,47 @@ class SlackCompositionRules[
                     candidate.offer.occurrence.identity, "fallback.text", fallback_length, self.limits.fallback_text
                 )
             )
+        if isinstance(self.limits, SlackModalLimits):
+            assert self.modal is not None
+            renderer = SlackFormRenderer(self.limits, context.localization, candidate.offer.occurrence.identity)
+            title = renderer.plain(
+                resolve_text(self.modal.spec.title, context.localization).content,
+                "modal.title",
+                capacity=self.limits.title,
+            )
+            submit = renderer.plain(
+                resolve_text(self.modal.label, context.localization).content,
+                "modal.submit",
+                capacity=self.limits.submit,
+            )
+            close = renderer.plain(
+                resolve_text(context.chrome.cancel, context.localization).content,
+                "modal.close",
+                capacity=self.limits.close,
+            )
+            if len(self.modal.key) > self.limits.callback_id:
+                violations.append(
+                    LocalCapacityExceeded(
+                        candidate.offer.occurrence.identity,
+                        "modal.callback_id",
+                        len(self.modal.key),
+                        self.limits.callback_id,
+                    )
+                )
+            violations.extend(renderer.violations)
+            body: scene.SlackMessage | scene.SlackHomeView | scene.SlackModalView = scene.SlackModalView(
+                self.modal.key, title, submit, close, tuple(prepared_blocks)
+            )
+        elif isinstance(self.limits, SlackMessageLimits):
+            body = scene.SlackMessage("\n".join(texts), tuple(prepared_blocks))
+        else:
+            body = scene.SlackHomeView(tuple(prepared_blocks))
         return Evaluation(
             cost,
             violations=tuple(violations),
             effects=tuple(effects),
             interactions=frozenset(interactions),
-            preparation=cast(
-                BodyT,
-                scene.SlackMessage("\n".join(texts), tuple(prepared_blocks))
-                if isinstance(self.limits, SlackMessageLimits)
-                else scene.SlackHomeView(tuple(prepared_blocks)),
-            ),
+            preparation=cast(BodyT, body),
             text=tuple(texts),
             resource_axes=frozenset({Axis.BLOCKS}),
             scoped_costs=scopes,
@@ -584,6 +636,15 @@ class SlackCompositionRules[
         for block in body.blocks:
             context.work.consume()
             match block:
+                case scene.SlackInput():
+                    if (
+                        not isinstance(self.limits, SlackModalLimits)
+                        or len(block.block_id) > self.limits.components.block_id
+                    ):
+                        message = "invalid Slack form input placement or identifier"
+                        raise DrawInvariantError(message)
+                    for value in form_texts(block):
+                        text(value, 2000)
                 case scene.SlackActions(elements=elements):
                     if len(elements) > self.limits.components.actions_elements:
                         msg = "built Slack actions exceed their limit"
@@ -646,6 +707,15 @@ class SlackCompositionRules[
                 case _:
                     message = "unexpected block in shared Slack composition"
                     raise DrawInvariantError(message)
+        if isinstance(body, scene.SlackModalView) and (
+            not isinstance(self.limits, SlackModalLimits)
+            or len(body.callback_id) > self.limits.callback_id
+            or len(body.title.content) > self.limits.title
+            or (body.submit is not None and len(body.submit.content) > self.limits.submit)
+            or (body.close is not None and len(body.close.content) > self.limits.close)
+        ):
+            message = "built Slack modal exceeds its header limits"
+            raise DrawInvariantError(message)
         cost = ResourceCost({Axis.BLOCKS: len(body.blocks)})
         if (
             cost != expected.cost
