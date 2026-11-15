@@ -465,7 +465,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             # domain type stays optional only for a build that has not been submitted yet.
             summary=_build_summary,
             detail=self._detail,
-            page_size=8,
+            page_size=25,
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
             empty=tr(t"build-list-empty = No builds are available."),
             # `_BuildSource` uses the default listing order: highest, so newest, build ID first.
@@ -744,7 +744,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             expression if scope is SearchScope.RECORDS else query,
             scope=scope,
             sort=SearchSort.parse(sort or None),
-            page_size=8,
+            page_size=25,
             visible_statuses=frozenset(status.name.lower() for status in self._statuses),
         )
         page = await self._search_service.search(request)

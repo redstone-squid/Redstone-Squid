@@ -576,14 +576,17 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
     queries.list_page.side_effect = (
         Page(
             items=tuple(
-                DoorBuild(id=identifier, submission_status=Status.CONFIRMED) for identifier in range(20, 12, -1)
+                DoorBuild(id=identifier, submission_status=Status.CONFIRMED) for identifier in range(37, 12, -1)
             ),
-            total=9,
+            total=26,
             next=PageAnchor(after_id=13),
             prev=None,
         ),
         Page(
-            items=(DoorBuild(id=12, submission_status=Status.CONFIRMED),), total=9, next=None, prev=PageAnchor(offset=0)
+            items=(DoorBuild(id=12, submission_status=Status.CONFIRMED),),
+            total=26,
+            next=None,
+            prev=PageAnchor(offset=0),
         ),
     )
     queries.get.side_effect = lambda identifier: DoorBuild(id=identifier, submission_status=Status.CONFIRMED)
@@ -593,7 +596,7 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
         await ui.press(ui.key_for("builds.item-next"))
         assert "Build #12" in ui.texts()
         queries.list_page.assert_awaited_with(
-            statuses=frozenset({Status.CONFIRMED, Status.PENDING}), selector=PageSelector(offset=8), page_size=8
+            statuses=frozenset({Status.CONFIRMED, Status.PENDING}), selector=PageSelector(offset=25), page_size=25
         )
 
 
@@ -635,8 +638,8 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
     screen = _screen(initial_id=None)
     queries = cast(AsyncMock, screen._queries)
     queries.list_page.return_value = Page(
-        items=tuple(DoorBuild(id=index, submission_status=Status.CONFIRMED) for index in range(1, 9)),
-        total=8,
+        items=tuple(DoorBuild(id=index, submission_status=Status.CONFIRMED) for index in range(1, 26)),
+        total=25,
         next=None,
         prev=None,
     )
@@ -647,9 +650,9 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
             RecordSearchHit(str(index), f"Fastest door {index}", "Java", index, f"Door {index}", "fastest", "all_time")
             if records
             else BuildSearchHit(str(index), f"Door {index}", "confirmed", "A detailed door description")
-            for index in range(1, 9)
+            for index in range(1, 26)
         ),
-        total=8,
+        total=25,
         next=None,
         prev=None,
     )
@@ -688,9 +691,9 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
     queries.list_page.side_effect = page
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form(ui.key_for("builds.seek.jump"))
-        await form.submit({"page": "37"})
-        assert queries.list_page.await_args.kwargs["selector"] == PageSelector(offset=288)
-        assert any("Page 37 of 50" in text for text in ui.texts())
+        await form.submit({"page": "13"})
+        assert queries.list_page.await_args.kwargs["selector"] == PageSelector(offset=300)
+        assert any("Page 13 of 16" in text for text in ui.texts())
         ui.assert_within_limits()
 
 
@@ -726,7 +729,7 @@ async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> N
             assert screen._guided is editor
             assert screen._query == query
             assert service.search.call_args.args[0].query == query
-            assert service.search.call_args.args[0].page_size == 8
+            assert service.search.call_args.args[0].page_size == 25
             assert not ui.root.finished
             assert "## Search results" in ui.texts()
         await ui.press(ui.key_for("remove-0"))
@@ -758,8 +761,8 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         )
     )
     cast(AsyncMock, screen._search_service).search.return_value = SearchPage(
-        hits=tuple(BuildSearchHit(str(index), f"Door {index}", "confirmed", "A door") for index in range(8)),
-        total=8,
+        hits=tuple(BuildSearchHit(str(index), f"Door {index}", "confirmed", "A door") for index in range(25)),
+        total=25,
         next=None,
         prev=None,
     )
@@ -853,9 +856,9 @@ async def test_expanded_editor_results_and_help_fit_together(records: bool) -> N
             RecordSearchHit(str(index), f"Fastest door {index}", "Java", index, f"Door {index}", "fastest", "all_time")
             if records
             else BuildSearchHit(str(index), f"Door {index}", "confirmed", "A detailed door description")
-            for index in range(8)
+            for index in range(25)
         ),
-        total=8,
+        total=25,
         next=None,
         prev=None,
     )

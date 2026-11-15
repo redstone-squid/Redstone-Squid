@@ -80,7 +80,7 @@ def record_browser(
         label=lambda record: truncate_display_text(record.title, 80),
         summary=lambda record: sl.md(t"**{record.title}** — {record.version_scope.replace('_', ' ')}"),
         detail=detail,
-        page_size=8,
+        page_size=25,
         title=tr(t"record-browse-title = Records"),
         empty=tr(t"record-browse-empty = No published records are available."),
     )
