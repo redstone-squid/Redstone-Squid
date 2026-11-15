@@ -41,16 +41,12 @@ class _Cell[ValueT](_ReactiveSource):
         self.identity = uuid.uuid7()
         self.value: ValueT | _Missing = value
         self.version = version
-        self.address = address
+        self._address = address
 
     @property
     @override
     def address(self) -> DependencyAddress | None:
         return self._address
-
-    @address.setter
-    def address(self, value: DependencyAddress | None) -> None:
-        self._address = value
 
     @property
     def label(self) -> str:
@@ -125,17 +121,13 @@ class Signal(_ReactiveSource, SubscriptionSource):
 
     def __init__(self) -> None:
         self._reactive_subscribers: SubscriberRegistry = {}
-        self.address = CellAddress(self, "revision")
+        self._address = CellAddress(self, "revision")
         self.version = 0
 
     @property
     @override
     def address(self) -> CellAddress:
         return self._address
-
-    @address.setter
-    def address(self, value: CellAddress) -> None:
-        self._address = value
 
     def track(self) -> None:
         """Make the computation or render now running depend on this signal."""

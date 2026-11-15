@@ -295,7 +295,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         self._label = name
         self.pending_mode = pending_mode
         self._reactive_subscribers: SubscriberRegistry = {}
-        self.address = address if address is not None else CellAddress(self, "status")
+        self._address = address if address is not None else CellAddress(self, "status")
         self._status: ResourceStatus[ValueT] = Pending()
         self._loading: _Load[ValueT] | None = None
         self._request_token = 0
@@ -324,10 +324,6 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
     @override
     def address(self) -> CellAddress:
         return self._address
-
-    @address.setter
-    def address(self, value: CellAddress) -> None:
-        self._address = value
 
     @property
     def status(self) -> ResourceStatus[ValueT]:
