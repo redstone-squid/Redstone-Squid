@@ -4,14 +4,14 @@ import pytest
 
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
+from squid_ui.planning.target import Target
 from squid_ui.sources import list_source
-from squid_ui.target_types import DiscordTarget
 from squid_ui_widgets import Browser
 
 
 @pytest.mark.parametrize("target", [DISCORD_V1_DPY27, DISCORD_V2_DPY27])
 @pytest.mark.parametrize("value", ["1", "25", "0", "26", "-1", "1.5", "no"])
-async def test_browser_page_size_form_validates_and_reloads(target: DiscordTarget, value: str) -> None:
+async def test_browser_page_size_form_validates_and_reloads(target: Target, value: str) -> None:
     browser = Browser(
         list_source(tuple(str(index) for index in range(30))),
         identity=str,

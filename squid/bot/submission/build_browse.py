@@ -771,7 +771,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._sort = sort
         self._selected = None
 
-    async def _back(self, _event: sl.PressEvent) -> None:
+    async def _back(self, _event: sl.ActionEvent) -> None:
         self._selected = None
 
 

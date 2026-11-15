@@ -223,10 +223,10 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
                     key="search-build-detail-actions",
                 ),
             )
-        if self._full_build is not None:
-            node = self._holder_build if self._holder_id is not None else self._full_build
+        if self._holder_id is not None:
+            node = self._holder_build if self._holder_build is not None else self._card_node()
         else:
-            node = self._card_node()
+            node = self._full_build if self._full_build is not None else self._card_node()
         if self._holder_id is not None:
             return (
                 node,
