@@ -81,7 +81,7 @@ def _inferred_ticks(value: str | None) -> int | None:
     if value is not None:
         normalized = value.strip().casefold()
         if re.fullmatch(
-            r"(?:instant|instantly|instantaneous)(?:\s+(?:open|opening|close|closing|extension|retraction))?",
+            r"(?:insta|instant|instantly|instantaneous)(?:\s+(?:open|opening|close|closing|extension|retraction))?",
             normalized,
         ):
             return 0
