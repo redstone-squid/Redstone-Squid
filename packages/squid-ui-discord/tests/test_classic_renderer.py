@@ -27,9 +27,8 @@ class TestDrawing:
     def test_a_classic_document_draws_the_whole_message(self) -> None:
         presentation = classic.render_static([Paragraph("A 2x2 flush door."), Note("by squid")])
 
-        assert presentation.content is None
-        assert presentation.embeds[0].description == "A 2x2 flush door."
-        assert presentation.embeds[0].footer.text == "by squid"
+        assert presentation.content == "A 2x2 flush door.\n-# by squid"
+        assert presentation.embeds == ()
 
     def test_controls_become_a_real_view_with_explicit_rows(self) -> None:
         """Not a `LayoutView`: an ActionRow-only one would still flag the message V2."""

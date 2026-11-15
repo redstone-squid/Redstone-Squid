@@ -791,7 +791,7 @@ class Nest(Component[sl.ComponentsV2Target]):
         nodes: list[Node | Boundary] = [Row((Button(label="x", on_click=self._click, key="click"),))]
         if self.child is not None:
             nodes.append(self.child.keyed(f"level{self.depth}" + "_padding" * 4))
-        return [Panel(children=tuple(nodes))]
+        return sl.block(*nodes)
 
     async def _click(self, event: PressEvent) -> None: ...
 

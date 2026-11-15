@@ -262,7 +262,7 @@ class TestReservedPlanning:
     def test_component_reservation_is_enforced(self):
         # Twelve text components fit an unreserved message and cannot fit five, so the
         # reservation has to be the difference between composing and refusing.
-        document = [sl.primitives.Text(f"line {index}") for index in range(12)]
+        document = [sl.primitives.Text(f"line {index}", overflow=sl.primitives.Never()) for index in range(12)]
         assert len(list(squid_ui_discord.render_message(document).view.walk_children())) == 12
         with pytest.raises(sl.errors.UnsolvableLayoutError):
             squid_ui_discord.render_message(document, reservation=squid_ui_discord.ResourceCost({Axis.COMPONENTS: 35}))

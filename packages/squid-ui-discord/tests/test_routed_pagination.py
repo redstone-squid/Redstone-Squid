@@ -210,13 +210,23 @@ async def test_semantic_region_uses_its_controlled_owner(target: Target) -> None
     async def change(event: sl.PageEvent) -> None:
         seen.append(event.page)
 
-    document = sl.stack(*(sl.aside(sl.paragraph(str(index) * 20)) for index in range(4))).paged(
-        key="region", chars=40, page=Controlled(99, change)
+    document = sl.region(
+        *(sl.aside(sl.paragraph(str(index) * 20)) for index in range(4)),
+        key="region",
+        title="Region",
+        page=Controlled(99, change),
     )
-    result = plan(document, target=target, nav=default_nav)
+    result = plan(
+        document,
+        target=target,
+        nav=default_nav,
+        composition=sl.planning.CompositionOptions(
+            automatic=True, partitions={sl.planning.OccurrenceId(("root", "region")): (1, 2, 3, 4)}
+        ),
+    )
     assert result.scene.pagers[0].page == result.scene.pagers[0].pages - 1
     assert not any(isinstance(update, CursorUpdate) for update in result.session_updates)
-    await result.bindings["__cursor_previous.region"].handler(testing.press_event())
+    await result.bindings["__cursor_previous.$/region"].handler(testing.press_event())
     assert seen == [result.scene.pagers[0].page - 1]
 
 

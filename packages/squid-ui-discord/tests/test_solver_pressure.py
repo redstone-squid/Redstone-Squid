@@ -5,6 +5,7 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.planning import measure
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import Paginate, Text
@@ -81,7 +82,7 @@ class TestBudgetContract:
         )
         target = v2(limits=V2Limits(total_text=100))
 
-        with pytest.raises(sl.errors.UnsolvableLayoutError, match="Budget floors need"):
+        with pytest.raises(JointInfeasibleError):
             sl.planning.plan(document, target=target)
 
     def test_best_effort_permits_its_floor_to_breach(self) -> None:

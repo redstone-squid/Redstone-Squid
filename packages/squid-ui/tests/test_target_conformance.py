@@ -134,18 +134,12 @@ _TARGETS: dict[str, Callable[[], Any]] = {
     "slack-home": lambda: sl.slack.home_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
 }
 
-# Record known gaps as expected errors rather than skipping their fixtures. Fixing a gap
-# makes its raises assertion fail, prompting removal of that exception. Classic currently
-# rejects measured timestamps, these wrappers around text, and the media fixture because
-# their required conversion or strategy is missing.
+# Character-only wrappers require a shared character axis. Use resource budgets
+# and regions on targets whose capacity is distributed across blocks or embeds.
 _REFUSALS: dict[tuple[type, str], str] = {
-    (semantic.Timestamp, "discord-classic"): "MeasuredTime cannot appear in a card description",
-    (semantic.ZonedTimestamp, "discord-classic"): "MeasuredZonedTime cannot appear in a card description",
-    (semantic.Media, "discord-classic"): "media galleries require Components V2 or a classic media strategy",
-    (semantic.Budgeted, "discord-classic"): "MeasuredText cannot appear in a classic message",
-    (semantic.Unbreakable, "discord-classic"): "MeasuredText cannot appear in a classic message",
-    (semantic.KeepWithNext, "discord-classic"): "MeasuredText cannot appear in a classic message",
-    (semantic.Paged, "discord-classic"): "MeasuredText cannot appear in a classic message",
+    (node, target): "joint allocation requires unsupported vocabulary or resource axes"
+    for node in (semantic.Budgeted, semantic.Paged)
+    for target in ("discord-classic", "slack-message", "slack-home")
 }
 
 

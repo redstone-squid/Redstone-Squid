@@ -9,7 +9,7 @@ would be making layout decisions with none of the planner's budget information.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
@@ -68,9 +68,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.target_types import ClassicTarget
 from squid_ui.temporal import ZonedDateTime
-
-if TYPE_CHECKING:
-    from squid_ui.planning.discord_planner import DiscordPlanner
 
 BLOCK_JOIN = "\n\n"
 """How a card's description blocks are joined. One rule, so one card is one string."""
@@ -400,12 +397,6 @@ class ClassicDialect:
     default_limits = CLASSIC_LIMITS
     # A classic message has no component that can hold a native discord.py item.
     realizes_extensions = False
-
-    @property
-    def planner(self) -> DiscordPlanner:
-        from squid_ui.planning.discord_planner import DISCORD_PLANNER
-
-        return DISCORD_PLANNER
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]

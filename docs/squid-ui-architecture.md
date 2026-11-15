@@ -168,21 +168,16 @@ The existing `runtime.component` import path is a facade over these definitions.
         v
     semantic Document -- keyed components, assets, semantic content
         |
-        +-- plan(..., Discord target)
-        |       |
-        |       v
-        |   DiscordPlanner -- adaptation, search, measurement, pagination
-        |       |
-        |       v
-        |   immutable Scene[Discord body] --> sd.Renderer
+        | plan(..., target=...)
+        v
+    shared composition -- representations, allocation, pagination, bindings
         |
-        +-- plan(..., HTML target)
-                |
-                v
-            HtmlPlanner -- native semantic resolution
-                |
-                v
-            immutable Scene[HtmlBody] --> sl.html.Renderer
+        +-- Discord rules --> Scene[ComponentsV2 | ClassicMessage] --> sd.Renderer
+        +-- HTML rules ----> Scene[HtmlBody] ----------------------> sl.html.Renderer
+        +-- Slack rules ---> Scene[SlackMessage | SlackHomeView | SlackModalView]
+                                                                    |
+                                                                    v
+                                                              Slack SDK renderer
 
     Every PlanResult also carries PlanReport, PlanMetrics, and ephemeral ActionBindings.
     Every immutable Scene supports `sl.scene.Codec` JSON and JSON Schema.
@@ -438,12 +433,10 @@ composable `Text`. Markdown is one source syntax, parsed after localization whil
 keeping captured values separate. Joining text combines structure, so fragments
 cannot complete one another's Markdown delimiters.
 
-HTML and legacy Slack planning share an element compiler that resolves semantic
-structure, text, bindings, assets, and authored pagination. HTML wraps those elements
-in its scene; Slack lowers them into Block Kit. Each planner owns its final scene,
-report, and caches. Slack does not construct an intermediate HTML plan. Automatic
-composition uses the separate target rules described below.
-The Discord planner serializes before measuring, using its adapter's library-backed
+HTML and Slack have direct composition rules for their own scene bodies; neither
+compiles through another target. Shared semantic realization retains text, forms,
+bindings, and assets until those rules evaluate the selected representation.
+Discord rules serialize before accounting for text, using the adapter's library-backed
 literal escaping. Mentions and timestamps are semantic values, not trusted raw
 Markdown. Scenes identify their serialized encoding explicitly; authored text does
 not carry a target dialect. The V2 HTML preview parses the serialized Markdown safely.
@@ -1322,11 +1315,11 @@ is the single framework boundary outside the whole user onion.
 For an ownership-first path from existing views and persistent controls into these adapter
 boundaries, see the [Discord migration guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/migrating.md).
 
-The portable seam is the semantic `Document`. The public planner delegates to the selected target
-backend and shares only target-neutral resources, options, state, caches, and reports.
-`DiscordPlanner` owns adaptation, measurement, search, pagination, Discord budgets, and exact
-primitive conversion. `HtmlPlanner` resolves semantic nodes directly into `HtmlBody`, without the
-Discord solver or its limits. Each renderer is mechanical and consumes only its own scene body.
+The portable seam is the semantic `Document`. Every built-in target uses shared composition:
+target rules offer representations, evaluate their costs, assemble the selected body, and
+independently validate it. The common planner owns search, pagination, bindings, resources,
+and presentation updates. Each renderer is mechanical and consumes only its own scene body.
+There is no fallback to a separate complete target compiler.
 
 Below the Discord scene, `renderer`, `message_root`, `delivery`, and `routing` form a
 **discord.py adapter**, not a Discord-protocol adapter, and its dependencies sort into three strata:
@@ -1872,5 +1865,5 @@ to describe, and saying so is noise.
   sit on it: `squid-ui-discord` for the discord.py runtime, `squid-ui-slack` for mechanical Slack
   SDK drawing, and `squid-ui-widgets` for reusable application state machines. The Slack leaf owns
   no Bolt app, listener, HTTP client, dispatch, or delivery lifecycle. Discord protocol knowledge
-  stays behind `DiscordPlanner`; Slack lowers through its own Block Kit dialect; HTML planning and
-  drawing import neither frontend SDK.
+  stays in the Discord composition rules and adapter; Slack has direct Block Kit composition
+  rules; HTML planning and drawing import neither frontend SDK.

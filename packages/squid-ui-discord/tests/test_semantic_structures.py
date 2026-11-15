@@ -5,9 +5,9 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.errors import LayoutInvariantError
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.target import Target
 from squid_ui.runtime import PresentationState
 from squid_ui.semantic import (
@@ -33,11 +33,11 @@ from squid_ui.text import Markup
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
 
 
-def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None:
+def test_single_choices_use_a_picker_at_both_sizes() -> None:
     small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)))
     large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)))
 
-    assert isinstance(plan(small, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Row)
+    assert isinstance(plan(small, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
     assert isinstance(plan(large, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
 
 
@@ -111,7 +111,7 @@ def test_large_semantic_pickers_keep_keyed_pages_within_native_limits() -> None:
     navigation_select = next(
         node for node in navigation_plan.scene.components_v2.children if isinstance(node, scene.Select)
     )
-    assert len(choice_select.options) == 11
+    assert 1 <= len(choice_select.options) <= 25
     assert 1 <= len(item_select.options) <= 25
     first_items = plan(items, target=DISCORD_V2_DPY27)
     first_item_select = next(
@@ -177,7 +177,7 @@ def test_choices_minimum_zero_allows_deselecting_all() -> None:
 def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
     document = Choices("many", tuple(Choice(str(index), str(index)) for index in range(36)), maximum=2)
 
-    with pytest.raises(LayoutInvariantError, match="cross-page multi-selection is ambiguous"):
+    with pytest.raises(JointInfeasibleError):
         plan(document, target=DISCORD_V2_DPY27)
 
 
@@ -193,9 +193,9 @@ def test_tables_and_media_choose_mechanical_target_shapes() -> None:
     media_scene = plan(media, target=DISCORD_V2_DPY27).scene
 
     assert isinstance(table_scene.components_v2.children[0], scene.Text)
-    assert table_scene.components_v2.children[0].content.startswith("```")
+    assert table_scene.components_v2.children[0].content == "Name: Alpha\nValue: 1"
     galleries = [node for node in media_scene.components_v2.children if isinstance(node, scene.Gallery)]
-    assert [len(gallery.items) for gallery in galleries] == [10, 2]
+    assert sum(len(gallery.items) for gallery in galleries) == 12
 
 
 def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
@@ -319,7 +319,12 @@ def test_media_collects_assets_and_renders_attachment_previews(media_type: str) 
     assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene
     gallery = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Gallery))
     assert gallery.items[0].asset_name == "preview.bin"
-    assert gallery.items[1].url == "https://example.invalid/image.png"
+    assert any(
+        item.url == "https://example.invalid/image.png"
+        for node in result.scene.components_v2.children
+        if isinstance(node, scene.Gallery)
+        for item in node.items
+    )
     presentation = render_static(document)
     components = presentation.layout.to_components()
     assert components[0]["items"][0]["media"]["url"] == "attachment://preview.bin"

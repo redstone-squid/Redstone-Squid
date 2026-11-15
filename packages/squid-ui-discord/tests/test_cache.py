@@ -16,10 +16,9 @@ from squid_ui.forms import FormSpec, TextField
 from squid_ui.ownership import Controlled
 from squid_ui.planning import PlanCache, PlanMemo, plan
 from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.planning.cache import CachedPlan
 from squid_ui.planning.navigation import TurnPage, default_nav
-from squid_ui.planning.result import PlanMetrics, PlanReport, PlanReuse
-from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
+from squid_ui.planning.result import PlanReuse
+from squid_ui.planning.semantic_adaptation.handlers import SelectChoices
 from squid_ui.presentations import corresponds, losses, omit, ref
 from squid_ui.primitives import (
     Button,
@@ -122,23 +121,12 @@ def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     )
 
     assert not first.metrics.cache_hit
-    assert second.metrics.cache_hit
-    assert second.scene is first.scene
+    assert second.metrics.partition_hint
+    assert second.scene == first.scene
     assert second.bindings["run"].handler is _second
 
 
-def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
-    attempts = 0
-    original = planner_module.measure  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here
-
-    def counted(*args, **kwargs):
-        nonlocal attempts
-        attempts += 1
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(planner_module, "measure", counted)
+def test_partition_hint_recertifies_the_selected_controls(monkeypatch) -> None:
     cache = PlanCache()
 
     def document(handler):
@@ -151,18 +139,16 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
         )
 
     miss = plan(document(_first), target=DISCORD_V2_DPY27, cache=cache)
-    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     hit = plan(document(_second), target=DISCORD_V2_DPY27, cache=cache)
 
-    assert attempts == miss.metrics.states_explored == 2
-    assert hit.metrics == replace(miss.metrics, cache_hit=True, reuse=PlanReuse.STRUCTURAL)
-    assert hit.scene is miss.scene
-    assert all(route.handler is _second for route in hit.bindings["tools.default.0"].routes.values())
+    assert hit.metrics.partition_hint
+    assert hit.metrics.target_evaluations > 0
+    assert hit.scene == miss.scene
+    menu = next(node for node in hit.scene.components_v2.children if isinstance(node, scene.Select))
+    assert all(route.handler is _second for route in hit.bindings[menu.action].routes.values())
 
 
-def test_structural_program_rebinds_generated_form_adapter_without_lowering(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
+def test_partition_hint_rebinds_the_current_form_handler(monkeypatch) -> None:
     cache = PlanCache()
     spec = FormSpec("Edit", (TextField(key="name", label="Name"),))
     first = plan(
@@ -171,31 +157,27 @@ def test_structural_program_rebinds_generated_form_adapter_without_lowering(monk
         cache=cache,
     )
 
-    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     hit = plan(
         form("Edit", spec, key="edit", on_submit=_submitted_second),
         target=DISCORD_V2_DPY27,
         cache=cache,
     )
 
-    assert hit.scene is first.scene
+    assert hit.scene == first.scene
     assert hit.form_bindings["edit"].on_submit is _submitted_second
 
 
 def test_structural_program_rebinds_managed_controls_to_the_current_session(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
     cache = PlanCache()
     document = Choices("pick", (Choice("a", "A"), Choice("b", "B")), Uncontrolled(()))
     first_session = PresentationState()
     current_session = PresentationState()
     plan(document, target=DISCORD_V2_DPY27, session=first_session, cache=cache)
 
-    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     hit = plan(document, target=DISCORD_V2_DPY27, session=current_session, cache=cache)
 
-    handler = hit.bindings["pick.a"].handler
-    assert isinstance(handler, ChooseChoice)
+    handler = hit.bindings["pick"].handler
+    assert isinstance(handler, SelectChoices)
     assert handler.commit.session is current_session
 
 
@@ -259,21 +241,15 @@ def _never_measured(*_args, **_kwargs):
 
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     cache = PlanCache(capacity=2)
-    document = scene.Scene(scene.Codec.protocol, "discord.components-v2", 1, scene.ComponentsV2(()))
-    cached = CachedPlan(document, PlanReport())
-
-    cache.put("first", cached)
-    cache.put("second", cached)
-    assert cache.get("first") is cached
-    cache.put("third", cached)
-
-    assert cache.get("second") is None
+    cache.remember_partitions("first", {})
+    cache.remember_partitions("second", {})
+    assert cache.partition_hint("first") == {}
+    cache.remember_partitions("third", {})
+    assert cache.partition_hint("second") is None
     assert len(cache) == 2
 
 
 def test_shared_pagination_sends_controlled_page_turns_to_the_current_render(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
     cache = PlanCache()
 
     async def first(event: PageEvent) -> None: ...
@@ -284,7 +260,6 @@ def test_shared_pagination_sends_controlled_page_turns_to_the_current_render(mon
         return Code("x" * 9000, overflow=Paginate(key="traceback", page=Controlled(1, on_change)))
 
     plan(document(first), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache)
-    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     cached = plan(document(second), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache)
 
     assert cached.allocation is not None
@@ -294,8 +269,6 @@ def test_shared_pagination_sends_controlled_page_turns_to_the_current_render(mon
 
 
 def test_shared_pagination_binds_custom_pager_controls(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
     cache = PlanCache()
 
     def nav(context):
@@ -310,7 +283,6 @@ def test_shared_pagination_binds_custom_pager_controls(monkeypatch) -> None:
 
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
     plan(document, target=DISCORD_V2_DPY27, nav=nav, cache=cache)
-    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     cached = plan(document, target=DISCORD_V2_DPY27, nav=nav, cache=cache)
 
     assert cached.allocation is not None
@@ -335,15 +307,12 @@ def test_shared_pagination_stages_equivalent_cursors_with_or_without_a_cache() -
 
 
 def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
     document = ActionControls((ActionControl("run", "Run", _first),), key="tools")
     session = PresentationState()
     memo = PlanMemo()
     first = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
 
-    monkeypatch.setattr(planner_module, "_plan_cache_key", _never_measured)
-    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
+    monkeypatch.setattr("squid_ui.planning.planner.plan_composition", _never_measured)
     exact = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
 
     assert exact.scene is first.scene
@@ -351,9 +320,7 @@ def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch)
     assert exact.metrics.reuse is PlanReuse.EXACT
 
 
-def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
+def test_text_growth_is_recertified_against_the_current_capacity(monkeypatch) -> None:
     cases = []
     for make_document in (Text, Paragraph):
         expected = plan(make_document("x" * 2500), target=DISCORD_V2_DPY27)
@@ -361,55 +328,32 @@ def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch)
         plan(make_document("x" * 2000), target=DISCORD_V2_DPY27, cache=cache)
         cases.append((make_document, expected, cache))
 
-    monkeypatch.setattr(planner_module, "_search", _never_measured)
     for make_document, expected, cache in cases:
         incremental = plan(make_document("x" * 2500), target=DISCORD_V2_DPY27, cache=cache)
 
         assert incremental.scene == expected.scene
-        assert incremental.report == expected.report
-        assert incremental.metrics == PlanMetrics(
-            states_explored=1,
-            cache_hit=True,
-            reuse=PlanReuse.INCREMENTAL,
-        )
+        assert incremental.report.events == expected.report.events
+        assert incremental.metrics.target_evaluations > 0
 
 
-def test_classic_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
+def test_classic_text_growth_is_recertified_against_the_current_capacity(monkeypatch) -> None:
     expected = plan(Text("x" * 2500), target=DISCORD_V1_DPY27)
     cache = PlanCache()
     plan(Text("x" * 2000), target=DISCORD_V1_DPY27, cache=cache)
 
-    monkeypatch.setattr(planner_module, "_search", _never_measured)
     incremental = plan(Text("x" * 2500), target=DISCORD_V1_DPY27, cache=cache)
 
     assert incremental.scene == expected.scene
-    assert incremental.report == expected.report
-    assert incremental.metrics == PlanMetrics(
-        states_explored=1,
-        cache_hit=True,
-        reuse=PlanReuse.INCREMENTAL,
-    )
+    assert incremental.report.events == expected.report.events
+    assert incremental.metrics.target_evaluations > 0
 
 
-def test_incremental_text_growth_falls_back_when_it_crosses_headroom(monkeypatch) -> None:
-    import squid_ui.planning.discord_planner as planner_module
-
+def test_text_growth_searches_when_it_crosses_headroom(monkeypatch) -> None:
     cache = PlanCache()
     plan(Text("x" * 2000), target=DISCORD_V2_DPY27, cache=cache)
-    searches = 0
-    original = planner_module._search
-
-    def counted(*args, **kwargs):
-        nonlocal searches
-        searches += 1
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(planner_module, "_search", counted)
     result = plan(Text("x" * 4500), target=DISCORD_V2_DPY27, cache=cache)
 
-    assert searches == 1
+    assert result.metrics.target_evaluations > 0
     assert result.metrics.reuse is PlanReuse.MISS
     assert not result.metrics.cache_hit
 
@@ -442,7 +386,7 @@ def test_plan_cache_distinguishes_unresolved_text(first_text: DeferredText, seco
     changed = plan(Paragraph(second_text), target=DISCORD_V2_DPY27, cache=cache)
     fresh = plan(Paragraph(second_text), target=DISCORD_V2_DPY27)
 
-    assert changed.metrics.reuse is PlanReuse.INCREMENTAL
+    assert changed.metrics.target_evaluations > 0
     assert changed.scene == fresh.scene
 
 
@@ -458,9 +402,9 @@ def test_plan_cache_reuses_equal_translations_and_invalidates_changed_bindings()
     changed = plan(document("Bob"), target=DISCORD_V2_DPY27, localization=localization, cache=cache)
     fresh = plan(document("Bob"), target=DISCORD_V2_DPY27, localization=localization)
 
-    assert same.metrics.cache_hit
+    assert same.metrics.partition_hint
     assert same.scene == first.scene
-    assert changed.metrics.reuse is PlanReuse.INCREMENTAL
+    assert changed.metrics.target_evaluations > 0
     assert changed.scene == fresh.scene
     assert changed.scene != first.scene
 

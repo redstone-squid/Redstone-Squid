@@ -47,6 +47,7 @@ from squid_ui.planning.realizations import (
     TableRealization,
     TextRealization,
     TextSequenceRealization,
+    matrix_text,
     record_text,
     semantic_offers,
 )
@@ -79,7 +80,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         return semantic_offers(
             occurrence,
             context,
-            table_forms=(TableForm.RECORDS,),
+            table_forms=(TableForm.RECORDS, TableForm.MATRIX),
             panels=True,
             nested_panels=False,
             text_limit=min(self.limits.content, self.limits.embeds.description),
@@ -288,8 +289,11 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     for child in part.children:
                         visit(child, output, embedded=embedded)
                 case TableRealization() as table:
-                    for nodes in record_text(table):
-                        text(markdown(nodes))
+                    if table.form == TableForm.MATRIX:
+                        text(matrix_text(table))
+                    else:
+                        for nodes in record_text(table):
+                            text(markdown(nodes))
                 case PanelRealization() as panel:
                     if not panel.framed:
                         if panel.thumbnail is not None:

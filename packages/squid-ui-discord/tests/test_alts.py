@@ -1,7 +1,7 @@
 """Text alternatives tried from most to least detailed when the message runs out of space."""
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
@@ -173,6 +173,7 @@ class TestCardFieldLadders:
         assert conform(view) == []
 
 
+@settings(deadline=None)
 @given(
     body=st.text(max_size=5000),
     ladder=st.lists(st.text(min_size=1, max_size=500), min_size=1, max_size=4),

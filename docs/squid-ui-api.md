@@ -88,9 +88,9 @@ not portable and cannot be planned to this target.
 The complete behavioral model—including transaction boundaries, action middleware, session scopes,
 durability, and ownership—is in [architecture and API interactions](squid-ui-architecture.md).
 
-## Explicit shared composition
+## Shared composition
 
-The shared composition path supports fixed choices on Components V2, Slack messages, and HTML:
+All built-in targets use shared composition. Pass options to configure automatic search or fixed choices:
 
 ```python
 from squid_ui.planning import CompositionOptions
@@ -98,13 +98,13 @@ from squid_ui.planning import CompositionOptions
 planned = sl.planning.plan(
     sl.paragraph("Ready for review."),
     target=sl.html.target(),
-    composition=CompositionOptions(),
+    composition=CompositionOptions(automatic=True),
 )
 ```
 
 Use `sl.alternatives(..., content=..., key=...)` for peer presentations with explicit fidelity.
-Multiple offers need a selection keyed by `OccurrenceId`; automatic joint search is not enabled
-on this path yet. `CompositionRejectedError` identifies a failed candidate, not proven
+Automatic search chooses among offers. For fixed planning, supply selections keyed by
+`OccurrenceId` with `automatic=False`. `CompositionRejectedError` identifies a failed candidate, not proven
 unsolvability. Planning retains selected live bindings but performs no state updates.
 
 Named resource limits use `squid_ui.presentations.budget(node, limits={Axis.COMPONENTS: 20})`.
@@ -114,5 +114,5 @@ separate from the legacy `sl.budget(min=..., prefer=...)` API. Platform limits r
 `AtomicNode`, `AtomicContract`, and `FixedComposition` provide the typed custom-widget path.
 See the [composition API](plans/generic-region-pagination/api-sketch.md) for occurrence paths,
 source references, and custom rule responsibilities, and the
-[migration inventory](plans/generic-region-pagination/02-composition.md#implemented-boundary-and-migration-inventory)
-for supported vocabulary and remaining legacy routes.
+[migration notes](plans/generic-region-pagination/07-single-planner.md)
+for caller and extension contract changes.

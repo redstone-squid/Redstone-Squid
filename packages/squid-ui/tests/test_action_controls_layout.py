@@ -105,7 +105,7 @@ def test_folding_into_a_menu_keeps_toggles_and_forms_as_buttons() -> None:
     menus = [child for child in body.children if isinstance(child, scene.Select)]
     rows = [_labels(child.items) for child in body.children if isinstance(child, scene.Row)]
     assert [[option.label for option in menu.options] for menu in menus] == [["Save"]]
-    assert rows == [["Alerts: Off", "Edit", "Docs"]]
+    assert rows == [["Alerts: Off"], ["Edit"], ["Docs"]]
 
 
 def test_html_places_the_toggle_and_form_inside_the_actions() -> None:
@@ -113,7 +113,8 @@ def test_html_places_the_toggle_and_form_inside_the_actions() -> None:
     html = sl.html.Renderer().draw(planned.scene, plan=planned)
 
     nav = html[html.index("<nav") : html.index("</nav>")]
-    assert 'type="checkbox"' in nav
+    assert 'data-squid-action="alerts"' in nav
+    assert "Alerts: Off" in nav
     assert "<form" in nav
     assert nav.index("Save") < nav.index("Alerts") < nav.index("Edit") < nav.index("Docs")
 
@@ -125,7 +126,7 @@ def test_slack_shows_one_button_per_control_and_no_form_fields() -> None:
     assert len(actions) == 1
     buttons = [element for element in actions[0].elements if isinstance(element, scene.SlackButton)]
     assert len(buttons) == len(actions[0].elements)
-    assert [button.label.content for button in buttons] == ["Save", "Alerts", "Edit", "Docs"]
+    assert [button.label.content for button in buttons] == ["Save", "Alerts: Off", "Edit", "Docs"]
 
 
 @pytest.mark.parametrize("entry", [sl.toggle("Alerts", key="alerts"), sl.control_group(key="empty")])

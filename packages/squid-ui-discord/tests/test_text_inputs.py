@@ -81,7 +81,7 @@ def test_template_normalization_preserves_cache_identity_and_locale(*, direct: b
     same = plan(document("Ann"), target=DISCORD_V2_DPY27, localization=french, cache=cache)
     changed = plan(document("Bob"), target=DISCORD_V2_DPY27, localization=french, cache=cache)
     fresh = plan(document("Bob"), target=DISCORD_V2_DPY27, localization=french)
-    assert same.metrics.cache_hit
+    assert same.metrics.partition_hint
     assert same.scene == first.scene
     assert changed.scene == fresh.scene
     assert changed.scene != first.scene

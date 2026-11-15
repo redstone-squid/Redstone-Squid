@@ -5,9 +5,9 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.planning import plan
-from squid_ui.planning.joint_search import JointInfeasibleError
+from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
 from squid_ui.primitives import (
     Card,
@@ -104,13 +104,13 @@ class TestClassicShape:
 class TestGating:
     def test_a_v2_container_has_no_classic_form_and_says_so(self) -> None:
         for node in (Panel(children=(Text("x"),)), Gallery(("https://example.invalid/a.png",))):
-            with pytest.raises(LayoutInvariantError, match="no classic form"):
+            with pytest.raises(JointUnsupportedError):
                 plan(node, target=DISCORD_V1_DPY27)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
     def test_a_section_is_never_silently_reinterpreted_as_a_card(self) -> None:
         section = Section((Text("x"),), accessory=Thumbnail("https://example.invalid/a.png"))
 
-        with pytest.raises(LayoutInvariantError, match="no classic form"):
+        with pytest.raises(JointUnsupportedError):
             plan(section, target=DISCORD_V1_DPY27)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
@@ -172,10 +172,10 @@ class TestIndependentTextPools:
 class TestPagedRegions:
     def test_a_paged_region_plans_against_the_classic_component_budget(self) -> None:
         """`sl.paged` is not mode-gated, so the region breaker may not read a V2-only cap."""
-        document = sl.paged(
-            sl.group(*(sl.paragraph(f"{index}: " + "x" * 10) for index in range(6))),
+        document = sl.region(
+            *(sl.paragraph(f"{index}: " + "x" * 10) for index in range(6)),
             key="report",
-            chars=200,
+            title="Report",
         )
 
         assert isinstance(plan(document, target=DISCORD_V1_DPY27).scene.body, scene.ClassicMessage)

@@ -88,7 +88,7 @@ class ResourcePipelineResult:
     loads_per_operation: float
     scheduler_included: bool
     planner_reuse: str
-    planner_states_explored: int
+    planner_target_evaluations: int
     phases: tuple[ResourcePhaseResult, ...]
 
 
@@ -455,7 +455,7 @@ async def measure_resource_pipeline(
     starting_renders = leaf.renders
     starting_loads = leaf.loads
     planner_reuse: set[str] = set()
-    planner_states_explored: set[int] = set()
+    planner_target_evaluations: set[int] = set()
 
     try:
         for index in range(samples):
@@ -479,7 +479,7 @@ async def measure_resource_pipeline(
                 if span.name == "planner":
                     attributes = {attribute.key: attribute.value for attribute in span.attributes}
                     planner_reuse.add(str(attributes["reuse"]))
-                    planner_states_explored.add(int(cast(int, attributes["states_explored"])))
+                    planner_target_evaluations.add(int(cast(int, attributes["target_evaluations"])))
                 if span.name not in {
                     "runtime_render",
                     "resource_settle.atomic",
@@ -513,8 +513,10 @@ async def measure_resource_pipeline(
             loads_per_operation=(leaf.loads - starting_loads) / samples,
             scheduler_included=False,
             planner_reuse=planner_reuse.pop() if len(planner_reuse) == 1 else "mixed",
-            planner_states_explored=(
-                planner_states_explored.pop() if len(planner_states_explored) == 1 else max(planner_states_explored)
+            planner_target_evaluations=(
+                planner_target_evaluations.pop()
+                if len(planner_target_evaluations) == 1
+                else max(planner_target_evaluations)
             ),
             phases=phases,
         )

@@ -25,20 +25,21 @@ def test_inert_tally_renders_counts_bars_and_reader_emphasis() -> None:
     assert any("No — 1" in value for value in text)
 
 
-async def test_mounted_tally_inherits_button_adaptation_and_reports_one_key() -> None:
+async def test_mounted_tally_dispatches_the_selected_value() -> None:
     seen: list[sl.SelectionEvent] = []
 
     async def vote(event: sl.SelectionEvent) -> None:
         seen.append(event)
 
     result = sl.planning.plan(sl.tally(OPTIONS, key="vote", on_vote=vote), target=squid_ui_discord.DISCORD_V2_DPY27)
-    button = next(
-        item
-        for item in testing.walk(result.scene.body)
-        if isinstance(item, scene.Button) and item.label is not None and "Yes" in item.label
-    )
-    await result.bindings[button.action].handler(
-        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), context=None)
+    select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
+    await result.bindings[select.action].handler(
+        sl.SelectionEvent(
+            sl.interactions.Actor("7"),
+            cast(sl.interactions.ActionResponder, object()),
+            context=None,
+            values=("yes",),
+        )
     )
 
     assert seen[0].values == ("yes",)

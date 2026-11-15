@@ -33,26 +33,23 @@ def codes(document) -> list[str]:
 
 
 class TestLooseProse:
-    def test_consecutive_prose_becomes_one_implicit_card(self) -> None:
+    def test_consecutive_prose_uses_message_content(self) -> None:
         body = message([Paragraph("first"), Paragraph("second")])
 
-        assert len(body.embeds) == 1
-        assert body.embeds[0].description == "first\n\nsecond"
+        assert body.embeds == ()
+        assert body.content == "first\nsecond"
 
-    def test_the_first_suitable_heading_becomes_the_title(self) -> None:
+    def test_loose_headings_remain_in_message_content(self) -> None:
         body = message([Heading("Piston door"), Paragraph("body")])
 
-        assert body.embeds[0].title == "Piston door"
-        assert body.embeds[0].description == "body"
+        assert body.content == "## Piston door\nbody"
+        assert body.embeds == ()
 
-    def test_a_later_heading_stays_formatted_description_text(self) -> None:
-        """An embed has one title; inventing a card for the second heading would regroup
-        the document rather than express it."""
+    def test_loose_headings_preserve_author_order(self) -> None:
         body = message([Heading("One"), Paragraph("a"), Heading("Two"), Paragraph("b")])
 
-        assert len(body.embeds) == 1
-        assert body.embeds[0].title == "One"
-        assert "## Two" in (body.embeds[0].description or "")
+        assert body.embeds == ()
+        assert body.content == "## One\na\n## Two\nb"
 
 
 class TestRegions:
@@ -84,19 +81,15 @@ class TestRegions:
 
 
 class TestNotes:
-    def test_a_single_trailing_note_takes_the_footer_slot(self) -> None:
+    def test_a_trailing_note_remains_in_content(self) -> None:
         body = message([Paragraph("body"), Note("submitted by squid")])
 
-        assert body.embeds[0].footer is not None
-        assert body.embeds[0].footer.text == "submitted by squid"
+        assert body.content == "body\n-# submitted by squid"
 
-    def test_a_second_note_stays_subtle_description_text(self) -> None:
-        """An embed has exactly one footer, so the second one cannot have that slot."""
+    def test_multiple_notes_retain_their_order(self) -> None:
         body = message([Paragraph("body"), Note("first"), Note("second")])
 
-        footers = [embed.footer.text for embed in body.embeds if embed.footer is not None]
-        assert footers == ["first"]
-        assert any("second" in (embed.description or "") for embed in body.embeds)
+        assert body.content == "body\n-# first\n-# second"
 
 
 class TestFields:
@@ -131,7 +124,7 @@ class TestFields:
 
 
 class TestTables:
-    def test_a_table_stays_an_aligned_code_block_while_it_fits(self) -> None:
+    def test_a_table_preserves_column_names_beside_values(self) -> None:
         body = message(
             Table(
                 Columns((Column("a", "Name"), Column("b", "Size"))),
@@ -140,7 +133,7 @@ class TestTables:
             )
         )
 
-        assert "```" in (body.embeds[0].description or "")
+        assert body.content == "Name: door\nSize: 2x2"
 
 
 class TestMedia:
@@ -150,11 +143,10 @@ class TestMedia:
         assert body.embeds[0].image is not None
         assert body.embeds[0].image.description == "the door"
 
-    def test_a_figure_caption_takes_the_footer(self) -> None:
+    def test_a_figure_caption_stays_visible(self) -> None:
         body = message(Figure(MediaItem("i", "https://example.invalid/i.png"), caption="Fig 1"))
 
-        assert body.embeds[0].footer is not None
-        assert body.embeds[0].footer.text == "Fig 1"
+        assert "Fig 1" in (body.content or "")
 
 
 class TestDownloads:
@@ -162,9 +154,11 @@ class TestDownloads:
         document = Download("dl", "Schematic", Asset("s", "s.litematic", "application/octet-stream", InlineAsset(b"x")))
         body = message(document)
 
-        assert "Schematic" in (body.embeds[0].description or "")
+        assert body.content == "Schematic"
 
-    def test_losing_the_file_component_is_reported_rather_than_left_to_be_noticed(self) -> None:
+    def test_download_retains_its_delivery_resource(self) -> None:
         document = Download("dl", "Schematic", Asset("s", "s.litematic", "application/octet-stream", InlineAsset(b"x")))
 
-        assert "download.attachment_only" in codes(document)
+        result = plan(document, target=DISCORD_V1_DPY27)
+        assert result.resources["asset:s"] is document.asset
+        assert result.scene.assets[0].name == "s.litematic"

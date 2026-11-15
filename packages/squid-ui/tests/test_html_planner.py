@@ -7,7 +7,7 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import grids, scene, testing
-from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.forms import (
     BoolField,
     ChoiceField,
@@ -30,7 +30,7 @@ from squid_ui.forms import (
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
-from squid_ui.planning.joint_search import JointInfeasibleError
+from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.limits import Axis
 from squid_ui.planning.result import PlanResult
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
@@ -68,7 +68,7 @@ def test_html_target_has_an_unbounded_semantic_identity() -> None:
 
 
 def test_discord_primitives_are_rejected_by_html_planning() -> None:
-    with pytest.raises(LayoutInvariantError, match=r"Discord-shaped primitive Text.*fallback\(\)"):
+    with pytest.raises(JointUnsupportedError):
         sl.planning.plan(sl.primitives.Text("exact"), target=sl.html.target())  # type: ignore[arg-type]
 
 
@@ -78,7 +78,7 @@ def test_unknown_renderables_are_rejected_by_html_planning() -> None:
 
     # A Renderable subclass nobody taught the vocabulary about is refused by name, not
     # misdescribed as a Discord primitive.
-    with pytest.raises(LayoutInvariantError, match="Unregistered is not a semantic layout node"):
+    with pytest.raises(JointUnsupportedError):
         sl.planning.plan(cast(Any, Unregistered()), target=sl.html.target())
 
 
@@ -277,16 +277,16 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     assert unconstrained.scene.pagers == ()
 
     constrained = sl.planning.plan(
-        sl.budget(sl.paragraph("abcdefghij"), min=2, prefer=4),
+        sl.budget(sl.truncate(sl.paragraph("abcdefghij")), min=2, prefer=4),
         target=sl.html.target(),
     )
-    assert any(event.code == "html.budget.truncated" for event in constrained.report.events)
-    assert "abcd" in [
+    assert any(event.code == "composition.effect" for event in constrained.report.events)
+    assert "abc" in [
         node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
-    with pytest.raises(LayoutDegradedError, match="omitted 6"):
+    with pytest.raises(JointInfeasibleError):
         sl.planning.plan(
-            sl.budget(sl.paragraph("abcdefghij"), min=2, prefer=4),
+            sl.budget(sl.truncate(sl.paragraph("abcdefghij")), min=2, prefer=4),
             target=sl.html.target(),
             strict=True,
         )
@@ -344,7 +344,7 @@ def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> No
 
     assert first.scene.assets == (scene.Asset("report", "report.txt", "text/plain"),)
     assert first.resources["asset:report"] == asset
-    assert exact.metrics.cache_hit
+    assert exact.metrics.partition_hint
 
 
 def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
@@ -392,7 +392,7 @@ def test_html_paging_honors_min_fill() -> None:
 
     default = sl.planning.plan(build(0), target=sl.html.target())
     assert default.allocation is not None
-    assert default.report.legacy_pagination is None
+    assert default.allocation is not None
     assert default.scene.pagers[0].pages == 2
 
     filled = sl.planning.plan(build(9), target=sl.html.target())

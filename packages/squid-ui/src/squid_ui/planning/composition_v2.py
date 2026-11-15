@@ -55,6 +55,7 @@ from squid_ui.planning.realizations import (
     TextSequenceRealization,
     ThumbnailRealization,
     TimeRealization,
+    matrix_text,
     record_text,
     semantic_offers,
 )
@@ -82,7 +83,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         return semantic_offers(
             occurrence,
             context,
-            table_forms=(TableForm.RECORDS,),
+            table_forms=(TableForm.RECORDS, TableForm.MATRIX),
             panels=True,
             nested_panels=False,
             character_budgets=True,
@@ -368,6 +369,8 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     return rendered_text(discord_text(payload, context.escape_text))
                 case TableRealization() as table:
                     context.work.consume(len(table.columns) + sum(1 + len(row.cells) for row in table.rows))
+                    if table.form == TableForm.MATRIX:
+                        return rendered_text(matrix_text(table))
                     if table.form != TableForm.RECORDS:
                         violations.append(UnsupportedCapability(part.offer.occurrence.identity, "native table"))
                     return tuple(node for row in record_text(table) for node in text(row))

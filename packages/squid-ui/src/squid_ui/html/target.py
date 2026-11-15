@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self, overload
+from typing import Self, overload
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
@@ -10,9 +10,6 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.target_types import HtmlAdapter, HtmlTarget
-
-if TYPE_CHECKING:
-    from squid_ui.planning.html_planner import HtmlPlanner
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +34,7 @@ HTML_LIMITS = HtmlLimits()
 
 
 class HtmlDialect:
-    """Native semantic HTML scene shape and its complete planner backend."""
+    """Native semantic HTML scene shape, capabilities, and limits."""
 
     id = "html.semantic"
     version = 1
@@ -56,12 +53,6 @@ class HtmlDialect:
     body_type = scene.HtmlBody
     default_limits = HTML_LIMITS
     realizes_extensions = False
-
-    @property
-    def planner(self) -> HtmlPlanner:
-        from squid_ui.planning.html_planner import HTML_PLANNER
-
-        return HTML_PLANNER
 
 
 HTML_DIALECT = HtmlDialect()

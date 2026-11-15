@@ -32,7 +32,7 @@ from squid_ui.planning.semantics import semantic_graph
 from squid_ui.presentations import ref
 from squid_ui.semantic import TableDisplay
 from squid_ui.slack.target import SlackComponentLimits, SlackMessageLimits
-from squid_ui.target_types import RenderTarget
+from squid_ui.target_types import ComponentsV2Target, RenderTarget
 
 
 def test_v2_shares_an_unread_attachment_across_sibling_regions(tmp_path: Path) -> None:
@@ -82,14 +82,14 @@ def test_v2_repeated_header_and_container_costs_remain_per_occurrence() -> None:
 
 
 def test_v2_checks_container_nesting_in_the_composed_context() -> None:
-    node = sl.block(sl.block(sl.paragraph("Nested"), key="inner"), key="outer")
-    rules, context = V2CompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(100))
+    node = sl.block(sl.primitives.Panel((sl.primitives.Text("Nested"),)), key="outer")
+    rules, context = V2CompositionRules[ComponentsV2Target, object](), PlanningContext(WorkBudget(100))
     occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("outer"))
     candidate = select_composition(occurrence, rules, context, selections={})
     assert isinstance(candidate, CandidateComposition)
     result = build_composition(candidate, rules, context)
     assert isinstance(result, Evaluation)
-    assert result.violations == (ConstraintViolation(OccurrenceId(("root", "inner")), "nested V2 container"),)
+    assert result.violations == (ConstraintViolation(OccurrenceId(("root", "@0")), "nested V2 container"),)
 
 
 def test_slack_native_overflow_is_a_candidate_failure_and_records_keep_every_cell() -> None:

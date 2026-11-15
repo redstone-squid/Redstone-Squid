@@ -84,7 +84,7 @@ def test_slack_accepts_themed_portable_content(home: bool) -> None:
     node = sl.themed(Palette(brand=0x112233), sl.region(sl.paragraph("body"), key="r", title="R"))
     result = plan(node, target=target)
     assert result.allocation is not None
-    assert result.report.legacy_pagination is None
+    assert result.allocation is not None
 
 
 @pytest.mark.parametrize(

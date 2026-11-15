@@ -11,7 +11,7 @@ from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.spread import plan_spread
-from squid_ui.presentation import ActivePagers, RetainedCompositionUpdate
+from squid_ui.presentation import ActivePagers, RegionLayoutUpdate, RetainedCompositionUpdate
 from squid_ui.target_types import DiscordAdapter
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "spread.discord", ">=1"))
@@ -83,7 +83,11 @@ def test_a_retained_cut_that_no_longer_fits_is_searched_again() -> None:
 def test_writes_about_the_whole_display_are_merged_across_messages() -> None:
     spread = plan_spread(parts(6), REQUEST, max_messages=2)
 
-    assert [type(update) for update in spread.session_updates] == [ActivePagers, RetainedCompositionUpdate]
+    assert [type(update) for update in spread.session_updates] == [
+        ActivePagers,
+        RegionLayoutUpdate,
+        RetainedCompositionUpdate,
+    ]
     for message in spread.messages:
         assert not any(
             isinstance(update, ActivePagers | RetainedCompositionUpdate) for update in message.session_updates

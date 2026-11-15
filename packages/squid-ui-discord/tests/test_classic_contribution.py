@@ -5,7 +5,7 @@ import pytest
 
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
-from squid_ui.semantic import Heading, Paragraph
+from squid_ui.semantic import Block, Heading, Paragraph
 from squid_ui_discord import ExistingLayoutError, classic
 from squid_ui_discord.inspection import measure
 from squid_ui_discord.message_payload import MessageModeError, MessagePayload
@@ -69,13 +69,13 @@ class TestMeasurement:
 
 class TestContribution:
     def test_the_squid_region_lands_after_the_hosts_embeds(self) -> None:
-        result = classic.contribute(Paragraph("squid"), to=host(embeds=[discord.Embed(description="host")]))
+        result = classic.contribute(Block((Paragraph("squid"),)), to=host(embeds=[discord.Embed(description="host")]))
 
         assert [embed.description for embed in result.payload.embeds] == ["host", "squid"]
 
     def test_trailing_embeds_land_after_the_squid_region(self) -> None:
         result = classic.contribute(
-            Paragraph("squid"),
+            Block((Paragraph("squid"),)),
             to=host(embeds=[discord.Embed(description="host")]),
             followed_by=[discord.Embed(description="tail")],
         )
@@ -83,7 +83,7 @@ class TestContribution:
         assert [embed.description for embed in result.payload.embeds] == ["host", "squid", "tail"]
 
     def test_host_content_is_never_overwritten(self) -> None:
-        result = classic.contribute(Paragraph("squid"), to=host(content="@here"))
+        result = classic.contribute(Block((Paragraph("squid"),)), to=host(content="@here"))
 
         assert result.payload.content == "@here"
 
@@ -116,7 +116,7 @@ class TestContribution:
         embed = discord.Embed(description="host")
         message = host(content="@here", embeds=[embed])
 
-        result = classic.contribute(Paragraph("squid"), to=message)
+        result = classic.contribute(Block((Paragraph("squid"),)), to=message)
 
         assert message.embeds == (embed,)
         assert result.payload.embeds is not message.embeds
@@ -160,7 +160,7 @@ class TestPreflight:
         message = host(embeds=embeds)
 
         with pytest.raises(UnsolvableLayoutError):
-            classic.contribute(Paragraph("squid"), to=message)
+            classic.contribute(Block((Paragraph("squid"),)), to=message)
 
         assert len(message.embeds) == 10
 
@@ -169,7 +169,7 @@ class TestPreflight:
         layout.add_item(discord.ui.TextDisplay("hi"))
 
         with pytest.raises(MessageModeError, match="needs a classic host payload"):
-            classic.contribute(Paragraph("squid"), to=MessagePayload.components_v2(layout))
+            classic.contribute(Block((Paragraph("squid"),)), to=MessagePayload.components_v2(layout))
 
     def test_a_component_local_action_cannot_enter_a_host_view(self) -> None:
         """The host view's callbacks stay under its owner."""

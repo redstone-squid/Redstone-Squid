@@ -61,7 +61,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
     work_limit: int | None = None,
 ) -> PlanningContext:
     nav = request.nav
-    if nav is None and request.shared_pagination:
+    if nav is None and request.composition is None:
         if request.target.body_type is scene.HtmlBody:
             nav = page_select_nav
         elif request.target.body_type in (scene.SlackMessage, scene.SlackHomeView):
@@ -75,7 +75,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.target.reserve(request.reservation).capacities,
         request.chrome,
         PagerNav(nav, request.presentation, staged=True) if nav is not None else None,
-        request.shared_pagination or request.session is not None or nav is not None or request.positions is not None,
+        request.composition is None or request.session is not None or nav is not None or request.positions is not None,
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,
         extensions=request.target.extensions,

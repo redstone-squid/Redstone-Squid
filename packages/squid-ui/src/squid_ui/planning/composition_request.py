@@ -1,4 +1,4 @@
-"""Opt into fixed composition or automatic joint representation and page search."""
+"""Configure fixed composition or automatic representation and page search."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -45,7 +45,7 @@ class CompositionOptions:
 
 
 class CompositionPlanner[RenderTargetT, BodyT: scene.Body](Protocol):
-    """A typed opt-in for custom target rules through the public planning dispatcher."""
+    """Custom target rules exposed through the public planning dispatcher."""
 
     def plan[AdapterT](
         self, rendered: DocumentLike[RenderTargetT], request: PlanRequest[BodyT, RenderTargetT, AdapterT]

@@ -11,6 +11,7 @@ import squid_ui_discord
 from squid_ui import scene
 from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_ui.planning import measure
+from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.planning.limits import Axis
 from squid_ui.primitives import EntitySelect
 from squid_ui.runtime import PresentationState
@@ -218,7 +219,7 @@ def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
 def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None:
     target = without_capabilities(squid_ui_discord.DISCORD_V2_DPY27, "actions.entity")
 
-    with pytest.raises(sl.errors.LayoutInvariantError, match="enumerated fallback"):
+    with pytest.raises(JointUnsupportedError):
         sl.planning.plan(sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=target)
 
 

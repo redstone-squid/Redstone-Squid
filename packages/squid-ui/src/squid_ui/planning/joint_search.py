@@ -649,7 +649,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                     push(_Assignment((root,), probe=True, repair=hints))
             if feasible and satisfied:
                 continue
-            if not feasible and not task.regions and not degradation_probed:
+            if not feasible and not degradation_probed:
                 # Find a compact certificate before enumerating combinations of
                 # independent ladders. This changes work order only: ordinary
                 # assignments remain queued and still establish optimality.

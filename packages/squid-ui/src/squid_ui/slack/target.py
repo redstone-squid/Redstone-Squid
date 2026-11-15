@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
@@ -10,9 +10,6 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.target_types import SlackAdapter, SlackHomeTarget, SlackMessageTarget, SlackModalTarget
-
-if TYPE_CHECKING:
-    from squid_ui.planning.slack_planner import SlackPlanner
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,12 +137,6 @@ class SlackMessageDialect:
     default_limits = SLACK_MESSAGE_LIMITS
     realizes_extensions = False
 
-    @property
-    def planner(self) -> SlackPlanner:
-        from squid_ui.planning.slack_planner import SLACK_PLANNER
-
-        return SLACK_PLANNER
-
 
 class SlackModalDialect:
     """Slack Block Kit modal scene and planner contract."""
@@ -157,12 +148,6 @@ class SlackModalDialect:
     body_type = scene.SlackModalView
     default_limits = SLACK_MODAL_LIMITS
     realizes_extensions = False
-
-    @property
-    def planner(self) -> SlackPlanner:
-        from squid_ui.planning.slack_planner import SLACK_PLANNER
-
-        return SLACK_PLANNER
 
 
 class SlackHomeDialect:
@@ -177,12 +162,6 @@ class SlackHomeDialect:
     body_type = scene.SlackHomeView
     default_limits = SLACK_HOME_LIMITS
     realizes_extensions = False
-
-    @property
-    def planner(self) -> SlackPlanner:
-        from squid_ui.planning.slack_planner import SLACK_PLANNER
-
-        return SLACK_PLANNER
 
 
 SLACK_MESSAGE_DIALECT = SlackMessageDialect()

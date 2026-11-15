@@ -102,7 +102,7 @@ preserves the same component identities and lifetimes as running it again.
 The suite is deliberately split so portable code does not acquire transport or storage imports:
 
 - `squid-reactivity`: transactional state and topic primitives
-- `squid-ui`: semantic UI, target planners, runtime, scenes, and native HTML
+- `squid-ui`: semantic UI, shared composition, runtime, scenes, and native HTML
 - `squid-ui-widgets`: reusable frontend-neutral application machines
 - `squid-ui-discord`: discord.py rendering, delivery, sessions, and routing
 - `squid-ui-slack`: Slack SDK drawing for messages, modals, and App Home

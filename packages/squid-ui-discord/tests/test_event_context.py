@@ -9,7 +9,7 @@ import squid_ui_discord as sd
 from squid_ui.handlers import FrontendHandler, HandlerSet
 from squid_ui.html.target import target as html_target
 from squid_ui.planning import plan
-from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
+from squid_ui.planning.semantic_adaptation.handlers import SelectChoices
 from squid_ui.semantic import Controlled
 
 
@@ -186,11 +186,11 @@ async def test_cached_generated_handlers_select_current_native_callbacks() -> No
     first_branch, second_branch = sd.on_choice(first), sd.on_choice(second)
     old = plan(document(sl.handlers(first_branch)), target=sd.DISCORD_V2_DPY27, cache=cache)
     current = plan(document(sl.handlers(second_branch)), target=sd.DISCORD_V2_DPY27, cache=cache)
-    assert current.metrics.cache_hit
-    old_handler = old.bindings["choices.a"].handler
-    current_handler = current.bindings["choices.a"].handler
-    assert isinstance(old_handler, ChooseChoice)
-    assert isinstance(current_handler, ChooseChoice)
+    assert current.metrics.partition_hint
+    old_handler = old.bindings["choices"].handler
+    current_handler = current.bindings["choices"].handler
+    assert isinstance(old_handler, SelectChoices)
+    assert isinstance(current_handler, SelectChoices)
     assert isinstance(old_handler.commit.ownership, Controlled)
     assert isinstance(current_handler.commit.ownership, Controlled)
     old_callback = old_handler.commit.ownership.on_change
@@ -206,5 +206,5 @@ async def test_cached_generated_handlers_select_current_native_callbacks() -> No
             return document(sl.handlers(second_branch))
 
     async with sd.testing.stage(Panel(), owner=object()) as ui:
-        await ui.press("choices.a")
+        await ui.select("choices", ("a",))
     assert seen == ["second"]

@@ -8,10 +8,11 @@ import squid_ui as sl
 import squid_ui_discord
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
-from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.errors import UnsolvableLayoutError
+from squid_ui.planning.allocation import CertifiedAllocation
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.component import render_component_tree
-from squid_ui.runtime.presentation_state import StrategyUpdate
 
 
 def _cells(count: int) -> tuple[sp.GridCell, ...]:
@@ -35,10 +36,8 @@ def test_explicit_matrix_table_is_dense_and_authoritative() -> None:
 
     assert text.splitlines()[1].split() == ["Name", "Value"]
     assert "-+-" not in text
-    update = next(
-        update for update in result.session_updates if isinstance(update, StrategyUpdate) and update.key == "stats"
-    )
-    assert update.state.strategy_id == "matrix"
+    assert isinstance(result.allocation, CertifiedAllocation)
+    assert any(selection == "matrix" for _, selection in result.allocation.selection)
 
 
 async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() -> None:
@@ -64,7 +63,7 @@ async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() ->
 
 
 def test_exact_button_grid_refuses_illegal_discord_shapes_in_planning() -> None:
-    with pytest.raises(LayoutInvariantError, match="maximum is 5"):
+    with pytest.raises(JointInfeasibleError):
         sl.planning.plan(
             squid_ui_discord.button_grid(*_cells(6), key="wide", columns=6, on_pick=_pick),
             target=squid_ui_discord.DISCORD_V2_DPY27,
@@ -92,7 +91,7 @@ def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_
 
     assert any(isinstance(item, scene_type) for item in testing.walk(result.scene.body))
     assert result.allocation is not None
-    assert result.report.legacy_pagination is None
+    assert result.allocation is not None
     if strategy == "paged_select":
         select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
         assert 1 <= len(select.options) <= 25

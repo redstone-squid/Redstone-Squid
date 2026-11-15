@@ -27,17 +27,8 @@ V2 = components_v2_target(AdapterProfile(DiscordAdapter, "joint.discord", ">=1")
 SLACK = sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "joint.slack", ">=1"))
 
 
-def reject_legacy(*args: object, **kwargs: object) -> None:
-    pytest.fail("automatic composition called a legacy complete planner")
-
-
 @pytest.mark.parametrize("target", ["v2", "slack", "html"])
-def test_public_automatic_planning_and_page_selection(
-    target: Literal["v2", "slack", "html"], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr("squid_ui.planning.discord_planner.DiscordPlanner.plan", reject_legacy)
-    monkeypatch.setattr("squid_ui.planning.html_planner.HtmlPlanner.plan", reject_legacy)
-    monkeypatch.setattr("squid_ui.planning.slack_planner.SlackPlanner.plan", reject_legacy)
+def test_public_automatic_planning_and_page_selection(target: Literal["v2", "slack", "html"]) -> None:
     node = sl.region(
         sl.table(
             sl.columns(sl.column("Name", key="name")),

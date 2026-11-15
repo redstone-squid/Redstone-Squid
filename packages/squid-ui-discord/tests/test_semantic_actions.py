@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from squid_ui import fallback, scene, truncate
+from squid_ui import fallback, scene, testing, truncate
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.pages import PagePosition
@@ -51,17 +51,25 @@ def _text_variants(*nodes: Node, priority: int = 0) -> Variants[Any]:
     )
 
 
-def test_thirty_six_actions_fold_losslessly_into_twenty_five_and_eleven() -> None:
-    result = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27)
+def _visible_action_keys(result: Any) -> set[str]:
+    assert isinstance(result.allocation, CertifiedAllocation)
+    keys: set[str] = set()
+    for page in result.allocation.pages:
+        for node in testing.walk(page.output.scene.body):
+            if isinstance(node, scene.Button) and node.action.startswith("action."):
+                keys.add(node.action)
+                assert node.action in page.output.bindings
+            elif isinstance(node, scene.Select):
+                keys.update(option.value for option in node.options if option.value.startswith("action."))
+                assert node.action in page.output.bindings
+    return keys
 
-    selects = [node for node in result.scene.components_v2.children if isinstance(node, scene.Select)]
-    assert [len(select.options) for select in selects] == [25, 11]
-    assert {option.value for select in selects for option in select.options} == {
-        f"action.{index}" for index in range(36)
-    }
-    assert {f"action.{index}" for index in range(36)} <= result.bindings.keys()
-    assert result.report.events[0].code == "actions.grouped"
-    assert result.metrics.states_explored == 1
+
+def test_thirty_six_actions_remain_reachable_across_certified_pages() -> None:
+    result = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27)
+    assert _visible_action_keys(result) == {f"action.{index}" for index in range(36)}
+    assert result.report.search is not None
+    assert result.report.search.completion in (SearchCompletion.COMPLETE, SearchCompletion.EXHAUSTED)
 
 
 def test_explicit_action_groups_never_merge() -> None:
@@ -77,10 +85,11 @@ def test_explicit_action_groups_never_merge() -> None:
     )
 
     result = plan(document, target=DISCORD_V2_DPY27)
-    selects = [node for node in result.scene.components_v2.children if isinstance(node, scene.Select)]
-
-    assert [len(select.options) for select in selects] == [10, 10]
-    assert [select.action for select in selects] == ["toolbar.files.0", "toolbar.admin.0"]
+    rows = [node for node in result.scene.components_v2.children if isinstance(node, scene.Row)]
+    for row in rows:
+        labels = [button.label or "" for button in row.items if isinstance(button, scene.Button)]
+        assert all(label.startswith("Action") for label in labels) or all(label.startswith("Admin") for label in labels)
+    assert sum(len(row.items) for row in rows) == 20
 
 
 def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> None:
@@ -122,12 +131,8 @@ def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
     dense = plan(dense_document, target=DISCORD_V2_DPY27)
     roomy = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27)
 
-    assert dense.report.events[0].code == "actions.grouped"
-    assert dense.metrics.states_explored == 2
     assert not dense.scene.pagers
     assert sum(isinstance(node, scene.Select) for node in dense.scene.components_v2.children) == 1
-    assert roomy.report.events[0].code == "actions.individual"
-    assert roomy.metrics.states_explored == 1
     assert sum(len(node.items) for node in roomy.scene.components_v2.children if isinstance(node, scene.Row)) == 5
 
 
@@ -201,72 +206,46 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
     assert result.allocation is not None
 
 
-@pytest.mark.parametrize(
-    ("count", "expected"),
-    [(5, "actions.individual"), (36, "actions.grouped"), (76, "actions.paged")],
-)
-def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
-    result = plan(ActionControls(_actions(count), key="demo"), target=DISCORD_V2_DPY27, session=PresentationState())
-
-    assert result.report.events[0].code == expected
+@pytest.mark.parametrize("count", [5, 36, 76])
+def test_action_counts_preserve_every_control(count: int) -> None:
+    result = plan(ActionControls(_actions(count), key="demo"), target=DISCORD_V2_DPY27)
+    assert _visible_action_keys(result) == {f"action.{index}" for index in range(count)}
 
 
-@pytest.mark.parametrize(
-    ("initial", "changed", "expected"),
-    [
-        (5, 5, "actions.individual"),
-        (5, 36, "actions.grouped"),
-        (36, 5, "actions.grouped"),
-        (36, 76, "actions.grouped"),
-        (76, 36, "actions.grouped"),
-    ],
-)
-def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: int, expected: str) -> None:
+@pytest.mark.parametrize(("initial", "changed"), [(5, 5), (5, 36), (36, 5), (36, 76), (76, 36)])
+def test_changed_actions_recertify_the_current_controls(initial: int, changed: int) -> None:
     session = PresentationState()
     first = plan(ActionControls(_actions(initial), key="demo"), target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(first.session_updates)
-
     result = plan(ActionControls(_actions(changed), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    assert _visible_action_keys(result) == {f"action.{index}" for index in range(changed)}
 
-    assert result.report.events[0].code == expected
 
-
-def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
+def test_reordering_actions_preserves_every_control() -> None:
     session = PresentationState()
     actions = _actions(36)
     first = plan(ActionControls(actions, key="demo"), target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(first.session_updates)
-
     result = plan(ActionControls(tuple(reversed(actions)), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    assert _visible_action_keys(result) == {f"action.{index}" for index in range(36)}
 
-    assert result.report.events[0].code == "actions.grouped"
 
-
-def test_adapter_version_change_resets_only_that_strategy() -> None:
+def test_old_strategy_state_does_not_override_shared_allocation() -> None:
     session = PresentationState(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
-
     result = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
-    session.apply_updates(result.session_updates)
-
-    assert result.report.events[0].code == "actions.grouped"
-    assert session.strategies["demo"].adapter_version == 1
+    assert _visible_action_keys(result) == {f"action.{index}" for index in range(36)}
 
 
-def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
+def test_large_action_groups_reuse_the_committed_allocation_for_page_turns() -> None:
     session = PresentationState()
     document = ActionControls(_actions(76), key="demo")
     first = plan(document, target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(first.session_updates)
-    session.move_cursor("demo.default", PagePosition(page=1))
+    assert first.scene.pagers[0].pages > 1
+    session.move_cursor(first.scene.pagers[0].key, PagePosition(page=1))
     second = plan(document, target=DISCORD_V2_DPY27, session=session)
-
-    first_select = next(node for node in first.scene.components_v2.children if isinstance(node, scene.Select))
-    second_select = next(node for node in second.scene.components_v2.children if isinstance(node, scene.Select))
-    assert len(first_select.options) == 25
-    assert first.scene.pagers[0].pages == 4
-    assert first.scene.pagers[0].page == 0
+    assert second.allocation is first.allocation
     assert second.scene.pagers[0].page == 1
-    assert second_select.options[0].value == "action.25"
 
 
 def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
@@ -297,13 +276,12 @@ def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
     assert labels == {f"Action {index + 1}" for index in range(5)}
 
 
-def test_a_provably_optimal_first_candidate_reports_no_fallback() -> None:
-    """A budget of one is not a truncated search when nothing left could have beaten it."""
-    result = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27, search_budget=1)
-
-    assert result.metrics.states_explored == 1
-    assert not result.metrics.search_fallback
-    assert [event.code for event in result.report.events] == ["actions.individual"]
+def test_a_complete_search_reports_its_shared_work_budget() -> None:
+    result = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27, search_budget=50_000)
+    assert result.report.search is not None
+    assert result.report.search.completion is SearchCompletion.COMPLETE
+    assert result.report.search.optimal
+    assert result.metrics.work_used <= 50_000
 
 
 def _texts(result) -> set[str]:

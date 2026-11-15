@@ -14,7 +14,8 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui import scene
-from squid_ui.errors import DrawInvariantError, LayoutInvariantError
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
@@ -1100,7 +1101,7 @@ class TestDrawing:
         # through it, so the drawing gate has to be the backstop.
         document = Panel((Row((RoutedButton("Edit", "x" * 500),)),))
 
-        with pytest.raises(DrawInvariantError, match="custom id 500 > 100"):
+        with pytest.raises(JointInfeasibleError):
             render_static(document)
 
     def test_a_bound_control_still_needs_a_session(self) -> None:
@@ -1188,7 +1189,7 @@ class TestDrawing:
             key="picker",
         )
 
-        with pytest.raises(LayoutInvariantError, match="split the routed picker"):
+        with pytest.raises(JointInfeasibleError):
             sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27)
 
     def test_routed_choices_need_an_available_option(self) -> None:
@@ -1198,7 +1199,7 @@ class TestDrawing:
             key="picker",
         )
 
-        with pytest.raises(LayoutInvariantError, match="at least one available"):
+        with pytest.raises(JointInfeasibleError):
             sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27)
 
 

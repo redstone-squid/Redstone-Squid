@@ -139,8 +139,7 @@ def test_handler_composition_does_not_import_planning_or_runtime() -> None:
     assert not {name for name in imports if name.startswith(("squid_ui.planning", "squid_ui.runtime"))}
 
 
-def test_legacy_element_compilation_does_not_depend_on_complete_target_planners() -> None:
-    imports = runtime_imports(SOURCE / "planning" / "_html_elements.py")
-    assert not {name for name in imports if name.endswith(("_planner", ".request", ".cache"))}
-    slack_imports = runtime_imports(SOURCE / "planning" / "slack_planner.py")
-    assert not {name for name in slack_imports if name.startswith("squid_ui.planning.html_planner")}
+def test_composition_rules_do_not_depend_on_complete_target_planners() -> None:
+    for name in ("html", "slack", "v2", "classic"):
+        imports = runtime_imports(SOURCE / "planning" / f"composition_{name}.py")
+        assert not {module for module in imports if module.endswith(("_planner", ".request", ".cache"))}

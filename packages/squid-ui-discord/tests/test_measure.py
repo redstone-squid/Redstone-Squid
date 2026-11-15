@@ -13,6 +13,7 @@ from squid_ui.planning import (
     SolveNoteCode,
     measure,
 )
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.layout_measurement.model import MeasuredText
 from squid_ui.planning.layout_measurement.solver import MeasuredLayout
 from squid_ui.primitives import (
@@ -227,7 +228,7 @@ class TestStructure:
             texts=(Text("a"), Text("b"), Text("c"), Text("d")),
             accessory=Thumbnail("https://example.invalid/a.png"),
         )
-        with pytest.raises(LayoutInvariantError, match="section has 4 text slots"):
+        with pytest.raises(JointInfeasibleError):
             render_static([section])
 
     def test_emptied_section_drops_whole(self):

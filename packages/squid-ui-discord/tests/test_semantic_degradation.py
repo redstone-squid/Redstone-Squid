@@ -3,14 +3,14 @@
 import pytest
 
 from squid_ui import best_effort, optional, truncate
-from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.planning import plan
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.semantic import Importance, Paragraph
 from squid_ui_discord import DISCORD_V2_DPY27
 
 
 def test_semantic_prose_is_lossless_by_default() -> None:
-    with pytest.raises(UnsolvableLayoutError, match="Never nodes need"):
+    with pytest.raises(JointInfeasibleError):
         plan(Paragraph("x" * 5000), target=DISCORD_V2_DPY27)
 
 

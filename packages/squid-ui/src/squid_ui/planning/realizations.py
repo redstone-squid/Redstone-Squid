@@ -266,6 +266,7 @@ class TableRecord:
 class TableForm(StrEnum):
     NATIVE = "table"
     RECORDS = "records"
+    MATRIX = "matrix"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1280,6 +1281,8 @@ def semantic_offers[RenderTargetT, ContextT](
     ):
         if not native_controls:
             return ()
+        if isinstance(value, primitive.Button | primitive.SelectMenu | primitive.EntitySelect) and len(value.key) > 64:
+            value = replace(value, key=_control_key(occurrence, context))
         candidate = navigation_candidate(value, occurrence, context)
         return (replace(candidate.offer, key="native-control", interaction=True),)
     if isinstance(value, sem.Themed):
@@ -1740,7 +1743,7 @@ def semantic_offers[RenderTargetT, ContextT](
             ),
             navigation=True,
         )
-        grouped = RealizationOffer(
+        grouped = RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "navigation.grouped",
             payload,
@@ -1961,7 +1964,9 @@ def semantic_offers[RenderTargetT, ContextT](
                 SelectChoices(ChoiceCommit(value.selection, value.key, previous, context.presentation)),
                 ActionMode.EXCLUSIVE,
             )
-        offer = RealizationOffer(occurrence, "select", payload, interaction=True, binding=binding)
+        offer = RealizationOffer[RenderTargetT, ContextT, Realization](
+            occurrence, "select", payload, interaction=True, binding=binding
+        )
         if isinstance(value, sem.Choices) and value.maximum == 1 and options:
             cursor_key = f"{value.key}.choices"
             offer = replace(
@@ -2271,7 +2276,9 @@ def semantic_offers[RenderTargetT, ContextT](
                 tone=value.tone.base.value,
             )
         elif isinstance(value, sem.Block):
-            payload = PanelRealization(resolve_accent(value.accent, context.palette), framed=panels)
+            payload = PanelRealization(
+                resolve_accent(value.accent, context.palette), framed=panels and (nested_panels or not inside_panel)
+            )
         elif isinstance(value, sem.ActionControls | sem.ControlGroup):
             payload = ActionsRealization()
         elif isinstance(value, sem.Fields):
@@ -2381,7 +2388,7 @@ def semantic_offers[RenderTargetT, ContextT](
                     )
                     for item in eligible
                 )
-                grouped = RealizationOffer(
+                grouped = RealizationOffer[RenderTargetT, ContextT, Realization](
                     occurrence,
                     "actions.grouped",
                     SelectRealization(scene.Select(options, key)),
@@ -2393,24 +2400,27 @@ def semantic_offers[RenderTargetT, ContextT](
                     preference=0 if value.display == sem.ControlDisplay.GROUPED else 1,
                     preference_priority=int(value.flexibility),
                 )
-                if len(eligible) == len(value.items):
+                if len(value.items) > 25:
                     cursor_key = f"{value.key}.actions"
                     contract = RegionContract(
                         cursor_key,
                         RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key, default_controls=True),
                         cursor_key=cursor_key,
                     )
-                    payload = SelectRealization(scene.Select(options, key))
-                    grouped = replace(
-                        grouped,
-                        fragments=FragmentContract(
-                            tuple(child.sources for child in children),
-                            tuple(range(1, len(children) + 1)),
-                            payload.fragment,
-                        ),
-                        region=contract,
-                    )
                     container = replace(container, region=contract)
+                    if len(eligible) > 25 and len(eligible) != len(value.items):
+                        return (container,)
+                    if len(eligible) == len(value.items):
+                        payload = SelectRealization(scene.Select(options, key))
+                        grouped = replace(
+                            grouped,
+                            fragments=FragmentContract(
+                                tuple(child.sources for child in children),
+                                tuple(range(1, len(eligible) + 1)),
+                                payload.fragment,
+                            ),
+                            region=contract,
+                        )
                 return (
                     (replace(container, preference=1), grouped)
                     if value.display == sem.ControlDisplay.GROUPED
@@ -2445,7 +2455,8 @@ def semantic_offers[RenderTargetT, ContextT](
         elif value.display == sem.TableDisplay.RECORDS:
             preferred = TableForm.RECORDS
         elif value.display == sem.TableDisplay.MATRIX:
-            preferred = None
+            preferred = TableForm.MATRIX
+            table_forms = (TableForm.MATRIX,) if TableForm.MATRIX in table_forms else ()
         offers: list[RealizationOffer[RenderTargetT, ContextT, Realization]] = []
         for index, form in enumerate(table_forms):
             payload = TableRealization(columns, tuple(rows), form)
@@ -2482,6 +2493,17 @@ def semantic_offers[RenderTargetT, ContextT](
         )
         return (RealizationOffer(occurrence, "download", payload),)
     return ()
+
+
+def matrix_text(table: TableRealization) -> str:
+    """Render an authored matrix with aligned columns inside one code block."""
+    rows = [
+        ["".join(tree.plain(node) for node in column.nodes) for column in table.columns],
+        *[["".join(tree.plain(node) for node in cell.nodes) for cell in row.cells] for row in table.rows],
+    ]
+    widths = [max(len(row[index]) for row in rows) for index in range(len(table.columns))]
+    lines = ["  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip() for row in rows]
+    return "```\n" + "\n".join(lines).replace("```", "``\u200b`") + "\n```"
 
 
 def record_text(table: TableRealization) -> tuple[tuple[tree.Node, ...], ...]:

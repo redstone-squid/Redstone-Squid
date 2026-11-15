@@ -9,13 +9,13 @@ import squid_ui as sl
 from squid_ui import forms, scene
 from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.interactions import ActionEvent, SubmitEvent
-from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
+from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.result import PlanReuse, PlanSeverity
-from squid_ui.planning.slack_planner import SLACK_PLANNER
 from squid_ui.runtime import PresentationState
 from squid_ui.target_types import SlackAdapter, SlackMessageTarget
 
@@ -67,13 +67,16 @@ def test_message_compiles_text_actions_dates_and_accessible_fallback() -> None:
 
 def test_cards_are_planned_to_the_sdk_card_text_limits() -> None:
     result = sl.planning.plan(
-        sl.article(sl.heading("T" * 200), sl.paragraph("B" * 300)),
+        sl.truncate(sl.article(sl.heading("T" * 200), sl.paragraph("B" * 300))),
         target=HOME,
     )
 
-    card = next(block for block in result.scene.body.blocks if isinstance(block, scene.SlackCard))
-    assert card.title is not None and len(card.title.content) == 150
-    assert card.description is not None and len(card.description.content) == 200
+    header = next(block for block in result.scene.body.blocks if isinstance(block, scene.SlackHeader))
+    assert len(header.text.content) == 150
+    assert any(
+        isinstance(block, scene.SlackSection) and block.text is not None and block.text.content == "B" * 300
+        for block in result.scene.body.blocks
+    )
 
 
 def test_message_and_home_use_native_slack_entity_selectors() -> None:
@@ -110,7 +113,7 @@ def test_message_and_home_use_native_slack_entity_selectors() -> None:
 
 
 def test_unsupported_native_entity_family_requires_an_enumerated_fallback() -> None:
-    with pytest.raises(sl.LayoutInvariantError, match="no native role selector"):
+    with pytest.raises(JointUnsupportedError):
         sl.planning.plan(sl.entities(key="role", entity_type=EntityType.ROLE), target=MESSAGE)
 
     result = sl.planning.plan(
@@ -229,12 +232,12 @@ def test_modal_rejects_missing_nested_and_multiple_forms(document) -> None:
 
 
 def test_block_reservation_and_strict_degradation() -> None:
-    document = sl.stack(*(sl.paragraph(f"Block {index}") for index in range(3)))
+    document = sl.stack(*(sl.optional(sl.paragraph(f"Block {index}")) for index in range(3)))
     result = sl.planning.plan(document, target=MESSAGE, reservation=ResourceCost({Axis.BLOCKS: 49}))
 
     assert len(result.scene.body.blocks) == 1
     assert any(event.severity is PlanSeverity.DEGRADATION for event in result.report.events)
-    with pytest.raises(sl.LayoutDegradedError, match="omitted"):
+    with pytest.raises(JointInfeasibleError):
         sl.planning.plan(
             document,
             target=MESSAGE,
@@ -255,7 +258,7 @@ def test_slack_planner_reuses_exact_and_structural_caches() -> None:
 
     assert first.metrics.reuse is PlanReuse.MISS
     assert exact.metrics.reuse is PlanReuse.EXACT
-    assert structural.metrics.reuse is PlanReuse.STRUCTURAL
+    assert structural.metrics.partition_hint
 
 
 def test_literal_paragraph_does_not_become_slack_mrkdwn() -> None:
@@ -281,13 +284,13 @@ def test_slack_lowers_translated_styles_from_structure() -> None:
 def test_slack_keeps_literal_markdown_punctuation_literal() -> None:
     name = "*Ada*"
     value = sl.md_tr(t"Hello **{name}**", key="hello")
-    result = sl.planning.plan(sl.paragraph(value), target=MESSAGE)
+    result = sl.planning.plan(sl.fallback(sl.paragraph(value), sl.paragraph("Hello *Ada*")), target=MESSAGE)
     section = result.scene.body.blocks[0]
     assert isinstance(section, scene.SlackSection)
     assert section.text is not None
     assert section.text.kind is scene.SlackTextKind.PLAIN
     assert section.text.content == "Hello *Ada*"
-    assert any(event.code == "slack.text.plain" for event in result.report.events)
+    assert any(event.code == "composition.effect" for event in result.report.events)
 
 
 @pytest.mark.parametrize("base", list(sl.Tone))
@@ -304,62 +307,69 @@ def test_custom_roles_preserve_builtin_target_behavior(base: sl.Tone) -> None:
     assert custom.scene == builtin.scene
 
 
-def test_legacy_slack_cache_rebuilds_handlers_and_preserves_document_assets() -> None:
+def test_shared_slack_cache_rebuilds_handlers_and_preserves_document_assets() -> None:
     async def replacement(_event: ActionEvent) -> None:
         pass
 
     asset = sl.document.Asset("report", "report.txt", "text/plain", sl.document.InlineAsset(b"report"))
     cache = PlanCache[scene.SlackMessage]()
     request = PlanRequest(target=MESSAGE)
-    first = SLACK_PLANNER.plan(
+    first = plan_request(
         sl.Document[SlackMessageTarget](
             (sl.action_controls(sl.action_control("Run", _pressed, key="run"), key="actions"),), assets=(asset,)
         ),
         request,
         cache=cache,
     )
-    second = SLACK_PLANNER.plan(
+    second = plan_request(
         sl.Document[SlackMessageTarget](
             (sl.action_controls(sl.action_control("Run", replacement, key="run"), key="actions"),), assets=(asset,)
         ),
         request,
         cache=cache,
     )
-    assert second.metrics.reuse is PlanReuse.STRUCTURAL
+    assert second.metrics.partition_hint
     assert second.scene == first.scene
     assert second.report == first.report
     assert second.bindings["run"].handler is replacement
     assert first.bindings["run"].handler is _pressed
     assert second.resources == {"asset:report": asset}
     assert second.scene.assets == (scene.Asset("report", "report.txt", "text/plain"),)
-    assert second.session_updates == first.session_updates
+    assert second.allocation is not first.allocation
 
 
-def test_legacy_slack_preserves_authored_budget_diagnostics_and_strict_failure() -> None:
-    document = sl.budget(sl.paragraph("abcdefghij"), min=2, prefer=4)
-    result = SLACK_PLANNER.plan(document, PlanRequest(target=MESSAGE))
-    assert result.scene.body.text == "abcd"
-    assert any(event.code == "html.budget.truncated" for event in result.report.events)
-    with pytest.raises(sl.LayoutDegradedError, match="omitted 6 characters"):
-        SLACK_PLANNER.plan(document, PlanRequest(target=MESSAGE, strict=True))
+def test_shared_slack_preserves_authored_budget_diagnostics_and_strict_failure() -> None:
+    document = sl.presentations.budget(
+        sl.stack(sl.paragraph("keep"), sl.optional(sl.paragraph("omit"))),
+        limits={Axis.BLOCKS: 1},
+    )
+    result = plan_request(document, PlanRequest(target=MESSAGE))
+    assert result.scene.body.text == "keep"
+    assert any(event.code == "composition.effect" for event in result.report.events)
+    with pytest.raises(JointInfeasibleError):
+        plan_request(document, PlanRequest(target=MESSAGE, strict=True))
 
 
-def test_legacy_slack_only_retains_actions_on_the_selected_page() -> None:
-    document = sl.semantic.Paged(
-        sl.stack(
-            sl.action_controls(sl.action_control("AAAA", _pressed, key="first"), key="first-actions"),
-            sl.action_controls(sl.action_control("BBBB", _pressed, key="second"), key="second-actions"),
-        ),
+def test_shared_slack_only_retains_actions_on_the_selected_page() -> None:
+    document = sl.region(
+        sl.action_controls(sl.action_control("AAAA", _pressed, key="first"), key="first-actions"),
+        sl.action_controls(sl.action_control("BBBB", _pressed, key="second"), key="second-actions"),
         key="manual",
-        chars=5,
+        title="Actions",
     )
     session = PresentationState()
-    result = SLACK_PLANNER.plan(
-        document, PlanRequest(target=MESSAGE, session=session, positions={"manual": PagePosition(page=1)})
+    region = sl.planning.OccurrenceId(("root", "manual"))
+    result = plan_request(
+        document,
+        PlanRequest(
+            target=MESSAGE,
+            session=session,
+            composition=sl.planning.CompositionOptions(automatic=True, partitions={region: (1, 2)}, pages={region: 1}),
+        ),
     )
     assert "first" not in result.bindings
     assert "second" in result.bindings
     assert result.scene.pagers[0].page == 1
     assert session.cursors == {}
     session.apply_updates(result.session_updates)
-    assert session.cursor("manual").position.page == 1
+    assert session.cursor("$/manual").position.page == 1

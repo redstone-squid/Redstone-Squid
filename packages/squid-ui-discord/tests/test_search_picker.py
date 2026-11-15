@@ -66,7 +66,7 @@ async def test_lookup_searches_picks_resolved_items_and_removes_them() -> None:
 
     assert lookup.session is not None and lookup.session.snapshot is not None
     commit_render(message_root)
-    await message_root.dispatch("lookup.results.a", interaction_harness())
+    await message_root.dispatch("lookup.results", interaction_harness(), ["a"])
     assert lookup.picked == (Entry("a", "Alpha"),)
     assert commits == [(Entry("a", "Alpha"),)]
 

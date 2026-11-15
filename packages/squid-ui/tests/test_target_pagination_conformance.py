@@ -7,7 +7,7 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.planning import CompositionOptions, JointUnsupportedError, OccurrenceId, plan
+from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.limits import ClassicLimits
@@ -62,7 +62,7 @@ def test_production_list_uses_shared_search(target: Target[Any, Any, Any, Any]) 
     )
     result = plan(node, target=target, nav=default_nav)
     assert result.allocation is not None
-    assert result.report.legacy_pagination is None
+    assert result.allocation is not None
     assert result.scene.pagers[0].pages == 3
 
 
@@ -96,7 +96,7 @@ def test_semantic_text_and_action_rows_share_the_production_route(target: Target
         title="Content",
     )
     result = plan(node, target=target, nav=default_nav)
-    assert result.report.legacy_pagination is None
+    assert result.allocation is not None
     assert result.allocation is not None
     wire = scene.Codec.dumps(result.scene)
     for value in ("Heading", "Note", "print(1)", "Quote", "Label", "Value"):
@@ -143,9 +143,8 @@ def test_uncontrolled_toggle_changes_invalidate_retained_output(target: Target[A
 
 
 def test_modal_regions_explain_the_form_surface_constraint() -> None:
-    with pytest.raises(JointUnsupportedError) as caught:
+    with pytest.raises(sl.LayoutInvariantError, match="one top-level"):
         plan(sl.region(sl.paragraph("body"), key="r", title="R"), target=sl.slack.modal_target(adapter=SLACK))
-    assert "one top-level form trigger" in str(caught.value.diagnostics.violations)
 
 
 def test_legacy_fallback_in_a_region_retains_the_primary_without_loss() -> None:
@@ -209,7 +208,7 @@ def test_repeated_media_deduplicates_its_attachment(target: Target[Any, Any, Any
     )
     result = plan(node, target=target)
     assert result.allocation is not None
-    assert tuple(result.resources) == ("image",)
+    assert tuple(result.resources) == ("asset:image",)
     assert len(result.scene.assets) == 1
 
 
@@ -217,7 +216,7 @@ def test_classic_count_based_primitive_pages_use_its_own_text_pool() -> None:
     node = sl.primitives.Lines(("first", "second"), overflow=sl.primitives.Paginate(key="lines", per=1))
     result = plan(node, target=classic_target(DISCORD), nav=default_nav)
     assert result.allocation is not None
-    assert result.report.legacy_pagination is None
+    assert result.allocation is not None
     assert result.scene.pagers[0].pages == 2
     assert isinstance(result.scene.body, scene.ClassicMessage)
     assert "first" in (result.scene.body.content or "")

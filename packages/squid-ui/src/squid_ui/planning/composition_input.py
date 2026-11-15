@@ -1,8 +1,4 @@
-"""Translate supported pagination declarations before selecting a production planner.
-
-Compatibility routes are chosen from vocabulary and target capabilities. Search
-failure never causes a second attempt with a different solver.
-"""
+"""Validate authored layout vocabulary and prepare it for shared composition."""
 
 from dataclasses import dataclass, replace
 
@@ -25,24 +21,20 @@ from squid_ui.text import resolve_text
 
 
 @dataclass(frozen=True, slots=True)
-class PaginationMigration[RenderTargetT]:
+class PreparedComposition[RenderTargetT]:
     document: Document[RenderTargetT]
-    enabled: bool
     limitation: str | None = None
     combinations: int = 1
 
 
-def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
+def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
     document: Document[RenderTargetT], request: PlanRequest[BodyT, RenderTargetT, AdapterT]
-) -> PaginationMigration[RenderTargetT]:
+) -> PreparedComposition[RenderTargetT]:
     limits = request.target.limits
     if isinstance(limits, SlackModalLimits):
-        return PaginationMigration(
-            document, enabled=False, limitation="Slack modals require one top-level form trigger"
-        )
+        return PreparedComposition(document)
     if not isinstance(limits, ClassicLimits | V2Limits | SlackMessageLimits | SlackHomeLimits | HtmlLimits):
-        return PaginationMigration(document, enabled=False, limitation="target has no shared composition rules")
-    pageable = False
+        return PreparedComposition(document, limitation="target has no shared composition rules")
     combinations = 1
     text_choices = 0
     shortening_depth = 0
@@ -59,10 +51,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
     )
 
     def visit[NodeTargetT](node: Renderable[NodeTargetT]) -> Renderable[NodeTargetT]:
-        nonlocal pageable, combinations, shortening_depth, text_choices, card_depth, variant_index
+        nonlocal combinations, shortening_depth, text_choices, card_depth, variant_index
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation() | sem.Grid():
-                pageable = True
                 if isinstance(node, sem.Paged):
                     if not isinstance(limits, V2Limits | HtmlLimits):
                         msg = "Paged requires one shared character axis; use regions with this target's resource limits"
@@ -81,19 +72,16 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     combinations *= max(1, (len(node.items) + node.page_size - 1) // node.page_size)
                 return node
             case sem.Roster():
-                pageable = True
                 combinations = max(
                     combinations,
                     sum(len(group.members) for group in node.placement.groups) + len(node.placement.waitlist),
                 )
                 return node
             case sem.Items():
-                pageable = True
                 return replace(
                     node, items=tuple(replace(item, children=tuple(map(visit, item.children))) for item in node.items)
                 )
             case sem.Details():
-                pageable = True
                 return replace(node, children=tuple(map(visit, node.children)))
             case (
                 sem.Group()
@@ -107,17 +95,14 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
             ):
                 return replace(node, children=tuple(map(visit, node.children)))
             case sem.OptionalContent():
-                pageable = True
                 return replace(node, node=visit(node.node))
             case sem.Truncated() | sem.Spilled() | sem.BestEffort():
-                pageable = True
                 shortening_depth += 1
                 try:
                     return replace(node, node=visit(node.node))
                 finally:
                     shortening_depth -= 1
             case sem.Fields():
-                pageable |= any(entry.fallbacks for entry in node.fields)
                 return node
             case (
                 primitive.Panel()
@@ -143,14 +128,12 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 if not isinstance(limits, ClassicLimits):
                     msg = "native classic message content on another target"
                     raise UnsupportedSemanticError(msg)
-                pageable = True
                 visit(primitive.Text(node.content, overflow=node.overflow, priority=node.priority))
                 return node
             case primitive.Card():
                 if not isinstance(limits, ClassicLimits):
                     msg = "native classic embed on another target"
                     raise UnsupportedSemanticError(msg)
-                pageable = True
                 card_depth += 1
                 try:
                     for child in node.children:
@@ -174,7 +157,6 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 if isinstance(node, primitive.Budget) and not isinstance(limits, V2Limits):
                     msg = "Budget requires one shared character axis; use resource budgets on this target"
                     raise UnsupportedSemanticError(msg)
-                pageable = True
                 for child in node.children:
                     visit(child)
                 return node
@@ -190,13 +172,11 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 elif not isinstance(adapter, ComposableExtension):
                     msg = f"extension {node.kind.name!r} needs a compose() contract for shared allocation"
                     raise UnsupportedSemanticError(msg)
-                pageable = True
                 return node
             case primitive.RawItem():
                 if not isinstance(limits, V2Limits) or node.composition is None:
                     msg = "RawItem requires a native Components V2 composition contract"
                     raise UnsupportedSemanticError(msg)
-                pageable = True
                 return node
             case primitive.Row() | primitive.ControlGroup():
                 if not isinstance(limits, V2Limits | ClassicLimits):
@@ -245,7 +225,6 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     steps = sum(len(item.fallbacks) if isinstance(item, Alt) else 0 for item in node.lines)
                     combinations = max(combinations, len(node.lines) + steps)
                     if isinstance(overflow, Alts):
-                        pageable = True
                         text_choices += min(text_ladder, len(overflow.ladder[-1]))
                         combinations = max(combinations, text_choices + len(overflow.ladder))
                     return node
@@ -265,7 +244,6 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 if overflow.min_fill and not isinstance(limits, V2Limits):
                     msg = "primitive min_fill requires one shared character axis"
                     raise UnsupportedSemanticError(msg)
-                pageable = True
                 if isinstance(node, primitive.Lines):
                     steps = sum(len(item.fallbacks) if isinstance(item, Alt) else 0 for item in node.lines)
                     combinations = max(combinations, len(node.lines) + steps)
@@ -309,9 +287,9 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                     combinations = max(combinations, text_choices)
                 return node
             case sem.ActionControls():
+                combinations = max(combinations, len(node.items) * 16)
                 return node
             case sem.FallbackContent():
-                pageable = True
                 return replace(node, primary=visit(node.primary), alternates=tuple(map(visit, node.alternates)))
             case primitive.Variants():
                 variant_index += 1
@@ -320,7 +298,6 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
                 group = variant_alternatives(node)
                 return visit(replace(group, key=node.key or f"@variants-{variant_index}"))
             case Alternatives():
-                pageable = True
                 # Canonical content describes identity; it need not render on this target.
                 semantic_graph(node.content)
                 choices = []
@@ -344,8 +321,7 @@ def prepare_pagination[BodyT: scene.Body, RenderTargetT, AdapterT](
         children = tuple(map(visit, document.children))
         if document.key and request.nav is not None:
             children = (RootRegion[RenderTargetT](children, key=document.key, title=""),)
-            pageable = True
         prepared = replace(document, children=children)
-        return PaginationMigration(prepared, pageable, combinations=combinations)
+        return PreparedComposition(prepared, combinations=combinations)
     except UnsupportedSemanticError as error:
-        return PaginationMigration(document, enabled=False, limitation=error.kind)
+        return PreparedComposition(document, limitation=error.kind)

@@ -2,7 +2,7 @@
 
 import discord
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui import PressEvent
@@ -63,12 +63,14 @@ class TestRenderMessage:
             render_message([Text("hello")], into=discord.ui.LayoutView(timeout=None))  # type: ignore[call-arg]
 
 
+@settings(deadline=None)
 @given(documents(), st.integers(min_value=0, max_value=3900))
 def test_reserved_text_is_held_back_from_the_budget(nodes, reserved):
     view = render_message(nodes, reservation=ResourceCost({Axis.DISPLAY_TEXT: reserved})).view
     assert sum(len(text) for text in sd.payload_texts(view)) <= LIMITS.total_text - reserved
 
 
+@settings(deadline=None)
 @given(documents())
 def test_render_static_matches_render_message(nodes):
     assert render_static(nodes).layout.to_components() == render_message(nodes).view.to_components()

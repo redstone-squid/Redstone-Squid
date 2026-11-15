@@ -7,7 +7,7 @@ because the panels primarily display Python identifiers and diagnostic event cod
 import dataclasses
 import json
 import pprint
-from collections.abc import Awaitable, Callable, Hashable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Hashable, Iterable, Mapping, Sequence
 from datetime import datetime
 from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, override
@@ -829,7 +829,7 @@ def operational_attachment(
     snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot,
 ) -> sl.document.Asset:
     """The operational snapshot as an inline JSON download."""
-    encoded = json.dumps(dataclasses.asdict(snapshot), default=_json_default, indent=2, sort_keys=True).encode()
+    encoded = json.dumps(snapshot, default=_json_default, indent=2, sort_keys=True).encode()
     return sl.document.Asset(
         key="operational-snapshot",
         name="squid-operational-snapshot.json",
@@ -839,6 +839,10 @@ def operational_attachment(
 
 
 def _json_default(value: object) -> object:
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {field.name: getattr(value, field.name) for field in dataclasses.fields(value)}
+    if isinstance(value, Mapping):
+        return dict(value)
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, Enum):

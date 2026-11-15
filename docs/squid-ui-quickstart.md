@@ -281,9 +281,8 @@ Unsupported combinations raise `JointUnsupportedError` with capability diagnosti
 they never retry through another region solver. Slack modals retain their separate
 form-only contract. Native `Variants` participates with checked source correspondence
 and loss contracts; V2 `NativeItem` participates through the Discord adapter's native
-validation contract. Non-region documents can still use their target's existing
-fitter; `report.legacy_pagination` identifies
-missing shared capabilities. See the [target capability matrix](plans/generic-region-pagination/06-target-coverage.md#target-capability-matrix)
+validation contract. All documents use shared composition, including ordinary
+non-region layouts and Slack modal forms. See the [target capability matrix](plans/generic-region-pagination/06-target-coverage.md#target-capability-matrix)
 for supported vocabulary and deliberate limitations.
 
 

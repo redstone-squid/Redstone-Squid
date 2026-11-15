@@ -1,46 +1,22 @@
 """Reuse planning work while keeping callbacks tied to the render that supplied them.
 
 PlanMemo retains one owner's complete result and replays it only for the same inputs
-and presentation-state revision. PlanCache stores structure without live callbacks;
-the planner rebuilds bindings from the current document when reusing that structure.
+and presentation-state revision. PlanCache stores partition hints without live callbacks;
+the planner certifies current content and rebuilds its bindings when trying those cuts.
 This lets an identical-looking display reuse layout work without invoking an older
 component's handler when a control is pressed.
 """
 
 from collections import OrderedDict
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Any
 
 from squid_ui import scene
 from squid_ui.planning.composition import OccurrenceId
-from squid_ui.planning.degradation import DegradationProfile
-from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.planning.result import PlanReport, PlanResult, PlanReuse
-from squid_ui.presentation import PresentationState, SessionUpdate
-
-
-@dataclass(frozen=True, slots=True)
-class CachedPlan[BodyT: scene.Body = scene.Body]:
-    scene: scene.Scene[BodyT]
-    report: PlanReport
-    session_updates: tuple[SessionUpdate, ...] = ()
-    """Replayed on a hit: the session is part of the key, so these stay correct."""
-    strategies: tuple[tuple[str, str], ...] = ()
-    states_explored: int = 0
-    search_fallback: bool = False
-    variant_positions: tuple[tuple[tuple[int | str, ...], int], ...] = ()
-    fallbacks: tuple[tuple[str, int], ...] = ()
-    """Fallback decisions for entries whose selected primitive tree could not be compiled."""
-    lowered_template: object | None = None
-    """Selected primitive tree with every process-local value replaced by a document slot."""
-
-    cost: ResourceCost = field(default=EMPTY_COST, kw_only=True)
-    degradation: DegradationProfile = field(default_factory=DegradationProfile, kw_only=True)
-
-
-_MISSING = object()
+from squid_ui.planning.result import PlanResult, PlanReuse
+from squid_ui.presentation import PresentationState
 
 
 class _LruStore[ValueT]:
@@ -68,18 +44,10 @@ class _LruStore[ValueT]:
 
 
 class PlanCache[BodyT: scene.Body = Any]:
-    """Reuse callback-free plans, evicting the least recently used entries when full.
+    """Retain bounded, callback-free partition hints for shared composition.
 
-    A separate store remembers isolated text-region shapes that previously fitted
-    without loss. These certifications let the Discord planner try a single candidate
-    before a full search when only that region's text changes.
-
-    Shared pagination stores partition hints separately. They contain only occurrence
-    paths and cuts; current content, navigation, and resources are certified again.
-
-    Each store trims to `capacity` on writes. Changing capacity takes effect separately
-    on the next write to each store. Specialize `BodyT` when the owner knows its scene
-    type; the default also supports runtime-selected targets.
+    A hint suggests page boundaries; the planner certifies them against current
+    content and target limits. Writes enforce capacity, evicting least-used hints.
     """
 
     def __init__(self, capacity: int = 32) -> None:
@@ -87,15 +55,7 @@ class PlanCache[BodyT: scene.Body = Any]:
             message = "plan cache capacity must be positive"
             raise ValueError(message)
         self.capacity = capacity
-        self._entries = _LruStore[CachedPlan[BodyT]]()
-        self._incremental = _LruStore[None]()
         self._partitions = _LruStore[Mapping[OccurrenceId, tuple[int, ...]]]()
-
-    def get(self, key: str) -> CachedPlan[BodyT] | None:
-        return self._entries.get(key, None)
-
-    def put(self, key: str, value: CachedPlan[BodyT]) -> None:
-        self._entries.put(key, value, capacity=self.capacity)
 
     def partition_hint(self, key: str) -> Mapping[OccurrenceId, tuple[int, ...]] | None:
         """Return prior cuts as a search hint, never as a certificate of feasibility."""
@@ -104,16 +64,8 @@ class PlanCache[BodyT: scene.Body = Any]:
     def remember_partitions(self, key: str, cuts: Mapping[OccurrenceId, tuple[int, ...]]) -> None:
         self._partitions.put(key, MappingProxyType(dict(cuts)), capacity=self.capacity)
 
-    def admits_incremental(self, key: str) -> bool:
-        """Whether a prior lossless plan certified this configuration and region shape."""
-        return self._incremental.get(key, _MISSING) is not _MISSING
-
-    def certify_incremental(self, key: str) -> None:
-        """Record one lossless, uncoupled region shape as eligible for local replanning."""
-        self._incremental.put(key, None, capacity=self.capacity)
-
     def __len__(self) -> int:
-        return len(self._entries)
+        return len(self._partitions)
 
 
 class PlanMemo[BodyT: scene.Body = Any]:

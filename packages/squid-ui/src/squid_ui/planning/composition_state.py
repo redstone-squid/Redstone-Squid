@@ -69,7 +69,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             and self.navigation_version is not None
             and _navigation_version(request.nav) == self.navigation_version
             and request.search_budget == self.request.search_budget
-            and request.shared_pagination == self.request.shared_pagination
+            and (request.composition is None) == (self.request.composition is None)
             and request.presentation is self.request.presentation
             and replace(options, pages={}) == self.options
         )
@@ -254,5 +254,5 @@ def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
             scene_fingerprint=sha256(scene.Codec.dumps(output).encode()).hexdigest(),
         ),
         metrics=result.metrics,
-        session_updates=tuple(updates) if request.session is not None or request.shared_pagination else (),
+        session_updates=tuple(updates) if request.session is not None or request.composition is None else (),
     )

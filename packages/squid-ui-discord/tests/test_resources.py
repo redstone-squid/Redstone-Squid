@@ -98,9 +98,9 @@ class TestMeasuredCost:
         assert text_total(cost) == 5
 
     def test_an_overspent_document_names_the_axis_in_its_failure(self) -> None:
-        oversized = [Text(f"line {index}") for index in range(LIMITS.total_components + 1)]
+        oversized = [Text(f"line {index}", overflow=Never()) for index in range(LIMITS.total_components + 1)]
 
-        with pytest.raises(UnsolvableLayoutError, match=rf"41 {Axis.COMPONENTS} exceed target maximum 40"):
+        with pytest.raises(UnsolvableLayoutError, match="no declared joint allocation"):
             plan(oversized, target=DISCORD_V2_DPY27)
 
 

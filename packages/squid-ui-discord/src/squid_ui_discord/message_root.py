@@ -898,13 +898,15 @@ class MessageRoot[
             if planner_span is not None:
                 planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
                 planner_span.set_attribute("reuse", result.metrics.reuse.value)
-                planner_span.set_attribute("states_explored", result.metrics.states_explored)
+                planner_span.set_attribute("target_evaluations", result.metrics.target_evaluations)
+                planner_span.set_attribute("work_used", result.metrics.work_used)
                 planner_span.set_attribute("search_fallback", result.metrics.search_fallback)
         if profile is not None:
             profile.increment("planner.calls")
             profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
             profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
-            profile.increment("planner.states_explored", result.metrics.states_explored)
+            profile.increment("planner.target_evaluations", result.metrics.target_evaluations)
+            profile.increment("planner.work_used", result.metrics.work_used)
         # Adaptation events record ordinary layout choices, such as showing actions as buttons.
         # Only lost content or a warning is worth logging.
         degraded = tuple(

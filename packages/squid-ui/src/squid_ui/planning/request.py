@@ -87,7 +87,6 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     session: PresentationState | None = None
     composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None
     search_budget: int = DEFAULT_SEARCH_BUDGET
-    shared_pagination: bool = False
     presentation: PresentationState = field(init=False, compare=False, repr=False)
     """`session`, or the empty state standing in for it -- resolved once, so that a request
     without a session still has one stable presentation identity to key a memo on."""

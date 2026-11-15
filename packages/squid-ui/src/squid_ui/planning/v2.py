@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
@@ -60,9 +60,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Markup
-
-if TYPE_CHECKING:
-    from squid_ui.planning.discord_planner import DiscordPlanner
 
 
 @dataclass(slots=True)
@@ -388,12 +385,6 @@ class V2Dialect:
     body_type = scene.ComponentsV2
     default_limits = LIMITS
     realizes_extensions = True
-
-    @property
-    def planner(self) -> DiscordPlanner:
-        from squid_ui.planning.discord_planner import DISCORD_PLANNER
-
-        return DISCORD_PLANNER
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]

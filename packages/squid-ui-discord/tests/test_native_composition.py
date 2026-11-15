@@ -53,7 +53,7 @@ def test_native_media_deduplicates_its_declared_attachment() -> None:
     result = plan(sl.Document((image, image), assets=(asset,)), target=DISCORD_V2_DPY27)
     assert result.allocation is not None
     assert result.cost.get(Axis.ATTACHMENTS) == 1
-    assert result.resources[asset.key] is asset
+    assert result.resources[f"asset:{asset.key}"] is asset
     assert len(result.scene.assets) == 1
 
 
