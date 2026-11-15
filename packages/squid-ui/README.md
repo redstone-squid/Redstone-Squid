@@ -128,7 +128,8 @@ match = query(tree, save.qualified_key("editor.save")).one()
 assert match.node.available
 ```
 
-`select(Type)` includes subclasses. Refine it with `key`, `qualified_key`, `attr`,
+`select(Type)` includes subclasses; `select(instance)` matches that exact object by
+identity, including all its placements. Refine it with `key`, `qualified_key`, `attr`,
 `has_attr`, `text`, `label`, or a read-only `where` predicate. Text and labels match
 exactly by default; `contains=True` or a compiled regular expression opts into
 partial matching. Queries accept `localization=...` and otherwise resolve text

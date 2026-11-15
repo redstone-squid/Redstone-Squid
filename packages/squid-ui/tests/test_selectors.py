@@ -204,3 +204,28 @@ def test_inspection_does_not_reconstruct_nodes_or_render_components() -> None:
     node = Stack((toolbar("save"),))
     assert query(snapshot(node), select(s.ActionControl)).count() == 1
     assert constructions == ["constructed"]
+
+
+def test_instance_selection_matches_identity_not_equality() -> None:
+    first = ui.paragraph("equal")
+    second = ui.paragraph("equal")
+    assert first == second and first is not second
+    tree = snapshot(ui.stack(first, second, first))
+    found = query(tree, select(first)).all()
+    assert len(found) == 2
+    assert all(match.node is first for match in found)
+    assert_type(found[0], Match[s.Paragraph])
+    assert query(tree, select(s.Paragraph)).count() == 3
+    assert not query(tree, select(ui.paragraph("equal"))).exists()
+
+
+def test_instance_selection_can_narrow_a_component_placement() -> None:
+    screen = Screen()
+    tree = render_snapshot(screen)
+    editor = select(screen.editor)
+    assert_type(query(tree, editor).all()[0], Match[Editor])
+    assert query(tree, editor).count() == 2
+    primary = query(tree, editor.qualified_key("primary")).one()
+    assert primary.node is screen.editor
+    assert query(tree, editor, within=primary, include_scope=True).one() == primary
+    assert query(tree, select(ui.Component)).count() == 3

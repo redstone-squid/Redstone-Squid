@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from re import Pattern
-from typing import Any, cast
+from typing import Any, cast, overload
 
 from squid_ui.selectors.tree import Match, Snapshot
 from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
@@ -137,8 +137,28 @@ class Selector[T]:
         )
 
 
-def select[T](kind: type[T]) -> Selector[T]:
-    return Selector(lambda tree, index, _scope, _locale: isinstance(tree.matches[index].node, kind), kind.__name__)
+@overload
+def select[T](target: type[T]) -> Selector[T]: ...
+
+
+@overload
+def select[T](target: T) -> Selector[T]: ...
+
+
+def select[T](target: type[T] | T) -> Selector[T]:
+    """Match a type (including subclasses) or an exact instance by identity.
+
+    An instance matches every occurrence of that object. Narrow by qualified_key
+    or query scope to identify one placement.
+    """
+    if isinstance(target, type):
+        return Selector(
+            lambda tree, index, _scope, _locale: isinstance(tree.matches[index].node, target), target.__name__
+        )
+    return Selector(
+        lambda tree, index, _scope, _locale: tree.matches[index].node is target,
+        f"{type(target).__name__}(instance@{id(target):x})",
+    )
 
 
 def scope() -> Selector[object]:
