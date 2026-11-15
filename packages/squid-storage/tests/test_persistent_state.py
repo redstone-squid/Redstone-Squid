@@ -13,6 +13,7 @@ from squid_storage import MemoryScopedStore, PersistentStatePool, Slot, json_cod
 
 class Preferences(Reactive):
     theme: str = state("dark")
+    preview: str = state("", persist=False)
 
 
 def make_preferences(key: str) -> Preferences:
@@ -62,6 +63,22 @@ async def test_committed_state_persists_but_rolled_back_state_does_not(
             raise RuntimeError("rollback")
         await pool.flush()
         assert await store.get(slot, "guild") == {"theme": "light"}
+        await pool.close()
+
+
+async def test_a_commit_that_changes_no_persistent_field_saves_nothing(
+    slot: Slot[str, Mapping[str, object]],
+) -> None:
+    store = MemoryScopedStore()
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(pool.run)
+        preferences = await pool.load("guild")
+
+        preferences.preview = "light"
+        await pool.flush()
+        assert await store.get(slot, "guild") is None
         await pool.close()
 
 

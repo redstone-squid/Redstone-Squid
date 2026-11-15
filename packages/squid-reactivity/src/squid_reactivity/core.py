@@ -7,7 +7,6 @@ Inspection and export helpers expose model state to tools and storage.
 """
 
 import functools
-import logging
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -30,8 +29,6 @@ from squid_reactivity.transactions._state import (
     read_only,
 )
 
-_log = logging.getLogger(__name__)
-
 
 class Reactive(ReactiveStateOwner):
     """A model with tracked fields, cached computations, and transaction-aware writes.
@@ -46,7 +43,6 @@ class Reactive(ReactiveStateOwner):
     notification, but cannot undo the collaborator's mutation.
     """
 
-    _reactive_commit_listeners: set[Callable[[], None]]
     _reactive_subscribers: SubscriberRegistry
 
     _state_names: ClassVar[frozenset[str]] = frozenset()
@@ -60,7 +56,6 @@ class Reactive(ReactiveStateOwner):
         instance = super().__new__(cls)
         # Subclasses can initialize their own inputs without calling a base initializer.
         object.__setattr__(instance, "_reactive_subscribers", {})
-        object.__setattr__(instance, "_reactive_commit_listeners", set())
         object.__setattr__(instance, "_reactive_initialization", _READ_ONLY.get())
         if current := _current_transaction():
             current.note_born(instance)
@@ -125,22 +120,11 @@ class Reactive(ReactiveStateOwner):
         ]
         for name in changed:
             publish(CellAddress(self, name))
-        for listener in tuple(self._reactive_commit_listeners):
-            try:
-                listener()
-            except Exception:
-                _log.exception("reactive commit listener failed")
         self.on_state_commit(frozenset(changed))
 
     @override
     def _state_rolled_back(self) -> None:
         self.on_state_rollback()
-
-    def _add_commit_listener(self, listener: Callable[[], None]) -> None:
-        self._reactive_commit_listeners.add(listener)
-
-    def _remove_commit_listener(self, listener: Callable[[], None]) -> None:
-        self._reactive_commit_listeners.discard(listener)
 
 
 class _State[ValueT]:

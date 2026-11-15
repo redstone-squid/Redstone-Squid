@@ -1,20 +1,21 @@
 """Restore shared view state on load and save snapshots after reactive commits.
 
 PersistentStatePool retains one model per scope. The first load creates an
-instance, restores its saved fields, and only then makes it
-available to other consumers. Later commits queue snapshots for a worker, so
-storage latency does not hold up the reactive action.
+instance, restores its saved fields, and only then makes it available to other
+consumers. Later commits that change a persistent field queue snapshots for a
+worker, so storage latency does not hold up the reactive action.
 """
 
 import asyncio
 import logging
 from collections.abc import Callable, Hashable, Mapping
+from functools import partial
 from types import MappingProxyType
 
 import anyio
 from anyio.abc import TaskStatus
 
-from squid_reactivity import Reactive, export_state, restore_state
+from squid_reactivity import ChangeListener, Reactive, export_state, on_change, restore_state
 from squid_storage.scoped import ScopedStore, Slot
 
 _logger = logging.getLogger(__name__)
@@ -26,9 +27,9 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
     Start run in a host-owned task group before the first load. Hydration completes
     before a handle enters the cache, so concurrent loads share fully restored state.
 
-    Commits synchronously stage snapshots for an asynchronous worker. Pending writes
-    coalesce by scope: only the newest queued snapshot is kept, with no ordering across
-    scopes. Failed writes are reported to on_error, or logged, without retrying or
+    A commit that changes a persistent field synchronously stages a snapshot for an
+    asynchronous worker. Pending writes coalesce by scope: only the newest queued
+    snapshot is kept, with no ordering across scopes. Failed writes are reported to on_error, or logged, without retrying or
     rolling back the committed action. Store reads during load still propagate errors.
     Close drains the queue and permanently stops accepting loads and new writes.
     """
@@ -46,7 +47,7 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
         self._factory = factory
         self._models: dict[ScopeT, SharedT] = {}
         self._on_error = on_error
-        self._listeners: dict[ScopeT, Callable[[], None]] = {}
+        self._listeners: dict[ScopeT, ChangeListener[dict[str, object]]] = {}
         self._pending: dict[ScopeT, Mapping[str, object]] = {}
         self._load_lock = asyncio.Lock()
         self._pending_event = asyncio.Event()
@@ -105,9 +106,8 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
                 restore_state(created, values)
             # The load lock covers construction and hydration. Publish only a fully
             # restored model, and leave failed loads absent so callers can retry.
-            listener = self._listener_for(created, scope)
-            created._add_commit_listener(listener)
-            self._listeners[scope] = listener
+            # Listen only from here on, so restoring the saved fields does not write them back.
+            self._listeners[scope] = on_change(lambda: export_state(created), partial(self._stage, scope))
             self._models[scope] = created
             return created
 
@@ -130,15 +130,15 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
             retired = self._models.pop(scope, None)
             if retired is None:
                 return None
-            self._detach(retired, scope)
+            self._detach(scope)
         await self.flush()
         return retired
 
     async def clear(self) -> None:
         """Retire every cached handle as delete does, preserving the stored values."""
         async with self._load_lock:
-            for scope, handle in tuple(self._models.items()):
-                self._detach(handle, scope)
+            for scope in tuple(self._models):
+                self._detach(scope)
             self._models.clear()
         await self.flush()
 
@@ -162,28 +162,17 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
         if self._running:
             await self._idle.wait()
 
-    def _listener_for(self, namespace: SharedT, scope: ScopeT) -> Callable[[], None]:
-        def stage() -> None:
-            self._stage(namespace, scope)
-
-        return stage
-
-    def _detach(self, namespace: SharedT, scope: ScopeT) -> None:
+    def _detach(self, scope: ScopeT) -> None:
         listener = self._listeners.pop(scope, None)
         if listener is not None:
-            namespace._remove_commit_listener(listener)
+            listener.close()
 
-    def _stage(self, namespace: SharedT, scope: ScopeT) -> None:
+    def _stage(self, scope: ScopeT, values: Mapping[str, object]) -> None:
         if self._closing:
             # Queuing here would drop the write silently: no worker is left to drain it.
             # A namespace outliving its pool is the host's mistake, so it is reported like
             # any other persistence failure rather than raised into the action.
             self._report(RuntimeError(f"persisted pool is closed; dropped a write for scope {scope!r}"))
-            return
-        try:
-            values = dict(export_state(namespace))
-        except BaseException as error:
-            self._report(error)
             return
         self._pending[scope] = values
         self._idle.clear()
