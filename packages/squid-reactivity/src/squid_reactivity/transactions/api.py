@@ -1,19 +1,14 @@
 """Open transactions and expose their identity, outcome, and callback registration.
 
 Nested blocks share a handle. The engine owns staged changes and the commit boundary;
-this module installs its scope and translates body and publication failures into outcomes.
+this module installs its scope and exposes the public handle.
 """
 
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import replace
 from typing import Any
 
-from squid_reactivity.diagnostics import (
-    emit_result,
-)
 from squid_reactivity.errors import (
-    FrameworkIntegrityError,
     FreshTransactionError,
     StaleReactiveContextError,
 )
@@ -28,15 +23,11 @@ from squid_reactivity.transactions.context import (
 )
 from squid_reactivity.transactions.engine import (
     TransactionParticipant,
-    _emit_commit,
-    _emit_rollback,
-    _Phase,
     _TransactionEngine,
     _write,
 )
 from squid_reactivity.transactions.patches import ConditionalCellPatch
 from squid_reactivity.transactions.results import (
-    RollbackReason,
     TransactionCommit,
     TransactionResult,
     TransactionRollback,
@@ -71,15 +62,15 @@ class Transaction:
 
     def after_commit(self, callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
         """Run after commit; callback failures cannot change the committed result."""
-        self._add_hook("commit", callback, key=key)
+        self._add_hook(self._check_current().commit_hooks, callback, key=key)
 
     def after_rollback(self, callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
         """Run after rollback; callback failures cannot change the discarded result."""
-        self._add_hook("rollback", callback, key=key)
+        self._add_hook(self._check_current().rollback_hooks, callback, key=key)
 
     def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
         """Run after either outcome. Further writes require a new transaction."""
-        self._add_hook("result", callback, key=key)
+        self._add_hook(self._check_current().result_hooks, callback, key=key)
 
     @property
     def readonly(self) -> bool:
@@ -95,16 +86,19 @@ class Transaction:
             for registered, _ in hooks
         )
 
-    def _add_hook(self, kind: str, callback: Callable[..., None], *, key: object | None) -> None:
+    def _add_hook[ResultT: TransactionResult](
+        self,
+        hooks: list[tuple[object | None, Callable[[ResultT], None]]],
+        callback: Callable[[ResultT], None],
+        *,
+        key: object | None,
+    ) -> None:
         current = self._check_current()
         if not current.writable():
             current.reject_stale("a result hook")
         if key is not None and self.has_hook(key):
             message = f"{key!r} already registered a result hook for this transaction"
             raise RuntimeError(message)
-        hooks = {"commit": current.commit_hooks, "rollback": current.rollback_hooks, "result": current.result_hooks}[
-            kind
-        ]
         hooks.append((key, callback))
 
     def _check_current(self) -> _TransactionEngine:
@@ -128,10 +122,8 @@ def current_transaction() -> Transaction | None:
 
 @contextmanager
 def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> Iterator[Transaction]:
-    """Own staging, the commit point, and outcome delivery for either transaction mode."""
-    current = _TransactionEngine(
-        Transaction(context, readonly=readonly), readonly=readonly, owner_task=_current_task(), context=context
-    )
+    """Install the transaction scope and hand its success or failure to the engine."""
+    current = _TransactionEngine(Transaction(context, readonly=readonly), owner_task=_current_task())
     with causal_scope(context.causal_ref(), context.root_transaction_id):
         token = _CURRENT_TRANSACTION.set(current)
         try:
@@ -139,33 +131,10 @@ def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> 
             yield current.handle
         except BaseException as error:
             _CURRENT_TRANSACTION.reset(token)
-            _emit_rollback(current, error, during_commit=False)
+            current.rollback(error)
             raise
         _CURRENT_TRANSACTION.reset(token)
-        try:
-            _checkpoint("transaction.close_staging")
-            commit = current.commit()
-        except BaseException as error:
-            if current.phase is _Phase.COMMITTED:
-                # Publication is the commit point. An apply failure is an adapter integrity
-                # defect, not a user rollback; retain the commit truth and fail loudly.
-                assert current.commit_record is not None
-                integrity_commit = replace(
-                    current.commit_record,
-                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
-                )
-                current.handle._result = integrity_commit
-                emit_result(integrity_commit)
-                message = f"an infallible transaction adapter failed after the commit point: {error}"
-                raise FrameworkIntegrityError(message) from error
-            else:
-                _emit_rollback(current, error, during_commit=True)
-            raise
-        try:
-            _checkpoint("commit.before_notifications")
-            current.finalize_commit()
-        finally:
-            _emit_commit(current, commit)
+        current.finish()
 
 
 @contextmanager

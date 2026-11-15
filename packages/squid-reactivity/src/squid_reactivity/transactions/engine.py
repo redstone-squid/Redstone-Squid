@@ -10,7 +10,7 @@ import logging
 import uuid
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Protocol
@@ -21,6 +21,7 @@ from squid_reactivity.diagnostics import (
     emit_result,
 )
 from squid_reactivity.errors import (
+    FrameworkIntegrityError,
     ReactiveConflictError,
     ReactiveWriteError,
     StaleReactiveContextError,
@@ -179,7 +180,6 @@ class _TransactionEngine:
     """
 
     handle: Transaction
-    readonly: bool = False
     phase: _Phase = _Phase.STAGING
     owner_task: object | None = None
     """The task that opened this transaction, or `None` outside a running loop."""
@@ -203,13 +203,20 @@ class _TransactionEngine:
     commit_hooks: list[tuple[object | None, Callable[[TransactionCommit], None]]] = field(default_factory=list)
     rollback_hooks: list[tuple[object | None, Callable[[TransactionRollback], None]]] = field(default_factory=list)
     result_hooks: list[tuple[object | None, Callable[[TransactionResult], None]]] = field(default_factory=list)
-    context: TransactionContext = field(default_factory=TransactionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
     cleanup_errors: list[ExceptionReport] = field(default_factory=list)
     prepared_participants: list[tuple[TransactionParticipant[Any], Any]] = field(default_factory=list)
     commit_record: TransactionCommit | None = None
+
+    @property
+    def context(self) -> TransactionContext:
+        return self.handle.context
+
+    @property
+    def readonly(self) -> bool:
+        return self.handle.readonly
 
     @property
     def closed(self) -> bool:
@@ -384,6 +391,32 @@ class _TransactionEngine:
         ):
             yield
 
+    def finish(self) -> None:
+        """Publish staged work and deliver its outcome, preserving the commit on later failure."""
+        try:
+            _checkpoint("transaction.close_staging")
+            commit = self.commit()
+        except BaseException as error:
+            if self.phase is _Phase.COMMITTED:
+                # Publication is the commit point. An apply failure is an adapter integrity
+                # defect, not a user rollback; retain the commit truth and fail loudly.
+                assert self.commit_record is not None
+                integrity_commit = replace(
+                    self.commit_record,
+                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
+                )
+                self.handle._result = integrity_commit
+                emit_result(integrity_commit)
+                message = f"an infallible transaction adapter failed after the commit point: {error}"
+                raise FrameworkIntegrityError(message) from error
+            self.rollback(error, during_commit=True)
+            raise
+        try:
+            _checkpoint("commit.before_notifications")
+            self.finalize_commit()
+        finally:
+            self._emit_commit(commit)
+
     def commit(self) -> TransactionCommit:
         """Prepare everything, publish synchronously, and return the immutable commit."""
         self.phase = _Phase.PREPARING
@@ -482,6 +515,33 @@ class _TransactionEngine:
             _bump_epoch()
         return tuple(self.cleanup_errors)
 
+    def _emit_commit(self, commit: TransactionCommit) -> None:
+        self.handle._result = commit
+        emit_result(commit)
+        _notify_hooks(commit, self.commit_hooks)
+        _notify_hooks(commit, self.result_hooks)
+
+    def rollback(self, error: BaseException, *, during_commit: bool = False) -> TransactionRollback:
+        """Discard staged work, record the failure, and deliver rollback callbacks."""
+        cleanup_errors = self.abort(error)
+        rolled_back_at = datetime.now(UTC)
+        rollback = TransactionRollback(
+            self.context,
+            rolled_back_at,
+            rolled_back_at - self.context.started_at,
+            _rollback_reason(error, during_commit=during_commit),
+            self.reads(),
+            error.detail if isinstance(error, ReactiveConflictError) else None,
+            ExceptionReport.capture(error),
+            ChangeReport(len(self.writes), len(self.participants)),
+            cleanup_errors,
+        )
+        self.handle._result = rollback
+        emit_result(rollback)
+        _notify_hooks(rollback, self.rollback_hooks)
+        _notify_hooks(rollback, self.result_hooks)
+        return rollback
+
 
 @dataclass(frozen=True, slots=True)
 class _FrozenTransactionView:
@@ -563,31 +623,3 @@ def _notify_hooks(
                     getattr(callback, "__qualname__", type(callback).__qualname__),
                     error,
                 )
-
-
-def _emit_commit(current: _TransactionEngine, commit: TransactionCommit) -> None:
-    current.handle._result = commit
-    emit_result(commit)
-    _notify_hooks(commit, current.commit_hooks)
-    _notify_hooks(commit, current.result_hooks)
-
-
-def _emit_rollback(current: _TransactionEngine, error: BaseException, *, during_commit: bool) -> TransactionRollback:
-    cleanup_errors = current.abort(error)
-    rolled_back_at = datetime.now(UTC)
-    rollback = TransactionRollback(
-        current.context,
-        rolled_back_at,
-        rolled_back_at - current.context.started_at,
-        _rollback_reason(error, during_commit=during_commit),
-        current.reads(),
-        error.detail if isinstance(error, ReactiveConflictError) else None,
-        ExceptionReport.capture(error),
-        ChangeReport(len(current.writes), len(current.participants)),
-        cleanup_errors,
-    )
-    current.handle._result = rollback
-    emit_result(rollback)
-    _notify_hooks(rollback, current.rollback_hooks)
-    _notify_hooks(rollback, current.result_hooks)
-    return rollback
