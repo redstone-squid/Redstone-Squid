@@ -7,6 +7,7 @@ from squid_ui import Component
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.primitives import Heading, Text
 from squid_ui.runtime import ComponentRuntime
+from squid_ui.selectors import query, select, snapshot
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord import testing as sd
 from squid_ui_discord.navigation import StackNavigator
@@ -90,7 +91,8 @@ async def test_same_screen_keeps_its_namespace_at_a_different_depth() -> None:
     runtime = ComponentRuntime(navigator, context={CHROME_CONTEXT: DEFAULT_CHROME})
     before = runtime.render()
     runtime.commit(before)
-    child_path = next(path for path, component in before.components.items() if component is child)
+    retained_screen = select(child)
+    namespace = query(snapshot(before), retained_screen).one().qualified_key
 
     navigator.push(Screen("middle"))
     runtime.commit(runtime.render(reuse_committed=True))
@@ -98,6 +100,7 @@ async def test_same_screen_keeps_its_namespace_at_a_different_depth() -> None:
     after = runtime.render(reuse_committed=True)
     runtime.commit(after)
 
-    assert after.components[child_path] is child
+    assert query(snapshot(after), retained_screen).one().qualified_key == namespace
     navigator.home()
-    assert runtime.render(reuse_committed=True).components[child_path] is child
+    home = runtime.render(reuse_committed=True)
+    assert query(snapshot(home), retained_screen).one().qualified_key == namespace
