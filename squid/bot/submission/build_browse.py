@@ -501,14 +501,24 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._mode == "tools" and self._record_tools is not None:
             return (self._workspace_controls(), self._record_tools)
         nodes = [self._workspace_controls(), *self._find_nodes()]
-        if self._selected is not None:
+        if self._show_search_help:
+            # Help takes the place of the list or build below the search controls, so it reads
+            # as part of searching. Closing it brings back the same list or build.
+            nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"catalogue-search-help-close = Close help"), self._toggle_search_help, key="close-help"
+                    ),
+                    key="help-actions",
+                )
+            )
+        elif self._selected is not None:
             nodes.append(self._selected)
         elif self._results is not None:
             nodes.append(self._results)
         else:
             nodes.append(self._records if self._mode == "records" and self._records is not None else self._browser)
-        if self._show_search_help:
-            nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
         return tuple(nodes)
 
     def _workspace_controls(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
@@ -770,6 +780,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._query = query
         self._sort = sort
         self._selected = None
+        # A new search shows its results, so help gives way to them.
+        self._show_search_help = False
 
     async def _back(self, _event: sl.ActionEvent) -> None:
         self._selected = None

@@ -37,60 +37,78 @@ def search_help(
     records: bool,
     apply_example: Callable[[str, sl.PressEvent], Awaitable[None]],
 ) -> sp.Tabs[sl.ComponentsV2Target, sd.Request]:
-    """Build the tabbed reference appended below the catalogue or its results."""
+    """Build the tabbed search reference that the catalogue shows in place of its list."""
     if records:
+        base_titles = ", ".join(title.value for title in BaseTitle)
+        kinds = ", ".join(kind.value for kind in BuildKind)
+        scopes = ", ".join(scope.value for scope in VersionScope)
         fields = (
             sl.paragraph(
                 tr(
-                    t"search-reference-record-scope = Record filters describe the record category. Build "
-                    t"dimensions and creator filters belong in Builds."
+                    t"search-reference-record-scope = Record filters describe the record. To filter by build size "
+                    t"or creator, search Builds instead."
                 )
             ),
-            _entry("title", tr(t"search-reference-record-title = Words in the indexed title; for example title:door.")),
-            _entry("kind", ", ".join(kind.value for kind in BuildKind)),
-            _entry("base_title", ", ".join(title.value for title in BaseTitle)),
-            _entry("version_scope", ", ".join(scope.value for scope in VersionScope)),
+            _entry(
+                tr(t"search-reference-label-record-type = Record type"),
+                md_tr(t"search-reference-record-type = `base_title:` {base_titles}"),
+            ),
+            _entry(
+                tr(t"search-reference-label-kind = Kind"),
+                md_tr(t"search-reference-kind = `kind:` {kinds}"),
+            ),
+            _entry(
+                tr(t"search-reference-label-version-scope = Version scope"),
+                md_tr(t"search-reference-version-scope = `version_scope:` {scopes}"),
+            ),
+            _entry(
+                tr(t"search-reference-label-title = Title words"),
+                md_tr(t"search-reference-record-title = `title:door`"),
+            ),
             sl.paragraph(
                 tr(
-                    t"search-reference-record-types = The type toggles match any selected type, then combine "
-                    t"with your typed query. Use base_title for combined titles such as fastest_smallest."
+                    t"search-reference-record-types = The Smallest, Fastest and First buttons match records of any "
+                    t"selected type, together with your query."
                 )
             ),
         )
     else:
+        categories = ", ".join(kind.value for kind in BuildCategory)
         fields = (
-            _entry("kind", ", ".join(kind.value for kind in BuildCategory)),
-            _entry(
-                "title · description",
-                tr(t"search-reference-text = Words or quoted phrases in the title or description."),
-            ),
-            _entry(
-                "creator · version",
-                tr(t'search-reference-credit = Creator name or Minecraft version; creator:Steve, version:"Java 1.20".'),
-            ),
-            _entry(
-                "tag · restriction · type · pattern",
-                tr(t"search-reference-tags = A known tag, restriction or pattern name. Quote names containing spaces."),
-            ),
-            _entry(
-                "width · height · depth",
-                md_tr(
-                    t"search-reference-size = Physical build dimensions in blocks and volume in blocks "
-                    t"cubed, not the door opening size. Use width<=5 or width:[3 TO 5].",
-                ),
-            ),
-            _entry(
-                "completion_at · created_at · updated_at",
-                tr(
-                    t"search-reference-dates = Completion, submission and update dates. Use YYYY-MM-DD, for "
-                    t"example completion_at>=2025-01-01."
-                ),
-            ),
             sl.paragraph(
-                tr(
-                    t"search-reference-autocomplete = For suggested field names and values, use the query "
-                    t"option of /search. Discord modals cannot show those suggestions."
+                md_tr(
+                    t"search-reference-intro = Type words to match titles and descriptions. Add filter lists every "
+                    t"field and its known values, or type filters yourself, like `width<=5`."
                 )
+            ),
+            _entry(
+                tr(t"search-reference-label-kind = Kind"),
+                md_tr(t"search-reference-build-kind = `kind:door` · {categories}"),
+            ),
+            _entry(
+                tr(t"search-reference-label-size = Size"),
+                md_tr(
+                    t"search-reference-size = `width<=5`, `height:[3 TO 5]`, `depth`, `volume`. The whole build in "
+                    t"blocks, not the door opening."
+                ),
+            ),
+            _entry(
+                tr(t"search-reference-label-credit = Creator and version"),
+                md_tr(t'search-reference-credit = `creator:Steve`, `version:"Java 1.20"`'),
+            ),
+            _entry(
+                tr(t"search-reference-label-tags = Restrictions, patterns and tags"),
+                md_tr(
+                    t'search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `tag:`. '
+                    t"Quote names with spaces."
+                ),
+            ),
+            _entry(
+                tr(t"search-reference-label-dates = Dates"),
+                md_tr(
+                    t"search-reference-dates = `completion_at>=2025-01-01`. Also `created_at` (submitted) and "
+                    t"`updated_at`."
+                ),
             ),
         )
     examples = RECORD_EXAMPLES if records else BUILD_EXAMPLES
@@ -113,17 +131,17 @@ def search_help(
         (
             sp.Tab(
                 "fields",
-                tr(t"search-reference-fields = Fields & values"),
-                sl.section(sl.heading(tr(t"search-reference-fields = Fields & values")), _reference(fields)),
+                tr(t"search-reference-fields = What you can search"),
+                sl.section(sl.heading(tr(t"search-reference-fields = What you can search")), _reference(fields)),
             ),
             sp.Tab(
                 "examples",
-                tr(t"search-reference-examples = Worked examples"),
+                tr(t"search-reference-examples = Examples"),
                 (
                     sl.note(
                         tr(
-                            t"search-reference-example-reset = Try a search to replace your current query, "
-                            t"type toggles and sort order."
+                            t"search-reference-example-reset = Running an example replaces your current query, "
+                            t"type buttons and sort."
                         )
                     ),
                     *example_nodes,
@@ -131,46 +149,31 @@ def search_help(
             ),
             sp.Tab(
                 "syntax",
-                tr(t"search-reference-syntax = Syntax & sorting"),
+                tr(t"search-reference-syntax = Combining filters"),
                 sl.section(
-                    sl.heading(tr(t"search-reference-syntax = Syntax & sorting")),
-                    _reference(
-                        (
-                            sl.paragraph(
-                                tr(
-                                    t"search-reference-and = Spaces mean AND: door width<=5 requires both. OR "
-                                    t"accepts either: (door OR extender) width<=5 applies the width limit to both "
-                                    t"alternatives."
-                                )
-                            ),
-                            sl.paragraph(
-                                tr(
-                                    t"search-reference-not = NOT excludes a match: door NOT "
-                                    t"restriction:observerless. AND binds more tightly than OR; use parentheses to "
-                                    t"group alternatives."
-                                )
-                            ),
-                            sl.paragraph(
+                    sl.heading(tr(t"search-reference-syntax = Combining filters")),
+                    sl.paragraph(
+                        Text.join(
+                            "\n",
+                            (
+                                md_tr(t"search-reference-and = - Everything you type must match: `door width<=5`."),
                                 md_tr(
-                                    t'search-reference-operators = Quote phrases: title:"vault door". Numbers and '
-                                    t"dates support <, <=, >, >= and inclusive ranges such as width:[3 TO 5]. "
-                                    t"Wildcards (* and ?) are not supported.",
-                                )
-                            ),
-                            sl.paragraph(
+                                    t"search-reference-or = - `OR` matches either side. Group with brackets: "
+                                    t"`(door OR extender) width<=5`."
+                                ),
+                                md_tr(
+                                    t"search-reference-not = - `NOT` leaves matches out: "
+                                    t"`door NOT restriction:observerless`."
+                                ),
+                                md_tr(
+                                    t'search-reference-operators = - Quote phrases: `title:"vault door"`. Compare '
+                                    t"numbers and dates with `<`, `<=`, `>`, `>=` or a range like `[3 TO 5]`."
+                                ),
+                                md_tr(t"search-reference-sort = - Order results with Sort, not in the query."),
                                 tr(
-                                    t"search-reference-sort = Put one field in Sort, not in the query. Available "
-                                    t"fields: width, height, depth, created_at, updated_at. Prefix with - to reverse "
-                                    t"order. Dimensions apply to Builds. Blank uses relevance for keywords; "
-                                    t"filter-only searches use the default result order."
-                                )
-                            ),
-                            sl.paragraph(
-                                tr(
-                                    t"search-reference-empty = No matches? Turn off type toggles, remove one filter "
-                                    t"at a time, and check Fields & values. Records only includes populated "
-                                    t"standings; hidden builds are never made visible by a filter."
-                                )
+                                    t"search-reference-empty = - No results? Remove filters one at a time. Filters "
+                                    t"never reveal hidden builds."
+                                ),
                             ),
                         )
                     ),
@@ -182,7 +185,7 @@ def search_help(
     )
 
 
-def _entry(label: str, value: sl.TextLike) -> Fields:
+def _entry(label: sl.TextLike, value: sl.TextLike) -> Fields:
     return sl.fields(sl.field(label, value))
 
 
