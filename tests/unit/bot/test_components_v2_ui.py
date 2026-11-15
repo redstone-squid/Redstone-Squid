@@ -27,6 +27,7 @@ from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
 from squid_i18n import source_text
+from squid_ui.selectors import query, scope, select, snapshot
 from squid_ui.ext.discord import SessionSpec
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
@@ -522,17 +523,14 @@ async def test_build_card_shows_compact_attachment_specific_dimensions(display_b
     assert reader.calls == [7]
     assert isinstance(node, sl.semantic.Section)
     # The shorter resource entry retains the exact download, with no dimensions.
-    resource = next(
-        child
-        for child in node.children
-        if isinstance(child, sl.semantic.Section)
-        and any(
-            isinstance(part, sl.semantic.Fields)
-            and any("/schematics/42/content" in source_text(field.value) for field in part.fields)
-            for part in child.children
-        )
+    tree = snapshot(node)
+    schematic_entry = select(sl.semantic.Field).where(
+        lambda field: "/schematics/42/content" in source_text(field.value)
     )
-    entries = next(part for part in resource.children if isinstance(part, sl.semantic.Fields))
+    resource_fields = select(sl.semantic.Fields).has(schematic_entry, direct=True)
+    resource_section = select(sl.semantic.Section).has(resource_fields, direct=True)
+    resource = query(tree, select(node).children(resource_section)).one()
+    entries = query(tree, scope().children(select(sl.semantic.Fields)), within=resource).one().node
     measured = entries.fields[0]
     assert "/schematics/42/content" in source_text(measured.fallbacks[0])
     assert "12 \u00d7 8 \u00d7 10" not in source_text(measured.fallbacks[0])
