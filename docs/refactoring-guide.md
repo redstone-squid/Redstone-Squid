@@ -1,162 +1,175 @@
-# Refactoring and cleanup
+# Refactoring and cleanup in Python libraries
 
-This guide captures the expectations reflected in the `squid_reactivity` changes
-of November 14–15, 2026. Apply the same judgment elsewhere in the repository.
 The goal is code whose concepts, ownership, and ordinary use are easy to understand.
 A cleanup should reduce how much a reader must discover to make a correct change.
+These guidelines apply to small utility packages as well as libraries with state,
+asynchronous work, or integrations. Apply the parts that fit the library; a simple
+function does not need an object lifecycle or an extension system.
 
-Read this alongside [the documentation style guide](code-documentation-style.md).
+For comments and docstrings, see [the documentation style guide](code-documentation-style.md).
 
 ## Understand the responsibility before changing the shape
 
 Read the implementation, its callers, and its tests together. Work out what each
-type represents, which object owns its state, and where its lifetime ends. Then
-decide what belongs together and what should disappear.
+type represents, which object owns its state, and where its lifetime ends. Trace
+an ordinary call from input to result before deciding what belongs together and
+what should disappear.
 
 Moving functions between files is useful when it makes those responsibilities
 clearer. Renaming a vague abstraction without resolving its mixed responsibilities
 leaves the hard part untouched. Likewise, splitting a large file into arbitrary
 pieces just makes the reader visit more files.
 
-For example, transaction scope, execution, identity, and results are distinct
-responsibilities. The scope installs the active transaction and hands completion
-to the engine. The engine owns staging, publication, and outcome delivery. The
-public handle gives callers access to context, results, and callback registration.
-Each part should have enough authority to do its job without reaching into the
-others' storage.
+For example, parsing configuration, validating it, and opening resources from it
+are different responsibilities. Separate them when callers need to validate
+without performing I/O, or when their dependencies and lifetimes differ. Keep
+closely related steps together when splitting them would only add forwarding calls.
+Let the actual responsibilities determine the structure.
 
 ## Put behavior with the state it governs
 
-Keep mutation, validation, and lifecycle decisions with their owner. A transaction
-handle can check whether it is being used in the right context, but the engine
-should manage its callback lists, ownership checks, and duplicate registration
-rules. Callers should ask it to register a callback rather than manipulate those
-lists themselves.
+Keep mutation, validation, and lifecycle decisions with their owner. A registry
+should manage its entries and duplicate-registration rules. Callers should ask it
+to register an item rather than check and modify its private dictionary themselves.
 
-Methods that describe or inspect a cell belong on the cell when they are part of
-its responsibility: `cell.label` and `cell.staged_value()` are examples. Avoid
-scattering helpers that take an object only to interpret its private fields.
-Keep application policy out of shared storage types.
+A helper that mostly interprets an object's private fields may belong on that
+object. Alternate constructors can belong on the type they construct. Keep
+application policy and transport dependencies out of shared value types, and keep
+stateless transformations as functions when no object needs to own them.
 
-Give each fact one authoritative home. Derive transaction metadata from the
-active transaction rather than maintaining another ambient copy. Remove fields
-that merely duplicate the handle's context or read-only status. Every stored copy
-creates another consistency rule that future changes must preserve.
+Give each fact one authoritative home. Derive a session's configuration from its
+configuration object rather than copying individual flags into several wrappers.
+Every stored copy creates another consistency rule that future changes must
+preserve. Store derived data only when there is a reason, and define how it stays
+valid.
 
 ## Make lifetime and context explicit
 
 Use an explicit object when the caller is acting on a particular lifetime.
-`tx.after_commit(callback)` says which transaction owns the registration. An
-ambient registration function makes that relationship harder to see.
+`session.on_close(callback)` says which session owns the registration. A global
+registration function makes that relationship harder to see.
 
-Pass causality explicitly when code starts work, such as
-`operation.start(caused_by=tx.context)`. Keep implicit context where the API needs
-it, such as a field read discovering its transaction and dependency collector.
-For each remaining context variable, explain who owns it, how nested scopes
-restore it, and what child tasks inherit.
+Pass dependencies and execution context explicitly where practical. Keep implicit
+context where it serves the interface, such as request-scoped tracing. For each
+`ContextVar`, explain who owns its value, how nested scopes restore it, and what
+child tasks inherit. A copied context does not give each task an independent copy
+of a mutable value.
 
-Separate an immutable reference to earlier work from access to live execution
-state. Retaining a transaction's causal identity must not keep its overlay active.
-Similarly, a cache belongs to the view in which it was computed; another
-transaction must not accidentally read that view's staged values.
+Separate a record of earlier work from access to live resources. Retaining a job's
+result should not accidentally retain an open connection or keep a session usable
+after it closes. Define who closes resources, whether callers may supply borrowed
+resources, and what remains valid after cleanup. Use context managers when scope
+is the natural owner of cleanup.
 
-Remove synchronization only after checking the execution model. Synchronous
-publication on an owning thread can make a commit lock unnecessary, but that
-does not establish that the objects are safe to share across threads. Preserve
-ownership checks and the cancellation behavior around publication.
+Check the execution model before changing synchronization. Identify which state
+can be shared across tasks or threads and where execution can interleave. Preserve
+ownership checks, cancellation behavior, and cleanup on partial failure. Removing
+a lock requires a concrete reason that the protected access no longer needs it.
 
 ## Use names and types that expose the actual distinctions
 
-Use one term consistently for one concept. Reserve `Signal` for the valueless
-source it actually names; ordinary state fields need not also be called signals.
-Distinguish a subscription source from an owner of transactional state. Distinguish
-a resolved dependency address from a name that a bus still needs to resolve.
+Use one term consistently for one concept. Distinguish a parsed value from raw
+input, a resource name from an open handle, and a job definition from one execution
+of that job. Avoid making readers infer these differences from call order.
 
-Name functions and modules for their role. A lookup of the active transaction
-engine should say that; a generic name such as `active` leaves readers guessing.
-Arrange definitions by responsibility and reading flow, keeping related state,
-public operations, and their supporting implementation near one another.
+Name functions and modules for their role. `current_session()` is clearer than
+`active()` when the question is which session is running. Arrange definitions by
+responsibility and reading flow, keeping related operations and their supporting
+implementation near one another. Avoid turning `utils.py` into a home for unrelated
+code whose ownership has not been decided.
 
-Carry meaningful types through the whole path. A typed cell should not lose its
-value type when it enters staging, and an asynchronous binding should retain its
-status type. Declare concrete protocol implementations explicitly where that
-makes their contract checkable. Expose read-only properties when mutation is not
-part of the interface. These changes should let the type checker enforce a real
-constraint, rather than merely add annotations around `Any`.
+Carry meaningful types through the whole path. A cache of a particular value type
+should retain that type through lookup and loading. Use protocols for capabilities
+that consumers actually need; declare concrete implementations explicitly when
+that helps check their contract. Expose read-only properties when mutation is not
+part of the interface. Annotations should enforce useful constraints rather than
+surround untyped operations with casts or `Any`.
+
+Choose syntax and typing features that fit the library's supported Python versions.
+An internal cleanup should not silently raise its minimum Python version.
 
 ## Make the supported API small and usable
 
-Give ordinary callers a public way to ask ordinary questions. They should use
-`current_transaction()` rather than read a private context variable. Tests should
-prefer observable results and inspection APIs over private storage when those
-express the behavior being tested.
+Give ordinary callers a public way to ask ordinary questions. They should be able
+to inspect whether a session is closed without reading its private flags. Tests
+should prefer observable results and inspection APIs over private storage when
+those express the behavior being tested.
 
-Keep everyday authoring operations at the package root and specialist interfaces
-in focused public modules. Mark implementation modules with a leading underscore.
-Avoid providing multiple competing import paths for the same everyday concept.
-Keep any necessary integration internals narrow and explicit about their stability.
+Choose clear, documented import paths. A small package may expose its everyday
+operations at the root; a larger library may use focused public modules. Mark
+implementation modules with a leading underscore and keep re-exports deliberate.
+Users should not have to choose between several apparently equivalent entry points.
 
-Remove redundant aliases such as `batch` when `transaction` already expresses
-the operation. Update callers, exports, tests, and examples together. Do not leave
-compatibility wrappers by habit; retain one only for an actual compatibility
-requirement.
+Remove redundant aliases and forwarding layers when compatibility permits it.
+Update callers, exports, tests, and examples together. For a published library,
+repository searches cannot establish that a public API is unused: external callers
+may depend on imports, signatures, subclass hooks, and serialized objects. Follow
+the library's compatibility policy and provide a deprecation or migration path
+when required. Keep temporary shims purposeful, with a defined removal condition.
 
 ## Remove machinery without a consumer
 
-Check repository-wide usage before preserving a report, codec, abstraction, or
-extension point. Diagnostic snapshots and delivery belong in the reactive
-library; an application's serialization format and storage can belong in its
-sink. A codec with no consumer does not become necessary just because it already
-has tests.
+Check usage before preserving a report, codec, abstraction, or extension point.
+Look beyond direct calls to callback registrations, plugins, dynamic imports, and
+supported external integrations. Tests alone do not establish that an otherwise
+unused abstraction serves a user.
 
-Remove unused reporting fields while preserving the internal tracking needed
-for conflict detection. Replace tests of removed bookkeeping with tests of the
-behavior that still matters. Keep useful parsing, validation, lifecycle helpers,
-and named domain rules; reducing line count alone is not a reason to inline them.
+Keep the library's responsibility distinct from application choices. A library
+may produce diagnostic records while applications decide where and how to store
+them. A serialization library, by contrast, owns its formats. Place behavior based
+on the package's purpose rather than applying a universal rule about layers.
 
-Avoid work when nobody requested its result. Diagnostic observation should not
-allocate delivery bookkeeping when there are no observers, and detailed validation
-reports can be opt-in. Preserve redaction and delivery semantics when optimizing.
+Remove unused reporting fields while preserving the internal bookkeeping needed
+for correctness. Replace tests of removed bookkeeping with tests of the behavior
+that still matters. Keep useful parsing, validation, lifecycle helpers, and named
+domain rules; reducing line count alone is not a reason to inline them. Similar
+code in unrelated domains does not always need a shared abstraction.
 
 ## Keep independent policies independent
 
-Defaults should make ordinary declarations straightforward. Persistence is an
-explicit field choice with `persist=True`; runtime-only fields should not need
-repeated opt-outs. Identity comparison is a separate choice: a non-JSON value
-does not automatically need `opaque=True`.
+Options should express separate decisions. Persistence, equality, caching, and
+validation are different policies; one flag should not change several of them
+unless that relationship is part of the documented contract.
 
-Likewise, cross-transaction computed reuse is an explicit optimization with
-`@computed(reuse=True)`. It must validate dependencies and preserve conflict
-tracking. Benchmark it against realistic alternatives, and explain the restrictions
-on functions that can use it. Do not make a more complicated execution policy
-universal just because some callers benefit.
+Choose defaults that make the common case straightforward. Repeated opt-outs in
+callers can reveal a poor default, but changing it is a behavior change. Review
+existing callers and external compatibility before making that change.
 
-Changing a default or adding listener behavior changes the contract. Treat that
-as a deliberate behavior change, migrate affected callers, and test it separately
-from mechanical moves or renames.
+Make expensive or restrictive behavior optional when only some callers need it.
+For example, detailed diagnostics can be opt-in. Caching needs a defined key,
+lifetime, and invalidation rule, including the inputs supplied through context.
+Explain whether enabling it changes evaluation frequency or side effects.
+
+Optimize a demonstrated cost. Compare against realistic alternatives and preserve
+ordering, errors, and resource usage guarantees. Avoid allocating diagnostic data
+when nobody consumes it, but retain the checks needed for correctness.
 
 ## Preserve the boundaries that callers observe
 
-Before restructuring lifecycle code, identify the irreversible point. Once state
-is published, a later notification failure cannot truthfully turn the outcome into
-a rollback. Preserve that distinction in results, error handling, and diagnostics.
+Before restructuring lifecycle code, identify the irreversible point. Once a file
+has been replaced or a transaction committed, a later callback failure cannot
+truthfully mean that nothing happened. Preserve that distinction in results, error
+handling, and diagnostics.
 
-Ordering also belongs to the contract. Change listeners run after the commit has
-finished announcing itself. Queue and deduplication improvements must preserve
-that ordering and avoid exposing partially announced changes. Errors should name
-the failing listener or operation so someone can act on them.
+Ordering, exception types, laziness, and resource ownership can all be observable
+contracts. Replacing an iterator with a list changes when work happens and how much
+memory it needs. Moving validation can change which error a caller sees first.
+Queue and deduplication improvements can change callback order. Review these
+consequences even when return values look identical.
 
-Choose tests around these boundaries: conflicting reads, rollback, stale contexts,
-cancellation, callback failure, and listener ordering. Keep coverage that explains
-why an invariant matters. Avoid tests that merely freeze the current file layout
-or private representation unless the boundary itself is the requirement.
+Choose tests around the behavior at risk: invalid input, empty results, partial
+failure, repeated calls, cancellation, callback failure, or concurrent access.
+For an unfamiliar implementation, establish existing behavior before restructuring
+it. Treat bug fixes and intentional contract changes as separate decisions, with
+focused regression coverage. Avoid tests that freeze private representation unless
+that representation is itself a required boundary.
 
 ## Explain the library on its own terms
 
-A reader should be able to understand reactive models, transactions, and listeners
-without first learning the UI renderer. Start with what the reader wants to do,
-show an ordinary example, and then explain the relevant limits. A concrete
-conflicting transaction teaches more than a list of transaction-related symbols.
+A reader should be able to understand a library without first learning the
+application that uses it. Introduce its concepts, start with what the reader wants
+to do, show an ordinary example, and then explain the relevant limits. A concrete
+input and result usually teach more than a list of exported symbols.
 
 Keep the contract at the interface and the implementation's reasoning beside the
 implementation. Document lifetime, ownership, and surprising behavior where needed.
@@ -167,18 +180,24 @@ throughout the source, or preserve historical explanations after their reason is
 
 Make small, independently valid commits. Separate mechanical organization from
 semantic changes where practical, so reviewers can tell what requires behavioral
-scrutiny. A rename is complete when imports, tests, examples, and documentation
-all use the same vocabulary.
+scrutiny. A rename is complete when supported imports, tests, examples, and
+documentation agree, including any intentional compatibility paths.
 
 Before finishing, check that:
 
 - Each responsibility and piece of mutable state has a clear owner.
 - Ordinary callers can use the supported API without knowing its storage layout.
-- Removed aliases, fields, and helpers have no remaining consumers.
-- Defaults and observable behavior are preserved or deliberately migrated.
-- Focused tests pass with `--no-cov` after the final relevant edit.
-- Changed code is formatted and linted, `git diff --check` passes, and the whole
-  project passes `just typecheck`, following the repository's validation rules.
+- Removed interfaces have been checked against internal usage and external contracts.
+- Observable behavior is preserved or deliberately changed with a migration path.
+- Focused tests cover the affected behavior and pass after the final relevant edit.
+- Formatting, linting, type checking, and diff checks pass under the project's rules.
+- Changes to exports, dependencies, or packaging work from an installed distribution,
+  and relevant checks cover the supported Python versions.
+
+Scale validation to the change. Documentation edits need accuracy and link checks;
+a package move may need installation and import checks; a lifecycle rewrite needs
+failure-path tests. Follow the project's validation requirements without adding
+tests that merely repeat the implementation.
 
 The useful review question is whether an engineer new to this code can find the
 right entry point, explain who owns the work, and predict its result without
