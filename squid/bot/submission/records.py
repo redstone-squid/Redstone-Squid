@@ -264,16 +264,16 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                         )
                     ),
                     sl.action_controls(
+                        sl.action_control(
+                            tr(t"records-choose-restriction = Add restriction"),
+                            self._choose_restriction,
+                            key="restriction",
+                        ),
                         sl.form(
                             tr(t"records-exact-category = Look up exact category"),
                             self._lookup_form(),
                             key="lookup",
                             on_submit=self._lookup,
-                        ),
-                        sl.action_control(
-                            tr(t"records-choose-restriction = Add restriction"),
-                            self._choose_restriction,
-                            key="restriction",
                         ),
                         *(
                             sl.action_control(
