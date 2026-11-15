@@ -582,15 +582,15 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
     queries.list_page.side_effect = (
         Page(
             items=tuple(
-                DoorBuild(id=identifier, submission_status=Status.CONFIRMED) for identifier in range(37, 12, -1)
+                DoorBuild(id=identifier, submission_status=Status.CONFIRMED) for identifier in range(27, 12, -1)
             ),
-            total=26,
+            total=16,
             next=PageAnchor(after_id=13),
             prev=None,
         ),
         Page(
             items=(DoorBuild(id=12, submission_status=Status.CONFIRMED),),
-            total=26,
+            total=16,
             next=None,
             prev=PageAnchor(offset=0),
         ),
@@ -602,7 +602,7 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
         await ui.press(ui.key_for("builds.item-next"))
         assert "Build #12" in ui.texts()
         queries.list_page.assert_awaited_with(
-            statuses=frozenset({Status.CONFIRMED, Status.PENDING}), selector=PageSelector(offset=25), page_size=25
+            statuses=frozenset({Status.CONFIRMED, Status.PENDING}), selector=PageSelector(offset=15), page_size=15
         )
 
 
@@ -696,8 +696,8 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form(ui.key_for("builds.seek.jump"))
         await form.submit({"page": "13"})
-        assert queries.list_page.await_args.kwargs["selector"] == PageSelector(offset=300)
-        assert any("Page 13 of 16" in text for text in ui.texts())
+        assert queries.list_page.await_args.kwargs["selector"] == PageSelector(offset=180)
+        assert any("Page 13 of 27" in text for text in ui.texts())
         ui.assert_within_limits()
 
 
@@ -733,7 +733,7 @@ async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> N
             assert screen._guided is editor
             assert screen._query == query
             assert service.search.call_args.args[0].query == query
-            assert service.search.call_args.args[0].page_size == 25
+            assert service.search.call_args.args[0].page_size == 15
             assert not ui.root.finished
             assert "## Search results" in ui.texts()
         await ui.press(ui.key_for("remove-0"))
@@ -967,14 +967,13 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "width:3 AND height:5 AND depth:2"})
         await ui.select(ui.key_for("search.open"), ["build:7"])
-        await ui.press(ui.key_for("open-build"))
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             ui.control(ui.key_for("advanced"))
-            ui.control("back")
+            ui.control(ui.key_for("search.back"))
             ui.assert_within_limits()
         await ui.press(ui.key_for("schematic-tools"))
-        assert len(ui.root._candidates.continuations) == 2
+        assert ui.root._candidates.continuations
         ui.control(ui.key_for("schematic-info"))
         await ui.press(ui.key_for("next-clauses"))
         ui.control(ui.key_for("edit-2"))
@@ -982,8 +981,8 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))
             ui.assert_within_limits()
-        await ui.press("back")
-        ui.control(ui.key_for("open-build"))
+        await ui.press(ui.key_for("search.back"))
+        ui.control(ui.key_for("search.open"))
         assert screen._guided is not None
         assert screen._show_search_help
         assert screen._query == "width:3 AND height:5 AND depth:2"

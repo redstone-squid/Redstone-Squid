@@ -17,7 +17,7 @@ from squid.bot.navigation.destinations import BuildDetail, BuildIndex
 from squid.bot.navigation.router import screen_route
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
 from squid.bot.submission.query_clauses import query_leaves
-from squid.bot.submission.record_browser import record_browser
+from squid.bot.submission.record_browser import CATALOGUE_PAGE_SIZE, record_browser
 from squid.bot.submission.records import RecordsScreen
 from squid.bot.submission.schematic_tools import SchematicTools
 from squid.bot.submission.search_help import search_help
@@ -483,7 +483,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             # domain type stays optional only for a build that has not been submitted yet.
             summary=_build_summary,
             detail=self._detail,
-            page_size=25,
+            page_size=CATALOGUE_PAGE_SIZE,
+            show_page_size=True,
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
             empty=tr(t"build-list-empty = No builds are available."),
             # `_BuildSource` uses the default listing order: highest, so newest, build ID first.
@@ -752,7 +753,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             expression if scope is SearchScope.RECORDS else query,
             scope=scope,
             sort=SearchSort.parse(sort or None),
-            page_size=25,
+            page_size=CATALOGUE_PAGE_SIZE,
             visible_statuses=frozenset(status.name.lower() for status in self._statuses),
             # One row per build, listing the records it holds, as /search shows results.
             group_by_build=True,

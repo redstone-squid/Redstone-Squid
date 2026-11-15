@@ -15,6 +15,9 @@ from squid.records.application.models import PublishedTitle
 from squid_i18n import md_tr
 from squid_ui.sources import window_fingerprint
 
+CATALOGUE_PAGE_SIZE = 15
+"""Rows per page in the catalogue's build, record, and search lists; viewers can change it."""
+
 
 class RecordSource:
     capabilities = sl.sources.SourceCapabilities(
@@ -80,7 +83,8 @@ def record_browser(
         label=lambda record: truncate_display_text(record.title, 80),
         summary=lambda record: sl.md(t"**{record.title}** — {record.version_scope.replace('_', ' ')}"),
         detail=detail,
-        page_size=25,
+        page_size=CATALOGUE_PAGE_SIZE,
+        show_page_size=True,
         title=tr(t"record-browse-title = Records"),
         empty=tr(t"record-browse-empty = No published records are available."),
     )
