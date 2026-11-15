@@ -91,7 +91,6 @@ def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_
 
     assert any(isinstance(item, scene_type) for item in testing.walk(result.scene.body))
     assert result.allocation is not None
-    assert result.allocation is not None
     if strategy == "paged_select":
         select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
         assert 1 <= len(select.options) <= 25

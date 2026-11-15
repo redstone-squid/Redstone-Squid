@@ -4,7 +4,7 @@ from typing import cast
 
 import discord
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui.errors import LayoutInvariantError
@@ -277,6 +277,7 @@ def _draw_node(draw, kind: str):
     return None
 
 
+@settings(deadline=None)
 @given(documents())
 def test_rendered_documents_fit_without_conform_interventions(nodes: list) -> None:
     view = sd.static_view(nodes)

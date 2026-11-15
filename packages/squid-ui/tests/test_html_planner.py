@@ -392,7 +392,6 @@ def test_html_paging_honors_min_fill() -> None:
 
     default = sl.planning.plan(build(0), target=sl.html.target())
     assert default.allocation is not None
-    assert default.allocation is not None
     assert default.scene.pagers[0].pages == 2
 
     filled = sl.planning.plan(build(9), target=sl.html.target())

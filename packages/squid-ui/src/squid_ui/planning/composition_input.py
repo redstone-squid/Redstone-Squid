@@ -252,6 +252,7 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                     return node
                 content = resolve_text(node.content, request.localization).plain()
                 count = len(content.split(overflow.boundary)) if overflow.boundary else 1
+                combinations = max(combinations, count * 16)
                 if overflow.per is not None:
                     combinations *= max(1, (count + overflow.per - 1) // overflow.per)
                 return node

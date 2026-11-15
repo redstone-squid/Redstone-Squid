@@ -608,7 +608,8 @@ class TestDispatchProfiling:
         assert {attribute.key for attribute in planner.attributes} == {
             "cache_hit",
             "reuse",
-            "states_explored",
+            "target_evaluations",
+            "work_used",
             "search_fallback",
         }
         acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")

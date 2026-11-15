@@ -657,7 +657,15 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
                 # Intermediate rungs avoid an empty incumbent when several prose
                 # blocks must share space. This samples work order, never feasibility.
                 context.work.consume(len(task.choices))
-                adjustable = sum(choice_counts.get(offer.occurrence.identity, 0) > 1 for offer, _ in task.choices)
+                adjustable = 0
+                for current, _ in task.choices:
+                    discovery = discoveries[id(current.occurrence)]
+                    domain = discovery.offers if isinstance(discovery, OfferDiscovery) else discovery
+                    context.work.consume(len(domain))
+                    if choice_counts.get(current.occurrence.identity, 0) > 1 and (
+                        not task.regions or any(offer.effects for offer in domain)
+                    ):
+                        adjustable += 1
                 if adjustable:
                     for fraction in dict.fromkeys((1.0, 1 - 1 / max(2, adjustable), 0.5, 0.75, 0.875, 0.9375)):
                         push(_Assignment((root,), probe=True, fraction=fraction))

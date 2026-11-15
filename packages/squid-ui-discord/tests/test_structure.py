@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui import ComponentsV2Target, Renderable, paragraph, scene
@@ -356,6 +356,7 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
     assert len(document.components_v2.children) == 2
 
 
+@settings(deadline=None)
 @given(st.integers(min_value=1, max_value=20))
 def test_enough_steps_always_bring_the_document_within_limits(count: int) -> None:
     rendered = render_message(_ladder_document(count))

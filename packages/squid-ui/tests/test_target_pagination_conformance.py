@@ -62,7 +62,6 @@ def test_production_list_uses_shared_search(target: Target[Any, Any, Any, Any]) 
     )
     result = plan(node, target=target, nav=default_nav)
     assert result.allocation is not None
-    assert result.allocation is not None
     assert result.scene.pagers[0].pages == 3
 
 
@@ -96,7 +95,6 @@ def test_semantic_text_and_action_rows_share_the_production_route(target: Target
         title="Content",
     )
     result = plan(node, target=target, nav=default_nav)
-    assert result.allocation is not None
     assert result.allocation is not None
     wire = scene.Codec.dumps(result.scene)
     for value in ("Heading", "Note", "print(1)", "Quote", "Label", "Value"):
@@ -215,7 +213,6 @@ def test_repeated_media_deduplicates_its_attachment(target: Target[Any, Any, Any
 def test_classic_count_based_primitive_pages_use_its_own_text_pool() -> None:
     node = sl.primitives.Lines(("first", "second"), overflow=sl.primitives.Paginate(key="lines", per=1))
     result = plan(node, target=classic_target(DISCORD), nav=default_nav)
-    assert result.allocation is not None
     assert result.allocation is not None
     assert result.scene.pagers[0].pages == 2
     assert isinstance(result.scene.body, scene.ClassicMessage)
