@@ -33,8 +33,8 @@ def classify_attachment(filename: str, content_type: str | None, size: int, *, m
     """Classify an attachment within the declared size limit.
 
     Check schematic extensions first, then image/video content types. Guess a media
-    type from the filename only when content_type is missing; an explicit generic
-    content type does not receive that fallback.
+    type from the filename when content_type is missing or generic. The intake
+    processor still validates the downloaded bytes.
 
     Raises:
         SchematicTooLargeError: Declared size exceeds max_bytes.
@@ -48,7 +48,11 @@ def classify_attachment(filename: str, content_type: str | None, size: int, *, m
         if lowered.endswith(extension):
             return ClassifiedAttachment("schematic", filename, content_type or "application/octet-stream")
 
-    resolved = content_type or mimetypes.guess_type(filename)[0]
+    resolved = (
+        mimetypes.guess_type(filename)[0]
+        if not content_type or content_type == "application/octet-stream"
+        else content_type
+    )
     if resolved is not None:
         if resolved.startswith("image/"):
             return ClassifiedAttachment("image", filename, resolved)

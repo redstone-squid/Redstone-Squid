@@ -24,6 +24,8 @@ MAX_BYTES = 2 * 1024 * 1024
         # Falls back to guessing from the name when Discord tells us nothing.
         ("screenshot.png", None, "image"),
         ("clip.mp4", None, "video"),
+        ("screenshot.png", "application/octet-stream", "image"),
+        ("clip.webm", "application/octet-stream", "video"),
         # A conflicting image MIME must not override the final schematic extension.
         # This only classifies the filename; schematic intake later validates the bytes.
         ("door.png.litematic", "image/png", "schematic"),
@@ -44,6 +46,7 @@ def test_classification(filename: str, content_type: str | None, expected: Attac
         ("archive.zip", "application/zip"),
         ("world.zip", None),
         ("notes.txt", "text/plain"),
+        ("clip.mp4", "application/zip"),
         ("mystery", None),
     ],
 )
