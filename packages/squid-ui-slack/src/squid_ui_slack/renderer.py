@@ -130,47 +130,59 @@ class _Drawer:
     def block(self, value: scene.SlackBlock) -> Block:
         """Draw one closed-union Slack block."""
         match value:
-            case scene.SlackSection(text=text, fields=fields, accessory=accessory):
-                return SectionBlock(
-                    text=None if text is None else _text(text),
-                    fields=[_text(field) for field in fields] or None,
-                    accessory=None if accessory is None else self.element(accessory),
-                )
+            case scene.SlackSection():
+                return self._section(value)
             case scene.SlackHeader(text=text):
                 return HeaderBlock(text=_plain(text, "header text"))
             case scene.SlackContext(elements=elements):
                 return ContextBlock(elements=[_text(element) for element in elements])
             case scene.SlackDivider():
                 return DividerBlock()
-            case scene.SlackImage(image_url=image_url, alt_text=alt_text, title=title):
-                safe = _safe_url(image_url, https_only=True)
-                if safe is None:
-                    message = "Slack images require an absolute HTTPS URL"
-                    raise DrawInvariantError(message)
-                return ImageBlock(
-                    image_url=safe,
-                    alt_text=alt_text,
-                    title=None if title is None else _plain(title, "image title"),
-                )
+            case scene.SlackImage():
+                return self._image(value)
             case scene.SlackActions(elements=elements, block_id=block_id):
                 return ActionsBlock(elements=[self.interactive(element) for element in elements], block_id=block_id)
-            case scene.SlackInput(block_id=block_id, label=label, element=element, optional=optional, hint=hint):
-                return InputBlock(
-                    block_id=block_id,
-                    label=_plain(label, "input label"),
-                    element=self.input_element(element),
-                    optional=optional,
-                    hint=None if hint is None else _plain(hint, "input hint"),
-                )
+            case scene.SlackInput():
+                return self._input(value)
             case scene.SlackTable(rows=rows):
                 return TableBlock(rows=[[RawTextObject(text=cell.content).to_dict() for cell in row] for row in rows])
             case scene.SlackCard():
                 return self.card(value)
             case scene.SlackCarousel(cards=cards):
                 return CarouselBlock(elements=[self.card(card) for card in cards])
-            case scene.SlackAlert(title=title, text=text, style=style):
-                content = title.content if text is None else f"{title.content}\n{text.content}"
-                return AlertBlock(text=MarkdownTextObject(text=content), level=style.value)
+            case scene.SlackAlert():
+                return self._alert(value)
+
+    def _section(self, value: scene.SlackSection) -> Block:
+        return SectionBlock(
+            text=None if value.text is None else _text(value.text),
+            fields=[_text(field) for field in value.fields] or None,
+            accessory=None if value.accessory is None else self.element(value.accessory),
+        )
+
+    def _image(self, value: scene.SlackImage) -> Block:
+        safe = _safe_url(value.image_url, https_only=True)
+        if safe is None:
+            message = "Slack images require an absolute HTTPS URL"
+            raise DrawInvariantError(message)
+        return ImageBlock(
+            image_url=safe,
+            alt_text=value.alt_text,
+            title=None if value.title is None else _plain(value.title, "image title"),
+        )
+
+    def _input(self, value: scene.SlackInput) -> Block:
+        return InputBlock(
+            block_id=value.block_id,
+            label=_plain(value.label, "input label"),
+            element=self.input_element(value.element),
+            optional=value.optional,
+            hint=None if value.hint is None else _plain(value.hint, "input hint"),
+        )
+
+    def _alert(self, value: scene.SlackAlert) -> Block:
+        content = value.title.content if value.text is None else f"{value.title.content}\n{value.text.content}"
+        return AlertBlock(text=MarkdownTextObject(text=content), level=value.style.value)
 
     def card(self, value: scene.SlackCard) -> CardBlock:
         """Draw a card shared by standalone and carousel positions."""
@@ -207,53 +219,71 @@ class _Drawer:
             case scene.SlackSelect():
                 return self.select(value)
             case scene.SlackTextInput():
-                return PlainTextInputElement(
-                    action_id=value.action_id,
-                    initial_value=value.initial_value,
-                    placeholder=None if value.placeholder is None else _plain(value.placeholder, "input placeholder"),
-                    multiline=value.multiline,
-                    min_length=value.minimum_length,
-                    max_length=value.maximum_length,
-                )
+                return self._text_input(value)
             case scene.SlackNumberInput():
-                return NumberInputElement(
-                    action_id=value.action_id,
-                    initial_value=value.initial_value,
-                    is_decimal_allowed=value.decimal_allowed,
-                    min_value=value.minimum,
-                    max_value=value.maximum,
-                )
+                return self._number_input(value)
             case scene.SlackDatePicker():
-                return DatePickerElement(
-                    action_id=value.action_id,
-                    initial_date=value.initial_date,
-                    placeholder=None if value.placeholder is None else _plain(value.placeholder, "date placeholder"),
-                )
+                return self._date_picker(value)
             case scene.SlackTimePicker():
-                return TimePickerElement(
-                    action_id=value.action_id,
-                    initial_time=value.initial_time,
-                    placeholder=None if value.placeholder is None else _plain(value.placeholder, "time placeholder"),
-                )
+                return self._time_picker(value)
             case scene.SlackCheckboxes():
-                options = self.options(value.options)
-                return CheckboxesElement(
-                    action_id=value.action_id,
-                    options=options,
-                    initial_options=self.initial_options(options, value.options, value.initial_values),
-                )
+                return self._checkboxes(value)
             case scene.SlackRadioButtons():
-                options = self.options(value.options)
-                initial = self.initial_options(
-                    options,
-                    value.options,
-                    () if value.initial_value is None else (value.initial_value,),
-                )
-                return RadioButtonsElement(
-                    action_id=value.action_id,
-                    options=options,
-                    initial_option=None if not initial else initial[0],
-                )
+                return self._radio_buttons(value)
+
+    def _text_input(self, value: scene.SlackTextInput) -> InputInteractiveElement:
+        return PlainTextInputElement(
+            action_id=value.action_id,
+            initial_value=value.initial_value,
+            placeholder=None if value.placeholder is None else _plain(value.placeholder, "input placeholder"),
+            multiline=value.multiline,
+            min_length=value.minimum_length,
+            max_length=value.maximum_length,
+        )
+
+    def _number_input(self, value: scene.SlackNumberInput) -> InputInteractiveElement:
+        return NumberInputElement(
+            action_id=value.action_id,
+            initial_value=value.initial_value,
+            is_decimal_allowed=value.decimal_allowed,
+            min_value=value.minimum,
+            max_value=value.maximum,
+        )
+
+    def _date_picker(self, value: scene.SlackDatePicker) -> InputInteractiveElement:
+        return DatePickerElement(
+            action_id=value.action_id,
+            initial_date=value.initial_date,
+            placeholder=None if value.placeholder is None else _plain(value.placeholder, "date placeholder"),
+        )
+
+    def _time_picker(self, value: scene.SlackTimePicker) -> InputInteractiveElement:
+        return TimePickerElement(
+            action_id=value.action_id,
+            initial_time=value.initial_time,
+            placeholder=None if value.placeholder is None else _plain(value.placeholder, "time placeholder"),
+        )
+
+    def _checkboxes(self, value: scene.SlackCheckboxes) -> InputInteractiveElement:
+        options = self.options(value.options)
+        return CheckboxesElement(
+            action_id=value.action_id,
+            options=options,
+            initial_options=self.initial_options(options, value.options, value.initial_values),
+        )
+
+    def _radio_buttons(self, value: scene.SlackRadioButtons) -> InputInteractiveElement:
+        options = self.options(value.options)
+        initial = self.initial_options(
+            options,
+            value.options,
+            () if value.initial_value is None else (value.initial_value,),
+        )
+        return RadioButtonsElement(
+            action_id=value.action_id,
+            options=options,
+            initial_option=None if not initial else initial[0],
+        )
 
     def button(self, value: scene.SlackButton) -> ButtonElement:
         """Draw one button and resolve its external destination if present."""
@@ -283,37 +313,51 @@ class _Drawer:
         action_id = _action_id(value)
         assert action_id is not None
         placeholder = None if value.placeholder is None else _plain(value.placeholder, "select placeholder")
-        multiple = value.maximum > 1
         if value.kind is scene.SlackSelectKind.STATIC:
-            options = self.options(value.options)
-            initial = self.initial_options(options, value.options, value.initial_values)
-            if multiple:
-                return StaticMultiSelectElement(
-                    action_id=action_id,
-                    placeholder=placeholder,
-                    options=options,
-                    initial_options=initial,
-                    max_selected_items=value.maximum,
-                )
-            return StaticSelectElement(
+            return self._static_select(value, action_id, placeholder)
+        if value.kind is scene.SlackSelectKind.USERS:
+            return self._user_select(value, action_id, placeholder)
+        return self._conversation_select(value, action_id, placeholder)
+
+    def _static_select(
+        self, value: scene.SlackSelect, action_id: str, placeholder: PlainTextObject | None
+    ) -> InputInteractiveElement:
+        options = self.options(value.options)
+        initial = self.initial_options(options, value.options, value.initial_values)
+        if value.maximum > 1:
+            return StaticMultiSelectElement(
                 action_id=action_id,
                 placeholder=placeholder,
                 options=options,
-                initial_option=None if not initial else initial[0],
+                initial_options=initial,
+                max_selected_items=value.maximum,
             )
-        if value.kind is scene.SlackSelectKind.USERS:
-            if multiple:
-                return UserMultiSelectElement(
-                    action_id=action_id,
-                    placeholder=placeholder,
-                    initial_users=list(value.initial_values),
-                    max_selected_items=value.maximum,
-                )
-            return UserSelectElement(
+        return StaticSelectElement(
+            action_id=action_id,
+            placeholder=placeholder,
+            options=options,
+            initial_option=None if not initial else initial[0],
+        )
+
+    def _user_select(
+        self, value: scene.SlackSelect, action_id: str, placeholder: PlainTextObject | None
+    ) -> InputInteractiveElement:
+        if value.maximum > 1:
+            return UserMultiSelectElement(
                 action_id=action_id,
                 placeholder=placeholder,
-                initial_user=None if not value.initial_values else value.initial_values[0],
+                initial_users=list(value.initial_values),
+                max_selected_items=value.maximum,
             )
+        return UserSelectElement(
+            action_id=action_id,
+            placeholder=placeholder,
+            initial_user=None if not value.initial_values else value.initial_values[0],
+        )
+
+    def _conversation_select(
+        self, value: scene.SlackSelect, action_id: str, placeholder: PlainTextObject | None
+    ) -> InputInteractiveElement:
         included: list[str] = []
         for conversation_type in value.conversation_types:
             translated = _CONVERSATION_TYPES.get(conversation_type)
@@ -323,7 +367,7 @@ class _Drawer:
             if translated not in included:
                 included.append(translated)
         filter_value = None if not included else ConversationFilter(include=included)
-        if multiple:
+        if value.maximum > 1:
             return ConversationMultiSelectElement(
                 action_id=action_id,
                 placeholder=placeholder,
