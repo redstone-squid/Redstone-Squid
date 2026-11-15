@@ -9,10 +9,11 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
+from threading import current_thread
 from typing import TYPE_CHECKING, Protocol
 
 from squid_reactivity.addresses import SubscriptionSource
-from squid_reactivity.errors import ReactiveWriteError
+from squid_reactivity.errors import ReactiveWriteError, StaleReactiveContextError
 
 if TYPE_CHECKING:
     from squid_reactivity.transactions.engine import _TransactionEngine
@@ -32,7 +33,8 @@ class ReactiveStateOwner(SubscriptionSource, Protocol):
 _CURRENT_TRANSACTION: ContextVar[_TransactionEngine | None] = ContextVar("squid_reactivity_transaction", default=None)
 """Transaction overlay used by field descriptors during staging.
 
-Only its owning task may write. Child tasks inherit the same transaction object;
+Access from another thread is rejected. Only its owning task may write.
+Child tasks inherit the same transaction object;
 closed overlays are ignored for reads and rejected for writes. Publication resets
 this slot before notifying consumers, so callbacks cannot join a finished overlay.
 """
@@ -46,13 +48,25 @@ def _current_task() -> object | None:
         return None
 
 
+def _current_transaction() -> _TransactionEngine | None:
+    """Read the inherited overlay, rejecting access from another thread."""
+    current = _CURRENT_TRANSACTION.get()
+    if current is not None and current.owner_thread is not current_thread():
+        message = (
+            "transaction context belongs to another thread; "
+            "start independent reactive work in a thread with context=Context()"
+        )
+        raise StaleReactiveContextError(message)
+    return current
+
+
 def _active() -> _TransactionEngine | None:
     """Return the open transaction used for reads, ignoring a finished context.
 
     A child task may retain a transaction after its context exits. Reads then
     use committed state, while writes through that context are rejected.
     """
-    current = _CURRENT_TRANSACTION.get()
+    current = _current_transaction()
     return None if current is None or current.closed else current
 
 
@@ -135,15 +149,11 @@ _INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
 )
 """Test-only checkpoint callback installed by InterleavingHarness.
 
-It inherits into child tasks like transaction state. The process-wide count below
-lets production checkpoints skip context lookup when no harness is installed.
+It inherits into child tasks like transaction state.
 """
-_INTERLEAVER_USERS: int = 0
 
 
 def _checkpoint(name: str) -> None:
-    if _INTERLEAVER_USERS == 0:
-        return
     interleaver = _INTERLEAVER.get()
     if interleaver is not None:
         interleaver(name)
@@ -157,7 +167,7 @@ def block_writes(reason: str) -> Iterator[None]:
     has recorded. For code that runs *inside* a transaction but must not touch the tree, such as
     an undo entry's external inverse, whose writes a following restore would silently clobber.
     """
-    current = _CURRENT_TRANSACTION.get()
+    current = _current_transaction()
     if current is None:
         yield
         return

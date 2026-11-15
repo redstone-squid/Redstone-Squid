@@ -7,14 +7,15 @@ publication are reported without undoing the committed changes.
 import asyncio
 import inspect
 import logging
-import uuid
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import Enum, auto
+from threading import Thread, current_thread
 from typing import TYPE_CHECKING, Any, Protocol
 
+from squid_reactivity._runtime import _runtime
 from squid_reactivity.cells import _Cell
 from squid_reactivity.diagnostics import (
     emit_continuation_failure,
@@ -54,6 +55,7 @@ from squid_reactivity.transactions.state import (
     _check_write,
     _checkpoint,
     _current_task,
+    _current_transaction,
     block_writes,
     relaxed_read,
 )
@@ -63,14 +65,10 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-_RUNTIME_ID = uuid.uuid4()
-_sequence = 0
-
 
 def _next_commit_sequence() -> CommitSequence:
-    global _sequence
-    _sequence += 1
-    return CommitSequence(_RUNTIME_ID, _sequence)
+    _runtime.sequence += 1
+    return CommitSequence(_runtime.identity, _runtime.sequence)
 
 
 class TransactionView(Protocol):
@@ -148,7 +146,7 @@ def _write(owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> Non
     its construction lands immediately too.
     """
     _check_write(owner, name)
-    current = _CURRENT_TRANSACTION.get()
+    current = _current_transaction()
     if current is None and in_continuation():
         message = "direct reactive mutation in a result callback is forbidden; open a new transaction(...)"
         raise ReactiveWriteError(message)
@@ -181,6 +179,7 @@ class _TransactionEngine:
 
     handle: Transaction
     phase: _Phase = _Phase.STAGING
+    owner_thread: Thread = field(default_factory=current_thread)
     owner_task: object | None = None
     """The task that opened this transaction, or `None` outside a running loop."""
     read_view: object = field(default_factory=object)
@@ -232,7 +231,11 @@ class _TransactionEngine:
 
         Read-only and temporary write restrictions are checked separately by stage.
         """
-        return not self.closed and (self.owner_task is None or self.owner_task is _current_task())
+        return (
+            self.owner_thread is current_thread()
+            and not self.closed
+            and (self.owner_task is None or self.owner_task is _current_task())
+        )
 
     def reject_stale(self, what: str) -> None:
         """Raise an error identifying the finished transaction or wrong task."""

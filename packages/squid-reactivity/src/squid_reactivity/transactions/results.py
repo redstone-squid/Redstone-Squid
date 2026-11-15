@@ -31,7 +31,7 @@ class RollbackReason(Enum):
 
 @dataclass(frozen=True, slots=True)
 class CommitSequence:
-    """A runtime-local diagnostic order, never comparable across runtimes."""
+    """A diagnostic order within one thread, never comparable across thread runtime IDs."""
 
     runtime_id: uuid.UUID
     value: int

@@ -29,7 +29,7 @@ Participant `apply()` is infallible by contract; an exception there is framework
 is tagged on the committed diagnostic outcome, and fails loudly.
 
 Reactive state belongs to one thread; validation through publication runs without awaiting.
-`CommitSequence` belongs to one runtime and does not promise a distributed total order.
+`CommitSequence` has a separate identity and counter per thread; it does not order commits across threads or processes.
 Network receive, authentication, limits, decoding, storage, and transport I/O happen outside publication.
 
 ## Register history

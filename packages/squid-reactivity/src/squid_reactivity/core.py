@@ -12,19 +12,19 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import Any, ClassVar, Self, overload, override
 
-import squid_reactivity.tracking as tracking
+from squid_reactivity._runtime import _runtime
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.cells import _MISSING, _Cell, _staged_value
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _equal, _ReactiveSource, settling, untracked
 from squid_reactivity.transactions import transaction
 from squid_reactivity.transactions.engine import _write, report_undeclared_write
 from squid_reactivity.transactions.state import (
-    _CURRENT_TRANSACTION,
     _READ_CONSISTENCY,
     _READ_ONLY,
     ReactiveStateOwner,
     _active,
     _check_write,
+    _current_transaction,
     read_only,
 )
 
@@ -394,10 +394,10 @@ class _Derived:
         # A cache belongs to one read view. Re-evaluate on entry to an action or
         # a different read policy so cache hits cannot bypass conflict observations.
         if self._view == view:
-            if self._epoch == tracking._EPOCH:
+            if self._epoch == _runtime.epoch:
                 return self.version
             if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
-                self._epoch = tracking._EPOCH
+                self._epoch = _runtime.epoch
                 return self.version
         # Cleared before the run, not after: a body that raises must leave the node asking to
         # be recomputed rather than holding a value nothing verified.
@@ -409,8 +409,8 @@ class _Derived:
         self._settled = True
         self._view = view
         # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
-        # from it, and bumping would make every settled node in the process walk its sources.
-        self._epoch = tracking._EPOCH
+        # from it, and bumping would make every settled node on the thread walk its sources.
+        self._epoch = _runtime.epoch
         if not _equal(self.value, value):
             self.value = value
             self.version += 1
@@ -532,7 +532,7 @@ class Reactive:
         object.__setattr__(instance, "_reactive_subscribers", {})
         object.__setattr__(instance, "_reactive_commit_listeners", set())
         object.__setattr__(instance, "_reactive_initialization", _READ_ONLY.get())
-        if current := _CURRENT_TRANSACTION.get():
+        if current := _current_transaction():
             current.note_born(instance)
         return instance
 

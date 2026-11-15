@@ -29,11 +29,9 @@ class InterleavingHarness:
     def installed(self) -> Iterator[InterleavingHarness]:
         """Use this harness until the context exits, then restore the previous one."""
         token = transaction_state._INTERLEAVER.set(self.checkpoint)
-        transaction_state._INTERLEAVER_USERS += 1
         try:
             yield self
         finally:
-            transaction_state._INTERLEAVER_USERS -= 1
             transaction_state._INTERLEAVER.reset(token)
 
 

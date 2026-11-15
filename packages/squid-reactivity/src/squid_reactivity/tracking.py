@@ -10,6 +10,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
+from squid_reactivity._runtime import _runtime
 from squid_reactivity.errors import ReactiveCycleError
 from squid_reactivity.transactions.state import read_only
 
@@ -97,16 +98,9 @@ def settling(node: _SettlingNode) -> Iterator[None]:
         yield
 
 
-_EPOCH = 0
-"""Advance when state is staged, published, restored, or invalidated.
-
-Computed values use this counter to skip dependency checks when no state has changed.
-"""
-
-
 def _bump_epoch() -> None:
-    global _EPOCH
-    _EPOCH += 1
+    """Invalidate this thread's computed-cache fast path after a state change."""
+    _runtime.epoch += 1
 
 
 @contextmanager

@@ -8,6 +8,22 @@ publish or none do.
 
 Access reactive state on one owning thread, normally the event-loop thread. Background
 workers must send their results back to that thread before reading or changing reactive state.
+Independent threads can each own separate models, buses, subscriptions, and async executions,
+including on free-threaded Python. Start each worker with a fresh context so it does not inherit
+a caller's transaction, dependency collection, or diagnostic observers:
+
+```python
+from contextvars import Context
+from threading import Thread
+
+worker = Thread(target=run_worker, context=Context())
+worker.start()
+worker.join()
+```
+
+Here `run_worker` creates and uses its own reactive objects; it can run its own event loop.
+Live reactive objects must not cross threads. Copied transactions are rejected, but the package
+does not check thread ownership on every object access.
 
 There are no dependencies. The API is alpha and may change before 1.0.
 
@@ -53,7 +69,7 @@ The transaction could then publish a value it calculated from outdated data:
 ```python
 with transaction("Increment counter"):
     seen = counter.count
-    await save(seen)          # Meanwhile, another task sets counter.count = 5.
+    await save(seen)  # Meanwhile, another task sets counter.count = 5.
     counter.count = seen + 1  # Would replace that 5 with 1.
 ```
 
@@ -178,7 +194,7 @@ from squid_reactivity import LocalTopicBus
 
 bus = LocalTopicBus()
 build_changes = bus.topic("build", "42")
-build_changes.watch()    # Read inside a render, computed function, or resource loader.
+build_changes.watch()  # Read inside a render, computed function, or resource loader.
 build_changes.publish()  # Notify after a database change or incoming bridge message.
 ```
 

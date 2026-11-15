@@ -37,6 +37,7 @@ from squid_reactivity.transactions.state import (
     _active,
     _checkpoint,
     _current_task,
+    _current_transaction,
 )
 
 
@@ -102,7 +103,7 @@ class Transaction:
         hooks.append((key, callback))
 
     def _check_current(self) -> _TransactionEngine:
-        current = _CURRENT_TRANSACTION.get()
+        current = _current_transaction()
         if current is None or current.handle is not self:
             message = "callbacks must be registered inside their transaction"
             raise StaleReactiveContextError(message)
@@ -160,7 +161,7 @@ def transaction(
     Such a failure raises FrameworkIntegrityError and is recorded as a damaged
     commit, since already applied external changes cannot be rolled back here.
     """
-    outer = _CURRENT_TRANSACTION.get()
+    outer = _current_transaction()
     if outer is not None:
         # Checked at the `with`, not at the first write inside it, so a task that inherited
         # someone else's transaction is told where it went wrong rather than where it showed.
@@ -202,7 +203,7 @@ def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Tr
     outer transaction that already staged work is rejected because committing the inner transaction
     could not then be rolled back with the outer one.
     """
-    outer = _CURRENT_TRANSACTION.get()
+    outer = _current_transaction()
     if outer is not None and (outer.writes or outer.participants or outer.preconditions):
         message = "a fresh transaction cannot start after the admitting transaction staged changes"
         raise FreshTransactionError(message)
@@ -220,7 +221,7 @@ def batch() -> Iterator[None]:
 @contextmanager
 def readonly_transaction(*, transaction_context: TransactionContext | None = None) -> Iterator[Transaction]:
     """Run an identified read-only transaction and reject any state mutation."""
-    if _CURRENT_TRANSACTION.get() is not None:
+    if _current_transaction() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
     causality = current_causality()
@@ -243,7 +244,7 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
     to wait for and should land now. `key` identifies the subsystem, is usually the
     subsystem itself, and must be hashable.
     """
-    current = _CURRENT_TRANSACTION.get()
+    current = _current_transaction()
     if current is None:
         return None
     return current.enlist(key, factory)
@@ -251,13 +252,13 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
 
 def transaction_participant(key: object) -> TransactionParticipant[Any] | None:
     """Return the participant already registered for ``key``, without creating one."""
-    current = _CURRENT_TRANSACTION.get()
+    current = _current_transaction()
     return None if current is None else current.participants.get(key)
 
 
 def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
     """Stage an all-or-nothing conditional patch set in the active transaction."""
-    current = _CURRENT_TRANSACTION.get()
+    current = _current_transaction()
     if current is None or not current.writable():
         message = "conditional patches require an active writable transaction"
         raise RuntimeError(message)
