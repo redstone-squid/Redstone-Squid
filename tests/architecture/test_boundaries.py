@@ -71,6 +71,10 @@ FRAMEWORK_URLS = {
     "Issues": "https://github.com/redstone-squid/Redstone-Squid/issues",
     "Repository": "https://github.com/redstone-squid/Redstone-Squid",
 }
+# squid-reactivity is usable without the UI packages, so it links to its own reference page.
+FRAMEWORK_DOCUMENTATION = {
+    "squid-reactivity": "https://redstone-squid.github.io/Redstone-Squid/reference/squid-reactivity/",
+}
 
 
 def _scanned_files(roots: tuple[Path, ...] = SCAN_ROOTS) -> list[Path]:
@@ -239,7 +243,8 @@ def test_framework_distributions_share_publishable_alpha_metadata() -> None:
         assert project["license-files"] == ["LICENSE"]
         assert project["authors"] == [{"name": "Redstone Squid contributors"}]
         assert project["classifiers"] == FRAMEWORK_CLASSIFIERS
-        assert project["urls"] == FRAMEWORK_URLS
+        documentation = FRAMEWORK_DOCUMENTATION.get(name, FRAMEWORK_URLS["Documentation"])
+        assert project["urls"] == FRAMEWORK_URLS | {"Documentation": documentation}
         assert (package / "README.md").is_file()
         assert (package / "LICENSE").read_text(encoding="utf-8") == root_license
         assert (package / "src" / name.replace("-", "_") / "py.typed").is_file()
