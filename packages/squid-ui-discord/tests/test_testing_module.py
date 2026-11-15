@@ -116,3 +116,33 @@ async def test_stage_surfaces_reported_overflow_and_preserves_live_handlers(repo
         assert "private content" not in repr(caught.value.context)
         assert ui.root.snapshot().handler_keys == before
         assert ui.root.generation == generation
+
+
+def test_payload_traversal_preserves_components_without_counting_metadata() -> None:
+    shared = {"type": 10, "content": "Repeated"}
+    accessory = {"type": 2, "label": "Open", "custom_id": "open"}
+    picker = {
+        "type": 3,
+        "custom_id": "pick",
+        "options": [{"label": "Option", "value": "one", "custom_id": "not-a-control"}],
+    }
+    section = {"type": 9, "components": [shared], "accessory": accessory}
+    label = {"type": 18, "label": "Pick", "component": picker}
+    gallery = {"type": 12, "items": [{"description": "Image", "custom_id": "not-a-control"}]}
+    container = {"type": 17, "components": [section, label, shared, gallery]}
+
+    components = list(sd.iter_component_payloads([container]))
+    assert components == [container, section, shared, accessory, label, picker, shared, gallery]
+    assert components[2] is components[6] is shared
+    assert sd.payload_texts([container]) == ["Repeated", "Repeated"]
+    assert sd.payload_labels([container]) == ["Open"]
+    assert sd.payload_custom_ids([container]) == ["open", "pick"]
+    assert sd.payload_problems([container]) == []
+
+
+def test_payload_traversal_rejects_component_cycles() -> None:
+    container: sd.ComponentPayload = {"type": 17, "components": []}
+    container["components"].append(container)
+
+    with pytest.raises(ValueError, match="cycle"):
+        list(sd.iter_component_payloads([container]))

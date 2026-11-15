@@ -44,7 +44,8 @@ from squid_ui.ext.discord.runtime import DiscordUIRuntime, install
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.runtime.component import Component
-from squid_ui.selectors import Match, Query, Selector, Snapshot
+from squid_ui.selectors import Match, Query, Selector, Snapshot, select
+from squid_ui.selectors import query as query_tree
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui.ext.discord._testing_queries import query as query
@@ -70,15 +71,25 @@ def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTarget
     return replace(target, dialect=reduced)
 
 
+def _payload_children(node: object) -> Iterator[tuple[str, object]]:
+    """Serialized component edges; options and gallery items are metadata, not components."""
+    if not isinstance(node, dict):
+        return
+    for index, component in enumerate(node.get("components", [])):
+        yield f"components.{index}", component
+    for name in ("accessory", "component"):
+        if (nested := node.get(name)) is not None:
+            yield name, nested
+
+
 def iter_component_payloads(components: list[ComponentPayload]) -> Iterator[ComponentPayload]:
-    """Yield every component dict in a payload tree, depth first."""
-    for component in components:
-        yield component
-        yield from iter_component_payloads(component.get("components", []))
-        for key in ("accessory", "component"):
-            nested = component.get(key)
-            if nested is not None:
-                yield from iter_component_payloads([nested])
+    """Yield every serialized component occurrence in depth-first order.
+
+    Only component edges are followed. Repeated references count at each placement,
+    while ancestor cycles raise ValueError instead of recursing indefinitely.
+    """
+    for match in query_tree(components, select(dict), children=_payload_children).all():
+        yield match.node
 
 
 def _check_string(problems: list[str], component: ComponentPayload, key: str, limit: int, where: str) -> None:
