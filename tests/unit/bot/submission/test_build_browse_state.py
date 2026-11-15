@@ -761,12 +761,15 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
     screen = _screen(initial_id=None)
     suggestions = SuggestionService(
         SuggestionRegistry.of(
-            (RegisteredSource("search_fields", RecordingProvider((Candidate.create("width", "Width"),))),)
+            (
+                RegisteredSource("search_fields", RecordingProvider((Candidate.create("width", "Width"),))),
+                RegisteredSource("search_sorts", RecordingProvider((Candidate.create("-width", "Widest first"),))),
+            )
         )
     )
     cast(AsyncMock, screen._search_service).search.return_value = SearchPage(
-        hits=tuple(BuildSearchHit(str(index), f"Door {index}", "confirmed", "A door") for index in range(25)),
-        total=25,
+        hits=tuple(BuildSearchHit(str(index), f"Door {index}", "confirmed", "A door") for index in range(5)),
+        total=5,
         next=None,
         prev=None,
     )
@@ -786,9 +789,15 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         ui.control(ui.key_for("advanced"))
 
         await ui.press(ui.key_for("field"))
+        await ui.press(ui.key_for("sort"))
         with anyio.fail_after(2):
-            while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
+            while not all(
+                any(key.endswith(f"{picker}.results") for key in ui.root.snapshot().handler_keys)
+                for picker in ("filter-lookup", "sort-lookup")
+            ):
                 await anyio.sleep(0.01)
+        # Both panels, the filter rows, and a full page of results fit within the workspace.
+        ui.assert_within_limits()
         ui.control(ui.key_for("open-id"))
         ui.control(ui.key_for("guided-search"))
         assert "## Search results" in ui.texts()

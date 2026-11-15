@@ -8,12 +8,15 @@ import anyio
 import pytest
 
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
+from squid.bot.submission.search_labels import filter_label
+from squid.core.actors import Actor
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import BooleanExpression, BooleanOperator, ComparisonOperator, FieldExpression
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
-from squid_ui.ext.discord.testing import iter_component_payloads, stage
+from squid_i18n import Text
+from squid_ui.ext.discord.testing import StagedUI, iter_component_payloads, stage
 from tests.unit.suggestions.test_services import RecordingProvider
 
 
@@ -88,31 +91,95 @@ async def test_long_queries_paginate_removable_clauses() -> None:
         assert len(screen.clauses) == 7
 
 
-async def test_field_and_sort_pickers_stay_in_the_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    service = SuggestionService(
-        SuggestionRegistry.of(
-            (
-                RegisteredSource("search_fields", RecordingProvider((Candidate.create("width", "Width"),))),
-                RegisteredSource("search_sorts", RecordingProvider((Candidate.create("-width", "Widest first"),))),
-            )
-        )
+def _suggestions(*sources: tuple[str, tuple[Candidate, ...]]) -> SuggestionService:
+    return SuggestionService(
+        SuggestionRegistry.of(tuple(RegisteredSource(name, RecordingProvider(items)) for name, items in sources))
+    )
+
+
+def _install(ui: StagedUI[GuidedSearch], monkeypatch: pytest.MonkeyPatch, service: SuggestionService) -> None:
+    monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=Actor())), raising=False)
+    monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
+
+
+async def _choose(ui: StagedUI[GuidedSearch], picker: str, value: str) -> None:
+    with anyio.fail_after(2):
+        while not any(key.endswith(f"{picker}.results") for key in ui.root.snapshot().handler_keys):
+            await anyio.sleep(0.01)
+    await ui.select(ui.key_for(f"{picker}.results"), [value])
+
+
+async def test_filter_and_sort_panels_open_together_and_stay_in_the_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(
+        ("search_fields", (Candidate.create("width", "Width"),)),
+        ("search_sorts", (Candidate.create("-width", "Widest first"),)),
     )
     screen = editor()
     async with stage(screen, owner=object()) as ui:
-        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
-        monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
-        for control, value in (("field", "width"), ("sort", "-width")):
+        _install(ui, monkeypatch, service)
+        for control in ("field", "sort"):
             interaction = await ui.press(ui.key_for(control))
             assert not interaction.sends
-            with anyio.fail_after(2):
-                while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
-                    await anyio.sleep(0.01)
-            await ui.select(ui.key_for("search-lookup.results"), [value])
-            assert (screen.picker is None) == (control == "field")
-            assert not ui.root.finished
-        assert screen.selected is None
+        assert screen.filter_open
+        assert screen.sort_picker is not None
+        assert "## Add filter" in ui.texts()
+        assert "## Sort by" in ui.texts()
+
+        await _choose(ui, "sort-lookup", "-width")
         assert screen.sort == "-width"
+        assert screen.sort_picker is not None
+        assert screen.sort_picker.picked == ()
+        await _choose(ui, "filter-lookup", "width")
+        assert screen.selected is not None
+        assert screen.selected.name == "width"
+        assert "## Filter by Width" in ui.texts()
+        assert screen.sort_picker is not None, "choosing a field leaves the sort panel open"
+        assert not ui.root.finished
         cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection("", "-width"))
+        ui.assert_within_limits()
+
+
+async def test_named_value_fields_open_their_value_picker_directly(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(
+        ("search_fields", (Candidate.create("creator", "Creator"),)),
+        ("creators", (Candidate.create("Steve", "Steve"),)),
+    )
+    screen = editor()
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press(ui.key_for("field"))
+        await _choose(ui, "filter-lookup", "creator")
+        assert not any(key.endswith("value") for key in ui.root.snapshot().handler_keys)
+        await _choose(ui, "value-lookup", "Steve")
+        assert screen.query == 'creator:"Steve"'
+        assert not screen.filter_open
+        assert Text(filter_label(screen.clauses[0])).resolve() == "Creator is Steve"
+
+
+async def test_fixed_values_are_chosen_from_a_menu(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(("search_fields", (Candidate.create("kind", "Kind"),)))
+    screen = editor()
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press(ui.key_for("field"))
+        await _choose(ui, "filter-lookup", "kind")
+        await ui.select(ui.key_for("value-choice"), ["door"])
+        assert screen.query == 'kind:"door"'
+        assert not screen.filter_open
+
+
+async def test_choose_another_field_returns_to_the_field_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(("search_fields", (Candidate.create("width", "Width"),)))
+    screen = editor()
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press(ui.key_for("field"))
+        await _choose(ui, "filter-lookup", "width")
+        assert ui.control(ui.key_for("value")).payload["label"] == "Set Width filter"
+        await ui.press(ui.key_for("change-field"))
+        assert screen.selected is None
+        assert "## Add filter" in ui.texts()
+        await _choose(ui, "filter-lookup", "width")
 
 
 async def test_filter_edit_and_remove_share_one_action_row() -> None:
@@ -125,7 +192,7 @@ async def test_filter_edit_and_remove_share_one_action_row() -> None:
             {edit.custom_id, remove.custom_id} <= {child.get("custom_id") for child in row.get("components", [])}
             for row in rows
         )
-        assert "width:3" in edit.payload["label"]
+        assert edit.payload["label"] == "Width is 3"
 
 
 async def test_guided_edits_preserve_or_and_negation() -> None:
@@ -164,30 +231,25 @@ async def test_keyword_edit_treats_query_syntax_as_literal_text() -> None:
 
 
 async def test_filter_picker_has_specific_search_copy_and_shows_search_text(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = RecordingProvider((Candidate.create("width", "Width"),))
-    service = SuggestionService(SuggestionRegistry.of((RegisteredSource("search_fields", provider),)))
+    service = _suggestions(("search_fields", (Candidate.create("width", "Width"),)))
     screen = editor()
     async with stage(screen, owner=object()) as ui:
-        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
-        monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
+        _install(ui, monkeypatch, service)
         await ui.press(ui.key_for("field"))
         assert "## Search" not in ui.texts()
-        assert ui.control(ui.key_for("search-lookup.search")).payload["label"] == "Search filter"
-        form = await ui.press_for_form(ui.key_for("search-lookup.search"))
+        assert ui.control(ui.key_for("filter-lookup.search")).payload["label"] == "Search fields"
+        form = await ui.press_for_form(ui.key_for("filter-lookup.search"))
         await form.submit({"query": "wid"})
         assert "wid" in ui.texts()
-        with anyio.fail_after(2):
-            while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
-                await anyio.sleep(0.01)
-        await ui.select(ui.key_for("search-lookup.results"), ["width"])
+        await _choose(ui, "filter-lookup", "width")
         assert ui.control(ui.key_for("field")).payload["label"] == "Add filter"
-        assert ui.control(ui.key_for("value")).payload["label"] == "Filter: Width"
+        assert ui.control(ui.key_for("value")).payload["label"] == "Set Width filter"
 
 
 async def test_not_filter_button_preserves_and_can_remove_negation() -> None:
     screen = editor("NOT width:3 OR height:5")
     async with stage(screen, owner=object()) as ui:
-        assert ui.control(ui.key_for("edit-0")).payload["label"] == "Edit NOT width:3"
+        assert ui.control(ui.key_for("edit-0")).payload["label"] == "Not: Width is 3"
         form = await ui.press_for_form(ui.key_for("edit-0"))
         await form.submit({"value": "4", "operator": "0", "negated": True})
         assert screen.query == "NOT width:4 OR height:5"
@@ -198,50 +260,33 @@ async def test_not_filter_button_preserves_and_can_remove_negation() -> None:
         assert screen.query == "height:5"
 
 
-async def test_picker_toggles_are_exclusive_and_keep_query_controls(monkeypatch: pytest.MonkeyPatch) -> None:
-    service = SuggestionService(
-        SuggestionRegistry.of(
-            (
-                RegisteredSource("search_fields", RecordingProvider((Candidate.create("width", "Width"),))),
-                RegisteredSource("search_sorts", RecordingProvider((Candidate.create("-width", "Widest first"),))),
-            )
-        )
+async def test_panels_keep_filter_rows_and_survive_filter_edits(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(
+        ("search_fields", (Candidate.create("width", "Width"),)),
+        ("search_sorts", (Candidate.create("-width", "Widest first"),)),
     )
     screen = editor("width:3 AND height:5 AND depth:7")
     async with stage(screen, owner=object()) as ui:
-        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
-        monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
-        for button, panel in (("field", "fields"), ("sort", "sort"), ("field", "fields")):
-            await ui.press(ui.key_for(button))
-            assert screen.panel == panel
-            ui.control(ui.key_for("advanced"))
-            for key in ("edit-0", "remove-0", "edit-1", "remove-1", "next-clauses"):
-                ui.control(ui.key_for(key))
-            assert ui.control(ui.key_for("field")).payload["style"] == (3 if panel == "fields" else 2)
-            assert ui.control(ui.key_for("sort")).payload["style"] == (3 if panel == "sort" else 2)
-            assert not any(key.endswith(("picker-back", "relevance")) for key in ui.root.snapshot().handler_keys)
+        _install(ui, monkeypatch, service)
         await ui.press(ui.key_for("field"))
-        assert screen.panel is None
-        assert screen.picker is None
         await ui.press(ui.key_for("sort"))
-        with anyio.fail_after(2):
-            while not any(key.endswith("search-lookup.results") for key in ui.root.snapshot().handler_keys):
-                await anyio.sleep(0.01)
-        await ui.select(ui.key_for("search-lookup.results"), ["-width"])
-        assert screen.sort == "-width"
-        assert screen.panel == "sort"
-        assert screen.picker is not None
-        assert screen.picker.picked == ()
-        picker = screen.picker
+        ui.control(ui.key_for("advanced"))
+        for key in ("edit-0", "remove-0", "edit-1", "remove-1", "next-clauses"):
+            ui.control(ui.key_for(key))
+        assert ui.control(ui.key_for("field")).payload["style"] == 3
+        assert ui.control(ui.key_for("sort")).payload["style"] == 3
+        picker = screen.sort_picker
         await ui.press(ui.key_for("next-clauses"))
         form = await ui.press_for_form(ui.key_for("edit-2"))
         await form.submit({"value": "8", "operator": "0"})
         assert screen.query == "width:3 AND height:5 AND depth:8"
-        assert screen.picker is picker
+        assert screen.sort_picker is picker
         await ui.press(ui.key_for("remove-2"))
         assert screen.query == "width:3 AND height:5"
-        assert screen.picker is picker
-        ui.control(ui.key_for("edit-0"))
+        assert screen.sort_picker is picker
+        await ui.press(ui.key_for("field"))
+        assert not screen.filter_open
+        assert screen.sort_picker is picker
         await ui.press(ui.key_for("sort"))
-        assert screen.panel is None
-        assert screen.sort == "-width"
+        assert screen.sort_picker is None
+        assert ui.control(ui.key_for("sort")).payload["style"] == 2
