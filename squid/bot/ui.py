@@ -82,6 +82,38 @@ def _try_again_in(seconds: float) -> ui.text.Text:
     return md_tr(t"bot-ui-try-again-in-seconds = Try again in {whole} seconds.")
 
 
+def _chrome_step_progress(step: int, steps: int) -> ui.TextLike:
+    return md_tr(t"ui-chrome-step-progress = Step {step} of {steps}")
+
+
+def _chrome_range_footer(first: int, last: int) -> ui.TextLike:
+    return md_tr(t"ui-chrome-range-footer = {first}\N{EN DASH}{last}")
+
+
+def _chrome_approximate_total_footer(first: int, last: int, total: int) -> ui.TextLike:
+    return md_tr(t"ui-chrome-approximate-total-footer = {first}\N{EN DASH}{last} of ~{total}")
+
+
+def _chrome_total_range_footer(first: int, last: int, total: int) -> ui.TextLike:
+    return md_tr(t"ui-chrome-total-range-footer = {first}\N{EN DASH}{last} of {total}")
+
+
+def _chrome_page_option(page: int) -> ui.TextLike:
+    return md_tr(t"ui-chrome-page-option = Page {page}")
+
+
+def _chrome_slot_count(count: int, capacity: int | None) -> ui.TextLike:
+    return (
+        md_tr(t"ui-chrome-slot-count = {count}")
+        if capacity is None
+        else md_tr(t"ui-chrome-slot-capacity = {count}/{capacity}")
+    )
+
+
+def _chrome_approved_count(count: int, total: int) -> ui.TextLike:
+    return md_tr(t"ui-chrome-approved-count = Approved: {count}/{total}")
+
+
 CHROME = ui.chrome.Chrome(
     and_n_more=lambda count: md_tr(t"bot-ui-and-more = …and {count} more."),
     not_yours=tr(t"ui-list-controls-not-owned = These list controls belong to someone else."),
@@ -125,6 +157,24 @@ CHROME = ui.chrome.Chrome(
     finish=tr(t"bot-ui-finish = Finish"),
     unanswered=tr(t"bot-ui-not-answered-yet = Not answered yet"),
     page_footer=lambda page, pages: md_tr(t"bot-ui-page-of = Page {page} of {pages}"),
+    changed_elsewhere=tr(t"ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again."),
+    older=tr(t"ui-chrome-older = Older"),
+    newer=tr(t"ui-chrome-newer = Newer"),
+    undo=tr(t"ui-chrome-undo = Undo"),
+    redo=tr(t"ui-chrome-redo = Redo"),
+    continue_step=tr(t"ui-chrome-continue = Continue"),
+    step_progress=_chrome_step_progress,
+    range_footer=_chrome_range_footer,
+    approximate_total_footer=_chrome_approximate_total_footer,
+    total_range_footer=_chrome_total_range_footer,
+    jump_to_page=tr(t"ui-chrome-jump-to-page = Jump to a page"),
+    page_option=_chrome_page_option,
+    waitlist=tr(t"ui-chrome-waitlist = Waitlist"),
+    full=tr(t"ui-chrome-full = Full"),
+    slot_count=_chrome_slot_count,
+    approve=tr(t"ui-chrome-approve = Approve"),
+    withdraw=tr(t"ui-chrome-withdraw = Withdraw"),
+    approved_count=_chrome_approved_count,
 )
 _OPEN_LINK = tr(t"bot-ui-open-link = Open link")
 

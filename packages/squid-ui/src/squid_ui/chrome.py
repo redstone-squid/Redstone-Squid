@@ -1,7 +1,7 @@
 """Host-overridable framework labels and status messages.
 
-Supply localized TextLike values or callbacks instead of relying on the host's
-translation extractor to scan this package. Form parse errors and renderer-specific
+Defaults are English. Applications supply localized TextLike values or callbacks
+and own the corresponding translation catalogs. Form parse errors and renderer-specific
 wording are defined separately.
 """
 
@@ -9,65 +9,54 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import ceil
 
-from squid_i18n import md_tr, tr
-from squid_ui.content.text import Localization, TextLike, resolve_text
+from squid_ui.content.text import Localization, TextLike, md, resolve_text
 from squid_ui.context import ContextKey
 
 
 def _default_and_n_more(count: int) -> TextLike:
-    return md_tr(t"ui-chrome-and-n-more = …and {count} more")
+    return md(t"…and {count} more")
 
 
 def _default_step_progress(step: int, steps: int) -> TextLike:
-    return md_tr(t"ui-chrome-step-progress = Step {step} of {steps}")
+    return md(t"Step {step} of {steps}")
 
 
 def _default_page_footer(page: int, pages: int) -> TextLike:
-    return md_tr(t"ui-chrome-page-footer = Page {page} of {pages}")
+    return md(t"Page {page} of {pages}")
 
 
 def _default_range_footer(first: int, last: int) -> TextLike:
-    return md_tr(t"ui-chrome-range-footer = {first}\N{EN DASH}{last}")
+    return md(t"{first}\N{EN DASH}{last}")
 
 
 def _default_approximate_total_footer(first: int, last: int, total: int) -> TextLike:
-    return md_tr(t"ui-chrome-approximate-total-footer = {first}\N{EN DASH}{last} of ~{total}")
+    return md(t"{first}\N{EN DASH}{last} of ~{total}")
 
 
 def _default_total_range_footer(first: int, last: int, total: int) -> TextLike:
-    return md_tr(t"ui-chrome-total-range-footer = {first}\N{EN DASH}{last} of {total}")
+    return md(t"{first}\N{EN DASH}{last} of {total}")
 
 
 def _default_page_option(page: int) -> TextLike:
-    return md_tr(t"ui-chrome-page-option = Page {page}")
+    return md(t"Page {page}")
 
 
 def _default_decided(label: TextLike) -> TextLike:
-    return md_tr(t"ui-chrome-decided = You chose {label}.")
+    return md(t"You chose {label}.")
 
 
 def _default_try_again_in(seconds: float) -> TextLike:
     whole = max(1, ceil(seconds))
-    return md_tr(
-        t"""
-        ui-chrome-try-again-in = {{ {whole} ->
-            [one] Try again in {whole} second.
-           *[other] Try again in {whole} seconds.
-        }}
-        """,
-    )
+    unit = "second" if whole == 1 else "seconds"
+    return md(t"Try again in {whole} {unit}.")
 
 
 def _default_slot_count(count: int, capacity: int | None) -> TextLike:
-    return (
-        md_tr(t"ui-chrome-slot-count = {count}")
-        if capacity is None
-        else md_tr(t"ui-chrome-slot-capacity = {count}/{capacity}")
-    )
+    return md(t"{count}") if capacity is None else md(t"{count}/{capacity}")
 
 
 def _default_approved_count(count: int, total: int) -> TextLike:
-    return md_tr(t"ui-chrome-approved-count = Approved: {count}/{total}")
+    return md(t"Approved: {count}/{total}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,65 +65,63 @@ class Chrome:
 
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
     """Spill line appended when a list shows fewer entries than it holds."""
-    not_yours: TextLike = tr(t"ui-chrome-not-yours = These controls belong to someone else.")
+    not_yours: TextLike = "These controls belong to someone else."
     """Ephemeral rejection shown when an author-locked control is used by another user."""
-    session_ended: TextLike = tr(t"ui-chrome-session-ended = This session has ended.")
+    session_ended: TextLike = "This session has ended."
     """Ephemeral rejection shown when a control on a finished mount is clicked anyway."""
-    not_now: TextLike = tr(t"ui-chrome-not-now = You can't do that right now.")
+    not_now: TextLike = "You can't do that right now."
     """Ephemeral rejection shown when an action's guard denies a press with no wording."""
     try_again_in: Callable[[float], TextLike] = _default_try_again_in
     """Denial wording when the guard said how long to wait; called with seconds."""
-    working: TextLike = tr(t"ui-chrome-working = Working…")
+    working: TextLike = "Working…"
     """What a control with `BusySpec` says while its handler runs."""
-    updates_paused: TextLike = tr(t"ui-chrome-updates-paused = Live updates paused — press any control to resume.")
+    updates_paused: TextLike = "Live updates paused — press any control to resume."
     """Status shown before an interaction edit token expires and unattended refreshes pause."""
-    session_expiring: TextLike = tr(t"ui-chrome-session-expiring = This session is about to expire.")
+    session_expiring: TextLike = "This session is about to expire."
     """Status shown while an ephemeral session waits for an explicit renewal click."""
-    continue_session: TextLike = tr(t"ui-chrome-continue-session = Continue Session")
+    continue_session: TextLike = "Continue Session"
     """Framework-owned action that renews an expiring ephemeral session."""
-    changed_elsewhere: TextLike = tr(
-        t"ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again."
-    )
+    changed_elsewhere: TextLike = "Someone else changed this while you were working. Try again."
     """Wording for a shared-state conflict: what the action read moved before it committed."""
-    sent_privately: TextLike = tr(t"ui-chrome-sent-privately = Sent by direct message.")
+    sent_privately: TextLike = "Sent by direct message."
     """Channel confirmation after a reply was delivered by direct message."""
-    dm_unavailable: TextLike = tr(
-        t"ui-chrome-dm-unavailable = This reply is too private for a channel, and your direct messages "
-        t"are closed. Run the command in a direct message, or allow direct messages and retry."
+    dm_unavailable: TextLike = (
+        "This reply is too private for a channel, and your direct messages "
+        "are closed. Run the command in a direct message, or allow direct messages and retry."
     )
     """Channel notice when a private reply cannot be delivered by direct message."""
-    previous: TextLike = tr(t"ui-chrome-previous = Previous")
-    next: TextLike = tr(t"ui-chrome-next = Next")
-    older: TextLike = tr(t"ui-chrome-older = Older")
-    newer: TextLike = tr(t"ui-chrome-newer = Newer")
-    back: TextLike = tr(t"ui-chrome-back = Back")
-    home: TextLike = tr(t"ui-chrome-home = Home")
-    close: TextLike = tr(t"ui-chrome-close = Close")
-    undo: TextLike = tr(t"ui-chrome-undo = Undo")
-    redo: TextLike = tr(t"ui-chrome-redo = Redo")
-    on: TextLike = tr(t"ui-chrome-on = On")
-    off: TextLike = tr(t"ui-chrome-off = Off")
-    download: TextLike = tr(t"ui-chrome-download = Download")
-    confirm: TextLike = tr(t"ui-chrome-confirm = Confirm")
-    cancel: TextLike = tr(t"ui-chrome-cancel = Cancel")
-    apply: TextLike = tr(t"ui-chrome-apply = Apply")
-    save: TextLike = tr(t"ui-chrome-save = Save")
-    unsaved: TextLike = tr(t"ui-chrome-unsaved = Unsaved changes")
-    search: TextLike = tr(t"ui-chrome-search = Search")
-    no_results: TextLike = tr(t"ui-chrome-no-results = No results")
+    previous: TextLike = "Previous"
+    next: TextLike = "Next"
+    older: TextLike = "Older"
+    newer: TextLike = "Newer"
+    back: TextLike = "Back"
+    home: TextLike = "Home"
+    close: TextLike = "Close"
+    undo: TextLike = "Undo"
+    redo: TextLike = "Redo"
+    on: TextLike = "On"
+    off: TextLike = "Off"
+    download: TextLike = "Download"
+    confirm: TextLike = "Confirm"
+    cancel: TextLike = "Cancel"
+    apply: TextLike = "Apply"
+    save: TextLike = "Save"
+    unsaved: TextLike = "Unsaved changes"
+    search: TextLike = "Search"
+    no_results: TextLike = "No results"
     decided: Callable[[TextLike], TextLike] = _default_decided
-    add: TextLike = tr(t"ui-chrome-add = Add")
-    edit: TextLike = tr(t"ui-chrome-edit = Edit")
-    remove: TextLike = tr(t"ui-chrome-remove = Remove")
-    move_up: TextLike = tr(t"ui-chrome-move-up = Move up")
-    move_down: TextLike = tr(t"ui-chrome-move-down = Move down")
-    review: TextLike = tr(t"ui-chrome-review = Review")
-    finish: TextLike = tr(t"ui-chrome-finish = Finish")
-    continue_step: TextLike = tr(t"ui-chrome-continue = Continue")
+    add: TextLike = "Add"
+    edit: TextLike = "Edit"
+    remove: TextLike = "Remove"
+    move_up: TextLike = "Move up"
+    move_down: TextLike = "Move down"
+    review: TextLike = "Review"
+    finish: TextLike = "Finish"
+    continue_step: TextLike = "Continue"
     """Opens the current wizard step's form when more steps follow it."""
     step_progress: Callable[[int, int], TextLike] = _default_step_progress
     """A wizard's position; called with (step, steps), 1-based."""
-    unanswered: TextLike = tr(t"ui-chrome-unanswered = Not answered yet")
+    unanswered: TextLike = "Not answered yet"
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
     range_footer: Callable[[int, int], TextLike] = _default_range_footer
@@ -143,15 +130,15 @@ class Chrome:
     """Visible range and approximate source total."""
     total_range_footer: Callable[[int, int, int], TextLike] = _default_total_range_footer
     """Visible range and exact source total."""
-    jump_to_page: TextLike = tr(t"ui-chrome-jump-to-page = Jump to a page")
+    jump_to_page: TextLike = "Jump to a page"
     """Placeholder on the jump select a seekable paginator can offer."""
     page_option: Callable[[int], TextLike] = _default_page_option
     """One entry of that select; called with a 1-based page number."""
-    waitlist: TextLike = tr(t"ui-chrome-waitlist = Waitlist")
-    full: TextLike = tr(t"ui-chrome-full = Full")
+    waitlist: TextLike = "Waitlist"
+    full: TextLike = "Full"
     slot_count: Callable[[int, int | None], TextLike] = _default_slot_count
-    approve: TextLike = tr(t"ui-chrome-approve = Approve")
-    withdraw: TextLike = tr(t"ui-chrome-withdraw = Withdraw")
+    approve: TextLike = "Approve"
+    withdraw: TextLike = "Withdraw"
     approved_count: Callable[[int, int], TextLike] = _default_approved_count
 
 

@@ -1,6 +1,6 @@
 """Bot locale resolution and translation tests."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import partial
 from typing import Any, cast
 
@@ -9,9 +9,11 @@ import pytest
 
 import squid_ui.ext.discord as sd
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
+from squid.bot.ui import CHROME
 from squid.runtime import BotServices
 from squid.settings.application import SettingsService
 from squid.settings.models import ServerSetting
+from squid_ui.chrome import Chrome
 from tests.support.services import bot_services
 from tests.support.settings import FakeSettingsUnitOfWork, settings_state
 
@@ -169,3 +171,9 @@ async def test_resolve_locale_message_without_guild_defaults() -> None:
     message = cast("discord.Message", MessageSource(guild=None))
 
     assert await resolve_locale(message, service) == "en"
+
+
+def test_bot_supplies_every_chrome_label() -> None:
+    defaults = Chrome()
+    for field in fields(Chrome):
+        assert getattr(CHROME, field.name) != getattr(defaults, field.name), field.name

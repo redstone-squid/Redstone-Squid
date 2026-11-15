@@ -220,3 +220,8 @@ containers, section accessories, select options, and modal inputs are supported.
 Use `discord_testing.index_tree(view)` or `staged.index()` for shared scopes or
 ordering. `staged.query(selector, view=candidate)` explicitly inspects a candidate
 view; the default keeps pending renders separate from committed output.
+
+Framework wording is supplied through `Chrome`. Its defaults are English; applications
+own translated labels and callbacks, including their catalogs. Pass plain localized
+strings or deferred `TextLike` values to override them. Deferred application text is
+still resolved with the render or session localization.

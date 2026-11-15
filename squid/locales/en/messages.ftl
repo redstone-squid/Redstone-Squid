@@ -1484,112 +1484,112 @@ bot-tags-view-value-3 = { $action_label } **{ $tag_name }**?
 # squid/bot/tags_view.py:521
 bot-tags-view-value-type = Value type
 
-# squid/bot/ui.py:119
+# squid/bot/ui.py:151
 bot-ui-add = Add
 
-# squid/bot/ui.py:86
+# squid/bot/ui.py:118
 bot-ui-and-more = …and { $count } more.
 
-# squid/bot/ui.py:113
+# squid/bot/ui.py:145
 bot-ui-apply = Apply
 
-# squid/bot/ui.py:105
+# squid/bot/ui.py:137
 bot-ui-back = Back
 
-# squid/bot/ui.py:112
+# squid/bot/ui.py:144
 bot-ui-cancel = Cancel
 
-# squid/bot/ui.py:107
+# squid/bot/ui.py:139
 bot-ui-close = Close
 
-# squid/bot/ui.py:111
+# squid/bot/ui.py:143
 bot-ui-confirm = Confirm
 
-# squid/bot/ui.py:96
+# squid/bot/ui.py:128
 bot-ui-continue-session = Continue Session
 
-# squid/bot/ui.py:110
+# squid/bot/ui.py:142
 bot-ui-download = Download
 
-# squid/bot/ui.py:120
+# squid/bot/ui.py:152
 bot-ui-edit = Edit
 
-# squid/bot/ui.py:125
+# squid/bot/ui.py:157
 bot-ui-finish = Finish
 
-# squid/bot/ui.py:106
+# squid/bot/ui.py:138
 bot-ui-home = Home
 
-# squid/bot/ui.py:92
+# squid/bot/ui.py:124
 bot-ui-live-updates-paused-press-any-control-to = Live updates paused — press any control to resume.
 
-# squid/bot/ui.py:123
+# squid/bot/ui.py:155
 bot-ui-move-down = Move down
 
-# squid/bot/ui.py:122
+# squid/bot/ui.py:154
 bot-ui-move-up = Move up
 
-# squid/bot/ui.py:104
+# squid/bot/ui.py:136
 bot-ui-next = Next
 
-# squid/bot/ui.py:117
+# squid/bot/ui.py:149
 bot-ui-no-results = No results
 
-# squid/bot/ui.py:126
+# squid/bot/ui.py:158
 bot-ui-not-answered-yet = Not answered yet
 
-# squid/bot/ui.py:109
+# squid/bot/ui.py:141
 bot-ui-off = Off
 
-# squid/bot/ui.py:108
+# squid/bot/ui.py:140
 bot-ui-on = On
 
-# squid/bot/ui.py:129
+# squid/bot/ui.py:179
 bot-ui-open-link = Open link
 
-# squid/bot/ui.py:127
+# squid/bot/ui.py:159
 bot-ui-page-of = Page { $page } of { $pages }
 
-# squid/bot/ui.py:103
+# squid/bot/ui.py:135
 bot-ui-previous = Previous
 
-# squid/bot/ui.py:121
+# squid/bot/ui.py:153
 bot-ui-remove = Remove
 
-# squid/bot/ui.py:124
+# squid/bot/ui.py:156
 bot-ui-review = Review
 
-# squid/bot/ui.py:114
+# squid/bot/ui.py:146
 bot-ui-save = Save
 
-# squid/bot/ui.py:116
+# squid/bot/ui.py:148
 bot-ui-search = Search
 
-# squid/bot/ui.py:97
+# squid/bot/ui.py:129
 bot-ui-sent-by-direct-message = Sent by direct message.
 
-# squid/bot/ui.py:98
+# squid/bot/ui.py:130
 bot-ui-this-reply-is-too-private-for-a = This reply is too private for a channel, and your direct messages are closed. Run the command in a direct message, or allow direct messages and retry.
 
-# squid/bot/ui.py:88
+# squid/bot/ui.py:120
 bot-ui-this-session-has-ended = This session has ended.
 
-# squid/bot/ui.py:95
+# squid/bot/ui.py:127
 bot-ui-this-session-is-about-to-expire = This session is about to expire.
 
 # squid/bot/ui.py:82
 bot-ui-try-again-in-seconds = Try again in { $whole } seconds.
 
-# squid/bot/ui.py:115
+# squid/bot/ui.py:147
 bot-ui-unsaved-changes = Unsaved changes
 
-# squid/bot/ui.py:91
+# squid/bot/ui.py:123
 bot-ui-working = Working…
 
-# squid/bot/ui.py:89
+# squid/bot/ui.py:121
 bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 
-# squid/bot/ui.py:118
+# squid/bot/ui.py:150
 bot-ui-you-chose = You chose { $label }.
 
 # squid/bot/accounts/cog.py:109
@@ -5638,10 +5638,67 @@ tags-workspace-heading = Build tags
 # squid/bot/tags_view.py:229
 tags-workspace-help = Browse the tag library, or choose a build to apply tags to it.
 
+# squid/bot/ui.py:175
+ui-chrome-approve = Approve
+
+# squid/bot/ui.py:114
+ui-chrome-approved-count = Approved: { $count }/{ $total }
+
+# squid/bot/ui.py:94
+ui-chrome-approximate-total-footer = { $first }–{ $last } of ~{ $total }
+
+# squid/bot/ui.py:160
+ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again.
+
+# squid/bot/ui.py:165
+ui-chrome-continue = Continue
+
+# squid/bot/ui.py:173
+ui-chrome-full = Full
+
+# squid/bot/ui.py:170
+ui-chrome-jump-to-page = Jump to a page
+
+# squid/bot/ui.py:162
+ui-chrome-newer = Newer
+
+# squid/bot/ui.py:161
+ui-chrome-older = Older
+
+# squid/bot/ui.py:102
+ui-chrome-page-option = Page { $page }
+
+# squid/bot/ui.py:90
+ui-chrome-range-footer = { $first }–{ $last }
+
+# squid/bot/ui.py:164
+ui-chrome-redo = Redo
+
+# squid/bot/ui.py:109
+ui-chrome-slot-capacity = { $count }/{ $capacity }
+
+# squid/bot/ui.py:107
+ui-chrome-slot-count = { $count }
+
+# squid/bot/ui.py:86
+ui-chrome-step-progress = Step { $step } of { $steps }
+
+# squid/bot/ui.py:98
+ui-chrome-total-range-footer = { $first }–{ $last } of { $total }
+
+# squid/bot/ui.py:163
+ui-chrome-undo = Undo
+
+# squid/bot/ui.py:172
+ui-chrome-waitlist = Waitlist
+
+# squid/bot/ui.py:176
+ui-chrome-withdraw = Withdraw
+
 # squid/bot/routes.py:49
 ui-control-expired = This control is no longer available.
 
-# squid/bot/ui.py:87
+# squid/bot/ui.py:119
 ui-list-controls-not-owned = These list controls belong to someone else.
 
 # squid/bot/accounts/cog.py:90
