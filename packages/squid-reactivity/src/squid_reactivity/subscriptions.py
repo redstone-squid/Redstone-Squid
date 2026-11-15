@@ -13,8 +13,9 @@ class Subscriptions:
     commit() accepts the candidate set; discard() restores the previous set. Only one
     candidate may be staged at a time. close() releases everything.
 
-    Topics carry their bus and cell addresses carry their source. UI integrations use
-    the staging interval while preparing and delivering an updated view.
+    Topics carry their bus and cell addresses carry their source. A consumer that
+    recomputes after a notification stages the addresses its new result read, and
+    commits once that result has replaced the old one.
     """
 
     def __init__(self, callback: Callable[[DependencyAddress], None]) -> None:

@@ -87,7 +87,7 @@ def test_read_only_actions_emit_terminal_outcomes() -> None:
         assert [result.terminal for result in ledger.results] == ["committed", "rolled_back"]
 
 
-def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
+def test_block_failure_emits_rollback_after_staged_state_dies() -> None:
     preferences = Preferences()
     seen: list[tuple[str, str]] = []
 
@@ -100,7 +100,7 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
         tx.after_rollback(observe)
         raise RuntimeError("failed")
 
-    assert seen == [("handler_exception", "system")]
+    assert seen == [("block_exception", "system")]
 
 
 def test_write_skew_is_allowed_by_default() -> None:

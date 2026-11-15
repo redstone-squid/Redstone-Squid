@@ -7,7 +7,7 @@ a new value.
 
 Each invalidation or replacement starts a generation. Only a load for the current
 generation can install its result, preventing old requests from overwriting new data.
-UI integrations can discover resources during rendering and resolve them afterward.
+A caller can discover the resources a synchronous computation read and resolve them afterward.
 """
 
 import asyncio
@@ -100,8 +100,8 @@ class ResourceNotReadyError(ReactivityError, LookupError):
 class _AtomicResourcePending(ResourceNotReadyError):
     """Request loading before a synchronous computation can continue.
 
-    UI integrations catch this internal ResourceNotReadyError subtype, resolve the
-    resource, and retry the computation.
+    A caller that runs the computation catches this internal ResourceNotReadyError
+    subtype, resolves the resource, and retries the computation.
     """
 
     def __init__(self, resource: Resource[Any]) -> None:
@@ -521,8 +521,8 @@ class AtomicResource[ValueT](Resource[ValueT]):
     When pending without a previous value, reading status raises ResourceNotReadyError.
     The pending property still reports whether a load is needed, and resolve() can load it.
 
-    UI integrations catch the internal pending exception, resolve the resource, and retry
-    rendering. Other callers can await it directly.
+    A caller running a synchronous computation catches the internal pending exception,
+    resolves the resource, and retries. Other callers can await it directly.
     """
 
     @property
@@ -676,7 +676,7 @@ def resource(
 
     EXPLICIT mode exposes Pending, Ready, or Failed status. ATOMIC mode uses the last ready
     value while reloading and raises ResourceNotReadyError when no value is available.
-    UI integrations can use that exception to load required inputs before rendering.
+    A caller can use that exception to load required inputs before retrying a computation.
     """
 
     def decorate(

@@ -21,7 +21,8 @@ if TYPE_CHECKING:
 class RollbackReason(Enum):
     """Why a transaction discarded its staged writes."""
 
-    HANDLER_EXCEPTION = "handler_exception"
+    BLOCK_EXCEPTION = "block_exception"
+    """The transaction block raised."""
     CANCELLED = "cancelled"
     CONFLICT = "conflict"
     VALIDATION_FAILED = "validation_failed"

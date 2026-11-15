@@ -214,14 +214,16 @@ class _TransactionEngine:
         if self.closed:
             message = (
                 f"{what} was written through a transaction that has already finished. The write "
-                f"came from a task that outlived the transaction which opened it, so nothing would "
-                f"publish it: give the task an owner inside the handler, or write in the handler."
+                f"came from a task that was started inside the transaction and outlived it, so "
+                f"nothing would publish it: write from the task that opened the transaction before "
+                f"its block exits, or start the task outside the block."
             )
         else:
             message = (
                 f"{what} was written from a task other than the one that opened its transaction. "
                 f"Sibling tasks staging into one overlay make what commits depend on scheduling: "
-                f"write from the handler's own task, or give each branch its own transaction."
+                f"write from the task that opened the transaction, or start each branch outside "
+                f"the block so it can open its own."
             )
         raise StaleReactiveContextError(message)
 
@@ -267,7 +269,7 @@ class _TransactionEngine:
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
-            message = "read-only transactions cannot mutate component state"
+            message = "read-only transactions cannot write reactive state"
             raise ReactiveWriteError(message)
         entry = self.staged(cell)
         if entry is None:
@@ -643,11 +645,11 @@ def report_undeclared_write(owner: object, name: str) -> None:
         message = f"{current.write_block} ({label})"
         raise ReactiveWriteError(message)
     if current.readonly:
-        message = f"read-only transactions cannot mutate component state ({label})"
+        message = f"read-only transactions cannot write reactive state ({label})"
         raise ReactiveWriteError(message)
     message = (
         f"{label} was assigned inside a transaction but is not declared state: it would not be "
-        f"rolled back if the transaction failed, and it would not trigger a re-render. "
+        f"rolled back if the transaction failed, and its readers would not be notified. "
         f"Declare it with state()."
     )
     raise UndeclaredStateError(message)
@@ -667,7 +669,7 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
         return RollbackReason.VALIDATION_FAILED
     if during_commit:
         return RollbackReason.PARTICIPANT_PREPARE_FAILED
-    return RollbackReason.HANDLER_EXCEPTION
+    return RollbackReason.BLOCK_EXCEPTION
 
 
 def _notify_hooks(

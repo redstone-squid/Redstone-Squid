@@ -18,7 +18,7 @@ dependencies = []
 
 [project.urls]
 Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
-Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/reference/squid-reactivity/"
 Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
 Repository = "https://github.com/redstone-squid/Redstone-Squid"
 

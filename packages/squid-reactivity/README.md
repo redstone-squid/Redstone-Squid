@@ -54,9 +54,6 @@ which is cached until a reactive value it depends on changes. A `@computed` can 
 another `@computed`. Reactivity is fine-grained: changing a field affects only what read
 that field. Otherwise, a `Reactive` model is a plain object.
 
-`squid_ui.Component` is built on this library. A component is a `Reactive`, and its renderer
-tracks what each render reads.
-
 ## Transactions
 
 A bare assignment takes effect immediately. Inside `with transaction(...)`, the block sees
@@ -114,15 +111,16 @@ subscriptions.close()
 
 `stage` subscribes to a new set of addresses while keeping the old set, and `commit` drops
 the old set, so no notification is missed while you recompute. Models hold subscribers
-weakly, so keep the subscriptions for as long as you want callbacks. The UI runtime does all of
-this for component renders.
+weakly, so keep the subscriptions for as long as you want callbacks.
 
 The block under `observe_reads()` is read-only, as are computed functions: assigning to
 existing state raises `ReactiveWriteError`, though an object created there may still set up
 its own fields. `capture_reads()` records without that restriction, and `untracked()` hides
 reads from the recording.
 
-To save and restore state across restarts, see `squid_storage.PersistentStatePool`.
+To save and restore state across restarts, `export_state(model)` returns the model's
+persistent fields as a dictionary, and `restore_state(model, values)` assigns them back in
+one transaction. Declare a field with `state(persist=False)` to leave it out.
 
 ## Finding out what happened
 
@@ -183,7 +181,7 @@ class BuildPage(Reactive):
 
 `page.title.status` is `Pending`, `Ready`, or `Failed`. Reading it never starts I/O;
 `await page.title` runs the loader in your task. Changing `build_id` makes the resource
-pending again. In the UI, `squid_ui.runtime.async_bindings` decides when to load.
+pending again.
 
 A loader can run several times and an outdated result is thrown away, so keep side effects
 out of it. An outdated load still runs to the end unless you load inside
@@ -202,7 +200,7 @@ from squid_reactivity import LocalTopicBus
 
 bus = LocalTopicBus()
 build_changes = bus.topic("build", "42")
-build_changes.watch()  # Read inside a render, computed function, or resource loader.
+build_changes.watch()  # Read inside a computed function, resource loader, or observe_reads() block.
 build_changes.publish()  # Notify after a database change or incoming bridge message.
 ```
 

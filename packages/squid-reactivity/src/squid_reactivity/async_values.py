@@ -40,8 +40,8 @@ child tasks inherit that same list. Collection discovers work but never starts l
 def observe_async_bindings() -> Iterator[list[AsyncBinding[object]]]:
     """Collect asynchronous bindings accessed inside this scope without starting them.
 
-    Integrations can resolve pending bindings after a synchronous computation finishes.
-    UI renderers use this to discover asynchronous inputs before presenting a result.
+    A caller can resolve pending bindings after a synchronous computation finishes,
+    then run the computation again with its asynchronous inputs available.
     """
     observed: list[AsyncBinding[object]] = []
     token = _ASYNC_BINDING_COLLECTOR.set(observed)

@@ -3,7 +3,7 @@
 A state descriptor stores each instance's value in a cell. A computed descriptor
 records the inputs read by its function and checks their versions before reusing
 a result. Reactive supplies transaction-aware assignment and change notifications.
-Inspection and export helpers expose model state without requiring a UI framework.
+Inspection and export helpers expose model state to tools and storage.
 """
 
 import functools

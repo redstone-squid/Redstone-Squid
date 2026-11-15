@@ -181,7 +181,7 @@ def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Tr
     transaction with writes, participants, or version conditions: committing inner changes
     would otherwise make an outer rollback incomplete.
 
-    UI undo/redo dispatch uses this to give the history operation its own identity inside
+    For example, an undo dispatcher can give the history operation its own identity inside
     an otherwise empty dispatch transaction.
     """
     outer = _current_transaction()
