@@ -9,6 +9,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui import ComponentsV2Target, Renderable, paragraph, scene
+from squid_ui.authoring.presentations import Replacement, corresponds, losses, ref
 from squid_ui.ext.discord import DISCORD_V2_DPY27, render_message
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
@@ -20,7 +21,6 @@ from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
 from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.result import PlanResult
-from squid_ui.presentations import Replacement, corresponds, losses, ref
 from squid_ui.primitives import (
     Alt,
     ControlGroup,

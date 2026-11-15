@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from squid_ui.semantic import Region
+from squid_ui.authoring.semantic import Region
 from squid_ui.target_types import RenderTarget
 
 

@@ -12,8 +12,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast, overload
 
-from squid_ui.emoji import EmojiLike, normalize_emoji
-from squid_ui.entity import ConversationType, EntityRef, EntityType
+from squid_ui.content.emoji import EmojiLike, normalize_emoji
+from squid_ui.content.entity import ConversationType, EntityRef, EntityType
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.content.text import TextLike
 from squid_ui.extensions import ExtensionKind
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
@@ -28,13 +30,11 @@ from squid_ui.interactions import (
 from squid_ui.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable, RenderTarget
-from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
+    from squid_ui.authoring.presentations import Correspondence
+    from squid_ui.authoring.presentations import Fidelity as PresentationFidelity
     from squid_ui.planning.native_extensions import NativeComposition
-    from squid_ui.presentations import Correspondence
-    from squid_ui.presentations import Fidelity as PresentationFidelity
     from squid_ui.runtime.definition import Component
     from squid_ui.runtime.histories import History
 

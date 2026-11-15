@@ -7,8 +7,9 @@ from hashlib import sha256
 from types import MappingProxyType
 
 from squid_ui import scene
-from squid_ui.assets import Asset
-from squid_ui.document import DocumentLike, as_document
+from squid_ui.authoring.document import DocumentLike, as_document
+from squid_ui.authoring.semantic import Group
+from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
@@ -34,7 +35,6 @@ from squid_ui.planning.realizations import select_composition
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
-from squid_ui.semantic import Group
 
 _logger = logging.getLogger(__name__)
 

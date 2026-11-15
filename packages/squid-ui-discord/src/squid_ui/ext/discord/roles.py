@@ -13,9 +13,11 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, override
 
 import discord
-from squid_ui.emoji import EmojiLike, normalize_emoji
+from squid_ui.authoring.presentations import change_interaction, corresponds, losses, ref
+from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.content.emoji import EmojiLike, normalize_emoji
+from squid_ui.content.text import TextLike
 from squid_ui.ext.discord.routing import RouteComponent, RouteGroup
-from squid_ui.presentations import change_interaction, corresponds, losses, ref
 from squid_ui.primitives.nodes import (
     ControlGroup,
     Heading,
@@ -28,9 +30,7 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.routing import Route
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import DiscordTarget
-from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,7 +6,7 @@ import pytest
 
 import squid_ui as ui
 from squid_ui import scene
-from squid_ui import semantic as s
+from squid_ui.authoring import semantic as s
 from squid_ui.primitives import Lines
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.selectors import Match, Selector, SelectorSyntaxError, parse, query, scope, select, snapshot

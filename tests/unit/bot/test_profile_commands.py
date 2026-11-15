@@ -6,7 +6,7 @@ from uuid import UUID
 from squid.accounts.domain import CreditedAlias, IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile
 from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.bot.accounts.profile_render import own_profile_avatar, own_profile_fields, public_profile_fields
-from squid_ui.text import source_text
+from squid_ui.content.text import source_text
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 DISCORD = replace(AccountIdentity.discord(7), id=1, avatar_key="abc")

@@ -9,6 +9,11 @@ costs to choose balanced breaks before the complete candidate is fitted.
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
+from squid_ui.authoring.semantic import (
+    BestEffort,
+    LayoutNode,
+    Paged,
+)
 from squid_ui.capabilities import Capability
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord.limits import Axis, MessageLimits
@@ -53,11 +58,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.nodes import (
     Heading as PrimitiveHeading,
-)
-from squid_ui.semantic import (
-    BestEffort,
-    LayoutNode,
-    Paged,
 )
 
 

@@ -7,8 +7,9 @@ from copy import deepcopy
 from typing import Any, cast
 
 from squid_ui.action_mode import ActionMode
-from squid_ui.emoji import Emoji
-from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.content.emoji import Emoji
+from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.content.text import Markup
 from squid_ui.errors import SquidUiError
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.scene._json import (
@@ -73,7 +74,6 @@ from squid_ui.scene.model import (
 from squid_ui.scene.schema import SCHEMA
 from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
 from squid_ui.scene.slack_codec import SlackSceneCodecError, slack_body_from_dict, slack_body_to_dict
-from squid_ui.text import Markup
 
 
 class CodecError(SquidUiError, ValueError):

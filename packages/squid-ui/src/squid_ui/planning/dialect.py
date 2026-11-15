@@ -8,7 +8,7 @@ from squid_ui.capabilities import Capability
 from squid_ui.planning.resources import TargetLimits
 
 if TYPE_CHECKING:
-    from squid_ui.document import DocumentLike
+    from squid_ui.authoring.document import DocumentLike
     from squid_ui.planning.composition import TargetRules
     from squid_ui.planning.pagination.navigation import PlannedNav
 

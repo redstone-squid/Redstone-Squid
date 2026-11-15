@@ -15,7 +15,7 @@ from squid.bot.ui import tr
 from squid.suggestions.application import Candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
 from squid_i18n import md, md_tr
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 if TYPE_CHECKING:
     import squid.bot.app

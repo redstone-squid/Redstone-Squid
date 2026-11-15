@@ -12,9 +12,9 @@ from squid_ui.planning.resources import ResourceCost as ResourceCost
 from squid_ui.scene.model import JsonValue
 
 if TYPE_CHECKING:
+    from squid_ui.content.text import Localization
     from squid_ui.forms import FormSpec
     from squid_ui.planning.target import AnyTarget
-    from squid_ui.text import Localization
 
 
 class FormPlanner(Protocol):

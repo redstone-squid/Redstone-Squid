@@ -32,7 +32,7 @@ from squid.voting.domain import (
     validate_thresholds,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_ui.text import NEUTRAL, resolve_text
+from squid_ui.content.text import NEUTRAL, resolve_text
 from tests.support.services import bot_services
 from tests.support.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
 

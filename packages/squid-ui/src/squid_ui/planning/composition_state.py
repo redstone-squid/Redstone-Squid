@@ -7,7 +7,9 @@ from typing import Any
 from urllib.parse import quote
 
 from squid_ui import scene
-from squid_ui.document import Document, DocumentLike, as_document
+from squid_ui.authoring.document import Document, DocumentLike, as_document
+from squid_ui.authoring.presentations import SemanticRef
+from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ownership import Controlled
 from squid_ui.pages import PagePosition
@@ -30,10 +32,8 @@ from squid_ui.presentation import (
     RegionLayoutUpdate,
     RetainedCompositionUpdate,
 )
-from squid_ui.presentations import SemanticRef
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import FIRST_PAGE, Paginate, RoutedPage
-from squid_ui.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 
 
 def _navigation_version(nav: PlannedNav | None) -> int | None:

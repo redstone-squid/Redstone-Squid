@@ -8,7 +8,9 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.assets import Asset
+from squid_ui.authoring.presentations import budget, ref
+from squid_ui.content.assets import Asset
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
@@ -30,9 +32,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.realizations import Realization, select_composition
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.semantics import semantic_graph
-from squid_ui.presentations import budget, ref
 from squid_ui.target_types import Renderable, RenderTarget
-from squid_ui.text import NEUTRAL, Localization
 
 
 def evaluate[BodyT, PreparationT, ResourceT](

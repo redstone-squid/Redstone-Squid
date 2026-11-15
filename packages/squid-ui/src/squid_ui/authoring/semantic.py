@@ -17,20 +17,20 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, Literal, overload
 
-from squid_ui.assets import Asset
-from squid_ui.entity import ConversationType, EntityRef, EntityType
+from squid_ui.authoring.grids import GridCell, validate_grid
+from squid_ui.authoring.rosters import RosterPlacement
+from squid_ui.content.assets import Asset
+from squid_ui.content.entity import ConversationType, EntityRef, EntityType
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.content.text import Text, TextLike, timestamp_text
 from squid_ui.forms import FormSpec, SubmitHandler
-from squid_ui.grids import GridCell, validate_grid
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
 from squid_ui.ownership import Controlled, Ownership, Uncontrolled
 from squid_ui.palette import INHERIT, Accent, Palette, Role, Tone
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import Node
-from squid_ui.rosters import RosterPlacement
 from squid_ui.target_types import Renderable, RenderTarget
-from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import Text, TextLike, timestamp_text
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History

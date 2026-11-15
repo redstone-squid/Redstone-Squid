@@ -8,13 +8,13 @@ if TYPE_CHECKING:
 
 import discord
 from discord.ext import commands
-from squid_ui.document import Document
+from squid_ui.authoring.document import Document
+from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.content.text import Localization
 from squid_ui.ext.discord.delivery import Messageable, Replyable
 from squid_ui.ext.discord.message_payload import MessagePayload
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui.text import Localization
 
 type InteractionSource[ClientT: discord.Client = discord.Client] = discord.Interaction[ClientT]
 type CommandSource[BotT: commands.Bot = commands.Bot] = commands.Context[BotT]

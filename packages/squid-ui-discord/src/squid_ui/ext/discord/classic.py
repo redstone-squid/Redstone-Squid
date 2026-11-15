@@ -14,9 +14,12 @@ from typing import TYPE_CHECKING, Any, Literal, Unpack, cast
 
 import discord
 from squid_ui import scene
-from squid_ui.assets import Asset
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.document import DocumentLike
+from squid_ui.content.assets import Asset
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.content.text import NEUTRAL, Localization, TextLike
+from squid_ui.content.text import Text as TextExpression
 from squid_ui.errors import ExistingLayoutError
 from squid_ui.ext.discord._draw import plan_and_draw
 from squid_ui.ext.discord._factories import (
@@ -76,9 +79,6 @@ from squid_ui.primitives.styles import Color
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
-from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import NEUTRAL, Localization, TextLike
-from squid_ui.text import Text as TextExpression
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

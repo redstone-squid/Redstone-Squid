@@ -9,6 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.authoring.rosters import RosterEntry, RosterOverflow, RosterSlot, place_roster
 from squid_ui.chrome import Chrome
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
@@ -17,7 +18,6 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.rosters import RosterEntry, RosterOverflow, RosterSlot, place_roster
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 DISCORD = AdapterProfile(DiscordAdapter, "roster.discord", "1")

@@ -1,6 +1,6 @@
 """Build semantic layout nodes using shorthand suited to Component.render methods.
 
-These factories construct the public records in squid_ui.semantic. Containers accept
+These factories construct the public records in squid_ui.authoring.semantic. Containers accept
 layout nodes, turn bare strings and t-strings into paragraphs, and omit None or False
 children. For example, ``sl.stack("Details", show_note and sl.note("Draft"))`` includes
 the note only when show_note is true.

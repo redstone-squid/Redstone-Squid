@@ -1,7 +1,7 @@
 """Conversion from portable emoji metadata to discord.py values."""
 
 import discord
-from squid_ui.emoji import EmojiLike
+from squid_ui.content.emoji import EmojiLike
 
 
 def discord_emoji(emoji: EmojiLike | None) -> str | discord.PartialEmoji | None:

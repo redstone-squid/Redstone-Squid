@@ -11,7 +11,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from heapq import heappop, heappush
 
-from squid_ui.semantic import Flexibility
+from squid_ui.authoring.semantic import Flexibility
 
 DEFAULT_SEARCH_BUDGET = 512
 

@@ -10,8 +10,9 @@ from typing import Any, Literal
 
 import discord
 from squid_ui.capabilities import Capability
-from squid_ui.emoji import EmojiLike
-from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui.content.emoji import EmojiLike
+from squid_ui.content.entity import EntityKind, EntityRef, EntityType
+from squid_ui.content.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui.errors import LayoutInvariantError, LimitViolationError
 from squid_ui.ext.discord.conformance import trim
 from squid_ui.ext.discord.form_fields import CheckboxGroupField, EntityField, FileField
@@ -34,7 +35,6 @@ from squid_ui.forms import (
     TimeField,
     ZonedDateTimeField,
 )
-from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 
 logger = logging.getLogger(__name__)
 

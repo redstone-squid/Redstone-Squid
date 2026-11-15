@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
-from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.interactions import ActionResponder, Actor, EntitySelectionEvent, SelectionEvent
 from squid_ui.planning import CompositionOptions, JointInfeasibleError, JointUnsupportedError, OccurrenceId, plan

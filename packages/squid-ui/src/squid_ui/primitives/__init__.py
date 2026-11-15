@@ -5,7 +5,7 @@ primitives are the escape hatch for target-specific structure and are intentiona
 behind ``squid_ui.primitives``.
 """
 
-from squid_ui.emoji import Emoji, EmojiLike, normalize_emoji
+from squid_ui.content.emoji import Emoji, EmojiLike, normalize_emoji
 from squid_ui.primitives.constraints import (
     FIRST_PAGE,
     LAST_PAGE,

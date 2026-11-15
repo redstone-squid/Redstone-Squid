@@ -8,6 +8,7 @@ when a fragment is materialized.
 
 from dataclasses import dataclass, replace
 
+from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.composition import (
     CandidateComposition,
@@ -16,7 +17,6 @@ from squid_ui.planning.composition import (
     Placement,
     PlanningContext,
 )
-from squid_ui.presentations import SemanticRef
 
 
 @dataclass(frozen=True, slots=True)

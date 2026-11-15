@@ -13,8 +13,8 @@ from dataclasses import fields, is_dataclass
 from enum import Enum
 from string.templatelib import Template
 
+from squid_ui.content.text import Text
 from squid_ui.primitives.constraints import RoutedPage
-from squid_ui.text import Text
 
 
 def stable_fingerprint(values: Sequence[object], *, consume: Callable[[], None] | None = None) -> str:

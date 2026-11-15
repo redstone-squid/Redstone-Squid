@@ -7,22 +7,9 @@ from typing import Any
 import pytest
 
 from squid_ui import fallback, scene, truncate
-from squid_ui.document import Asset, InlineAsset
-from squid_ui.ext.discord import DISCORD_V2_DPY27
-from squid_ui.interactions import ActionEvent, ActionMode
-from squid_ui.pages import PagePosition
-from squid_ui.planning import plan
-from squid_ui.planning.allocation import CertifiedAllocation
-from squid_ui.planning.allocation_policy import SearchCompletion
-from squid_ui.planning.joint_search import JointExhaustedError
-from squid_ui.planning.result import PlanResult
-from squid_ui.presentations import corresponds
-from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
-from squid_ui.primitives.nodes import Node
-from squid_ui.runtime import PresentationState
-from squid_ui.runtime.presentation_state import StrategyState
-from squid_ui.selectors import query, select
-from squid_ui.semantic import (
+from squid_ui.authoring.document import Asset, InlineAsset
+from squid_ui.authoring.presentations import corresponds
+from squid_ui.authoring.semantic import (
     ActionControl,
     ActionControls,
     ControlDisplay,
@@ -36,6 +23,19 @@ from squid_ui.semantic import (
     Paragraph,
     Stack,
 )
+from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.interactions import ActionEvent, ActionMode
+from squid_ui.pages import PagePosition
+from squid_ui.planning import plan
+from squid_ui.planning.allocation import CertifiedAllocation
+from squid_ui.planning.allocation_policy import SearchCompletion
+from squid_ui.planning.joint_search import JointExhaustedError
+from squid_ui.planning.result import PlanResult
+from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
+from squid_ui.primitives.nodes import Node
+from squid_ui.runtime import PresentationState
+from squid_ui.runtime.presentation_state import StrategyState
+from squid_ui.selectors import query, select
 
 
 async def _act(event: ActionEvent) -> None: ...

@@ -5,8 +5,8 @@ from collections.abc import Mapping
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
-from squid_ui.semantic import ActionControl, Choices, FormTrigger, RoutedActionControl
-from squid_ui.text import NEUTRAL, TextLike, resolve_text
+from squid_ui.authoring.semantic import ActionControl, Choices, FormTrigger, RoutedActionControl
+from squid_ui.content.text import NEUTRAL, TextLike, resolve_text
 from squid_ui_widgets import testing as wt
 
 

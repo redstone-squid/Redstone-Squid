@@ -5,10 +5,10 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from squid_i18n import tree
+from squid_ui.authoring.presentations import SemanticRef, Shortening, TextPresentation
+from squid_ui.content.text import Localization, resolve_text
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.semantics import CheckedAlternative, source_text
-from squid_ui.presentations import SemanticRef, Shortening, TextPresentation
-from squid_ui.text import Localization, resolve_text
 
 
 @dataclass(frozen=True, slots=True)

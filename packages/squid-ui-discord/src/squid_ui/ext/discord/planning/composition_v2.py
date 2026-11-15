@@ -6,8 +6,11 @@ from typing import assert_never
 
 from squid_i18n import tree
 from squid_ui import scene
-from squid_ui.assets import Asset
+from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
 from squid_ui.capabilities import Capability
+from squid_ui.content.assets import Asset
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_discord import discord_text, discord_time_prefix, select_violations
@@ -60,10 +63,7 @@ from squid_ui.planning.realizations import (
     semantic_offers,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.primitives import nodes as primitive
-from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import Markup
 
 
 @dataclass(frozen=True, slots=True)

@@ -19,9 +19,6 @@ from squid_reactivity.operations import operation
 from squid_reactivity.resources import resource
 from squid_ui import (
     chrome,
-    document,
-    emoji,
-    entity,
     errors,
     forms,
     guards,
@@ -36,17 +33,83 @@ from squid_ui import (
     routing,
     runtime,
     scene,
-    semantic,
     sources,
-    temporal,
-    text,
 )
-from squid_ui.assets import FileInput, file
-from squid_ui.context import ContextKey
-from squid_ui.document import (
+from squid_ui.authoring import (
+    document,
+    semantic,
+)
+from squid_ui.authoring import (
+    grids as grids,
+)
+from squid_ui.authoring import (
+    presentations as presentations,
+)
+from squid_ui.authoring import (
+    rosters as rosters,
+)
+from squid_ui.authoring import (
+    tallies as tallies,
+)
+from squid_ui.authoring.document import (
     Document,
     DocumentLike,
 )
+from squid_ui.authoring.presentations import (
+    Alternative,
+    Alternatives,
+    AtomicNode,
+    Correspondence,
+    Fidelity,
+    SemanticRef,
+    TextPresentation,
+    alternative,
+    alternatives,
+    change_interaction,
+    corresponds,
+    equivalent,
+    losses,
+    omit,
+    present_text,
+    ref,
+    shorten,
+)
+from squid_ui.authoring.semantic import (
+    ChoiceEvent,
+    EntityEvent,
+    LayoutNode,
+    NavigateEvent,
+    OpenEvent,
+    ScaleEvent,
+    ToggleEvent,
+    Tone,
+    best_effort,
+    budget,
+    fallback,
+    keep_with_next,
+    optional,
+    paged,
+    spill,
+    truncate,
+    unbreakable,
+)
+from squid_ui.content import assets as assets
+from squid_ui.content import emoji, entity, temporal, text
+from squid_ui.content.assets import FileInput, file
+from squid_ui.content.text import (
+    TextLike,
+    emoji_text,
+    emphasis,
+    inline_code,
+    md,
+    md_tr,
+    mention,
+    plain,
+    strong,
+    text_link,
+    tr,
+)
+from squid_ui.context import ContextKey
 from squid_ui.errors import (
     DrawInvariantError,
     ExistingLayoutError,
@@ -129,46 +192,8 @@ from squid_ui.interactions import (
     SubmitEvent,
 )
 from squid_ui.palette import INHERIT, Accent, AccentRole, Palette, PaletteRegistry, Role
-from squid_ui.presentations import (
-    Alternative,
-    Alternatives,
-    AtomicNode,
-    Correspondence,
-    Fidelity,
-    SemanticRef,
-    TextPresentation,
-    alternative,
-    alternatives,
-    change_interaction,
-    corresponds,
-    equivalent,
-    losses,
-    omit,
-    present_text,
-    ref,
-    shorten,
-)
 from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.definition import Component
-from squid_ui.semantic import (
-    ChoiceEvent,
-    EntityEvent,
-    LayoutNode,
-    NavigateEvent,
-    OpenEvent,
-    ScaleEvent,
-    ToggleEvent,
-    Tone,
-    best_effort,
-    budget,
-    fallback,
-    keep_with_next,
-    optional,
-    paged,
-    spill,
-    truncate,
-    unbreakable,
-)
 from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
@@ -180,19 +205,6 @@ from squid_ui.target_types import (
     SlackMessageTarget,
     SlackModalTarget,
     SlackTarget,
-)
-from squid_ui.text import (
-    TextLike,
-    emoji_text,
-    emphasis,
-    inline_code,
-    md,
-    md_tr,
-    mention,
-    plain,
-    strong,
-    text_link,
-    tr,
 )
 
 # Adapters can contribute squid_ui.ext packages from separate editable source trees.

@@ -2,7 +2,9 @@
 
 from typing import Literal, cast
 
-from squid_ui.assets import Asset
+from squid_ui.content.assets import Asset
+from squid_ui.content.text import Text as TextExpression
+from squid_ui.content.text import TextLike
 from squid_ui.ext.discord._factories import (
     button,
     check_content,
@@ -42,8 +44,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.styles import Color
 from squid_ui.target_types import ComponentsV2Target, Renderable
-from squid_ui.text import Text as TextExpression
-from squid_ui.text import TextLike
 
 type Child[ContextT = object] = Renderable[ComponentsV2Target, ContextT] | TextLike | Literal[False] | None
 type SectionText = Text | Heading | Footer | TextLike | Literal[False] | None

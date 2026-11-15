@@ -14,7 +14,14 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
-from squid_ui.semantic import ActionControl, Choices, Controlled, FormTrigger, RoutedActionControl, RoutedChoices
+from squid_ui.authoring.semantic import (
+    ActionControl,
+    Choices,
+    Controlled,
+    FormTrigger,
+    RoutedActionControl,
+    RoutedChoices,
+)
 from squid_ui_widgets import testing as wt
 from squid_ui_widgets.drivers import FormPresentingMachine
 

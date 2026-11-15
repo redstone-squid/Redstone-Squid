@@ -3,7 +3,7 @@
 import pytest
 
 import squid_ui as sl
-from squid_ui.document import Asset, Document, InlineAsset, as_document
+from squid_ui.authoring.document import Asset, Document, InlineAsset, as_document
 from squid_ui.errors import LayoutInvariantError
 
 

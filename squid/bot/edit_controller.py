@@ -22,7 +22,7 @@ from squid.edits.domain import (
 )
 from squid_i18n import md_tr
 from squid_reactivity import Signal, current_transaction
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 logger = logging.getLogger(__name__)
 

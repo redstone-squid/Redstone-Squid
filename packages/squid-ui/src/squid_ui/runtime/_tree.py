@@ -4,33 +4,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
 from typing import cast
 
-from squid_ui.errors import LayoutInvariantError
-from squid_ui.primitives.constraints import Paginate
-from squid_ui.primitives.nodes import (
-    Break,
-    Budget,
-    Button,
-    Card,
-    Code,
-    ControlGroup,
-    Extension,
-    Footer,
-    Heading,
-    Lines,
-    Panel,
-    Row,
-    SelectMenu,
-    Text,
-    Variants,
-)
-from squid_ui.primitives.nodes import Section as PrimitiveSection
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     ActionControl as SemanticActionControl,
 )
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     ActionControls as SemanticActionControls,
 )
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     AnyLayoutNode,
     Article,
     Aside,
@@ -54,40 +34,60 @@ from squid_ui.semantic import (
     Truncated,
     Unbreakable,
 )
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     Choices as SemanticChoices,
 )
-from squid_ui.semantic import ControlGroup as SemanticControlGroup
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import ControlGroup as SemanticControlGroup
+from squid_ui.authoring.semantic import (
     Details as SemanticDetails,
 )
-from squid_ui.semantic import Download as SemanticDownload
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import Download as SemanticDownload
+from squid_ui.authoring.semantic import (
     FormTrigger as SemanticFormTrigger,
 )
-from squid_ui.semantic import Grid as SemanticGrid
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import Grid as SemanticGrid
+from squid_ui.authoring.semantic import (
     Items as SemanticItems,
 )
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     Link as SemanticLink,
 )
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     List as SemanticList,
 )
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     Media as SemanticMedia,
 )
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     Navigation as SemanticNavigation,
 )
-from squid_ui.semantic import Paged as SemanticPaged
-from squid_ui.semantic import Roster as SemanticRoster
-from squid_ui.semantic import RoutedActionControl as SemanticRoutedActionControl
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import Paged as SemanticPaged
+from squid_ui.authoring.semantic import Roster as SemanticRoster
+from squid_ui.authoring.semantic import RoutedActionControl as SemanticRoutedActionControl
+from squid_ui.authoring.semantic import (
     Table as SemanticTable,
 )
-from squid_ui.semantic import Toggle as SemanticToggle
+from squid_ui.authoring.semantic import Toggle as SemanticToggle
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.primitives.constraints import Paginate
+from squid_ui.primitives.nodes import (
+    Break,
+    Budget,
+    Button,
+    Card,
+    Code,
+    ControlGroup,
+    Extension,
+    Footer,
+    Heading,
+    Lines,
+    Panel,
+    Row,
+    SelectMenu,
+    Text,
+    Variants,
+)
+from squid_ui.primitives.nodes import Section as PrimitiveSection
 from squid_ui.target_types import RenderTarget
 
 type LayoutTransform[RenderTargetT: RenderTarget, ContextT = object] = Callable[

@@ -18,12 +18,12 @@ from enum import StrEnum
 from typing import ClassVar
 
 from squid_ui.action_mode import ActionMode
-from squid_ui.emoji import Emoji
-from squid_ui.entity import ConversationType, EntityRef, EntityType
+from squid_ui.content.emoji import Emoji
+from squid_ui.content.entity import ConversationType, EntityRef, EntityType
+from squid_ui.content.text import Markup
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
-from squid_ui.text import Markup
 
 
 @dataclass(frozen=True, slots=True)

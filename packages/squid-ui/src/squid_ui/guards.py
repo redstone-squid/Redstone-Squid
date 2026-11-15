@@ -21,8 +21,8 @@ from enum import StrEnum
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
+from squid_ui.content.text import TextLike
 from squid_ui.interactions import ActionEvent
-from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
     from squid_ui.runtime.definition import Component

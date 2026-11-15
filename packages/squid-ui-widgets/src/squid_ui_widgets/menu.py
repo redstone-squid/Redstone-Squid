@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from string.templatelib import Template
 
 from squid_i18n import Text as TextExpression
-from squid_ui.document import DocumentLike
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import ControlDisplay, LayoutNode
+from squid_ui.content.text import TextLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.semantic import ControlDisplay, LayoutNode
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key, slug
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
 

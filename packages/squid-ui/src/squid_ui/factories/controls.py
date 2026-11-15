@@ -5,13 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from squid_i18n import Text
-from squid_ui.assets import FileInput, file
-from squid_ui.entity import ConversationType, EntityRef, EntityType
-from squid_ui.forms import FormLike, SubmitHandler, bind_form
-from squid_ui.guards import Guard
-from squid_ui.interactions import ActionMode, BusySpec, PressHandler
-from squid_ui.palette import Role
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     FIRST_OPTION,
     NO_ENTITIES,
     OFF,
@@ -47,6 +41,12 @@ from squid_ui.semantic import (
     Tone,
     Uncontrolled,
 )
+from squid_ui.content.assets import FileInput, file
+from squid_ui.content.entity import ConversationType, EntityRef, EntityType
+from squid_ui.forms import FormLike, SubmitHandler, bind_form
+from squid_ui.guards import Guard
+from squid_ui.interactions import ActionMode, BusySpec, PressHandler
+from squid_ui.palette import Role
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History

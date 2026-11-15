@@ -11,9 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
+from squid_ui.content.text import TextLike
 from squid_ui.interactions import ActionEvent
 from squid_ui.ownership import Controlled, Ownership, Uncontrolled
-from squid_ui.text import TextLike
 
 # --- Who keeps a pager's page ---------------------------------------------------------
 

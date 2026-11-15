@@ -9,8 +9,10 @@ allows the planner to distribute buttons across rows.
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Literal
 
-from squid_ui.emoji import EmojiLike
-from squid_ui.entity import ConversationType, EntityRef, EntityType
+from squid_ui.content.emoji import EmojiLike
+from squid_ui.content.entity import ConversationType, EntityRef, EntityType
+from squid_ui.content.text import Text as TextExpression
+from squid_ui.content.text import TextLike
 from squid_ui.guards import Guard
 from squid_ui.interactions import (
     ActionBinding,
@@ -40,8 +42,6 @@ from squid_ui.primitives.nodes import (
     Text,
 )
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.text import Text as TextExpression
-from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History

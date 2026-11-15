@@ -10,7 +10,8 @@ import squid_ui as sl
 import squid_ui.ext.discord.classic_renderer as classic_renderer_module
 import squid_ui.ext.discord.renderer as renderer_module
 from squid_ui import Component, state
-from squid_ui.document import Document
+from squid_ui.authoring.document import Document
+from squid_ui.authoring.semantic import ActionControl, ActionControls
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
 from squid_ui.ext.discord.classic_renderer import ClassicRenderer
 from squid_ui.ext.discord.render_cache import RenderProgramCache
@@ -21,7 +22,6 @@ from squid_ui.planning.planner import plan
 from squid_ui.primitives import Text
 from squid_ui.scene import ClassicMessage, Codec, Embed
 from squid_ui.scene import Scene as RenderedScene
-from squid_ui.semantic import ActionControl, ActionControls
 
 
 def _text_plan(value: str):

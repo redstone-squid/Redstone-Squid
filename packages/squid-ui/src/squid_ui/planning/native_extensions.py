@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
 from squid_ui import scene
-from squid_ui.assets import Asset
+from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.composition import AtomicContract, PlanningContext, SharedUse
 from squid_ui.planning.resources import Axis, ResourceCost, ResourceIdentity

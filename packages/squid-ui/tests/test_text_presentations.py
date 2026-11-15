@@ -7,11 +7,11 @@ import pytest
 
 import squid_ui as sl
 from squid_i18n import tree
+from squid_ui.authoring.presentations import alternative, alternatives, equivalent, losses, present_text, ref, shorten
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.text_presentations import ResolvedText, resolve_presentation_text
-from squid_ui.presentations import alternative, alternatives, equivalent, losses, present_text, ref, shorten
-from squid_ui.text import NEUTRAL, Localization
 
 
 def test_combined_text_checks_each_shortening_separately() -> None:

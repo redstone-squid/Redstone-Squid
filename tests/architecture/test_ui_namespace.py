@@ -14,7 +14,7 @@ import importlib
 importlib.import_module({first!r})
 import squid_ui
 from squid_ui.ext import discord, slack, html
-assert squid_ui.Document is importlib.import_module('squid_ui.document').Document
+assert squid_ui.Document is importlib.import_module('squid_ui.authoring.document').Document
 assert squid_ui.ext.__spec__.origin is None
 for module in (discord, slack, html):
     assert module is importlib.import_module(module.__name__)

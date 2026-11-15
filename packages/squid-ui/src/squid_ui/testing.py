@@ -14,6 +14,8 @@ from pathlib import Path
 from string.templatelib import Template
 from typing import Any
 
+from squid_ui.authoring.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
+from squid_ui.content.text import NEUTRAL, Text, TextLike, resolve_text
 from squid_ui.forms import FormIssue, FormLike, SubmitHandler
 from squid_ui.interactions import (
     ActionMode,
@@ -29,8 +31,6 @@ from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import Snapshot, snapshot
-from squid_ui.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
-from squid_ui.text import NEUTRAL, Text, TextLike, resolve_text
 
 type Tree = object
 """Anything `walk` can inspect recursively."""

@@ -14,6 +14,7 @@ import anyio
 import discord
 from squid_reactivity.transactions import Transaction
 from squid_ui import paragraph
+from squid_ui.content.text import Localization
 from squid_ui.ext.discord._shutdown import cleanup_outside_action
 from squid_ui.ext.discord.audience import Audience
 from squid_ui.ext.discord.closure import CloseReason
@@ -41,7 +42,6 @@ from squid_ui.ext.discord.session_specs import OpenContext
 from squid_ui.ext.discord.sessions import Opened, RejectionReason
 from squid_ui.ext.discord.sessions import Rejected as SessionRejected
 from squid_ui.runtime.component import Component
-from squid_ui.text import Localization
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.runtime import DiscordUIRuntime

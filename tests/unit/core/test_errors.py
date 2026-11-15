@@ -6,7 +6,7 @@ from squid.accounts.errors import AccountAlreadyLinkedError
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
 from squid.core.i18n import localization_for, tr
-from squid_ui.text import Text, localization_scope
+from squid_ui.content.text import Text, localization_scope
 
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
 

@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.ext.discord.limits import Axis
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import (
@@ -29,7 +30,6 @@ from squid_ui.primitives.nodes import (
     Thumbnail,
 )
 from squid_ui.primitives.styles import Color
-from squid_ui.temporal import ZonedDateTime
 
 
 @dataclass(slots=True)

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 import squid_ui as sl
-from squid_ui.assets import InlineAsset, LocalAsset
+from squid_ui.content.assets import InlineAsset, LocalAsset
 
 
 def test_path_is_lazy_and_snapshots_on_first_read(tmp_path: Path) -> None:

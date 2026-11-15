@@ -12,8 +12,21 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, overload, override, runtime_checkable
 
 from squid_reactivity import state
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import (
+    ActionControl,
+    Choice,
+    ChoiceEvent,
+    Choices,
+    Emphasis,
+    FormTrigger,
+    LayoutNode,
+    RoutedActionControl,
+    RoutedChoices,
+    Tone,
+)
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
-from squid_ui.document import DocumentLike
+from squid_ui.content.text import TextLike
 from squid_ui.factories import (
     action_control,
     choice,
@@ -29,20 +42,7 @@ from squid_ui.palette import Role
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import (
-    ActionControl,
-    Choice,
-    ChoiceEvent,
-    Choices,
-    Emphasis,
-    FormTrigger,
-    LayoutNode,
-    RoutedActionControl,
-    RoutedChoices,
-    Tone,
-)
 from squid_ui.target_types import DiscordTarget, RenderTarget
-from squid_ui.text import TextLike
 
 type FormValues = Mapping[str, object]
 """Values submitted by a heterogeneous form schema."""

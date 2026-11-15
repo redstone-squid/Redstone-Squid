@@ -10,8 +10,8 @@ from squid.bot.ui import tr
 from squid.builds.domain import BuildCategory
 from squid.records.domain import BaseTitle, BuildKind, VersionScope
 from squid_i18n import md_tr
-from squid_ui.semantic import Fields, Paragraph
-from squid_ui.text import Text
+from squid_ui.authoring.semantic import Fields, Paragraph
+from squid_ui.content.text import Text
 
 # Examples are also parsed in tests so the reference cannot drift from the query language.
 BUILD_EXAMPLES = (

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any, assert_never
 
-from squid_ui import semantic as sem
+from squid_ui.authoring import semantic as sem
 from squid_ui.primitives import nodes as primitive
 
 

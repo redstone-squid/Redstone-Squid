@@ -2,13 +2,13 @@
 
 Public, but deliberately not part of the root namespace: `sl.grid` is the factory that builds
 a grid, and a module of that name bound on the package would shadow it. Downstream pattern
-and transport packages import `squid_ui.grids` directly.
+and transport packages import `squid_ui.authoring.grids` directly.
 """
 
 from dataclasses import dataclass
 
+from squid_ui.content.text import TextLike
 from squid_ui.palette import Role, Tone
-from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

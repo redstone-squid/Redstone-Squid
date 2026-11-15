@@ -12,6 +12,7 @@ from typing import assert_type, override
 import squid_ui as sl
 from squid_reactivity.topics import DependencyAddress, LocalTopicBus
 from squid_ui import Component, ContextKey, Reactive, paragraph, resource, state
+from squid_ui.authoring.semantic import Paragraph
 from squid_ui.runtime import (
     AtomicResource,
     AtomicResourceStatus,
@@ -23,7 +24,6 @@ from squid_ui.runtime import (
     ResourceStatus,
     addresses,
 )
-from squid_ui.semantic import Paragraph
 
 bus = LocalTopicBus()
 

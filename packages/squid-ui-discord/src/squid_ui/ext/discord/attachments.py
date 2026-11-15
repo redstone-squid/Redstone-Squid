@@ -9,7 +9,7 @@ import io
 from collections.abc import Sequence
 
 import discord
-from squid_ui.assets import Asset
+from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.result import PlanResult
 

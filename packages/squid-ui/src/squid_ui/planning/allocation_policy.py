@@ -10,9 +10,9 @@ from enum import StrEnum
 from functools import cmp_to_key
 from itertools import zip_longest
 
+from squid_ui.authoring.presentations import FidelityEffect
 from squid_ui.planning.composition import CandidateViolation, OccurrenceId
 from squid_ui.planning.resources import Axis
-from squid_ui.presentations import FidelityEffect
 
 
 @dataclass(frozen=True, slots=True)

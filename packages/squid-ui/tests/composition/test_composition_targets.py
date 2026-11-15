@@ -8,6 +8,8 @@ import pytest
 import squid_ui as sl
 from squid_i18n import tree
 from squid_ui import scene
+from squid_ui.authoring.presentations import ref
+from squid_ui.authoring.semantic import TableDisplay
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
@@ -30,8 +32,6 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.realizations import TableRealization, select_composition
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import semantic_graph
-from squid_ui.presentations import ref
-from squid_ui.semantic import TableDisplay
 from squid_ui.target_types import ComponentsV2Target, RenderTarget
 
 

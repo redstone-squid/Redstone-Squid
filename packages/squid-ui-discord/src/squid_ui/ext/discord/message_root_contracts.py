@@ -15,6 +15,7 @@ import discord
 from squid_reactivity.topics import DependencyAddress, TopicBus
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.content.text import NEUTRAL, Localization, TextLike
 from squid_ui.ext.discord.access import AccessPolicy
 from squid_ui.ext.discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
@@ -32,7 +33,6 @@ from squid_ui.target_types import (
     DiscordPyAdapter,
     DiscordTarget,
 )
-from squid_ui.text import NEUTRAL, Localization, TextLike
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.message_root import AnyMessageRoot

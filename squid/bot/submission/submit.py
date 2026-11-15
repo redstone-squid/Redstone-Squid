@@ -58,7 +58,7 @@ from squid.submissions.domain import (
 )
 from squid.submissions.errors import DraftCapacityExceededError
 from squid_i18n import Text, md_tr
-from squid_ui.text import md
+from squid_ui.content.text import md
 
 if TYPE_CHECKING:
     import squid.bot.app

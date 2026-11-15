@@ -10,7 +10,7 @@ from typing import assert_type, override
 import discord
 
 import squid_ui as sl
-from squid_ui.document import DocumentLike
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.ext.discord import Everyone, MessageRoot, owner_message_root
 from squid_ui.ext.discord.emoji import discord_emoji
 from squid_ui.ext.discord.limits import LIMITS, Axis

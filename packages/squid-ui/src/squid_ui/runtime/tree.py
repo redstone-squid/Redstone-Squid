@@ -11,11 +11,11 @@ from typing import Any, Generic
 from squid_reactivity import Dependencies
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import DependencyAddress
+from squid_ui.authoring.document import Asset
+from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.context import ContextKey
-from squid_ui.document import Asset
 from squid_ui.runtime._tree import _LayoutRoute
 from squid_ui.runtime.definition import AnyComponent, ContextT, RenderTargetT
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
 
 

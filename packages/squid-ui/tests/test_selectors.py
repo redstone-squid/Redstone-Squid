@@ -8,7 +8,7 @@ import pytest
 
 import squid_ui as ui
 from squid_i18n import tr
-from squid_ui import semantic as s
+from squid_ui.authoring import semantic as s
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import Match, QueryError, query, scope, select, snapshot

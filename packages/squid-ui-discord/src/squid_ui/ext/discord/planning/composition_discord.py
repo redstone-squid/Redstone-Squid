@@ -5,7 +5,7 @@ from datetime import datetime
 
 from squid_i18n import tree
 from squid_ui import scene
-from squid_ui.entity import ConversationType
+from squid_ui.content.entity import ConversationType
 from squid_ui.ext.discord.limits import ComponentLimits
 from squid_ui.planning.realizations import TextRealization, TimeRealization
 

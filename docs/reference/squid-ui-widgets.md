@@ -119,7 +119,7 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.AgreementResolveHandler
 
-::: squid_ui.tallies.TallyOption
+::: squid_ui.authoring.tallies.TallyOption
 
 ## Ranked lists and rosters
 

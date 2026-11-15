@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 
 from squid_ui.chrome import Chrome
+from squid_ui.content.text import TextLike
 from squid_ui.planning.pagination.navigation import NavigationState
 from squid_ui.sources import Chronology, CountPrecision, LoadedWindow, SourceCapabilities
-from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

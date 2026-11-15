@@ -17,6 +17,7 @@ from typing import Self, cast, override
 
 from squid_i18n import md_tr, tr
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.content.text import TextLike
 from squid_ui.context import ContextKey
 from squid_ui.forms import FormBinding, FormSpec, IntField
 from squid_ui.handlers import _HandlerBinder, _HandlerComposition
@@ -40,7 +41,6 @@ from squid_ui.primitives.nodes import (
     Thumbnail,
 )
 from squid_ui.sources import CountPrecision
-from squid_ui.text import TextLike
 
 MATERIALIZED_PREVIOUS_KEY = "__cursor_previous"
 MATERIALIZED_NEXT_KEY = "__cursor_next"

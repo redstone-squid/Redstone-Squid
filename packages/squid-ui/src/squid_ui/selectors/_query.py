@@ -3,10 +3,10 @@
 from collections.abc import Mapping
 from typing import Any, cast, overload
 
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.selectors.core import Query, Selector
 from squid_ui.selectors.parser import parse
 from squid_ui.selectors.tree import Children, Match, Snapshot, snapshot, ui_children
-from squid_ui.text import NEUTRAL, Localization
 
 
 @overload

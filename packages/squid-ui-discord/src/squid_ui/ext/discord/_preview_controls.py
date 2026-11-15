@@ -3,7 +3,7 @@
 import htpy as h
 
 from squid_ui import scene
-from squid_ui.entity import EntityKind, EntityRef
+from squid_ui.content.entity import EntityKind, EntityRef
 from squid_ui.ext.html.safety import safe_url
 
 

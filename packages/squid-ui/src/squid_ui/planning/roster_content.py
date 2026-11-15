@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from squid_ui.rosters import RosterSlot
-from squid_ui.semantic import List
+from squid_ui.authoring.rosters import RosterSlot
+from squid_ui.authoring.semantic import List
 
 
 @dataclass(frozen=True, slots=True)

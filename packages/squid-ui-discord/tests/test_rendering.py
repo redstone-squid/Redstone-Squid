@@ -20,7 +20,18 @@ import squid_ui.runtime.owner as owner_module
 from squid_reactivity import Reactive
 from squid_reactivity.topics import CellAddress
 from squid_ui import Component, ContextKey, PressEvent, state
-from squid_ui.document import Asset, Document, InlineAsset
+from squid_ui.authoring.document import Asset, Document, InlineAsset
+from squid_ui.authoring.semantic import (
+    ActionControl,
+    ActionControls,
+    Choice,
+    Choices,
+    Controlled,
+    Group,
+    LayoutNode,
+    List,
+    ListItem,
+)
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.testing import commit_render, interaction_harness, payload_texts
@@ -41,17 +52,6 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.semantic import (
-    ActionControl,
-    ActionControls,
-    Choice,
-    Choices,
-    Controlled,
-    Group,
-    LayoutNode,
-    List,
-    ListItem,
-)
 
 
 class Counter(Component[sl.ComponentsV2Target]):

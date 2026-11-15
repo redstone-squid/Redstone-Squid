@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from squid_ui.chrome import DEFAULT_CHROME, Chrome, localize_chrome
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import LIMITS, Axis, MessageLimits
 from squid_ui.ext.discord.planning.measurement.allocation import (
@@ -53,7 +54,6 @@ from squid_ui.primitives.nodes import (
     Lines,
     Node,
 )
-from squid_ui.text import NEUTRAL, Localization
 
 
 @dataclass(frozen=True, slots=True)

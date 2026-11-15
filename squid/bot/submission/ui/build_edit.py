@@ -40,7 +40,7 @@ from squid.submissions.application.build_answers import BuildAnswers, answers_fr
 from squid.submissions.domain import ChoiceOption, FormField, FormManifest, FormSection, SubmissionOrigin
 from squid_i18n import Text, md_tr
 from squid_reactivity import Topic
-from squid_ui.text import TextLike, md
+from squid_ui.content.text import TextLike, md
 
 type OptionLoader = Callable[[str], Awaitable[tuple[ChoiceOption, ...]]]
 """Fetch the current choices of one option source, such as `approved_restrictions`."""

@@ -4,13 +4,14 @@ import discord
 import pytest
 
 from squid_ui import scene
-from squid_ui.emoji import Emoji
+from squid_ui.authoring.presentations import Replacement, corresponds, losses, ref
+from squid_ui.content.emoji import Emoji
+from squid_ui.content.text import Markup
 from squid_ui.ext.discord import DISCORD_V2_DPY27, classic, render_static
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.ext.discord.testing import without_capabilities
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointUnsupportedError
-from squid_ui.presentations import Replacement, corresponds, losses, ref
 from squid_ui.primitives import (
     Gallery,
     GalleryItem,
@@ -23,7 +24,6 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
-from squid_ui.text import Markup
 
 
 def test_v2_draws_premium_links_select_emoji_and_media_metadata() -> None:

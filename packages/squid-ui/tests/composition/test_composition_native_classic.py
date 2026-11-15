@@ -9,7 +9,8 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 from squid_ui import scene
-from squid_ui.document import Document
+from squid_ui.authoring.document import Document
+from squid_ui.authoring.presentations import Alternative
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import ClassicLimits, EmbedLimits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
@@ -21,7 +22,6 @@ from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.presentations import Alternative
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Paginate, Truncate
 from squid_ui.target_types import DiscordAdapter, Renderable

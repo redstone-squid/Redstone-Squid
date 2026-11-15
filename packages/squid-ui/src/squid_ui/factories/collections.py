@@ -5,16 +5,9 @@ from dataclasses import dataclass
 from string.templatelib import Template
 
 from squid_i18n import NUMBER, Text, emoji_text, md_tr, strong
-from squid_ui.assets import FileInput
-from squid_ui.factories._inputs import ChildLike, Conditional, TextValue, _children, _collect
-from squid_ui.factories.containers import stack
-from squid_ui.factories.content import media_item, progress
-from squid_ui.factories.controls import choice, choices, controlled, routed_choices
-from squid_ui.grids import GridCell
-from squid_ui.interactions import SelectionEvent
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
-from squid_ui.rosters import RosterPlacement
-from squid_ui.semantic import (
+from squid_ui.authoring.grids import GridCell
+from squid_ui.authoring.rosters import RosterPlacement
+from squid_ui.authoring.semantic import (
     UNOPENED,
     ChoiceEvent,
     Column,
@@ -41,9 +34,16 @@ from squid_ui.semantic import (
     TableDisplay,
     TableRow,
 )
-from squid_ui.tallies import TallyOption
+from squid_ui.authoring.tallies import TallyOption
+from squid_ui.content.assets import FileInput
+from squid_ui.content.text import TextLike
+from squid_ui.factories._inputs import ChildLike, Conditional, TextValue, _children, _collect
+from squid_ui.factories.containers import stack
+from squid_ui.factories.content import media_item, progress
+from squid_ui.factories.controls import choice, choices, controlled, routed_choices
+from squid_ui.interactions import SelectionEvent
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike
 
 
 def item[RenderTargetT = RenderTarget, ContextT = object](

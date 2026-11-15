@@ -4,7 +4,7 @@ from typing import assert_type
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid_ui.semantic import ActionControl
+from squid_ui.authoring.semantic import ActionControl
 
 
 async def discord(event: sd.PressEvent) -> None:

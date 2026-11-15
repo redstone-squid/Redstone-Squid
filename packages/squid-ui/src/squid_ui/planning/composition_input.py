@@ -3,18 +3,18 @@
 from dataclasses import dataclass, replace
 
 from squid_ui import scene
-from squid_ui import semantic as sem
-from squid_ui.document import Document
+from squid_ui.authoring import semantic as sem
+from squid_ui.authoring.document import Document
+from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
+from squid_ui.content.text import resolve_text
 from squid_ui.planning.native_extensions import ComposableExtension
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph, variant_alternatives
-from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Condense, Drop, Never, Paginate, Spill, Truncate
 from squid_ui.target_types import Renderable
-from squid_ui.text import resolve_text
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,9 +12,10 @@ from datetime import datetime
 from typing import Any
 
 from squid_ui import scene
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
-from squid_ui.document import DocumentLike
+from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.ext.discord.planning.composition_classic import ClassicCompositionRules
@@ -71,7 +72,6 @@ from squid_ui.primitives.nodes import (
     card_text,
 )
 from squid_ui.target_types import ClassicTarget
-from squid_ui.temporal import ZonedDateTime
 
 BLOCK_JOIN = "\n\n"
 """How a card's description blocks are joined. One rule, so one card is one string."""

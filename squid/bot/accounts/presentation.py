@@ -6,7 +6,7 @@ from uuid import UUID
 from squid.accounts.domain import IdentityRefresh, LinkPreview
 from squid.accounts.models import AccountIdentity
 from squid_i18n import Text, md_tr
-from squid_ui.text import md
+from squid_ui.content.text import md
 
 
 def link_conflict(preview: LinkPreview, existing_java: Sequence[AccountIdentity]) -> UUID | None:

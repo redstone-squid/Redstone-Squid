@@ -14,8 +14,8 @@ from squid.core.actors import Actor
 from squid.schematics.application.services import SchematicService
 from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
+from squid_ui.content.text import source_text
 from squid_ui.ext.discord.testing import InteractionHarness
-from squid_ui.text import source_text
 
 
 @pytest.fixture

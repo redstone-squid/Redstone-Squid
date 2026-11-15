@@ -7,13 +7,13 @@ import jsonschema
 import pytest
 
 from squid_ui import scene
-from squid_ui.document import Asset, Document, InlineAsset, as_document
-from squid_ui.emoji import Emoji
+from squid_ui.authoring.document import Asset, Document, InlineAsset, as_document
+from squid_ui.content.emoji import Emoji
+from squid_ui.content.text import Markup
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionMode
 from squid_ui.primitives.nodes import Text
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.text import Markup
 
 
 def _scene() -> scene.Scene:

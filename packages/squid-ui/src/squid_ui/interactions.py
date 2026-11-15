@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_reactivity.transactions import Transaction, TransactionContext
 from squid_ui.action_mode import ActionMode as ActionMode
-from squid_ui.entity import EntityRef
-from squid_ui.text import TextLike
+from squid_ui.content.entity import EntityRef
+from squid_ui.content.text import TextLike
 
 if TYPE_CHECKING:
     from squid_ui.forms import FormIssue, FormLike, SubmitHandler

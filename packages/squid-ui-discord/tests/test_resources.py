@@ -3,6 +3,7 @@
 import pytest
 
 from squid_ui import paragraph
+from squid_ui.authoring.presentations import corresponds
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
@@ -14,7 +15,6 @@ from squid_ui.ext.discord.planning.measurement.model import MeasuredText
 from squid_ui.ext.discord.planning.measurement.text import BudgetRegion, make_unit, text_total
 from squid_ui.planning import plan
 from squid_ui.planning.resources import ResourceCost
-from squid_ui.presentations import corresponds
 from squid_ui.primitives import Never, Panel, Text, Variant, Variants
 
 

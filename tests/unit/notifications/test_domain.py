@@ -9,7 +9,7 @@ from squid.bot.notifications import NotificationCog, render_delivery
 from squid.core.errors import DataIntegrityError
 from squid.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
 from squid.notifications.domain import NotificationKind
-from squid_ui.text import Localization
+from squid_ui.content.text import Localization
 
 
 def test_record_filter_round_trips_presence_and_exact_tag_predicates() -> None:

@@ -11,6 +11,8 @@ import pytest
 
 from squid_i18n import tr
 from squid_ui.chrome import DEFAULT_CHROME
+from squid_ui.content.text import NEUTRAL
+from squid_ui.content.text import Text as TextExpression
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import LIMITS
 from squid_ui.ext.discord.planning.adaptation.lowering import lower_semantics
@@ -38,8 +40,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.target_types import DiscordTarget, Renderable
-from squid_ui.text import NEUTRAL
-from squid_ui.text import Text as TextExpression
 
 _TEXT_FIELDS = ("content", "label", "description", "placeholder")
 

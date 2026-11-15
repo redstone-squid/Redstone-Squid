@@ -4,12 +4,12 @@ from collections.abc import Awaitable, Callable, Collection, Iterable
 from dataclasses import dataclass
 from typing import override
 
-from squid_ui.document import DocumentLike
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import ControlDisplay, Emphasis, Tone
+from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_controls, stack, status
 from squid_ui.palette import Role
-from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 

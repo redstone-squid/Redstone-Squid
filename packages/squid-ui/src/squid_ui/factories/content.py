@@ -3,10 +3,7 @@
 from datetime import datetime
 
 from squid_i18n import Text
-from squid_ui.assets import FileInput, file
-from squid_ui.factories._inputs import TextValue
-from squid_ui.palette import Role
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     Code,
     Emphasis,
     Figure,
@@ -24,7 +21,10 @@ from squid_ui.semantic import (
     Tone,
     ZonedTimestamp,
 )
-from squid_ui.temporal import ZonedDateTime
+from squid_ui.content.assets import FileInput, file
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.factories._inputs import TextValue
+from squid_ui.palette import Role
 
 
 def heading(content: TextValue, *, level: int = 2, importance: Importance = Importance.HIGH) -> Heading:

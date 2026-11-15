@@ -11,7 +11,8 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 from squid_ui import scene
-from squid_ui.document import DocumentLike
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.content.text import Markup
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.ext.discord.renderer import V2Renderer
@@ -19,7 +20,6 @@ from squid_ui.ext.discord.testing import query
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime.component import Component
 from squid_ui.selectors import select as select_node
-from squid_ui.text import Markup
 
 
 def _inline() -> sl.document.Asset:

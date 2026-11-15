@@ -13,7 +13,7 @@ from squid.permissions.domain.catalogue import (
     VOTE_WEIGHT_STAFF,
 )
 from squid.voting.domain import VoteRejection
-from squid_ui.text import Text
+from squid_ui.content.text import Text
 
 if TYPE_CHECKING:
     import squid.bot.app

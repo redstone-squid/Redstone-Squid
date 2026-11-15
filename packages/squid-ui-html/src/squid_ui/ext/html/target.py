@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from typing import Self, overload
 
 from squid_ui import scene
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
-from squid_ui.document import DocumentLike
 from squid_ui.ext.html.composition import HtmlCompositionRules
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.dialect import InputPolicy

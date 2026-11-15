@@ -7,7 +7,7 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.document import Document
+from squid_ui.authoring.document import Document
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target

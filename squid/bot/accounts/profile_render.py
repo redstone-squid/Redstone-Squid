@@ -9,8 +9,8 @@ from squid.accounts.domain import IdentityDetails, IdentityProvider, ProfileLink
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
 from squid_i18n import Text, md_tr, text_link
-from squid_ui.text import TextLike
-from squid_ui.text import mention as text_mention
+from squid_ui.content.text import TextLike
+from squid_ui.content.text import mention as text_mention
 
 _PROVIDER_LABELS = {
     IdentityProvider.DISCORD: tr(t"bot-profile-render-discord = Discord"),

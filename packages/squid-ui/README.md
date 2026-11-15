@@ -120,7 +120,7 @@ Use `squid_ui.selectors` for read-only queries in tests and inspection tools:
 ```python
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import query, select, snapshot
-from squid_ui.semantic import ActionControl
+from squid_ui.authoring.semantic import ActionControl
 
 # Rendering is explicit. query accepts existing nodes, scenes, or component trees.
 tree = render_component_tree(screen)

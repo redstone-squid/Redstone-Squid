@@ -6,6 +6,7 @@ from typing import Literal
 import pytest
 
 import squid_ui as sl
+from squid_ui.authoring.presentations import alternative, alternatives, equivalent, losses, omit, ref
 from squid_ui.capabilities import Capability
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.html.composition import HtmlCompositionRules
@@ -25,7 +26,6 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.realizations import Realization, select_composition
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import semantic_graph
-from squid_ui.presentations import alternative, alternatives, equivalent, losses, omit, ref
 from squid_ui.target_types import Renderable, RenderTarget
 
 

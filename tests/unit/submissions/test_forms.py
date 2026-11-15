@@ -26,7 +26,7 @@ from squid.submissions.domain import (
     FieldOperationKind,
     SubmissionOrigin,
 )
-from squid_ui.text import Localization
+from squid_ui.content.text import Localization
 
 
 class FakeOptionCatalog:

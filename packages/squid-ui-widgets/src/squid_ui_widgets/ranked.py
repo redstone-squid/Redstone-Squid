@@ -3,12 +3,12 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from squid_ui.document import DocumentLike
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import heading, stack
 from squid_ui.primitives import Lines
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import DiscordTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls

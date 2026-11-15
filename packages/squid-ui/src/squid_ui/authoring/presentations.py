@@ -9,10 +9,10 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal
 
+from squid_ui.content.text import Text, TextLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.resources import Axis
 from squid_ui.target_types import Renderable, RenderTarget
-from squid_ui.text import Text, TextLike
 
 
 @dataclass(frozen=True, slots=True)

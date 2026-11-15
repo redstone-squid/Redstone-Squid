@@ -19,9 +19,9 @@ from squid.community.application import RedstonerService
 from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 from squid_i18n import md_tr
+from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import send_to
 from squid_ui.ext.discord.i18n import to_locale_str
-from squid_ui.text import localization_scope
 
 if TYPE_CHECKING:
     import squid.bot.app

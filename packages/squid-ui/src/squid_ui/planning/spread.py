@@ -19,7 +19,8 @@ from itertools import pairwise, product
 from typing import Any
 
 from squid_ui import scene
-from squid_ui.document import Document, DocumentLike, PortableDocumentLike, as_document
+from squid_ui.authoring.document import Document, DocumentLike, PortableDocumentLike, as_document
+from squid_ui.authoring.semantic import KeepWithNext
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.diagnostics import LayoutOverflowError
@@ -27,7 +28,6 @@ from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import ActivePagers, RegionLayoutState, RegionLayoutUpdate, RetainedCompositionUpdate
-from squid_ui.semantic import KeepWithNext
 
 # Planning failures that a smaller document could avoid. An overflow can also come from
 # one oversized child; cutting cannot help then, and the original error is raised.

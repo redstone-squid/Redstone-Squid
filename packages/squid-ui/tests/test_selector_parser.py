@@ -3,7 +3,7 @@
 import pytest
 
 import squid_ui as ui
-from squid_ui import semantic as s
+from squid_ui.authoring import semantic as s
 from squid_ui.selectors import SelectorSyntaxError, parse, query, select, snapshot
 
 

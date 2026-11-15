@@ -10,7 +10,7 @@ from squid_ui.planning.allocation_policy import RegionPolicy
 from squid_ui.planning.composition import OccurrenceId
 
 if TYPE_CHECKING:
-    from squid_ui.document import DocumentLike
+    from squid_ui.authoring.document import DocumentLike
     from squid_ui.planning.request import PlanRequest
     from squid_ui.planning.result import PlanResult
 

@@ -12,7 +12,7 @@ from enum import StrEnum
 from typing import Any
 
 import discord
-from squid_ui.assets import Asset, LocalAsset
+from squid_ui.content.assets import Asset, LocalAsset
 from squid_ui.errors import LayoutError
 from squid_ui.ext.discord.attachments import files_for
 

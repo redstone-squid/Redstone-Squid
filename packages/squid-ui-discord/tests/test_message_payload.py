@@ -13,7 +13,7 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui.ext.discord.durability
-from squid_ui.assets import Asset, InlineAsset
+from squid_ui.content.assets import Asset, InlineAsset
 from squid_ui.errors import LimitViolationError
 from squid_ui.ext.discord import delivery
 from squid_ui.ext.discord import testing as sd

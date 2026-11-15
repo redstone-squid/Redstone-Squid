@@ -12,29 +12,8 @@ import pytest
 from squid_i18n import Text as DeferredText
 from squid_i18n import md, tr
 from squid_ui import Palette, Role, Tone, fallback, form, scene
-from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
-from squid_ui.ext.discord import testing as sd
-from squid_ui.forms import FormSpec, TextField
-from squid_ui.ownership import Controlled
-from squid_ui.planning import PlanCache, PlanMemo, plan
-from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.planning.interaction_handlers import SelectChoices
-from squid_ui.planning.pagination.navigation import TurnPage, default_nav
-from squid_ui.planning.result import PlanReuse
-from squid_ui.presentations import corresponds, losses, omit, ref
-from squid_ui.primitives import (
-    Button,
-    Code,
-    Paginate,
-    Panel,
-    Row,
-    Text,
-    Variant,
-    Variants,
-)
-from squid_ui.primitives.constraints import PageEvent
-from squid_ui.runtime import PresentationState
-from squid_ui.semantic import (
+from squid_ui.authoring.presentations import corresponds, losses, omit, ref
+from squid_ui.authoring.semantic import (
     ActionControl,
     ActionControls,
     Choice,
@@ -48,7 +27,28 @@ from squid_ui.semantic import (
     Status,
     Uncontrolled,
 )
-from squid_ui.text import Localization, Markup
+from squid_ui.content.text import Localization, Markup
+from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
+from squid_ui.ext.discord import testing as sd
+from squid_ui.forms import FormSpec, TextField
+from squid_ui.ownership import Controlled
+from squid_ui.planning import PlanCache, PlanMemo, plan
+from squid_ui.planning.adapter import AdapterCapability
+from squid_ui.planning.interaction_handlers import SelectChoices
+from squid_ui.planning.pagination.navigation import TurnPage, default_nav
+from squid_ui.planning.result import PlanReuse
+from squid_ui.primitives import (
+    Button,
+    Code,
+    Paginate,
+    Panel,
+    Row,
+    Text,
+    Variant,
+    Variants,
+)
+from squid_ui.primitives.constraints import PageEvent
+from squid_ui.runtime import PresentationState
 
 
 async def _first(_event) -> None: ...

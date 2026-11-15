@@ -12,8 +12,9 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 from squid_ui import scene
+from squid_ui.authoring.document import Asset
 from squid_ui.chrome import Chrome
-from squid_ui.document import Asset
+from squid_ui.content.text import Localization, TextLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.message_payload import MessagePayload
 from squid_ui.ext.discord.message_root_wiring import AnyMountedView
@@ -39,7 +40,6 @@ from squid_ui.runtime.component import ComponentTree
 from squid_ui.runtime.owner import RenderCandidate
 from squid_ui.runtime.presentation_state import SessionUpdate
 from squid_ui.target_types import DiscordTarget
-from squid_ui.text import Localization, TextLike
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.message_root import AnyMessageRoot

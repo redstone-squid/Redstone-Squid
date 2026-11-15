@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from typing import Any, override
 
 import discord
-from squid_ui.entity import EntityType
+from squid_ui.content.entity import EntityType
+from squid_ui.content.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui.ext.discord.conformance import conform_modal
 from squid_ui.ext.discord.emoji import discord_emoji
@@ -34,7 +35,6 @@ from squid_ui.ext.discord.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_ui.forms import FormSpec, FormText, UploadedFile
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.target_types import DiscordPyAdapter
-from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 
 logger = logging.getLogger(__name__)
 

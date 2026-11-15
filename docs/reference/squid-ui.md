@@ -329,13 +329,13 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.routing` | Stateless control identity: routes that own their own custom id format. |
 | `squid_ui.runtime` | Frontend-neutral component runtime and presentation state. |
 | `squid_ui.scene` | Immutable resolved scenes and protocol serialization. |
-| `squid_ui.semantic` | Frontend-neutral semantic layout vocabulary. |
+| `squid_ui.authoring.semantic` | Frontend-neutral semantic layout vocabulary. |
 | `squid_ui.ext.slack` | Slack Block Kit target identities and hard limits. |
 | `squid_ui.sources` | Source addresses, continuations, and asynchronous window loading. |
 | `squid_ui.pages` | Layout page positions and keyed-entry reveal requests. |
-| `squid_ui.temporal` | Portable exact-time values and local-time resolution. |
+| `squid_ui.content.temporal` | Portable exact-time values and local-time resolution. |
 | `squid_ui.testing` | Tree queries, frontend doubles, and determinism controls for tests. |
-| `squid_ui.text` | Resolved text values and explicit Markdown interpolation. |
+| `squid_ui.content.text` | Resolved text values and explicit Markdown interpolation. |
 
 ## Shared semantic presentations
 

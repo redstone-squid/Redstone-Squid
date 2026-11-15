@@ -5,8 +5,10 @@ from functools import partial
 from typing import override
 
 from squid_reactivity.operations import Failed, Pending
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_ui.document import DocumentLike
+from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_control, action_controls, heading, note, stack
 from squid_ui.interactions import ActionEvent
 from squid_ui.planning.pagination.navigation import (
@@ -16,7 +18,6 @@ from squid_ui.planning.pagination.navigation import (
 )
 from squid_ui.primitives import Lines
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import LayoutNode
 from squid_ui.sources import (
     ORIGIN,
     CountPrecision,
@@ -26,7 +27,6 @@ from squid_ui.sources import (
     window_footer,
 )
 from squid_ui.target_types import DiscordTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets._window import (

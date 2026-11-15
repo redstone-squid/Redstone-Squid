@@ -2,8 +2,8 @@
 
 from typing import override
 
+from squid_ui.content.text import Text, TextLike
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets.drivers import ComponentDriver, TransitionEvent
 from squid_ui_widgets.machines.wizard import REVIEW_STEP as REVIEW_STEP
 from squid_ui_widgets.machines.wizard import StepSource as StepSource

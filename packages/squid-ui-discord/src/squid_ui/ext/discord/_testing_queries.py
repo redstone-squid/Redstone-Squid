@@ -4,11 +4,10 @@ from collections.abc import Iterator, Mapping
 from typing import Any, overload
 
 import discord
-
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.selectors import Match, Query, Selector, Snapshot, parse
 from squid_ui.selectors import query as query_tree
 from squid_ui.selectors import snapshot as capture_snapshot
-from squid_ui.text import NEUTRAL, Localization
 
 _DISCORD_TYPES: dict[str, type] = {
     name: value

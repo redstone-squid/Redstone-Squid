@@ -8,8 +8,9 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 from squid_ui import scene
+from squid_ui.authoring.presentations import alternative, alternatives, equivalent
 from squid_ui.capabilities import Capability
-from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.forms import FormBinding, FormSpec, SubmitEvent, TextField
@@ -19,7 +20,6 @@ from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupporte
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.presentations import alternative, alternatives, equivalent
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never
 from squid_ui.selectors import query, select

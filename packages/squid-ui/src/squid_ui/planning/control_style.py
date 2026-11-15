@@ -1,8 +1,8 @@
 """Map portable action tone and emphasis to shared control styles."""
 
+from squid_ui.authoring.semantic import Emphasis, Tone
 from squid_ui.palette import Role
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.semantic import Emphasis, Tone
 
 
 def button_style(tone: Tone | Role, emphasis: Emphasis) -> ActionStyle:

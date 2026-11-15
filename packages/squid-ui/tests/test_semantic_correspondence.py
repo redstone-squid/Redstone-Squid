@@ -5,9 +5,7 @@ from dataclasses import replace
 import pytest
 
 import squid_ui as sl
-from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.semantics import TableCell, check_alternative, semantic_graph
-from squid_ui.presentations import (
+from squid_ui.authoring.presentations import (
     alternative,
     alternatives,
     change_interaction,
@@ -17,6 +15,8 @@ from squid_ui.presentations import (
     omit,
     ref,
 )
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.semantics import TableCell, check_alternative, semantic_graph
 
 
 def test_reordered_choices_share_meaning_without_a_baseline() -> None:

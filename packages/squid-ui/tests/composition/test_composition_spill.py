@@ -9,6 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.authoring.semantic import Importance, ListItem
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import ClassicLimits, EmbedLimits, V2Limits
@@ -19,7 +20,6 @@ from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
-from squid_ui.semantic import Importance, ListItem
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 DISCORD = AdapterProfile(DiscordAdapter, "spill.discord", "1")

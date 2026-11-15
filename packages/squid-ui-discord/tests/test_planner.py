@@ -7,7 +7,10 @@ import pytest
 
 from squid_i18n import tr
 from squid_ui import Document, paragraph, scene, zoned_timestamp
-from squid_ui.document import Asset, InlineAsset
+from squid_ui.authoring.document import Asset, InlineAsset
+from squid_ui.authoring.presentations import corresponds
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.content.text import Localization, Markup
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord import testing as sd
@@ -17,7 +20,6 @@ from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.presentations import corresponds
 from squid_ui.primitives import (
     Button,
     Code,
@@ -33,8 +35,6 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
-from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import Localization, Markup
 
 
 async def _click(event) -> None: ...

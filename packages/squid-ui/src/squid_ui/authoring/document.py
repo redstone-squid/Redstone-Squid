@@ -3,9 +3,9 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from squid_ui.assets import Asset, AssetSource, InlineAsset, StoredAsset
+from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.content.assets import Asset, AssetSource, InlineAsset, StoredAsset
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
 
 __all__ = ["Asset", "AssetSource", "Document", "DocumentLike", "InlineAsset", "StoredAsset", "as_document"]

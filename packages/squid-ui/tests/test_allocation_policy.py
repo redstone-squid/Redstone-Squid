@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+from squid_ui.authoring.presentations import omit
 from squid_ui.planning.allocation_policy import (
     AllocationQuality,
     PreferenceTree,
@@ -7,7 +8,6 @@ from squid_ui.planning.allocation_policy import (
     compare_quality,
     dense_ranks,
 )
-from squid_ui.presentations import omit
 
 
 def siblings(*ranks: int) -> PreferenceTree:

@@ -9,6 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.authoring.presentations import budget
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
@@ -17,7 +18,6 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import CapacityExceeded, OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
-from squid_ui.presentations import budget
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "composition.discord", ">=1"))

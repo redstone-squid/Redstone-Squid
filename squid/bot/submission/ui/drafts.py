@@ -76,8 +76,8 @@ from squid.submissions.domain.finalization import (
 from squid.submissions.domain.intake import IntakeStatus
 from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
+from squid_ui.content.text import TextLike, md
 from squid_ui.ext.discord.modal import FileField
-from squid_ui.text import TextLike, md
 
 MAX_FILES_PER_UPLOAD = 4
 """Files accepted by one Add files modal, matching the four file options of /build submit."""

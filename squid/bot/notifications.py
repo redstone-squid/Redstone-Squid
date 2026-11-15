@@ -20,7 +20,7 @@ from squid.notifications.domain import NotificationKind
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
 from squid_i18n import md_tr
-from squid_ui.text import Text, localization_scope
+from squid_ui.content.text import Text, localization_scope
 
 logger = logging.getLogger(__name__)
 

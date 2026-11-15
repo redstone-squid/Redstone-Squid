@@ -16,14 +16,25 @@ from urllib.parse import quote
 
 from squid_i18n import tree
 from squid_ui import scene
-from squid_ui import semantic as sem
-from squid_ui.assets import Asset
+from squid_ui.authoring import semantic as sem
+from squid_ui.authoring.grids import coordinate
+from squid_ui.authoring.presentations import (
+    Alternatives,
+    Budget,
+    FidelityEffect,
+    Omission,
+    Replacement,
+    SemanticRef,
+    Shortening,
+    TextPresentation,
+)
 from squid_ui.capabilities import Capability
-from squid_ui.emoji import Emoji, normalize_emoji
-from squid_ui.entity import EntityRef
+from squid_ui.content.assets import Asset
+from squid_ui.content.emoji import Emoji, normalize_emoji
+from squid_ui.content.entity import EntityRef
+from squid_ui.content.text import Text, TextLike, resolve_text, timestamp_text
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
-from squid_ui.grids import coordinate
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.ownership import Controlled
 from squid_ui.planning.classic_content import CardSlot
@@ -88,16 +99,6 @@ from squid_ui.planning.text_presentations import (
     text_ends,
     text_fragments,
 )
-from squid_ui.presentations import (
-    Alternatives,
-    Budget,
-    FidelityEffect,
-    Omission,
-    Replacement,
-    SemanticRef,
-    Shortening,
-    TextPresentation,
-)
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import (
     FIRST_PAGE,
@@ -112,7 +113,6 @@ from squid_ui.primitives.constraints import (
     Truncate,
 )
 from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.text import Text, TextLike, resolve_text, timestamp_text
 
 
 @dataclass(frozen=True, slots=True)

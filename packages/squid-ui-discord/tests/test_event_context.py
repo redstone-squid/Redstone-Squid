@@ -6,11 +6,11 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid_ui.authoring.semantic import Controlled
 from squid_ui.ext.html.target import target as html_target
 from squid_ui.handlers import FrontendHandler, HandlerSet
 from squid_ui.planning import plan
 from squid_ui.planning.interaction_handlers import SelectChoices
-from squid_ui.semantic import Controlled
 
 
 class ContextScreen(sd.Screen):

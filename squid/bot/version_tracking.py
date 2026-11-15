@@ -16,9 +16,9 @@ from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
 from squid.versions.errors import InvalidVersionError
 from squid_i18n import md_tr
+from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import send_to
 from squid_ui.ext.discord.i18n import to_locale_str
-from squid_ui.text import localization_scope
 
 if TYPE_CHECKING:
     import squid.bot.app

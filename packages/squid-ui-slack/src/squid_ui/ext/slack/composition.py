@@ -6,10 +6,12 @@ from typing import cast
 
 from squid_i18n import tree
 from squid_ui import scene
-from squid_ui import semantic as sem
-from squid_ui.assets import Asset
+from squid_ui.authoring import semantic as sem
+from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
 from squid_ui.capabilities import Capability
-from squid_ui.entity import ConversationType, EntityType
+from squid_ui.content.assets import Asset
+from squid_ui.content.entity import ConversationType, EntityType
+from squid_ui.content.text import resolve_text
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.slack._forms import SlackFormRenderer, form_texts
 from squid_ui.ext.slack.limits import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
@@ -50,9 +52,7 @@ from squid_ui.planning.realizations import (
     semantic_offers,
 )
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, ResourceIdentity
-from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.text import resolve_text
 
 
 def _plain(nodes: tuple[tree.Node, ...]) -> str | None:

@@ -8,10 +8,10 @@ ignored. Unknown extensions prevent reuse until they supply an explicit contract
 from dataclasses import replace
 from typing import Any
 
-from squid_ui import semantic as sem
-from squid_ui.document import Document
+from squid_ui.authoring import semantic as sem
+from squid_ui.authoring.document import Document
+from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.ownership import Controlled
-from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import PageOwnership, Paginate
 from squid_ui.target_types import Renderable

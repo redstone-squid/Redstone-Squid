@@ -14,7 +14,9 @@ from urllib.parse import urlsplit
 
 import discord
 from squid_ui import scene
-from squid_ui.assets import Asset, StoredAsset
+from squid_ui.content.assets import Asset, StoredAsset
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.content.text import discord_text
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui.ext.discord.attachments import attachment_assets
@@ -29,8 +31,6 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import Renderer
 from squid_ui.target_types import DiscordPyAdapter
-from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import discord_text
 
 type Control = scene.Button | scene.Select | scene.EntitySelect
 type Accessory = (

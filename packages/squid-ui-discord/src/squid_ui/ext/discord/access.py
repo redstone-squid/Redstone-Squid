@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import discord
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

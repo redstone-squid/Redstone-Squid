@@ -5,14 +5,14 @@ from dataclasses import dataclass
 from typing import Literal, override
 
 from squid_reactivity import state
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_ui.document import DocumentLike
+from squid_ui.content.text import TextLike, tr
 from squid_ui.factories import action_control, action_controls, bullet, bullets, stack, status
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import TextLike, tr
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 
 

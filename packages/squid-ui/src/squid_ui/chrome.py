@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from math import ceil
 
 from squid_i18n import md_tr, tr
+from squid_ui.content.text import Localization, TextLike, resolve_text
 from squid_ui.context import ContextKey
-from squid_ui.text import Localization, TextLike, resolve_text
 
 
 def _default_and_n_more(count: int) -> TextLike:

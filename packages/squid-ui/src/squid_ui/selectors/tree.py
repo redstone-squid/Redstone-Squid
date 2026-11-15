@@ -5,7 +5,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from typing import Any
 
 from squid_ui import primitives as p
-from squid_ui import semantic as s
+from squid_ui.authoring import semantic as s
 from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.tree import ComponentTree

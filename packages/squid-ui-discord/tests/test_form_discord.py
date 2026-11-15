@@ -9,7 +9,7 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.modal import (
     CheckboxGroupField,

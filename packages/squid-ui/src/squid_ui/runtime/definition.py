@@ -10,8 +10,8 @@ from itertools import count
 from typing import Any, ClassVar, Generic, Protocol, Self, TypeVar, cast, overload, override
 
 from squid_reactivity import Reactive
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.context import ContextKey
-from squid_ui.document import DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime.services import ManagedService, ServiceOwner

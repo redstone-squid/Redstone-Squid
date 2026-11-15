@@ -3,11 +3,11 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from squid_ui.document import DocumentLike
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import ControlDisplay, Emphasis, LayoutNode
+from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.semantic import ControlDisplay, Emphasis, LayoutNode
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import FormValues, MachineControls
 

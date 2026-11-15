@@ -5,7 +5,7 @@ Named in the plural for the same reason as `grids`: `sl.tally` is the factory.
 
 from dataclasses import dataclass
 
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

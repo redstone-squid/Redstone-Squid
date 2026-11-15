@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 
-from squid_ui.grids import GridCell, validate_grid
+from squid_ui.authoring.grids import GridCell, validate_grid
 from squid_ui.interactions import PressEvent, SelectionEvent
 from squid_ui.palette import Role, Tone
 from squid_ui.primitives import ActionStyle, Button, Row

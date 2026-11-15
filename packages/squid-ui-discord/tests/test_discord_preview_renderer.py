@@ -7,11 +7,11 @@ from typing import cast, override
 import pytest
 
 from squid_ui import scene
-from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui.content.entity import EntityKind, EntityRef, EntityType
+from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.interactions import ActionMode
-from squid_ui.text import Markup
 
 
 class HtmlProbe(HTMLParser):

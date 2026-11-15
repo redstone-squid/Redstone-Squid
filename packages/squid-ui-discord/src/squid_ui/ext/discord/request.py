@@ -20,6 +20,7 @@ from discord import app_commands
 from discord.ext import commands
 from squid_reactivity.transactions import Transaction
 from squid_ui import paragraph
+from squid_ui.content.text import Localization
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.audience import Private, Visibility
 from squid_ui.ext.discord.contracts import FacadeContent, ResponseSource
@@ -42,7 +43,6 @@ from squid_ui.forms import FormSpec
 from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui.text import Localization
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope

@@ -17,8 +17,8 @@ from squid.starboard.application.ports import EntryState
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEntry
 from squid.voting.application import VoteService
 from squid.voting.domain import VoteMessage, VoteSessionSnapshot, VoteStatus
+from squid_ui.content.text import NEUTRAL, resolve_text
 from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
-from squid_ui.text import NEUTRAL, resolve_text
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import poll_snapshot

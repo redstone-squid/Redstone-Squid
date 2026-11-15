@@ -42,8 +42,10 @@ from squid_reactivity.transactions import (
     transaction,
 )
 from squid_ui import scene
+from squid_ui.authoring.document import Document
+from squid_ui.authoring.semantic import Status
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
-from squid_ui.document import Document
+from squid_ui.content.text import Localization, TextLike, localization_scope, resolve_text
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.ext.discord import delivery as deliver
 from squid_ui.ext.discord import live
@@ -154,9 +156,7 @@ from squid_ui.runtime.component import Component, ComponentTree
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.presentation_state import PresentationState
-from squid_ui.semantic import Status
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
-from squid_ui.text import Localization, TextLike, localization_scope, resolve_text
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

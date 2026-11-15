@@ -8,12 +8,12 @@ direct child composition, so its controls and state use the normal parent-child 
 
 from typing import override
 
+from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.chrome import CHROME_CONTEXT
 from squid_ui.interactions import PressEvent
 from squid_ui.primitives.nodes import Button, Row
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import ComponentsV2Target
 
 

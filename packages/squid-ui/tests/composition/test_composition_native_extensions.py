@@ -6,7 +6,8 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene
-from squid_ui.assets import Asset
+from squid_ui.authoring.presentations import budget
+from squid_ui.content.assets import Asset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
@@ -17,7 +18,6 @@ from squid_ui.planning.composition import Placement, PlanningContext, ResourceId
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.presentations import budget
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never
 from squid_ui.target_types import DiscordAdapter

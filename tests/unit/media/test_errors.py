@@ -22,7 +22,7 @@ from squid.media.errors import (
 )
 from squid_i18n import source_text
 from squid_i18n.compiler import parse_resource
-from squid_ui.text import Localization, Text, localization_scope
+from squid_ui.content.text import Localization, Text, localization_scope
 
 UPLOAD_ID = UUID("75043a53-05ae-4097-bbf4-4eae1d6b088c")
 PUBLIC_ATTACHMENT_ERROR_COPY: dict[type[SquidError], dict[str, str]] = {

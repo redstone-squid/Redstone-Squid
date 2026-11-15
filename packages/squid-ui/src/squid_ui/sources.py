@@ -13,7 +13,7 @@ from hashlib import blake2s
 from typing import Protocol
 
 from squid_ui.chrome import Chrome
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 
 class Direction(StrEnum):

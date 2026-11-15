@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable
 from typing import TypeIs
 
 from squid_ui.action_mode import ActionMode
-from squid_ui.entity import ConversationType
+from squid_ui.content.entity import ConversationType
 from squid_ui.errors import SquidUiError
 from squid_ui.scene._json import (
     JsonArray,

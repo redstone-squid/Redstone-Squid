@@ -41,8 +41,8 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid_i18n import Text, md_tr
+from squid_ui.content.text import TextLike, md
 from squid_ui.interactions import PressHandler
-from squid_ui.text import TextLike, md
 
 MAX_MODAL_FIELDS = 5
 """Discord modals hold at most five inputs."""

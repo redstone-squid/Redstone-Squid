@@ -52,8 +52,8 @@ from slack_sdk.models.blocks import (
 from slack_sdk.models.views import View
 
 from squid_ui import scene
-from squid_ui.assets import Asset, StoredAsset
-from squid_ui.entity import ConversationType
+from squid_ui.content.assets import Asset, StoredAsset
+from squid_ui.content.entity import ConversationType
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.slack.adapter import SLACK_SDK_343_ADAPTER, require_slack_sdk_capability
 from squid_ui.ext.slack.message_payload import MessagePayload

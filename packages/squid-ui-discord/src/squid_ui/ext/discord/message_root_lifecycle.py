@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from squid_ui.document import Asset
+from squid_ui.authoring.document import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.message_root_candidates import (
     _ApplicationCandidate,

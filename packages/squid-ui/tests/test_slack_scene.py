@@ -4,7 +4,7 @@ import jsonschema
 import pytest
 
 from squid_ui import scene
-from squid_ui.entity import ConversationType
+from squid_ui.content.entity import ConversationType
 
 
 def _document(body: scene.SlackBody) -> scene.Scene[scene.SlackBody]:

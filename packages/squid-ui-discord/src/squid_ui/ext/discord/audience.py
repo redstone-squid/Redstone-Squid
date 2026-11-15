@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

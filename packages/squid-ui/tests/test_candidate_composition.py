@@ -6,7 +6,8 @@ from typing import override
 import pytest
 
 import squid_ui as sl
-from squid_ui.assets import Asset
+from squid_ui.authoring.presentations import omit, ref
+from squid_ui.content.assets import Asset
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.planning.composition import (
     BuiltComposition,
@@ -26,7 +27,6 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.semantics import semantic_graph
-from squid_ui.presentations import omit, ref
 from squid_ui.target_types import RenderTarget
 
 

@@ -8,10 +8,10 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Protocol
 
+from squid_ui.authoring.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Toggle, Uncontrolled
 from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Role, Tone
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.styles import Color
-from squid_ui.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Toggle, Uncontrolled
 
 
 def indexed_children[T](children: Sequence[T], path: str) -> Iterator[tuple[T, str]]:

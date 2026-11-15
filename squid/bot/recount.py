@@ -24,7 +24,7 @@ from squid.bot.utils.permissions import enforce
 from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
 from squid_i18n import md_tr
-from squid_ui.text import Text
+from squid_ui.content.text import Text
 
 if TYPE_CHECKING:
     import squid.bot.app

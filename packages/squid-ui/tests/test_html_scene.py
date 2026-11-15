@@ -4,8 +4,8 @@ import jsonschema
 import pytest
 
 from squid_ui import scene
+from squid_ui.content.text import Markup
 from squid_ui.interactions import ActionMode
-from squid_ui.text import Markup
 
 
 def _html_scene() -> scene.Scene[scene.HtmlBody]:

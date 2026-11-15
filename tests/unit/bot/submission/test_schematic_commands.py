@@ -4,7 +4,7 @@
 from squid.bot.submission.schematics import _CANDIDATE_LIMIT, _describe, _describe_input_refusal
 from squid.schematics.application import RenderSkipReason, SchematicPublication, StoredSchematic
 from squid.schematics.errors import AmbiguousSimulationInputError
-from squid_ui.text import source_text
+from squid_ui.content.text import source_text
 from tests.unit.schematics.fakes import make_analysis
 
 

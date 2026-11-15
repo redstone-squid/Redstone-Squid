@@ -17,9 +17,9 @@ from squid.bot import app as bot_app
 from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, DiscordConfig, VerificationConfig
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
 from squid_reactivity import EventLedger, transaction
+from squid_ui.content.text import Localization, current_localization
 from squid_ui.ext.discord.devtools import DevTools
 from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
-from squid_ui.text import Localization, current_localization
 from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services
 

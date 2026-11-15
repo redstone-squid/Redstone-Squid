@@ -16,9 +16,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import discord
-from squid_ui.assets import Asset
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.document import DocumentLike
+from squid_ui.content.assets import Asset
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import ExistingLayoutError, LayoutError
 from squid_ui.ext.discord.attachments import files_for
 from squid_ui.ext.discord.inspection import MessageReservation, audit, cost, measure
@@ -31,7 +32,6 @@ from squid_ui.planning.result import PlanReport, PlanResult
 from squid_ui.planning.target import Target
 from squid_ui.scene.model import ComponentsV2
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui.text import NEUTRAL, Localization
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

@@ -4,12 +4,7 @@ from collections.abc import Awaitable, Callable
 
 import squid_ui as sl
 from squid_ui import TextLike, scene
-from squid_ui.ext.discord import DISCORD_V2_DPY27
-from squid_ui.forms import FormLike, SubmitHandler
-from squid_ui.interactions import ActionMode, Actor, SelectionEvent, Visibility
-from squid_ui.planning import plan
-from squid_ui.runtime import PresentationState
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     Choice,
     ChoiceEvent,
     Choices,
@@ -22,6 +17,11 @@ from squid_ui.semantic import (
     Paragraph,
     Uncontrolled,
 )
+from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.forms import FormLike, SubmitHandler
+from squid_ui.interactions import ActionMode, Actor, SelectionEvent, Visibility
+from squid_ui.planning import plan
+from squid_ui.runtime import PresentationState
 
 
 class _Responder:

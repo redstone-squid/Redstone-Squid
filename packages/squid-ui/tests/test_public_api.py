@@ -34,7 +34,7 @@ ROOT_NAMESPACES = (
 
 
 def test_namespaces_are_modules_not_shadowed_callables() -> None:
-    """`import squid_ui.entity as e` must not hand back a factory."""
+    """`import squid_ui.content.entity as e` must not hand back a factory."""
     for name in ROOT_NAMESPACES:
         assert isinstance(getattr(sl, name), ModuleType), f"sl.{name} is shadowed"
 
@@ -45,9 +45,9 @@ def test_promoted_value_modules_do_not_shadow_their_factories() -> None:
     `sl.grid`, `sl.roster` and `sl.tally` are factories. A submodule of the same name would be
     bound onto the package by the import system on first import and shadow them.
     """
-    import squid_ui.grids
-    import squid_ui.rosters
-    import squid_ui.tallies  # noqa: F401
+    import squid_ui.authoring.grids
+    import squid_ui.authoring.rosters
+    import squid_ui.authoring.tallies  # noqa: F401
 
     assert callable(sl.grid) and callable(sl.roster) and callable(sl.tally)
 

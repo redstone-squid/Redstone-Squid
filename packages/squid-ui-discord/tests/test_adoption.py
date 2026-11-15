@@ -12,10 +12,10 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord
-from squid_ui.assets import Asset, InlineAsset, StoredAsset
-from squid_ui.document import Document
-from squid_ui.emoji import Emoji
-from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.authoring.document import Document
+from squid_ui.content.assets import Asset, InlineAsset, StoredAsset
+from squid_ui.content.emoji import Emoji
+from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.adoption import AdoptionError, adopt
 from squid_ui.ext.discord.message_root_wiring import _EntityValues

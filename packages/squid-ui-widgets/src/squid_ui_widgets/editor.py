@@ -5,11 +5,8 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any, Generic, TypeVar, cast
 
-from squid_ui.document import DocumentLike, as_document
-from squid_ui.factories import action_controls, heading, paragraph, stack, status
-from squid_ui.forms import Form, FormField, FormIssue, FormLike, FormSpec
-from squid_ui.palette import Role
-from squid_ui.semantic import (
+from squid_ui.authoring.document import DocumentLike, as_document
+from squid_ui.authoring.semantic import (
     ActionControl,
     Choice,
     Choices,
@@ -21,8 +18,11 @@ from squid_ui.semantic import (
     RoutedChoices,
     Tone,
 )
+from squid_ui.content.text import Text, TextLike
+from squid_ui.factories import action_controls, heading, paragraph, stack, status
+from squid_ui.forms import Form, FormField, FormIssue, FormLike, FormSpec
+from squid_ui.palette import Role
 from squid_ui.target_types import DiscordTarget, RenderTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets._actions import MachineKeySegment, NestedAction, keyed_action, match_keyed_action
 from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode

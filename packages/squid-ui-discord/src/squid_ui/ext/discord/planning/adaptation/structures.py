@@ -2,7 +2,23 @@
 
 from collections.abc import Sequence
 
-from squid_ui.assets import Asset
+from squid_ui.authoring.grids import GridCell, column_name, coordinate
+from squid_ui.authoring.semantic import (
+    ActionControl,
+    ActionControls,
+    ControlGroup,
+    Emphasis,
+    FormTrigger,
+    Grid,
+    Link,
+    Media,
+    Roster,
+    RoutedActionControl,
+    Table,
+    Toggle,
+    Tone,
+)
+from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.adaptation.common import (
@@ -33,7 +49,6 @@ from squid_ui.ext.discord.planning.adaptation.model import (
 from squid_ui.ext.discord.planning.adaptation.regions import (
     _cards,
 )
-from squid_ui.grids import GridCell, column_name, coordinate
 from squid_ui.interactions import ActionBinding
 from squid_ui.pages import PagePosition
 from squid_ui.planning.control_style import button_style as _button_style
@@ -66,21 +81,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.nodes import (
     Heading as PrimitiveHeading,
-)
-from squid_ui.semantic import (
-    ActionControl,
-    ActionControls,
-    ControlGroup,
-    Emphasis,
-    FormTrigger,
-    Grid,
-    Link,
-    Media,
-    Roster,
-    RoutedActionControl,
-    Table,
-    Toggle,
-    Tone,
 )
 
 

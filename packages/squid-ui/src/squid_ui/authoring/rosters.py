@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from squid_ui.content.text import TextLike
 from squid_ui.palette import Role, Tone
-from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

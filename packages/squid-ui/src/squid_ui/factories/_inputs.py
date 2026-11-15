@@ -6,14 +6,14 @@ from types import UnionType
 from typing import Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
 from squid_i18n import Text
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     BuiltinLayoutNode,
     LayoutNode,
     Paragraph,
     PortableNode,
 )
+from squid_ui.content.text import TextLike
 from squid_ui.target_types import Renderable, RenderTarget
-from squid_ui.text import TextLike
 
 type TextValue = TextLike
 """Author text: literal strings and t-strings, or explicitly formatted text."""

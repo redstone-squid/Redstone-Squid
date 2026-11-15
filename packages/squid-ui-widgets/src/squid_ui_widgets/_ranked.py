@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.text import TextLike, md
+from squid_ui.content.text import TextLike, md
 
 
 @dataclass(frozen=True, slots=True)

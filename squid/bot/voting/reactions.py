@@ -33,8 +33,8 @@ from squid.voting.application.ports import VoteActorResolver
 from squid.voting.application.recount import BallotRecounter
 from squid.voting.domain import CastVoteResult, VoteRejection, VoteSessionSnapshot
 from squid_i18n import md_tr
+from squid_ui.content.text import Text, localization_scope, mention
 from squid_ui.ext.discord import send_to
-from squid_ui.text import Text, localization_scope, mention
 
 if TYPE_CHECKING:
     import squid.bot.app

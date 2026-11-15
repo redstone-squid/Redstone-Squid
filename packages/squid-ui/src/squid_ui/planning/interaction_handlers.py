@@ -10,21 +10,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Self, cast, override
 
-from squid_ui.entity import EntityRef
-from squid_ui.forms import FormSpec, SubmitHandler
-from squid_ui.handlers import _HandlerBinder, _HandlerComposition
-from squid_ui.interactions import (
-    ActionBinding,
-    ActionEvent,
-    ActionMode,
-    EntitySelectionEvent,
-    PressEvent,
-    SelectionEvent,
-)
-from squid_ui.ownership import bind_ownership
-from squid_ui.planning.generated import GeneratedHandler
-from squid_ui.presentation import PresentationState
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     ChoiceEvent,
     ChoiceOwnership,
     Controlled,
@@ -39,7 +25,21 @@ from squid_ui.semantic import (
     ToggleEvent,
     Uncontrolled,
 )
-from squid_ui.text import TextLike
+from squid_ui.content.entity import EntityRef
+from squid_ui.content.text import TextLike
+from squid_ui.forms import FormSpec, SubmitHandler
+from squid_ui.handlers import _HandlerBinder, _HandlerComposition
+from squid_ui.interactions import (
+    ActionBinding,
+    ActionEvent,
+    ActionMode,
+    EntitySelectionEvent,
+    PressEvent,
+    SelectionEvent,
+)
+from squid_ui.ownership import bind_ownership
+from squid_ui.planning.generated import GeneratedHandler
+from squid_ui.presentation import PresentationState
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History

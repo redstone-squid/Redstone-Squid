@@ -4,7 +4,8 @@ from dataclasses import dataclass, replace
 
 from squid_i18n import tree
 from squid_ui import scene
-from squid_ui.assets import Asset
+from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
+from squid_ui.content.assets import Asset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.html._forms import HtmlFormRenderer
 from squid_ui.ext.html._text import html_text
@@ -49,7 +50,6 @@ from squid_ui.planning.realizations import (
     semantic_offers,
 )
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
-from squid_ui.presentations import FidelityEffect, SemanticRef
 
 _INLINE = frozenset(
     {

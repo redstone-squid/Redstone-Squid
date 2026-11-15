@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import NoReturn, override
 
-from squid_ui import semantic
+from squid_ui.authoring import semantic
 from squid_ui.scene import model as scene_model
 from squid_ui.scene import slack as scene_slack
 from squid_ui.selectors.core import Selector, scope, select

@@ -19,7 +19,7 @@ from squid.messages.application import MessageService
 from squid.submissions.application.credit_text import parse_credit_lines
 from squid.submissions.domain import match_choice
 from squid_i18n import md_tr
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 if TYPE_CHECKING:
     import squid.bot.app

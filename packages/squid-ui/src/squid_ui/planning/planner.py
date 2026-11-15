@@ -4,8 +4,9 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from squid_ui import scene
+from squid_ui.authoring.document import DocumentLike, PortableDocumentLike, as_document
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.document import DocumentLike, PortableDocumentLike, as_document
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
@@ -24,7 +25,6 @@ from squid_ui.planning.result import PlanResult
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.text import NEUTRAL, Localization
 
 
 def plan[RenderTargetT, AdapterT, BodyT: scene.Body](

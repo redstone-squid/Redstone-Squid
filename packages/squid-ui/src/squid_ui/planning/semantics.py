@@ -5,20 +5,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
-from squid_ui import semantic as sem
-from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.classic_content import CardSlot
-from squid_ui.planning.interaction_handlers import ForwardSelection
-from squid_ui.planning.interaction_semantics import (
-    DisclosureToggle,
-    Interaction,
-    ItemBack,
-    ItemSummary,
-    NavigationChoice,
-    interaction_changes,
-)
-from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
-from squid_ui.presentations import (
+from squid_ui.authoring import semantic as sem
+from squid_ui.authoring.presentations import (
     Alternative,
     Alternatives,
     AtomicNode,
@@ -31,11 +19,23 @@ from squid_ui.presentations import (
     Shortening,
     TextPresentation,
 )
+from squid_ui.authoring.rosters import RosterEntry, RosterSlot
+from squid_ui.content.text import Text, TextLike
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.classic_content import CardSlot
+from squid_ui.planning.interaction_handlers import ForwardSelection
+from squid_ui.planning.interaction_semantics import (
+    DisclosureToggle,
+    Interaction,
+    ItemBack,
+    ItemSummary,
+    NavigationChoice,
+    interaction_changes,
+)
+from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Paginate
-from squid_ui.rosters import RosterEntry, RosterSlot
 from squid_ui.target_types import Renderable
-from squid_ui.text import Text, TextLike
 
 
 class UnsupportedSemanticError(LayoutInvariantError):

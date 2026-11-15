@@ -7,7 +7,10 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.html
-from squid_ui import grids, scene, testing
+from squid_ui import scene, testing
+from squid_ui.authoring import grids
+from squid_ui.authoring.rosters import RosterEntry, RosterSlot, place_roster
+from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord.limits import Axis
 from squid_ui.forms import (
@@ -34,10 +37,8 @@ from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.result import PlanResult
-from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.runtime.presentation_state import PresentationState, SelectionState
 from squid_ui.target_types import HtmlTarget, Renderable
-from squid_ui.temporal import ZonedDateTime
 
 
 async def _pressed(_event: ActionEvent) -> None:

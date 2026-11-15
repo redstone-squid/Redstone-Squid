@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from re import Pattern
 from typing import Any, cast, overload
 
+from squid_ui.content.text import Localization, TextLike, resolve_text
 from squid_ui.selectors.tree import Match, Snapshot
-from squid_ui.text import Localization, TextLike, resolve_text
 
 type Predicate = Callable[[Snapshot, int, int | None, Localization], bool]
 _MISSING = object()

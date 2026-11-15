@@ -11,7 +11,9 @@ from hypothesis import strategies as st
 
 import squid_ui as sl
 from squid_ui import Component, field, fields, paragraph, section, truncate
+from squid_ui.authoring.semantic import Item, Items, Paragraph
 from squid_ui.chrome import DEFAULT_CHROME
+from squid_ui.content.text import NEUTRAL
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
@@ -38,8 +40,6 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime import PresentationState
 from squid_ui.selectors import select as select_node
-from squid_ui.semantic import Item, Items, Paragraph
-from squid_ui.text import NEUTRAL
 
 
 class TestSplitPages:

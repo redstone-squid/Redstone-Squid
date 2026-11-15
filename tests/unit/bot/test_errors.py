@@ -27,8 +27,8 @@ from squid.core.errors import InternalError, JSONValue
 from squid.diagnostics.application import ErrorReportService
 from squid.observability import TraceSpan, bind_correlation_id, correlation_id, unbind_correlation_id
 from squid.permissions.domain import Decision, Reason
+from squid_ui.content.text import Localization, current_localization
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.text import Localization, current_localization
 from tests.support.discord import make_command_interaction, make_interaction, make_layout_bot, make_message
 
 

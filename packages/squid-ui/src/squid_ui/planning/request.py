@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, TypedDict, override
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.identity import stable_value
@@ -14,7 +15,6 @@ from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target, TargetIdentity
 from squid_ui.presentation import PresentationState
-from squid_ui.text import NEUTRAL, Localization
 
 if TYPE_CHECKING:
     from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner

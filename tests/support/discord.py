@@ -22,9 +22,9 @@ from squid.permissions.domain import CheckMode, Decision, PermissionCheck, Permi
 from squid.runtime import BotServices
 from squid.suggestions.application import SuggestionService
 from squid_reactivity import LocalTopicBus
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from squid_ui.ext.discord.testing import InteractionHarness as UIInteractionHarness
-from squid_ui.text import NEUTRAL, Localization
 from tests.support.services import bot_services, is_configured
 
 if TYPE_CHECKING:

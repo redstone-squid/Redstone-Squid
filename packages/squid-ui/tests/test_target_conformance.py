@@ -15,18 +15,19 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
-from squid_ui import scene, semantic
-from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui import scene
+from squid_ui.authoring import semantic
+from squid_ui.authoring.grids import GridCell
+from squid_ui.authoring.rosters import RosterEntry, RosterSlot, place_roster
+from squid_ui.authoring.semantic import PortableNode
+from squid_ui.content.entity import EntityKind, EntityRef, EntityType
+from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.forms import FormSpec, TextField
-from squid_ui.grids import GridCell
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.palette import Palette
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
-from squid_ui.semantic import PortableNode
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
-from squid_ui.temporal import ZonedDateTime
 
 
 async def _pressed(_event: ActionEvent) -> None:

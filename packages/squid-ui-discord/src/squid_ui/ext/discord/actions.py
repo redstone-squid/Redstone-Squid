@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING, Any, override
 import discord
 from squid_reactivity.operations import Cancelled
 from squid_reactivity.transactions import Transaction, TransactionCommit, TransactionContext
+from squid_ui.content.text import TextLike, resolve_text
 from squid_ui.ext.discord import delivery as deliver
 from squid_ui.ext.discord.form_planning import DiscordFormPlan
 from squid_ui.ext.discord.modal import ModalSpec, build_form_modal, build_modal, render_form_modal
 from squid_ui.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
 from squid_ui.interactions import ActionEvent, ActionMode, Visibility
 from squid_ui.runtime.continuations import PostCommitOperation
-from squid_ui.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.message_root import AnyMessageRoot

@@ -33,8 +33,8 @@ from squid.observability import (
     trace_span,
 )
 from squid_i18n import NUMBER, Markup, Text, current_localization, md, md_tr, resolve_text
+from squid_ui.content.text import NEUTRAL, TextLike, localization_scope
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.text import NEUTRAL, TextLike, localization_scope
 
 logger = logging.getLogger(__name__)
 

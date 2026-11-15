@@ -7,8 +7,8 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord
-from squid_ui.assets import Asset, InlineAsset
-from squid_ui.document import Document
+from squid_ui.authoring.document import Document
+from squid_ui.content.assets import Asset, InlineAsset
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )

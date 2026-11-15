@@ -14,8 +14,9 @@ from squid_reactivity.internals import AtomicResourcePending
 from squid_reactivity.resources import AsyncBinding, observe_async_bindings, unique_async_bindings
 from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.transactions import read_only
+from squid_ui.authoring.document import Asset, Document, DocumentLike
+from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.context import ContextKey
-from squid_ui.document import Asset, Document, DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime._tree import (
@@ -34,7 +35,6 @@ from squid_ui.runtime.tree import (
     _NodeSplice,
     _SpliceResult,
 )
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
 
 

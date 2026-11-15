@@ -4,12 +4,12 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 
-from squid_ui.document import DocumentLike
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import ActionControl, ControlDisplay, LayoutNode, Link, RoutedActionControl, Tone
+from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_controls, field, fields, heading, note, progress, stack
 from squid_ui.forms import Form, FormField, FormLike, FormSpec
-from squid_ui.semantic import ActionControl, ControlDisplay, LayoutNode, Link, RoutedActionControl, Tone
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import FormValues, MachineControls, TransitionEvent
 

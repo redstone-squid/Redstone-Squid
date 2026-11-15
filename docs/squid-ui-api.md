@@ -109,7 +109,7 @@ Automatic search chooses among offers. For fixed planning, supply selections key
 `OccurrenceId` with `automatic=False`. `CompositionRejectedError` identifies a failed candidate, not proven
 unsolvability. Planning retains selected live bindings but performs no state updates.
 
-Named resource limits use `squid_ui.presentations.budget(node, limits={Axis.COMPONENTS: 20})`.
+Named resource limits use `squid_ui.authoring.presentations.budget(node, limits={Axis.COMPONENTS: 20})`.
 They use target protocol counts and preserve structural boundaries across alternatives. This is
 separate from the legacy `sl.budget(min=..., prefer=...)` API. Platform limits remain automatic.
 

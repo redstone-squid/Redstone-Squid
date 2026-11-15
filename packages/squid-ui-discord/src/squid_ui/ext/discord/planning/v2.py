@@ -6,9 +6,10 @@ from datetime import UTC
 from typing import Any
 
 from squid_ui import scene
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
-from squid_ui.document import DocumentLike
+from squid_ui.content.text import Markup
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord.limits import LIMITS, Axis, V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
@@ -63,7 +64,6 @@ from squid_ui.primitives.nodes import (
     Variants,
 )
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui.text import Markup
 
 
 @dataclass(slots=True)

@@ -3,10 +3,7 @@
 from collections.abc import Sequence
 
 from squid_i18n import Text
-from squid_ui.factories._inputs import ChildLike, TextValue, _children
-from squid_ui.palette import INHERIT, Accent, Palette, Role
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
-from squid_ui.semantic import (
+from squid_ui.authoring.semantic import (
     CLOSED,
     Article,
     Aside,
@@ -24,6 +21,9 @@ from squid_ui.semantic import (
     Themed,
     Tone,
 )
+from squid_ui.factories._inputs import ChildLike, TextValue, _children
+from squid_ui.palette import INHERIT, Accent, Palette, Role
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.target_types import RenderTarget
 
 

@@ -9,13 +9,13 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.authoring.semantic import Importance
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.target import Target
-from squid_ui.semantic import Importance
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 DISCORD = AdapterProfile(DiscordAdapter, "optional.discord", "1")

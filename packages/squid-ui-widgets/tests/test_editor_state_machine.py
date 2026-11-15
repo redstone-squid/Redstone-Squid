@@ -7,8 +7,8 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
+from squid_ui.authoring.semantic import ActionControl, RoutedActionControl
 from squid_ui.selectors import query, select, snapshot
-from squid_ui.semantic import ActionControl, RoutedActionControl
 
 
 def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], sp.FormValues, sl.RenderTarget]:

@@ -10,8 +10,11 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_ui.assets import Asset
+from squid_ui.authoring.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
+from squid_ui.authoring.semantic import Budgeted
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.content.assets import Asset
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
@@ -21,11 +24,8 @@ from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLi
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantics import SemanticGraph, SemanticValue, SourceScope, budget_floor
 from squid_ui.presentation import PresentationState
-from squid_ui.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import Budget as NativeBudget
-from squid_ui.semantic import Budgeted
-from squid_ui.text import NEUTRAL, Localization
 
 if TYPE_CHECKING:
     from squid_ui.planning.adapter import ExtensionAdapter

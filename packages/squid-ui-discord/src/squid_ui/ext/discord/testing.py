@@ -26,6 +26,7 @@ import anyio
 import discord
 from discord.ext import commands
 from squid_ui import scene
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutError
 from squid_ui.ext.discord.commands import bind_context_menu, context_menu_declaration
 from squid_ui.ext.discord.config import Config
@@ -47,7 +48,6 @@ from squid_ui.runtime.component import Component
 from squid_ui.selectors import Match, Query, Selector, Snapshot, select
 from squid_ui.selectors import query as query_tree
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
-from squid_ui.text import NEUTRAL, Localization
 from squid_ui.ext.discord._testing_queries import query as query
 from squid_ui.ext.discord._testing_queries import snapshot as snapshot
 

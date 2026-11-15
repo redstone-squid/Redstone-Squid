@@ -25,10 +25,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast, overload, override
 
 from squid_i18n import md_tr, source_text, tr
-from squid_ui.emoji import EmojiLike, normalize_emoji
-from squid_ui.errors import LayoutInvariantError, SquidUiError
-from squid_ui.interactions import ActionMode, InvalidSubmitEvent, SubmitEvent
-from squid_ui.temporal import (
+from squid_ui.content.emoji import EmojiLike, normalize_emoji
+from squid_ui.content.temporal import (
     AmbiguousLocalTimeError,
     AmbiguousTimeMode,
     InvalidTimezoneOffsetError,
@@ -39,7 +37,9 @@ from squid_ui.temporal import (
     resolve_offset_datetime,
     timezone_from_name,
 )
-from squid_ui.text import Text, TextLike
+from squid_ui.content.text import Text, TextLike
+from squid_ui.errors import LayoutInvariantError, SquidUiError
+from squid_ui.interactions import ActionMode, InvalidSubmitEvent, SubmitEvent
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History

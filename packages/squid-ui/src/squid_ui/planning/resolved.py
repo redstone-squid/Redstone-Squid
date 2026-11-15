@@ -1,8 +1,8 @@
 """Validated access to primitive values after semantic text lowering."""
 
-from squid_ui.emoji import Emoji, EmojiLike
+from squid_ui.content.emoji import Emoji, EmojiLike
+from squid_ui.content.text import TextLike
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.text import TextLike
 
 
 def text(value: TextLike) -> str:

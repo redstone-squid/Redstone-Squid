@@ -35,8 +35,10 @@ from squid_ui import (
     state,
 )
 from squid_ui import form as sl_form
+from squid_ui.authoring.document import Asset, InlineAsset
+from squid_ui.authoring.semantic import Paragraph
 from squid_ui.chrome import LOCALIZATION_CONTEXT, Chrome
-from squid_ui.document import Asset, InlineAsset
+from squid_ui.content.text import Localization
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import (
     Everyone,
@@ -93,9 +95,7 @@ from squid_ui.runtime import (
     Ready,
     transaction,
 )
-from squid_ui.semantic import Paragraph
 from squid_ui.testing import text_component
-from squid_ui.text import Localization
 
 
 @dataclass(slots=True)

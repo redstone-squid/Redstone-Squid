@@ -9,7 +9,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 import discord
-from squid_ui import interactions, semantic
+from squid_ui import interactions
+from squid_ui.authoring import semantic
 from squid_ui.ext.discord.request import Request
 from squid_ui.handlers import FrontendHandler
 

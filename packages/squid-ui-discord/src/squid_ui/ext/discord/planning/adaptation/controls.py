@@ -3,8 +3,23 @@
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 
+from squid_ui.authoring.semantic import (
+    Choice,
+    Choices,
+    Controlled,
+    Details,
+    Emphasis,
+    Entities,
+    FormTrigger,
+    Items,
+    LayoutNode,
+    Navigation,
+    RoutedChoices,
+    Toggle,
+    Uncontrolled,
+)
 from squid_ui.capabilities import Capability
-from squid_ui.entity import EntityRef
+from squid_ui.content.entity import EntityRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.planning.adaptation.common import (
     _literal,
@@ -82,21 +97,6 @@ from squid_ui.primitives.nodes import (
     Heading as PrimitiveHeading,
 )
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.semantic import (
-    Choice,
-    Choices,
-    Controlled,
-    Details,
-    Emphasis,
-    Entities,
-    FormTrigger,
-    Items,
-    LayoutNode,
-    Navigation,
-    RoutedChoices,
-    Toggle,
-    Uncontrolled,
-)
 
 
 def _form(node: FormTrigger, context: LoweringContext) -> list[Node]:

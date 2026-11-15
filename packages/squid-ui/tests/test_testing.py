@@ -7,8 +7,8 @@ import pytest
 import squid_ui as sl
 from squid_i18n import tr
 from squid_ui import testing as st
+from squid_ui.authoring.semantic import ActionControl, ActionControls, Choices, Paragraph
 from squid_ui.interactions import Visibility
-from squid_ui.semantic import ActionControl, ActionControls, Choices, Paragraph
 
 
 async def _pressed(_event: sl.PressEvent) -> None: ...

@@ -33,6 +33,7 @@ from squid.bot.accounts.consent import (
     request_consent,
 )
 from squid.core.sentinel import NOT_ASKED
+from squid_ui.content.text import NEUTRAL, resolve_text
 from squid_ui.ext.discord import Everyone, SessionKey
 from squid_ui.ext.discord.sessions import Opened
 from squid_ui.ext.discord.testing import (
@@ -45,7 +46,6 @@ from squid_ui.ext.discord.testing import (
     message_harness,
 )
 from squid_ui.testing import RecordingResponder, press
-from squid_ui.text import NEUTRAL, resolve_text
 from tests.support.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)

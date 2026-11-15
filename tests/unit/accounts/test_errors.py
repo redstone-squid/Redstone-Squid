@@ -15,7 +15,7 @@ from squid.accounts.errors import (
     ConsentRequiredError,
     NoLinkedMinecraftAccountError,
 )
-from squid_ui.text import Text
+from squid_ui.content.text import Text
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 

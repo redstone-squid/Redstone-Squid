@@ -8,11 +8,11 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 from squid_ui import scene
+from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.html import DEFAULT_CSS, Renderer
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
-from squid_ui.text import Markup
 
 
 async def _pressed(event: ActionEvent) -> None:

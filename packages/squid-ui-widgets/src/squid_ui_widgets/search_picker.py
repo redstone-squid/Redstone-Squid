@@ -6,8 +6,10 @@ from typing import override
 
 from squid_reactivity import state
 from squid_reactivity.operations import Failed, Pending
+from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import ChoiceEvent, ControlDisplay, LayoutNode, Tone
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_ui.document import DocumentLike
+from squid_ui.content.text import TextLike
 from squid_ui.factories import (
     ChildLike,
     action_control,
@@ -24,9 +26,7 @@ from squid_ui.factories import (
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import ChoiceEvent, ControlDisplay, LayoutNode, Tone
 from squid_ui.sources import WindowSource, window_footer
-from squid_ui.text import TextLike
 from squid_ui_widgets._content import require_key
 from squid_ui_widgets._window import LoadingCopy
 from squid_ui_widgets.browsing import BrowseSession, BrowseSnapshot, Movement

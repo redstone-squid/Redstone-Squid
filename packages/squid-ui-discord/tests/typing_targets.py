@@ -9,6 +9,7 @@ from typing import Any, assert_type
 
 import squid_ui.ext.html as html
 from squid_ui import RenderTarget, fallback, scene
+from squid_ui.authoring.semantic import FallbackContent, Paragraph
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning import classic_target, components_v2_target
 from squid_ui.ext.discord.target import classic, v2
@@ -27,7 +28,6 @@ from squid_ui.planning import (
 )
 from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import Card, Panel, Text, Variants
-from squid_ui.semantic import FallbackContent, Paragraph
 
 
 class Portable(Renderable[RenderTarget]):

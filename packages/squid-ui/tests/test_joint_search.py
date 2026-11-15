@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 import squid_ui as sl
-from squid_ui.assets import Asset
+from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules

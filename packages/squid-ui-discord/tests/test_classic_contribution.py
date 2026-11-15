@@ -3,12 +3,12 @@
 import discord
 import pytest
 
+from squid_ui.authoring.semantic import Block, Heading, Paragraph
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord import ExistingLayoutError, classic
 from squid_ui.ext.discord.inspection import measure
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis
 from squid_ui.ext.discord.message_payload import MessageModeError, MessagePayload
-from squid_ui.semantic import Block, Heading, Paragraph
 
 
 def host(*, content=None, embeds=(), controls=()) -> MessagePayload:
@@ -88,7 +88,7 @@ class TestContribution:
         assert result.payload.content == "@here"
 
     def test_squid_controls_go_into_rows_after_the_hosts(self) -> None:
-        from squid_ui.semantic import ActionControls, Link
+        from squid_ui.authoring.semantic import ActionControls, Link
 
         host_view_message = host(controls=[button("host")])
         result = classic.contribute(
@@ -103,7 +103,7 @@ class TestContribution:
 
     def test_the_host_view_is_mutated_rather_than_cloned(self) -> None:
         """A control's callback registration belongs to the view that owns it."""
-        from squid_ui.semantic import ActionControls, Link
+        from squid_ui.authoring.semantic import ActionControls, Link
 
         message = host(controls=[button("host")])
         result = classic.contribute(
@@ -122,7 +122,7 @@ class TestContribution:
         assert result.payload.embeds is not message.embeds
 
     def test_removal_is_identity_based(self) -> None:
-        from squid_ui.semantic import ActionControls, Link
+        from squid_ui.authoring.semantic import ActionControls, Link
 
         message = host(controls=[button("host")])
         result = classic.contribute(
@@ -140,7 +140,7 @@ class TestContribution:
 
 class TestPreflight:
     def test_a_duplicate_custom_id_fails_before_anything_moves(self) -> None:
-        from squid_ui.semantic import ActionControls, RoutedActionControl
+        from squid_ui.authoring.semantic import ActionControls, RoutedActionControl
 
         message = host(controls=[button("shared")])
         assert isinstance(message.view, discord.ui.View)
@@ -173,7 +173,7 @@ class TestPreflight:
 
     def test_a_component_local_action_cannot_enter_a_host_view(self) -> None:
         """The host view's callbacks stay under its owner."""
-        from squid_ui.semantic import ActionControl, ActionControls
+        from squid_ui.authoring.semantic import ActionControl, ActionControls
 
         async def press(event) -> None: ...
 

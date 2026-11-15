@@ -5,7 +5,7 @@ from squid.schematics.application import RenderSkipReason, StoredSchematic
 from squid.schematics.domain.models import SchematicFormat, SimulationResult, Vector3
 from squid.schematics.errors import AmbiguousSimulationInputError
 from squid_i18n import Text, md, md_tr
-from squid_ui.text import TextLike
+from squid_ui.content.text import TextLike
 
 WRITABLE_EXTENSIONS = {
     SchematicFormat.LITEMATIC: "litematic",

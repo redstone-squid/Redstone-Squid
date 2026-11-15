@@ -6,13 +6,13 @@ import discord
 import pytest
 
 from squid_ui import scene
+from squid_ui.authoring.semantic import ActionControls, Link, Note, Paragraph
+from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord import DISCORD_V1_DPY27, classic
 from squid_ui.ext.discord.classic_renderer import ClassicRenderer
 from squid_ui.ext.discord.inspection import audit_classic_payload
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS
-from squid_ui.semantic import ActionControls, Link, Note, Paragraph
-from squid_ui.text import Markup
 
 
 def _document(body: scene.ClassicMessage) -> scene.Scene[scene.ClassicMessage]:

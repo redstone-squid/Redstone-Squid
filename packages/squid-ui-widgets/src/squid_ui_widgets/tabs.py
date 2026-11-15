@@ -3,8 +3,8 @@
 from collections.abc import Iterable
 from typing import override
 
+from squid_ui.content.text import Text, TextLike
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Text, TextLike
 from squid_ui_widgets.drivers import ComponentDriver, TransitionHandler
 from squid_ui_widgets.machines.tabs import Tab as Tab
 from squid_ui_widgets.machines.tabs import Tabs as TabsMachine

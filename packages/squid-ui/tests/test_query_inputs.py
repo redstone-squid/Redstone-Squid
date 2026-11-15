@@ -4,7 +4,7 @@ import pytest
 
 import squid_ui as ui
 from squid_ui import scene
-from squid_ui import semantic as s
+from squid_ui.authoring import semantic as s
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import query, select, snapshot
 from squid_ui.testing import text_component

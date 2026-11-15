@@ -55,12 +55,12 @@ from squid_reactivity.transactions import (
     enlist,
     fresh_transaction,
 )
+from squid_ui.authoring.semantic import ControlGroup
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.content.text import TextLike, source_text
 from squid_ui.errors import SquidUiError
 from squid_ui.factories import action_control, control_group
 from squid_ui.interactions import ActionEvent
-from squid_ui.semantic import ControlGroup
-from squid_ui.text import TextLike, source_text
 
 logger = logging.getLogger(__name__)
 

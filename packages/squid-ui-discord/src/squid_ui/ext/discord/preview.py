@@ -9,7 +9,9 @@ import htpy as h
 from markupsafe import Markup as SafeHtml
 
 from squid_ui import scene
-from squid_ui.assets import Asset, InlineAsset, LocalAsset, StoredAsset
+from squid_ui.content.assets import Asset, InlineAsset, LocalAsset, StoredAsset
+from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord import _preview_controls as controls
 from squid_ui.ext.discord._preview_styles import PREVIEW_CSS as PREVIEW_CSS
@@ -17,8 +19,6 @@ from squid_ui.ext.html.markup import markdown
 from squid_ui.ext.html.safety import safe_url as _safe_url
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import AssetResolver
-from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import Markup
 
 type FileResolver = Callable[[scene.File | scene.GalleryItem], str | None]
 

@@ -4,10 +4,10 @@ import re
 from collections.abc import Iterable, Mapping
 from string.templatelib import Template
 
+from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.content.text import Text, TextLike, source_text
 from squid_ui.factories import is_layout_node, paragraph
-from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Text, TextLike, source_text
 
 type ContentLike[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
     LayoutNode[RenderTargetT, ContextT] | TextLike | Iterable[LayoutNode[RenderTargetT, ContextT] | TextLike]

@@ -1,6 +1,6 @@
 """Pure allocation for host-owned roster ledgers."""
 
-from squid_ui.rosters import (
+from squid_ui.authoring.rosters import (
     RosterEntry,
     RosterGroup,
     RosterOverflow,

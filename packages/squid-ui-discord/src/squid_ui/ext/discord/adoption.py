@@ -19,10 +19,10 @@ from urllib.parse import urlsplit
 
 import discord
 from squid_reactivity import state
-from squid_ui.assets import Asset, StoredAsset
-from squid_ui.document import Document
-from squid_ui.emoji import Emoji, normalize_emoji
-from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui.authoring.document import Document
+from squid_ui.content.assets import Asset, StoredAsset
+from squid_ui.content.emoji import Emoji, normalize_emoji
+from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutError
 from squid_ui.ext.discord.actions import ActionResponder, _responder
 from squid_ui.ext.discord.message_root_wiring import _CONVERSATION_TYPES

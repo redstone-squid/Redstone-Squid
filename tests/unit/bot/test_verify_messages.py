@@ -21,7 +21,7 @@ from squid.bot.accounts.profile_render import present_claimant
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.providers.records import AliasClaimProvider
 from squid_i18n import NEUTRAL, discord_text, resolve_text
-from squid_ui.text import source_text
+from squid_ui.content.text import source_text
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_UUID = UUID("22222222-2222-2222-2222-222222222222")

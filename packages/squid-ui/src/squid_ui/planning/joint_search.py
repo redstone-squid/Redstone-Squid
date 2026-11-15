@@ -13,6 +13,8 @@ from heapq import heappop, heappush
 from itertools import count
 from types import MappingProxyType
 
+from squid_ui.authoring.presentations import Budget, FidelityEffect
+from squid_ui.authoring.semantic import Budgeted
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.planning.allocation import CertifiedAllocation, CertifiedPage, PageFamily, allocate_family
 from squid_ui.planning.allocation_policy import (
@@ -47,9 +49,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.semantics import budget_floor
-from squid_ui.presentations import Budget, FidelityEffect
 from squid_ui.primitives.nodes import Budget as NativeBudget
-from squid_ui.semantic import Budgeted
 
 
 class JointInfeasibleError(UnsolvableLayoutError):
