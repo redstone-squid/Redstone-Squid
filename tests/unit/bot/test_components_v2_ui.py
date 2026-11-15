@@ -199,21 +199,17 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
     assert message_root.retain_routed_on_timeout is True
     assert not component.expired
     active = interaction.response.send_message.await_args.kwargs["view"]
-    assert all(
-        item.label != "Open new editor" for item in active.walk_children() if isinstance(item, discord.ui.Button)
-    )
+    assert not sd.testing.query(active, 'Button[label="Open new editor"]').exists()
 
     await message_root.handle_timeout()
 
     assert component.expired
     expired = interaction.edit_original_response.await_args.kwargs["view"]
-    buttons = {item.label: item.disabled for item in expired.walk_children() if isinstance(item, discord.ui.Button)}
+    buttons = {
+        match.node.label: match.node.disabled for match in sd.testing.query(expired, select(discord.ui.Button)).all()
+    }
     assert buttons == {"Open new editor": False}
-    assert any(
-        "Unsaved changes were discarded" in item.content
-        for item in expired.walk_children()
-        if isinstance(item, discord.ui.TextDisplay)
-    )
+    assert sd.testing.query(expired, 'TextDisplay[text*="Unsaved changes were discarded"]').exists()
 
 
 async def test_build_editor_commits_against_the_revision_it_presented(
@@ -393,7 +389,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     bot = make_layout_bot()
     message_root = bot.ui.mount(view, access=sd.Owner(123), timeout=180)
     rendered = commit_render(message_root)
-    result_select = next(child for child in rendered.walk_children() if isinstance(child, discord.ui.Select))
+    result_select = sd.testing.query(rendered, select(discord.ui.Select)).all()[0].node
     assert [option.label for option in result_select.options] == ["Smallest 2x2 door", "Fast door"]
     assert "Close" not in str(rendered.to_components())
 
@@ -429,9 +425,9 @@ async def test_search_timeout_disables_bound_controls() -> None:
 
     message.edit.assert_awaited_once()
     disabled = message.edit.await_args.kwargs["view"]
-    controls = [child for child in disabled.walk_children() if isinstance(child, discord.ui.Button | discord.ui.Select)]
+    controls = sd.testing.query(disabled, select(discord.ui.Button).union(select(discord.ui.Select))).all()
     assert controls
-    assert all(control.disabled for control in controls)
+    assert all(control.node.disabled for control in controls)
 
 
 async def test_build_history_survives_a_failed_card_refresh(display_build: Build) -> None:

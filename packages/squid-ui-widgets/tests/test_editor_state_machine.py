@@ -166,7 +166,7 @@ def test_nested_forms_keep_router_shell_parity() -> None:
 
     rendered = sp.RouteDriver(route).render(editor, state)
 
-    add = select(RoutedActionControl).where(lambda control: control.key.endswith("links.add"))
+    add = select(RoutedActionControl).attr_ends_with("key", "links.add")
     assert query(snapshot(rendered), add).exists()
     request = next(route for route in routes if route.action == "section:links:add")
     assert request.phase == "input"

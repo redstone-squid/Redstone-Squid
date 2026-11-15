@@ -20,6 +20,7 @@ from squid_ui.ext.discord.testing import (
     interaction_harness,
     message_harness,
 )
+from squid_ui.selectors import select
 
 
 def workbench() -> tuple[BuildDraft, Workbench, MessageRoot, MessageRoot, MessageRootScheduler]:
@@ -168,12 +169,13 @@ async def test_invalid_form_keeps_draft_and_offers_prefilled_retry() -> None:
         assert draft.build == BuildSample()
         assert not editor.history.can_undo
         view = attempt.response.send_message.await_args.kwargs["view"]
-        retry = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
+        retry = sd.testing.query(view, select(discord.ui.Button)).all()[0].node
         opening = interaction_harness()
         await retry.callback(opening)
         modal = opening.response.send_modal.await_args.args[0]
         values = {
-            item.custom_id: item.default for item in modal.walk_children() if isinstance(item, discord.ui.TextInput)
+            match.node.custom_id: match.node.default
+            for match in sd.testing.query(modal, select(discord.ui.TextInput)).all()
         }
         assert values["dimensions"] == "0x4x3"
         assert values["name"] == "Vault door"

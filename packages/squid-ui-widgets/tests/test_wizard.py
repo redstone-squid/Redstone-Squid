@@ -6,7 +6,7 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.runtime import transaction
-from squid_ui.selectors import query, snapshot
+from squid_ui.selectors import query, select, snapshot
 from squid_ui.semantic import FormTrigger
 from squid_ui_widgets import REVIEW_STEP
 from squid_ui_widgets import testing as wt
@@ -96,9 +96,8 @@ def _answer(wizard: WizardMachine, state: sp.WizardState, step: str, value: str)
 
 def _labels(rendered) -> list[object]:
     return [
-        sl.text.source_text(node.label)
-        for node in engine.walk(rendered)
-        if isinstance(node, sl.semantic.ActionControl | sl.semantic.FormTrigger)
+        sl.text.source_text(match.node.label)
+        for match in query(rendered, select(sl.semantic.ActionControl).union(select(FormTrigger))).all()
     ]
 
 
@@ -165,7 +164,7 @@ def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
     assert state.current == REVIEW_STEP
 
     rendered = sp.Wizard("Build", _review_steps, review=True, initial_state=state).render()
-    values = [node.value for node in engine.walk(rendered) if isinstance(node, sl.semantic.Field)]
+    values = [match.node.value for match in query(rendered, select(sl.semantic.Field)).all()]
 
     assert values == [sl.plain("Ada"), sl.plain("advanced"), sl.chrome.DEFAULT_CHROME.unanswered]
     assert "Finish" in _labels(rendered)
@@ -179,11 +178,8 @@ def test_a_summarize_callback_replaces_the_default_rows() -> None:
 
     rendered = sp.Wizard("Build", _review_steps, review=review, initial_state=state).render()
 
-    assert not [node for node in engine.walk(rendered) if isinstance(node, sl.semantic.Field)]
-    assert any(
-        isinstance(node, sl.semantic.Paragraph) and node.content == sl.plain("2 answers")
-        for node in engine.walk(rendered)
-    )
+    assert not query(rendered, "Field").exists()
+    assert query(rendered, select(sl.semantic.Paragraph).attr("content", sl.plain("2 answers"))).exists()
 
 
 async def test_finishing_from_the_review_screen_happens_once() -> None:
@@ -301,9 +297,8 @@ async def _leave(_event: sl.PressEvent) -> None: ...
 
 def _control_rows(rendered: object) -> list[list[str]]:
     return [
-        [engine.labels(item)[0] for item in node.items]
-        for node in engine.walk(rendered)
-        if isinstance(node, sl.semantic.ActionControls)
+        [engine.labels(item)[0] for item in match.node.items]
+        for match in query(rendered, select(sl.semantic.ActionControls)).all()
     ]
 
 

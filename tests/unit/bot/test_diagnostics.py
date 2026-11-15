@@ -22,6 +22,7 @@ from squid_ui.ext.discord import MessageRoot, Owner, Private, SessionSpec
 from squid_ui.ext.discord.testing import AsyncCallRecorder, assert_within_limits, commit_render, interaction_harness
 from squid_ui.pages import PagePosition
 from squid_ui.runtime import UIExecutionHost
+from squid_ui.selectors import select
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
 from tests.support.discord import make_layout_bot
 
@@ -156,10 +157,8 @@ def _code_pages(message_root: MessageRoot) -> list[str]:
     while True:
         view = commit_render(message_root)
         pages.append(next(text for text in _texts(view) if text.startswith("```")))
-        next_button = next(
-            item
-            for item in view.walk_children()
-            if isinstance(item, discord.ui.Button) and item.custom_id and ":__cursor_next" in item.custom_id
+        next_button = (
+            sd.testing.query(view, select(discord.ui.Button).attr_contains("custom_id", ":__cursor_next")).all()[0].node
         )
         if next_button.disabled:
             return pages
@@ -248,8 +247,9 @@ async def test_paging_stops_at_both_ends() -> None:
         browser = make_screen(report=make_report(traceback=frames))
         message_root, view = await message_root_browser(browser, execution_host=execution_host)
 
-        nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
-        later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
+        later = (
+            sd.testing.query(view, select(discord.ui.Button).attr_contains("custom_id", ":__cursor_next")).all()[0].node
+        )
         assert later.disabled  # opened at the end
         interaction = interaction_harness()
         await message_root.dispatch("__cursor_next.traceback", interaction)
