@@ -12,8 +12,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity.transactions import Transaction
-from squid_reactivity.transactions.context import TransactionContext
+from squid_reactivity.transactions import Transaction, TransactionContext
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.entity import EntityRef
 from squid_ui.text import TextLike

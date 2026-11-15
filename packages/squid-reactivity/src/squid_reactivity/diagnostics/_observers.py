@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol, override
 
-from squid_reactivity.diagnostics.snapshots import (
+from squid_reactivity.diagnostics._snapshots import (
     DEFAULT_REDACTION,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
@@ -22,10 +22,10 @@ from squid_reactivity.diagnostics.snapshots import (
     TransactionResultSnapshot,
     TransactionValidationSnapshot,
 )
-from squid_reactivity.transactions.context import (
+from squid_reactivity.transactions._context import (
     ExceptionReport,
 )
-from squid_reactivity.transactions.results import (
+from squid_reactivity.transactions._results import (
     TransactionCommit,
     TransactionResult,
     TransactionRollback,

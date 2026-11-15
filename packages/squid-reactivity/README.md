@@ -213,14 +213,27 @@ name on two buses is two topics. A bridge that only has the name can call
 rest still run and the error goes to `on_subscriber_error`, which logs by default. For
 queues or network delivery, implement the `TopicBus` protocol.
 
-## Code layout
+## Modules
 
-The top-level package exports what models and their readers need. Patches, participants,
-and causal context are in `squid_reactivity.transactions`; event snapshots and redaction are
-in `squid_reactivity.diagnostics`.
+Import from the modules below. A module or name that starts with an underscore is private
+and can change in any release.
 
-`core` declares models, `cells` stores versioned values, and `tracking` captures and checks
-dependencies. The `transactions` package separates the `with transaction(...)` block (`scope`), execution
-(`engine`), reversible changes (`patches`), identity (`context`), outcomes (`results`),
-and scoped controls (`state`). `diagnostics` delivers events; `topics`, `resources`, and
-`operations` handle external work.
+- `squid_reactivity` has what models and their readers need: fields, computed values,
+  transactions, read tracking, subscriptions, topics, and the error types.
+- `squid_reactivity.transactions` adds patches, participants, causal context, and results.
+- `squid_reactivity.diagnostics` has event snapshots, sinks, and redaction.
+- `squid_reactivity.resources` and `squid_reactivity.operations` have asynchronous values and
+  explicitly started work.
+- `squid_reactivity.topics` has buses, codecs, and the address types.
+- `squid_reactivity.core` and `squid_reactivity.tracking` add inspection helpers such as
+  `inspect_cells` and `addresses` to the model and tracking names the root exports.
+- `squid_reactivity.errors`, `squid_reactivity.subscriptions`, and `squid_reactivity.completion`
+  hold the error types, `Subscriptions`, and `Completion`, a shareable asynchronous result.
+- `squid_reactivity.testing` runs callbacks at named points of a commit, to test interleavings.
+- `squid_reactivity.internals` exposes storage and execution types to packages that integrate
+  closely, such as a UI runtime. It is public to import but carries no stability promise.
+
+Inside the package, `_cells` stores versioned values and `_addresses` delivers notifications.
+The `transactions` package separates the `with transaction(...)` block (`_scope`), execution
+(`_engine`), reversible changes (`_patches`), identity (`_context`), outcomes (`_results`),
+and scoped controls (`_state`).

@@ -8,10 +8,10 @@ import uuid
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Final, override
 
+from squid_reactivity._addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
 from squid_reactivity._runtime import _bump_epoch
-from squid_reactivity.addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource
-from squid_reactivity.transactions.state import _READ_CONSISTENCY, _active, _ReadConsistency
+from squid_reactivity.transactions._state import _READ_CONSISTENCY, _active, _ReadConsistency
 
 if TYPE_CHECKING:
     from squid_reactivity.topics import DependencyAddress

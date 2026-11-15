@@ -5,14 +5,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from squid_reactivity.cells import _MISSING, _Cell
+from squid_reactivity._cells import _MISSING, _Cell
 from squid_reactivity.errors import (
     ReactiveConflictError,
 )
-from squid_reactivity.transactions.results import (
+from squid_reactivity.transactions._results import (
     ConflictDetail,
 )
-from squid_reactivity.transactions.state import (
+from squid_reactivity.transactions._state import (
     ReactiveStateOwner,
 )
 

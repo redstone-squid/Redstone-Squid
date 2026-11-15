@@ -12,7 +12,7 @@ from squid_reactivity.errors import (
     FreshTransactionError,
     StaleReactiveContextError,
 )
-from squid_reactivity.transactions.context import (
+from squid_reactivity.transactions._context import (
     ActorRef,
     Causality,
     TransactionContext,
@@ -21,18 +21,18 @@ from squid_reactivity.transactions.context import (
     causal_scope,
     current_causality,
 )
-from squid_reactivity.transactions.engine import (
+from squid_reactivity.transactions._engine import (
     TransactionParticipant,
     _TransactionEngine,
     _write,
 )
-from squid_reactivity.transactions.patches import ConditionalCellPatch
-from squid_reactivity.transactions.results import (
+from squid_reactivity.transactions._patches import ConditionalCellPatch
+from squid_reactivity.transactions._results import (
     TransactionCommit,
     TransactionResult,
     TransactionRollback,
 )
-from squid_reactivity.transactions.state import (
+from squid_reactivity.transactions._state import (
     _CURRENT_TRANSACTION,
     _active,
     _checkpoint,

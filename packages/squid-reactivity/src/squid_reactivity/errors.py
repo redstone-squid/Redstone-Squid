@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from squid_reactivity.transactions.results import (
+from squid_reactivity.transactions._results import (
     ConflictDetail,
 )
 

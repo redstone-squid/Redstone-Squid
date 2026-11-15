@@ -25,7 +25,7 @@ from squid_reactivity import (
 from squid_reactivity._runtime import _runtime
 from squid_reactivity.resources import Ready, resource
 from squid_reactivity.testing import InterleavingHarness
-from squid_reactivity.transactions.results import CommitSequence
+from squid_reactivity.transactions import CommitSequence
 
 
 class Model(Reactive):

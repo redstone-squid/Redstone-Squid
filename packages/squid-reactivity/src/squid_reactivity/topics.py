@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol, override, runtime_checkable
 from weakref import WeakValueDictionary
 
-from squid_reactivity.addresses import CellAddress
-from squid_reactivity.cells import _Cell
+from squid_reactivity._addresses import CellAddress
+from squid_reactivity._cells import _Cell
 
 logger = logging.getLogger(__name__)
 

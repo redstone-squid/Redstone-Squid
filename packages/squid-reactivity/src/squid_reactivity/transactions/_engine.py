@@ -17,15 +17,15 @@ from enum import Enum, auto
 from threading import Thread, current_thread
 from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
+from squid_reactivity._cells import _Cell, _Missing
 from squid_reactivity._runtime import _bump_epoch, _runtime
-from squid_reactivity.cells import _Cell, _Missing
 from squid_reactivity.diagnostics import (
     emit_causal_event,
     emit_continuation_failure,
     emit_result,
 )
-from squid_reactivity.diagnostics.observers import has_validation_observers
-from squid_reactivity.diagnostics.snapshots import PreconditionSnapshot, TransactionValidationSnapshot
+from squid_reactivity.diagnostics._observers import has_validation_observers
+from squid_reactivity.diagnostics._snapshots import PreconditionSnapshot, TransactionValidationSnapshot
 from squid_reactivity.errors import (
     FrameworkIntegrityError,
     ReactiveConflictError,
@@ -34,14 +34,14 @@ from squid_reactivity.errors import (
     TransactionValidationError,
     UndeclaredStateError,
 )
-from squid_reactivity.transactions.context import (
+from squid_reactivity.transactions._context import (
     ExceptionReport,
     TransactionContext,
     continuation_callback,
     in_continuation,
 )
-from squid_reactivity.transactions.patches import CellPatch, CellPatchSet, CellTarget, SlotValue
-from squid_reactivity.transactions.results import (
+from squid_reactivity.transactions._patches import CellPatch, CellPatchSet, CellTarget, SlotValue
+from squid_reactivity.transactions._results import (
     ChangeReport,
     CommitSequence,
     ConflictDetail,
@@ -51,7 +51,7 @@ from squid_reactivity.transactions.results import (
     TransactionResult,
     TransactionRollback,
 )
-from squid_reactivity.transactions.state import (
+from squid_reactivity.transactions._state import (
     _CURRENT_TRANSACTION,
     ReactiveStateOwner,
     _active,
@@ -64,7 +64,7 @@ from squid_reactivity.transactions.state import (
 )
 
 if TYPE_CHECKING:
-    from squid_reactivity.transactions.scope import Transaction
+    from squid_reactivity.transactions._scope import Transaction
 
 _log = logging.getLogger(__name__)
 

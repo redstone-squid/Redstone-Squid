@@ -6,7 +6,7 @@ without keeping reactive owners alive. Observer scopes apply redaction before
 passing snapshots to a sink; applications own storage and serialization.
 """
 
-from squid_reactivity.diagnostics.observers import (
+from squid_reactivity.diagnostics._observers import (
     EventLedger,
     EventSink,
     copy_event_observers,
@@ -16,7 +16,7 @@ from squid_reactivity.diagnostics.observers import (
     has_event_observers,
     observe_events,
 )
-from squid_reactivity.diagnostics.snapshots import (
+from squid_reactivity.diagnostics._snapshots import (
     DEFAULT_REDACTION,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,

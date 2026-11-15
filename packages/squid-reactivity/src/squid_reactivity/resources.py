@@ -21,21 +21,22 @@ from enum import StrEnum
 from types import TracebackType
 from typing import Any, Literal, Protocol, overload, override
 
-from squid_reactivity._runtime import _bump_epoch
-from squid_reactivity.addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
-from squid_reactivity.async_values import (
+from squid_reactivity._addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
+from squid_reactivity._async_values import (
     AsyncBinding as AsyncBinding,
 )
-from squid_reactivity.async_values import (
+from squid_reactivity._async_values import (
     _Execution,
     _observe,
 )
-from squid_reactivity.async_values import (
+from squid_reactivity._async_values import (
     observe_async_bindings as observe_async_bindings,
 )
-from squid_reactivity.async_values import (
+from squid_reactivity._async_values import (
     unique_async_bindings as unique_async_bindings,
 )
+from squid_reactivity._evaluation import _SettlingNode, cycle_path, settling
+from squid_reactivity._runtime import _bump_epoch
 from squid_reactivity.core import (
     declared_cells,
 )
@@ -48,16 +49,15 @@ from squid_reactivity.errors import (
     ReactiveCycleError,
     ReactivityError,
 )
-from squid_reactivity.evaluation import _SettlingNode, cycle_path, settling
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _DependencyCollector, _ReactiveSource
 from squid_reactivity.transactions import TransactionParticipant, TransactionView, enlist, transaction_participant
-from squid_reactivity.transactions.context import (
+from squid_reactivity.transactions._context import (
     CausalRef,
     ExceptionReport,
     TransactionId,
     current_causality,
 )
-from squid_reactivity.transactions.state import ReactiveStateOwner
+from squid_reactivity.transactions._state import ReactiveStateOwner
 
 
 @dataclass(frozen=True, slots=True)

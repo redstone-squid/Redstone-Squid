@@ -19,8 +19,7 @@ from squid_reactivity import (
     transaction,
 )
 from squid_reactivity.diagnostics import CausalEventSnapshot, TransactionValidationSnapshot
-from squid_reactivity.transactions import apply_conditional_patches
-from squid_reactivity.transactions.patches import ConditionalCellPatch, SlotValue
+from squid_reactivity.transactions import ConditionalCellPatch, SlotValue, apply_conditional_patches
 
 
 class Model(Reactive):

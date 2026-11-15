@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
-from squid_reactivity.addresses import CellAddress, subscribe
+from squid_reactivity._addresses import CellAddress, subscribe
 from squid_reactivity.topics import DependencyAddress, Topic
 
 

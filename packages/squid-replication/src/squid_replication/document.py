@@ -10,16 +10,23 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
+from squid_reactivity import CellAddress
 from squid_reactivity.errors import (
     ReactiveConflictError,
 )
 from squid_reactivity.internals import Cell as _Cell
-from squid_reactivity.transactions import TransactionView, enlist, transaction, transaction_participant
-from squid_reactivity.transactions.context import ActorRef, CausalRef, TransactionContext, TransactionPurpose
-from squid_reactivity.transactions.results import (
+from squid_reactivity.internals import SubscriberRegistry, publish
+from squid_reactivity.transactions import (
+    ActorRef,
+    CausalRef,
     ConflictDetail,
+    TransactionContext,
     TransactionContribution,
+    TransactionPurpose,
+    TransactionView,
+    enlist,
+    transaction,
+    transaction_participant,
 )
 from squid_replication.engine import ReplicationBackend, ReplicationEngine
 from squid_replication.model import (

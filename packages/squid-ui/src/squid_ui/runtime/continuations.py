@@ -22,11 +22,7 @@ from squid_reactivity.operations import (
     Pending,
     ProgressReporter,
 )
-from squid_reactivity.transactions import current_transaction
-from squid_reactivity.transactions.results import (
-    TransactionCommit,
-    TransactionRollback,
-)
+from squid_reactivity.transactions import TransactionCommit, TransactionRollback, current_transaction
 from squid_ui.errors import SquidUiError
 from squid_ui.runtime.tasks import anyio, task_is_within
 

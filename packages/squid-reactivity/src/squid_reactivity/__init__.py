@@ -10,7 +10,7 @@ Models and their consumers belong to one thread. Independent threads may use
 separate reactive objects when started with separate execution contexts.
 """
 
-from squid_reactivity.cells import Signal
+from squid_reactivity._cells import Signal
 from squid_reactivity.core import Reactive, computed, export_state, restore_state, state
 from squid_reactivity.diagnostics import EventLedger, observe_events
 from squid_reactivity.errors import (
@@ -28,8 +28,8 @@ from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import CellAddress, DependencyAddress, LocalTopicBus, Topic, TopicBus, TopicName, watch
 from squid_reactivity.tracking import Dependencies, capture_reads, observe_reads, untracked
 from squid_reactivity.transactions import Transaction, current_transaction, readonly_transaction, transaction
-from squid_reactivity.transactions.results import TransactionCommit, TransactionResult, TransactionRollback
-from squid_reactivity.transactions.state import relaxed_read, strong_read
+from squid_reactivity.transactions._results import TransactionCommit, TransactionResult, TransactionRollback
+from squid_reactivity.transactions._state import relaxed_read, strong_read
 
 __all__ = [
     "CellAddress",

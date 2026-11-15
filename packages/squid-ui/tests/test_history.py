@@ -13,10 +13,7 @@ import pytest
 from squid_reactivity import EventLedger, observe_events
 from squid_reactivity.diagnostics import OperationEventSnapshot
 from squid_reactivity.operations import OperationContext
-from squid_reactivity.transactions import TransactionContribution, enlist, readonly_transaction
-from squid_reactivity.transactions.results import (
-    ChangeToken,
-)
+from squid_reactivity.transactions import ChangeToken, TransactionContribution, enlist, readonly_transaction
 from squid_ui import Component, DiscordTarget, Reactive, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import (

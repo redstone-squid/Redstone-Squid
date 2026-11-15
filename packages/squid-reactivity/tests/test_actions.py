@@ -38,7 +38,7 @@ from squid_reactivity.transactions import (
     apply_conditional_patches,
     enlist,
 )
-from squid_reactivity.transactions.state import _CURRENT_TRANSACTION
+from squid_reactivity.transactions._state import _CURRENT_TRANSACTION
 
 
 class Preferences(Reactive):

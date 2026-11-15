@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
-from squid_reactivity.transactions.state import read_only
+from squid_reactivity.transactions._state import read_only
 
 if TYPE_CHECKING:
     from squid_reactivity.topics import DependencyAddress

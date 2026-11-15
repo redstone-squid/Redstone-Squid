@@ -1,7 +1,7 @@
 """Transactions, their identities, outcomes, and reversible changes.
 
 Application code can import these names here or from squid_reactivity. Low-level
-reactive modules import context, results, and state before cells are initialized,
+reactive modules import _context, _results, and _state before cells are initialized,
 so public API exports load on first access rather than importing the engine eagerly.
 """
 
@@ -9,82 +9,84 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from squid_reactivity.transactions.context import ActorRef as ActorRef
-    from squid_reactivity.transactions.context import Causality as Causality
-    from squid_reactivity.transactions.context import CausalRef as CausalRef
-    from squid_reactivity.transactions.context import ExceptionReport as ExceptionReport
-    from squid_reactivity.transactions.context import TransactionContext as TransactionContext
-    from squid_reactivity.transactions.context import TransactionId as TransactionId
-    from squid_reactivity.transactions.context import TransactionPurpose as TransactionPurpose
-    from squid_reactivity.transactions.context import TransactionRelation as TransactionRelation
-    from squid_reactivity.transactions.engine import TransactionParticipant as TransactionParticipant
-    from squid_reactivity.transactions.engine import TransactionView as TransactionView
-    from squid_reactivity.transactions.engine import report_undeclared_write as report_undeclared_write
-    from squid_reactivity.transactions.patches import CellPatch as CellPatch
-    from squid_reactivity.transactions.patches import CellPatchSet as CellPatchSet
-    from squid_reactivity.transactions.patches import CellTarget as CellTarget
-    from squid_reactivity.transactions.patches import ConditionalCellPatch as ConditionalCellPatch
-    from squid_reactivity.transactions.patches import SlotValue as SlotValue
-    from squid_reactivity.transactions.results import ChangeReport as ChangeReport
-    from squid_reactivity.transactions.results import ChangeToken as ChangeToken
-    from squid_reactivity.transactions.results import CommitSequence as CommitSequence
-    from squid_reactivity.transactions.results import ConflictDetail as ConflictDetail
-    from squid_reactivity.transactions.results import RollbackReason as RollbackReason
-    from squid_reactivity.transactions.results import TransactionCommit as TransactionCommit
-    from squid_reactivity.transactions.results import TransactionContribution as TransactionContribution
-    from squid_reactivity.transactions.results import TransactionResult as TransactionResult
-    from squid_reactivity.transactions.results import TransactionRollback as TransactionRollback
-    from squid_reactivity.transactions.scope import Transaction as Transaction
-    from squid_reactivity.transactions.scope import apply_conditional_patches as apply_conditional_patches
-    from squid_reactivity.transactions.scope import current_transaction as current_transaction
-    from squid_reactivity.transactions.scope import enlist as enlist
-    from squid_reactivity.transactions.scope import fresh_transaction as fresh_transaction
-    from squid_reactivity.transactions.scope import readonly_transaction as readonly_transaction
-    from squid_reactivity.transactions.scope import transaction as transaction
-    from squid_reactivity.transactions.scope import transaction_participant as transaction_participant
-    from squid_reactivity.transactions.state import block_writes as block_writes
-    from squid_reactivity.transactions.state import read_only as read_only
-    from squid_reactivity.transactions.state import relaxed_read as relaxed_read
-    from squid_reactivity.transactions.state import strong_read as strong_read
+    from squid_reactivity.transactions._context import ActorRef as ActorRef
+    from squid_reactivity.transactions._context import Causality as Causality
+    from squid_reactivity.transactions._context import CausalRef as CausalRef
+    from squid_reactivity.transactions._context import ExceptionReport as ExceptionReport
+    from squid_reactivity.transactions._context import TransactionContext as TransactionContext
+    from squid_reactivity.transactions._context import TransactionId as TransactionId
+    from squid_reactivity.transactions._context import TransactionPurpose as TransactionPurpose
+    from squid_reactivity.transactions._context import TransactionRelation as TransactionRelation
+    from squid_reactivity.transactions._context import current_causality as current_causality
+    from squid_reactivity.transactions._engine import TransactionParticipant as TransactionParticipant
+    from squid_reactivity.transactions._engine import TransactionView as TransactionView
+    from squid_reactivity.transactions._engine import report_undeclared_write as report_undeclared_write
+    from squid_reactivity.transactions._patches import CellPatch as CellPatch
+    from squid_reactivity.transactions._patches import CellPatchSet as CellPatchSet
+    from squid_reactivity.transactions._patches import CellTarget as CellTarget
+    from squid_reactivity.transactions._patches import ConditionalCellPatch as ConditionalCellPatch
+    from squid_reactivity.transactions._patches import SlotValue as SlotValue
+    from squid_reactivity.transactions._results import ChangeReport as ChangeReport
+    from squid_reactivity.transactions._results import ChangeToken as ChangeToken
+    from squid_reactivity.transactions._results import CommitSequence as CommitSequence
+    from squid_reactivity.transactions._results import ConflictDetail as ConflictDetail
+    from squid_reactivity.transactions._results import RollbackReason as RollbackReason
+    from squid_reactivity.transactions._results import TransactionCommit as TransactionCommit
+    from squid_reactivity.transactions._results import TransactionContribution as TransactionContribution
+    from squid_reactivity.transactions._results import TransactionResult as TransactionResult
+    from squid_reactivity.transactions._results import TransactionRollback as TransactionRollback
+    from squid_reactivity.transactions._scope import Transaction as Transaction
+    from squid_reactivity.transactions._scope import apply_conditional_patches as apply_conditional_patches
+    from squid_reactivity.transactions._scope import current_transaction as current_transaction
+    from squid_reactivity.transactions._scope import enlist as enlist
+    from squid_reactivity.transactions._scope import fresh_transaction as fresh_transaction
+    from squid_reactivity.transactions._scope import readonly_transaction as readonly_transaction
+    from squid_reactivity.transactions._scope import transaction as transaction
+    from squid_reactivity.transactions._scope import transaction_participant as transaction_participant
+    from squid_reactivity.transactions._state import block_writes as block_writes
+    from squid_reactivity.transactions._state import read_only as read_only
+    from squid_reactivity.transactions._state import relaxed_read as relaxed_read
+    from squid_reactivity.transactions._state import strong_read as strong_read
 
 _EXPORT_MODULES = {
-    "Transaction": "scope",
-    "transaction": "scope",
-    "readonly_transaction": "scope",
-    "fresh_transaction": "scope",
-    "current_transaction": "scope",
-    "enlist": "scope",
-    "transaction_participant": "scope",
-    "apply_conditional_patches": "scope",
-    "TransactionParticipant": "engine",
-    "TransactionView": "engine",
-    "report_undeclared_write": "engine",
-    "SlotValue": "patches",
-    "CellTarget": "patches",
-    "CellPatch": "patches",
-    "ConditionalCellPatch": "patches",
-    "CellPatchSet": "patches",
-    "TransactionContext": "context",
-    "TransactionId": "context",
-    "TransactionPurpose": "context",
-    "TransactionRelation": "context",
-    "ActorRef": "context",
-    "CausalRef": "context",
-    "Causality": "context",
-    "ExceptionReport": "context",
-    "ChangeReport": "results",
-    "ChangeToken": "results",
-    "CommitSequence": "results",
-    "ConflictDetail": "results",
-    "RollbackReason": "results",
-    "TransactionCommit": "results",
-    "TransactionContribution": "results",
-    "TransactionResult": "results",
-    "TransactionRollback": "results",
-    "block_writes": "state",
-    "read_only": "state",
-    "relaxed_read": "state",
-    "strong_read": "state",
+    "Transaction": "_scope",
+    "transaction": "_scope",
+    "readonly_transaction": "_scope",
+    "fresh_transaction": "_scope",
+    "current_transaction": "_scope",
+    "enlist": "_scope",
+    "transaction_participant": "_scope",
+    "apply_conditional_patches": "_scope",
+    "TransactionParticipant": "_engine",
+    "TransactionView": "_engine",
+    "report_undeclared_write": "_engine",
+    "SlotValue": "_patches",
+    "CellTarget": "_patches",
+    "CellPatch": "_patches",
+    "ConditionalCellPatch": "_patches",
+    "CellPatchSet": "_patches",
+    "TransactionContext": "_context",
+    "TransactionId": "_context",
+    "TransactionPurpose": "_context",
+    "TransactionRelation": "_context",
+    "ActorRef": "_context",
+    "CausalRef": "_context",
+    "Causality": "_context",
+    "ExceptionReport": "_context",
+    "current_causality": "_context",
+    "ChangeReport": "_results",
+    "ChangeToken": "_results",
+    "CommitSequence": "_results",
+    "ConflictDetail": "_results",
+    "RollbackReason": "_results",
+    "TransactionCommit": "_results",
+    "TransactionContribution": "_results",
+    "TransactionResult": "_results",
+    "TransactionRollback": "_results",
+    "block_writes": "_state",
+    "read_only": "_state",
+    "relaxed_read": "_state",
+    "strong_read": "_state",
 }
 
 
@@ -130,6 +132,7 @@ __all__ = [
     "TransactionView",
     "apply_conditional_patches",
     "block_writes",
+    "current_causality",
     "current_transaction",
     "enlist",
     "fresh_transaction",

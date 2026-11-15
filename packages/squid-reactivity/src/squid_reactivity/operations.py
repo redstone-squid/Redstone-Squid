@@ -14,17 +14,17 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, overload, override
 
-from squid_reactivity.async_values import AsyncBinding, _Execution, _observe
-from squid_reactivity.cells import Signal
+from squid_reactivity._async_values import AsyncBinding, _Execution, _observe
+from squid_reactivity._cells import Signal
+from squid_reactivity._evaluation import _SettlingNode, settling
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     emit_causal_event,
     has_event_observers,
 )
-from squid_reactivity.evaluation import _SettlingNode, settling
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR
 from squid_reactivity.transactions import fresh_transaction
-from squid_reactivity.transactions.context import (
+from squid_reactivity.transactions._context import (
     CausalRef,
     ExceptionReport,
     TransactionContext,

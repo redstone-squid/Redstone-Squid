@@ -2,7 +2,7 @@ import asyncio
 
 import anyio
 
-from squid_reactivity.async_values import _Execution
+from squid_reactivity._async_values import _Execution
 
 
 async def test_observers_wait_without_starting_or_cancelling_owned_execution() -> None:

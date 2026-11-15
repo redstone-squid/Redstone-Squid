@@ -13,7 +13,7 @@ from squid_reactivity import (
     transaction,
 )
 from squid_reactivity.topics import CellAddress, DependencyAddress
-from squid_reactivity.transactions.state import _CURRENT_TRANSACTION
+from squid_reactivity.transactions._state import _CURRENT_TRANSACTION
 
 
 class Preferences(Reactive):

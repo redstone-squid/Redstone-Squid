@@ -126,13 +126,13 @@ rules documented at each declaration:
 
 | Module | Scoped state | Lifetime |
 |---|---|---|
-| `transactions.state` | Active transaction, read policy, write restriction | Transaction body or nested read scope; test interception is separate. |
+| `transactions._state` | Active transaction, read policy, write restriction | Transaction body or nested read scope; test interception is separate. |
 | `tracking` | Dependency collector | Computation, resource load, or render. |
-| `evaluation` | Evaluation stack for cycle detection | Computed value, resource load, or operation. |
-| `transactions.context` | Immutable causality and callback write guard | Transaction publication, operation execution, or result callback. |
-| `async_values` | Observed async bindings | One render expansion. |
+| `_evaluation` | Evaluation stack for cycle detection | Computed value, resource load, or operation. |
+| `transactions._context` | Immutable causality and callback write guard | Transaction publication, operation execution, or result callback. |
+| `_async_values` | Observed async bindings | One render expansion. |
 | `resources` | Host cancellation-scope factory | Host execution, inherited by nested resource awaits. |
-| `diagnostics.observers` | Event registrations | Observation scope; exit disables inherited registrations too. |
+| `diagnostics._observers` | Event registrations | Observation scope; exit disables inherited registrations too. |
 
 Child tasks inherit context values, not independent copies of mutable objects. A transaction
 still checks its owning task before accepting writes. Causal references can outlive the
