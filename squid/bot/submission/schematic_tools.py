@@ -38,7 +38,7 @@ type SchematicRequest = sd.Request[Any, RedstoneSquid]
 class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     """Own schematic actions, permission checks, and the latest generated result."""
 
-    _schematic_result: sl.TextLike | None = sl.state(None, opaque=True)
+    _schematic_result: sl.TextLike | None = sl.state(None, persist=False)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
     _video_job_id: int | None = sl.state(None)
     _video_recipe: VideoRenderRequest = sl.state(VideoRenderRequest(), persist=False)

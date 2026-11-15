@@ -28,7 +28,7 @@ class Reviewer(sl.Reactive):
 
 
 class ReviewRoom(sl.Reactive):
-    seats: tuple[Reviewer, ...] = sl.state((), persist=False, opaque=True)
+    seats: tuple[Reviewer, ...] = sl.state((), persist=False)
     closed: bool = sl.state(False)
     activity: tuple[str, ...] = sl.state(())
 

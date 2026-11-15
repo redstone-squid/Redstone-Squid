@@ -47,7 +47,7 @@ class SearchPicker[ItemT](Component):
     """
 
     query: str | None = state(None)
-    picked: tuple[ItemT, ...] = state((), persist=False, opaque=True)
+    picked: tuple[ItemT, ...] = state((), persist=False)
     session: BrowseSession[ItemT] | None = state(None, persist=False, opaque=True)
 
     def __init__(

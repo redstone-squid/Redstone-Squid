@@ -24,7 +24,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
     """
 
     policy = sd.ResponseSpec(audience="personal", timeout=600)
-    proposal: RecalculationProposal = sl.state(opaque=True)
+    proposal: RecalculationProposal = sl.state(persist=False)
     notice: sl.TextLike = sl.state("")
 
     def __init__(self, services: BotServices, proposal: RecalculationProposal, targets: tuple[int, ...]) -> None:

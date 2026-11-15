@@ -57,12 +57,12 @@ class BuildEditWorkspace(sl.Reactive):
     screen saves `patch()`; after a save, `reset` starts again from the saved build.
     """
 
-    staged: Mapping[str, JSONValue] = sl.state({}, opaque=True)
+    staged: Mapping[str, JSONValue] = sl.state({})
     """Edited answers keyed by field ID; a field the build has no value for holds None or []."""
-    unresolved: UnresolvedTaxonomy = sl.state(UnresolvedTaxonomy(), opaque=True)
+    unresolved: UnresolvedTaxonomy = sl.state(UnresolvedTaxonomy(), persist=False)
     """Names on the build that match no catalogue entry and that the user has not removed."""
     notice: sl.TextLike = sl.state("")
-    option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({}, opaque=True)
+    option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({}, persist=False)
     revision: int = sl.state(0)
     """Counts changes; a section modal compares it to notice that it was opened before an undo."""
     history: sl.runtime.History = sl.runtime.history(limit=20)
