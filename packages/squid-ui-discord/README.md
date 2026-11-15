@@ -186,3 +186,7 @@ currently delivered native views, including continuation messages. It does not r
 pending component changes. Pass `view=candidate_view` explicitly to inspect a candidate.
 For scoped queries or ordering comparisons, capture `testing.index_tree(view)` or
 `staged.index()` once and query that index; matches belong to that capture.
+
+Devtools command metadata carries a `chrome_field` entry in `locale_str.extras`.
+A host `app_commands.Translator` can resolve that field from its application-owned
+`Chrome` for the requested locale. Without a translator, commands use English defaults.

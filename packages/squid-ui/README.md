@@ -225,3 +225,8 @@ Framework wording is supplied through `Chrome`. Its defaults are English; applic
 own translated labels and callbacks, including their catalogs. Pass plain localized
 strings or deferred `TextLike` values to override them. Deferred application text is
 still resolved with the render or session localization.
+
+Standalone helpers accept `chrome=`, including `tally`, `page_jump_form`, and
+`FormSpec.evaluate`. A field can also carry its own `chrome` for direct parsing.
+Mounted form submissions use the mount's chrome. Framework packages ship no
+translation catalogs; applications can use any localization system to supply wording.

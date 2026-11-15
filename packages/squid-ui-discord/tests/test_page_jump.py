@@ -230,3 +230,18 @@ async def test_cached_jump_form_calls_the_current_page_owner() -> None:
     assert result.allocation is not None
     await result.form_bindings["__cursor_seek.entries.jump"].on_submit(engine.submit_event({"page": 73}))
     assert seen == [("second", 72)]
+
+
+async def test_mounted_jump_uses_host_labels_and_parse_errors() -> None:
+    chrome = replace(DEFAULT_CHROME, page_jump_number="Destination", form_integer_format="Use digits here")
+    root = MessageRoot(JumpPages(), access=Everyone(), timeout=None, nav=page_jump_nav, chrome=chrome)
+    commit_render(root)
+    modal = await open_jump(root)
+    label = modal.children[0]
+    assert isinstance(label, discord.ui.Label)
+    assert label.text == "Destination"
+    page_input(modal)._value = "not a number"
+    interaction = interaction_harness()
+    await modal.on_submit(interaction)
+    reply = interaction.response.send_message.await_args.kwargs
+    assert "Use digits here" in str(reply["view"].to_components())

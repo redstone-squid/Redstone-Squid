@@ -75,3 +75,12 @@ def test_tally_rejects_invalid_inputs() -> None:
         sl.tally(OPTIONS, key="vote", on_vote=vote, route_id="poll:vote")
     with pytest.raises(ValueError, match="at least every option count"):
         sl.tally(OPTIONS, key="vote", total=2)
+
+
+def test_tally_uses_host_wording() -> None:
+    chrome = sl.chrome.Chrome(tally_option=lambda label, count: sl.text.md(t"{label}: {count} votes"))
+    result = sl.planning.plan(
+        sl.tally(OPTIONS, key="vote", chrome=chrome), target=squid_ui.ext.discord.DISCORD_V2_DPY27
+    )
+    text = [match.node.content for match in query(result.scene, select(scene.Text)).all()]
+    assert any("✅ **Yes**: 3 votes" in value for value in text)

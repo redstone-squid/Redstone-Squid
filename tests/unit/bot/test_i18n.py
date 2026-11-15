@@ -7,7 +7,9 @@ from typing import Any, cast
 import discord
 import pytest
 
+import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot import i18n as bot_i18n
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
 from squid.bot.ui import CHROME
 from squid.runtime import BotServices
@@ -177,3 +179,14 @@ def test_bot_supplies_every_chrome_label() -> None:
     defaults = Chrome()
     for field in fields(Chrome):
         assert getattr(CHROME, field.name) != getattr(defaults, field.name), field.name
+
+
+async def test_command_translator_resolves_application_chrome(monkeypatch: pytest.MonkeyPatch) -> None:
+    snapshot = sl.text.Localization("zh-CN", ("command-dev-ui-help = 打开仪表盘。",))
+    monkeypatch.setattr(bot_i18n, "localization_for", lambda _locale: snapshot)
+    translated = await bot_i18n.SquidAppCommandTranslator().translate(
+        discord.app_commands.locale_str("Open the dashboard", chrome_field="dev_ui_help"),
+        discord.Locale.chinese,
+        cast(discord.app_commands.TranslationContext, None),
+    )
+    assert translated == "打开仪表盘。"

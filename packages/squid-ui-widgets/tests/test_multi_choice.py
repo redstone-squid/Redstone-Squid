@@ -349,3 +349,19 @@ def test_no_available_options_renders_without_a_picker() -> None:
 def _english(messages: tuple[TextLike, ...]) -> tuple[str, ...]:
     """Resolve validation messages to their English text."""
     return tuple(resolve_text(message, NEUTRAL).content for message in messages)
+
+
+def test_host_can_override_validation_and_modal_wording() -> None:
+    panel = sp.MultiChoice("Roles", (sp.MultiChoiceGroup("roles", "Roles", _options("role", 2)),), minimum=1)
+    chrome = sl.chrome.Chrome(
+        multi_choice_too_few=lambda minimum: f"Pick {minimum}",
+        multi_choice_select_options="Pick roles",
+        multi_choice_options="Roles to pick",
+    )
+    assert panel.errors(panel.initial_state, chrome=chrome) == ("Pick 1",)
+    form = panel.form_for(panel.initial_state, "modal", chrome=chrome)
+    assert form is not None
+    assert form.title == "Pick roles"
+    field = form.items[0]
+    assert isinstance(field, sl.forms.MultiChoiceField)
+    assert field.label == "Roles to pick"
