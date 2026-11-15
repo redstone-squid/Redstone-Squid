@@ -134,11 +134,6 @@ class _Staged:
     version: int
 
 
-def _slot_name(cell: _Cell) -> str:
-    """Return the shared field address, or an opaque slot ID for local state."""
-    return f"slot:{cell.identity}" if cell.address is None else str(cell.address)
-
-
 def _write(owner: ReactiveStateOwner, name: str, cell: _Cell, value: Any) -> None:
     """Stage a write into the transaction in flight, or land it now if there is none.
 
@@ -343,9 +338,9 @@ class _TransactionEngine:
         for cell, version in required.items():
             if cell.version == version:
                 continue
-            detail = ConflictDetail(_slot_name(cell), version, cell.version)
+            detail = ConflictDetail(cell.label, version, cell.version)
             message = (
-                f"{_slot_name(cell)} changed while this transaction was running: expected version "
+                f"{cell.label} changed while this transaction was running: expected version "
                 f"{version}, found {cell.version}. Nothing was published."
             )
             raise ReactiveConflictError(detail, message)
@@ -354,7 +349,7 @@ class _TransactionEngine:
     def require_version(self, cell: _Cell, version: int) -> None:
         existing = self.preconditions.get(cell)
         if existing is not None and existing != version:
-            detail = ConflictDetail(_slot_name(cell), existing, version)
+            detail = ConflictDetail(cell.label, existing, version)
             raise ReactiveConflictError(detail, "incompatible inverse preconditions")
         self.preconditions[cell] = version
 

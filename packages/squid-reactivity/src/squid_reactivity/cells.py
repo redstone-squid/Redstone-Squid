@@ -36,6 +36,19 @@ class _Cell:
         self.version = version
         self.address = address
 
+    @property
+    def label(self) -> str:
+        """Return the readable address, or an opaque slot ID for an unaddressed cell."""
+        return f"slot:{self.identity}" if self.address is None else str(self.address)
+
+    def staged_value(self) -> Any:
+        """Return the active transaction's pending value, or _MISSING if none is staged."""
+        current = _active()
+        if current is None:
+            return _MISSING
+        entry = current.staged(self)
+        return _MISSING if entry is None else entry.value
+
     def dependencies(self) -> tuple[_ReactiveSource, ...]:
         return ()
 
@@ -78,15 +91,6 @@ class _Cell:
         """Advance the version without replacing the value."""
         self.version += 1
         _bump_epoch()
-
-
-def _staged_value(cell: _Cell) -> Any:
-    """This action's pending value for `cell`, or `_MISSING` if it has not written one."""
-    current = _active()
-    if current is None:
-        return _MISSING
-    entry = current.staged(cell)
-    return _MISSING if entry is None else entry.value
 
 
 class Signal:

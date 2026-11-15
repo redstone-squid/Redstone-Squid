@@ -14,7 +14,7 @@ from typing import Any, ClassVar, Self, overload, override
 
 from squid_reactivity._runtime import _runtime
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
-from squid_reactivity.cells import _MISSING, _Cell, _staged_value
+from squid_reactivity.cells import _MISSING, _Cell
 from squid_reactivity.evaluation import settling
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource, untracked
 from squid_reactivity.transactions import transaction
@@ -107,7 +107,7 @@ class _State:
     def is_set(self, instance: ReactiveStateOwner) -> bool:
         """Whether this field currently holds a value of its own rather than its default."""
         cell = instance.__dict__.get(self._name)
-        return cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING)
+        return cell is not None and (cell.value is not _MISSING or cell.staged_value() is not _MISSING)
 
     def mutated(self, instance: ReactiveStateOwner) -> None:
         """Stage a version change for an opaque value that was mutated in place.
@@ -117,7 +117,7 @@ class _State:
         __set__ because its identity comparison would discard this same-object write.
         """
         cell = self.cell(instance)
-        held = _staged_value(cell)
+        held = cell.staged_value()
         if held is _MISSING:
             held = cell.value
         _write(instance, self._name, cell, held)
@@ -151,7 +151,7 @@ class _State:
         _check_write(instance, self.public_name)
         cell = instance.__dict__.get(self._name)
         if cell is not None:
-            held = _staged_value(cell)
+            held = cell.staged_value()
             if held is _MISSING:
                 held = cell.value
             # Opaque fields compare by identity: their values are collaborators, and `==` on
