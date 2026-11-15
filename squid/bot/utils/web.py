@@ -1,4 +1,4 @@
-"""Constrained media-preview fetching for trusted Discord origins."""
+"""Constrained media-preview fetching for trusted media origins."""
 
 import io
 import logging
@@ -15,7 +15,7 @@ import bs4
 
 logger = logging.getLogger(__name__)
 
-TRUSTED_PREVIEW_HOSTS = frozenset({"cdn.discordapp.com", "media.discordapp.net"})
+TRUSTED_PREVIEW_HOSTS = frozenset({"cdn.discordapp.com", "media.discordapp.net", "imgur.com", "i.imgur.com"})
 MAX_PREVIEW_PAGE_BYTES = 1024 * 1024
 MAX_PREVIEW_CACHE_ENTRIES = 256
 PREVIEW_USER_AGENT = "Redstone-Squid/1.0 (+https://github.com/Redstone-Squid/Redstone-Squid)"
@@ -26,12 +26,13 @@ class Preview(TypedDict):
     title: str | None
     description: str | None
     image: str | io.BytesIO | None
+    video: str | None
     site_name: str | None
     url: str | None
 
 
 class MediaPreviewClient:
-    """Fetch previews from allowed Discord HTTPS hosts without following redirects.
+    """Fetch previews from allowed media HTTPS hosts without following redirects.
 
     Cache up to `MAX_PREVIEW_CACHE_ENTRIES` URLs in access order, including empty
     results from failed requests. Entries have no time-based expiry. The client
@@ -190,19 +191,27 @@ async def _preview_response(url: str, response: aiohttp.ClientResponse) -> Previ
         return _empty_preview()
     content_type = response.headers.get("Content-Type", "").partition(";")[0].strip().lower()
     if not content_type:
-        content_type = mimetypes.guess_type(url, strict=False)[0] or "application/octet-stream"
+        content_type = mimetypes.guess_type(urlsplit(url).path, strict=False)[0] or "application/octet-stream"
     if content_type.startswith("image/"):
         preview = _empty_preview()
         preview["image"] = url
+        preview["url"] = url
+        return preview
+    if content_type.startswith("video/"):
+        preview = _empty_preview()
+        preview["video"] = url
         preview["url"] = url
         return preview
     if content_type != "text/html":
         return _empty_preview()
     if response.content_length is not None and response.content_length > MAX_PREVIEW_PAGE_BYTES:
         return _empty_preview()
-    payload = await response.content.read(MAX_PREVIEW_PAGE_BYTES + 1)
-    if len(payload) > MAX_PREVIEW_PAGE_BYTES:
-        return _empty_preview()
+    payload = bytearray()
+    # StreamReader.read(n) may return only the first network chunk, before the page's metadata.
+    async for chunk in response.content.iter_chunked(64 * 1024):
+        payload.extend(chunk)
+        if len(payload) > MAX_PREVIEW_PAGE_BYTES:
+            return _empty_preview()
     return _parse_page(url, payload.decode(response.charset or "utf-8", errors="replace"))
 
 
@@ -221,6 +230,11 @@ def _parse_page(url: str, page_text: str) -> Preview:
     preview["description"] = meta_content("og:description") or meta_content("twitter:description", "name")
     image = meta_content("og:image") or meta_content("twitter:image", "name")
     preview["image"] = image if image is not None and is_trusted_preview_url(image) else None
+    video = meta_content("og:video:secure_url") or meta_content("og:video")
+    if video is not None and is_trusted_preview_url(video):
+        video_type = mimetypes.guess_type(urlsplit(video).path)[0]
+        if video_type is not None and video_type.startswith("video/"):
+            preview["video"] = video
     preview["site_name"] = meta_content("og:site_name") or urlsplit(url).hostname
     canonical_url = meta_content("og:url")
     preview["url"] = canonical_url if canonical_url is not None and is_trusted_preview_url(canonical_url) else url
@@ -232,4 +246,4 @@ def _parse_page(url: str, page_text: str) -> Preview:
 
 
 def _empty_preview() -> Preview:
-    return {"title": None, "description": None, "image": None, "site_name": None, "url": None}
+    return {"title": None, "description": None, "image": None, "video": None, "site_name": None, "url": None}

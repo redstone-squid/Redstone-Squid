@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from typing import cast, override
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import discord
@@ -112,7 +113,6 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
     "url",
     [
         "https://example.com/build.png?signature=abc",
-        "https://example.com/image/123",
         "https://example.com/build.webp#preview",
     ],
 )
@@ -122,6 +122,35 @@ async def test_build_card_preserves_image_urls(display_build: Build, url: str) -
     payload = render_payload([await render_build_card(display_build, MediaPreviewClient())]).layout.to_components()
 
     assert url in str(payload)
+
+
+async def test_build_card_does_not_embed_unresolved_page_urls(display_build: Build) -> None:
+    url = "https://example.com/album/123"
+    display_build.links = [BuildLink(url=url, media_type="image")]
+
+    thumbnail, media = await build_card_module._get_media_urls(display_build, MediaPreviewClient())
+    payload = render_payload([await render_build_card(display_build, MediaPreviewClient())])
+
+    assert thumbnail is None
+    assert media == []
+    assert url in str(payload.layout.to_components())
+
+
+async def test_build_card_resolves_imgur_album_image_and_video(display_build: Build) -> None:
+    url = "https://imgur.com/a/SYA1OuC"
+    image = "https://i.imgur.com/YQ2b2aO.jpg?fbplay"
+    video = "https://i.imgur.com/YQ2b2aO.mp4"
+    display_build.links = [BuildLink(url=url, media_type="image")]
+    previews = AsyncMock(spec=MediaPreviewClient)
+    previews.get.return_value = {"image": image, "video": video}
+
+    payload = render_payload([await render_build_card(display_build, previews)])
+    components = list(payload.layout.walk_children())
+
+    assert [item.media.url for item in components if isinstance(item, discord.ui.Thumbnail)] == [image]
+    assert [
+        entry.media.url for item in components if isinstance(item, discord.ui.MediaGallery) for entry in item.items
+    ] == [video]
 
 
 async def test_build_card_keeps_remaining_images_and_videos(display_build: Build) -> None:

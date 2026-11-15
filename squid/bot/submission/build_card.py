@@ -145,6 +145,7 @@ async def render_build_card(
         "World Download",
         "Schematic",
         "Videos",
+        "Images",
         "Sponsor Website",
     }
     credit_names = {"Creators", "Date Of Completion", "Sponsoring Server"}
@@ -210,6 +211,7 @@ def _field_ladders(build: Build) -> dict[str, tuple[str, ...]]:
         ("World Download", build.world_download_urls),
         ("Schematic", build.schematic_urls),
         ("Videos", build.video_urls),
+        ("Images", build.image_urls),
     ):
         if len(urls) > 1:
             ladders[name] = (f"{len(urls)} links — first: {urls[0]}", f"{len(urls)} links")
@@ -222,40 +224,31 @@ def _field_ladders(build: Build) -> dict[str, tuple[str, ...]]:
 async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> tuple[str | None, list[str]]:
     """Choose an image thumbnail and retain the remaining images and direct video files."""
     images: list[str] = []
-    for url in build.image_urls:
-        mimetype, _ = mimetypes.guess_type(urlsplit(url).path)
+    video_previews: list[str] = []
+    videos: list[str] = []
+    for url in (*build.image_urls, *build.video_urls):
+        parsed = urlsplit(url)
+        mimetype, _ = mimetypes.guess_type(parsed.path)
         if mimetype is not None and mimetype.startswith("image/"):
             images.append(url)
+            continue
+        if mimetype is not None and mimetype.startswith("video/"):
+            videos.append(url)
             continue
         try:
             preview = await media_previews.get(url)
         except Exception:
             logger.warning("Could not resolve a build media preview", exc_info=True)
-            preview = None
-        image = preview["image"] if preview is not None else None
-        # Stored image links may be extensionless or outside the preview fetch allowlist.
-        images.append(image if isinstance(image, str) else url)
+            continue
+        image = preview["image"]
+        if isinstance(image, str):
+            (images if url in build.image_urls else video_previews).append(image)
+        if video := preview["video"]:
+            videos.append(video)
 
-    if not images:
-        for url in build.video_urls:
-            try:
-                preview = await media_previews.get(url)
-            except Exception:
-                logger.warning("Could not resolve a build video preview", exc_info=True)
-                continue
-            image = preview["image"]
-            if isinstance(image, str):
-                images.append(image)
-                break
-
+    # Page URLs are not valid image sources. Keep unresolved links in Resources.
     # Prefer submitted images or a video preview over a generated render for the thumbnail.
-    images = list(dict.fromkeys((*images, *build.render_urls)))
-    videos: list[str] = []
-    for url in build.video_urls:
-        mimetype, _ = mimetypes.guess_type(urlsplit(url).path)
-        if mimetype is not None and mimetype.startswith("video/"):
-            videos.append(url)
-    # Video pages remain in Resources; Discord galleries need direct media URLs.
+    images = list(dict.fromkeys((*(images or video_previews[:1]), *build.render_urls)))
     return (images[0] if images else None), list(dict.fromkeys((*images[1:], *videos)))
 
 
@@ -338,6 +331,8 @@ def build_metadata_fields(build: Build) -> dict[str, str]:
         fields["World Download"] = ", ".join(build.world_download_urls)
     if build.schematic_urls:
         fields["Schematic"] = ", ".join(build.schematic_urls)
+    if build.image_urls:
+        fields["Images"] = ", ".join(build.image_urls)
     if build.video_urls:
         fields["Videos"] = ", ".join(build.video_urls)
 
