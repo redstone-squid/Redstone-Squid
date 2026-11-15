@@ -119,4 +119,6 @@ async def test_layout_error_keeps_the_dispatched_action_in_diagnostics() -> None
 
     assert seen == [error]
     assert error.context["action"] == "builds.item-next"
-    assert error.context["screen"].endswith("FailingPanel")
+    screen = error.context["screen"]
+    assert isinstance(screen, str)
+    assert screen.endswith("FailingPanel")
