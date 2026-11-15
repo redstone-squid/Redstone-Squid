@@ -7,6 +7,8 @@ CREATE TABLE public.title_results (
     provisional_build_id bigint,
     history_complete boolean DEFAULT true NOT NULL,
     computed_at timestamp with time zone DEFAULT now() NOT NULL,
+    door_evidence jsonb,
+    CONSTRAINT title_results_door_evidence_check CHECK (((door_evidence IS NULL) OR (((jsonb_typeof(door_evidence) = 'object'::text) AND ((door_evidence -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
     CONSTRAINT title_results_status_check CHECK ((status = ANY (ARRAY['resolved'::text, 'unresolved'::text, 'no_candidate'::text])))
 );
 
