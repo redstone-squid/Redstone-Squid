@@ -14,6 +14,7 @@ from squid_ui.planning import CompositionOptions, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
+from squid_ui.selectors import query, select
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 ADAPTER = AdapterProfile(DiscordAdapter, "themes", "1")
@@ -27,14 +28,11 @@ def colours(body: scene.Body) -> list[int | None]:
         return [embed.colour for embed in body.embeds]
     assert isinstance(body, scene.HtmlBody)
 
-    def visit(node: scene.HtmlNode) -> list[int | None]:
-        if isinstance(node, scene.HtmlText):
-            return []
-        return ([node.colour.value] if node.colour is not None else []) + [
-            value for child in node.children for value in visit(child)
-        ]
-
-    return [value for node in body.children for value in visit(node)]
+    return [
+        match.node.colour.value
+        for match in query(body, select(scene.HtmlElement)).all()
+        if match.node.colour is not None
+    ]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)

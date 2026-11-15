@@ -122,8 +122,8 @@ from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import query, select, snapshot
 from squid_ui.semantic import ActionControl
 
-# Rendering is explicit. Querying this snapshot never renders or dispatches.
-tree = snapshot(render_component_tree(screen))
+# Rendering is explicit. query accepts existing nodes, scenes, or component trees.
+tree = render_component_tree(screen)
 save = select(ActionControl).key("save")
 match = query(tree, save.qualified_key("editor.save")).one()
 assert match.node.available
@@ -136,10 +136,10 @@ exactly by default; `contains=True` or a compiled regular expression opts into
 partial matching. Queries accept `localization=...` and otherwise resolve text
 against the neutral locale. Text matches a node's own content, not its descendants.
 
-Compose selectors with `descendants`, `children`, `has`, `intersect`, `union`, and
-`excluding`. For example, `select(Editor).key("editor").descendants(save)` selects
+Compose selectors with `descendants`, `children`, `next_sibling`, `following_siblings`,
+`has`, `intersect`, `union`, and `excluding`. For example, `select(Editor).key("editor").descendants(save)` selects
 save controls inside that component placement. `query(tree, save, within=match)`
-searches a matched subtree, excluding its root unless `include_scope=True` is set.
+searches a matched subtree in a shared snapshot, excluding its root unless `include_scope=True` is set.
 `scope()` explicitly matches that root. Scoped relations cannot consult ancestors
 outside the subtree; `has` evaluates its inner selector relative to each candidate.
 
@@ -148,6 +148,13 @@ Results provide `all()`, `one()`, `optional()`, `exists()`, and `count()`. `one(
 Matches expose `node`, `path`, `owner`, `key`, and `qualified_key`. Repeated objects
 are distinct occurrences; unions deduplicate occurrences in depth-first tree order.
 Paths for unkeyed nodes are addresses within a snapshot, not persistent identities.
+
+`query(nodes, selector)` captures its input automatically. For multiple queries that
+share matches, capture once with `tree = snapshot(nodes)`. This is required for
+`within=match` and `first.precedes(second)`: scopes and order comparisons belong to
+one capture. `precedes` uses depth-first order (ancestors precede descendants);
+`next_sibling` and `following_siblings` require a shared parent. Queries do not
+implicitly render a live component.
 
 A `ComponentTree` retains authored boundaries and local keys, including all layout
 alternatives before planning. It describes authored UI, not what a frontend finally
@@ -174,11 +181,38 @@ query(tree, 'Editor[key="editor"]', types={"Editor": Editor}).one()
 ```
 
 String queries return `Match[object]`; typed selectors preserve their inferred node type.
-Semantic type names are built in. Register component or primitive names explicitly
-with `types={...}`; parsing never imports or evaluates names. Supported syntax is
-`*`, types, `[attribute]`, `[attribute=value]`, `[text*=value]`, `[label*=value]`,
-descendant whitespace, `>`, comma unions, `:scope`, `:is(...)`, `:not(...)`, and
+Semantic type names and qualified planned-scene names such as `scene.Button` and
+`scene.HtmlElement` are built in. Planned Discord, HTML, and Slack scene trees use
+their declared display edges, including controls and options. Attributes, action
+references, assets, pager records, and extension payloads remain metadata. Register
+component or primitive names explicitly with `types={...}`; parsing never imports or evaluates names. Supported syntax is
+`*`, types, `[attribute]`, `[attribute=value]`, string prefix `^=`, suffix `$=`,
+and substring `*=`, descendant whitespace, `>`, adjacent sibling `+`, subsequent
+sibling `~`, comma unions, `:scope`, `:is(...)`, `:not(...)`, and
 `:has(...)`. Values use JSON literals, including double-quoted strings, booleans,
 numbers, and `null`. Malformed or unsupported syntax raises `SelectorSyntaxError`
-with a source offset. CSS IDs, classes, escaping, siblings, and positional
-pseudo-classes are outside this initial subset.
+with a source offset. CSS IDs, classes, escaping, and positional pseudo-classes
+are outside this subset.
+
+Typed string filters are `attr_starts_with`, `attr_ends_with`, and `attr_contains`.
+Missing or non-string values do not match. Attribute paths follow explicit dotted
+attributes, so `select(Lines).attr("overflow.key", "results")` selects the owner of
+a pagination policy without turning that policy into a UI child. The string form
+is `Lines[overflow.key="results"]` with `types={"Lines": Lines}`.
+
+Native Discord UI queries live in `squid_ui_discord.testing`:
+
+```python
+from squid_ui_discord import testing as discord_testing
+
+save = discord_testing.query(view, 'Button[label="Save"]').one()
+# A staged harness inspects its latest delivered views, without rendering again.
+save = staged.query('Button[label="Save"]').one()
+```
+
+These inspect native Discord items and their native attributes (`custom_id`,
+`disabled`, etc.), not authored controls or reconstructed semantic keys. Nested
+containers, section accessories, select options, and modal inputs are supported.
+Use `discord_testing.snapshot(view)` or `staged.snapshot()` for shared scopes or
+ordering. `staged.query(selector, view=candidate)` explicitly inspects a candidate
+view; the default keeps pending renders separate from committed output.

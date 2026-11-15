@@ -69,8 +69,6 @@ def test_parser_and_builder_have_identical_results() -> None:
     [
         "",
         "Unknown",
-        "ActionControl + ActionControl",
-        "ActionControl ~ ActionControl",
         "#save",
         ".button",
         "ActionControl[",
@@ -81,9 +79,7 @@ def test_parser_and_builder_have_identical_results() -> None:
         "ActionControl:visible",
         "ActionControl:has()",
         "ActionControl)",
-        'ActionControl[key*="save"]',
         "ActionControl[label=2]",
-        'ActionControl[available^="t"]',
         "__import__(os)",
         'ActionControl[key="\\q"]',
         "ActionControl[key=null]",

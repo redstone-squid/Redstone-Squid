@@ -6,6 +6,7 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.runtime import transaction
+from squid_ui.selectors import query, snapshot
 from squid_ui.semantic import FormTrigger
 from squid_ui_widgets import REVIEW_STEP
 from squid_ui_widgets import testing as wt
@@ -322,13 +323,9 @@ def test_the_review_note_sits_just_above_finish_and_the_screen_controls() -> Non
     cancel = sl.action_control("Cancel", _leave, key="cancel")
 
     rendered = sp.Wizard("Build", _review_steps, review=review, initial_state=state, actions=lambda: (cancel,)).render()
-    nodes = list(engine.walk(rendered))
-    note_index = next(index for index, node in enumerate(nodes) if isinstance(node, sl.semantic.Note))
-    finish_row = next(
-        index
-        for index, node in enumerate(nodes)
-        if isinstance(node, sl.semantic.ActionControls) and node.key.endswith(".chrome")
-    )
+    tree = snapshot(rendered)
+    note = query(tree, "Note").one()
+    finish_row = query(tree, 'ActionControls[key$=".chrome"]').one()
 
-    assert note_index < finish_row
+    assert note.precedes(finish_row)
     assert _control_rows(rendered)[-1] == ["Finish", "Cancel"]

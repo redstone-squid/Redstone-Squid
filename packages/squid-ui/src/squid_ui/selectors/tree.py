@@ -9,6 +9,7 @@ from squid_ui import semantic as s
 from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.tree import ComponentTree
+from squid_ui.selectors._scene import is_scene_node, scene_children
 from squid_ui.target_types import Renderable
 
 # Query edges include controls and content values that layout rewriting treats as leaves.
@@ -73,6 +74,9 @@ def ui_children(node: object) -> Iterable[tuple[str, object]]:
     Application records, callbacks, and state ownership objects are leaves. Custom
     trees can supply their own adapter to snapshot instead of exposing arbitrary fields.
     """
+    if is_scene_node(node):
+        yield from scene_children(node)
+        return
     for kind, names in _UI_FIELDS:
         if isinstance(node, kind):
             for name in names:
@@ -134,7 +138,7 @@ class Snapshot:
 
 
 def snapshot(tree: object, *, children: Children = ui_children) -> Snapshot:
-    """Capture an authored ComponentTree or a tree of already-created UI values.
+    """Capture an authored ComponentTree, planned scene, or existing UI values.
 
     ComponentTree preserves placements and local keys. Plain expanded nodes have only
     their existing keys and no owner metadata. Lists and tuples are transparent roots.
