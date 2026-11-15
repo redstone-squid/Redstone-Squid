@@ -68,7 +68,7 @@ def test_standalone_preview_includes_discord_like_css() -> None:
 
     assert rendered.startswith("<!doctype html>")
     assert ".squid-panel" in rendered
-    assert "background:#313338" in rendered
+    assert "background: #313338" in rendered
 
 
 def test_html_preview_rejects_an_unknown_target_version() -> None:
@@ -129,6 +129,6 @@ def test_preview_styles_discord_subtext_and_revealable_spoilers() -> None:
 
     assert '<p class="squid-subtext">Small <label class="squid-text-spoiler">' in rendered
     assert '<input type="checkbox" aria-label="Reveal spoiler">' in rendered
-    assert "visibility:hidden" in rendered
-    assert "input:checked+.squid-text-spoiler__content{visibility:visible}" in rendered
+    assert "visibility: hidden" in rendered
+    assert "input:checked+.squid-text-spoiler__content{visibility:visible;}" in "".join(rendered.split())
     assert "-# ||literal||" in rendered
