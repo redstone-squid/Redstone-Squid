@@ -8,7 +8,7 @@ from squid_reactivity import state
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_ui.content.text import TextLike, tr
+from squid_ui.content.text import TextLike
 from squid_ui.factories import action_control, action_controls, bullet, bullets, stack, status
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
 from squid_ui.runtime.component import Component
@@ -85,9 +85,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](C
         approved = frozenset(self.approved)
         participant_rows = tuple(
             bullet(
-                tr(
-                    t"widgets-agreement-participant = {(mark := '✓' if participant.actor_id in approved else '○')} {(display := participant.display)}"  # noqa: F841 - captured Fluent bindings
-                ),
+                chrome.agreement_participant("✓" if participant.actor_id in approved else "○", participant.display),
                 key=participant.actor_id,
             )
             for participant in self.participants

@@ -2,7 +2,6 @@
 
 from collections.abc import Sequence
 from functools import cache
-from importlib.util import find_spec
 from pathlib import Path
 
 from babel import Locale, UnknownLocaleError
@@ -21,15 +20,7 @@ def locales_dir() -> Path:
 
 @cache
 def _resources(locale: str) -> tuple[str, ...]:
-    resources = [path.read_text() for path in sorted((locales_dir() / locale).glob("*.ftl"))]
-    for package in ("squid_ui", "squid_ui_widgets", "squid_ui.ext.discord"):
-        # Locate resources without importing the framework or Discord adapter into API processes.
-        spec = find_spec(package)
-        if spec is not None and spec.submodule_search_locations is not None:
-            for location in spec.submodule_search_locations:
-                directory = Path(location) / "locales" / locale
-                resources.extend(path.read_text() for path in sorted(directory.glob("*.ftl")))
-    return tuple(resources)
+    return tuple(path.read_text() for path in sorted((locales_dir() / locale).glob("*.ftl")))
 
 
 @cache

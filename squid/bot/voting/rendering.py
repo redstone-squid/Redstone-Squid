@@ -7,6 +7,7 @@ from typing import cast
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
+from squid.bot.chrome import CHROME
 from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
@@ -166,7 +167,7 @@ def _generic_poll_nodes(
                     emoji=option.emoji,
                 )
             )
-        nodes.append(sl.tally(tally_options, key="poll.tally"))
+        nodes.append(sl.tally(tally_options, key="poll.tally", chrome=CHROME))
     else:
         nodes.append(
             sl.bullets(

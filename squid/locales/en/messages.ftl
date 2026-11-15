@@ -1484,112 +1484,112 @@ bot-tags-view-value-3 = { $action_label } **{ $tag_name }**?
 # squid/bot/tags_view.py:521
 bot-tags-view-value-type = Value type
 
-# squid/bot/ui.py:151
+# squid/bot/chrome.py:248
 bot-ui-add = Add
 
-# squid/bot/ui.py:118
+# squid/bot/chrome.py:215
 bot-ui-and-more = …and { $count } more.
 
-# squid/bot/ui.py:145
+# squid/bot/chrome.py:242
 bot-ui-apply = Apply
 
-# squid/bot/ui.py:137
+# squid/bot/chrome.py:234
 bot-ui-back = Back
 
-# squid/bot/ui.py:144
+# squid/bot/chrome.py:241
 bot-ui-cancel = Cancel
 
-# squid/bot/ui.py:139
+# squid/bot/chrome.py:236
 bot-ui-close = Close
 
-# squid/bot/ui.py:143
+# squid/bot/chrome.py:240
 bot-ui-confirm = Confirm
 
-# squid/bot/ui.py:128
+# squid/bot/chrome.py:225
 bot-ui-continue-session = Continue Session
 
-# squid/bot/ui.py:142
+# squid/bot/chrome.py:239
 bot-ui-download = Download
 
-# squid/bot/ui.py:152
+# squid/bot/chrome.py:249
 bot-ui-edit = Edit
 
-# squid/bot/ui.py:157
+# squid/bot/chrome.py:254
 bot-ui-finish = Finish
 
-# squid/bot/ui.py:138
+# squid/bot/chrome.py:235
 bot-ui-home = Home
 
-# squid/bot/ui.py:124
+# squid/bot/chrome.py:221
 bot-ui-live-updates-paused-press-any-control-to = Live updates paused — press any control to resume.
 
-# squid/bot/ui.py:155
+# squid/bot/chrome.py:252
 bot-ui-move-down = Move down
 
-# squid/bot/ui.py:154
+# squid/bot/chrome.py:251
 bot-ui-move-up = Move up
 
-# squid/bot/ui.py:136
+# squid/bot/chrome.py:233
 bot-ui-next = Next
 
-# squid/bot/ui.py:149
+# squid/bot/chrome.py:246
 bot-ui-no-results = No results
 
-# squid/bot/ui.py:158
+# squid/bot/chrome.py:255
 bot-ui-not-answered-yet = Not answered yet
 
-# squid/bot/ui.py:141
+# squid/bot/chrome.py:238
 bot-ui-off = Off
 
-# squid/bot/ui.py:140
+# squid/bot/chrome.py:237
 bot-ui-on = On
 
-# squid/bot/ui.py:179
+# squid/bot/ui.py:79
 bot-ui-open-link = Open link
 
-# squid/bot/ui.py:159
+# squid/bot/chrome.py:256
 bot-ui-page-of = Page { $page } of { $pages }
 
-# squid/bot/ui.py:135
+# squid/bot/chrome.py:232
 bot-ui-previous = Previous
 
-# squid/bot/ui.py:153
+# squid/bot/chrome.py:250
 bot-ui-remove = Remove
 
-# squid/bot/ui.py:156
+# squid/bot/chrome.py:253
 bot-ui-review = Review
 
-# squid/bot/ui.py:146
+# squid/bot/chrome.py:243
 bot-ui-save = Save
 
-# squid/bot/ui.py:148
+# squid/bot/chrome.py:245
 bot-ui-search = Search
 
-# squid/bot/ui.py:129
+# squid/bot/chrome.py:226
 bot-ui-sent-by-direct-message = Sent by direct message.
 
-# squid/bot/ui.py:130
+# squid/bot/chrome.py:227
 bot-ui-this-reply-is-too-private-for-a = This reply is too private for a channel, and your direct messages are closed. Run the command in a direct message, or allow direct messages and retry.
 
-# squid/bot/ui.py:120
+# squid/bot/chrome.py:217
 bot-ui-this-session-has-ended = This session has ended.
 
-# squid/bot/ui.py:127
+# squid/bot/chrome.py:224
 bot-ui-this-session-is-about-to-expire = This session is about to expire.
 
-# squid/bot/ui.py:82
+# squid/bot/chrome.py:12
 bot-ui-try-again-in-seconds = Try again in { $whole } seconds.
 
-# squid/bot/ui.py:147
+# squid/bot/chrome.py:244
 bot-ui-unsaved-changes = Unsaved changes
 
-# squid/bot/ui.py:123
+# squid/bot/chrome.py:220
 bot-ui-working = Working…
 
-# squid/bot/ui.py:121
+# squid/bot/chrome.py:218
 bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 
-# squid/bot/ui.py:150
+# squid/bot/chrome.py:247
 bot-ui-you-chose = You chose { $label }.
 
 # squid/bot/accounts/cog.py:109
@@ -2257,6 +2257,48 @@ command-build-submit-restrictions-name = restrictions
 
 # squid/bot/submission/submit.py:145
 command-build-submit-versions-name = versions
+
+# squid/bot/chrome.py:154
+command-dev-help = Development-only operational diagnostics.
+
+# squid/bot/chrome.py:152
+command-dev-name = dev
+
+# squid/bot/chrome.py:162
+command-dev-ui-choice-activity = activity
+
+# squid/bot/chrome.py:158
+command-dev-ui-choice-overview = overview
+
+# squid/bot/chrome.py:165
+command-dev-ui-choice-persistence = persistence
+
+# squid/bot/chrome.py:164
+command-dev-ui-choice-profile = profile
+
+# squid/bot/chrome.py:163
+command-dev-ui-choice-queues = queues
+
+# squid/bot/chrome.py:159
+command-dev-ui-choice-roots = roots
+
+# squid/bot/chrome.py:161
+command-dev-ui-choice-routes = routes
+
+# squid/bot/chrome.py:160
+command-dev-ui-choice-sessions = sessions
+
+# squid/bot/chrome.py:155
+command-dev-ui-help = Open the unified operational dashboard.
+
+# squid/bot/chrome.py:153
+command-dev-ui-name = ui
+
+# squid/bot/chrome.py:157
+command-dev-ui-tab-help = The dashboard tab to open first.
+
+# squid/bot/chrome.py:156
+command-dev-ui-tab-name = tab
 
 # squid/bot/diagnostics/cog.py:24
 command-errors-help = Browse private error reports, optionally opening one reference.
@@ -5638,68 +5680,170 @@ tags-workspace-heading = Build tags
 # squid/bot/tags_view.py:229
 tags-workspace-help = Browse the tag library, or choose a build to apply tags to it.
 
-# squid/bot/ui.py:175
+# squid/bot/chrome.py:272
 ui-chrome-approve = Approve
 
-# squid/bot/ui.py:114
+# squid/bot/chrome.py:44
 ui-chrome-approved-count = Approved: { $count }/{ $total }
 
-# squid/bot/ui.py:94
+# squid/bot/chrome.py:24
 ui-chrome-approximate-total-footer = { $first }–{ $last } of ~{ $total }
 
-# squid/bot/ui.py:160
+# squid/bot/chrome.py:257
 ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again.
 
-# squid/bot/ui.py:165
+# squid/bot/chrome.py:262
 ui-chrome-continue = Continue
 
-# squid/bot/ui.py:173
+# squid/bot/chrome.py:270
 ui-chrome-full = Full
 
-# squid/bot/ui.py:170
+# squid/bot/chrome.py:267
 ui-chrome-jump-to-page = Jump to a page
 
-# squid/bot/ui.py:162
+# squid/bot/chrome.py:259
 ui-chrome-newer = Newer
 
-# squid/bot/ui.py:161
+# squid/bot/chrome.py:258
 ui-chrome-older = Older
 
-# squid/bot/ui.py:102
+# squid/bot/chrome.py:32
 ui-chrome-page-option = Page { $page }
 
-# squid/bot/ui.py:90
+# squid/bot/chrome.py:20
 ui-chrome-range-footer = { $first }–{ $last }
 
-# squid/bot/ui.py:164
+# squid/bot/chrome.py:261
 ui-chrome-redo = Redo
 
-# squid/bot/ui.py:109
+# squid/bot/chrome.py:39
 ui-chrome-slot-capacity = { $count }/{ $capacity }
 
-# squid/bot/ui.py:107
+# squid/bot/chrome.py:37
 ui-chrome-slot-count = { $count }
 
-# squid/bot/ui.py:86
+# squid/bot/chrome.py:16
 ui-chrome-step-progress = Step { $step } of { $steps }
 
-# squid/bot/ui.py:98
+# squid/bot/chrome.py:28
 ui-chrome-total-range-footer = { $first }–{ $last } of { $total }
 
-# squid/bot/ui.py:163
+# squid/bot/chrome.py:260
 ui-chrome-undo = Undo
 
-# squid/bot/ui.py:172
+# squid/bot/chrome.py:269
 ui-chrome-waitlist = Waitlist
 
-# squid/bot/ui.py:176
+# squid/bot/chrome.py:273
 ui-chrome-withdraw = Withdraw
 
 # squid/bot/routes.py:49
 ui-control-expired = This control is no longer available.
 
-# squid/bot/ui.py:119
+# squid/bot/chrome.py:200
+ui-form-date-format = Enter a date as YYYY-MM-DD.
+
+# squid/bot/chrome.py:76
+ui-form-date-maximum = Enter a date on or before { $value }.
+
+# squid/bot/chrome.py:72
+ui-form-date-minimum = Enter a date on or after { $value }.
+
+# squid/bot/chrome.py:202
+ui-form-datetime-format = Enter a date and time as YYYY-MM-DD HH:MM.
+
+# squid/bot/chrome.py:92
+ui-form-datetime-maximum = Enter a date and time on or before { $value }.
+
+# squid/bot/chrome.py:88
+ui-form-datetime-minimum = Enter a date and time on or after { $value }.
+
+# squid/bot/chrome.py:199
+ui-form-duration-format = Enter a duration such as 30m, 12h, or 7d.
+
+# squid/bot/chrome.py:68
+ui-form-duration-maximum = Enter a duration no longer than { $maximum } seconds.
+
+# squid/bot/chrome.py:64
+ui-form-duration-minimum = Enter a duration of at least { $minimum } seconds.
+
+# squid/bot/chrome.py:197
+ui-form-integer-format = Enter a whole number.
+
+# squid/bot/chrome.py:177
+ui-form-invalid-boolean = Choose yes or no.
+
+# squid/bot/chrome.py:193
+ui-form-invalid-choice = Choose one of the available options.
+
+# squid/bot/chrome.py:194
+ui-form-invalid-choices = Choose only from the available options.
+
+# squid/bot/chrome.py:183
+ui-form-number-finite = Enter a finite number.
+
+# squid/bot/chrome.py:198
+ui-form-number-format = Enter a number.
+
+# squid/bot/chrome.py:60
+ui-form-number-maximum = Enter a value no greater than { $maximum }.
+
+# squid/bot/chrome.py:56
+ui-form-number-minimum = Enter a value of at least { $minimum }.
+
+# squid/bot/chrome.py:178
+ui-form-required = This field is required.
+
+# squid/bot/chrome.py:108
+ui-form-scale-integer = Choose a whole number from { $minimum } to { $maximum }.
+
+# squid/bot/chrome.py:96
+ui-form-scale-range = Choose a value from { $minimum } to { $maximum }.
+
+# squid/bot/chrome.py:104
+ui-form-selection-maximum = Choose no more than { $maximum } options.
+
+# squid/bot/chrome.py:100
+ui-form-selection-minimum = Choose at least { $minimum } options.
+
+# squid/bot/chrome.py:52
+ui-form-text-maximum = Enter no more than { $maximum } characters.
+
+# squid/bot/chrome.py:48
+ui-form-text-minimum = Enter at least { $minimum } characters.
+
+# squid/bot/chrome.py:203
+ui-form-time-ambiguous = This local time occurs twice in the selected timezone. Enter a date and time with an explicit UTC offset.
+
+# squid/bot/chrome.py:201
+ui-form-time-format = Enter a time as HH:MM.
+
+# squid/bot/chrome.py:84
+ui-form-time-maximum = Enter a time at or before { $value }.
+
+# squid/bot/chrome.py:80
+ui-form-time-minimum = Enter a time at or after { $value }.
+
+# squid/bot/chrome.py:206
+ui-form-time-nonexistent = This local time does not exist in the selected timezone.
+
+# squid/bot/chrome.py:207
+ui-form-timezone-offset-mismatch = The UTC offset does not match this local time in the selected timezone.
+
+# squid/bot/chrome.py:216
 ui-list-controls-not-owned = These list controls belong to someone else.
+
+# squid/bot/chrome.py:212
+ui-page-jump-number = Page number
+
+# squid/bot/chrome.py:112
+ui-page-jump-range = Enter a page from 1 to { $pages }.
+
+# squid/bot/chrome.py:211
+ui-page-jump-unavailable = This pager is no longer available.
+
+# squid/bot/chrome.py:116
+ui-tally-option = { $label } — { NUMBER($count) }
 
 # squid/bot/accounts/cog.py:90
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
@@ -5853,3 +5997,46 @@ voting-vote-configuration-invalid = Vote configuration is invalid.
 
 # squid/voting/errors.py:10
 voting-vote-session-not-found = Vote session not found.
+
+# squid/bot/chrome.py:120
+widgets-agreement-participant = { $mark } { $display }
+
+# squid/bot/chrome.py:124
+widgets-collection-too-few =
+    { NUMBER($minimum) ->
+        [one] Add at least { NUMBER($minimum) } entry.
+       *[other] Add at least { NUMBER($minimum) } entries.
+    }
+
+# squid/bot/chrome.py:130
+widgets-collection-too-many =
+    { NUMBER($maximum) ->
+        [one] Keep no more than { NUMBER($maximum) } entry.
+       *[other] Keep no more than { NUMBER($maximum) } entries.
+    }
+
+# squid/bot/chrome.py:148
+widgets-multi-choice-exclusive = { $group_label } cannot be combined with an exclusive group.
+
+# squid/bot/chrome.py:176
+widgets-multi-choice-options = Options
+
+# squid/bot/chrome.py:169
+widgets-multi-choice-select-options = Select options
+
+# squid/bot/chrome.py:136
+widgets-multi-choice-too-few =
+    { NUMBER($minimum) ->
+        [one] Select at least { NUMBER($minimum) } option.
+       *[other] Select at least { NUMBER($minimum) } options.
+    }
+
+# squid/bot/chrome.py:142
+widgets-multi-choice-too-many =
+    { NUMBER($maximum) ->
+        [one] Select no more than { NUMBER($maximum) } option.
+       *[other] Select no more than { NUMBER($maximum) } options.
+    }
+
+# squid/bot/chrome.py:172
+widgets-multi-choice-unavailable = One or more selected options are no longer available.

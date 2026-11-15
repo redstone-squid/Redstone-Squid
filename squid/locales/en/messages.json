@@ -4993,7 +4993,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:151"
+      "squid/bot/chrome.py:248"
     ]
   },
   "bot-ui-and-more": {
@@ -5008,7 +5008,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:118"
+      "squid/bot/chrome.py:215"
     ]
   },
   "bot-ui-apply": {
@@ -5017,7 +5017,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:145"
+      "squid/bot/chrome.py:242"
     ]
   },
   "bot-ui-back": {
@@ -5026,7 +5026,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:137"
+      "squid/bot/chrome.py:234"
     ]
   },
   "bot-ui-cancel": {
@@ -5035,7 +5035,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:144"
+      "squid/bot/chrome.py:241"
     ]
   },
   "bot-ui-close": {
@@ -5044,7 +5044,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:139"
+      "squid/bot/chrome.py:236"
     ]
   },
   "bot-ui-confirm": {
@@ -5053,7 +5053,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:143"
+      "squid/bot/chrome.py:240"
     ]
   },
   "bot-ui-continue-session": {
@@ -5062,7 +5062,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:128"
+      "squid/bot/chrome.py:225"
     ]
   },
   "bot-ui-download": {
@@ -5071,7 +5071,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:142"
+      "squid/bot/chrome.py:239"
     ]
   },
   "bot-ui-edit": {
@@ -5080,7 +5080,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:152"
+      "squid/bot/chrome.py:249"
     ]
   },
   "bot-ui-finish": {
@@ -5089,7 +5089,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:157"
+      "squid/bot/chrome.py:254"
     ]
   },
   "bot-ui-home": {
@@ -5098,7 +5098,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:138"
+      "squid/bot/chrome.py:235"
     ]
   },
   "bot-ui-live-updates-paused-press-any-control-to": {
@@ -5107,7 +5107,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:124"
+      "squid/bot/chrome.py:221"
     ]
   },
   "bot-ui-move-down": {
@@ -5116,7 +5116,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:155"
+      "squid/bot/chrome.py:252"
     ]
   },
   "bot-ui-move-up": {
@@ -5125,7 +5125,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:154"
+      "squid/bot/chrome.py:251"
     ]
   },
   "bot-ui-next": {
@@ -5134,7 +5134,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:136"
+      "squid/bot/chrome.py:233"
     ]
   },
   "bot-ui-no-results": {
@@ -5143,7 +5143,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:149"
+      "squid/bot/chrome.py:246"
     ]
   },
   "bot-ui-not-answered-yet": {
@@ -5152,7 +5152,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:158"
+      "squid/bot/chrome.py:255"
     ]
   },
   "bot-ui-off": {
@@ -5161,7 +5161,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:141"
+      "squid/bot/chrome.py:238"
     ]
   },
   "bot-ui-on": {
@@ -5170,7 +5170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:140"
+      "squid/bot/chrome.py:237"
     ]
   },
   "bot-ui-open-link": {
@@ -5179,7 +5179,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:179"
+      "squid/bot/ui.py:79"
     ]
   },
   "bot-ui-page-of": {
@@ -5199,7 +5199,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:159"
+      "squid/bot/chrome.py:256"
     ]
   },
   "bot-ui-previous": {
@@ -5208,7 +5208,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:135"
+      "squid/bot/chrome.py:232"
     ]
   },
   "bot-ui-remove": {
@@ -5217,7 +5217,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:153"
+      "squid/bot/chrome.py:250"
     ]
   },
   "bot-ui-review": {
@@ -5226,7 +5226,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:156"
+      "squid/bot/chrome.py:253"
     ]
   },
   "bot-ui-save": {
@@ -5235,7 +5235,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:146"
+      "squid/bot/chrome.py:243"
     ]
   },
   "bot-ui-search": {
@@ -5244,7 +5244,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:148"
+      "squid/bot/chrome.py:245"
     ]
   },
   "bot-ui-sent-by-direct-message": {
@@ -5253,7 +5253,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:129"
+      "squid/bot/chrome.py:226"
     ]
   },
   "bot-ui-this-reply-is-too-private-for-a": {
@@ -5262,7 +5262,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:130"
+      "squid/bot/chrome.py:227"
     ]
   },
   "bot-ui-this-session-has-ended": {
@@ -5271,7 +5271,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:120"
+      "squid/bot/chrome.py:217"
     ]
   },
   "bot-ui-this-session-is-about-to-expire": {
@@ -5280,7 +5280,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:127"
+      "squid/bot/chrome.py:224"
     ]
   },
   "bot-ui-try-again-in-seconds": {
@@ -5295,7 +5295,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:82"
+      "squid/bot/chrome.py:12"
     ]
   },
   "bot-ui-unsaved-changes": {
@@ -5304,7 +5304,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:147"
+      "squid/bot/chrome.py:244"
     ]
   },
   "bot-ui-working": {
@@ -5313,7 +5313,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:123"
+      "squid/bot/chrome.py:220"
     ]
   },
   "bot-ui-you-can-t-do-that-right-now": {
@@ -5322,7 +5322,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:121"
+      "squid/bot/chrome.py:218"
     ]
   },
   "bot-ui-you-chose": {
@@ -5337,7 +5337,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:150"
+      "squid/bot/chrome.py:247"
     ]
   },
   "bot-verify-doesn-t-have-a-creator-page": {
@@ -7475,6 +7475,132 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/submit.py:145"
+    ]
+  },
+  "command-dev-help": {
+    "fingerprint": "6edf09d1b16cf659abdb530e7a187d8aefc54662a4438b0e75a8c1f8d82a731b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:154"
+    ]
+  },
+  "command-dev-name": {
+    "fingerprint": "fdfe9794cdb847e4f711bcee92837e4c49795b81770182adf7402644c25f2945",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:152"
+    ]
+  },
+  "command-dev-ui-choice-activity": {
+    "fingerprint": "10be4640157d136923de7f79ae858b2b927e98620f69c19b5cfa0c3804dd6928",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:162"
+    ]
+  },
+  "command-dev-ui-choice-overview": {
+    "fingerprint": "f770b81cc3f125e40088f0534a22b6d96f99ff80aba2389305bd2726ab012d31",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:158"
+    ]
+  },
+  "command-dev-ui-choice-persistence": {
+    "fingerprint": "2be1738a4b6bd5512abb11117226028a6a1e102fdfd375a90835281570f704ca",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:165"
+    ]
+  },
+  "command-dev-ui-choice-profile": {
+    "fingerprint": "4ac03e02b0f69d76daff9aa9fa69dbf232b925e7cd5b4d486b9fcb3273ac2689",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:164"
+    ]
+  },
+  "command-dev-ui-choice-queues": {
+    "fingerprint": "08f17f55916d1853a3fa466f09067ac031ea431b3046aae874e518b3ce776da7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:163"
+    ]
+  },
+  "command-dev-ui-choice-roots": {
+    "fingerprint": "5532494589b950c48a7c1f2d5eadf3f712b4c5f39187d2fb0f8bb1a736c5a5c1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:159"
+    ]
+  },
+  "command-dev-ui-choice-routes": {
+    "fingerprint": "a8fd68e05f8671b734b08c8fa3431b7b20520ae496a8461688a4e7af835b9667",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:161"
+    ]
+  },
+  "command-dev-ui-choice-sessions": {
+    "fingerprint": "6c84fa49bbceae4688d7427d61c839b473aa53338ea7b209a6e2f07120414cb1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:160"
+    ]
+  },
+  "command-dev-ui-help": {
+    "fingerprint": "26e88500a693845c98c914dc9f6198d9b2afa014dd2d353f57aabfa249b737a3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:155"
+    ]
+  },
+  "command-dev-ui-name": {
+    "fingerprint": "f01b279fc83d22a2b5d691dbf12b0388ebbff0a5297b3a14fb03159f3146ba95",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:153"
+    ]
+  },
+  "command-dev-ui-tab-help": {
+    "fingerprint": "749c3a71db57d45b2d03a04dec35c2ab304381bec571c496fcbca2799d5bc385",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:157"
+    ]
+  },
+  "command-dev-ui-tab-name": {
+    "fingerprint": "1015d392d11b1ed3b1829297b5a4102c276673f9059ea60cc67281ac0c83433a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:156"
     ]
   },
   "command-errors-help": {
@@ -18630,7 +18756,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:175"
+      "squid/bot/chrome.py:272"
     ]
   },
   "ui-chrome-approved-count": {
@@ -18650,7 +18776,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:114"
+      "squid/bot/chrome.py:44"
     ]
   },
   "ui-chrome-approximate-total-footer": {
@@ -18675,7 +18801,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:94"
+      "squid/bot/chrome.py:24"
     ]
   },
   "ui-chrome-changed-elsewhere": {
@@ -18684,7 +18810,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:160"
+      "squid/bot/chrome.py:257"
     ]
   },
   "ui-chrome-continue": {
@@ -18693,7 +18819,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:165"
+      "squid/bot/chrome.py:262"
     ]
   },
   "ui-chrome-full": {
@@ -18702,7 +18828,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:173"
+      "squid/bot/chrome.py:270"
     ]
   },
   "ui-chrome-jump-to-page": {
@@ -18711,7 +18837,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:170"
+      "squid/bot/chrome.py:267"
     ]
   },
   "ui-chrome-newer": {
@@ -18720,7 +18846,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:162"
+      "squid/bot/chrome.py:259"
     ]
   },
   "ui-chrome-older": {
@@ -18729,7 +18855,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:161"
+      "squid/bot/chrome.py:258"
     ]
   },
   "ui-chrome-page-option": {
@@ -18744,7 +18870,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:102"
+      "squid/bot/chrome.py:32"
     ]
   },
   "ui-chrome-range-footer": {
@@ -18764,7 +18890,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:90"
+      "squid/bot/chrome.py:20"
     ]
   },
   "ui-chrome-redo": {
@@ -18773,7 +18899,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:164"
+      "squid/bot/chrome.py:261"
     ]
   },
   "ui-chrome-slot-capacity": {
@@ -18793,7 +18919,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:109"
+      "squid/bot/chrome.py:39"
     ]
   },
   "ui-chrome-slot-count": {
@@ -18808,7 +18934,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:107"
+      "squid/bot/chrome.py:37"
     ]
   },
   "ui-chrome-step-progress": {
@@ -18828,7 +18954,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:86"
+      "squid/bot/chrome.py:16"
     ]
   },
   "ui-chrome-total-range-footer": {
@@ -18853,7 +18979,7 @@
       }
     ],
     "locations": [
-      "squid/bot/ui.py:98"
+      "squid/bot/chrome.py:28"
     ]
   },
   "ui-chrome-undo": {
@@ -18862,7 +18988,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:163"
+      "squid/bot/chrome.py:260"
     ]
   },
   "ui-chrome-waitlist": {
@@ -18871,7 +18997,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:172"
+      "squid/bot/chrome.py:269"
     ]
   },
   "ui-chrome-withdraw": {
@@ -18880,7 +19006,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:176"
+      "squid/bot/chrome.py:273"
     ]
   },
   "ui-control-expired": {
@@ -18892,13 +19018,442 @@
       "squid/bot/routes.py:49"
     ]
   },
+  "ui-form-date-format": {
+    "fingerprint": "c7d90428368b0ad21dca2b475236108fc6a61efe8e5f6ba2062cdd80297d3164",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:200"
+    ]
+  },
+  "ui-form-date-maximum": {
+    "fingerprint": "489ffdf71e23ffa24637662ec9d30679fb27ce9970f037b8cec996f2c9a75d74",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:76"
+    ]
+  },
+  "ui-form-date-minimum": {
+    "fingerprint": "185de6d799f080aea3e12719d69299ed6b6ed3317cda91ee3724a034f71680e2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:72"
+    ]
+  },
+  "ui-form-datetime-format": {
+    "fingerprint": "48166bdbc416649ea756737b7ef5e6f4ff0de482fb28b01533f9a477ba60f236",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:202"
+    ]
+  },
+  "ui-form-datetime-maximum": {
+    "fingerprint": "ff5d491501de9f563cbb917d46ec8ddb0de15a543b3c1ac5e1e908fc51ad273c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:92"
+    ]
+  },
+  "ui-form-datetime-minimum": {
+    "fingerprint": "afc612e0a7d75e8299c7550bd536936acf4a3b15d1e36774e63a60abe17890c1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:88"
+    ]
+  },
+  "ui-form-duration-format": {
+    "fingerprint": "dcdde888fe216a7494178b48b3eb4a5134280cafcc003621b60225db7ed36245",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:199"
+    ]
+  },
+  "ui-form-duration-maximum": {
+    "fingerprint": "d298fd6823dde34213dfb09e8d07d6a503ed749740e212d4ff4522274fabaf91",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:68"
+    ]
+  },
+  "ui-form-duration-minimum": {
+    "fingerprint": "a9d88fddda75d694bdd8bd88b89e9391765746efbdb94a10238cad61198c1c77",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:64"
+    ]
+  },
+  "ui-form-integer-format": {
+    "fingerprint": "e651fe326bf3b065e27611895a1538574bcf59e37423da6f7a64ad97ad2bac4a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:197"
+    ]
+  },
+  "ui-form-invalid-boolean": {
+    "fingerprint": "e25b9b34179fc6d2fb9409f9dcac01ba488cfddd68a47c1b0faa4726af010897",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:177"
+    ]
+  },
+  "ui-form-invalid-choice": {
+    "fingerprint": "222424bb987f61a76cbe0341845139253d44c24ab1768ce2b4c5ff48d9579b1f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:193"
+    ]
+  },
+  "ui-form-invalid-choices": {
+    "fingerprint": "fee99ee78683e2093247ab80f00204ad7d8a3b7c440ae7e469cc20e3f2d01070",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:194"
+    ]
+  },
+  "ui-form-number-finite": {
+    "fingerprint": "8fd763b68f0046a2fc0959290c10ff408e86426abf9a6c0dcfcdb6df838c6d9a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:183"
+    ]
+  },
+  "ui-form-number-format": {
+    "fingerprint": "b4189e307a6ae1c80179fc96ef5e26a2743b514e68c93a4dd819f5b566f56448",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:198"
+    ]
+  },
+  "ui-form-number-maximum": {
+    "fingerprint": "343fe349aa532363590b6502ff83fd98416aabe9758d2fd34c3fc7e18b75bb97",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:60"
+    ]
+  },
+  "ui-form-number-minimum": {
+    "fingerprint": "9a49a99d0d35bda2e0aeff333c3a6cdea382b12100a597746247306452dcca9b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:56"
+    ]
+  },
+  "ui-form-required": {
+    "fingerprint": "0b37c5d2f2d89e542c969def816752615b06e49d51c59ab306dccab47a37bafe",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:178"
+    ]
+  },
+  "ui-form-scale-integer": {
+    "fingerprint": "3d49f237a371febc15e9335861b6c9bafd9b075fc7c9a1356f79836218b2f4f1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:108"
+    ]
+  },
+  "ui-form-scale-range": {
+    "fingerprint": "67de695e5e80aaf78d060aa97670f3f18d8eec14e6a58af9445627d5176841cf",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:96"
+    ]
+  },
+  "ui-form-selection-maximum": {
+    "fingerprint": "a18bc4608634929d656de15efcbb91cb23deea6193ce62655a4b9189006453ae",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:104"
+    ]
+  },
+  "ui-form-selection-minimum": {
+    "fingerprint": "ced0f826d1d210cb5f8a9b907c1ac9ddbff25ef4ea330fe632d340d69aa84466",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:100"
+    ]
+  },
+  "ui-form-text-maximum": {
+    "fingerprint": "8c7dea99d2894fa25efb5371d3d9a21c7d52109d9bec74912460d6dce8254c12",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:52"
+    ]
+  },
+  "ui-form-text-minimum": {
+    "fingerprint": "81b08b4e646adb68c4970c366fc86252c28d8b0b8182ef76a8daca29df1cbc83",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:48"
+    ]
+  },
+  "ui-form-time-ambiguous": {
+    "fingerprint": "51130cd27de66c2b808c9594c3d441e356e6b901c52649e3997836057ef2f72b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:203"
+    ]
+  },
+  "ui-form-time-format": {
+    "fingerprint": "04159f13d76b0572a1005418332d1941ea8c34ae3b607f86995538696adca122",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:201"
+    ]
+  },
+  "ui-form-time-maximum": {
+    "fingerprint": "2d66bcd2e776b6595107a7d3c327c1181f0fe35df8f6a2a8520058e7abbe1091",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:84"
+    ]
+  },
+  "ui-form-time-minimum": {
+    "fingerprint": "7e4feb168afcc195d14228bcfecf610eb04860979d44a8e8d561c2c2574fc316",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:80"
+    ]
+  },
+  "ui-form-time-nonexistent": {
+    "fingerprint": "fe1c6bc80785138d26f89922938250e691ded8cd44e2db0596bccfaf8b187078",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:206"
+    ]
+  },
+  "ui-form-timezone-offset-mismatch": {
+    "fingerprint": "86f201b10b9cdd613800ec24ac69a008945207481eb8b65ba6093ed86564723b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:207"
+    ]
+  },
   "ui-list-controls-not-owned": {
     "fingerprint": "09680d40c6de5130a456afcffb192498cc23a47c779f8fd549f54ab99874f083",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/ui.py:119"
+      "squid/bot/chrome.py:216"
+    ]
+  },
+  "ui-page-jump-number": {
+    "fingerprint": "4baebd66f3ca9151c45b2e09cc0e3ff579b7eb94db98b27a53da22f3334693dc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:212"
+    ]
+  },
+  "ui-page-jump-range": {
+    "fingerprint": "ada7f14d83cfc7c62765ca66fcd51f14b782d452c9f947c459dba11c8181b4c9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "pages",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:112"
+    ]
+  },
+  "ui-page-jump-unavailable": {
+    "fingerprint": "7b5ae6945ccb382f231df711b1c561b87bc823728c8841c834b6e5888893e671",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:211"
+    ]
+  },
+  "ui-tally-option": {
+    "fingerprint": "b591288eaa153cc777eb41be5108cb2fb6ed668c2b7242646d42bf1e30c1795d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "label",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "count",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:116"
     ]
   },
   "verify-creator-page-hidden": {
@@ -19372,6 +19927,128 @@
     "arguments": [],
     "locations": [
       "squid/voting/errors.py:10"
+    ]
+  },
+  "widgets-agreement-participant": {
+    "fingerprint": "c3508def8cd42b11f0cb7c79dbd56b9fe01b3940314fa964e3d4df2849f14e95",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "mark",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "display",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:120"
+    ]
+  },
+  "widgets-collection-too-few": {
+    "fingerprint": "e991b4780e2fd9dc1fccff7a7aab75bec1aee38984d6c89433adcb909d5b6806",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:124"
+    ]
+  },
+  "widgets-collection-too-many": {
+    "fingerprint": "ac6c203ba401b39881cc583c8b75692575ec4099f6ffd97ccb789b5f10b74040",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:130"
+    ]
+  },
+  "widgets-multi-choice-exclusive": {
+    "fingerprint": "98bcec52748b9eb9a9d0025177796557ab30144b472d00674dc65ec8bfa3bbaf",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "group_label",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:148"
+    ]
+  },
+  "widgets-multi-choice-options": {
+    "fingerprint": "1dde75181824517a8c0eb0ab709a4c1eb159526701d1be52e7bb7e1246c76ec4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:176"
+    ]
+  },
+  "widgets-multi-choice-select-options": {
+    "fingerprint": "64cb8b8630dc864a862d72494747a4abf0be69d82518db71c44fd083757720c2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:169"
+    ]
+  },
+  "widgets-multi-choice-too-few": {
+    "fingerprint": "528b4884c42d4b9071d55f043aa23e496c4f14c818e2fc015e5e3d4f2f14198d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:136"
+    ]
+  },
+  "widgets-multi-choice-too-many": {
+    "fingerprint": "b33f646c092216a081c5600728da9cab2a94ee339f77c117b6b30bcc77cc22f3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/chrome.py:142"
+    ]
+  },
+  "widgets-multi-choice-unavailable": {
+    "fingerprint": "a7040b8133401d3545a0f86e66ad49f99f34b4c26f238552f6bbc9bbead7aca7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/chrome.py:172"
     ]
   }
 }

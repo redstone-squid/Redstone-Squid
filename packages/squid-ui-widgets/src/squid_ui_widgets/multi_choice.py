@@ -4,10 +4,10 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from squid_i18n import NUMBER
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import Choice, ControlDisplay, Tone, fallback
-from squid_ui.content.text import Text, TextLike, tr
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.interactions.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_ui_widgets._actions import (
@@ -185,41 +185,23 @@ class MultiChoice:
         inverse = tuple(group.key for group in self.groups if group_key in group.exclusive_with)
         return frozenset((*direct, *inverse))
 
-    def errors(self, state: MultiChoiceState) -> tuple[TextLike, ...]:
+    def errors(self, state: MultiChoiceState, *, chrome: Chrome = DEFAULT_CHROME) -> tuple[TextLike, ...]:
         """Return every commit-blocking violation for the staged set."""
         errors: list[TextLike] = []
         count = len(state.staged)
         minimum, maximum = self.minimum, self.maximum
         if count < minimum:
-            errors.append(
-                tr(t"""
-                    widgets-multi-choice-too-few = {{ {NUMBER(minimum)} ->
-                        [one] Select at least {NUMBER(minimum)} option.
-                       *[other] Select at least {NUMBER(minimum)} options.
-                    }}
-                    """)
-            )
+            errors.append(chrome.multi_choice_too_few(minimum))
         if count > maximum:
-            errors.append(
-                tr(t"""
-                    widgets-multi-choice-too-many = {{ {NUMBER(maximum)} ->
-                        [one] Select no more than {NUMBER(maximum)} option.
-                       *[other] Select no more than {NUMBER(maximum)} options.
-                    }}
-                    """)
-            )
+            errors.append(chrome.multi_choice_too_many(maximum))
         unknown = set(state.staged) - set(self._choices)
         if unknown:
-            errors.append(
-                tr(t"widgets-multi-choice-unavailable = One or more selected options are no longer available.")
-            )
+            errors.append(chrome.multi_choice_unavailable)
         selected_groups = {self._group_for[key] for key in state.staged if key in self._group_for}
         for group in self.groups:
             if group.key in selected_groups and self._rivals(group.key) & selected_groups:
                 group_label = group.label
-                errors.append(
-                    tr(t"widgets-multi-choice-exclusive = {group_label} cannot be combined with an exclusive group.")
-                )
+                errors.append(chrome.multi_choice_exclusive(group_label))
                 break
         return tuple(errors)
 
@@ -291,16 +273,16 @@ class MultiChoice:
         labels = [display_text(self._choices[key].label) for key in selected if key in self._choices]
         return f"{len(selected)} selected" + (f": {', '.join(labels)}" if labels else "")
 
-    def form_for(self, state: MultiChoiceState, action: str) -> FormSpec | None:
+    def form_for(self, state: MultiChoiceState, action: str, *, chrome: Chrome = DEFAULT_CHROME) -> FormSpec | None:
         """Resolve the routed modal action to its small-panel form schema."""
         if action != "modal" or len(self._choice_order) > 25:
             return None
         return FormSpec(
-            tr(t"widgets-multi-choice-select-options = Select options"),
+            chrome.multi_choice_select_options,
             (
                 MultiChoiceField[str, Any](
                     key="selection",
-                    label=tr(t"widgets-multi-choice-options = Options"),
+                    label=chrome.multi_choice_options,
                     required=self.minimum > 0,
                     options=tuple(
                         ChoiceOption(
@@ -361,19 +343,19 @@ class MultiChoice:
 
         direct = stack(*group_nodes)
         if len(self._choice_order) <= 25:
-            modal = self.form_for(state, "modal")
+            modal = self.form_for(state, "modal", chrome=controls.chrome)
             assert modal is not None
             # fallback needs layout nodes, so wrap the form control in a container.
             trigger = controls.form(
                 modal,
                 "modal",
                 key=f"{self.key}.modal",
-                label=tr(t"widgets-multi-choice-select-options = Select options"),
+                label=controls.chrome.multi_choice_select_options,
             )
             selection = fallback(direct, action_controls(trigger, key=f"{self.key}.modal-action"))
         else:
             selection = direct
-        errors = self.errors(state)
+        errors = self.errors(state, chrome=controls.chrome)
         return stack(
             heading(self.title),
             paragraph(self._summary(state)),

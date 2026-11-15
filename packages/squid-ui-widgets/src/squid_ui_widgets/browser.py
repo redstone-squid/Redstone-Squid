@@ -260,6 +260,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
                     partial(self._move, "previous", self.session.revision),
                     partial(self._move, "next", self.session.revision),
                     partial(self._seek, self.session.revision) if state.extent is not None else None,
+                    chrome=chrome,
                 )
             )
         )

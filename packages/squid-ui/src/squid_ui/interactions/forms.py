@@ -24,7 +24,8 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast, overload, override
 
-from squid_i18n import md_tr, source_text, tr
+from squid_i18n import source_text
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.emoji import EmojiLike, normalize_emoji
 from squid_ui.content.temporal import (
     AmbiguousLocalTimeError,
@@ -128,6 +129,7 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
     name when the class compiles its schema.
     """
 
+    chrome: Chrome = dataclass_field(default=DEFAULT_CHROME, kw_only=True)
     label: TextLike | None = None
     key: str = ""
     description: TextLike | None = None
@@ -194,7 +196,7 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
         if not self._missing(raw):
             return False
         if self.required:
-            _invalid(tr(t"ui-form-required = This field is required."))
+            _invalid(self.chrome.form_required)
         return True
 
 
@@ -215,17 +217,13 @@ class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         if self.strip:
             value = value.strip()
         if self.required and not value:
-            _invalid(tr(t"ui-form-required = This field is required."))
+            _invalid(self.chrome.form_required)
         if self.minimum is not None and len(value) < self.minimum:
             minimum = self.minimum
-            _invalid(md_tr(t"ui-form-text-minimum = Enter at least {minimum} characters."))
+            _invalid(self.chrome.form_text_minimum(minimum))
         if self.maximum is not None and len(value) > self.maximum:
             maximum = self.maximum
-            _invalid(
-                md_tr(
-                    t"ui-form-text-maximum = Enter no more than {maximum} characters.",
-                )
-            )
+            _invalid(self.chrome.form_text_maximum(maximum))
         return value
 
 
@@ -249,21 +247,13 @@ class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormF
         try:
             value = int(str(raw).strip())
         except ValueError:
-            _invalid(tr(t"ui-form-integer-format = Enter a whole number."))
+            _invalid(self.chrome.form_integer_format)
         if self.minimum is not None and value < self.minimum:
             minimum = self.minimum
-            _invalid(
-                md_tr(
-                    t"ui-form-number-minimum = Enter a value of at least {minimum}.",
-                )
-            )
+            _invalid(self.chrome.form_number_minimum(minimum))
         if self.maximum is not None and value > self.maximum:
             maximum = self.maximum
-            _invalid(
-                md_tr(
-                    t"ui-form-number-maximum = Enter a value no greater than {maximum}.",
-                )
-            )
+            _invalid(self.chrome.form_number_maximum(maximum))
         return value
 
 
@@ -282,23 +272,15 @@ class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         try:
             value = float(str(raw).strip())
         except ValueError:
-            _invalid(tr(t"ui-form-number-format = Enter a number."))
+            _invalid(self.chrome.form_number_format)
         if not math.isfinite(value):
-            _invalid(tr(t"ui-form-number-finite = Enter a finite number."))
+            _invalid(self.chrome.form_number_finite)
         if self.minimum is not None and value < self.minimum:
             minimum = self.minimum
-            _invalid(
-                md_tr(
-                    t"ui-form-number-minimum = Enter a value of at least {minimum}.",
-                )
-            )
+            _invalid(self.chrome.form_number_minimum(minimum))
         if self.maximum is not None and value > self.maximum:
             maximum = self.maximum
-            _invalid(
-                md_tr(
-                    t"ui-form-number-maximum = Enter a value no greater than {maximum}.",
-                )
-            )
+            _invalid(self.chrome.form_number_maximum(maximum))
         return value
 
 
@@ -336,22 +318,14 @@ class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         else:
             match = _DURATION.fullmatch(source)
             if match is None:
-                _invalid(tr(t"ui-form-duration-format = Enter a duration such as 30m, 12h, or 7d."))
+                _invalid(self.chrome.form_duration_format)
             value = round(float(match.group(1)) * _DURATION_UNITS[match.group(2).lower()])
         if self.minimum is not None and value < self.minimum:
             minimum = self.minimum
-            _invalid(
-                md_tr(
-                    t"ui-form-duration-minimum = Enter a duration of at least {minimum} seconds.",
-                )
-            )
+            _invalid(self.chrome.form_duration_minimum(minimum))
         if self.maximum is not None and value > self.maximum:
             maximum = self.maximum
-            _invalid(
-                md_tr(
-                    t"ui-form-duration-maximum = Enter a duration no longer than {maximum} seconds.",
-                )
-            )
+            _invalid(self.chrome.form_duration_maximum(maximum))
         return value
 
     @override
@@ -379,21 +353,13 @@ class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         try:
             value = date.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid(tr(t"ui-form-date-format = Enter a date as YYYY-MM-DD."))
+            _invalid(self.chrome.form_date_format)
         if self.minimum is not None and value < self.minimum:
             value = self.minimum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-date-minimum = Enter a date on or after {value}.",
-                )
-            )
+            _invalid(self.chrome.form_date_minimum(value))
         if self.maximum is not None and value > self.maximum:
             value = self.maximum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-date-maximum = Enter a date on or before {value}.",
-                )
-            )
+            _invalid(self.chrome.form_date_maximum(value))
         return value
 
     @override
@@ -416,21 +382,13 @@ class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         try:
             value = TimeValue.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid(tr(t"ui-form-time-format = Enter a time as HH:MM."))
+            _invalid(self.chrome.form_time_format)
         if self.minimum is not None and value < self.minimum:
             value = self.minimum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-time-minimum = Enter a time at or after {value}.",
-                )
-            )
+            _invalid(self.chrome.form_time_minimum(value))
         if self.maximum is not None and value > self.maximum:
             value = self.maximum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-time-maximum = Enter a time at or before {value}.",
-                )
-            )
+            _invalid(self.chrome.form_time_maximum(value))
         return value
 
     @override
@@ -472,35 +430,21 @@ class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         try:
             value = DateTimeValue.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid(tr(t"ui-form-datetime-format = Enter a date and time as YYYY-MM-DD HH:MM."))
+            _invalid(self.chrome.form_datetime_format)
         if value.tzinfo is None or value.utcoffset() is None:
             try:
                 value = resolve_local_datetime(value, self.timezone, self.ambiguous, self.nonexistent)
             except AmbiguousLocalTimeError:
-                _invalid(
-                    tr(
-                        t"ui-form-time-ambiguous = This local time occurs "
-                        t"twice in the selected timezone. Enter a date and time with an explicit UTC "
-                        t"offset."
-                    )
-                )
+                _invalid(self.chrome.form_time_ambiguous)
             except NonexistentLocalTimeError:
-                _invalid(tr(t"ui-form-time-nonexistent = This local time does not exist in the selected timezone."))
+                _invalid(self.chrome.form_time_nonexistent)
         instant = value.astimezone(UTC)
         if self.minimum is not None and instant < self.minimum.astimezone(UTC):
             value = self.minimum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-datetime-minimum = Enter a date and time on or after {value}.",
-                )
-            )
+            _invalid(self.chrome.form_datetime_minimum(value))
         if self.maximum is not None and instant > self.maximum.astimezone(UTC):
             value = self.maximum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-datetime-maximum = Enter a date and time on or before {value}.",
-                )
-            )
+            _invalid(self.chrome.form_datetime_maximum(value))
         return value
 
     @override
@@ -546,7 +490,7 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
         try:
             submitted = DateTimeValue.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid(tr(t"ui-form-datetime-format = Enter a date and time as YYYY-MM-DD HH:MM."))
+            _invalid(self.chrome.form_datetime_format)
         timezone = timezone_from_name(self.timezone)
         try:
             if submitted.tzinfo is None or submitted.utcoffset() is None:
@@ -554,37 +498,19 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
             else:
                 resolved = resolve_offset_datetime(submitted, timezone)
         except AmbiguousLocalTimeError:
-            _invalid(
-                tr(
-                    t"ui-form-time-ambiguous = This local time occurs twice "
-                    t"in the selected timezone. Enter a date and time with an explicit UTC offset."
-                )
-            )
+            _invalid(self.chrome.form_time_ambiguous)
         except NonexistentLocalTimeError:
-            _invalid(tr(t"ui-form-time-nonexistent = This local time does not exist in the selected timezone."))
+            _invalid(self.chrome.form_time_nonexistent)
         except InvalidTimezoneOffsetError:
-            _invalid(
-                tr(
-                    t"ui-form-timezone-offset-mismatch = The UTC offset does not match this "
-                    t"local time in the selected timezone."
-                )
-            )
+            _invalid(self.chrome.form_timezone_offset_mismatch)
 
         value = ZonedDateTime(resolved, self.timezone)
         if self.minimum is not None and value.instant < self.minimum.astimezone(UTC):
             value = self.minimum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-datetime-minimum = Enter a date and time on or after {value}.",
-                )
-            )
+            _invalid(self.chrome.form_datetime_minimum(value))
         if self.maximum is not None and value.instant > self.maximum.astimezone(UTC):
             value = self.maximum.isoformat()
-            _invalid(
-                md_tr(
-                    t"ui-form-datetime-maximum = Enter a date and time on or before {value}.",
-                )
-            )
+            _invalid(self.chrome.form_datetime_maximum(value))
         return value
 
     @override
@@ -631,19 +557,11 @@ class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         except ValueError:
             minimum = self.minimum
             maximum = self.maximum
-            _invalid(
-                md_tr(
-                    t"ui-form-scale-integer = Choose a whole number from {minimum} to {maximum}.",
-                )
-            )
+            _invalid(self.chrome.form_scale_integer(minimum, maximum))
         if not self.minimum <= value <= self.maximum:
             minimum = self.minimum
             maximum = self.maximum
-            _invalid(
-                md_tr(
-                    t"ui-form-scale-range = Choose a value from {minimum} to {maximum}.",
-                )
-            )
+            _invalid(self.chrome.form_scale_range(minimum, maximum))
         return value
 
     @override
@@ -685,7 +603,7 @@ class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[T
         key = str(raw)
         option = next((option for option in self.options if option.key == key), None)
         if option is None:
-            _invalid(tr(t"ui-form-invalid-choice = Choose one of the available options."))
+            _invalid(self.chrome.form_invalid_choice)
         return option.value
 
     @override
@@ -722,24 +640,20 @@ class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Lite
     def parse(self, raw: object) -> tuple[ValueT, ...]:
         if self._missing(raw):
             if self.required:
-                _invalid(tr(t"ui-form-required = This field is required."))
+                _invalid(self.chrome.form_required)
             return ()
         submitted = tuple(str(value) for value in raw) if isinstance(raw, list | tuple) else (str(raw),)
         by_key = {option.key: option for option in self.options}
         if any(key not in by_key for key in submitted):
-            _invalid(tr(t"ui-form-invalid-choices = Choose only from the available options."))
+            _invalid(self.chrome.form_invalid_choices)
         selected = set(submitted)
         values = tuple(option.value for option in self.options if option.key in selected)
         if len(values) < self.minimum:
             minimum = self.minimum
-            _invalid(
-                md_tr(
-                    t"ui-form-selection-minimum = Choose at least {minimum} options.",
-                )
-            )
+            _invalid(self.chrome.form_selection_minimum(minimum))
         maximum = len(self.options) if self.maximum is None else self.maximum
         if len(values) > maximum:
-            _invalid(md_tr(t"ui-form-selection-maximum = Choose no more than {maximum} options."))
+            _invalid(self.chrome.form_selection_maximum(maximum))
         return values
 
     @override
@@ -778,7 +692,7 @@ class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
             return True
         if normalized in {"0", "false", "no", "off"}:
             return False
-        _invalid(tr(t"ui-form-invalid-boolean = Choose yes or no."))
+        _invalid(self.chrome.form_invalid_boolean)
 
 
 @dataclass(frozen=True, slots=True)
@@ -856,12 +770,13 @@ class FormSpec[ContextT = object]:
         """The submitted keys this schema parses, in declaration order."""
         return tuple(field.key for field in self.items if isinstance(field, FormField))
 
-    async def evaluate(self, attempted: Mapping[str, object]) -> FormResult:
+    async def evaluate(self, attempted: Mapping[str, object], *, chrome: Chrome | None = None) -> FormResult:
         """Parse all declared fields and return successful values alongside any validation issues.
 
         Only FormValueError becomes a field issue; unexpected parser exceptions propagate.
         Cross-field validation runs only if every field parsed. Missing keys are passed as
         None, while unknown keys remain in attempted but do not enter parsed values.
+        Supply chrome to override built-in parse messages for this submission.
         """
         raw = MappingProxyType(dict(attempted))
         values: dict[str, object] = {}
@@ -870,7 +785,8 @@ class FormSpec[ContextT = object]:
             if not isinstance(field, FormField):
                 continue
             try:
-                values[field.key] = field.parse(raw.get(field.key))
+                parser = replace(field, chrome=chrome) if chrome is not None else field
+                values[field.key] = parser.parse(raw.get(field.key))
             except FormValueError as error:
                 errors.append(FieldError(field, message=error.message))
         if not errors and self.validator is not None:

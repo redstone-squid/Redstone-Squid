@@ -2543,7 +2543,7 @@ class MessageRoot[
         async with self._interaction_tasks(interaction, profile):
             try:
                 with profile.operation.span("form_evaluation"):
-                    evaluation = await spec.evaluate(values)
+                    evaluation = await spec.evaluate(values, chrome=self.chrome)
                 context = await self._event_context(interaction)
                 actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
                 responder = ActionResponder(interaction, self)

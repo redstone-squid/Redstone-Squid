@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.bot.chrome import CHROME
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.settings.application import SettingsService
 from squid_i18n import Localization, Text, localization_scope
@@ -68,6 +69,8 @@ class SquidAppCommandTranslator(app_commands.Translator):
             return None  # Let discord.py fall back to the source string.
         with localization_scope(localization_for(resolved)):
             message = string.extras.get("fluent_message")
+            if field := string.extras.get("chrome_field"):
+                message = Text(getattr(CHROME, field))
             if not isinstance(message, Text):
                 return None
             return message.resolve()

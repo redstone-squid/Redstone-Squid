@@ -9,15 +9,15 @@ the layout and handle delivery, using the caller's render-time localization.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
-from math import ceil
 from typing import Any
 
 import discord
 
 import squid_ui as ui
 import squid_ui.ext.discord as sd
+from squid.bot.chrome import CHROME
 from squid.core.i18n import tr
-from squid_i18n import Text, md_tr
+from squid_i18n import Text
 
 
 class DiscordColour(IntEnum):
@@ -76,106 +76,6 @@ class CardSection:
     fields: Sequence[CardField]
 
 
-def _try_again_in(seconds: float) -> ui.text.Text:
-    """Round a guard's remaining cooldown up to whole seconds before wording it."""
-    whole = max(1, ceil(seconds))
-    return md_tr(t"bot-ui-try-again-in-seconds = Try again in {whole} seconds.")
-
-
-def _chrome_step_progress(step: int, steps: int) -> ui.TextLike:
-    return md_tr(t"ui-chrome-step-progress = Step {step} of {steps}")
-
-
-def _chrome_range_footer(first: int, last: int) -> ui.TextLike:
-    return md_tr(t"ui-chrome-range-footer = {first}\N{EN DASH}{last}")
-
-
-def _chrome_approximate_total_footer(first: int, last: int, total: int) -> ui.TextLike:
-    return md_tr(t"ui-chrome-approximate-total-footer = {first}\N{EN DASH}{last} of ~{total}")
-
-
-def _chrome_total_range_footer(first: int, last: int, total: int) -> ui.TextLike:
-    return md_tr(t"ui-chrome-total-range-footer = {first}\N{EN DASH}{last} of {total}")
-
-
-def _chrome_page_option(page: int) -> ui.TextLike:
-    return md_tr(t"ui-chrome-page-option = Page {page}")
-
-
-def _chrome_slot_count(count: int, capacity: int | None) -> ui.TextLike:
-    return (
-        md_tr(t"ui-chrome-slot-count = {count}")
-        if capacity is None
-        else md_tr(t"ui-chrome-slot-capacity = {count}/{capacity}")
-    )
-
-
-def _chrome_approved_count(count: int, total: int) -> ui.TextLike:
-    return md_tr(t"ui-chrome-approved-count = Approved: {count}/{total}")
-
-
-CHROME = ui.chrome.Chrome(
-    and_n_more=lambda count: md_tr(t"bot-ui-and-more = …and {count} more."),
-    not_yours=tr(t"ui-list-controls-not-owned = These list controls belong to someone else."),
-    session_ended=tr(t"bot-ui-this-session-has-ended = This session has ended."),
-    not_now=tr(t"bot-ui-you-can-t-do-that-right-now = You can't do that right now."),
-    try_again_in=_try_again_in,
-    working=tr(t"bot-ui-working = Working…"),
-    updates_paused=tr(
-        t"bot-ui-live-updates-paused-press-any-control-to = Live updates paused — press any control to resume."
-    ),
-    session_expiring=tr(t"bot-ui-this-session-is-about-to-expire = This session is about to expire."),
-    continue_session=tr(t"bot-ui-continue-session = Continue Session"),
-    sent_privately=tr(t"bot-ui-sent-by-direct-message = Sent by direct message."),
-    dm_unavailable=tr(
-        t"bot-ui-this-reply-is-too-private-for-a = This reply is too private for a channel, and your "
-        t"direct messages are closed. Run the command in a direct message, or allow direct messages and "
-        t"retry."
-    ),
-    previous=tr(t"bot-ui-previous = Previous"),
-    next=tr(t"bot-ui-next = Next"),
-    back=tr(t"bot-ui-back = Back"),
-    home=tr(t"bot-ui-home = Home"),
-    close=tr(t"bot-ui-close = Close"),
-    on=tr(t"bot-ui-on = On"),
-    off=tr(t"bot-ui-off = Off"),
-    download=tr(t"bot-ui-download = Download"),
-    confirm=tr(t"bot-ui-confirm = Confirm"),
-    cancel=tr(t"bot-ui-cancel = Cancel"),
-    apply=tr(t"bot-ui-apply = Apply"),
-    save=tr(t"bot-ui-save = Save"),
-    unsaved=tr(t"bot-ui-unsaved-changes = Unsaved changes"),
-    search=tr(t"bot-ui-search = Search"),
-    no_results=tr(t"bot-ui-no-results = No results"),
-    decided=lambda label: md_tr(t"bot-ui-you-chose = You chose {label}."),
-    add=tr(t"bot-ui-add = Add"),
-    edit=tr(t"bot-ui-edit = Edit"),
-    remove=tr(t"bot-ui-remove = Remove"),
-    move_up=tr(t"bot-ui-move-up = Move up"),
-    move_down=tr(t"bot-ui-move-down = Move down"),
-    review=tr(t"bot-ui-review = Review"),
-    finish=tr(t"bot-ui-finish = Finish"),
-    unanswered=tr(t"bot-ui-not-answered-yet = Not answered yet"),
-    page_footer=lambda page, pages: md_tr(t"bot-ui-page-of = Page {page} of {pages}"),
-    changed_elsewhere=tr(t"ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again."),
-    older=tr(t"ui-chrome-older = Older"),
-    newer=tr(t"ui-chrome-newer = Newer"),
-    undo=tr(t"ui-chrome-undo = Undo"),
-    redo=tr(t"ui-chrome-redo = Redo"),
-    continue_step=tr(t"ui-chrome-continue = Continue"),
-    step_progress=_chrome_step_progress,
-    range_footer=_chrome_range_footer,
-    approximate_total_footer=_chrome_approximate_total_footer,
-    total_range_footer=_chrome_total_range_footer,
-    jump_to_page=tr(t"ui-chrome-jump-to-page = Jump to a page"),
-    page_option=_chrome_page_option,
-    waitlist=tr(t"ui-chrome-waitlist = Waitlist"),
-    full=tr(t"ui-chrome-full = Full"),
-    slot_count=_chrome_slot_count,
-    approve=tr(t"ui-chrome-approve = Approve"),
-    withdraw=tr(t"ui-chrome-withdraw = Withdraw"),
-    approved_count=_chrome_approved_count,
-)
 _OPEN_LINK = tr(t"bot-ui-open-link = Open link")
 
 PALETTES = ui.PaletteRegistry(

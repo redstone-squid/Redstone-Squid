@@ -13,9 +13,9 @@ presentation session, or the application through `Controlled.on_change`.
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from typing import Self, cast, override
 
-from squid_i18n import md_tr, tr
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import TextLike
 from squid_ui.context import ContextKey
@@ -203,6 +203,7 @@ class NavigationContext:
     cursor always knows its own extent, so it always offers one.
     """
 
+    chrome: Chrome = dataclass_field(default=DEFAULT_CHROME, kw_only=True)
     jump_route: str | None = None
     """Persistent button route that opens a page-number form, when provided by the host."""
 
@@ -307,7 +308,9 @@ def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     return (navigation_controls(context),) if control is None else (navigation_controls(context), control)
 
 
-def page_jump_form(page: int, pages: int, *, title: TextLike = DEFAULT_CHROME.jump_to_page) -> FormSpec:
+def page_jump_form(
+    page: int, pages: int, *, title: TextLike | None = None, chrome: Chrome = DEFAULT_CHROME
+) -> FormSpec:
     """Ask for a 1-based page number; ``page`` is the zero-based current page.
 
     Routed hosts can present this schema and pass the parsed ``page`` minus one
@@ -317,12 +320,13 @@ def page_jump_form(page: int, pages: int, *, title: TextLike = DEFAULT_CHROME.ju
         msg = "page must address one of the available pages"
         raise ValueError(msg)
     return FormSpec(
-        title,
+        chrome.jump_to_page if title is None else title,
         (
             IntField(
                 key="page",
-                label=tr(t"ui-page-jump-number = Page number"),
-                description=md_tr(t"ui-page-jump-range = Enter a page from 1 to {pages}."),
+                chrome=chrome,
+                label=chrome.page_jump_number,
+                description=chrome.page_jump_range(pages),
                 minimum=1,
                 maximum=pages,
                 default=page + 1,
@@ -342,18 +346,18 @@ def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     seek = context.on_seek
     if state.page is None or state.extent is None or state.extent < 2:
         return (row,)
-    label = state.seek_label or DEFAULT_CHROME.jump_to_page
+    label = state.seek_label or context.chrome.jump_to_page
     if context.jump_route is not None:
         return (Row((*row.items, RoutedButton(label, context.jump_route))),)
     if not callable(seek):
         return (row,)
     form = FormBinding(
         f"{state.seek_key}.jump",
-        page_jump_form(state.page, state.extent, title=label),
+        page_jump_form(state.page, state.extent, title=label, chrome=context.chrome),
         _JumpSubmit(seek),
         ActionMode.REBASE,
         label,
-        unavailable=tr(t"ui-page-jump-unavailable = This pager is no longer available."),
+        unavailable=context.chrome.page_jump_unavailable,
     )
     button = FormButton(label, _PresentJump(form), form.key, mode=form.mode, form=form)
     return (Row((*row.items, button)),)
@@ -399,10 +403,13 @@ class PagerNav:
                     owner.route(min(extent - 1, page + 1)),
                     owner.seek_route() if owner.seek_route is not None else None,
                     owner.jump_route(page, extent) if owner.jump_route is not None else None,
+                    chrome=chrome,
                 )
             )
         commit = PageCommit(owner, key, extent, self.session, self.staged)
-        return self.factory(NavigationContext(state, TurnPage(commit, page - 1), TurnPage(commit, page + 1), commit))
+        return self.factory(
+            NavigationContext(state, TurnPage(commit, page - 1), TurnPage(commit, page + 1), commit, chrome=chrome)
+        )
 
 
 __all__ = [

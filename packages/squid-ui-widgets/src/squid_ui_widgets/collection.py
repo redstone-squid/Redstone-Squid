@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
-from squid_i18n import NUMBER
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import ControlDisplay, FormTrigger, Tone
-from squid_ui.content.text import Text, TextLike, tr
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_controls, choice, heading, stack, status
 from squid_ui.interactions.forms import Form, FormLike, FormSpec
 from squid_ui_widgets._actions import MachineKeySegment, WindowSelection
@@ -140,28 +140,14 @@ class CollectionEditor:
         """Project state to its ordered public form-value mappings."""
         return tuple(self._mapping(entry) for entry in state.entries)
 
-    def errors(self, state: CollectionState) -> tuple[TextLike, ...]:
+    def errors(self, state: CollectionState, *, chrome: Chrome = DEFAULT_CHROME) -> tuple[TextLike, ...]:
         """Return collection-bound violations for `state`."""
         errors: list[TextLike] = []
         minimum, maximum = self.minimum, self.maximum
         if len(state.entries) < minimum:
-            errors.append(
-                tr(t"""
-                    widgets-collection-too-few = {{ {NUMBER(minimum)} ->
-                        [one] Add at least {NUMBER(minimum)} entry.
-                       *[other] Add at least {NUMBER(minimum)} entries.
-                    }}
-                    """)
-            )
+            errors.append(chrome.collection_too_few(minimum))
         if maximum is not None and len(state.entries) > maximum:
-            errors.append(
-                tr(t"""
-                    widgets-collection-too-many = {{ {NUMBER(maximum)} ->
-                        [one] Keep no more than {NUMBER(maximum)} entry.
-                       *[other] Keep no more than {NUMBER(maximum)} entries.
-                    }}
-                    """)
-            )
+            errors.append(chrome.collection_too_many(maximum))
         return tuple(errors)
 
     def _selected_index(self, state: CollectionState) -> int | None:
@@ -315,7 +301,7 @@ class CollectionEditor:
         )
         return stack(
             heading(self.title),
-            *(status(message, tone=Tone.DANGER) for message in self.errors(state)),
+            *(status(message, tone=Tone.DANGER) for message in self.errors(state, chrome=controls.chrome)),
             picker,
             edit_node,
             entry_actions,

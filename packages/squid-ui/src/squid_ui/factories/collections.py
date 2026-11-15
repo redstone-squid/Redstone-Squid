@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from string.templatelib import Template
 
-from squid_i18n import NUMBER, Text, emoji_text, md_tr, strong
+from squid_i18n import Text, emoji_text, strong
 from squid_ui.authoring.grids import GridCell
 from squid_ui.authoring.rosters import RosterPlacement
 from squid_ui.authoring.semantic import (
@@ -35,6 +35,7 @@ from squid_ui.authoring.semantic import (
     TableRow,
 )
 from squid_ui.authoring.tallies import TallyOption
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.assets import FileInput
 from squid_ui.content.text import TextLike
 from squid_ui.factories._inputs import ChildLike, Conditional, TextValue, _children, _collect
@@ -177,10 +178,10 @@ def grid[ContextT = object](
     return Grid(key, _collect(cells, (GridCell,), "sl.grid()"), columns, on_pick, flexibility)
 
 
-def _tally_label(option: TallyOption) -> Text:
+def _tally_label(option: TallyOption, chrome: Chrome) -> Text:
     label = strong(option.label) if option.mine else option.label
     count = option.count
-    result = md_tr(t"ui-tally-option = {label} — {NUMBER(count)}")
+    result = Text(chrome.tally_option(label, count))
     return Text(t"{emoji_text(option.emoji)} {result}") if option.emoji is not None else result
 
 
@@ -192,6 +193,7 @@ def tally[ContextT = object](
     route_id: str | None = None,
     total: int | None = None,
     show_bars: bool = True,
+    chrome: Chrome = DEFAULT_CHROME,
 ) -> Stack[RenderTarget, ContextT]:
     """Render host-owned counts with optional mounted or routed selection."""
     if not options:
@@ -214,7 +216,7 @@ def tally[ContextT = object](
         if show_bars
         else ()
     )
-    entries = tuple(choice(_tally_label(option), key=option.key) for option in options)
+    entries = tuple(choice(_tally_label(option, chrome), key=option.key) for option in options)
     if on_vote is not None:
         vote = _TallySelection(on_vote)
 
@@ -227,7 +229,7 @@ def tally[ContextT = object](
         control = routed_choices(*entries, route_id=route_id, key=key)
     else:
         control = bullets(
-            *(bullet(_tally_label(option), key=option.key) for option in options),
+            *(bullet(_tally_label(option, chrome), key=option.key) for option in options),
             key=f"{key}.options",
         )
     return stack(*bars, control)

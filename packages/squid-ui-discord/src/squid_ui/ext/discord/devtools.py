@@ -12,11 +12,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context
-from squid_i18n import tr
+from squid_i18n import source_text
 from squid_reactivity.diagnostics import (
     EventLedger,
 )
 from squid_reactivity.topics import TopicBus
+from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.ext.discord.access import Owner
 from squid_ui.ext.discord.cog import Cog
 from squid_ui.ext.discord.contracts import ResponseSource
@@ -27,7 +28,6 @@ from squid_ui.ext.discord.devtools_view import (
     DevToolsSection,
     OperationalInspector,
 )
-from squid_ui.ext.discord.i18n import to_locale_str
 from squid_ui.ext.discord.message_root import MessageRoot
 from squid_ui.ext.discord.message_root_scheduler import MessageRootScheduler
 from squid_ui.ext.discord.request import request
@@ -38,6 +38,11 @@ from squid_ui.profiling import Profiler
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
 SESSION_SECONDS = 300
+
+
+def _command_wording(field: str) -> app_commands.locale_str:
+    """Expose a Chrome field to the host's discord.py command translator."""
+    return app_commands.locale_str(source_text(getattr(DEFAULT_CHROME, field), format="plain"), chrome_field=field)
 
 
 async def _owner_only[BotT: commands.Bot](ctx: Context[BotT]) -> bool:
@@ -125,9 +130,9 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         return await self._check(ctx)
 
     @commands.hybrid_group(
-        to_locale_str(tr(t"command-dev-name = dev")),
+        _command_wording("dev_name"),
         hidden=True,
-        description=to_locale_str(tr(t"command-dev-help = Development-only operational diagnostics.")),
+        description=_command_wording("dev_help"),
     )
     @discord.app_commands.default_permissions(administrator=True)
     async def dev_group(self, ctx: Context[BotT]) -> None:
@@ -135,23 +140,21 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         await ctx.send_help("dev")
 
     @dev_group.command(
-        to_locale_str(tr(t"command-dev-ui-name = ui")),
-        description=to_locale_str(tr(t"command-dev-ui-help = Open the unified operational dashboard.")),
+        _command_wording("dev_ui_name"),
+        description=_command_wording("dev_ui_help"),
     )
-    @app_commands.rename(tab=to_locale_str(tr(t"command-dev-ui-tab-name = tab")))
-    @app_commands.describe(tab=to_locale_str(tr(t"command-dev-ui-tab-help = The dashboard tab to open first.")))
+    @app_commands.rename(tab=_command_wording("dev_ui_tab_name"))
+    @app_commands.describe(tab=_command_wording("dev_ui_tab_help"))
     @app_commands.choices(
         tab=[
-            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-overview = overview")), value="overview"),
-            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-roots = roots")), value="roots"),
-            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-sessions = sessions")), value="sessions"),
-            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-routes = routes")), value="routes"),
-            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-activity = activity")), value="activity"),
-            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-queues = queues")), value="queues"),
-            app_commands.Choice(name=to_locale_str(tr(t"command-dev-ui-choice-profile = profile")), value="profile"),
-            app_commands.Choice(
-                name=to_locale_str(tr(t"command-dev-ui-choice-persistence = persistence")), value="persistence"
-            ),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_overview"), value="overview"),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_roots"), value="roots"),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_sessions"), value="sessions"),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_routes"), value="routes"),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_activity"), value="activity"),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_queues"), value="queues"),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_profile"), value="profile"),
+            app_commands.Choice(name=_command_wording("dev_ui_choice_persistence"), value="persistence"),
         ]
     )
     async def ui_command(

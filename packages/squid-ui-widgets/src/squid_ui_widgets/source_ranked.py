@@ -162,6 +162,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
                     partial(self._move, "previous", self.session.revision),
                     partial(self._move, "next", self.session.revision),
                     partial(self._seek, self.session.revision) if navigation_state.extent is not None else None,
+                    chrome=chrome,
                 )
             )
             if navigation_state is not None
