@@ -18,9 +18,9 @@ from squid_ui.ext.discord.messages.candidates import (
     _ApplicationCandidate,
     _Candidate,
     _LifecycleCandidate,
+    _MessagePlan,
     _PlanEnvironment,
     _PlannedCandidate,
-    _PlannedContinuation,
 )
 from squid_ui.ext.discord.messages.contracts import MessageRootStatus
 from squid_ui.ext.discord.messages.wiring import AnyMountedView
@@ -46,7 +46,7 @@ class _LiveContinuation:
     keeps the controls of the generation that last wrote it.
     """
 
-    planned: _PlannedContinuation
+    planned: _MessagePlan
     view: AnyMountedView | None
     generation: int
 

@@ -6,8 +6,8 @@ profile and busy paint carry one action's operation-local facts through the same
 """
 
 import asyncio
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, fields, is_dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import discord
@@ -16,6 +16,7 @@ from squid_ui.authoring.document import Asset
 from squid_ui.chrome import Chrome
 from squid_ui.content.text import Localization, TextLike
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord.messages.attachments import attachment_assets
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.messages.wiring import AnyMountedView
 from squid_ui.ext.discord.rendering import RenderedMessage
@@ -59,19 +60,50 @@ class _RenewalBinding(ActionBinding):
 
 
 @dataclass(frozen=True, slots=True)
-class _PlannedContinuation:
-    """One message after the first, for a render that max_messages let spread out.
-
-    The first message stays on the candidate itself; these are the others in reading order.
-    `keys` are the action keys drawn in this message, which is how a press is traced back
-    to the message it came from.
-    """
+class _MessagePlan:
+    """One message's scene, visible action bindings, and upload assets."""
 
     plan: PlanResult
-    keys: frozenset[str]
+    bindings: Mapping[str, ActionBinding]
     assets: tuple[Asset, ...]
 
-    def shows(self, other: _PlannedContinuation) -> bool:
+    @property
+    def keys(self) -> frozenset[str]:
+        return frozenset(self.bindings)
+
+    @classmethod
+    def from_plan(cls, plan: PlanResult) -> _MessagePlan:
+        """Resolve only visible controls, rejecting scene references without bindings."""
+        bindings: dict[str, ActionBinding] = {}
+
+        def collect(node: scene.Node) -> None:
+            match node:
+                case scene.Button(action=key) | scene.Select(action=key) | scene.EntitySelect(action=key):
+                    binding = plan.bindings.get(key)
+                    if binding is None:
+                        message = f"scene action {key!r} has no binding"
+                        raise LayoutInvariantError(message)
+                    bindings[key] = binding
+                case scene.Row(items=children) | scene.Panel(children=children):
+                    for child in children:
+                        collect(child)
+                case scene.Section(accessory=accessory):
+                    collect(accessory)
+
+        match plan.scene.body:
+            case scene.ComponentsV2(children=children):
+                for child in children:
+                    collect(child)
+            case scene.ClassicMessage(rows=rows):
+                for row in rows:
+                    for control in row.controls:
+                        collect(control)
+            case _:
+                message = "a Discord message plan requires a classic or Components V2 scene"
+                raise LayoutInvariantError(message)
+        return cls(plan, bindings, attachment_assets(plan))
+
+    def shows(self, other: _MessagePlan) -> bool:
         """Whether a message showing `other` already looks and responds like this one."""
         return (
             self.plan.report.scene_fingerprint == other.plan.report.scene_fingerprint
@@ -84,7 +116,7 @@ class _PlannedContinuation:
 class _DrawnContinuation:
     """A planned continuation drawn into a view, and whether delivery reached its message."""
 
-    planned: _PlannedContinuation
+    planned: _MessagePlan
     view: AnyMountedView
     rendered: RenderedMessage[Any, Any]
     written: bool = False
@@ -123,7 +155,7 @@ class _Candidate[RenderTargetT: DiscordTarget]:
         return self.render.settled
 
     @property
-    def planned_continuations(self) -> tuple[_PlannedContinuation, ...]:
+    def planned_continuations(self) -> tuple[_MessagePlan, ...]:
         return tuple(continuation.planned for continuation in self.continuations)
 
     @property
@@ -151,7 +183,7 @@ class _PlannedCandidate[RenderTargetT: DiscordTarget]:
     form_bindings: Mapping[str, FormBinding]
     assets: tuple[Asset, ...]
     session_updates: tuple[SessionUpdate, ...]
-    continuations: tuple[_PlannedContinuation, ...] = ()
+    continuations: tuple[_MessagePlan, ...] = ()
     anchors: tuple[str | None, ...] = ()
 
     @property
@@ -163,7 +195,7 @@ class _PlannedCandidate[RenderTargetT: DiscordTarget]:
         return self.render.settled
 
     @property
-    def planned_continuations(self) -> tuple[_PlannedContinuation, ...]:
+    def planned_continuations(self) -> tuple[_MessagePlan, ...]:
         return self.continuations
 
 
@@ -191,30 +223,6 @@ def _drawn[RenderTargetT: DiscordTarget](
         message = "an undrawn preflight candidate did not match the live scene"
         raise LayoutInvariantError(message)
     return candidate
-
-
-def _scene_action_keys(document: scene.Scene) -> tuple[str, ...]:
-    """Collect visible action references without allocating frontend controls."""
-    found: list[str] = []
-
-    def walk(value: object) -> None:
-        if isinstance(value, scene.Button | scene.Select | scene.EntitySelect):
-            found.append(value.action)
-            return
-        if is_dataclass(value) and not isinstance(value, type):
-            for item in fields(value):
-                walk(getattr(value, item.name))
-            return
-        if isinstance(value, Mapping):
-            for item in value.values():
-                walk(item)
-            return
-        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-            for item in value:
-                walk(item)
-
-    walk(document.body)
-    return tuple(found)
 
 
 @dataclass(slots=True)

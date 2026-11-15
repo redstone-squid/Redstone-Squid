@@ -57,7 +57,7 @@ from squid_ui.ext.discord.classic import render_message as render_classic_messag
 from squid_ui.ext.discord.classic_renderer import ClassicRenderer
 from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.lifetime import Lifetime
-from squid_ui.ext.discord.messages.attachments import attachment_assets, files_for
+from squid_ui.ext.discord.messages.attachments import files_for
 from squid_ui.ext.discord.messages.authority import _MessageDelivery
 from squid_ui.ext.discord.messages.candidates import (
     _ApplicationCandidate,
@@ -67,11 +67,10 @@ from squid_ui.ext.discord.messages.candidates import (
     _drawn,
     _DrawnContinuation,
     _LifecycleCandidate,
+    _MessagePlan,
     _PlanEnvironment,
     _PlannedCandidate,
-    _PlannedContinuation,
     _RenewalBinding,
-    _scene_action_keys,
     _SubmitBinding,
 )
 from squid_ui.ext.discord.messages.continuations import _Continuations, _DeliveryReport
@@ -123,7 +122,7 @@ from squid_ui.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
-from squid_ui.interactions.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
+from squid_ui.interactions.forms import FormSpec, FormValidationMode, SubmitHandler
 from squid_ui.interactions.guards import Challenge, GuardLedger, approvals
 from squid_ui.palette import Palette
 from squid_ui.planning.adapter import (
@@ -923,28 +922,15 @@ class MessageRoot[
         )
         if degraded:
             logger.warning("layout degraded: %s", "; ".join(event.message for event in degraded))
-        handlers: dict[str, ActionBinding] = {}
-        form_bindings: dict[str, FormBinding] = dict(result.form_bindings)
-        continuations: list[_PlannedContinuation] = []
-        for message in (result, *later):
-            keys = tuple(_scene_action_keys(message.scene))
-            for key in keys:
-                binding = message.bindings.get(key)
-                if binding is None:
-                    text = f"scene action {key!r} has no binding"
-                    raise LayoutInvariantError(text)
-                handlers[key] = binding
-            if message is not result:
-                form_bindings.update(message.form_bindings)
-                continuations.append(_PlannedContinuation(message, frozenset(keys), attachment_assets(message)))
+        messages = tuple(_MessagePlan.from_plan(message) for message in (result, *later))
         return _PlannedCandidate(
             result,
             self.runtime.stage(tree),
-            handlers,
-            form_bindings,
-            attachment_assets(result),
+            {key: binding for message in messages for key, binding in message.bindings.items()},
+            {key: binding for message in messages for key, binding in message.plan.form_bindings.items()},
+            messages[0].assets,
             result.session_updates,
-            tuple(continuations),
+            messages[1:],
             anchors,
         )
 
@@ -1001,7 +987,7 @@ class MessageRoot[
                 raise TypeError(message)
             return view, rendered
 
-        def draw_continuation(planned: _PlannedContinuation) -> _DrawnContinuation:
+        def draw_continuation(planned: _MessagePlan) -> _DrawnContinuation:
             # No timeout of its own: the first message's view owns the root's idle timer.
             presentation = self._renderer(None).draw(planned.plan.scene, plan=planned.plan, wire=wire)
             later = RenderedMessage(presentation, planned.plan)
