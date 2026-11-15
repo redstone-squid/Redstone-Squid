@@ -16,6 +16,7 @@ from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.navigation.destinations import BuildDetail, BuildIndex
 from squid.bot.navigation.router import screen_route
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
+from squid.bot.submission.list_rows import build_row
 from squid.bot.submission.query_clauses import query_leaves
 from squid.bot.submission.record_browser import CATALOGUE_PAGE_SIZE, record_browser
 from squid.bot.submission.records import RecordsScreen
@@ -826,16 +827,9 @@ def _build_label(build: Build) -> str:
 
 
 def _build_summary(build: Build) -> sl.TextLike:
-    """A compact list entry; the full card is reserved for an opened build.
-
-    The title already names the category and marks pending builds, so the entry adds only the
-    build's outer size, when any of it is known.
-    """
-    title = build.one_line_title
-    if all(value is None for value in build.dimensions):
-        return sl.md(t"**#{build.id}** {title}")
-    size = " x ".join(str(value) if value is not None else "?" for value in build.dimensions)
-    return sl.md(t"**#{build.id}** {title} — {size}")
+    """A compact list entry; the full card is reserved for an opened build."""
+    assert build.id is not None
+    return build_row(build.id, build.one_line_title, build.dimensions)
 
 
 class _OpenBuildForm(sl.forms.Form):

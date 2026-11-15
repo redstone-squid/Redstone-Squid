@@ -7,6 +7,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.follows import follow_control
+from squid.bot.submission.list_rows import record_row
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.pagination import PageSelector
 from squid.notifications.domain import SubscriptionKind
@@ -53,9 +54,7 @@ def _record_label(record: PublishedTitle) -> str:
 
 
 def _record_summary(record: PublishedTitle) -> sl.TextLike:
-    title = record.one_line_title
-    scope = record.version_scope.replace("_", " ")
-    return sl.md(t"**{title}** — {scope}")
+    return record_row(record.one_line_title, record.version_scope)
 
 
 def record_browser(

@@ -248,30 +248,35 @@ def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() 
         return SearchRequest("2x2", scope=scope, group_by_build=True)
 
     records = source_text(_result_description(hit, grouped()), format="plain")
-    # Records show their subtitle, since many records share a title.
+    # Results use the catalogue's rows: a record search leads with the record, then its build.
     assert records.splitlines() == [
-        "Smallest 2x2 Door · Java Edition",
-        "Build #42 · 2x2 Seamless Door",
-        "Fastest 2x2 Door · Java Edition",
+        "Smallest 2x2 Door · Java Edition — all time",
+        "#42 2x2 Seamless Door",
+        "Fastest 2x2 Door · Java Edition — all time",
     ]
     for scope in (SearchScope.BUILDS, SearchScope.ALL):
         description = source_text(_result_description(hit, grouped(scope)), format="plain")
         assert description.splitlines() == [
-            "2x2 Seamless Door",
-            "Build #42",
-            "Smallest 2x2 Door · Java Edition",
-            "Fastest 2x2 Door · Java Edition",
+            "#42 2x2 Seamless Door",
+            "Smallest 2x2 Door · Java Edition — all time",
+            "Fastest 2x2 Door · Java Edition — all time",
         ]
     same = replace(hit, title="Smallest 2x2 Door", title_match=None, records=hit.records[:1])
     for scope in (SearchScope.BUILDS, SearchScope.ALL):
         assert source_text(_result_description(same, grouped(scope)), format="plain").splitlines() == [
-            "Smallest 2x2 Door",
-            "Build #42",
+            "#42 Smallest 2x2 Door",
         ]
     assert source_text(_result_description(same, grouped()), format="plain").splitlines() == [
-        "Smallest 2x2 Door · Java Edition",
-        "Build #42",
+        "Smallest 2x2 Door · Java Edition — all time",
+        "#42 Smallest 2x2 Door",
     ]
+    # Only matched words are bold, so highlighting stands out from the row.
+    assert (
+        source_text(
+            _result_description(replace(hit, dimensions=(3, 4, None)), grouped(SearchScope.BUILDS)), format="markdown"
+        ).splitlines()[0]
+        == "#42 **2x2** Seamless Door — 3 x 4 x ?"
+    )
     assert "**2x2**" in source_text(_result_description(hit, grouped()), format="markdown")
     assert _result_label(hit, grouped()) == "Smallest 2x2 Door · Java Edition · #42"
     assert _result_label(replace(hit, source_id="57"), grouped()) == "Smallest 2x2 Door · Java Edition · #57"

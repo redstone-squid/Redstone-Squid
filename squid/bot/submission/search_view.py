@@ -9,6 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
+from squid.bot.submission.list_rows import build_row, record_row
 from squid.bot.ui import tr, truncate_display_text
 from squid.builds.domain import Status
 from squid.builds.models import Build
@@ -506,32 +507,33 @@ def _highlighted(value: SearchText) -> Text:
 
 
 def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
-    if isinstance(hit, BuildSearchHit) and request.group_by_build:
-        scope = request.scope
-        title = _result_title(hit, request)
-        build_id = hit.source_id
-        identity = tr(t"search-grouped-build-identity = Build #{build_id}")
-        if scope is SearchScope.RECORDS and hit.title != title.text:
-            identity += " · " + _highlighted(hit.title_match or SearchText(hit.title))
-        records = hit.records[1:] if scope is SearchScope.RECORDS else hit.records
-        if scope in {SearchScope.BUILDS, SearchScope.ALL} and len(records) == 1 and records[0].title == title.text:
-            records = ()
-        heading = _highlighted(title)
-        if subtitle := _heading_subtitle(hit, request):
-            heading += f" · {subtitle}"
-        lines: list[sl.TextLike] = [heading, identity]
-        lines.extend(_record_line(record) for record in records[:2])
-        if len(records) > 2:
-            count = len(records) - 2
+    """Describe a result with the same rows as the catalogue, with matched words in bold."""
+    if isinstance(hit, BuildSearchHit):
+        build = build_row(hit.source_id, _highlighted(hit.title_match or SearchText(hit.title)), hit.dimensions)
+        if not request.group_by_build:
+            return build
+        if request.scope is SearchScope.RECORDS and hit.records:
+            # A record search is about records: lead with the best one, then the build holding it.
+            others = hit.records[1:]
+            lines: list[sl.TextLike] = [_record_row(hit.records[0]), build]
+        else:
+            others = hit.records
+            # A build whose only record repeats its title adds nothing.
+            if len(others) == 1 and others[0].title == hit.title:
+                others = ()
+            lines = [build]
+        lines.extend(_record_row(record) for record in others[:2])
+        if len(others) > 2:
+            count = len(others) - 2
             lines.append(tr(t"search-grouped-more-records = +{count} more records"))
         return Text.join("\n", lines)
     if isinstance(hit, RecordSearchHit):
-        build_title = hit.build_title
-        return sl.md(t"**{hit.title}** — {build_title}")
-    if isinstance(hit, BuildSearchHit):
-        status = hit.status
-        return sl.md(t"**{hit.title}** · {status}")
+        return _record_row(hit)
     return Text.join("\n", (_highlighted(hit.title_match or SearchText(hit.title)), _metadata_label(hit.metadata_kind)))
+
+
+def _record_row(record: RecordSearchHit) -> Text:
+    return record_row(_record_line(record), record.version_scope)
 
 
 def _detail_text(hit: SearchHit) -> sl.TextLike:
