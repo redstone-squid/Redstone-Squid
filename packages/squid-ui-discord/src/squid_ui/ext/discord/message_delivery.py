@@ -26,9 +26,16 @@ class _MessageDelivery:
     def renew(self, handle: deliver.EditHandle) -> None:
         if self.handle is not None and self.handle.permanent:
             return
+        self.adopt(handle)
+
+    def adopt(self, handle: deliver.EditHandle) -> bool:
+        """Accept replacement authority unless it would downgrade a permanent handle."""
+        if self.handle is not None and self.handle.permanent and not handle.permanent:
+            return False
         self.handle = handle
         if hasattr(handle, "delete"):
             self.delete_handle = cast(deliver.DeleteHandle, handle)
+        return True
 
     async def write(
         self,

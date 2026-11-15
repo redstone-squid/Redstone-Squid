@@ -585,9 +585,8 @@ class MessageRoot[
             if handle.expired():
                 message = "cannot adopt an expired edit handle"
                 raise deliver.StaleHandleError(message)
-            if self._primary.handle is not None and self._primary.handle.permanent and not handle.permanent:
+            if not self._primary.adopt(handle):
                 return
-            self._primary.handle = handle
             if handle.permanent:
                 self._ephemeral = False
             if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
@@ -1963,7 +1962,7 @@ class MessageRoot[
             else:
                 # Adopt before staging or responding. A failed restore remains armed but now
                 # has the authority needed for another attempt.
-                self._primary.handle = source
+                self._primary.renew(source)
                 try:
                     candidate = await self._stage_loaded(profile=profile.operation)
                 except Exception as error:
