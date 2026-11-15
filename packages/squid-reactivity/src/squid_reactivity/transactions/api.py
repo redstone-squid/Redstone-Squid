@@ -63,15 +63,15 @@ class Transaction:
 
     def after_commit(self, callback: Callable[[TransactionCommit], None], *, key: object | None = None) -> None:
         """Run after commit; callback failures cannot change the committed result."""
-        self._check_current().add_commit_hook(callback, key=key)
+        self._require_active_engine().add_commit_hook(callback, key=key)
 
     def after_rollback(self, callback: Callable[[TransactionRollback], None], *, key: object | None = None) -> None:
         """Run after rollback; callback failures cannot change the discarded result."""
-        self._check_current().add_rollback_hook(callback, key=key)
+        self._require_active_engine().add_rollback_hook(callback, key=key)
 
     def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
         """Run after either outcome. Further writes require a new transaction."""
-        self._check_current().add_result_hook(callback, key=key)
+        self._require_active_engine().add_result_hook(callback, key=key)
 
     @property
     def readonly(self) -> bool:
@@ -80,9 +80,9 @@ class Transaction:
 
     def has_hook(self, key: object) -> bool:
         """Check whether this active transaction has a result callback registered under key."""
-        return self._check_current().has_hook(key)
+        return self._require_active_engine().has_hook(key)
 
-    def _check_current(self) -> _TransactionEngine:
+    def _require_active_engine(self) -> _TransactionEngine:
         current = _current_transaction()
         if current is None or current.handle is not self:
             message = "callbacks must be registered inside their transaction"
