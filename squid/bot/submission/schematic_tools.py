@@ -2,14 +2,12 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from functools import partial
-from typing import TYPE_CHECKING, Any, Literal, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import anyio
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.lookup import pick
 from squid.bot.submission.schematics import (
     WRITABLE_EXTENSIONS,
     _describe,
@@ -26,7 +24,6 @@ from squid.schematics.application import ConvertRequest, SchematicService, Store
 from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import SchematicRenderRefusedError
-from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
@@ -42,8 +39,6 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
     _video_job_id: int | None = sl.state(None)
     _video_recipe: VideoRenderRequest = sl.state(VideoRenderRequest())
-    _convert_version: Suggestion | None = sl.state(None)
-    _show_maintenance: bool = sl.state(False)
 
     def __init__(
         self,
@@ -67,9 +62,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, SchematicRequest]:
         if self._show_details is not None and not self._show_details():
             return ()
-        nodes = list(self._maintenance_nodes() if self._show_maintenance else self._schematic_nodes())
-        if self._convert_version is not None and not self._show_maintenance:
-            nodes.append(sl.note(self._convert_version.label))
+        nodes = list(self._schematic_nodes())
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
         if self._asset is not None and self._asset.media_type.startswith("image/"):
@@ -88,91 +81,43 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         if not self._schematics.available:
             return ()
         videos_enabled = self._schematics.videos is not None and self._schematics.videos.enabled
-        entries: tuple[
-            sl.semantic.ActionControl[SchematicRequest] | sl.semantic.FormTrigger[SchematicRequest] | Literal[False],
-            ...,
-        ] = (
-            sl.action_control(
-                tr(t"bot-submission-build-browse-schematic-info = Schematic info"),
-                self._schematic_info,
-                key="schematic-info",
-            ),
-            sl.action_control(
-                tr(t"bot-submission-build-browse-download-schematic = Download schematic"),
-                self._schematic_download,
-                key="schematic-download",
-            ),
-            sl.action_control(
-                tr(t"bot-submission-build-browse-render-schematic = Render schematic"),
-                self._schematic_render,
-                key="schematic-render",
-            ),
-            sl.action_control(
-                tr(t"schematic-choose-version = Choose conversion version"),
-                self._choose_version,
-                key="convert-version",
-            ),
-            sl.action_control(
-                tr(t"schematic-original-version = Keep source version"), self._clear_version, key="source-version"
-            ),
-            sl.form(
-                tr(t"bot-submission-build-browse-convert-schematic = Convert schematic"),
-                _ConvertForm().spec(),
-                key="convert",
-                on_submit=partial(self._convert, version=self._convert_version),
-            ),
-            videos_enabled
-            and sl.action_control(
-                tr(t"schematic-video-action = Render video"), sd.on_press(self._open_video), key="guided-video"
-            ),
-            videos_enabled
-            and self._video_job_id is not None
-            and sl.action_control(
-                tr(t"schematic-video-refresh = Check video"),
-                sd.on_press(self._refresh_video),
-                key="video-refresh",
-            ),
-        )
         return (
-            sl.action_controls(*entries[:3], key="schematic-actions"),
-            sl.action_controls(*entries[3:6], key="conversion-actions"),
-            sl.action_controls(*entries[6:], key="video-actions"),
             sl.action_controls(
                 sl.action_control(
-                    tr(t"schematic-conversion-maintenance = Conversion maintenance"),
-                    self._toggle_maintenance,
-                    key="conversion-maintenance",
+                    tr(t"bot-submission-build-browse-download-schematic = Download"),
+                    self._schematic_download,
+                    key="schematic-download",
                 ),
-                key="maintenance-entry",
-            ),
-        )
-
-    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, SchematicRequest], ...]:
-        return (
-            sl.heading(tr(t"schematic-conversion-maintenance = Conversion maintenance")),
-            sl.note(
-                tr(
-                    t"schematic-data-version-purpose = Convert to a numeric Minecraft world-format version when a named release is unavailable."
-                )
-            ),
-            sl.action_controls(
                 sl.form(
-                    tr(t"schematic-convert-by-data-version = Convert by data version"),
-                    _DataVersionForm().spec(),
-                    key="convert-data-version",
-                    on_submit=self._convert_by_data_version,
+                    tr(t"bot-submission-build-browse-convert-schematic = Other format or version"),
+                    _ConvertForm().spec(),
+                    key="convert",
+                    on_submit=self._convert,
                 ),
                 sl.action_control(
-                    tr(t"schematic-back-to-tools = Back to schematic tools"),
-                    self._toggle_maintenance,
-                    key="back-to-tools",
+                    tr(t"bot-submission-build-browse-render-schematic = Preview image"),
+                    self._schematic_render,
+                    key="schematic-render",
                 ),
-                key="maintenance-actions",
+                videos_enabled
+                and sl.action_control(
+                    tr(t"schematic-video-action = Render video"), sd.on_press(self._open_video), key="guided-video"
+                ),
+                videos_enabled
+                and self._video_job_id is not None
+                and sl.action_control(
+                    tr(t"schematic-video-refresh = Check video"),
+                    sd.on_press(self._refresh_video),
+                    key="video-refresh",
+                ),
+                sl.action_control(
+                    tr(t"bot-submission-build-browse-schematic-info = Details"),
+                    self._schematic_info,
+                    key="schematic-info",
+                ),
+                key="schematic-actions",
             ),
         )
-
-    async def _toggle_maintenance(self, _event: sl.PressEvent) -> None:
-        self._show_maintenance = not self._show_maintenance
 
     async def _primary(self, event: sl.ActionEvent, private_access: PermissionNode) -> StoredSchematic | None:
         """Return the featured schematic if the actor may use it, otherwise tell them why not.
@@ -213,20 +158,6 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             await event.notice(error.public_text())
             return
         self._asset = sl.file(rendered.png, filename=f"build-{self._build_id}-render.png")
-
-    async def _choose_version(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
-            self._convert_version = item
-
-        await pick(
-            event,
-            "approved_source_versions",
-            tr(t"schematic-choose-version = Choose conversion version"),
-            selected,
-        )
-
-    async def _clear_version(self, _event: sl.PressEvent) -> None:
-        self._convert_version = None
 
     async def _open_video(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         request = event.context
@@ -348,17 +279,16 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         )
         return True
 
-    async def _convert(self, event: sl.SubmitEvent, *, version: Suggestion | None = None) -> None:
+    async def _convert(self, event: sl.SubmitEvent) -> None:
         form = _ConvertForm.from_submission(event)
-        await self._convert_output(
-            event, ConvertRequest(target_format=form.format), version_label=version.value if version else None
-        )
-
-    async def _convert_by_data_version(self, event: sl.SubmitEvent) -> None:
-        form = _DataVersionForm.from_submission(event)
-        await self._convert_output(
-            event, ConvertRequest(target_format=form.format, target_data_version=form.data_version)
-        )
+        version = (form.version or "").strip()
+        # A bare number is a Minecraft data version; anything else names a release, such as Java 1.21.
+        if version.isdigit():
+            await self._convert_output(
+                event, ConvertRequest(target_format=form.format, target_data_version=int(version))
+            )
+        else:
+            await self._convert_output(event, ConvertRequest(target_format=form.format), version_label=version or None)
 
     async def _convert_output(
         self, event: sl.SubmitEvent, request: ConvertRequest, *, version_label: str | None = None
@@ -391,17 +321,14 @@ class _ConvertForm(sl.forms.Form):
             for file_format in WRITABLE_EXTENSIONS
         ),
     )
-
-
-class _DataVersionForm(_ConvertForm):
-    title = tr(t"schematic-convert-by-data-version = Convert by data version")
-
-    data_version = sl.forms.IntField(
-        label=tr(t"build-minecraft-data-version-label = Minecraft data version"),
+    version = sl.forms.TextField(
+        label=tr(t"schematic-convert-version = Minecraft version"),
         description=tr(
-            t"schematic-data-version-help = Numeric Minecraft world-format ID, not a Squid database version ID."
+            t"schematic-convert-version-help = Leave blank to keep the original. A release such as Java 1.21, "
+            t"or a numeric data version such as 3953."
         ),
-        minimum=1,
+        required=False,
+        maximum=100,
     )
 
 

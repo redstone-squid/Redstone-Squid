@@ -704,21 +704,20 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
         ui.assert_within_limits()
 
 
-async def test_numeric_conversion_versions_are_only_in_maintenance() -> None:
+async def test_schematic_tools_fit_one_row_and_convert_with_one_form() -> None:
     async with stage(_screen(schematics_available=True), owner=object()) as ui:
         await ui.press(ui.key_for("schematic-tools"))
-        normal = await ui.press_for_form(ui.key_for("convert"))
-        assert {item.custom_id for item in normal.modal.walk_children() if hasattr(item, "custom_id")} == {"format"}
-        await ui.press(ui.key_for("conversion-maintenance"))
-        assert "## Conversion maintenance" in ui.texts()
-        form = await ui.press_for_form(ui.key_for("convert-data-version"))
+        form = await ui.press_for_form(ui.key_for("convert"))
         assert {item.custom_id for item in form.modal.walk_children() if hasattr(item, "custom_id")} == {
             "format",
-            "data_version",
+            "version",
         }
-        await ui.press(ui.key_for("back-to-tools"))
-        ui.control(ui.key_for("convert"))
-        assert "Convert by data version" not in ui.texts()
+        for key in ("schematic-download", "schematic-render", "schematic-info"):
+            ui.control(ui.key_for(key))
+        assert not any(
+            key.endswith(("convert-version", "source-version", "conversion-maintenance"))
+            for key in ui.root.snapshot().handler_keys
+        )
 
 
 async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> None:

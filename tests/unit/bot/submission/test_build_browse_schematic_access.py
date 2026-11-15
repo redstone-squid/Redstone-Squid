@@ -14,7 +14,6 @@ from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
 from squid.schematics.domain.models import SchematicFormat
-from squid.suggestions.domain import Suggestion
 from squid_ui.testing import press_event, submit_event
 from tests.unit.schematics.fakes import make_analysis
 
@@ -171,12 +170,10 @@ async def test_conversion_paths_keep_access_checks_and_separate_version_inputs(
     detail = _detail(PUBLIC if public else PRIVATE, actor=OTHER_ID, held=set())
     convert = AsyncMock(return_value=(b"schematic", ()))
     monkeypatch.setattr(detail._schematics, "convert", convert)
-    event = submit_event({"format": SchematicFormat.LITEMATIC, "data_version": 3953})
+    # One version field takes either a numeric data version or a release name.
+    event = submit_event({"format": SchematicFormat.LITEMATIC, "version": "3953" if numeric else "Java 1.21"})
     with sl.runtime.transaction():
-        if numeric:
-            await detail._convert_by_data_version(event)
-        else:
-            await detail._convert(event, version=Suggestion("Java 1.21", "Java 1.21"))
+        await detail._convert(event)
     if not public:
         convert.assert_not_awaited()
         return
