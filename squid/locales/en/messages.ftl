@@ -1823,31 +1823,31 @@ build-drafts-state-waiting = Waiting for files
 # squid/submissions/application/forms.py:433
 build-edit-form-about = About this build
 
-# squid/submissions/application/forms.py:669
+# squid/submissions/application/forms.py:681
 build-edit-form-command = Command to get there
 
-# squid/submissions/application/forms.py:668
+# squid/submissions/application/forms.py:680
 build-edit-form-coordinates = Coordinates
 
-# squid/submissions/application/forms.py:664
+# squid/submissions/application/forms.py:676
 build-edit-form-images = Image links
 
-# squid/submissions/application/forms.py:660, squid/submissions/application/forms.py:662
+# squid/submissions/application/forms.py:672, squid/submissions/application/forms.py:674
 build-edit-form-links-location = Links and location
 
-# squid/submissions/application/forms.py:634
+# squid/submissions/application/forms.py:646
 build-edit-form-one-per-line = One link per line.
 
-# squid/submissions/application/forms.py:667
+# squid/submissions/application/forms.py:679
 build-edit-form-server = Server address
 
 # squid/submissions/application/forms.py:286
 build-edit-form-versions = Minecraft versions
 
-# squid/submissions/application/forms.py:665
+# squid/submissions/application/forms.py:677
 build-edit-form-videos = Video links
 
-# squid/submissions/application/forms.py:666
+# squid/submissions/application/forms.py:678
 build-edit-form-world-downloads = World download links
 
 # squid/bot/submission/ui/build_edit.py:159
@@ -1979,7 +1979,7 @@ builds-alias-restriction = That alias is already on this restriction.
 # squid/builds/errors.py:126
 builds-alias-used = That alias is already used by another restriction.
 
-# squid/builds/domain/models.py:142
+# squid/builds/domain/models.py:143
 builds-attribute-immutable = Attribute `{ $name }` is immutable!
 
 # squid/builds/errors.py:11
@@ -2024,7 +2024,7 @@ builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to fin
 # squid/builds/errors.py:55
 builds-if-match-build = An If-Match build revision is required for this operation.
 
-# squid/builds/domain/models.py:166
+# squid/builds/domain/models.py:167
 builds-not-dataclass = { $class_name } is not a dataclass
 
 # squid/builds/errors.py:99
@@ -3751,22 +3751,22 @@ media-media-batch-totals = Media batch totals cannot be negative.
 # squid/media/errors.py:74
 media-media-changed-submission = Media cannot be changed while this submission draft is locked.
 
-# squid/media/application/jobs.py:994
+# squid/media/application/jobs.py:1003
 media-media-content-types = Media content types must be 1-255 printable characters without surrounding whitespace.
 
-# squid/media/domain/models.py:142
+# squid/media/domain/models.py:143
 media-media-dimensions-positive = Media dimensions must be positive.
 
 # squid/media/application/jobs.py:90
 media-media-draft-upload = Media draft upload authorization is invalid.
 
-# squid/media/domain/models.py:148
+# squid/media/domain/models.py:149
 media-media-duration-negative = Media duration cannot be negative.
 
-# squid/media/domain/models.py:151
+# squid/media/domain/models.py:152
 media-media-frame-count = Media frame count cannot be negative.
 
-# squid/media/domain/models.py:145
+# squid/media/domain/models.py:146
 media-media-frame-rate = Media frame rate must be non-negative with a positive denominator.
 
 # squid/media/application/jobs.py:511
@@ -3775,7 +3775,7 @@ media-media-job-claim = Media job claim limit must be between 1 and { $maximum }
 # squid/media/application/jobs.py:679
 media-media-job-heartbeat = Media job heartbeat interval must be positive.
 
-# squid/media/application/jobs.py:988
+# squid/media/application/jobs.py:997
 media-media-object-keys = Media object keys must be non-empty relative paths without traversal.
 
 # squid/media/errors.py:189
@@ -3784,7 +3784,7 @@ media-media-processing-temporarily = Media processing is temporarily unavailable
 # squid/media/application/jobs.py:676
 media-media-queue-normalizer = Media queue and normalizer limits must match.
 
-# squid/media/application/jobs.py:981
+# squid/media/application/jobs.py:990
 media-media-sha-lowercase = Media SHA-256 values must be lowercase hexadecimal.
 
 # squid/media/application/jobs.py:159
@@ -3796,13 +3796,13 @@ media-media-source-cleanup = Media source cleanup limit must be between 1 and { 
 # squid/media/application/commands.py:31
 media-media-source-normalized = Media source, normalized output, and poster paths must be distinct.
 
-# squid/media/application/jobs.py:916
+# squid/media/application/jobs.py:925
 media-media-upload-changed = Media upload changed while it was being staged.
 
 # squid/media/application/jobs.py:107, squid/media/application/jobs.py:131
 media-media-upload-draft = Media upload and draft identifiers cannot be nil UUIDs.
 
-# squid/media/application/jobs.py:416, squid/media/application/jobs.py:895
+# squid/media/application/jobs.py:416, squid/media/application/jobs.py:904
 media-media-upload-exceeds = Media upload exceeds the { $limit }-byte source limit.
 
 # squid/media/errors.py:234
@@ -3811,34 +3811,34 @@ media-media-upload-exists = Media upload { $upload_id } already exists with diff
 # squid/media/application/jobs.py:156
 media-media-upload-identifiers = Media upload identifiers cannot be nil UUIDs.
 
-# squid/media/application/jobs.py:110, squid/media/application/jobs.py:890
+# squid/media/application/jobs.py:110, squid/media/application/jobs.py:899
 media-media-uploads-empty = Media uploads cannot be empty.
 
-# squid/media/application/jobs.py:887
+# squid/media/application/jobs.py:896
 media-media-uploads-staged = Media uploads must be staged as regular files.
 
-# squid/media/domain/models.py:194
+# squid/media/domain/models.py:195
 media-normalized-artifact-dimensions = Normalized artifact dimensions and size are invalid.
 
-# squid/media/domain/models.py:197
+# squid/media/domain/models.py:198
 media-normalized-artifact-sha = Normalized artifact SHA-256 must be lowercase hexadecimal.
 
-# squid/media/domain/models.py:227
+# squid/media/domain/models.py:228
 media-normalized-images-png = Normalized images must be PNG artifacts.
 
 # squid/media/errors.py:276
 media-normalized-media-object = A normalized media object is being cleaned up.
 
-# squid/media/domain/models.py:215
+# squid/media/domain/models.py:216
 media-normalized-media-source = Normalized media source size cannot be negative.
 
 # squid/media/errors.py:267
 media-normalized-object-unconfirmed = Object storage did not confirm a normalized media artifact.
 
-# squid/media/domain/models.py:221
+# squid/media/domain/models.py:222
 media-normalized-video-poster = A normalized video must have a poster artifact.
 
-# squid/media/domain/models.py:218
+# squid/media/domain/models.py:219
 media-normalized-videos-poster = Only normalized videos have a poster artifact.
 
 # squid/media/errors.py:260
@@ -3850,7 +3850,7 @@ media-reload-draft-upload = Reload the draft and upload the attachment again.
 # squid/media/errors.py:110
 media-reload-uploading-attachment = Reload your drafts before uploading the attachment again.
 
-# squid/media/domain/models.py:224
+# squid/media/domain/models.py:225
 media-report-actions-duplicate = Normalization report actions cannot contain duplicates.
 
 # squid/media/application/jobs.py:198
@@ -3865,7 +3865,7 @@ media-submission-draft-changed = The submission draft changed while its attachme
 # squid/media/errors.py:107
 media-submission-draft-not-found = Submission draft not found.
 
-# squid/media/domain/models.py:232
+# squid/media/domain/models.py:233
 media-video-format-unsupported = Normalized videos must contain MP4 and JPEG artifacts.
 
 # squid/media/application/commands.py:39
@@ -5056,13 +5056,13 @@ submissions-application-forms-build-identity = Name and creators
 # squid/submissions/application/forms.py:238
 submissions-application-forms-build-width = Build width
 
-# squid/submissions/application/forms.py:740
+# squid/submissions/application/forms.py:752
 submissions-application-forms-cc = CC0 1.0
 
-# squid/submissions/application/forms.py:741
+# squid/submissions/application/forms.py:753
 submissions-application-forms-cc-by = CC BY 4.0
 
-# squid/submissions/application/forms.py:557
+# squid/submissions/application/forms.py:569
 submissions-application-forms-closing-time = Closing time
 
 # squid/submissions/application/forms.py:218
@@ -5074,58 +5074,58 @@ submissions-application-forms-description = Description
 # squid/submissions/application/forms.py:195
 submissions-application-forms-display-name = Build name
 
-# squid/submissions/application/forms.py:500, squid/submissions/application/forms.py:534
+# squid/submissions/application/forms.py:512, squid/submissions/application/forms.py:546
 submissions-application-forms-door = Door
 
-# squid/submissions/application/forms.py:504
+# squid/submissions/application/forms.py:516
 submissions-application-forms-door-geometry = Door size and type
 
-# squid/submissions/application/forms.py:529
+# squid/submissions/application/forms.py:541
 submissions-application-forms-door-orientation = Door type
 
-# squid/submissions/application/forms.py:476
+# squid/submissions/application/forms.py:482
 submissions-application-forms-entrance = Entrance
 
-# squid/submissions/application/forms.py:573
+# squid/submissions/application/forms.py:585
 submissions-application-forms-extender = Extender
 
-# squid/submissions/application/forms.py:577
+# squid/submissions/application/forms.py:589
 submissions-application-forms-extender-movement = Extender size and direction
 
-# squid/submissions/application/forms.py:601
+# squid/submissions/application/forms.py:613
 submissions-application-forms-extension-length = Extension length
 
-# squid/submissions/application/forms.py:614
+# squid/submissions/application/forms.py:626
 submissions-application-forms-extension-time = Extension time
 
-# squid/submissions/application/forms.py:587
+# squid/submissions/application/forms.py:599
 submissions-application-forms-horizontal = Horizontal
 
-# squid/submissions/application/forms.py:681
+# squid/submissions/application/forms.py:693
 submissions-application-forms-known-patterns = Patterns
 
 # squid/submissions/application/forms.py:308
 submissions-application-forms-known-restrictions = Restrictions
 
-# squid/submissions/application/forms.py:677
+# squid/submissions/application/forms.py:689
 submissions-application-forms-mechanism-patterns = Patterns
 
-# squid/submissions/application/forms.py:581
+# squid/submissions/application/forms.py:593
 submissions-application-forms-movement-orientation = Direction
 
-# squid/submissions/application/forms.py:494
+# squid/submissions/application/forms.py:506
 submissions-application-forms-opening-depth = Opening depth
 
-# squid/submissions/application/forms.py:489
+# squid/submissions/application/forms.py:501
 submissions-application-forms-opening-height = Opening height
 
-# squid/submissions/application/forms.py:549
+# squid/submissions/application/forms.py:561
 submissions-application-forms-opening-time = Opening time
 
-# squid/submissions/application/forms.py:484
+# squid/submissions/application/forms.py:496
 submissions-application-forms-opening-width = Opening width
 
-# squid/submissions/application/forms.py:477
+# squid/submissions/application/forms.py:487
 submissions-application-forms-other = Other
 
 # squid/submissions/application/forms.py:175
@@ -5134,7 +5134,7 @@ submissions-application-forms-provenance = About this submission
 # squid/submissions/application/forms.py:398
 submissions-application-forms-public-download = Anyone
 
-# squid/submissions/application/forms.py:618
+# squid/submissions/application/forms.py:630
 submissions-application-forms-retraction-time = Retraction time
 
 # squid/submissions/application/forms.py:394
@@ -5146,19 +5146,19 @@ submissions-application-forms-schematic-visibility = Who can download the schema
 # squid/submissions/application/forms.py:364
 submissions-application-forms-showcase-tags = Tags
 
-# squid/submissions/application/forms.py:535
+# squid/submissions/application/forms.py:547
 submissions-application-forms-skydoor = Skydoor
 
-# squid/submissions/application/forms.py:537
+# squid/submissions/application/forms.py:549
 submissions-application-forms-trapdoor = Trapdoor
 
-# squid/submissions/application/forms.py:475
+# squid/submissions/application/forms.py:477
 submissions-application-forms-utility = Utility
 
-# squid/submissions/application/forms.py:595
+# squid/submissions/application/forms.py:607
 submissions-application-forms-vertical-downward = Vertical downward
 
-# squid/submissions/application/forms.py:591
+# squid/submissions/application/forms.py:603
 submissions-application-forms-vertical-upward = Vertical upward
 
 # squid/submissions/application/attachments.py:79
@@ -5176,19 +5176,19 @@ submissions-category-blank-label = category { $category } has a blank label
 # squid/submissions/domain/forms.py:332
 submissions-category-duplicates-common = category { $category_code } duplicates common fields: { $fields }
 
-# squid/submissions/application/forms.py:744
+# squid/submissions/application/forms.py:756
 submissions-cc-by-nc = CC BY-NC 4.0
 
-# squid/submissions/application/forms.py:746
+# squid/submissions/application/forms.py:758
 submissions-cc-by-nc-nd = CC BY-NC-ND 4.0
 
-# squid/submissions/application/forms.py:745
+# squid/submissions/application/forms.py:757
 submissions-cc-by-nc-sa = CC BY-NC-SA 4.0
 
-# squid/submissions/application/forms.py:743
+# squid/submissions/application/forms.py:755
 submissions-cc-by-nd = CC BY-ND 4.0
 
-# squid/submissions/application/forms.py:742
+# squid/submissions/application/forms.py:754
 submissions-cc-by-sa = CC BY-SA 4.0
 
 # squid/submissions/domain/forms.py:88
@@ -5209,13 +5209,13 @@ submissions-claim-limit = finalization claim limit must be between 1 and { $maxi
 # squid/submissions/application/finalization.py:69
 submissions-claimed-finalization-metadata-invalid = claimed submission finalization metadata is invalid
 
-# squid/submissions/application/forms.py:496
+# squid/submissions/application/forms.py:508
 submissions-clear-opening-depth = Clear opening depth
 
-# squid/submissions/application/forms.py:491
+# squid/submissions/application/forms.py:503
 submissions-clear-opening-height = Clear opening height
 
-# squid/submissions/application/forms.py:486
+# squid/submissions/application/forms.py:498
 submissions-clear-opening-width = Clear opening width
 
 # squid/submissions/domain/drafts.py:124
@@ -5299,7 +5299,7 @@ submissions-draft-staff-unconfigured = Staff access to submission drafts is not 
 # squid/submissions/domain/drafts.py:237
 submissions-draft-transition = draft cannot transition from { $current } to { $next_status }
 
-# squid/submissions/application/forms.py:729
+# squid/submissions/application/forms.py:741
 submissions-enter-game-ticks = Include a unit: 30gt, 15rt, or 1.5s.
 
 # squid/submissions/application/forms.py:259
@@ -5308,7 +5308,7 @@ submissions-exact-source-minecraft = Minecraft version
 # squid/submissions/domain/finalization.py:289
 submissions-extender-length-positive = extender length must be positive
 
-# squid/submissions/application/forms.py:658
+# squid/submissions/application/forms.py:670
 submissions-external-links = External links
 
 # squid/submissions/domain/forms.py:240
@@ -5323,10 +5323,10 @@ submissions-field-inline-dynamic = field { $field_id } cannot have inline and dy
 # squid/submissions/domain/forms.py:548
 submissions-field-name-format = { $label } must start with a letter and contain only lowercase letters, digits, or underscores
 
-# squid/submissions/domain/normalization.py:181
+# squid/submissions/domain/normalization.py:184
 submissions-field-not-integer = validated field { $field_id } is not an integer
 
-# squid/submissions/domain/normalization.py:147, squid/submissions/domain/normalization.py:160
+# squid/submissions/domain/normalization.py:150, squid/submissions/domain/normalization.py:163
 submissions-field-not-string = validated field { $field_id } is not a string
 
 # squid/submissions/domain/forms.py:234
@@ -5338,7 +5338,7 @@ submissions-finalization-job-missing = processing draft has no active finalizati
 # squid/submissions/application/finalization.py:266
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
-# squid/submissions/domain/finalization.py:401
+# squid/submissions/domain/finalization.py:407
 submissions-finalized-build-identity = finalized build identity is invalid
 
 # squid/submissions/domain/forms.py:318
@@ -5356,10 +5356,10 @@ submissions-invalid-submission-attention = invalid submission attention field ID
 # squid/submissions/domain/drafts.py:259
 submissions-json-contain-too = draft JSON values contain too many nodes
 
-# squid/submissions/domain/finalization.py:425
+# squid/submissions/domain/finalization.py:431
 submissions-keys-stable-lowercase = { $label } keys must be stable lowercase identifiers
 
-# squid/submissions/domain/finalization.py:422
+# squid/submissions/domain/finalization.py:428
 submissions-keys-unique = { $label } keys must be unique
 
 # squid/submissions/domain/forms.py:162
@@ -5380,16 +5380,16 @@ submissions-negative = { $name } cannot be negative
 # squid/submissions/domain/finalization.py:211
 submissions-normalized-media-upload = normalized media upload identifiers must be unique
 
-# squid/submissions/domain/finalization.py:349
+# squid/submissions/domain/finalization.py:355
 submissions-normalized-source-version-blank = normalized source versions cannot be blank
 
-# squid/submissions/domain/finalization.py:343
+# squid/submissions/domain/finalization.py:349
 submissions-normalized-submission-provenance = normalized submission provenance is invalid
 
-# squid/submissions/domain/finalization.py:346
+# squid/submissions/domain/finalization.py:352
 submissions-normalized-submission-schema = normalized submission schema provenance is invalid
 
-# squid/submissions/domain/normalization.py:207
+# squid/submissions/domain/normalization.py:210
 submissions-not-string-list = validated field { $field_id } is not a string list
 
 # squid/submissions/domain/drafts.py:138
@@ -5398,7 +5398,7 @@ submissions-operation-ids-unique = operation IDs must be unique within a draft c
 # squid/submissions/application/forms.py:77
 submissions-option-revisions-positive = option revisions must be positive
 
-# squid/submissions/application/forms.py:546, squid/submissions/application/forms.py:611
+# squid/submissions/application/forms.py:558, squid/submissions/application/forms.py:623
 submissions-optional-default-timing = Timings
 
 # squid/submissions/application/forms.py:197
@@ -5407,7 +5407,7 @@ submissions-optional-name-shown = Optional. Shown next to the title generated fr
 # squid/submissions/domain/drafts.py:170
 submissions-owner-account-id = owner_account_id must be positive
 
-# squid/submissions/domain/finalization.py:368
+# squid/submissions/domain/finalization.py:374
 submissions-paper-installation-only = Only Paper submissions may retain an installation provenance ID.
 
 # squid/submissions/application/drafts.py:322
@@ -5422,7 +5422,7 @@ submissions-propose-animation-restrictions = Other animation restrictions
 # squid/submissions/application/forms.py:355
 submissions-propose-component-restrictions = Other component restrictions
 
-# squid/submissions/application/forms.py:690
+# squid/submissions/application/forms.py:702
 submissions-propose-missing-patterns = Other patterns
 
 # squid/submissions/application/forms.py:317
@@ -5440,7 +5440,7 @@ submissions-public-schematic-rights-required = public schematics require a licen
 # squid/submissions/domain/finalization.py:226
 submissions-ready-schematic-assessment = only a ready schematic assessment may expose an artifact ID
 
-# squid/submissions/domain/finalization.py:413
+# squid/submissions/domain/finalization.py:419
 submissions-rejected-build-submission = rejected build submission requires at least one issue
 
 # squid/submissions/application/preparation.py:45
@@ -5476,7 +5476,7 @@ submissions-show-sponsoring-server = Show the sponsoring server on this build
 # squid/submissions/application/forms.py:262
 submissions-source-version-help = The version the schematic or world capture was exported from.
 
-# squid/submissions/domain/finalization.py:380
+# squid/submissions/domain/finalization.py:386
 submissions-sponsor-installation-match-required = Sponsor attribution requires a matching Paper installation projection.
 
 # squid/submissions/application/attachments.py:102
@@ -5491,16 +5491,16 @@ submissions-submission-dimensions-positive = submission dimensions must be posit
 # squid/submissions/application/drafts.py:216
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
-# squid/submissions/domain/finalization.py:362
+# squid/submissions/domain/finalization.py:368
 submissions-submission-incompatible-category = { $category } submission has incompatible category details
 
-# squid/submissions/domain/finalization.py:386
+# squid/submissions/domain/finalization.py:392
 submissions-submission-retain-sponsor = A submission cannot retain a sponsor projection when attribution was not requested.
 
-# squid/submissions/domain/finalization.py:433
+# squid/submissions/domain/finalization.py:439
 submissions-submission-timings-negative = submission timings cannot be negative
 
-# squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:692
+# squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:704
 submissions-suggestions-unofficial = Not in the list? Add them here, one per line. Staff review new ones.
 
 # squid/submissions/domain/forms.py:558
@@ -5515,16 +5515,16 @@ submissions-unset-operations-carry = unset operations cannot carry a value
 # squid/submissions/application/forms.py:154
 submissions-unsupported-checked-submission = unsupported checked-in submission form revision
 
-# squid/submissions/domain/normalization.py:192
+# squid/submissions/domain/normalization.py:195
 submissions-validated-field-not = validated field { $field_id } is not a boolean
 
 # squid/submissions/domain/finalization.py:208
 submissions-verified-artifact-identifiers = verified artifact identifiers cannot be nil UUIDs
 
-# squid/submissions/application/forms.py:561
+# squid/submissions/application/forms.py:573
 submissions-visible-closing-time = Visible closing time
 
-# squid/submissions/application/forms.py:553
+# squid/submissions/application/forms.py:565
 submissions-visible-opening-time = Visible opening time
 
 # squid/bot/submission/submit.py:175, squid/bot/submission/submit.py:179, squid/bot/submission/submit.py:183
