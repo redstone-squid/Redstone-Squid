@@ -289,7 +289,7 @@ class TestRenderCaching:
             leaf.wrapped = wrapped
             leaf.child_visible = child_visible
             optimized = runtime.render(reuse_committed=True)
-            cold = render_component_tree(root, runtime=runtime, context=runtime.context)
+            cold = render_component_tree(root, runtime=runtime, context=dict(runtime.context))
 
             assert optimized == cold
             optimized_plan = plan(

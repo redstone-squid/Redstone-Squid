@@ -1,6 +1,5 @@
 """Runtime inspection cannot bypass invalidation or component lifecycle."""
 
-import operator
 from typing import override
 
 import pytest
@@ -41,9 +40,9 @@ def test_context_view_tracks_supported_updates_and_render_invalidation() -> None
     supplied[LABEL] = "outside"
     assert context[LABEL] == "initial"
     with pytest.raises(TypeError):
-        operator.setitem(context, LABEL, "bypass")
+        context[LABEL] = "bypass"  # type: ignore  # Exercise runtime rejection of an invalid write.
     with pytest.raises(TypeError):
-        operator.delitem(context, LABEL)
+        del context[LABEL]  # type: ignore  # Exercise runtime rejection of an invalid deletion.
     assert not runtime.dirty
     assert runtime.revision == revision
 
@@ -69,9 +68,9 @@ def test_component_view_tracks_only_committed_placements_and_finish(incremental:
     assert components == {"$": root}
 
     with pytest.raises(TypeError):
-        operator.setitem(components, "$", child)
+        components["$"] = child  # type: ignore  # Exercise runtime rejection of an invalid write.
     with pytest.raises(TypeError):
-        operator.delitem(components, "$")
+        del components["$"]  # type: ignore  # Exercise runtime rejection of an invalid deletion.
     assert components == {"$": root}
 
     root.shown = True

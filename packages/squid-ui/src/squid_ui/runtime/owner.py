@@ -105,9 +105,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.on_reactive_invalidate = on_reactive_invalidate
         self.subscriptions = Subscriptions(self._reactive_changed)
         self._context = dict(context or {})
+        self._context_view = MappingProxyType(self._context)
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.plan_memo = PlanMemo()
         self._components: dict[str, AnyComponent] = {}
+        self._components_view = MappingProxyType(self._components)
         self._cache = RenderCache[RenderTargetT]()
         self._cached_tree: ComponentTree[RenderTargetT] | None = None
         self._cached_revision = -1
@@ -123,12 +125,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
     @property
     def context(self) -> Mapping[ContextKey[Any], object]:
         """Live read-only root bindings. Use ``set_context`` to replace a value and invalidate."""
-        return MappingProxyType(self._context)
+        return self._context_view
 
     @property
     def components(self) -> Mapping[str, AnyComponent]:
         """Live read-only placements in the committed tree, cleared by ``finish``."""
-        return MappingProxyType(self._components)
+        return self._components_view
 
     def _reactive_changed(self, address: DependencyAddress) -> None:
         self.invalidate_address(address)
