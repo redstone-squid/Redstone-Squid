@@ -585,7 +585,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             sd.v2.section(
                 tr(t"browse-query-summary = {query} · {sort}"),
                 accessory=sd.v2.button(
-                    tr(t"build-browser-edit-search = Edit"),
+                    tr(t"build-browser-close-search = Done")
+                    if self._guided is not None
+                    else tr(t"build-browser-edit-search = Edit search"),
                     self._guided_search,
                     key="guided-search",
                     style=sl.primitives.ActionStyle.SUCCESS
@@ -601,12 +603,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 (
                     sl.action_controls(
                         *(
-                            sl.toggle(
+                            # Buttons rather than toggles: a toggle labels itself "Smallest: Off".
+                            sl.action_control(
                                 label,
+                                partial(self._toggle_record_category, category),
                                 key=category,
-                                on=sl.controlled(
-                                    category in self._record_categories, partial(self._toggle_record_category, category)
-                                ),
                                 tone=sl.Tone.SUCCESS if category in self._record_categories else sl.Tone.NEUTRAL,
                             )
                             for category, label in (
@@ -616,12 +617,10 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                             )
                         ),
                         sl.action_control(
-                            tr(t"record-browser-all = All standings"),
-                            self._all_standings,
+                            tr(t"record-browser-all = All types"),
+                            self._all_types,
                             key="all-standings",
-                            tone=sl.Tone.SUCCESS
-                            if not self._query and not self._sort and not self._record_categories
-                            else sl.Tone.NEUTRAL,
+                            tone=sl.Tone.SUCCESS if not self._record_categories else sl.Tone.NEUTRAL,
                         ),
                         key="record-categories",
                         display=sl.semantic.ControlDisplay.INDIVIDUAL,
@@ -732,15 +731,18 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             actions=self._search_actions,
         )
 
-    async def _toggle_record_category(self, category: str, event: sl.ToggleEvent) -> None:
-        if event.value:
-            self._record_categories = self._record_categories | {category}
-        else:
-            self._record_categories = self._record_categories - {category}
+    async def _toggle_record_category(self, category: str, _event: sl.PressEvent) -> None:
+        self._record_categories = self._record_categories ^ {category}
         await self._run_search(self._query, self._sort)
 
-    async def _all_standings(self, event: sl.PressEvent) -> None:
-        await self._reset_search(event)
+    async def _all_types(self, _event: sl.PressEvent) -> None:
+        """Clear the record type buttons, keeping the typed query and sort."""
+        self._record_categories = frozenset()
+        if self._query or self._sort:
+            await self._run_search(self._query, self._sort)
+        else:
+            self._results = None
+            self._selected = None
 
     async def _reset_search(self, _event: sl.PressEvent) -> None:
         self._record_categories = frozenset()

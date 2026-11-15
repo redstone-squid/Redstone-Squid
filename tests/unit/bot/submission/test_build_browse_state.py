@@ -467,18 +467,26 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
         ui.assert_within_limits()
 
 
-async def test_all_standings_clears_active_search_and_toggles() -> None:
+async def test_all_types_clears_only_the_type_buttons() -> None:
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
+    service = cast(AsyncMock, screen._search_service)
     async with stage(screen, owner=object()) as ui:
+        assert ui.control(ui.key_for("smallest")).payload["label"] == "Smallest"
         await ui.press(ui.key_for("smallest"))
         await ui.press(ui.key_for("all-standings"))
         assert screen._record_categories == frozenset()
         assert screen._results is None
-        assert screen._query == screen._sort == ""
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
         assert "## Records" in ui.texts()
+        # With a typed query, the query and sort stay and the search reruns without types.
+        await submit_search(ui, "door", "-created_at")
+        await ui.press(ui.key_for("smallest"))
+        await ui.press(ui.key_for("all-standings"))
+        assert screen._query == "door"
+        assert screen._sort == "-created_at"
+        assert service.search.call_args.args[0].query == "status:resolved AND (door)"
         ui.assert_within_limits()
 
 
@@ -841,8 +849,11 @@ async def test_records_default_to_standings_and_highlight_active_controls() -> N
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "kind:door"})
         assert "## Search help" not in ui.texts()
+        # A typed query is not a type, so All types stays highlighted until a type is chosen.
+        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        await ui.press(ui.key_for("smallest"))
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 2
-        await ui.press(ui.key_for("all-standings"))
+        await ui.press(ui.key_for("reset"))
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
         assert screen._guided is not None
         assert screen._guided.query == ""
@@ -907,7 +918,7 @@ async def test_editor_expansion_survives_switching_catalogue_tabs() -> None:
             assert screen._guided is not None
             assert screen._guided.scope == scope
             ui.control(ui.key_for("advanced"))
-            assert ui.control(ui.key_for("guided-search")).payload["label"] == "Edit"
+            assert ui.control(ui.key_for("guided-search")).payload["label"] == "Done"
             assert ui.control(ui.key_for("guided-search")).payload["style"] == 3
         await ui.press(ui.key_for("guided-search"))
         await ui.press(ui.key_for("all-records"))
