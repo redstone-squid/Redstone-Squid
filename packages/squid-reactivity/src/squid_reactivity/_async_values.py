@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Protocol
 
+from squid_reactivity._read_capture import unsupported_read
 from squid_reactivity.completion import Completion
 
 
@@ -64,6 +65,8 @@ def unique_async_bindings(bindings: list[AsyncBinding[object]]) -> tuple[AsyncBi
 
 
 def _observe(binding: AsyncBinding[object]) -> None:
+    # Reuse would skip discovery in the next async-observation scope.
+    unsupported_read()
     observed = _ASYNC_BINDING_COLLECTOR.get()
     if observed is not None:
         observed.append(binding)

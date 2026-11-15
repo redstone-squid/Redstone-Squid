@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Final, override
 
 from squid_reactivity._addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
 from squid_reactivity._delivery import hold
+from squid_reactivity._read_capture import record_cell_guard, record_cell_read, record_signal
 from squid_reactivity._runtime import _bump_epoch
 from squid_reactivity._tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource
 from squid_reactivity.transactions._state import _READ_CONSISTENCY, _active, _ReadConsistency
@@ -64,11 +65,13 @@ class _Cell[ValueT](_ReactiveSource):
             if entry is not None:
                 # A staged read does not observe committed state, so it adds no
                 # commit-time version precondition.
+                record_cell_read(self, entry.version, staged=True)
                 self.track(entry.version)
                 return entry.value
             policy = _READ_CONSISTENCY.get()
             if self.address is not None and policy is not _ReadConsistency.RELAXED:
                 current.observe(self, strong=policy is _ReadConsistency.STRONG)
+        record_cell_read(self, self.version)
         self.track(self.version)
         return self.value
 
@@ -91,6 +94,7 @@ class _Cell[ValueT](_ReactiveSource):
 
     def track(self, version: int) -> None:
         """Record a read of this cell at `version` with whatever is consuming it."""
+        record_cell_guard(self, version)
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = version
@@ -133,6 +137,7 @@ class Signal(_ReactiveSource, SubscriptionSource):
 
     def track(self) -> None:
         """Record this signal as a dependency of the active computation."""
+        record_signal(self, self.version)
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = self.version

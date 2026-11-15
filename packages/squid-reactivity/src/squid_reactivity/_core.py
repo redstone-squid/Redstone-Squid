@@ -10,11 +10,14 @@ import functools
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
+from time import perf_counter_ns
 from typing import Any, ClassVar, Self, cast, overload, override
 
 from squid_reactivity._addresses import CellAddress, SubscriberRegistry, publish
-from squid_reactivity._cells import _MISSING, _Cell, _Missing
+from squid_reactivity._cells import _MISSING, Signal, _Cell, _Missing
 from squid_reactivity._evaluation import _SettlingNode, settling
+from squid_reactivity._read_capture import ReadFootprint, ReadRule, capture_active, merge_computed, unsupported_read
+from squid_reactivity._read_capture import capture_reads as capture_reusable_reads
 from squid_reactivity._runtime import _runtime
 from squid_reactivity._tracking import _DEPENDENCY_COLLECTOR, _DependencyCollector, _ReactiveSource, untracked
 from squid_reactivity.transactions import transaction
@@ -26,6 +29,7 @@ from squid_reactivity.transactions._state import (
     _active,
     _check_write,
     _current_transaction,
+    _ReadConsistency,
     read_only,
 )
 
@@ -357,6 +361,21 @@ def state(
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 
 
+_MIN_REUSE_NS = 50_000
+_MAX_REUSE_MISSES = 3
+
+
+@dataclass(frozen=True, slots=True)
+class _ReusableResult:
+    """An evaluation snapshot whose reads can be validated and replayed in another view."""
+
+    value: Any
+    version: int
+    sources: tuple[tuple[_ReactiveSource, int], ...]
+    footprint: ReadFootprint
+    elapsed_ns: int
+
+
 @dataclass(slots=True)
 class _ComputedCache(_DependencyCollector):
     """A computed result and its dependencies in one transaction/read-policy view."""
@@ -366,24 +385,23 @@ class _ComputedCache(_DependencyCollector):
     version: int = 0
     settled: bool = False
     epoch: int = -1
+    reusable: _ReusableResult | None = None
 
 
 class _Derived(_ReactiveSource, _SettlingNode):
-    """Identify a computed value across its committed and transaction-local caches.
+    """Expose one model's computed value as a dependency-tracked reactive source.
 
-    The node retains its input sources, but sources do not retain the node. Checking
-    versions on demand lets unused computations be collected without unsubscribe work.
-    Transactions own their caches so staged results cannot evict committed results.
+    The node has a stable identity across read views. Its memo owns cached values,
+    while transactions own the temporary entries for their overlays.
     """
 
-    __slots__ = ("_committed", "_function", "_label", "_version", "owner")
+    __slots__ = ("_function", "_label", "_memo", "owner")
 
-    def __init__(self, function: Callable[[Any], Any], owner: ReactiveStateOwner, label: str) -> None:
+    def __init__(self, function: Callable[[Any], Any], owner: ReactiveStateOwner, label: str, *, reuse: bool) -> None:
         self._function = function
         self._label = label
         self.owner = owner
-        self._committed = _ComputedCache()
-        self._version = 0
+        self._memo = _ComputedMemo(reuse=reuse)
 
     @property
     @override
@@ -391,7 +409,8 @@ class _Derived(_ReactiveSource, _SettlingNode):
         return None
 
     def read(self) -> Any:
-        cache = self._validated_cache()
+        cache = self._memo.validated(self)
+        merge_computed(self, cache.reusable)
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = cache.version
@@ -399,27 +418,45 @@ class _Derived(_ReactiveSource, _SettlingNode):
 
     @override
     def dependencies(self) -> Iterable[_ReactiveSource]:
-        return self._cache().sources
+        return self._memo.current(self).sources
 
     @override
     def validated_version(self) -> int:
-        """Return the version after validating this read view and its dependencies."""
-        return self._validated_cache().version
+        return self._memo.validated(self).version
 
-    def _cache(self) -> _ComputedCache:
+
+class _ComputedMemo:
+    """Manage a computed's view caches and admission to cross-transaction reuse.
+
+    A reusable result carries an immutable read footprint and dependency graph.
+    Guard checks must succeed without evaluating user code before any observations
+    are replayed or transaction caches installed. Failed checks fall back to evaluation.
+    """
+
+    __slots__ = ("_capture_next", "_committed", "_reuse", "_reuse_misses", "_version")
+
+    def __init__(self, *, reuse: bool) -> None:
+        self._committed = _ComputedCache()
+        self._version = 0
+        self._reuse = reuse
+        self._reuse_misses = 0
+        self._capture_next = True
+
+    def current(self, node: _Derived) -> _ComputedCache:
         current = _active()
         if current is None:
             return self._committed
-        key = (self, _READ_CONSISTENCY.get())
+        key = (node, _READ_CONSISTENCY.get())
         cache = current.computed_caches.get(key)
         if cache is None:
-            # A new transaction or read policy must run the body to record its own
-            # conflict observations, even if the committed result is still current.
+            # This view must either run the body or replay a validated read footprint.
             cache = current.computed_caches[key] = _ComputedCache()
         return cache
 
-    def _validated_cache(self) -> _ComputedCache:
-        cache = self._cache()
+    def validated(self, node: _Derived) -> _ComputedCache:
+        cache = self.current(node)
+        if cache.version == 0 and cache is not self._committed and self._try_reuse(node):
+            return self.current(node)
         if cache.epoch == _runtime.epoch:
             return cache
         if cache.settled and all(source.validated_version() == seen for source, seen in cache.sources.items()):
@@ -430,8 +467,27 @@ class _Derived(_ReactiveSource, _SettlingNode):
         cache.settled = False
         cache.epoch = -1
         cache.sources = {}
-        with _DEPENDENCY_COLLECTOR.set(cache), settling(self), read_only():
-            value = self._function(self.owner)
+        cache.reusable = None
+        eligible = self._reuse and cache is self._committed
+        capture_enabled = eligible and (self._capture_next or capture_active())
+        started = perf_counter_ns() if eligible else 0
+        try:
+            with (
+                capture_reusable_reads(enabled=capture_enabled) as capture,
+                _DEPENDENCY_COLLECTOR.set(cache),
+                settling(node),
+                read_only(),
+            ):
+                value = node._function(node.owner)
+        except BaseException:
+            # A parent that catches this failure must not reuse a partial read history.
+            unsupported_read()
+            raise
+        elapsed = perf_counter_ns() - started if eligible else 0
+        if eligible:
+            # Cheap evaluations skip footprint collection next time. Timing the body
+            # still lets a computation become eligible if its workload later grows.
+            self._capture_next = elapsed >= _MIN_REUSE_NS
         cache.settled = True
         # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
         # from it, and bumping would make every settled node on the thread walk its sources.
@@ -442,17 +498,76 @@ class _Derived(_ReactiveSource, _SettlingNode):
             # at version 1 could otherwise make different results appear identical.
             self._version += 1
             cache.version = self._version
+        if capture is not None and all(isinstance(source, (_Cell, Signal, _Derived)) for source in cache.sources):
+            footprint = capture.finish()
+            if footprint is not None:
+                cache.reusable = _ReusableResult(
+                    cache.value, cache.version, tuple(cache.sources.items()), footprint, elapsed
+                )
+        if cache is self._committed:
+            self._reuse_misses = 0
         return cache
+
+    def _try_reuse(self, root: _Derived) -> bool:
+        result = self._committed.reusable
+        if result is None or result.elapsed_ns < _MIN_REUSE_NS * (1 + len(result.footprint.cells) / 16):
+            return False
+        current = _active()
+        assert current is not None
+        policy = _READ_CONSISTENCY.get()
+        plan: dict[tuple[_Derived, _ReadConsistency], _ReusableResult] = {}
+
+        def collect(node: _Derived, candidate: _ReusableResult, policy: _ReadConsistency) -> bool:
+            key = (node, policy)
+            previous = plan.get(key)
+            if previous is not None:
+                return previous is candidate
+            existing = current.computed_caches.get(key)
+            if existing is not None and existing.version not in (0, candidate.version):
+                return False
+            plan[key] = candidate
+            for child, rule, child_result in candidate.footprint.children:
+                child_policy = policy
+                if rule is ReadRule.RELAXED:
+                    child_policy = _ReadConsistency.RELAXED
+                elif rule is ReadRule.STRONG and policy is not _ReadConsistency.RELAXED:
+                    child_policy = _ReadConsistency.STRONG
+                if not collect(child, child_result, child_policy):
+                    return False
+            return True
+
+        # Eligibility is side-effect free. In particular, do not validate by running
+        # nested computeds under the caller's policy before replaying their own scopes.
+        if not result.footprint.current(current) or not collect(root, result, policy):
+            self._reuse_misses += 1
+            if self._reuse_misses >= _MAX_REUSE_MISSES:
+                self._committed.reusable = None
+            return False
+        result.footprint.replay(
+            current, strong=policy is _ReadConsistency.STRONG, relaxed=policy is _ReadConsistency.RELAXED
+        )
+        for key, candidate in plan.items():
+            current.computed_caches[key] = _ComputedCache(
+                sources=dict(candidate.sources),
+                value=candidate.value,
+                version=candidate.version,
+                settled=True,
+                epoch=_runtime.epoch,
+                reusable=candidate,
+            )
+        self._reuse_misses = 0
+        return True
 
 
 class _Computed:
     """Bind a computed function to a separate cache on each model instance."""
 
-    def __init__(self, function: Callable[[Any], Any]) -> None:
+    def __init__(self, function: Callable[[Any], Any], *, reuse: bool = True) -> None:
         self._function = function
         self.public_name = function.__name__
         self._name = f"__computed_{function.__name__}"
         self._label = function.__name__
+        self._reuse = reuse
 
     def __set_name__(self, owner: type, name: str) -> None:
         self.public_name = name
@@ -468,24 +583,44 @@ class _Computed:
         """Return this computed's node on `instance`, unevaluated until something reads it."""
         node = instance.__dict__.get(self._name)
         if node is None:
-            node = instance.__dict__[self._name] = _Derived(self._function, instance, self._label)
+            node = instance.__dict__[self._name] = _Derived(self._function, instance, self._label, reuse=self._reuse)
         return node
 
 
-def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
+@overload
+def computed[ValueT](function: Callable[[Any], ValueT], *, reuse: bool = True) -> ValueT: ...
+
+
+@overload
+def computed[ValueT](function: None = None, *, reuse: bool = True) -> Callable[[Callable[[Any], ValueT]], ValueT]: ...
+
+
+def computed[ValueT](
+    function: Callable[[Any], ValueT] | None = None, *, reuse: bool = True
+) -> ValueT | Callable[[Callable[[Any], ValueT]], ValueT]:
     """Cache a derived value and track the reactive fields its function reads.
 
     Committed state and each transaction/read-policy view have separate caches.
-    The function runs on first access in each view and when dependencies change.
-    Returning to a view reuses its cache if still valid. Transaction caches are
-    discarded on commit or rollback; committed results are validated on next access.
+    Returning to a view reuses its cache if still valid. Expensive committed results
+    may also be reused in a new transaction after validating inputs and recording
+    the required conflict observations. Otherwise the function runs in that view.
+    Transaction caches are discarded on commit or rollback.
+
+    Functions eligible for cross-transaction reuse must depend only on reactive
+    inputs. Use @computed(reuse=False) for functions that sample external context or
+    require evaluation in each transaction. Resource and transaction-context reads
+    automatically prevent reuse. Neither form guarantees a particular evaluation count.
 
     Each run replaces the dependencies, including conditional branches. Equal
     results preserve the computed version within that view. The function runs read-only.
     """
+
     # The declared return type describes what reading the attribute yields, not what the
     # decorator hands back: the descriptor below is what actually gets bound to the class.
-    return _Computed(function)  # pyright: ignore[reportReturnType]  # pyrefly: ignore[bad-return]
+    def decorate(function: Callable[[Any], ValueT]) -> ValueT:
+        return _Computed(function, reuse=reuse)  # pyright: ignore[reportReturnType]  # pyrefly: ignore[bad-return]
+
+    return decorate if function is None else decorate(function)
 
 
 @dataclass(frozen=True, slots=True)
@@ -514,6 +649,7 @@ class ComputedReport:
 
 def inspect_cells(owner: ReactiveStateOwner) -> dict[str, CellReport]:
     """Report every declared state field on `owner`, by public name."""
+    unsupported_read()
     reports: dict[str, CellReport] = {}
     for name, descriptor in _descriptors(type(owner), _State):
         cell = descriptor.cell(owner)
@@ -523,10 +659,11 @@ def inspect_cells(owner: ReactiveStateOwner) -> dict[str, CellReport]:
 
 def inspect_computed(owner: ReactiveStateOwner) -> dict[str, ComputedReport]:
     """Report every computed's cache in the current view without evaluating it."""
+    unsupported_read()
     reports: dict[str, ComputedReport] = {}
     for name, descriptor in _descriptors(type(owner), _Computed):
         node = descriptor.node(owner)
-        cache = node._cache()
+        cache = node._memo.current(node)
         reports[name] = ComputedReport(id(node), cache.settled, cache.version, tuple(map(id, cache.sources)))
     return reports
 

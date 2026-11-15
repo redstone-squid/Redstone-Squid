@@ -129,7 +129,7 @@ def test_empty_transactions_preserve_the_committed_cache_but_evaluate_their_own(
     calls: list[int] = []
 
     class Counted(Model):
-        @computed
+        @computed(reuse=False)
         def counted(self) -> int:
             calls.append(self.value)
             return self.value
@@ -198,7 +198,7 @@ def test_switching_read_policies_reuses_each_cache_and_preserves_strong_reads() 
     calls: list[int] = []
 
     class Counted(Model):
-        @computed
+        @computed(reuse=False)
         def counted(self) -> int:
             calls.append(self.value)
             return self.value

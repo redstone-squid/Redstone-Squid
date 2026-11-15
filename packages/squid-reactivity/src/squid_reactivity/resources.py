@@ -43,6 +43,7 @@ from squid_reactivity._errors import (
     ReactivityError,
 )
 from squid_reactivity._evaluation import _SettlingNode, cycle_path, settling
+from squid_reactivity._read_capture import unsupported_read
 from squid_reactivity._runtime import _bump_epoch
 from squid_reactivity._tracking import _DEPENDENCY_COLLECTOR, _DependencyCollector, _ReactiveSource
 from squid_reactivity.diagnostics import (
@@ -329,6 +330,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
 
     def track(self) -> None:
         """Record this resource and its version as a dependency of the current reader."""
+        unsupported_read()
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is None or consumer is self:
             return

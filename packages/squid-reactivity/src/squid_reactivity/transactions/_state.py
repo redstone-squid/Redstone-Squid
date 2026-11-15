@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from squid_reactivity._addresses import SubscriptionSource
 from squid_reactivity._errors import ReactiveWriteError, StaleReactiveContextError
+from squid_reactivity._read_capture import ReadRule, read_rule
 
 if TYPE_CHECKING:
     from squid_reactivity.transactions._engine import _TransactionEngine
@@ -148,7 +149,7 @@ def relaxed_read() -> Iterator[None]:
     This suppresses both strong-read conditions and ordinary read-and-write conditions
     for reads inside the scope. It does not disable reactive dependency capture.
     """
-    with _READ_CONSISTENCY.set(_ReadConsistency.RELAXED):
+    with _READ_CONSISTENCY.set(_ReadConsistency.RELAXED), read_rule(ReadRule.RELAXED):
         yield
 
 
@@ -167,7 +168,7 @@ def strong_read() -> Iterator[None]:
     policy = _READ_CONSISTENCY.get()
     if policy is not _ReadConsistency.RELAXED:
         policy = _ReadConsistency.STRONG
-    with _READ_CONSISTENCY.set(policy):
+    with _READ_CONSISTENCY.set(policy), read_rule(ReadRule.STRONG):
         yield
 
 

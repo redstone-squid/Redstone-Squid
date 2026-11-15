@@ -13,6 +13,7 @@ from squid_reactivity._errors import (
     FreshTransactionError,
     StaleReactiveContextError,
 )
+from squid_reactivity._read_capture import unsupported_read
 from squid_reactivity.transactions._context import (
     ActorRef,
     Causality,
@@ -98,6 +99,7 @@ def current_transaction() -> Transaction | None:
     Publication and outcome callbacks run outside that scope. A task that inherited
     an already finished transaction also sees None.
     """
+    unsupported_read()
     current = _active()
     return None if current is None else current.handle
 
@@ -211,6 +213,7 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
 
 def transaction_participant(key: object) -> TransactionParticipant[Any] | None:
     """Return the participant already registered for ``key``, without creating one."""
+    unsupported_read()
     current = _current_transaction()
     return None if current is None else current.participants.get(key)
 

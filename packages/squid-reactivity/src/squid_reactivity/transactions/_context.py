@@ -16,6 +16,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Literal
 
+from squid_reactivity._read_capture import unsupported_read
+
 type TransactionId = uuid.UUID
 _EMPTY_METADATA: Mapping[str, str] = MappingProxyType({})
 
@@ -135,6 +137,7 @@ immutable origin; it grants no permission to write through the originating trans
 
 def current_causality() -> Causality | None:
     """Return the origin to capture when starting implicit reactive work."""
+    unsupported_read()
     return _CURRENT_CAUSALITY.get()
 
 
