@@ -413,89 +413,117 @@ class V2Renderer:
         match instruction:
             case _V2Text(text=text):
                 return discord.ui.TextDisplay(text)
-            case _V2File(node=node):
-                resource = plan.resources.get(f"asset:{node.asset_key}") if plan is not None else None
-                if isinstance(resource, Asset) and isinstance(resource.source, StoredAsset):
-                    parsed = urlsplit(resource.source.reference)
-                    if parsed.scheme in {"http", "https"} and parsed.netloc:
-                        if node.spoiler:
-                            message = "stored-file link conversion cannot preserve spoiler metadata"
-                            raise DrawInvariantError(message)
-                        return discord.ui.Button(
-                            style=discord.ButtonStyle.link,
-                            label=node.name,
-                            url=resource.source.reference,
-                        )
-                return discord.ui.File(f"attachment://{node.name}", spoiler=node.spoiler)
-            case _V2Panel(node=node, children=children):
-                return discord.ui.Container(
-                    *(self._execute(child, plan=plan, wire=wire) for child in children),
-                    accent_colour=node.accent,
-                    spoiler=node.spoiler,
-                )
-            case _V2Section(texts=texts, accessory=accessory):
-                return discord.ui.Section(
-                    *(discord.ui.TextDisplay(text) for text in texts),
-                    accessory=self._execute(accessory, plan=plan, wire=wire),
-                )
-            case _V2Separator(node=node):
-                spacing = discord.SeparatorSpacing.large if node.large else discord.SeparatorSpacing.small
-                return discord.ui.Separator(visible=node.visible, spacing=spacing)
+            case _V2File():
+                return self._draw_file(instruction.node, plan=plan)
+            case _V2Panel():
+                return self._draw_panel(instruction, plan=plan, wire=wire)
+            case _V2Section():
+                return self._draw_section(instruction, plan=plan, wire=wire)
+            case _V2Separator():
+                return self._draw_separator(instruction.node)
             case _V2Row(children=children):
                 return discord.ui.ActionRow(*(self._execute(child, plan=plan, wire=wire) for child in children))
             case _V2ControlRow(node=node):
                 return discord.ui.ActionRow(self._control(node, plan=plan, wire=wire))
-            case _V2RoutedSelect(node=node):
-                select = RoutedSelectItem(
-                    options=[
-                        discord.SelectOption(
-                            label=option.label,
-                            value=option.value,
-                            description=option.description,
-                            default=option.default,
-                            emoji=discord_emoji(option.emoji),
-                        )
-                        for option in node.options
-                    ],
-                    custom_id=node.route_id,
-                    placeholder=node.placeholder,
-                    min_values=node.min_values,
-                    max_values=node.max_values,
-                    disabled=node.disabled,
-                )
-                return discord.ui.ActionRow(select)
-            case _V2Gallery(node=node):
-                return discord.ui.MediaGallery(
-                    *(
-                        discord.MediaGalleryItem(
-                            f"attachment://{entry.asset_name}" if entry.asset_name is not None else entry.url,
-                            description=entry.description,
-                            spoiler=entry.spoiler,
-                        )
-                        for entry in node.items
-                    )
-                )
+            case _V2RoutedSelect():
+                return self._draw_routed_select(instruction.node)
+            case _V2Gallery():
+                return self._draw_gallery(instruction.node)
             case _V2Thumbnail(node=node):
                 return discord.ui.Thumbnail(node.url, description=node.description, spoiler=node.spoiler)
-            case _V2Link(node=node):
-                return discord.ui.Button(
-                    style=discord.ButtonStyle.link,
-                    label=node.label,
-                    url=node.url,
-                    emoji=discord_emoji(node.emoji),
-                    disabled=node.disabled,
-                )
+            case _V2Link():
+                return self._draw_link(instruction.node)
             case _V2Premium(node=node):
                 return discord.ui.Button(sku_id=node.sku_id)
             case _V2Control(node=node):
                 return self._control(node, plan=plan, wire=wire)
-            case _V2RoutedButton(node=node):
-                return RoutedItem(
-                    style=getattr(discord.ButtonStyle, node.style.value),
-                    label=node.label,
-                    custom_id=node.route_id,
-                    emoji=discord_emoji(node.emoji),
-                    disabled=node.disabled,
-                )
+            case _V2RoutedButton():
+                return self._draw_routed_button(instruction.node)
             case _V2Extension(node=node):
                 return self._extension(node, plan)
+
+    def _draw_file(self, node: scene.File, plan: PlanResult[scene.ComponentsV2] | None) -> discord.ui.Item[Any]:
+        resource = plan.resources.get(f"asset:{node.asset_key}") if plan is not None else None
+        if isinstance(resource, Asset) and isinstance(resource.source, StoredAsset):
+            parsed = urlsplit(resource.source.reference)
+            if parsed.scheme in {"http", "https"} and parsed.netloc:
+                if node.spoiler:
+                    message = "stored-file link conversion cannot preserve spoiler metadata"
+                    raise DrawInvariantError(message)
+                return discord.ui.Button(
+                    style=discord.ButtonStyle.link,
+                    label=node.name,
+                    url=resource.source.reference,
+                )
+        return discord.ui.File(f"attachment://{node.name}", spoiler=node.spoiler)
+
+    def _draw_panel(
+        self, instruction: _V2Panel, plan: PlanResult[scene.ComponentsV2] | None, wire: Wire | None
+    ) -> discord.ui.Item[Any]:
+        return discord.ui.Container(
+            *(self._execute(child, plan=plan, wire=wire) for child in instruction.children),
+            accent_colour=instruction.node.accent,
+            spoiler=instruction.node.spoiler,
+        )
+
+    def _draw_section(
+        self, instruction: _V2Section, plan: PlanResult[scene.ComponentsV2] | None, wire: Wire | None
+    ) -> discord.ui.Item[Any]:
+        return discord.ui.Section(
+            *(discord.ui.TextDisplay(text) for text in instruction.texts),
+            accessory=self._execute(instruction.accessory, plan=plan, wire=wire),
+        )
+
+    def _draw_separator(self, node: scene.Separator) -> discord.ui.Item[Any]:
+        spacing = discord.SeparatorSpacing.large if node.large else discord.SeparatorSpacing.small
+        return discord.ui.Separator(visible=node.visible, spacing=spacing)
+
+    def _draw_routed_select(self, node: scene.RoutedSelect) -> discord.ui.Item[Any]:
+        select = RoutedSelectItem(
+            options=[
+                discord.SelectOption(
+                    label=option.label,
+                    value=option.value,
+                    description=option.description,
+                    default=option.default,
+                    emoji=discord_emoji(option.emoji),
+                )
+                for option in node.options
+            ],
+            custom_id=node.route_id,
+            placeholder=node.placeholder,
+            min_values=node.min_values,
+            max_values=node.max_values,
+            disabled=node.disabled,
+        )
+        return discord.ui.ActionRow(select)
+
+    def _draw_gallery(self, node: scene.Gallery) -> discord.ui.Item[Any]:
+        return discord.ui.MediaGallery(
+            *(
+                discord.MediaGalleryItem(
+                    f"attachment://{entry.asset_name}" if entry.asset_name is not None else entry.url,
+                    description=entry.description,
+                    spoiler=entry.spoiler,
+                )
+                for entry in node.items
+            )
+        )
+
+    def _draw_link(self, node: scene.Link) -> discord.ui.Item[Any]:
+        return discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label=node.label,
+            url=node.url,
+            emoji=discord_emoji(node.emoji),
+            disabled=node.disabled,
+        )
+
+    def _draw_routed_button(self, node: scene.RoutedButton) -> discord.ui.Item[Any]:
+        return RoutedItem(
+            style=getattr(discord.ButtonStyle, node.style.value),
+            label=node.label,
+            custom_id=node.route_id,
+            emoji=discord_emoji(node.emoji),
+            disabled=node.disabled,
+        )
