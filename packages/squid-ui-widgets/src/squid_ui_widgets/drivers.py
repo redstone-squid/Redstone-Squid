@@ -206,7 +206,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
 
     # RouteDriver is the restart boundary; a generic state dataclass has no honest JSON
     # decoder for durable component restoration.
-    machine_state: StateT = state(persist=False)
+    machine_state: StateT = state()
 
     @overload
     def __init__(

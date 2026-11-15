@@ -91,7 +91,7 @@ class BuildDraft(sl.Reactive):
 
     build: BuildSample = sl.state(BuildSample())
     publication: sl.operations.OperationExecution[tuple[BuildSample, frozenset[str]], str] | None = sl.state(
-        None, persist=False, opaque=True
+        None, opaque=True
     )
 
     def __init__(self) -> None:
@@ -177,7 +177,7 @@ class Workbench(InspectablePanel):
     policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-workbench")))
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
-    notice: str = sl.state("Edit the build, then undo. Watch the preview follow both changes.", persist=False)
+    notice: str = sl.state("Edit the build, then undo. Watch the preview follow both changes.")
     fail_next: bool = sl.state(False)
 
     def __init__(self, draft: BuildDraft) -> None:

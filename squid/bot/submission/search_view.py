@@ -95,7 +95,7 @@ class _SearchSource:
 
 class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     _build_node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
-        None, persist=False, opaque=True
+        None, opaque=True
     )
 
     def __init__(

@@ -58,17 +58,11 @@ class StarboardScreen(sd.Screen):
     permission when an action is submitted, including deletion confirmation.
     """
 
-    _snapshots: Mapping[int, StarboardSnapshot] = sl.state({}, persist=False)
-    _browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = sl.state(
-        default=None, persist=False
-    )
-    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
-        default=None, persist=False
-    )
-    _deleting: StarboardSnapshot | None = sl.state(default=None, persist=False)
-    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
-        default=None, persist=False
-    )
+    _snapshots: Mapping[int, StarboardSnapshot] = sl.state({})
+    _browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = sl.state(default=None)
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(default=None)
+    _deleting: StarboardSnapshot | None = sl.state(default=None)
+    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(default=None)
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD))
 

@@ -20,7 +20,7 @@ class VideoEditor(sd.Screen[VideoRenderRequest]):
     seconds: int = sl.state(6)
     orbit: float = sl.state(180.0)
     simulate: bool = sl.state(True)
-    interactions: tuple[VideoInteraction, ...] = sl.state((VideoInteraction(tick=20),), persist=False)
+    interactions: tuple[VideoInteraction, ...] = sl.state((VideoInteraction(tick=20),))
 
     def __init__(
         self,

@@ -98,24 +98,24 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Red
 class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A tag workspace that ends when replaced or timed out."""
 
-    _build_id: int | None = sl.state(None, persist=False)
+    _build_id: int | None = sl.state(None)
     _build_label: str = sl.state("")
-    _restriction: tuple[Suggestion, Revision] | None = sl.state(None, persist=False)
-    _build_revision: int | None = sl.state(default=None, persist=False)
-    _tag_names: Mapping[int, str] = sl.state(factory=dict, persist=False)
+    _restriction: tuple[Suggestion, Revision] | None = sl.state(None)
+    _build_revision: int | None = sl.state(default=None)
+    _tag_names: Mapping[int, str] = sl.state(factory=dict)
     _catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
-        default=None, persist=False
+        default=None
     )
     _pending: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
-        default=None, persist=False
+        default=None
     )
     _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
-        default=None, persist=False
+        default=None
     )
     _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
-        sl.state(default=None, persist=False)
+        sl.state(default=None)
     )
-    _pending_action: tuple[TagDefinition, str] | None = sl.state(default=None, persist=False)
+    _pending_action: tuple[TagDefinition, str] | None = sl.state(default=None)
 
     policy = sd.ResponseSpec(nav=sd.navigation_controls.page_jump_nav, timeout=300, session=sd.SessionSpec("tags"))
 

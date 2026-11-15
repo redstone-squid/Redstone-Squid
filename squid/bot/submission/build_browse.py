@@ -169,7 +169,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         sl.state(None, opaque=True)
     )
     _review: BoundEdit | None = sl.state(None, opaque=True)
-    _pending_review: str | None = sl.state(None, persist=False)
+    _pending_review: str | None = sl.state(None)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
     _show_schematics: bool = sl.state(False)
 

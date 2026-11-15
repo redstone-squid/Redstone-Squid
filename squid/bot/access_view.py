@@ -66,15 +66,15 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     """
 
     policy = sd.ResponseSpec(nav=sd.navigation_controls.page_jump_nav, timeout=300, session=sd.SessionSpec("access"))
-    _selected_pattern: tuple[str, int] | None = sl.state(None, persist=False)
-    _selected_role: tuple[PermissionRole, int] | None = sl.state(None, persist=False)
-    _revision: int = sl.state(default=0, persist=False)
+    _selected_pattern: tuple[str, int] | None = sl.state(None)
+    _selected_role: tuple[PermissionRole, int] | None = sl.state(None)
+    _revision: int = sl.state(default=0)
     _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
-        default=None, persist=False
+        default=None
     )
-    _pending_delete: tuple[str, int, int] | None = sl.state(default=None, persist=False)
+    _pending_delete: tuple[str, int, int] | None = sl.state(default=None)
     _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
-        sl.state(default=None, persist=False)
+        sl.state(default=None)
     )
 
     def __init__(

@@ -166,11 +166,9 @@ class ErrorReportScreen(sd.Screen[int]):
     work_lost_only: bool = sl.state(False)
     confirming_clear: bool = sl.state(False)
     cleared_count: int | None = sl.state(None)
-    _reports: tuple[ErrorReport, ...] = sl.state((), persist=False, opaque=True)
-    _updates: _ReportUpdates | None = sl.state(None, persist=False, opaque=True)
-    _browser: sp.Browser[ErrorReport, sl.ComponentsV2Target, sd.Request] | None = sl.state(
-        None, persist=False, opaque=True
-    )
+    _reports: tuple[ErrorReport, ...] = sl.state((), opaque=True)
+    _updates: _ReportUpdates | None = sl.state(None, opaque=True)
+    _browser: sp.Browser[ErrorReport, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
 
     def __init__(
         self,

@@ -70,7 +70,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         session=sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD),
     )
 
-    _version: Suggestion | None = sl.state(None, persist=False)
+    _version: Suggestion | None = sl.state(None)
     _restrictions: tuple[Suggestion, ...] = sl.state(())
     _gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True

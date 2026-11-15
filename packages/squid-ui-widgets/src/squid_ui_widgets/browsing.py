@@ -43,12 +43,12 @@ class BrowseSession[ItemT](Reactive):
     stepping backwards within their currently loaded window.
     """
 
-    snapshot: BrowseSnapshot[ItemT] | None = state(None, persist=False, opaque=True)
-    revision: int = state(0, persist=False)
-    visit: int = state(0, persist=False)
-    operation: OperationExecution[None, None] | None = state(None, persist=False, opaque=True)
-    _request: _Request[ItemT] | None = state(None, persist=False, opaque=True)
-    source: WindowSource[ItemT] = state(persist=False, opaque=True)
+    snapshot: BrowseSnapshot[ItemT] | None = state(None, opaque=True)
+    revision: int = state(0)
+    visit: int = state(0)
+    operation: OperationExecution[None, None] | None = state(None, opaque=True)
+    _request: _Request[ItemT] | None = state(None, opaque=True)
+    source: WindowSource[ItemT] = state(opaque=True)
 
     def __init__(
         self,

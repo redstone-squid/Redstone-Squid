@@ -201,7 +201,7 @@ def _validate_adoptable(view: discord.ui.View | discord.ui.LayoutView, *, discar
 class _AdoptedView(Component[Any, Any]):
     """A component whose whole model is one legacy view."""
 
-    _view: discord.ui.View | discord.ui.LayoutView = state(persist=False, opaque=True)
+    _view: discord.ui.View | discord.ui.LayoutView = state(opaque=True)
 
     def __init__(
         self,

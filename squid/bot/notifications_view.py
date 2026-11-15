@@ -119,9 +119,9 @@ class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
 class NotificationSettings(sl.Reactive):
     """The preferences and subscriptions snapshot sharing one persisted revision."""
 
-    preferences: NotificationPreferences | None = sl.state(None, persist=False)
-    subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
-    labels: Mapping[int, str] = sl.state(factory=dict, persist=False)
+    preferences: NotificationPreferences | None = sl.state(None)
+    subscriptions: tuple[NotificationSubscription, ...] = sl.state(())
+    labels: Mapping[int, str] = sl.state(factory=dict)
 
     def __init__(self, notifications: NotificationService, account_id: int) -> None:
         self._notifications = notifications
@@ -203,7 +203,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
 
     selected_ids: tuple[str, ...] = sl.state(())
     page: int = sl.state(0)
-    filter_tag: Suggestion | None = sl.state(None, persist=False)
+    filter_tag: Suggestion | None = sl.state(None)
     filter_tag_type: TagValueType = sl.state(TagValueType.TEXT)
 
     def __init__(self, settings: NotificationSettings, edits: EditController) -> None:
@@ -523,9 +523,9 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
 class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Own visible inbox items, selection, and read-state changes."""
 
-    _visibility: InboxVisibility = sl.state(DEFAULT_INBOX_VISIBILITY, persist=False)
+    _visibility: InboxVisibility = sl.state(DEFAULT_INBOX_VISIBILITY)
     selected_inbox_ids: tuple[str, ...] = sl.state(())
-    _inbox: tuple[InboxNotification, ...] = sl.state((), persist=False)
+    _inbox: tuple[InboxNotification, ...] = sl.state(())
 
     def __init__(
         self,

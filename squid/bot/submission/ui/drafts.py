@@ -125,7 +125,7 @@ class DraftWorkspace(sl.Reactive):
 
     notice: sl.TextLike = sl.state("")
     """An error from the last action, shown until the next action replaces it."""
-    option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({}, persist=False)
+    option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({})
     """Catalogue options keyed by option source, used for labels and select menus."""
 
     def __init__(

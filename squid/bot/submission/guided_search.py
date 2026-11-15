@@ -56,7 +56,7 @@ OPERATORS = {
 class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     query: str = sl.state("")
     sort: str = sl.state("")
-    selected: FieldDefinition | None = sl.state(None, persist=False)
+    selected: FieldDefinition | None = sl.state(None)
     picker: sp.SearchPicker[Suggestion] | None = sl.state(None, opaque=True)
     panel: Literal["fields", "sort"] | None = sl.state(None)
     picker_title: sl.TextLike = sl.state("")

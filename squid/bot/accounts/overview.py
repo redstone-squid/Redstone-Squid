@@ -60,13 +60,13 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """
 
     selected_id: int | None = sl.state(None)
-    _revision: int = sl.state(1, persist=False)
+    _revision: int = sl.state(1)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
-    _identities: tuple[AccountIdentity, ...] = sl.state((), persist=False)
-    _needs_consent: bool = sl.state(False, persist=False)
+    _identities: tuple[AccountIdentity, ...] = sl.state(())
+    _needs_consent: bool = sl.state(False)
     # No default: the empty profile needs this instance's account id.
-    _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: ProfileEditor | None = sl.state(None, persist=False, opaque=True)
+    _profile: AccountProfile = sl.state()
+    _profile_editor: ProfileEditor | None = sl.state(None, opaque=True)
 
     def __init__(
         self,

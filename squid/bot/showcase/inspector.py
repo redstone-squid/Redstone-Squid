@@ -9,7 +9,7 @@ from squid.bot.ui import tr
 
 class InspectablePanel(sd.Screen):
     policy = sd.ResponseSpec(audience="public", live_updates=True)
-    inspection: sl.TextLike = sl.state("", persist=False)
+    inspection: sl.TextLike = sl.state("")
 
     def inspection_state(self) -> str:
         """Describe this panel's meaningful application state without mutating it."""

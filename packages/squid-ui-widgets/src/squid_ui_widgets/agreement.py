@@ -45,8 +45,8 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](C
     persistence of the agreement's result.
     """
 
-    approved: tuple[str, ...] = state((), persist=False)
-    resolved: bool = state(False, persist=False)
+    approved: tuple[str, ...] = state(())
+    resolved: bool = state(False)
 
     def __init__(
         self,

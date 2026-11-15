@@ -60,10 +60,10 @@ class BuildEditWorkspace(sl.Reactive):
 
     staged: Mapping[str, JSONValue] = sl.state({})
     """Edited answers keyed by field ID; a field the build has no value for holds None or []."""
-    unresolved: UnresolvedTaxonomy = sl.state(UnresolvedTaxonomy(), persist=False)
+    unresolved: UnresolvedTaxonomy = sl.state(UnresolvedTaxonomy())
     """Names on the build that match no catalogue entry and that the user has not removed."""
     notice: sl.TextLike = sl.state("")
-    option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({}, persist=False)
+    option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({})
     revision: int = sl.state(0)
     """Counts changes; a section modal compares it to notice that it was opened before an undo."""
     history: sl.runtime.History = sl.runtime.history(limit=20)

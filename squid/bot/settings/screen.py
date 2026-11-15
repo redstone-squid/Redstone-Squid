@@ -164,8 +164,8 @@ class SettingsPanel(sd.Screen):
 class SettingsEditor(sl.Reactive):
     """Own the guild snapshot and revision shared by both settings pages."""
 
-    snapshot: GuildSettings | None = sl.state(None, persist=False)
-    revision: int = sl.state(0, persist=False)
+    snapshot: GuildSettings | None = sl.state(None)
+    revision: int = sl.state(0)
 
     def __init__(
         self,
