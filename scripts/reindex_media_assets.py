@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 if __package__ in {None, ""}:
@@ -35,7 +36,7 @@ from squid.media.infrastructure import FfmpegMediaNormalizer
 from squid.persistence.engine import DatabaseEngine
 
 INVENTORY = """
-SELECT u.*, j.status, d.source_messages,
+SELECT u.*, j.status, d.source_messages, d.source_files,
        r.inputs->'bundle'->'channel_id' AS bundle_channel_id,
        jsonb_path_query_array(r.inputs, '$.bundle.primary[*].message_id') AS bundle_message_ids,
        (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.role) FROM media_artifacts a WHERE a.upload_id=u.id) AS artifacts
@@ -75,6 +76,13 @@ async def recover_source(
         channels = {}
     if messages is None:
         messages = OrderedDict()
+    attachment_ids: set[int] = set()
+    for source_file in row.get("source_files", []):
+        if source_file["id"] != str(row["id"]):
+            continue
+        parts = urlsplit(source_file["url"]).path.split("/")
+        if len(parts) >= 5 and parts[1] == "attachments" and parts[3].isdecimal():
+            attachment_ids.add(int(parts[3]))
     locations = [(int(source["channel_id"]), int(source["id"])) for source in row["source_messages"]]
     # Inference can attribute the build to its main message while its files came
     # from follow-up messages in the same retained bundle.
@@ -97,7 +105,10 @@ async def recover_source(
         except discord.HTTPException:
             continue
         for attachment in message.attachments:
-            if attachment.size != expected_size:
+            # Discord's declared PNG size can differ from the downloaded bytes.
+            # A retained attachment ID is stronger evidence for selecting a source;
+            # the actual byte count and checksum below still decide acceptance.
+            if attachment.id not in attachment_ids and attachment.size != expected_size:
                 continue
             with anyio.fail_after(120):
                 await attachment.save(destination)

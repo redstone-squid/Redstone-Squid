@@ -46,10 +46,11 @@ async def test_repair_rejects_corrupted_original(tmp_path: Path) -> None:
         await recover_source(row, source, AsyncMock(), AsyncMock())
 
 
-async def test_repair_recovers_attachment_from_followup_message(tmp_path: Path) -> None:
+@pytest.mark.parametrize("declared_size", [4, 8, 16])
+async def test_repair_recovers_attachment_from_followup_message(tmp_path: Path, declared_size: int) -> None:
     destination = tmp_path / "source"
     data = b"original"
-    attachment = MagicMock(size=len(data))
+    attachment = MagicMock(id=42, size=declared_size)
 
     async def save(path: Path) -> None:
         path.write_bytes(data)
@@ -62,6 +63,8 @@ async def test_repair_recovers_attachment_from_followup_message(tmp_path: Path) 
     store = AsyncMock()
     store.get_path.return_value = None
     row: dict[str, Any] = {
+        "id": "source-id",
+        "source_files": [{"id": "source-id", "url": "https://cdn.discordapp.com/attachments/10/42/image.png"}],
         "source_byte_size": len(data),
         "source_sha256": hashlib.sha256(data).hexdigest(),
         "source_object_key": "raw/source",
