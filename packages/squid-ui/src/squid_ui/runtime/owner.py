@@ -14,7 +14,7 @@ from squid_ui.presentation import PresentationState
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.render_cache import RenderCache
-from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _owns_current_activity, _ServiceLifecycle
+from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _ServiceLifecycle
 from squid_ui.runtime.tree import ComponentTree
 from squid_ui.target_types import RenderTarget
 
@@ -428,12 +428,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
     def check_service_wait(self) -> None:
         """Reject a caller whose own service run would be included in shutdown."""
-        owners = self._services._active | self._services._retired
-        if _owns_current_activity(
-            activation for owner in owners for activation in (*owner._current.values(), *owner._retired)
-        ):
-            message = "service activity cannot await its own component's shutdown"
-            raise RuntimeError(message)
+        self._services.check_wait()
 
     async def wait_services_ready(self) -> None:
         """Wait for the mounted services to finish setup.

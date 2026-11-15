@@ -607,6 +607,31 @@ async def test_child_activity_cannot_wait_for_its_owner_or_host() -> None:
         await owner.wait()
 
 
+@pytest.mark.parametrize("retired", [False, True])
+async def test_component_shutdown_check_covers_active_and_retired_service_activity(retired: bool) -> None:
+    async with running_host() as host:
+        panel = Panel()
+        runtime = ComponentRuntime(panel, execution_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        checked = asyncio.Event()
+
+        async def child() -> None:
+            with anyio.CancelScope(shield=True):
+                if retired:
+                    runtime.finish()
+                with pytest.raises(RuntimeError, match="own component's shutdown"):
+                    runtime.check_service_wait()
+                checked.set()
+
+        panel.service.task_groups[0].start_soon(child)
+        await checked.wait()
+        runtime.check_service_wait()
+        runtime.finish()
+        await runtime.wait_services()
+        runtime.check_service_wait()
+
+
 @pytest.mark.parametrize("shutdown", ["owner", "host"])
 async def test_service_can_submit_shutdown_to_application_task_group(shutdown: str) -> None:
     async with running_host() as host, anyio.create_task_group() as application_tasks:

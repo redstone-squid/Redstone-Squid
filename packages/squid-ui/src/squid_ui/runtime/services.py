@@ -581,6 +581,13 @@ class _ServiceLifecycle:
         runs = tuple(run for owner in self._active for run in owner._ready_runs())
         await _wait_ready(runs)
 
+    def check_wait(self) -> None:
+        """Reject service activity that would wait for its own component's shutdown."""
+        owners = self._active | self._retired
+        if _owns_current_activity(run for owner in owners for run in (*owner._current.values(), *owner._retired)):
+            message = "service activity cannot await its own component's shutdown"
+            raise RuntimeError(message)
+
     async def wait(self, *, allow_reentry: bool) -> None:
         if _owns_current_activity(run for owner in self._retired for run in owner._retired):
             if allow_reentry:
