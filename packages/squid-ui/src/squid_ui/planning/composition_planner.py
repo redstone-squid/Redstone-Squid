@@ -223,7 +223,10 @@ def _output[RenderTargetT, AdapterT, BodyT: scene.Body, ResourceT, PreparationT]
     if not isinstance(built.body, request.target.body_type):
         message = "composition rules constructed a body for another target"
         raise LayoutInvariantError(message)
-    resources = {identity.key: use.value for identity, use in built.evaluation.resources.uses.items()}
+    resources = {
+        f"asset:{identity.key}" if identity.kind == "attachment" else identity.key: use.value
+        for identity, use in built.evaluation.resources.uses.items()
+    }
     if len(resources) != len(built.evaluation.resources.uses):
         message = "composition resources have colliding delivery keys"
         raise LayoutInvariantError(message)

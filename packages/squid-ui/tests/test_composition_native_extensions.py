@@ -98,7 +98,7 @@ def test_opaque_shared_assets_are_charged_once_across_siblings() -> None:
     )
     assert result.cost.get(Axis.ATTACHMENTS) == 1
     assert result.cost.get(Axis.COMPONENTS) == 2
-    assert result.resources[asset.key] is asset
+    assert result.resources[f"asset:{asset.key}"] is asset
 
 
 def test_opaque_cost_is_checked_against_independent_native_measurement() -> None:

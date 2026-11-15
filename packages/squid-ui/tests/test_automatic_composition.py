@@ -176,3 +176,15 @@ def test_shared_modal_requires_one_top_level_form() -> None:
     target = sl.slack.modal_target(adapter=AdapterProfile(SlackAdapter, "joint.modal", ">=1"))
     with pytest.raises(sl.LayoutInvariantError, match="one top-level"):
         sl.planning.plan(sl.paragraph("Body"), target=target, composition=CompositionOptions(automatic=True))
+
+
+def test_shared_html_assets_reach_the_delivery_renderer() -> None:
+    asset = sl.file(b"report contents", filename="report.txt")
+    result = sl.planning.plan(
+        sl.download(asset, label="Report", key="report"),
+        target=sl.html.target(),
+        composition=CompositionOptions(automatic=True),
+    )
+
+    assert result.resources[f"asset:{asset.key}"] is asset
+    assert "data:text/plain;base64," in sl.html.Renderer().draw(result.scene, plan=result)
