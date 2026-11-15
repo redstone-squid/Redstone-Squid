@@ -6,7 +6,7 @@ subscriptions. Lookup accepts a definition ID or an exact category; the record
 service persists the requested category and recomputes its standings.
 """
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import replace
 from functools import partial
 from typing import Any, Literal, Protocol, override
@@ -22,7 +22,7 @@ from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTR
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
 from squid.suggestions.domain import Suggestion
-from squid_i18n import md_tr
+from squid_i18n import Text, md_tr
 
 
 class RecordOperations(Protocol):
@@ -57,8 +57,16 @@ class RecordComputationOperations(Protocol):
 type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
+type BuildOpener = Callable[[int, sl.ActionEvent], Awaitable[None]]
+
+
 class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     """Show record diagnostics and maintenance controls for one guild session.
+
+    Three tabs cover the staff workflow. "Missing evidence" lists record categories
+    that cannot be decided until their builds gain measurements, "Unrecognised titles"
+    lists categories whose titles contain terms the title rules do not know, and
+    "Recompute" recalculates standings once either has been fixed.
 
     Initial capabilities choose which tabs and forms are visible. Each maintenance
     action calls authorize again before invoking the record service.
@@ -96,6 +104,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._can_inspect = can_inspect
         self._can_rebuild = can_rebuild
         self._authorize = authorize
+        self.open_build: BuildOpener | None = None
+        """Opens a build from a gap's details; set by a host that can show builds."""
 
     @override
     async def on_load(self) -> None:
@@ -110,16 +120,12 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             sl.sources.list_source(gaps),
             key="evidence-gaps",
             identity=lambda gap: str(gap.definition_id),
-            label=lambda gap: truncate_display_text(gap.title, 80),
-            summary=lambda gap: f"{gap.title} · missing {', '.join(gap.fields)}",
-            detail=lambda gap: sl.fields(
-                sl.field(tr(t"bot-submission-records-definition = Definition"), str(gap.definition_id)),
-                sl.field(tr(t"bot-submission-records-builds = Builds"), ", ".join(map(str, gap.build_ids))),
-                sl.field(tr(t"bot-submission-records-missing-evidence = Missing evidence"), ", ".join(gap.fields)),
-            ),
+            label=lambda gap: truncate_display_text(_gap_title(gap), 80),
+            summary=_gap_summary,
+            detail=self._gap_detail,
             page_size=15,
-            title=tr(t"bot-submission-records-record-evidence-gaps = Record evidence gaps"),
-            empty=tr(t"records-no-unresolved-categories = No unresolved active record categories."),
+            title=tr(t"bot-submission-records-record-evidence-gaps = Records missing evidence"),
+            empty=tr(t"records-no-unresolved-categories = Every active record category has the evidence it needs."),
         )
         self._titles = sp.Browser(
             sl.sources.list_source(titles),
@@ -127,16 +133,35 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             identity=lambda gap: str(gap.definition_id),
             label=lambda gap: truncate_display_text(gap.title, 80),
             summary=lambda gap: gap.title,
-            detail=lambda gap: sl.fields(
-                sl.field(tr(t"bot-submission-records-definition = Definition"), str(gap.definition_id)),
-                sl.field(
-                    tr(t"bot-submission-records-diagnostics = Diagnostics"),
-                    ", ".join(str(item.get("code", "unknown")) for item in gap.diagnostics),
-                ),
+            detail=lambda gap: sl.section(
+                sl.heading(gap.title),
+                sl.paragraph(Text.join("\n", [_diagnostic_text(item) for item in gap.diagnostics])),
+                sl.note(_category_note(gap.definition_id)),
             ),
             page_size=15,
-            title=tr(t"bot-submission-records-record-title-diagnostics = Record title diagnostics"),
-            empty=tr(t"records-no-titles-need-review = No active record titles require taxonomy review."),
+            title=tr(t"bot-submission-records-record-title-diagnostics = Unrecognised record titles"),
+            empty=tr(t"records-no-titles-need-review = Every active record title uses known terms."),
+        )
+
+    def _gap_detail(self, gap: RecordGap) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        needs = ", ".join(field.replace("_", " ") for field in gap.fields)
+        return sl.section(
+            sl.heading(_gap_title(gap)),
+            sl.paragraph(tr(t"records-gap-needs = Needs {needs} on these builds:")),
+            sl.action_controls(
+                *(
+                    sl.action_control(
+                        tr(t"records-gap-open-build = Open build #{build_id!s}"),
+                        partial(self.open_build, build_id),
+                        key=f"gap-build-{build_id}",
+                    )
+                    for build_id in gap.build_ids[:5]
+                ),
+                key="gap-builds",
+            )
+            if self.open_build is not None and gap.build_ids
+            else sl.paragraph(", ".join(f"#{build_id}" for build_id in gap.build_ids)),
+            sl.note(_category_note(gap.definition_id)),
         )
 
     def _build_tabs(self) -> None:
@@ -144,21 +169,45 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._gaps is not None and self._titles is not None:
             tabs.extend(
                 (
-                    sp.Tab("gaps", tr(t"bot-submission-records-evidence-gaps = Evidence gaps"), self._gaps),
-                    sp.Tab("titles", tr(t"bot-submission-records-title-issues = Title issues"), self._titles),
+                    sp.Tab(
+                        "gaps",
+                        tr(t"bot-submission-records-evidence-gaps = Missing evidence"),
+                        (
+                            sl.note(
+                                tr(
+                                    t"records-gaps-purpose = These record categories cannot be decided yet. Add "
+                                    t"the missing values to their builds, then recompute."
+                                )
+                            ),
+                            self._gaps,
+                        ),
+                    ),
+                    sp.Tab(
+                        "titles",
+                        tr(t"bot-submission-records-title-issues = Unrecognised titles"),
+                        (
+                            sl.note(
+                                tr(
+                                    t"records-titles-purpose = These record titles contain terms the title rules "
+                                    t"do not know. Fix the taxonomy, then rebuild records."
+                                )
+                            ),
+                            self._titles,
+                        ),
+                    ),
                 )
             )
         tabs.append(
             sp.Tab(
                 "maintenance",
-                tr(t"records-maintenance-tools = Maintenance tools"),
+                tr(t"records-maintenance-tools = Recompute"),
                 self._maintenance_nodes(),
             )
         )
         self._tabs = sp.Tabs(
             tabs,
             key="records-tabs",
-            title=tr(t"bot-submission-records-records = Records"),
+            title=tr(t"bot-submission-records-records = Record tools"),
             initial_state=None if self._tabs is None else self._tabs.machine_state,
         )
 
@@ -166,68 +215,80 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._tabs is None:
             return (sl.status(tr(t"records-diagnostics-loading = Loading record diagnostics.")),)
-        return (
-            sl.note(self._version.label)
-            if self._version
-            else sl.note(tr(t"records-active-version = Using the active version")),
-            sl.action_controls(
-                sl.action_control(tr(t"records-choose-version = Choose version"), self._choose_version, key="version"),
-                sl.action_control(
-                    tr(t"records-reset-version = Use active version"),
-                    self._reset_version,
-                    key="active-version",
-                ),
-                key="version-actions",
-            ),
-            self._tabs,
-        )
+        return (self._tabs,)
 
     def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not (self._can_inspect or self._can_rebuild):
             return (sl.note(tr(t"records-no-maintenance-actions = No maintenance actions are available.")),)
+        version = self._version.label if self._version else tr(t"records-active-version = the active version")
         return (
+            sl.note(
+                tr(
+                    t"records-maintenance-purpose = Recalculate standings after fixing builds or title rules. "
+                    t"These actions use the rules of {version}."
+                )
+            ),
             sl.action_controls(
                 self._can_inspect
                 and sl.action_control(
-                    tr(t"records-choose-definition = Find definition by name"),
+                    tr(t"records-choose-definition = Recompute a category"),
                     self._choose_definition,
                     key="definition",
                 ),
-                self._can_inspect
-                and sl.action_control(
-                    tr(t"records-choose-restriction = Add category restriction"),
-                    self._choose_restriction,
-                    key="restriction",
-                ),
-                self._can_inspect
-                and sl.form(
-                    tr(t"records-exact-category = Lookup exact category"),
-                    self._lookup_form(),
-                    key="lookup",
-                    on_submit=self._lookup,
-                ),
                 self._can_rebuild
                 and sl.form(
-                    tr(t"bot-submission-records-rebuild-records = Rebuild records"),
+                    tr(t"bot-submission-records-rebuild-records = Rebuild all records"),
                     self._rebuild_form(),
                     key="rebuild",
                     on_submit=self._rebuild,
                 ),
+                sl.action_control(
+                    tr(t"records-choose-version = Use another version"), self._choose_version, key="version"
+                ),
+                self._version is not None
+                and sl.action_control(
+                    tr(t"records-reset-version = Use active version"),
+                    self._reset_version,
+                    key="active-version",
+                ),
                 key="maintenance-forms",
+                display=sl.semantic.ControlDisplay.INDIVIDUAL,
             ),
             *(
-                sl.action_controls(
-                    sl.action_control(
-                        item.label, partial(self._remove_restriction, item.value), key=f"restriction-{item.value}"
+                (
+                    sl.heading(tr(t"records-exact-heading = Category without a record")),
+                    sl.note(
+                        tr(
+                            t"records-exact-purpose = Create and compute a record category by its exact key, "
+                            t"optionally narrowed by restrictions."
+                        )
                     ),
-                    key=f"selected-{item.value}",
+                    sl.action_controls(
+                        sl.form(
+                            tr(t"records-exact-category = Look up exact category"),
+                            self._lookup_form(),
+                            key="lookup",
+                            on_submit=self._lookup,
+                        ),
+                        sl.action_control(
+                            tr(t"records-choose-restriction = Add restriction"),
+                            self._choose_restriction,
+                            key="restriction",
+                        ),
+                        *(
+                            sl.action_control(
+                                _remove_label(item.label),
+                                partial(self._remove_restriction, item.value),
+                                key=f"restriction-{item.value}",
+                            )
+                            for item in self._restrictions
+                        ),
+                        key="exact-category",
+                        display=sl.semantic.ControlDisplay.INDIVIDUAL,
+                    ),
                 )
-                for item in self._restrictions
-            ),
-            sl.note(
-                tr(
-                    t"records-restriction-removal = Selected restrictions apply to exact category requests. Press one to remove it."
-                )
+                if self._can_inspect
+                else ()
             ),
         )
 
@@ -269,9 +330,11 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _version_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
         self._version = item
+        self._build_tabs()
 
     async def _reset_version(self, _event: sd.PressEvent) -> None:
         self._version = None
+        self._build_tabs()
 
     async def _choose_restriction(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
@@ -387,6 +450,30 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             tr(t"records-operation-permission-denied = You are no longer allowed to perform this records operation.")
         )
         return False
+
+
+def _gap_title(gap: RecordGap) -> str:
+    return f"{gap.title} · {gap.subtitle}" if gap.subtitle else gap.title
+
+
+def _gap_summary(gap: RecordGap) -> sl.TextLike:
+    title = _gap_title(gap)
+    needs = ", ".join(field.replace("_", " ") for field in gap.fields)
+    return tr(t"records-gap-summary = {title} · needs {needs}")
+
+
+def _diagnostic_text(diagnostic: Mapping[str, str | list[str]]) -> str:
+    """Prefer the stored explanation; older rows may carry only a code."""
+    message = diagnostic.get("message")
+    return f"- {message}" if isinstance(message, str) and message else f"- {diagnostic.get('code', 'unknown')}"
+
+
+def _category_note(definition_id: int) -> sl.TextLike:
+    return tr(t"records-category-id = Category definition #{definition_id!s}")
+
+
+def _remove_label(label: sl.TextLike) -> sl.TextLike:
+    return tr(t"records-remove-restriction = Remove {label}")
 
 
 class _LookupForm(sl.forms.Form):

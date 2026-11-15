@@ -110,7 +110,7 @@ async def test_records_use_tabs_and_browsers_for_diagnostics() -> None:
     assert screen._gaps is not None
     assert screen._titles is not None
     assert screen._tabs is not None
-    assert {"Evidence gaps", "Title issues", "Maintenance tools"} <= set(labels(screen._tabs.render()))
+    assert {"Missing evidence", "Unrecognised titles", "Recompute"} <= set(labels(screen._tabs.render()))
 
 
 async def test_lookup_materializes_and_refreshes_diagnostics() -> None:

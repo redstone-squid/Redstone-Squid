@@ -323,8 +323,8 @@ async def test_record_tools_load_on_request_and_return_to_builds() -> None:
         records.gaps.assert_not_awaited()
         await ui.press(ui.key_for("record-tools"))
         records.gaps.assert_awaited_once()
-        assert "## Record evidence gaps" in ui.texts()
-        assert "No unresolved active record categories." in ui.texts()
+        assert "## Records missing evidence" in ui.texts()
+        assert "Every active record category has the evidence it needs." in ui.texts()
         ui.assert_within_limits()
         await ui.press(ui.key_for("all-builds"))
         assert "## Build catalogue" in ui.texts()
@@ -402,10 +402,15 @@ async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
     tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
     async with stage(_screen(initial_id=None, record_tools=tools), owner=object()) as ui:
         await ui.press(ui.key_for("record-tools"))
-        assert "## Record evidence gaps" in ui.texts()
+        assert "## Records missing evidence" in ui.texts()
         await ui.select(ui.key_for("evidence-gaps.open"), ["1"])
-        assert any("width" in text for text in ui.texts())
+        assert any("Needs width" in text for text in ui.texts())
         ui.assert_within_limits()
+        # A gap's build opens in place of the tools, and Back returns to the same gap.
+        await ui.press(ui.key_for("gap-build-7"))
+        assert "Build #7" in ui.texts()
+        await ui.press(ui.key_for("linked-build.back"))
+        assert any("Needs width" in text for text in ui.texts())
 
 
 @pytest.mark.parametrize("records", [False, True])

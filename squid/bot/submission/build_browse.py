@@ -457,6 +457,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._mode = "records" if initial_records and records is not None else "builds"
         self._records = record_browser(records, self._open_holder) if records is not None else None
         self._record_tools = record_tools
+        if record_tools is not None:
+            record_tools.open_build = self._open_holder
         self._topics = topics
         self._queries = queries
         self._builds = builds
@@ -498,7 +500,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._mode == "tools" and self._record_tools is not None:
-            return (self._workspace_controls(), self._record_tools)
+            # A build opened from Record tools replaces them until its Back returns there.
+            return (self._workspace_controls(), self._selected or self._record_tools)
         nodes = [self._workspace_controls(), *self._find_nodes()]
         if self._show_search_help:
             # Help takes the place of the list or build below the search controls, so it reads
