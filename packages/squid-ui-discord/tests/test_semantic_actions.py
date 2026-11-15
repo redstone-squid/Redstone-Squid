@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from squid_ui import fallback, scene, testing, truncate
+from squid_ui import fallback, scene, truncate
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.interactions import ActionEvent, ActionMode
@@ -15,11 +15,13 @@ from squid_ui.planning import plan
 from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.joint_search import JointExhaustedError
+from squid_ui.planning.result import PlanResult
 from squid_ui.presentations import corresponds
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_ui.primitives.nodes import Node
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.presentation_state import StrategyState
+from squid_ui.selectors import query, select
 from squid_ui.semantic import (
     ActionControl,
     ActionControls,
@@ -55,7 +57,8 @@ def _visible_action_keys(result: Any) -> set[str]:
     assert isinstance(result.allocation, CertifiedAllocation)
     keys: set[str] = set()
     for page in result.allocation.pages:
-        for node in testing.walk(page.output.scene.body):
+        for match in query(page.output.scene, select(scene.Button).union(select(scene.Select))).all():
+            node = match.node
             if isinstance(node, scene.Button) and node.action.startswith("action."):
                 keys.add(node.action)
                 assert node.action in page.output.bindings
@@ -102,9 +105,9 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
         target=DISCORD_V2_DPY27,
     )
 
-    select = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
+    picker = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
     rows = [node for node in result.scene.components_v2.children if isinstance(node, scene.Row)]
-    assert [option.value for option in select.options] == ["archive"]
+    assert [option.value for option in picker.options] == ["archive"]
     assert any(isinstance(item, scene.Button) and item.action == "delete" for row in rows for item in row.items)
     assert sum(len(row.items) for row in rows) == 2
 
@@ -112,9 +115,9 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
 def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
     action = ActionControl("read", "Read", _act, mode=ActionMode.PARALLEL_READ)
     result = plan(ActionControls((action,), key="demo", display=ControlDisplay.GROUPED), target=DISCORD_V2_DPY27)
-    select = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
+    picker = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
 
-    routed = result.bindings[select.action].routed(("read",))
+    routed = result.bindings[picker.action].routed(("read",))
 
     assert routed is not None
     assert routed.key == "read"
@@ -284,19 +287,8 @@ def test_a_complete_search_reports_its_shared_work_budget() -> None:
     assert result.metrics.work_used <= 50_000
 
 
-def _texts(result) -> set[str]:
-    """Collect scene text nodes, descending through panels used by these fixtures."""
-    found: set[str] = set()
-
-    def walk(children) -> None:
-        for child in children:
-            if isinstance(child, scene.Text):
-                found.add(child.content)
-            elif isinstance(child, scene.Panel):
-                walk(child.children)
-
-    walk(result.scene.components_v2.children)
-    return found
+def _texts(result: PlanResult[scene.ComponentsV2]) -> set[str]:
+    return {match.node.content for match in query(result.scene, select(scene.Text)).all()}
 
 
 def test_an_unopened_branch_leaves_no_trace_of_itself() -> None:

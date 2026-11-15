@@ -7,7 +7,8 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui_widgets as sp
-from squid_ui import scene, testing
+from squid_ui import scene
+from squid_ui.selectors import query, select
 
 OPTIONS = (
     sp.TallyOption("yes", "Yes", 3, mine=True, emoji="✅"),
@@ -17,7 +18,7 @@ OPTIONS = (
 
 def test_inert_tally_renders_counts_bars_and_reader_emphasis() -> None:
     result = sl.planning.plan(sl.tally(OPTIONS, key="vote"), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
-    text = [item.content for item in testing.walk(result.scene.body) if isinstance(item, scene.Text)]
+    text = [match.node.content for match in query(result.scene, select(scene.Text)).all()]
 
     assert any(value.startswith("Yes:") and value.endswith("75%") for value in text)
     assert any(value.startswith("No:") and value.endswith("25%") for value in text)
@@ -32,8 +33,8 @@ async def test_mounted_tally_dispatches_the_selected_value() -> None:
         seen.append(event)
 
     result = sl.planning.plan(sl.tally(OPTIONS, key="vote", on_vote=vote), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
-    select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
-    await result.bindings[select.action].handler(
+    picker = query(result.scene, select(scene.Select)).all()[0].node
+    await result.bindings[picker.action].handler(
         sl.SelectionEvent(
             sl.interactions.Actor("7"),
             cast(sl.interactions.ActionResponder, object()),
@@ -51,7 +52,7 @@ def test_mounted_tally_inherits_select_adaptation_for_many_options() -> None:
     options = tuple(sp.TallyOption(str(index), f"Option {index}", index) for index in range(6))
     result = sl.planning.plan(sl.tally(options, key="vote", on_vote=vote), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
 
-    assert any(isinstance(item, scene.Select) for item in testing.walk(result.scene.body))
+    assert query(result.scene, "scene.Select").exists()
 
 
 def test_routed_tally_uses_one_restart_surviving_selection_route() -> None:
@@ -59,10 +60,10 @@ def test_routed_tally_uses_one_restart_surviving_selection_route() -> None:
         sl.tally(OPTIONS, key="vote", route_id="poll:vote"),
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
-    select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.RoutedSelect))
+    picker = query(result.scene, select(scene.RoutedSelect)).all()[0].node
 
-    assert select.route_id == "poll:vote"
-    assert [option.value for option in select.options] == ["yes", "no"]
+    assert picker.route_id == "poll:vote"
+    assert [option.value for option in picker.options] == ["yes", "no"]
 
 
 def test_tally_rejects_invalid_inputs() -> None:

@@ -36,6 +36,7 @@ from squid_ui.primitives import (
     Variants,
 )
 from squid_ui.primitives.nodes import Node
+from squid_ui.selectors import query, select
 
 
 def _rendered(solved) -> str:
@@ -59,19 +60,7 @@ def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> Plan
 
 
 def _text(result: PlanResult[scene.ComponentsV2]) -> str:
-    parts: list[str] = []
-
-    def walk(children: Sequence[scene.Node]) -> None:
-        for child in children:
-            if isinstance(child, scene.Text):
-                parts.append(child.content)
-            elif isinstance(child, scene.Panel):
-                walk(child.children)
-            elif isinstance(child, scene.Section):
-                walk(child.texts)
-
-    walk(result.scene.components_v2.children)
-    return "\n".join(parts)
+    return "\n".join(match.node.content for match in query(result.scene, select(scene.Text)).all())
 
 
 def _components(result: PlanResult[scene.ComponentsV2]) -> int:

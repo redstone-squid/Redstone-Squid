@@ -7,12 +7,13 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui_widgets as sp
-from squid_ui import scene, testing
+from squid_ui import scene
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.component import render_component_tree
+from squid_ui.selectors import query, select
 
 
 def _cells(count: int) -> tuple[sp.GridCell, ...]:
@@ -32,7 +33,7 @@ def test_explicit_matrix_table_is_dense_and_authoritative() -> None:
     )
 
     result = sl.planning.plan(table, target=squid_ui.ext.discord.DISCORD_V2_DPY27)
-    text = next(item.content for item in testing.walk(result.scene.body) if isinstance(item, scene.Text))
+    text = query(result.scene, select(scene.Text)).all()[0].node.content
 
     assert text.splitlines()[1].split() == ["Name", "Value"]
     assert "-+-" not in text
@@ -51,8 +52,8 @@ async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() ->
         squid_ui.ext.discord.button_grid(*cells, key="board", columns=5, on_pick=pick),
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
-    rows = [item for item in testing.walk(result.scene.body) if isinstance(item, scene.Row)]
-    buttons = [item for item in testing.walk(result.scene.body) if isinstance(item, scene.Button)]
+    rows = [match.node for match in query(result.scene, select(scene.Row)).all()]
+    buttons = [match.node for match in query(result.scene, select(scene.Button)).all()]
 
     assert [len(row.items) for row in rows] == [5, 1]
     assert buttons[-1].disabled
@@ -89,11 +90,11 @@ def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
 
-    assert any(isinstance(item, scene_type) for item in testing.walk(result.scene.body))
+    assert query(result.scene, select(scene_type)).exists()
     assert result.allocation is not None
     if strategy == "paged_select":
-        select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
-        assert 1 <= len(select.options) <= 25
+        picker = query(result.scene, select(scene.Select)).all()[0].node
+        assert 1 <= len(picker.options) <= 25
         assert result.scene.pagers[0].pages == 2
 
 
@@ -112,7 +113,7 @@ def test_changed_grid_shape_recomputes_its_shared_representation() -> None:
         session=session,
     )
 
-    assert any(isinstance(item, scene.Button) for item in testing.walk(second.scene.body))
+    assert query(second.scene, "scene.Button").exists()
     assert second.allocation is not first.allocation
 
 
@@ -132,10 +133,10 @@ async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_key
         ),
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
-    select = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Select))
+    picker = query(result.scene, select(scene.Select)).all()[0].node
 
-    assert [(option.label, option.value) for option in select.options] == [("A1 — Open", "open")]
-    await result.bindings[select.action].handler(
+    assert [(option.label, option.value) for option in picker.options] == [("A1 — Open", "open")]
+    await result.bindings[picker.action].handler(
         sl.SelectionEvent(
             sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), values=("open",), context=None
         )
