@@ -40,6 +40,33 @@ class CachedPlan[BodyT: scene.Body = scene.Body]:
     degradation: DegradationProfile = field(default_factory=DegradationProfile, kw_only=True)
 
 
+_MISSING = object()
+
+
+class _LruStore[ValueT]:
+    """Promote successful reads and writes; apply the owner's capacity only on writes."""
+
+    def __init__(self) -> None:
+        self._entries: OrderedDict[str, ValueT] = OrderedDict()
+
+    def get[DefaultT](self, key: str, default: DefaultT) -> ValueT | DefaultT:
+        try:
+            value = self._entries[key]
+        except KeyError:
+            return default
+        self._entries.move_to_end(key)
+        return value
+
+    def put(self, key: str, value: ValueT, *, capacity: int) -> None:
+        self._entries[key] = value
+        self._entries.move_to_end(key)
+        while len(self._entries) > capacity:
+            self._entries.popitem(last=False)
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+
 class PlanCache[BodyT: scene.Body = Any]:
     """Reuse callback-free plans, evicting the least recently used entries when full.
 
@@ -50,8 +77,9 @@ class PlanCache[BodyT: scene.Body = Any]:
     Shared pagination stores partition hints separately. They contain only occurrence
     paths and cuts; current content, navigation, and resources are certified again.
 
-    Each store holds at most `capacity` entries. Specialize `BodyT` when the owner
-    knows its scene type; the default also supports runtime-selected targets.
+    Each store trims to `capacity` on writes. Changing capacity takes effect separately
+    on the next write to each store. Specialize `BodyT` when the owner knows its scene
+    type; the default also supports runtime-selected targets.
     """
 
     def __init__(self, capacity: int = 32) -> None:
@@ -59,48 +87,30 @@ class PlanCache[BodyT: scene.Body = Any]:
             message = "plan cache capacity must be positive"
             raise ValueError(message)
         self.capacity = capacity
-        self._entries: OrderedDict[str, CachedPlan[BodyT]] = OrderedDict()
-        self._incremental: OrderedDict[str, None] = OrderedDict()
-        self._partitions: OrderedDict[str, Mapping[OccurrenceId, tuple[int, ...]]] = OrderedDict()
+        self._entries = _LruStore[CachedPlan[BodyT]]()
+        self._incremental = _LruStore[None]()
+        self._partitions = _LruStore[Mapping[OccurrenceId, tuple[int, ...]]]()
 
     def get(self, key: str) -> CachedPlan[BodyT] | None:
-        value = self._entries.get(key)
-        if value is not None:
-            self._entries.move_to_end(key)
-        return value
+        return self._entries.get(key, None)
 
     def put(self, key: str, value: CachedPlan[BodyT]) -> None:
-        self._entries[key] = value
-        self._entries.move_to_end(key)
-        while len(self._entries) > self.capacity:
-            self._entries.popitem(last=False)
+        self._entries.put(key, value, capacity=self.capacity)
 
     def partition_hint(self, key: str) -> Mapping[OccurrenceId, tuple[int, ...]] | None:
         """Return prior cuts as a search hint, never as a certificate of feasibility."""
-        value = self._partitions.get(key)
-        if value is not None:
-            self._partitions.move_to_end(key)
-        return value
+        return self._partitions.get(key, None)
 
     def remember_partitions(self, key: str, cuts: Mapping[OccurrenceId, tuple[int, ...]]) -> None:
-        self._partitions[key] = MappingProxyType(dict(cuts))
-        self._partitions.move_to_end(key)
-        while len(self._partitions) > self.capacity:
-            self._partitions.popitem(last=False)
+        self._partitions.put(key, MappingProxyType(dict(cuts)), capacity=self.capacity)
 
     def admits_incremental(self, key: str) -> bool:
         """Whether a prior lossless plan certified this configuration and region shape."""
-        if key not in self._incremental:
-            return False
-        self._incremental.move_to_end(key)
-        return True
+        return self._incremental.get(key, _MISSING) is not _MISSING
 
     def certify_incremental(self, key: str) -> None:
         """Record one lossless, uncoupled region shape as eligible for local replanning."""
-        self._incremental[key] = None
-        self._incremental.move_to_end(key)
-        while len(self._incremental) > self.capacity:
-            self._incremental.popitem(last=False)
+        self._incremental.put(key, None, capacity=self.capacity)
 
     def __len__(self) -> int:
         return len(self._entries)
