@@ -39,6 +39,7 @@ from squid_ui.planning.realizations import (
     FieldsRealization,
     FlowRealization,
     ImageRealization,
+    OfferPolicy,
     PanelRealization,
     Realization,
     RowRealization,
@@ -128,12 +129,14 @@ class SlackCompositionRules[
         discovered = semantic_offers(
             occurrence,
             context,
-            table_forms=(TableForm.NATIVE, TableForm.RECORDS),
-            panels=False,
-            disabled_controls=False,
-            text_limit=self.limits.components.section_text,
-            heading_limit=self.limits.components.header_text,
-            grid_columns=self.limits.components.actions_elements,
+            OfferPolicy(
+                table_forms=(TableForm.NATIVE, TableForm.RECORDS),
+                panels=False,
+                disabled_controls=False,
+                text_limit=self.limits.components.section_text,
+                heading_limit=self.limits.components.header_text,
+                grid_columns=self.limits.components.actions_elements,
+            ),
         )
 
         if self.modal is None:

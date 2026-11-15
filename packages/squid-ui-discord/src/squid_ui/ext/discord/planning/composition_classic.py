@@ -41,6 +41,7 @@ from squid_ui.planning.realizations import (
     FieldsRealization,
     FlowRealization,
     ImageRealization,
+    OfferPolicy,
     PanelRealization,
     PremiumRealization,
     Realization,
@@ -80,14 +81,16 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         return semantic_offers(
             occurrence,
             context,
-            table_forms=(TableForm.RECORDS, TableForm.MATRIX),
-            panels=True,
-            nested_panels=False,
-            text_limit=min(self.limits.content, self.limits.embeds.description),
-            native_controls=True,
-            panel_text_limit=self.limits.embeds.description,
-            grid_columns=self.limits.components.row_buttons,
-            embed_limits=asdict(self.limits.embeds),
+            OfferPolicy(
+                table_forms=(TableForm.RECORDS, TableForm.MATRIX),
+                panels=True,
+                nested_panels=False,
+                text_limit=min(self.limits.content, self.limits.embeds.description),
+                native_controls=True,
+                panel_text_limit=self.limits.embeds.description,
+                grid_columns=self.limits.components.row_buttons,
+                embed_limits=asdict(self.limits.embeds),
+            ),
         )
 
     def evaluate(

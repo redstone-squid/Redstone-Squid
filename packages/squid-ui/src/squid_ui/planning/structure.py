@@ -71,7 +71,7 @@ def disclosure_state[RenderTargetT, ContextT](
             return session.disclosure(node.key, initial=initial).open
 
 
-def toggle_state(node: Toggle, session: PresentationState) -> bool:
+def toggle_state[ContextT](node: Toggle[ContextT], session: PresentationState) -> bool:
     """Whether a toggle is on: the author's word when controlled, session memory otherwise."""
     match node.on:
         case Controlled(value=value):

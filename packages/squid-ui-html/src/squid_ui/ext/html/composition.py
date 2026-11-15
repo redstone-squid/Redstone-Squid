@@ -35,6 +35,7 @@ from squid_ui.planning.realizations import (
     FlowRealization,
     ImageRealization,
     MetricRealization,
+    OfferPolicy,
     PanelRealization,
     ProgressRealization,
     Realization,
@@ -96,7 +97,9 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
         | OfferDiscovery[RenderTargetT, ContextT, Realization]
     ):
         return semantic_offers(
-            occurrence, context, table_forms=(TableForm.NATIVE, TableForm.RECORDS), panels=True, character_budgets=True
+            occurrence,
+            context,
+            OfferPolicy(table_forms=(TableForm.NATIVE, TableForm.RECORDS), panels=True, character_budgets=True),
         )
 
     def evaluate(

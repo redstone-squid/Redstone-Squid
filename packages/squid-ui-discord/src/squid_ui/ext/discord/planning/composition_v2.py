@@ -45,6 +45,7 @@ from squid_ui.planning.realizations import (
     GalleryRealization,
     ImageRealization,
     NativeSectionRealization,
+    OfferPolicy,
     OpaqueRealization,
     PanelRealization,
     PremiumRealization,
@@ -83,13 +84,15 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         return semantic_offers(
             occurrence,
             context,
-            table_forms=(TableForm.RECORDS, TableForm.MATRIX),
-            panels=True,
-            nested_panels=False,
-            character_budgets=True,
-            native_controls=True,
-            native_v2=True,
-            grid_columns=self.limits.components.row_buttons,
+            OfferPolicy(
+                table_forms=(TableForm.RECORDS, TableForm.MATRIX),
+                panels=True,
+                nested_panels=False,
+                character_budgets=True,
+                native_controls=True,
+                native_v2=True,
+                grid_columns=self.limits.components.row_buttons,
+            ),
         )
 
     def evaluate(
