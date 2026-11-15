@@ -13,7 +13,7 @@ import pytest
 import squid_ui as sl
 from squid_ui import Component, PressEvent, state
 from squid_ui.ext.discord import Everyone, MessageRoot
-from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, handle_for
+from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, handle_for, handle_for_original
 from squid_ui.ext.discord.message_payload import MessagePayload
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.testing import interaction_harness, message_harness, payload_texts
@@ -207,7 +207,8 @@ async def test_an_unreachable_message_goes_stale_and_is_repainted_when_pressed()
     interaction = press_from(delivery, 0)
     await root.dispatch("rename", interaction, generation=root.generation)
 
-    assert payload_texts(interaction.response.edit_message.records[0].kwargs["view"]) == ["Renamed", "Note 0"]
+    assert len(interaction.deferrals) == 1
+    assert payload_texts(interaction.followup.edit_message.records[0].kwargs["view"]) == ["Renamed", "Note 0"]
     assert root._candidates.stale == frozenset()
 
 
@@ -229,3 +230,31 @@ async def test_a_press_renews_the_credentials_that_delete_its_message() -> None:
 
     assert len(press.deletions) == 1
     assert grown.deletions == []
+
+
+async def test_editing_another_ephemeral_message_acknowledges_before_the_webhook_write() -> None:
+    delivery = Delivery()
+    credentials = [interaction_harness(message_id=message.id) for message in delivery.messages]
+
+    async def send(payload: MessagePayload) -> DeliveryResult:
+        index = len(delivery.sent)
+        delivery.sent.append(payload)
+        credential = credentials[index]
+        await credential.response.defer(thinking=True, ephemeral=True)
+        return DeliveryResult(
+            delivery.messages[index], handle_for_original(credential, mode=payload.mode), follow_up=send
+        )
+
+    root = MessageRoot(Panel(), access=Everyone(), timeout=None, target=TARGET, max_messages=3)
+    await root.send(send)
+    interaction = press_from(delivery, 0)
+
+    async def edit_other(**kwargs: Any) -> None:
+        assert interaction.response.is_done(), "the source click must be answered before editing another message"
+
+    credentials[1].edit_original_response.callback = edit_other
+    await root.dispatch("inc", interaction)
+
+    assert len(interaction.deferrals) == 1
+    assert len(credentials[1].edit_original_response.records) == 1
+    assert interaction.response.edit_message.records == []

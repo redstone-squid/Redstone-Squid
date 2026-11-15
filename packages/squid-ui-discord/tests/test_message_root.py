@@ -2059,7 +2059,7 @@ class TestDeliveryAtomicity:
         await message_root.dispatch("__cursor_next.entries", interaction, generation=live_generation)
 
         assert message_root.presentation.cursor("entries").position.page == 1
-        written = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        written = str(interaction.followup.edit_message.await_args.kwargs["view"].to_components())
         assert "Page 2 of 3" in written
         assert not message_root.pending
 
@@ -2145,7 +2145,7 @@ class TestDeliveryAtomicity:
         await message_root.dispatch("delete", interaction, generation=live_generation)
 
         assert not component.deleted
-        assert "Really delete?" in str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        assert "Really delete?" in str(interaction.followup.edit_message.await_args.kwargs["view"].to_components())
         await message_root.dispatch("delete", interaction_harness(), generation=message_root.generation)
         assert component.deleted
 
@@ -2164,13 +2164,20 @@ class TestDeliveryAtomicity:
 
         # The click is answered with the state the failed edit did not show, not dropped.
         interaction = interaction_harness()
+        preflight = message_root._preflight
+
+        def acknowledged_preflight(*args: Any, **kwargs: Any) -> Any:
+            assert interaction.response.is_done()
+            return preflight(*args, **kwargs)
+
+        monkeypatch.setattr(message_root, "_preflight", acknowledged_preflight)
         await message_root.dispatch("add", interaction, generation=live_generation)
 
         assert "added" not in panel.entries
         assert message_root.generation > live_generation
         assert not message_root.pending
         assert mounted == ["child"]
-        interaction.response.edit_message.assert_awaited_once()
+        interaction.followup.edit_message.assert_awaited_once()
 
         await message_root.dispatch("add", interaction_harness(), generation=message_root.generation)
         assert panel.entries[-1] == "added"

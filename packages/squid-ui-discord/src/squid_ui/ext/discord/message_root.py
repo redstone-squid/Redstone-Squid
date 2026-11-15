@@ -1708,6 +1708,10 @@ class MessageRoot[
             if not needed[index] or index > delivered:
                 continue
             own = through if index == source else None
+            if own is None and interaction is not None:
+                # A different message's webhook edit cannot answer this click. Do not
+                # leave its acknowledgement waiting for that network request to finish.
+                await self._acknowledge(interaction)
             if index == 0:
                 handle = await self._write(
                     candidate.payload, keep_attachments=keep_attachments, through=own, profile=profile
@@ -2416,6 +2420,7 @@ class MessageRoot[
                 # again without reading it. Consider framework-drawn status chrome on this
                 # repaint (as for "Live updates paused") or a short personal notice, and let a
                 # mount opt out for panels where the change is self-explanatory.
+                await self._acknowledge(interaction, profile=profile, source="stale")
                 profile.presentation = await self.refresh(interaction, profile=profile)
                 profile.finish(DispatchDisposition.STALE)
                 return
