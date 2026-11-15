@@ -2,6 +2,7 @@
 
 import io
 import logging
+import math
 import mimetypes
 import tempfile
 from collections import OrderedDict
@@ -86,12 +87,14 @@ class MediaPreviewClient:
         self._session = None
 
 
-async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10) -> io.BytesIO:
-    """Decode downloaded video bytes into one PNG frame, scaled to fit 1920 by 1080.
+async def extract_video_preview(video_data: bytes, *, timeout_seconds: float = 10) -> io.BytesIO:
+    """Decode one video frame to PNG, scaled to fit 1920 by 1080.
 
-    Kill ffmpeg on timeout or cancellation. Nonzero exit status and output larger
-    than `MAX_VIDEO_FRAME_BYTES` raise RuntimeError; the size check occurs after
-    the subprocess output has been read.
+    Seek halfway through the clip, capped at 30 seconds, to avoid recorder startup screens.
+    Unknown duration or an empty seek result falls back to the first frame.
+    Kill probe/decoder processes on timeout or cancellation. Nonzero exit status
+    and output larger than `MAX_VIDEO_FRAME_BYTES` raise RuntimeError; the size
+    check occurs after the subprocess output has been read.
     """
     # Ordinary MP4 files can store their index after the video packets. A pipe
     # cannot seek back to those packets once ffmpeg has read the index.
@@ -100,30 +103,55 @@ async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10)
         await source.write_bytes(video_data)
         try:
             with anyio.fail_after(timeout_seconds):
-                process = await anyio.run_process(
+                probe = await anyio.run_process(
                     [
-                        "ffmpeg",
+                        "ffprobe",
                         "-v",
                         "error",
-                        "-nostdin",
-                        "-threads",
-                        "1",
                         "-protocol_whitelist",
                         "file,pipe",
-                        "-i",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "default=noprint_wrappers=1:nokey=1",
                         str(source),
-                        "-frames:v",
-                        "1",
-                        "-vf",
-                        "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease",
-                        "-f",
-                        "image2pipe",
-                        "-vcodec",
-                        "png",
-                        "pipe:1",
                     ],
                     check=False,
                 )
+                try:
+                    duration = float(probe.stdout) if probe.returncode == 0 else 0.0
+                except ValueError:
+                    duration = 0.0
+                seek = min(duration / 2, 30.0) if math.isfinite(duration) and duration > 0 else 0.0
+                for offset in (seek, 0.0) if seek else (0.0,):
+                    process = await anyio.run_process(
+                        [
+                            "ffmpeg",
+                            "-v",
+                            "error",
+                            "-nostdin",
+                            "-threads",
+                            "1",
+                            "-protocol_whitelist",
+                            "file,pipe",
+                            "-ss",
+                            str(offset),
+                            "-i",
+                            str(source),
+                            "-frames:v",
+                            "1",
+                            "-vf",
+                            "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease",
+                            "-f",
+                            "image2pipe",
+                            "-vcodec",
+                            "png",
+                            "pipe:1",
+                        ],
+                        check=False,
+                    )
+                    if process.returncode != 0 or process.stdout:
+                        break
         except TimeoutError:
             msg = "Video frame extraction exceeded its deadline."
             raise RuntimeError(msg) from None

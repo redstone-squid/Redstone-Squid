@@ -87,7 +87,7 @@ async def test_video_preview_uses_downloaded_bytes_not_a_remote_ffmpeg_url(
     message = FakeImageMessage(1)
     message.attachments = [attachment]
     extract = AsyncCallRecorder(result=io.BytesIO(b"png-frame"))
-    monkeypatch.setattr(message_context, "extract_first_frame", extract)
+    monkeypatch.setattr(message_context, "extract_video_preview", extract)
 
     images = await collect_images(cast(list[discord.Message], [message]))
 

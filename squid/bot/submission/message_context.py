@@ -15,7 +15,7 @@ from typing import Literal, Protocol, cast
 import discord
 
 from squid.bot.submission.attachments import classify_attachment
-from squid.bot.utils.web import extract_first_frame
+from squid.bot.utils.web import extract_video_preview
 from squid.builds.application import BuildInferenceInput, ContextIdentity, ContextMessage, InlineImage
 from squid.core.errors import SquidError
 
@@ -171,7 +171,7 @@ async def collect_images(
                     video_data = await attachment.read()
                     if len(video_data) > max_bytes:
                         continue
-                    data = (await extract_first_frame(video_data)).getvalue()
+                    data = (await extract_video_preview(video_data)).getvalue()
                     content_type = "image/png"
                     origin = "video_frame"
             except (discord.HTTPException, OSError, RuntimeError) as exc:
