@@ -161,11 +161,38 @@ async def test_unknown_category_is_retained_without_inventing_a_door(monkeypatch
 
 
 async def test_ambiguous_files_wait_for_explicit_assignment(monkeypatch: pytest.MonkeyPatch) -> None:
-    h = setup(monkeypatch, (candidate(), candidate()))
+    source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://cdn.discordapp.com/source.png", 4)
+    h = setup(monkeypatch, (replace(candidate(), source_files=(source,)), replace(candidate(), source_files=(source,))))
     await ingestion.ingest_message_bundle([message(files=True)], [], h.services, model="test")
     assert h.materialize.await_count == 2
     h.download.assert_not_awaited()
     assert len(h.inference.infer_calls.await_args.kwargs["source_files"]) == 1
+    assert h.inference.infer_calls.await_args.kwargs["source_files"][0].source_message_id == 10
+
+
+async def test_each_candidate_receives_only_its_unshared_files(monkeypatch: pytest.MonkeyPatch) -> None:
+    shared = SubmissionSourceFile(uuid4(), "shared.png", "image/png", "https://cdn.discordapp.com/shared.png", 4)
+    own = replace(shared, id=uuid4(), filename="own.png")
+    first = replace(candidate(), source_files=(shared, own))
+    second = replace(candidate(), source_files=(shared,))
+    h = setup(monkeypatch, (first, second))
+
+    await ingestion.admit_candidates(h.services, (first, second), actor=Actor(account_id=7))
+
+    h.download.assert_awaited_once_with(h.services, first.id, Actor(account_id=7), own.id)
+    assert h.finalization.submit_calls.await_count == 2
+
+
+async def test_unknown_category_still_keeps_shared_files_unassigned(monkeypatch: pytest.MonkeyPatch) -> None:
+    source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://cdn.discordapp.com/source.png", 4)
+    known = replace(candidate(), source_files=(source,))
+    unknown = replace(candidate(), facts=BuildDraft(), source_files=(source,))
+    h = setup(monkeypatch, (known, unknown))
+
+    await ingestion.admit_candidates(h.services, (known, unknown), actor=Actor(account_id=7))
+
+    h.download.assert_not_awaited()
+    h.finalization.submit_calls.assert_awaited_once()
 
 
 async def test_download_failure_reaches_preparation_as_a_retained_requirement(monkeypatch: pytest.MonkeyPatch) -> None:

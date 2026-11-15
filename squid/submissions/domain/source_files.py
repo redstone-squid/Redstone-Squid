@@ -13,3 +13,4 @@ class SubmissionSourceFile:
     content_type: str | None
     url: str
     size: int
+    source_message_id: int | None = None

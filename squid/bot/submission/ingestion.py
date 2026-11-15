@@ -8,6 +8,7 @@ user has already edited alone.
 """
 
 import logging
+from collections import Counter
 from collections.abc import Sequence
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -61,6 +62,7 @@ async def ingest_message_bundle(
                 attachment.content_type,
                 attachment.url,
                 attachment.size,
+                source_message_id=message.id,
             )
             for message in primary
             for attachment in message.attachments
@@ -92,6 +94,9 @@ async def admit_candidates(
     Untouched imported drafts blocked on missing metadata can also be retried.
     Shared files still need explicit assignment.
     """
+    file_owners = Counter(
+        source_id for candidate in candidates for source_id in {file.id for file in candidate.source_files}
+    )
     for candidate in candidates:
         if candidate.facts.category is None:
             continue
@@ -130,12 +135,13 @@ async def admit_candidates(
                 )
                 continue
             # Finalization records shared files as unresolved rather than guessing their assignment.
-            if not (len(candidates) > 1 and candidate.source_files):
-                for source in candidate.source_files:
-                    try:
-                        await receive_retained_file(services, candidate.id, actor, source.id)
-                    except Exception:
-                        logger.warning("Could not receive inferred source %s", source.id, exc_info=True)
+            for source in candidate.source_files:
+                if file_owners[source.id] > 1:
+                    continue
+                try:
+                    await receive_retained_file(services, candidate.id, actor, source.id)
+                except Exception:
+                    logger.warning("Could not receive inferred source %s", source.id, exc_info=True)
             outcome = await services.submission_finalization.submit(candidate.id, actor, locale=None)
             if isinstance(outcome, DraftPreparationSnapshot):
                 logger.warning(

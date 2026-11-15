@@ -235,13 +235,26 @@ class PostgresInferenceRunRepository(InferenceRunRepository):
 
 
 def _candidates(row: SubmissionInferenceRun) -> tuple[InferenceCandidate, ...]:
+    drafts = tuple(_DRAFT.validate_python(facts).to_draft() for facts in row.candidates)
+    files = _SOURCE_FILES.validate_python(row.inputs.get("source_files", []))
+    message_owners: dict[int, set[int]] = {}
+    for index, draft in enumerate(drafts):
+        for message in draft.source_messages:
+            message_owners.setdefault(message.id, set()).add(index)
+    # Legacy files and messages without a candidate remain shared evidence for review.
     return tuple(
         InferenceCandidate(
             candidate_id(row.id, index),
             row.id,
             row.owner_account_id,
-            _DRAFT.validate_python(facts).to_draft(),
-            _SOURCE_FILES.validate_python(row.inputs.get("source_files", [])),
+            draft,
+            tuple(
+                source
+                for source in files
+                if source.source_message_id is None
+                or not (owners := message_owners.get(source.source_message_id))
+                or index in owners
+            ),
         )
-        for index, facts in enumerate(row.candidates)
+        for index, draft in enumerate(drafts)
     )
