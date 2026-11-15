@@ -67,6 +67,31 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
     assert browser.opened is None
 
 
+async def test_on_back_replaces_returning_to_the_list() -> None:
+    source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B")))
+    exits: list[str] = []
+
+    async def leave(_event: sl.ActionEvent) -> None:
+        exits.append("left")
+
+    browser = sp.Browser(
+        source,
+        identity=lambda item: item.key,
+        label=lambda item: item.label,
+        detail=lambda item: item.label,
+        page_size=2,
+        on_back=leave,
+    )
+    browser.session.replace(loaded)
+    await engine.choose(browser, "browser.open", "a")
+    await browser._detail.resolve()
+
+    await engine.press(browser, "browser.back")
+
+    assert exits == ["left"]
+    assert browser.opened == Entry("a", "A")
+
+
 async def test_navigating_keeps_the_previous_window_visible_while_the_next_is_pending() -> None:
     """Retain the loaded page until its replacement is ready."""
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))

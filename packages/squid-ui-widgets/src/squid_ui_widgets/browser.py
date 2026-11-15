@@ -1,6 +1,6 @@
 """Present a browsing session as an overview or focused detail."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from functools import partial
 from typing import override
 
@@ -72,6 +72,10 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
     Paging and stepping between opened items say Previous and Next. Pass `chronology` for a
     list sorted by time to label them Newer and Older instead. `show_page_size` adds
     an items-per-page form (1 to 25); changing it returns to the beginning.
+
+    Back in an opened item returns to the list. Pass `on_back` when the list is not a
+    useful destination, such as a browser opened directly on one item; the handler then
+    decides where Back goes and the session keeps its focus.
     """
 
     def __init__(
@@ -91,6 +95,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         show_page_size: bool = False,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
         chronology: Chronology | None = None,
+        on_back: Callable[[ActionEvent], Awaitable[None]] | None = None,
     ) -> None:
         title = None if title is None else Text(title)
         self.key = require_key(key, name="Browser.key")
@@ -115,6 +120,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         self.show_page_size = show_page_size
         self.copy = copy
         self.chronology = chronology
+        self.on_back = on_back
 
     @property
     def source(self) -> WindowSource[ItemT]:
@@ -334,7 +340,11 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
                     key=f"{self.key}.item-next",
                     available=self.session.can_step(1) and not self.session.busy,
                 ),
-                action_control(chrome.back, partial(self._back_at, self.session.revision), key=f"{self.key}.back"),
+                action_control(
+                    chrome.back,
+                    self.on_back or partial(self._back_at, self.session.revision),
+                    key=f"{self.key}.back",
+                ),
                 key=f"{self.key}.detail-navigation",
                 display=ControlDisplay.INDIVIDUAL,
             ),
