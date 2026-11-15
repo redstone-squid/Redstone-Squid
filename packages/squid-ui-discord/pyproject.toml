@@ -27,6 +27,8 @@ dependencies = [
     # PEP 728 open TypedDicts (`extra_items=`) for the command decorators' native kwargs;
     # the stdlib TypedDict on 3.14 does not accept the keyword yet.
     "typing-extensions>=4.13",
+    "htpy>=26.5.1",
+    "markupsafe>=3.0.4",
 ]
 
 [project.optional-dependencies]

@@ -5,6 +5,8 @@
     #   redstone-squid
     #   squid-ui
     #   squid-ui-discord
+    #   squid-ui-html
+    #   squid-ui-slack
     #   squid-ui-widgets
 -e ./packages/squid-reactivity
     # via
@@ -21,10 +23,13 @@
     # via
     #   redstone-squid
     #   squid-ui-discord
+    #   squid-ui-html
     #   squid-ui-slack
     #   squid-ui-widgets
 -e ./packages/squid-ui-discord
     # via redstone-squid
+-e ./packages/squid-ui-html
+    # via squid-ui-discord
 -e ./packages/squid-ui-slack
 -e ./packages/squid-ui-widgets
     # via redstone-squid
@@ -511,6 +516,10 @@ harfile==0.6.0 \
     --hash=sha256:0f2209d6ec164a2aea7e8fb2b49d9fef5ddeee51b65dbfd28a4167185c34bb30 \
     --hash=sha256:3e5751d52c59bda35789748256cbac097b664e65315d15ded67b006c173e34b3
     # via schemathesis
+htpy==26.5.1 \
+    --hash=sha256:148566db9d720c897baa5832e2a496954ce317ab06ef49a103b44f8a15322c3b \
+    --hash=sha256:43a365c1fc670094da781b923883019339cec031397d61d5fe5f8e2f2278b63e
+    # via squid-ui-discord
 httpcore==1.0.9 \
     --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55 \
     --hash=sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8
@@ -689,6 +698,7 @@ markdown-it-py==4.2.0 \
     #   rich
     #   squid-i18n
     #   squid-ui
+    #   squid-ui-html
 markupsafe==3.0.4 \
     --hash=sha256:02fa4acbc6a3fc5c693c34d4dd8c1130b7fe99cc915181b0ddd6f72aeb296002 \
     --hash=sha256:03470d1a8268e692ecf79ecd565593e59d44219377a7ead61f1f1b94c1f7ff6b \
@@ -727,7 +737,9 @@ markupsafe==3.0.4 \
     --hash=sha256:f03460ff076f70ab595bb45a0205ccea1971443575b6920c52e755dec2b3fbfe \
     --hash=sha256:f68edfc67aabac33708941f26f22a7b8e9f81429bc0cf249fcf7d66b23af8d19
     # via
+    #   htpy
     #   mako
+    #   squid-ui-discord
     #   werkzeug
 mdformat==1.0.0 \
     --hash=sha256:4954045fcae797c29f86d4ad879e43bb151fa55dbaf74ac6eaeacf1d45bb3928 \

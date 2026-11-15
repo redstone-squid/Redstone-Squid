@@ -1,7 +1,8 @@
 """Structure, escaping, and codec round trips for the Discord Components V2 HTML preview."""
 
 from dataclasses import replace
-from typing import cast
+from html.parser import HTMLParser
+from typing import cast, override
 
 import pytest
 
@@ -11,6 +12,22 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.interactions import ActionMode
 from squid_ui.text import Markup
 from squid_ui_discord.preview import DiscordPreviewRenderer
+
+
+class HtmlProbe(HTMLParser):
+    def __init__(self, html: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.elements: list[tuple[str, dict[str, str | None]]] = []
+        self.text: list[str] = []
+        self.feed(html)
+
+    @override
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.elements.append((tag, dict(attrs)))
+
+    @override
+    def handle_data(self, data: str) -> None:
+        self.text.append(data)
 
 
 def _scene() -> scene.Scene[scene.ComponentsV2]:
@@ -153,12 +170,14 @@ def test_preview_controls_preserve_escaped_binding_and_option_metadata(routed: b
     rendered = DiscordPreviewRenderer().draw(document)
 
     binding = "data-route-id" if routed else "data-squid-action"
-    assert rendered.count(f'{binding}="choose&quot;&lt;&amp;"') == 2
+    parsed = HtmlProbe(rendered)
+    assert [attrs[binding] for _, attrs in parsed.elements if binding in attrs] == [identifier, identifier]
     assert ('data-squid-mode="exclusive"' in rendered) is not routed
     assert "disabled>&lt;Save&gt;</button>" in rendered
     assert 'data-squid-min="0" data-squid-max="2" multiple disabled' in rendered
     assert '<option value="" disabled selected>&lt;Choose&gt;</option>' in rendered
-    assert '<option value="one&quot;&amp;" selected>&lt;One&gt;</option>' in rendered
+    assert ("option", {"value": 'one"&', "selected": None}) in parsed.elements
+    assert "<One>" in parsed.text
 
 
 @pytest.mark.parametrize("url, disabled", [("javascript:alert(1)", False), ("https://example.com", True)])
@@ -180,3 +199,26 @@ def test_spoiler_panel_keeps_focus_and_accent_attributes_separate() -> None:
     rendered = DiscordPreviewRenderer().draw(document)
 
     assert '<section class="squid-panel squid-spoiler" tabindex="0" style="--squid-accent:#123456">' in rendered
+
+
+def test_preview_builder_escapes_text_and_attributes_without_injecting_elements() -> None:
+    hostile = '"><script>alert(1)</script>&'
+    document = replace(
+        _scene(),
+        body=scene.ComponentsV2(
+            (
+                scene.Text(hostile),
+                scene.Row((scene.Button(hostile, hostile),)),
+                scene.Thumbnail("https://example.invalid/image.png", hostile),
+            )
+        ),
+    )
+
+    rendered = DiscordPreviewRenderer().draw(document)
+    parsed = HtmlProbe(rendered)
+
+    assert type(rendered) is str
+    assert [tag for tag, _ in parsed.elements] == ["div", "div", "div", "button", "img"]
+    assert parsed.text.count(hostile) == 2
+    assert next(attrs for tag, attrs in parsed.elements if tag == "img")["alt"] == hostile
+    assert next(attrs for tag, attrs in parsed.elements if tag == "button")["data-squid-action"] == hostile

@@ -1,71 +1,76 @@
 """HTML for Discord controls, retaining binding metadata without dispatching actions."""
 
-from html import escape
-
-from squid_ui_html.safety import attribute, safe_url
+import htpy as h
+from squid_ui_html.safety import safe_url
 
 from squid_ui import scene
 from squid_ui.entity import EntityKind, EntityRef
 
 
-def _binding(node: scene.Button | scene.RoutedButton | scene.Select | scene.RoutedSelect | scene.EntitySelect) -> str:
+def _binding(
+    node: scene.Button | scene.RoutedButton | scene.Select | scene.RoutedSelect | scene.EntitySelect,
+) -> dict[str, h.Attribute]:
     if isinstance(node, scene.RoutedButton | scene.RoutedSelect):
-        return f'data-route-id="{attribute(node.route_id)}"'
-    entity = f'data-squid-entity="{node.entity_type.value}" ' if isinstance(node, scene.EntitySelect) else ""
-    return f'data-squid-action="{attribute(node.action)}" {entity}data-squid-mode="{node.mode.value}"'
+        return {"data-route-id": node.route_id}
+    attributes: dict[str, h.Attribute] = {"data-squid-action": node.action}
+    if isinstance(node, scene.EntitySelect):
+        attributes["data-squid-entity"] = node.entity_type.value
+    attributes["data-squid-mode"] = node.mode.value
+    return attributes
 
 
-def _label(node: scene.Button | scene.RoutedButton | scene.Link) -> str:
-    icon = f'<span class="squid-button__emoji">{escape(node.emoji.name)}</span> ' if node.emoji else ""
-    return f"{icon}{escape(node.label or '')}"
-
-
-def button(node: scene.Button | scene.RoutedButton | scene.PremiumButton) -> str:
-    if isinstance(node, scene.PremiumButton):
-        return (
-            f'<button type="button" class="squid-button squid-premium" disabled '
-            f'data-sku-id="{node.sku_id}">Premium</button>'
-        )
-    disabled = " disabled" if node.disabled else ""
+def _label(node: scene.Button | scene.RoutedButton | scene.Link) -> h.Node:
     return (
-        f'<button type="button" class="squid-button squid-button--{node.style.value}" '
-        f"{_binding(node)}{disabled}>{_label(node)}</button>"
+        (h.span(class_="squid-button__emoji")[node.emoji.name], " ") if node.emoji else None,
+        node.label or "",
     )
 
 
-def link(node: scene.Link) -> str:
+def button(node: scene.Button | scene.RoutedButton | scene.PremiumButton) -> h.Element:
+    if isinstance(node, scene.PremiumButton):
+        return h.button(type="button", class_="squid-button squid-premium", disabled=True, data_sku_id=node.sku_id)[
+            "Premium"
+        ]
+    return h.button(
+        type="button",
+        class_=f"squid-button squid-button--{node.style.value}",
+        **_binding(node),
+        disabled=node.disabled,
+    )[_label(node)]
+
+
+def link(node: scene.Link) -> h.Element:
     url = safe_url(node.url)
     if url is None or node.disabled:
-        return f'<span class="squid-button squid-link" aria-disabled="true">{_label(node)}</span>'
-    return f'<a class="squid-button squid-link" href="{attribute(url)}" rel="noopener noreferrer">{_label(node)}</a>'
+        return h.span(class_="squid-button squid-link", aria_disabled="true")[_label(node)]
+    return h.a(class_="squid-button squid-link", href=url, rel="noopener noreferrer")[_label(node)]
 
 
-def select(node: scene.Select | scene.RoutedSelect | scene.EntitySelect) -> str:
-    disabled = " disabled" if node.disabled else ""
-    multiple = " multiple" if node.max_values > 1 else ""
+def select(node: scene.Select | scene.RoutedSelect | scene.EntitySelect) -> h.Element:
     prompt_selected = not isinstance(node, scene.EntitySelect) or not node.default_values
     prompt = (
-        f'<option value="" disabled{" selected" if prompt_selected else ""}>{escape(node.placeholder)}</option>'
+        h.option(value="", disabled=True, selected=prompt_selected)[node.placeholder]
         if node.placeholder is not None
-        else ""
+        else None
     )
     if isinstance(node, scene.EntitySelect):
         # Discord fills entity pickers from the guild. Preview only the selected mentions.
-        options = "".join(
-            f'<option value="{attribute(str(ref.id))}" selected>{escape(_mention(ref))}</option>'
-            for ref in node.default_values
-        )
+        options = [h.option(value=str(ref.id), selected=True)[_mention(ref)] for ref in node.default_values]
     else:
-        options = "".join(
-            f'<option value="{attribute(option.value)}"{" selected" if option.default else ""}>'
-            f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
+        options = [
+            h.option(value=option.value, selected=option.default)[
+                (option.emoji.name + " ") if option.emoji else "", option.label
+            ]
             for option in node.options
-        )
-    return (
-        f'<select class="squid-select" {_binding(node)} '
-        f'data-squid-min="{node.min_values}" data-squid-max="{node.max_values}"'
-        f"{multiple}{disabled}>{prompt}{options}</select>"
-    )
+        ]
+    return h.select(
+        class_="squid-select",
+        **_binding(node),
+        data_squid_min=node.min_values,
+        data_squid_max=node.max_values,
+        multiple=node.max_values > 1,
+        disabled=node.disabled,
+    )[prompt, options]
 
 
 def _mention(ref: EntityRef) -> str:

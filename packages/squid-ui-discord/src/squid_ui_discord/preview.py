@@ -4,10 +4,10 @@ import base64
 import json
 from collections.abc import Callable
 from datetime import datetime
-from html import escape
 
+import htpy as h
+from markupsafe import Markup as SafeHtml
 from squid_ui_html.markup import markdown
-from squid_ui_html.safety import attribute as _attribute
 from squid_ui_html.safety import safe_url as _safe_url
 
 from squid_ui import scene
@@ -85,23 +85,21 @@ class DiscordPreviewRenderer:
                 return _safe_url(resource.source.reference)
             return None
 
-        body = "".join(self._node(child, resolve_file) for child in document.body.children)
-        root = (
-            f'<div class="squid-view" data-squid-protocol="{document.protocol}" '
-            f'data-squid-target="{_attribute(document.target)}" data-squid-pagers="{_attribute(pager_data)}">{body}</div>'
-        )
+        root = h.div(
+            class_="squid-view",
+            data_squid_protocol=document.protocol,
+            data_squid_target=document.target,
+            data_squid_pagers=pager_data,
+        )[tuple(self._node(child, resolve_file) for child in document.body.children)]
         if not self.standalone:
-            return root
-        return (
-            '<!doctype html><html><head><meta charset="utf-8">'
-            f"<style>{self.css}</style></head><body>{root}</body></html>"
-        )
+            return str(root.__html__())
+        return str(h.html[h.head[h.meta(charset="utf-8"), h.style[SafeHtml(self.css)]], h.body[root]].__html__())
 
     def _node(
         self,
         node: scene.Node | scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton,
         resolve_file: FileResolver,
-    ) -> str:
+    ) -> h.Node:
         match node:
             case scene.Text():
                 return self._text(node)
@@ -134,86 +132,91 @@ class DiscordPreviewRenderer:
         message = f"DiscordPreviewRenderer cannot draw scene node {type(node).__name__}"
         raise DrawInvariantError(message)
 
-    def _text(self, node: scene.Text) -> str:
-        rendered = (
-            escape(node.content)
+    def _text(self, node: scene.Text) -> h.Element:
+        content = (
+            node.content
             if node.markup is Markup.PLAIN
-            else markdown(node.content, block=True, discord=node.markup is Markup.DISCORD_MARKDOWN)
+            else SafeHtml(markdown(node.content, block=True, discord=node.markup is Markup.DISCORD_MARKDOWN))
         )
-        return f'<div class="squid-text" data-squid-markup="{node.markup.value}">{rendered}</div>'
+        return h.div(class_="squid-text", data_squid_markup=node.markup.value)[content]
 
-    def _time(self, node: scene.Time) -> str:
-        return (
-            f'<div class="squid-text">{escape(node.prefix or "")}'
-            f'<time datetime="{_attribute(node.instant)}" data-squid-style="{_attribute(node.style)}">'
-            f"{escape(node.instant)}</time></div>"
-        )
+    def _time(self, node: scene.Time) -> h.Element:
+        return h.div(class_="squid-text")[
+            node.prefix or "",
+            h.time(datetime=node.instant, data_squid_style=node.style)[node.instant],
+        ]
 
-    def _zoned_time(self, node: scene.ZonedTime) -> str:
+    def _zoned_time(self, node: scene.ZonedTime) -> h.Element:
         value = ZonedDateTime(datetime.fromisoformat(node.instant), node.timezone)
-        return (
-            f'<div class="squid-text">{escape(node.prefix or "")}'
-            f'<time datetime="{_attribute(node.instant)}" data-squid-timezone="{_attribute(node.timezone)}">'
-            f"{escape(value.isoformat())}</time></div>"
-        )
+        return h.div(class_="squid-text")[
+            node.prefix or "",
+            h.time(datetime=node.instant, data_squid_timezone=node.timezone)[value.isoformat()],
+        ]
 
-    def _file(self, node: scene.File, resolve_file: FileResolver) -> str:
-        spoiler_class = " squid-spoiler" if node.spoiler else ""
-        focus = ' tabindex="0"' if node.spoiler else ""
+    def _file(self, node: scene.File, resolve_file: FileResolver) -> h.Element:
         resolved = resolve_file(node)
-        if resolved is None:
-            return (
-                f'<span class="squid-button squid-file{spoiler_class}" aria-disabled="true"{focus}>'
-                f"{escape(node.name)}</span>"
-            )
-        return (
-            f'<a class="squid-button squid-link squid-file{spoiler_class}" href="{_attribute(resolved)}" '
-            f'download="{_attribute(node.name)}"{focus}>{escape(node.name)}</a>'
-        )
-
-    def _separator(self, node: scene.Separator) -> str:
-        if not node.visible:
-            return ""
-        modifier = " squid-separator--large" if node.large else ""
-        return f'<hr class="squid-separator{modifier}">'
-
-    def _panel(self, node: scene.Panel, resolve_file: FileResolver) -> str:
-        style = f' style="--squid-accent:#{node.accent:06x}"' if node.accent is not None else ""
         spoiler_class = " squid-spoiler" if node.spoiler else ""
-        focus = ' tabindex="0"' if node.spoiler else ""
-        return (
-            f'<section class="squid-panel{spoiler_class}"{focus}{style}>'
-            f"{''.join(self._node(child, resolve_file) for child in node.children)}</section>"
-        )
+        if resolved is None:
+            return h.span(
+                class_=f"squid-button squid-file{spoiler_class}",
+                aria_disabled="true",
+                tabindex=0 if node.spoiler else None,
+            )[node.name]
+        return h.a(
+            class_=f"squid-button squid-link squid-file{spoiler_class}",
+            href=resolved,
+            download=node.name,
+            tabindex=0 if node.spoiler else None,
+        )[node.name]
 
-    def _section(self, node: scene.Section, resolve_file: FileResolver) -> str:
-        content = "".join(self._node(text, resolve_file) for text in node.texts)
-        return (
-            f'<section class="squid-section"><div>{content}</div>{self._node(node.accessory, resolve_file)}</section>'
-        )
+    def _separator(self, node: scene.Separator) -> h.VoidElement | None:
+        if not node.visible:
+            return None
+        return h.hr(class_=["squid-separator", {"squid-separator--large": node.large}])
 
-    def _row(self, node: scene.Row, resolve_file: FileResolver) -> str:
-        return f'<div class="squid-row">{"".join(self._node(item, resolve_file) for item in node.items)}</div>'
+    def _panel(self, node: scene.Panel, resolve_file: FileResolver) -> h.Element:
+        return h.section(
+            class_=["squid-panel", {"squid-spoiler": node.spoiler}],
+            tabindex=0 if node.spoiler else None,
+            style=f"--squid-accent:#{node.accent:06x}" if node.accent is not None else None,
+        )[tuple(self._node(child, resolve_file) for child in node.children)]
 
-    def _thumbnail(self, node: scene.Thumbnail) -> str:
+    def _section(self, node: scene.Section, resolve_file: FileResolver) -> h.Element:
+        return h.section(class_="squid-section")[
+            h.div[tuple(self._node(text, resolve_file) for text in node.texts)],
+            self._node(node.accessory, resolve_file),
+        ]
+
+    def _row(self, node: scene.Row, resolve_file: FileResolver) -> h.Element:
+        return h.div(class_="squid-row")[tuple(self._node(item, resolve_file) for item in node.items)]
+
+    def _thumbnail(self, node: scene.Thumbnail) -> h.VoidElement | None:
         safe = _safe_url(node.url)
         if safe is None:
-            return ""
-        spoiler_class = " squid-spoiler" if node.spoiler else ""
-        focus = ' tabindex="0"' if node.spoiler else ""
-        return f'<img class="squid-thumbnail{spoiler_class}" src="{_attribute(safe)}" alt="{_attribute(node.description or "")}"{focus}>'
-
-    def _gallery(self, node: scene.Gallery, resolve_file: FileResolver) -> str:
-        images = "".join(
-            f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
-            f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
-            for item in node.items
-            if (safe := resolve_file(item) if item.asset_name is not None else _safe_url(item.url)) is not None
+            return None
+        return h.img(
+            class_=["squid-thumbnail", {"squid-spoiler": node.spoiler}],
+            src=safe,
+            alt=node.description or "",
+            tabindex=0 if node.spoiler else None,
         )
-        return f'<div class="squid-gallery">{images}</div>'
 
-    def _extension(self, node: scene.Extension) -> str:
-        return (
-            f'<div class="squid-extension" data-squid-extension="{_attribute(node.kind)}" '
-            f'data-squid-extension-version="{node.version}"></div>'
+    def _gallery(self, node: scene.Gallery, resolve_file: FileResolver) -> h.Element:
+        images: list[h.VoidElement] = []
+        for item in node.items:
+            url = resolve_file(item) if item.asset_name is not None else _safe_url(item.url)
+            if url is not None:
+                images.append(
+                    h.img(
+                        class_="squid-spoiler" if item.spoiler else "",
+                        src=url,
+                        alt=item.description or "",
+                        tabindex=0 if item.spoiler else None,
+                    )
+                )
+        return h.div(class_="squid-gallery")[images]
+
+    def _extension(self, node: scene.Extension) -> h.Element:
+        return h.div(
+            class_="squid-extension", data_squid_extension=node.kind, data_squid_extension_version=node.version
         )
