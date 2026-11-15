@@ -5896,7 +5896,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/attachments.py:59"
+      "squid/bot/submission/attachments.py:63"
     ]
   },
   "build-attachment-types-help": {
@@ -5905,7 +5905,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/attachments.py:65"
+      "squid/bot/submission/attachments.py:69"
     ]
   },
   "build-browse-all-builds": {
@@ -12127,7 +12127,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:80"
+      "squid/media/domain/models.py:94"
     ]
   },
   "media-file-normalization-failed": {
@@ -12225,7 +12225,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:51"
+      "squid/media/domain/models.py:65"
     ]
   },
   "media-media-changed-submission": {
@@ -12252,7 +12252,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:143"
+      "squid/media/domain/models.py:157"
     ]
   },
   "media-media-draft-upload": {
@@ -12270,7 +12270,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:149"
+      "squid/media/domain/models.py:163"
     ]
   },
   "media-media-frame-count": {
@@ -12279,7 +12279,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:152"
+      "squid/media/domain/models.py:166"
     ]
   },
   "media-media-frame-rate": {
@@ -12288,7 +12288,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:146"
+      "squid/media/domain/models.py:160"
     ]
   },
   "media-media-job-claim": {
@@ -12468,7 +12468,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:195"
+      "squid/media/domain/models.py:217"
     ]
   },
   "media-normalized-artifact-sha": {
@@ -12477,16 +12477,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:198"
+      "squid/media/domain/models.py:220"
     ]
   },
   "media-normalized-images-png": {
-    "fingerprint": "bc36213003303daff110d04a7cf07a7ff6527876beed0bc4a0426335391c74f3",
+    "fingerprint": "06aea87f1a9110c1f60ee808b9f9e196e78a54dc3dd6822d55d859bdb3d3b5d9",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:228"
+      "squid/media/domain/models.py:250"
     ]
   },
   "media-normalized-media-object": {
@@ -12504,7 +12504,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:216"
+      "squid/media/domain/models.py:238"
     ]
   },
   "media-normalized-object-unconfirmed": {
@@ -12522,7 +12522,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:222"
+      "squid/media/domain/models.py:244"
     ]
   },
   "media-normalized-videos-poster": {
@@ -12531,7 +12531,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:219"
+      "squid/media/domain/models.py:241"
     ]
   },
   "media-queued-raw-media": {
@@ -12567,7 +12567,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:225"
+      "squid/media/domain/models.py:247"
     ]
   },
   "media-reports-not-pixel": {
@@ -12607,12 +12607,12 @@
     ]
   },
   "media-video-format-unsupported": {
-    "fingerprint": "ade68bc29f7022113ce59cbee912722d9ba071dbafecae45d2d25ff841665dbe",
+    "fingerprint": "a31ef625526d137ac325c7ec24115edcfb59fa037d9efe6613c1deaec30722c8",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/domain/models.py:233"
+      "squid/media/domain/models.py:257"
     ]
   },
   "media-video-requires-poster": {

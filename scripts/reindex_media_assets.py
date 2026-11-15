@@ -11,6 +11,7 @@ import hashlib
 import json
 import sys
 import tempfile
+from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
@@ -48,7 +49,15 @@ LIMIT :limit
 """
 
 
-async def recover_source(row: dict[str, Any], destination: Path, store: ArtifactStore, client: discord.Client) -> None:
+async def recover_source(
+    row: dict[str, Any],
+    destination: Path,
+    store: ArtifactStore,
+    client: discord.Client,
+    *,
+    channels: dict[int, Any] | None = None,
+    messages: OrderedDict[tuple[int, int], discord.Message] | None = None,
+) -> None:
     """Recover only bytes matching the original upload's size and SHA-256."""
     expected_size = row["source_byte_size"]
     result = await store.get_path(row["source_object_key"], destination, max_bytes=expected_size)
@@ -59,11 +68,27 @@ async def recover_source(row: dict[str, Any], destination: Path, store: Artifact
             return
         msg = "Stored source checksum mismatch"
         raise ValueError(msg)
+    if channels is None:
+        channels = {}
+    if messages is None:
+        messages = OrderedDict()
     for source in row["source_messages"]:
-        channel = await client.fetch_channel(int(source["channel_id"]))
-        if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+        channel_id, message_id = int(source["channel_id"]), int(source["id"])
+        try:
+            if channel_id not in channels:
+                channels[channel_id] = await client.fetch_channel(channel_id)
+            channel = channels[channel_id]
+            if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+                continue
+            key = (channel_id, message_id)
+            if key not in messages:
+                messages[key] = await channel.fetch_message(message_id)
+            message = messages[key]
+            messages.move_to_end(key)
+            while len(messages) > 512:
+                messages.popitem(last=False)
+        except discord.HTTPException:
             continue
-        message = await channel.fetch_message(int(source["id"]))
         for attachment in message.attachments:
             if attachment.size != expected_size:
                 continue
@@ -209,13 +234,16 @@ async def run(arguments: argparse.Namespace) -> int:
         async with discord.Client(intents=discord.Intents.none()) as client:
             await client.login(config.discord.token.get_secret_value())
 
+            channels: dict[int, Any] = {}
+            messages: OrderedDict[tuple[int, int], discord.Message] = OrderedDict()
+
             async def repair(row: dict[str, Any]) -> None:
                 nonlocal failed
                 try:
                     with tempfile.TemporaryDirectory(prefix="squid-asset-reindex-") as directory:
                         root = Path(directory)
                         source = root / "source"
-                        await recover_source(row, source, store, client)
+                        await recover_source(row, source, store, client, channels=channels, messages=messages)
                         result = await normalizer.normalize(
                             MediaNormalizationRequest(
                                 kind=MediaKind(row["kind"]),

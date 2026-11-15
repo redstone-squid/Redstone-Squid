@@ -1766,10 +1766,10 @@ bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a p
 # squid/bot/submission/build_browse.py:569
 browse-query-summary = Query: { $query } · Sort: { $sort }
 
-# squid/bot/submission/attachments.py:59
+# squid/bot/submission/attachments.py:63
 build-attachment-type-rejected = `{ $filename }` is not a file type this command accepts.
 
-# squid/bot/submission/attachments.py:65
+# squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
 # squid/bot/submission/build_browse.py:510
@@ -3715,7 +3715,7 @@ media-errors-reload-the-draft-and-choose-one-of = Reload the draft and choose on
 # squid/media/errors.py:79
 media-errors-reload-the-draft-before-trying-again = Reload the draft before trying again.
 
-# squid/media/domain/models.py:80
+# squid/media/domain/models.py:94
 media-every-media-limit = Every media limit must be positive.
 
 # squid/media/errors.py:170
@@ -3745,7 +3745,7 @@ media-media-artifact-dimensions = Media artifact dimensions must be positive.
 # squid/media/application/jobs.py:368
 media-media-attempts-positive = Media normalization attempts must be positive.
 
-# squid/media/domain/models.py:51
+# squid/media/domain/models.py:65
 media-media-batch-totals = Media batch totals cannot be negative.
 
 # squid/media/errors.py:74
@@ -3754,19 +3754,19 @@ media-media-changed-submission = Media cannot be changed while this submission d
 # squid/media/application/jobs.py:1003
 media-media-content-types = Media content types must be 1-255 printable characters without surrounding whitespace.
 
-# squid/media/domain/models.py:143
+# squid/media/domain/models.py:157
 media-media-dimensions-positive = Media dimensions must be positive.
 
 # squid/media/application/jobs.py:90
 media-media-draft-upload = Media draft upload authorization is invalid.
 
-# squid/media/domain/models.py:149
+# squid/media/domain/models.py:163
 media-media-duration-negative = Media duration cannot be negative.
 
-# squid/media/domain/models.py:152
+# squid/media/domain/models.py:166
 media-media-frame-count = Media frame count cannot be negative.
 
-# squid/media/domain/models.py:146
+# squid/media/domain/models.py:160
 media-media-frame-rate = Media frame rate must be non-negative with a positive denominator.
 
 # squid/media/application/jobs.py:511
@@ -3817,28 +3817,28 @@ media-media-uploads-empty = Media uploads cannot be empty.
 # squid/media/application/jobs.py:896
 media-media-uploads-staged = Media uploads must be staged as regular files.
 
-# squid/media/domain/models.py:195
+# squid/media/domain/models.py:217
 media-normalized-artifact-dimensions = Normalized artifact dimensions and size are invalid.
 
-# squid/media/domain/models.py:198
+# squid/media/domain/models.py:220
 media-normalized-artifact-sha = Normalized artifact SHA-256 must be lowercase hexadecimal.
 
-# squid/media/domain/models.py:228
-media-normalized-images-png = Normalized images must be PNG artifacts.
+# squid/media/domain/models.py:250
+media-normalized-images-png = Processed images must use a supported raster format.
 
 # squid/media/errors.py:276
 media-normalized-media-object = A normalized media object is being cleaned up.
 
-# squid/media/domain/models.py:216
+# squid/media/domain/models.py:238
 media-normalized-media-source = Normalized media source size cannot be negative.
 
 # squid/media/errors.py:267
 media-normalized-object-unconfirmed = Object storage did not confirm a normalized media artifact.
 
-# squid/media/domain/models.py:222
+# squid/media/domain/models.py:244
 media-normalized-video-poster = A normalized video must have a poster artifact.
 
-# squid/media/domain/models.py:219
+# squid/media/domain/models.py:241
 media-normalized-videos-poster = Only normalized videos have a poster artifact.
 
 # squid/media/errors.py:260
@@ -3850,7 +3850,7 @@ media-reload-draft-upload = Reload the draft and upload the attachment again.
 # squid/media/errors.py:110
 media-reload-uploading-attachment = Reload your drafts before uploading the attachment again.
 
-# squid/media/domain/models.py:225
+# squid/media/domain/models.py:247
 media-report-actions-duplicate = Normalization report actions cannot contain duplicates.
 
 # squid/media/application/jobs.py:198
@@ -3865,8 +3865,8 @@ media-submission-draft-changed = The submission draft changed while its attachme
 # squid/media/errors.py:107
 media-submission-draft-not-found = Submission draft not found.
 
-# squid/media/domain/models.py:233
-media-video-format-unsupported = Normalized videos must contain MP4 and JPEG artifacts.
+# squid/media/domain/models.py:257
+media-video-format-unsupported = Processed videos must contain a supported video and JPEG thumbnail.
 
 # squid/media/application/commands.py:39
 media-video-requires-poster = Video normalization requires a poster destination.
