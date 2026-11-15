@@ -23,7 +23,7 @@ from squid_reactivity._errors import (
     TransactionValidationError,
     UndeclaredStateError,
 )
-from squid_reactivity._subscriptions import ChangeListener, Subscriptions, on_change
+from squid_reactivity._subscriptions import ChangeListener, Effect, Subscriptions, effect, on_change
 from squid_reactivity._tracking import Dependencies, addresses, capture_reads, observe_reads, untracked
 from squid_reactivity.diagnostics import EventLedger, observe_events
 from squid_reactivity.topics import CellAddress, DependencyAddress, LocalTopicBus, Topic, TopicBus, TopicName, watch
@@ -36,6 +36,7 @@ __all__ = [
     "ChangeListener",
     "Dependencies",
     "DependencyAddress",
+    "Effect",
     "EventLedger",
     "FrameworkIntegrityError",
     "FreshTransactionError",
@@ -61,6 +62,7 @@ __all__ = [
     "capture_reads",
     "computed",
     "current_transaction",
+    "effect",
     "export_state",
     "observe_events",
     "observe_reads",

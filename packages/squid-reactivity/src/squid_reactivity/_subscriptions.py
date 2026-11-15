@@ -1,19 +1,20 @@
 """Listen for changes to the reactive state a consumer read.
 
-on_change() is the ready-made consumer: it calls a function when a value computed
-from reactive state changes. Subscriptions is the part underneath, for a consumer
-that decides for itself when to recompute.
+effect() and on_change() are the ready-made consumers. An effect reruns a function
+when the state it read changes; on_change() calls a function when a computed value
+changes. Subscriptions is the part underneath, for a consumer that decides for
+itself when to recompute.
 """
 
 import logging
 from collections.abc import Callable, Sequence
 from types import TracebackType
-from typing import Self
+from typing import Self, override
 
 from squid_reactivity._addresses import CellAddress, subscribe
 from squid_reactivity._core import _equal
 from squid_reactivity._delivery import schedule
-from squid_reactivity._tracking import Dependencies, observe_reads, untracked
+from squid_reactivity._tracking import Dependencies, capture_reads, observe_reads
 from squid_reactivity.topics import DependencyAddress, Topic
 from squid_reactivity.transactions._context import continuation_callback
 from squid_reactivity.transactions._state import _CURRENT_TRANSACTION
@@ -127,22 +128,17 @@ class Subscriptions:
                 unsubscribe()
 
 
-class ChangeListener[ValueT]:
-    """A running on_change() registration. Close it to stop the calls.
+class _QueuedConsumer:
+    """Subscribe to what a function read and queue a rerun when any of it changes.
 
-    Models hold their listeners weakly, so a listener that nothing refers to stops
-    without being closed. Keep it for as long as you want the calls.
+    Subclasses implement _deliver(), which the delivery queue calls once per pass
+    however many notifications arrived. See `_delivery` for when the queue runs.
     """
 
-    def __init__(self, read: Callable[[], ValueT], callback: Callable[[ValueT], None]) -> None:
-        self._read = read
-        self._callback = callback
+    def __init__(self) -> None:
         self._closed = False
+        self._dependencies = Dependencies()
         self._subscriptions = Subscriptions(self._notified)
-        with _CURRENT_TRANSACTION.set(None), observe_reads() as dependencies:
-            self._value = read()
-        self._dependencies: Dependencies = dependencies
-        self._subscribe()
 
     def close(self) -> None:
         """Stop listening. Closing twice is harmless."""
@@ -165,32 +161,103 @@ class ChangeListener[ValueT]:
         schedule(self._deliver)
 
     def _deliver(self) -> None:
-        if self._closed:
+        raise NotImplementedError
+
+
+class ChangeListener[ValueT](_QueuedConsumer):
+    """A running on_change() registration. Close it to stop the calls.
+
+    Models hold their listeners weakly, so a listener that nothing refers to stops
+    without being closed. Keep it for as long as you want the calls.
+    """
+
+    def __init__(self, read: Callable[[], ValueT], callback: Callable[[ValueT], None]) -> None:
+        super().__init__()
+        self._read = read
+        self._callback = callback
+        # Committed state, also when created inside a transaction that may yet roll back.
+        with _CURRENT_TRANSACTION.set(None), observe_reads() as dependencies:
+            self._value = read()
+        self._dependencies = dependencies
+        self._subscribe()
+
+    @override
+    def _deliver(self) -> None:
+        # Several notifications queue this listener once. One that was a false alarm,
+        # such as a write under a computed whose value stayed the same, stops here.
+        if self._closed or self._dependencies.current():
             return
-        # The queue never runs under an open transaction, but it may run in a task that
-        # inherited a finished one. Either way this listener reads committed state.
-        with _CURRENT_TRANSACTION.set(None):
-            # Several notifications queue this listener once. One that was a false alarm,
-            # such as a write under a computed whose value stayed the same, stops here.
-            if self._dependencies.current():
-                return
+        try:
+            with observe_reads() as dependencies:
+                value = self._read()
+        except Exception:
+            # The old dependencies stay subscribed and out of date, so the next change retries.
+            _log.exception("an on_change read function failed")
+            return
+        self._dependencies = dependencies
+        self._subscribe()
+        if _equal(self._value, value):
+            return
+        self._value = value
+        with continuation_callback():
             try:
-                with observe_reads() as dependencies:
-                    value = self._read()
+                self._callback(value)
             except Exception:
-                # The old dependencies stay subscribed and out of date, so the next change retries.
-                _log.exception("an on_change read function failed")
-                return
-            self._dependencies = dependencies
-            self._subscribe()
-            if _equal(self._value, value):
-                return
-            self._value = value
-            with untracked(), continuation_callback():
-                try:
-                    self._callback(value)
-                except Exception:
-                    _log.exception("an on_change callback failed")
+                _log.exception("an on_change callback failed")
+
+
+class Effect(_QueuedConsumer):
+    """A running effect() registration. Close it to stop the effect.
+
+    Models hold their effects weakly, so an effect that nothing refers to stops
+    without being closed. Keep it for as long as the effect should run.
+    """
+
+    def __init__(self, run: Callable[[], Callable[[], None] | None]) -> None:
+        super().__init__()
+        self._run = run
+        self._started = False
+        self._cleanup: Callable[[], None] | None = None
+        schedule(self._deliver)
+
+    @override
+    def close(self) -> None:
+        """Stop the effect and run the cleanup its last run returned, if any."""
+        super().close()
+        self._clean_up()
+
+    @override
+    def _deliver(self) -> None:
+        if self._closed or (self._started and self._dependencies.current()):
+            return
+        self._started = True
+        self._clean_up()
+        with capture_reads() as dependencies:
+            try:
+                cleanup = self._run()
+                if cleanup is not None and not callable(cleanup):
+                    # Most often a function that returns a value, which on_change() is for,
+                    # or an async function, whose coroutine would never be awaited.
+                    message = f"an effect returns a cleanup function or None, not {type(cleanup).__name__}"
+                    raise TypeError(message)  # noqa: TRY301
+                self._cleanup = cleanup
+            except Exception:
+                # What the run read before failing is still subscribed, so a change retries.
+                _log.exception("an effect failed")
+        self._dependencies = dependencies
+        self._subscribe()
+        # A run that assigned something it had already read is out of date as it ends. Its
+        # first run was not subscribed yet to hear that, so check instead of relying on it.
+        if not self._dependencies.current():
+            schedule(self._deliver)
+
+    def _clean_up(self) -> None:
+        cleanup, self._cleanup = self._cleanup, None
+        if cleanup is not None:
+            try:
+                cleanup()
+            except Exception:
+                _log.exception("an effect cleanup failed")
 
 
 def on_change[ValueT](read: Callable[[], ValueT], callback: Callable[[ValueT], None]) -> ChangeListener[ValueT]:
@@ -224,3 +291,38 @@ def on_change[ValueT](read: Callable[[], ValueT], callback: Callable[[ValueT], N
         The listener. Keep a reference to it and close it to stop the calls.
     """
     return ChangeListener(read, callback)
+
+
+def effect(run: Callable[[], Callable[[], None] | None]) -> Effect:
+    """Run `run` now, and again whenever reactive state it read has changed.
+
+    Each run records what it read, so an effect follows the branch it took. Unlike
+    a computed function or the `read` of on_change(), an effect may assign reactive
+    state. Each assignment publishes at once unless the effect opens a transaction.
+
+    `run` returns None, or a function that cleans up after that run. The cleanup is
+    called before the next run and when the effect is closed. To act on a value a
+    function returns, use on_change() instead.
+
+    An effect never runs while the code that created or triggered it has a
+    transaction open; it runs when that transaction ends, after the commit has
+    notified its subscribers and run its result callbacks. Effects and on_change()
+    listeners share one queue and run in the order they were first notified.
+
+    An effect that assigns something it reads runs again, until a run changes
+    nothing. One that reruns 100 times for a single change is treated as a loop
+    and stopped. An exception from `run` is logged; the effect reruns after the
+    next change to what it read before failing.
+
+    For example, this keeps a stored total in step with two fields::
+
+        def update_total() -> None:
+            cart.total = cart.apples + cart.pears
+
+
+        totals = effect(update_total)
+
+    Returns:
+        The effect. Keep a reference to it and close it to stop it.
+    """
+    return Effect(run)

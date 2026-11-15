@@ -12,7 +12,8 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from squid_reactivity._runtime import _runtime
-from squid_reactivity.transactions._state import _CURRENT_TRANSACTION
+from squid_reactivity._tracking import _DEPENDENCY_COLLECTOR
+from squid_reactivity.transactions._state import _CURRENT_TRANSACTION, _READ_CONSISTENCY, _READ_ONLY, _ReadConsistency
 
 _log = logging.getLogger(__name__)
 
@@ -45,27 +46,42 @@ def deliver() -> None:
     waiting, so each one sees a cause before its consequences. Nothing runs while a
     hold() block is open or while the calling code has a transaction open; that
     transaction runs the queue when it finishes.
+
+    The queue can start inside whatever code made the last change: a computed function
+    initializing an object, or a task that inherited a finished transaction. Listeners
+    do not belong to that code, so they run without its transaction, read policy,
+    write restriction, or dependency capture.
     """
     if _runtime.holds:
         return
     current = _CURRENT_TRANSACTION.get()
     if current is not None and not current.closed:
         return
-    runs: dict[Callable[[], None], int] = {}
     # Held while running, so a commit made by a listener queues behind this pass
     # and does not start a nested one.
     _runtime.holds += 1
     try:
-        while _runtime.listeners:
-            run = _runtime.listeners.popleft()
-            runs[run] = runs.get(run, 0) + 1
-            if runs[run] == _MAX_RUNS + 1:
-                _log.error(
-                    "a change listener ran %d times in response to one change and was stopped; "
-                    "its callback, or another listener's, keeps changing what it reads",
-                    _MAX_RUNS,
-                )
-            if runs[run] <= _MAX_RUNS:
-                run()
+        with (
+            _CURRENT_TRANSACTION.set(None),
+            _READ_CONSISTENCY.set(_ReadConsistency.DEFAULT),
+            _READ_ONLY.set(None),
+            _DEPENDENCY_COLLECTOR.set(None),
+        ):
+            _run_queue()
     finally:
         _runtime.holds -= 1
+
+
+def _run_queue() -> None:
+    runs: dict[Callable[[], None], int] = {}
+    while _runtime.listeners:
+        run = _runtime.listeners.popleft()
+        runs[run] = runs.get(run, 0) + 1
+        if runs[run] == _MAX_RUNS + 1:
+            _log.error(
+                "a change listener or effect ran %d times in response to one change and was "
+                "stopped; it, or another one, keeps changing what it reads",
+                _MAX_RUNS,
+            )
+        if runs[run] <= _MAX_RUNS:
+            run()

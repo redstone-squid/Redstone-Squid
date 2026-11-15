@@ -75,6 +75,10 @@ bridge can publish events received from another process.
 
 ::: squid_reactivity.topics.DelimitedTopicCodec
 
+::: squid_reactivity.effect
+
+::: squid_reactivity.Effect
+
 ::: squid_reactivity.on_change
 
 ::: squid_reactivity.ChangeListener

@@ -90,31 +90,51 @@ A field you write without reading is never checked: the last commit wins.
 ## Reacting to changes
 
 ```python
+from squid_reactivity import effect
+
+logging = effect(lambda: print("count is", counter.count))  # Prints "count is 1".
+counter.count = 5  # Prints "count is 5".
+logging.close()
+```
+
+`effect(run)` runs the function now and again whenever a field it read has a new value. A
+transaction that writes several of those fields causes one run, after it commits; one that
+rolls back causes none. If `run` returns a function, that is its cleanup: it is called before
+the next run and when the effect is closed.
+
+An effect may assign fields, for example to keep one model in step with another. If it
+assigns a field it also reads, it runs again until a run changes nothing.
+
+`on_change(read, callback)` separates the two halves. Use it when you care about one value
+and want to be told only when that value differs:
+
+```python
 from squid_reactivity import on_change
 
 listener = on_change(lambda: counter.doubled, print)
-counter.count = 5  # Prints 10.
+counter.count = 6  # Prints 12.
 listener.close()
 ```
 
-`on_change(read, callback)` runs `read` to learn which fields it depends on, and runs it
-again after one of them changes. It calls `callback` with the new result only when that
-result differs from the last one. A transaction that writes several of the fields causes one
-call, after it commits; one that rolls back causes none.
+`read` is read-only and decides what is watched. `callback` receives the new result, is not
+called for the starting value, and cannot assign a field directly: to write, it opens its own
+`transaction(...)`.
 
-`read` is read-only. `callback` cannot assign a field directly either, so to write it opens
-its own `transaction(...)`. Models hold listeners weakly: keep the listener for as long as
-you want the calls, and close it when you are done.
+Both follow the same rules:
 
-Listeners run after the commit has told its other subscribers and run its `after_commit`
-callbacks, one at a time, in the order they were notified. When a callback commits a
-transaction of its own, the listeners that transaction affects wait behind the ones already
-queued, so every listener hears about a change before it hears about what that change led to.
+- Models hold them weakly. Keep the returned object for as long as it should run, and close
+  it when you are done.
+- They run after the commit has told its other subscribers and run its `after_commit`
+  callbacks, never while the code that made the change still has a transaction open.
+- They run one at a time, in the order they were notified. When one of them changes state,
+  whatever that affects waits behind those already queued, so each hears about a change
+  before it hears about what the change led to.
+- One that reruns 100 times for a single change is treated as a loop, logged, and stopped.
 
 ### Doing it yourself
 
-`on_change` recomputes as soon as the commit has been announced. A consumer that needs to
-choose when to recompute, such as a renderer that delivers its result later, uses the parts underneath.
+`effect` and `on_change` rerun as soon as the commit has been announced. A consumer that
+needs to choose when to recompute, such as a renderer that delivers its result later, uses the parts underneath.
 
 `observe_reads()`, used above, yields a `Dependencies` object and adds to it every field the
 block reads, directly or through computed values. Use it after the block has finished. It
@@ -250,7 +270,7 @@ Import from the modules below. A module or name that starts with an underscore i
 and can change in any release.
 
 - `squid_reactivity` has what models and their readers need: fields, computed values,
-  transactions, read tracking, change listeners, topics, and the error types.
+  transactions, read tracking, effects, topics, and the error types.
 - `squid_reactivity.transactions` adds patches, participants, causal context, and results.
 - `squid_reactivity.diagnostics` has event snapshots, sinks, and redaction.
 - `squid_reactivity.resources` and `squid_reactivity.operations` have asynchronous values and
