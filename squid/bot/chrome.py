@@ -229,6 +229,7 @@ CHROME = ui.chrome.Chrome(
     ),
     form_scale_integer=_form_scale_integer,
     page_jump_unavailable=tr(t"ui-page-jump-unavailable = This pager is no longer available."),
+    items_per_page=tr(t"ui-items-per-page = Items per page"),
     page_jump_number=tr(t"ui-page-jump-number = Page number"),
     page_jump_range=_page_jump_range,
     tally_option=_tally_option,
