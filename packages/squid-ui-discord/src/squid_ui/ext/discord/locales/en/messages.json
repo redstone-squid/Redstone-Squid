@@ -5,7 +5,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:131"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:130"
     ]
   },
   "command-dev-name": {
@@ -14,7 +14,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:129"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:128"
     ]
   },
   "command-dev-ui-choice-activity": {
@@ -23,7 +23,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:150"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:149"
     ]
   },
   "command-dev-ui-choice-overview": {
@@ -32,7 +32,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:146"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:145"
     ]
   },
   "command-dev-ui-choice-persistence": {
@@ -41,7 +41,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:154"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:153"
     ]
   },
   "command-dev-ui-choice-profile": {
@@ -50,7 +50,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:152"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:151"
     ]
   },
   "command-dev-ui-choice-queues": {
@@ -59,7 +59,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:151"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:150"
     ]
   },
   "command-dev-ui-choice-roots": {
@@ -68,7 +68,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:147"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:146"
     ]
   },
   "command-dev-ui-choice-routes": {
@@ -77,7 +77,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:149"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:148"
     ]
   },
   "command-dev-ui-choice-sessions": {
@@ -86,7 +86,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:148"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:147"
     ]
   },
   "command-dev-ui-help": {
@@ -95,7 +95,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:140"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:139"
     ]
   },
   "command-dev-ui-name": {
@@ -104,7 +104,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:139"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:138"
     ]
   },
   "command-dev-ui-tab-help": {
@@ -113,7 +113,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:143"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:142"
     ]
   },
   "command-dev-ui-tab-name": {
@@ -122,7 +122,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:142"
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/devtools.py:141"
     ]
   }
 }

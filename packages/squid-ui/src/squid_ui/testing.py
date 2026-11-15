@@ -406,11 +406,11 @@ def text_component(*lines: Line, **declared: object) -> AnyComponent:
 
 
 def assert_imports_without(imports: str | Sequence[str], *blocked: str) -> None:
-    """Check imports in a fresh subprocess with the named dependency roots blocked.
+    """Check imports in a fresh subprocess with the named packages and their submodules blocked.
 
     A fresh process prevents cached imports from bypassing the blocker. Use the current
     interpreter so installed packages match the test environment. A standalone helper
-    installs the blocker before importing squid_ui, then checks sys.modules for blocked roots.
+    installs the blocker before importing squid_ui, then checks sys.modules for blocked packages.
     """
     names = (imports,) if isinstance(imports, str) else tuple(imports)
     argument = ", ".join(repr(name) for name in (names, *blocked))

@@ -25,6 +25,17 @@ pip install squid-ui-slack==0.1.0a1
 | `squid-storage` | `squid_storage` | Versioned scoped stores and persisted state pools |
 | `squid-replication` | `squid_replication` | Reference, Loro, and experimental pycrdt replicas |
 
+`squid_ui` remains the authoring package. Platform adapters contribute packages under
+`squid_ui.ext`; installing an adapter does not change the core imports. The parent package
+extends its search path so adapters also work from separate editable source trees.
+Only `squid-ui` owns `squid_ui/__init__.py`; `squid_ui/ext` has no `__init__.py`.
+Widgets remain a separate `squid_ui_widgets` library.
+
+Existing callers should replace `squid_ui_discord`, `squid_ui_slack`, and `squid_ui_html`
+imports with `squid_ui.ext.discord`, `squid_ui.ext.slack`, and `squid_ui.ext.html`, including
+submodule imports and string-based import or patch targets. The old import paths are removed;
+distribution names and installation commands are unchanged.
+
 The distributions release together at the same version. Dependencies between suite packages
 use that exact version, so one environment cannot silently mix incompatible alphas.
 

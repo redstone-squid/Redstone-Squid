@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import tomllib
 from pathlib import Path
 
 from squid_i18n.catalogs import artifacts, collect, validate
@@ -12,11 +13,15 @@ from squid_i18n.errors import CatalogError
 def distributions(root: Path) -> list[tuple[Path, Path]]:
     """Locate application and workspace resources using their distribution boundaries."""
     owners = [(root / "squid", root / "squid" / "locales")]
-    owners.extend(
-        (source, source / "locales")
-        for source in sorted((root / "packages").glob("*/src/*"))
-        if source.is_dir() and source.name != "squid_i18n"
-    )
+    for manifest in sorted((root / "packages").glob("*/pyproject.toml")):
+        metadata = tomllib.loads(manifest.read_text(encoding="utf-8"))
+        name = metadata["project"]["name"]
+        if name == "squid-i18n":
+            continue
+        build = metadata.get("tool", {}).get("uv", {}).get("build-backend", {})
+        module = build.get("module-name", name.replace("-", "_"))
+        source = manifest.parent / build.get("module-root", "src") / module.replace(".", "/")
+        owners.append((source, source / "locales"))
     return owners
 
 

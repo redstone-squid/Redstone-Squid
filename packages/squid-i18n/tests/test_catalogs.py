@@ -241,3 +241,20 @@ def test_repr_conversion_extraction_matches_runtime(helper: str) -> None:
     assert runtime.bindings == {"value": repr(value)}
     with pytest.raises(CatalogError, match="Conflicting"):
         artifacts(extract('tr(t"{value!s}", key="value")\ntr(t"{value!r}", key="value")'))
+
+
+@pytest.mark.parametrize("module", ["standalone", "family.ext.adapter"])
+def test_workspace_catalogs_belong_to_the_configured_module(tmp_path: Path, module: str) -> None:
+    package = tmp_path / "packages" / "example-adapter"
+    source = package / "src" / module.replace(".", "/")
+    source.mkdir(parents=True)
+    (package / "pyproject.toml").write_text(
+        f'[project]\nname = "example-adapter"\n[tool.uv.build-backend]\nmodule-name = "{module}"\n'
+    )
+    (source / "messages.py").write_text('tr(t"hello = Hello")')
+
+    run("extract", tmp_path)
+
+    assert "hello = Hello" in (source / "locales/en/messages.ftl").read_text()
+    assert sorted(package.rglob("messages.ftl")) == [source / "locales/en/messages.ftl"]
+    assert run("check", tmp_path) == []
