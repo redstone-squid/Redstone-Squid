@@ -290,7 +290,8 @@ async def test_unreachable_spread_commits_for_recovery_without_claiming_a_write(
     await root.dispatch("inc", interaction, generation=root.generation)
     assert panel.count == 7
     assert root._candidates.stale == {0}
-    assert "count: 7" in payload_texts(interaction.response.edit_message.records[0].kwargs["view"])
+    assert len(interaction.deferrals) == 1
+    assert "count: 7" in payload_texts(interaction.followup.edit_message.records[0].kwargs["view"])
 
 
 async def test_a_press_renews_primary_delete_authority_too() -> None:
