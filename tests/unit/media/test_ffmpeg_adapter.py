@@ -430,7 +430,17 @@ async def test_rate_metadata_fallback_requires_matching_frame_timestamps(
     assert timestamps.await_count == 2
 
 
-@pytest.mark.parametrize("values", [[], ["N/A"], ["NaN"], ["Infinity"], ["0.2", "0.1"]])
+@pytest.mark.parametrize("regression", ["0.000065", "0.001"])
+async def test_submillisecond_decoder_estimates_are_preserved(monkeypatch: pytest.MonkeyPatch, regression: str) -> None:
+    normalizer = FfmpegMediaNormalizer()
+    values = (Decimal("6.4"), Decimal("6.400065"), Decimal("6.400065") - Decimal(regression))
+    payload = {"frames": [{"best_effort_timestamp_time": str(value)} for value in values]}
+    monkeypatch.setattr(normalizer, "_run", AsyncMock(return_value=json.dumps(payload).encode()))
+
+    assert await normalizer._frame_timestamps(Path("source.mp4")) == values
+
+
+@pytest.mark.parametrize("values", [[], ["N/A"], ["NaN"], ["Infinity"], ["0.2", "0.1"], ["6.4", "6.398999"]])
 async def test_invalid_frame_timestamps_cannot_prove_timing_preservation(
     monkeypatch: pytest.MonkeyPatch, values: list[str]
 ) -> None:

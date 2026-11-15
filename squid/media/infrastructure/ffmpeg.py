@@ -47,6 +47,7 @@ from squid.media.errors import (
 _NETWORK_PROTOCOLS = "http,https,tcp,tls,udp,rtmp,rtmps,rtp,rtsp,sftp,ftp"
 _INPUT_PROTOCOLS = "file,pipe"
 _MAX_PROBE_OUTPUT_BYTES = 1024 * 1024
+_TIMESTAMP_TOLERANCE = Decimal("0.001")
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,7 +336,7 @@ class FfmpegMediaNormalizer:
                 if len(source_timestamps) == len(output_timestamps):
                     offset = output_timestamps[0] - source_timestamps[0]
                     timestamps_verified = all(
-                        abs(output_time - source_time - offset) <= Decimal("0.001")
+                        abs(output_time - source_time - offset) <= _TIMESTAMP_TOLERANCE
                         for source_time, output_time in zip(source_timestamps, output_timestamps, strict=True)
                     )
             _validate_video_output(
@@ -466,7 +467,9 @@ class FfmpegMediaNormalizer:
             if (
                 timestamps
                 and all(value.is_finite() for value in timestamps)
-                and all(later >= earlier for earlier, later in pairwise(timestamps))
+                # Decoder estimates can regress by less than a millisecond at EOF.
+                # Keep every value unchanged for the per-frame preservation check.
+                and all(later >= earlier - _TIMESTAMP_TOLERANCE for earlier, later in pairwise(timestamps))
             ):
                 return timestamps
         except KeyError, TypeError, ValueError, InvalidOperation, json.JSONDecodeError:
