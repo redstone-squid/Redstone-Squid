@@ -17,6 +17,7 @@ from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.fragments import FragmentOwnershipError, StaleReservationError, fragment
 from squid_ui.ext.discord.inspection import audit
 from squid_ui.ext.discord.limits import Axis
+from squid_ui.ext.discord.rendering.controls import RoutedItem
 
 
 def _text(content: str) -> list:
@@ -129,7 +130,7 @@ class TestPreflight:
 class TestInteractionBoundary:
     def test_routed_controls_are_allowed(self):
         host = sd.layout_view()
-        routed = squid_ui.ext.discord.rendering.v2.RoutedItem(label="go", custom_id="r:go")
+        routed = RoutedItem(label="go", custom_id="r:go")
         contribute(_text("body"), to=host, followed_by=(sd.action_row(routed),))
         assert routed in list(host.walk_children())
 

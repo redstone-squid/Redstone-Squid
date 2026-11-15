@@ -40,7 +40,12 @@ from squid_ui.ext.discord.devtools.presentation import (
     topic_summary,
     trace_summary,
 )
-from squid_ui.ext.discord.devtools.runtime import DevToolsAction, DevToolsRuntime, DurableRecordInspection
+from squid_ui.ext.discord.devtools.runtime import (
+    DevToolsAction,
+    DevToolsRuntime,
+    DurableRecordInspection,
+    OperationalSnapshot,
+)
 
 SESSION_SECONDS = 300
 """Short-lived on purpose: an inspector left open is one more message root in its own list."""
@@ -290,7 +295,7 @@ class OperationalInspector(sl.Component):
             return content
         return (sl.status(self.notice, tone=sl.Tone.INFO), *content)
 
-    def _overview(self, snapshot: squid_ui.ext.discord.devtools.runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _overview(self, snapshot: OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         counts = [
             f"roots        {len(snapshot.message_roots)}",
             f"sessions     {len(snapshot.sessions)}",
@@ -313,7 +318,7 @@ class OperationalInspector(sl.Component):
             self._controls(),
         ]
 
-    def _roots(self, snapshot: squid_ui.ext.discord.devtools.runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _roots(self, snapshot: OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         if self.message_root_id is not None:
             message_root = squid_ui.ext.discord.live.find(self.message_root_id)
             if message_root is not None:
@@ -403,7 +408,7 @@ class OperationalInspector(sl.Component):
             nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
         return (*nodes, self._controls(back=True))
 
-    def _sessions(self, snapshot: squid_ui.ext.discord.devtools.runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _sessions(self, snapshot: OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         if self.session_id is not None:
             session = next((item for item in snapshot.sessions if item.id == self.session_id), None)
             if session is not None:
@@ -466,7 +471,7 @@ class OperationalInspector(sl.Component):
             nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
         return (*nodes, self._controls(back=True))
 
-    def _queues(self, snapshot: squid_ui.ext.discord.devtools.runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _queues(self, snapshot: OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         lines = [
             f"scheduler  {scheduler_summary(snapshot.scheduler)}",
             f"topics   {topic_summary(snapshot.topics)}",
@@ -485,7 +490,7 @@ class OperationalInspector(sl.Component):
             )
         return (*nodes, self._controls(back=True))
 
-    def _profile(self, snapshot: squid_ui.ext.discord.devtools.runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _profile(self, snapshot: OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         health = snapshot.profiler.health
         lines = [
             f"process  {snapshot.profiler.process_id}",
@@ -518,9 +523,7 @@ class OperationalInspector(sl.Component):
             )
         return (*nodes, self._controls(back=True))
 
-    def _persistence(
-        self, snapshot: squid_ui.ext.discord.devtools.runtime.OperationalSnapshot
-    ) -> Sequence[sl.LayoutNode]:
+    def _persistence(self, snapshot: OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         durable = snapshot.durable
         record_nodes: list[sl.LayoutNode] = []
         if durable is None:
@@ -625,7 +628,7 @@ class OperationalInspector(sl.Component):
             body = "No routers are installed on this client." if not lines else "\n".join(lines)
         return (sl.section(sl.heading("Routed controls"), sl.code(body)), self._controls(back=True))
 
-    def _activity(self, snapshot: squid_ui.ext.discord.devtools.runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _activity(self, snapshot: OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         events = () if self._action_ledger is None else self._action_ledger.events[-20:]
         event_text = "No retained causal events." if not events else "\n".join(event_summary(event) for event in events)
         retained = (
