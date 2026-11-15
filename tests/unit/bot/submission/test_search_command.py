@@ -104,8 +104,18 @@ async def test_no_sort_option_leaves_relevance_ordering_alone() -> None:
 
     await _run(_cog(search), query="doors")
 
+    assert search.requests[0].scope is SearchScope.BUILDS
     assert search.requests[0].sort is None
     assert search.requests[0].mode is SearchMode.LEXICAL
+    assert search.requests[0].group_by_build
+
+
+async def test_records_remain_an_explicit_search_target() -> None:
+    search = RecordingSearch()
+
+    await _run(_cog(search), query="width:5", scope=SearchTarget.records)
+
+    assert search.requests[0].scope is SearchScope.RECORDS
     assert search.requests[0].group_by_build
 
 
