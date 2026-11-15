@@ -1,0 +1,102 @@
+"""Runtime inspection cannot bypass invalidation or component lifecycle."""
+
+import operator
+from typing import override
+
+import pytest
+
+import squid_ui as ui
+from squid_ui import testing
+from squid_ui.context import ContextKey
+from squid_ui.runtime import ComponentRuntime
+
+LABEL = ContextKey[str]("label")
+
+
+class Label(ui.Component):
+    @override
+    def render(self) -> ui.LayoutNode:
+        return ui.paragraph(self.inject(LABEL))
+
+
+class Switch(ui.Component):
+    shown: bool = ui.state(False)
+
+    def __init__(self, child: ui.Component) -> None:
+        self.child = child
+
+    @override
+    def render(self) -> ui.LayoutNode:
+        return self.child.keyed("child") if self.shown else ui.paragraph("hidden")
+
+
+def test_context_view_tracks_supported_updates_and_render_invalidation() -> None:
+    supplied = {LABEL: "initial"}
+    runtime = ComponentRuntime(Label(), context=supplied)
+    context = runtime.context
+    runtime.commit(runtime.render())
+    revision = runtime.revision
+    assert not runtime.dirty
+
+    supplied[LABEL] = "outside"
+    assert context[LABEL] == "initial"
+    with pytest.raises(TypeError):
+        operator.setitem(context, LABEL, "bypass")
+    with pytest.raises(TypeError):
+        operator.delitem(context, LABEL)
+    assert not runtime.dirty
+    assert runtime.revision == revision
+
+    runtime.set_context(LABEL, "updated")
+    assert context[LABEL] == "updated"
+    assert runtime.dirty
+    assert runtime.revision == revision + 1
+    tree = runtime.render(reuse_committed=True)
+    assert testing.texts(tree.nodes) == ["updated"]
+    runtime.commit(tree)
+    assert not runtime.dirty
+    runtime.finish()
+
+
+@pytest.mark.parametrize("incremental", [False, True])
+def test_component_view_tracks_only_committed_placements_and_finish(incremental: bool) -> None:
+    child = Label()
+    root = Switch(child)
+    runtime = ComponentRuntime(root, context={LABEL: "child"})
+    components = runtime.components
+    assert components == {}
+    runtime.commit(runtime.render())
+    assert components == {"$": root}
+
+    with pytest.raises(TypeError):
+        operator.setitem(components, "$", child)
+    with pytest.raises(TypeError):
+        operator.delitem(components, "$")
+    assert components == {"$": root}
+
+    root.shown = True
+    if not incremental:
+        runtime.invalidate()
+    candidate = runtime.render(reuse_committed=True)
+    assert components == {"$": root}
+    runtime.commit(candidate)
+    assert set(components.values()) == {root, child}
+    assert components == candidate.components
+
+    root.shown = False
+    if not incremental:
+        runtime.invalidate()
+    runtime.commit(runtime.render(reuse_committed=True))
+    assert components == {"$": root}
+    runtime.finish()
+    assert components == {}
+
+
+@pytest.mark.parametrize("attribute", ["context", "components"])
+def test_runtime_inspection_mappings_cannot_be_reassigned_or_deleted(attribute: str) -> None:
+    runtime = ComponentRuntime(Label(), context={LABEL: "initial"})
+    with pytest.raises(AttributeError):
+        setattr(runtime, attribute, {})
+    with pytest.raises(AttributeError):
+        delattr(runtime, attribute)
+    runtime.finish()

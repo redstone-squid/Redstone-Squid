@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 from squid_reactivity import Subscriptions
@@ -103,10 +104,10 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.on_invalidate = on_invalidate
         self.on_reactive_invalidate = on_reactive_invalidate
         self.subscriptions = Subscriptions(self._reactive_changed)
-        self.context = dict(context or {})
+        self._context = dict(context or {})
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.plan_memo = PlanMemo()
-        self.components: dict[str, AnyComponent] = {}
+        self._components: dict[str, AnyComponent] = {}
         self._cache = RenderCache[RenderTargetT]()
         self._cached_tree: ComponentTree[RenderTargetT] | None = None
         self._cached_revision = -1
@@ -118,6 +119,16 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         commit could invalidate moves it, including a shared cell another owner wrote."""
         self.dirty = True
         """Whether the committed tree is behind the inputs a fresh render would read."""
+
+    @property
+    def context(self) -> Mapping[ContextKey[Any], object]:
+        """Live read-only root bindings. Use ``set_context`` to replace a value and invalidate."""
+        return MappingProxyType(self._context)
+
+    @property
+    def components(self) -> Mapping[str, AnyComponent]:
+        """Live read-only placements in the committed tree, cleared by ``finish``."""
+        return MappingProxyType(self._components)
 
     def _reactive_changed(self, address: DependencyAddress) -> None:
         self.invalidate_address(address)
@@ -158,7 +169,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             raise
         if self._staged is not None:
             self._staged._discard(release=False)
-        self._release_unused_claims(set(self.components.values()) | set(tree.components.values()) | set(tree.deferred))
+        self._release_unused_claims(set(self._components.values()) | set(tree.components.values()) | set(tree.deferred))
         self.subscriptions.stage(tree.observations)
         self._staged = RenderCandidate(self, tree, self.revision)
         return self._staged
@@ -215,7 +226,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
     def set_context[ValueT](self, key: ContextKey[ValueT], value: ValueT) -> None:
         """Replace one root context value for subsequent renders."""
-        self.context[key] = value
+        self._context[key] = value
         self.invalidate()
 
     def render(
@@ -265,14 +276,14 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             tree = render_component_tree(
                 self.root,
                 runtime=self,
-                context=self.context,
+                context=self._context,
                 defer=defer,
                 incremental=self._cache.expansion(),
             )
             if not terminal:
                 self._validate_execution_host(tree)
         except BaseException:
-            retained = set(self.components.values())
+            retained = set(self._components.values())
             if self._staged is not None:
                 retained.update(self._staged.tree.components.values())
                 retained.update(self._staged.tree.deferred)
@@ -355,7 +366,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         return (
             self._committed_tree is not None
             and tree._topology_base is self._committed_tree._topology
-            and len(set(self.components.values())) == len(self.components)
+            and len(set(self._components.values())) == len(self._components)
             and len(set(tree.components.values())) == len(tree.components)
             and not (
                 {component for _, component in tree._removed_components}
@@ -374,11 +385,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             component._runtime = None
             if path != "$":
                 component._parent = None
-            if self.components.get(path) is component:
-                self.components.pop(path)
+            if self._components.get(path) is component:
+                self._components.pop(path)
             self._cache.remove_path(component)
         for path, component in sorted(tree._added_components, key=lambda item: _component_depth(item[0])):
-            self.components[path] = component
+            self._components[path] = component
             self._cache.add_path(component, path)
             self._mount(component, path)
         self._cache.discard_removed(tree._removed_components)
@@ -386,9 +397,9 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
     def _reconcile_components(self, tree: ComponentTree[RenderTargetT]) -> None:
         """Mount and unmount each changed instance once, including shared placements."""
-        old_instances = set(self.components.values())
+        old_instances = set(self._components.values())
         new_instances = set(tree.components.values())
-        removed = [(path, component) for path, component in self.components.items() if component not in new_instances]
+        removed = [(path, component) for path, component in self._components.items() if component not in new_instances]
         added = [(path, component) for path, component in tree.components.items() if component not in old_instances]
         visited: set[AnyComponent] = set()
         for _path, component in sorted(removed, key=lambda item: _component_depth(item[0]), reverse=True):
@@ -401,7 +412,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 visited.add(component)
                 self._mount(component, path)
         self._release_unused_claims(new_instances)
-        self.components = dict(tree.components)
+        self._components.clear()
+        self._components.update(tree.components)
 
     def _mount(self, component: AnyComponent, path: str) -> None:
         self.claim(component)
@@ -465,7 +477,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.subscriptions.clear()
         visited: set[AnyComponent] = set()
         for _path, component in sorted(
-            self.components.items(),
+            self._components.items(),
             key=lambda item: _component_depth(item[0]),
             reverse=True,
         ):
@@ -477,7 +489,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 component._runtime = None
                 component._parent = None
         self._claimed.clear()
-        self.components.clear()
+        self._components.clear()
         self._cache.clear()
         self._cached_tree = None
         self._committed_tree = None

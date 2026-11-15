@@ -26,6 +26,14 @@ Initial public alpha of the suite.
 - `squid-replication`: replicated-state containers over a reference backend, Loro, and an
   experimental pycrdt backend.
 
+Runtime ownership, still pre-release:
+
+- `ComponentRuntime.context` and `.components` are now live read-only mappings and
+  cannot be reassigned. Replace `runtime.context[key] = value` with
+  `runtime.set_context(key, value)` so the change invalidates rendering. Change the
+  component tree through rendering and commit instead of editing `.components`.
+  Mapping values remain the original objects; this does not freeze their contents.
+
 Model retention simplification, still pre-release:
 
 - Remove `ReactivePool`, `ReactiveFactory`, and `squid_reactivity.state_pool`, including their
