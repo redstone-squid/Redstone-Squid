@@ -16,11 +16,11 @@ class ReactivityError(Exception):
 
 
 class ReactiveWriteError(ReactivityError, RuntimeError):
-    """A state mutation was attempted inside a read-only transaction."""
+    """A reactive write violated a computation, transaction, or callback write restriction."""
 
 
 class TransactionValidationError(ReactivityError, ValueError):
-    """An admitted transaction failed application validation before publication."""
+    """Application validation rejected a transaction before publication."""
 
 
 class FrameworkIntegrityError(ReactivityError, RuntimeError):
@@ -28,7 +28,7 @@ class FrameworkIntegrityError(ReactivityError, RuntimeError):
 
 
 class FreshTransactionError(ReactivityError, RuntimeError):
-    """A distinct transaction was requested after its admitting transaction staged work."""
+    """An independent transaction was requested after the enclosing transaction staged work."""
 
 
 class UndeclaredStateError(ReactivityError, RuntimeError):
@@ -50,11 +50,11 @@ class ReactiveCycleError(ReactivityError, RuntimeError):
 
 
 class StaleReactiveContextError(ReactivityError, RuntimeError):
-    """A write used a finished transaction or came from a different task.
+    """Reactive access used a transaction outside its allowed lifetime or execution context.
 
-    Child tasks inherit the transaction context, but only its owning task may
-    stage writes. Reads from child tasks are allowed. Once the transaction closes,
-    reads ignore its staged values and use the committed cells.
+    Only the task that opened a transaction may stage writes. Child tasks on the same
+    thread may read its staged values; after closure, their reads use committed state
+    and their writes fail. Access through a context inherited by another thread fails.
     """
 
 

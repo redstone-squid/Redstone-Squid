@@ -1,13 +1,13 @@
-"""Keep view state reactive and publish related changes together.
+"""Track dependencies between model fields and publish related changes together.
 
-Declare fields with `state` and derived values with `computed` on a Reactive.
-Reads record dependencies; assignments advance versions so later reads can
-refresh derived values. A `transaction` stages related assignments and publishes
-them when the block succeeds. Consumers subscribe directly to the fields they
-read; models need no bus or host metadata.
+Declare fields with state() and derived values with computed() on a Reactive model.
+Reads record dependencies; assignments advance versions and notify subscribers.
+A transaction stages related writes and publishes them when its block succeeds.
+Resources cache asynchronous loads; operations expose explicitly started work
+and its progress.
 
-The resources and operations modules add asynchronous loading and progress while
-keeping component renders synchronous.
+Models and their consumers belong to one thread. Independent threads may use
+separate reactive objects when started with separate execution contexts.
 """
 
 from squid_reactivity.cells import Signal

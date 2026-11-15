@@ -176,12 +176,14 @@ def transaction(
 
 @contextmanager
 def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Transaction]:
-    """Start a distinct causal transaction while an empty admitting transaction is open.
+    """Start an independent transaction while an enclosing transaction has staged no work.
 
-    Mounted undo/redo handlers are admitted inside the dispatch transaction. Suspending that
-    empty envelope lets the history operation remain a real transaction with its own identity. An
-    outer transaction that already staged work is rejected because committing the inner transaction
-    could not then be rolled back with the outer one.
+    The enclosing scope is temporarily suspended and restored afterward. Reject an outer
+    transaction with writes, participants, or version conditions: committing inner changes
+    would otherwise make an outer rollback incomplete.
+
+    UI undo/redo dispatch uses this to give the history operation its own identity inside
+    an otherwise empty dispatch transaction.
     """
     outer = _current_transaction()
     if outer is not None and (outer.writes or outer.participants or outer.preconditions):
@@ -193,7 +195,7 @@ def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Tr
 
 @contextmanager
 def batch() -> Iterator[None]:
-    """Coalesce related state writes into one invalidation per component."""
+    """Group related writes into one change notification per model on commit."""
     with transaction():
         yield
 

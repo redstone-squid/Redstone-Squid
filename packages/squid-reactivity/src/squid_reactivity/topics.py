@@ -64,7 +64,7 @@ type SubscriberErrorHandler = Callable[[BusAddress, Subscriber, Exception], None
 
 
 def watch(*topics: Topic) -> None:
-    """Track several bus-owned handles in the current computation or render."""
+    """Record topic dependencies in the active capture scope."""
     for topic in topics:
         topic.watch()
 
@@ -109,12 +109,12 @@ class DelimitedTopicCodec(TopicCodec):
 class TopicBus(Protocol):
     """Publish notifications that external dependencies may have changed.
 
-    Reactive objects notify their consumers directly, without this bus. Hosts publish
-    named topics after database changes, file changes, or incoming remote events.
+    Reactive objects notify consumers directly. Applications use topics for changes
+    outside reactive fields, such as database updates, files, or remote events.
 
-    Each bus owns its topic handles and advances their tracked versions before
-    notifying subscribers, even when there are no subscribers. Delivery scheduling, coalescing,
-    durability, and bridges are deliberately outside this protocol.
+    Each bus owns its topic handles and advances their tracked versions before notifying
+    subscribers, even when no subscribers are present. Scheduling, coalescing, durability,
+    and transport bridges are outside this protocol.
     """
 
     __slots__ = ()

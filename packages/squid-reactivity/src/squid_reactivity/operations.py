@@ -1,10 +1,9 @@
-"""Run explicitly started asynchronous work and expose its progress to renders.
+"""Start asynchronous work explicitly and observe its progress and outcome.
 
-An operation definition is reusable; each `start()` creates a separate execution,
-such as one export requested by a user. Awaiting the execution runs or joins its
-loader in the caller's task. Progress and terminal outcomes notify every reader
-so separate components can display the same execution. Work that publishes reactive state can open
-a causally linked transaction through the execution's `start_transaction` method.
+An operation definition is reusable; each start() creates a separate execution.
+Awaiting that execution runs or joins its loader in the caller's task. Progress and
+terminal outcomes notify dependent consumers. An execution can open a causally linked
+transaction through start_transaction() to publish changes to reactive models.
 """
 
 import asyncio
@@ -89,7 +88,7 @@ class ProgressReporter[ProgressT]:
         self._execution = execution
 
     def report(self, value: ProgressT) -> None:
-        """Replace current progress and request a render."""
+        """Replace the current progress value and notify dependent consumers."""
         self._execution._set_progress(value)
 
 
@@ -250,11 +249,11 @@ class OperationDefinition[ValueT, ProgressT]:
         cause: CausalRef | None = None,
         root_transaction_id: TransactionId | None = None,
     ) -> OperationExecution[ValueT, ProgressT]:
-        """Create an execution without running its loader.
+        """Create an execution without starting its loader.
 
-        Pass caused_by to link this execution to a transaction or another operation.
-        Without it, cause and root_transaction_id describe an optional external origin.
-        Await the returned execution, or let the host settle it during rendering.
+        Pass caused_by to link it to a transaction or another operation. Otherwise cause and
+        root_transaction_id can identify an external origin. Await the execution or call
+        resolve() to run it; multiple callers share that execution's outcome.
         """
         if caused_by is not None:
             if cause is not None or root_transaction_id is not None:

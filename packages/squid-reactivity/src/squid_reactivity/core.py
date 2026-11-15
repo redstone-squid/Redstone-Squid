@@ -1,8 +1,9 @@
-"""Declare reactive models and cache their derived values.
+"""Declare reactive models, their state fields, and cached computations.
 
-State descriptors delegate writes to transactions and reads to tracked cells.
-Computed descriptors retain their dependencies and validate them on demand.
-Models also expose inspection and state export/restore for host integrations.
+A state descriptor stores each instance's value in a cell. A computed descriptor
+records the inputs read by its function and checks their versions before reusing
+a result. Reactive supplies transaction-aware assignment and change notifications.
+Inspection and export helpers expose model state without requiring a UI framework.
 """
 
 import functools
@@ -54,7 +55,7 @@ def _frozen(value: Any) -> Any:
 
 
 class _State[ValueT]:
-    """Descriptor backing a declared reactive state field."""
+    """Define one field and manage its per-instance cell, defaults, and assignments."""
 
     def __init__(
         self,
@@ -114,7 +115,7 @@ class _State[ValueT]:
         """Stage a version change for an opaque value that was mutated in place.
 
         The mutation itself cannot be undone. Staging delays its notification until
-        commit, so a failed action does not publish a change notification. Bypass
+        commit, so a failed transaction does not publish a change notification. Bypass
         __set__ because its identity comparison would discard this same-object write.
         """
         cell = self.cell(instance)
@@ -287,7 +288,7 @@ def state(
 
 @dataclass(frozen=True, slots=True)
 class CellReport:
-    """One state field as devtools sees it."""
+    """Describe the storage and assignment status of one declared field."""
 
     identity: int
     """`id()` of the cell, so a computed's sources can be resolved back to a name."""
@@ -299,21 +300,20 @@ class CellReport:
 
 @dataclass(frozen=True, slots=True)
 class ComputedReport:
-    """One computed as devtools sees it, including what it currently depends on."""
+    """Describe a cached computation and the identities of its direct dependencies."""
 
     identity: int
     evaluated: bool
-    """False until something reads it. A computed nobody renders is never evaluated."""
+    """False until something reads it. An unread computed value is never evaluated."""
     version: int
     sources: tuple[int, ...]
     """Identities of the cells and computeds its last run read, in read order."""
 
 
 def _descriptors[DescriptorT](cls: type, kind: type[DescriptorT]) -> Iterator[tuple[str, DescriptorT]]:
-    """Visit matching declarations base-first, retaining overridden descriptors.
+    """Visit declarations base-first, including overrides from derived classes.
 
-    Callers decide which declarations to keep after applying their own filters.
-    Visiting every match also preserves lazy cell/node creation during inspection.
+    Callers that build dictionaries by name keep the most derived declaration.
     """
     for base in reversed(cls.__mro__):
         for name, descriptor in vars(base).items():
@@ -380,11 +380,10 @@ def restore_state(owner: ReactiveStateOwner, values: Mapping[str, Any]) -> None:
 
 
 class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
-    """One computed's per-instance node: what it read last, and what it returned.
+    """Cache one model's computed value and the versions of its dependencies.
 
-    Sources are held by the node, never the other way round. A component here is per-message
-    and constantly dropped, and a source holding its readers would keep every one of them
-    alive; a version comparison at read time answers the same question with no back-edge.
+    The node retains its input sources, but sources do not retain the node. Checking
+    versions on demand lets unused computations be collected without unsubscribe work.
     """
 
     __slots__ = ("_epoch", "_function", "_label", "_settled", "_view", "owner", "sources", "value", "version")
@@ -453,6 +452,8 @@ class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
 
 
 class _Computed:
+    """Bind a computed function to a separate cache on each model instance."""
+
     def __init__(self, function: Callable[[Any], Any]) -> None:
         self._function = function
         self.public_name = function.__name__
@@ -483,7 +484,7 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
     The function runs on first access, when dependencies change, and when the
     transaction or its read consistency policy changes. One cache serves the
     current read view; switching views recomputes so staged values stay isolated
-    and action reads are recorded even if another view already evaluated it.
+    and transaction reads are recorded even if another view already evaluated it.
 
     Each run replaces the dependencies, including conditional branches. Equal
     results preserve the computed version. The function runs read-only.
@@ -517,16 +518,16 @@ def _checked_init(
 
 
 class Reactive(ReactiveStateOwner):
-    """Reusable reactive state and behavior, independent of rendering.
+    """A model with tracked fields, cached computations, and transaction-aware writes.
 
-    Declare fields with `state()` and derived properties with `computed`. Consumers
-    automatically follow fields they read through `Subscriptions`. Fields without
-    a default must be assigned before initialization finishes.
+    Declare fields with state() and derived properties with computed(). Consumers can
+    capture reads and subscribe to the resulting addresses through Subscriptions.
+    Fields without defaults must be assigned before initialization finishes.
 
-    Construction may assign ordinary attributes. Once the owner exists, writes
-    inside a transaction must target declared state so failure can discard them.
-    Opaque collaborator changes are signaled through `mutated`; that delays their
-    notifications but cannot undo mutations already made to the collaborator.
+    Construction may assign ordinary attributes. Later writes inside a transaction
+    must target declared state so failure can discard them. Use mutated() to notify
+    readers after changing an opaque collaborator in place; rollback can discard that
+    notification, but cannot undo the collaborator's mutation.
     """
 
     _reactive_commit_listeners: set[Callable[[], None]]
@@ -577,14 +578,13 @@ class Reactive(ReactiveStateOwner):
         """React after state fields publish together. `names` holds their declared field names."""
 
     def on_state_rollback(self) -> None:
-        """React after an attempted transaction restores this owner."""
+        """React after this model's staged writes are discarded."""
 
     def mutated(self, collaborator: object) -> None:
-        """Signal an in-place change to the object held by one opaque state field.
+        """Notify readers after changing an object held in an opaque state field.
 
-        Inside an action the signal stages with it, so a handler that fails publishes no
-        notification and a namespace does not tell other mounts to re-read halfway through
-        a transaction that is about to roll back.
+        Inside a transaction, notification waits for commit and is discarded on rollback.
+        The object's in-place mutation itself is not reversible.
         """
         with untracked():
             holders = [

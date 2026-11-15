@@ -1,7 +1,7 @@
-"""Capture dependencies and check whether a computation's inputs are still current.
+"""Capture reactive dependencies and check whether their versions still match.
 
-Computed values, resources, and renders share a dependency collector. Captured
-sources provide version checks and notification addresses for their consumers.
+A capture records the sources read by a computation. Dependencies can validate
+those versions or find the addresses a consumer needs to subscribe to.
 """
 
 from collections.abc import Callable, Iterable, Iterator
@@ -34,7 +34,7 @@ class _ReactiveSource(Protocol):
 
 
 class _DependencyCollector(Protocol):
-    """Collect dependencies read by a computed value, resource load, or render."""
+    """Receive source versions observed by a computation or asynchronous load."""
 
     __slots__ = ()
 
@@ -44,7 +44,7 @@ class _DependencyCollector(Protocol):
 _DEPENDENCY_COLLECTOR: ContextVar[_DependencyCollector | None] = ContextVar(
     "squid_reactivity_dependency_collector", default=None
 )
-"""Destination for reads made by the active computation, resource load, or render.
+"""Destination for source versions read by the active computation or resource load.
 
 Capture scopes and loaders install their own collector; untracked clears it temporarily.
 Child tasks inherit the same collector object. Operation loaders explicitly clear it so
@@ -54,11 +54,10 @@ awaiting an operation does not make its inputs dependencies of the awaiting comp
 
 @contextmanager
 def untracked() -> Iterator[None]:
-    """Read state without subscribing to it.
+    """Read reactive values without adding them to the surrounding dependency capture.
 
-    For code that reads to decide what to do rather than to derive a value from it. Action
-    handlers already run outside any consumer, so this is for a computed that deliberately
-    samples something it does not want to recompute for.
+    Use this when a computation needs to sample a value without depending on its changes.
+    Transaction conflict tracking is independent and remains active.
     """
     with _DEPENDENCY_COLLECTOR.set(None):
         yield
@@ -66,11 +65,11 @@ def untracked() -> Iterator[None]:
 
 @dataclass(slots=True)
 class Dependencies(_DependencyCollector):
-    """Record dependencies read by one render or computation.
+    """Record sources and versions read within one dependency-capture scope.
 
-    Addresses are collected through computed values and resources as well as
-    direct cell reads. Shared state is tracked automatically; watch adds a
-    dependency on a topic that has no value to read.
+    Computed values and resources remain direct dependencies rather than being flattened
+    into their inputs. Address discovery traverses those inputs to find subscription
+    sources. watch() adds a topic dependency even though that topic has no stored value.
     """
 
     sources: dict[_ReactiveSource, int] = field(default_factory=dict)
@@ -90,7 +89,7 @@ class Dependencies(_DependencyCollector):
         Anything with sources of its own is walked rather than re-run -- a cached computed, a
         settled resource. It did not read its sources again, but a reader that used its value
         still depends on every one of them, so a topic watched two loaders down is still this
-        render's dependency. One that carries an address of its own contributes that too.
+        consumer's dependency. One that carries an address of its own contributes that too.
         """
         found: list[DependencyAddress] = []
         seen: set[int] = set()

@@ -1,4 +1,9 @@
-"""Shared execution and render observation for asynchronous reactive values."""
+"""Discover asynchronous values and share one execution among multiple waiters.
+
+Bindings expose pending status and a resolve operation. Observation collects bindings
+accessed within a scope without starting them. Execution coordinates callers that
+share the result of one load.
+"""
 
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
@@ -57,9 +62,9 @@ class _Execution[StatusT]:
 _ASYNC_BINDING_COLLECTOR: ContextVar[list[AsyncBinding[object]] | None] = ContextVar(
     "squid_reactivity_observed_async_bindings", default=None
 )
-"""Bindings accessed while expanding one render, separate from versioned dependencies.
+"""Bindings accessed in an observation scope, separate from versioned dependencies.
 
-The expansion scope owns the list. Nested scopes replace it and restore the outer list;
+The observation scope owns the list. Nested scopes replace it and restore the outer list;
 child tasks inherit that same list. Collection discovers work but never starts loaders.
 """
 
@@ -72,7 +77,11 @@ def _observe(binding: AsyncBinding[object]) -> None:
 
 @contextmanager
 def observe_async_bindings() -> Iterator[list[AsyncBinding[object]]]:
-    """Collect asynchronous bindings accessed by one expanded component render."""
+    """Collect asynchronous bindings accessed inside this scope without starting them.
+
+    Integrations can resolve pending bindings after a synchronous computation finishes.
+    UI renderers use this to discover asynchronous inputs before presenting a result.
+    """
     observed: list[AsyncBinding[object]] = []
     token = _ASYNC_BINDING_COLLECTOR.set(observed)
     try:
@@ -82,7 +91,7 @@ def observe_async_bindings() -> Iterator[list[AsyncBinding[object]]]:
 
 
 def unique_async_bindings(bindings: list[AsyncBinding[object]]) -> tuple[AsyncBinding[object], ...]:
-    """Preserve render order while removing repeat accesses to the same binding."""
+    """Remove repeated bindings by identity, preserving first-access order."""
     seen: set[int] = set()
     unique: list[AsyncBinding[object]] = []
     for binding in bindings:

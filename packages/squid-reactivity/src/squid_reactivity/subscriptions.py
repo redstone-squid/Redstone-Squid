@@ -7,13 +7,14 @@ from squid_reactivity.topics import DependencyAddress, Topic
 
 
 class Subscriptions:
-    """Keep old subscriptions active while a replacement set is prepared.
+    """Update a consumer's subscriptions without missing changes during the transition.
 
-    Topics carry their bus; cell addresses carry their source.
-    Call stage to subscribe to new addresses without dropping the committed set.
-    Then call commit to accept the new set, or discard to keep the old one.
-    This overlap prevents missed notifications while a render is being delivered.
-    Only one set can be staged at a time. Call close to release all subscriptions.
+    stage() subscribes to new addresses while retaining the previous subscriptions.
+    commit() accepts the candidate set; discard() restores the previous set. Only one
+    candidate may be staged at a time. close() releases everything.
+
+    Topics carry their bus and cell addresses carry their source. UI integrations use
+    the staging interval while preparing and delivering an updated view.
     """
 
     def __init__(self, callback: Callable[[DependencyAddress], None]) -> None:
@@ -89,7 +90,7 @@ class Subscriptions:
         self._closed = True
 
     def clear(self) -> None:
-        """Release subscriptions while permitting later reuse by a remounted runtime."""
+        """Release all subscriptions while allowing this consumer to subscribe again."""
         self._committed = ()
         self._staged = None
         for unsubscribe in tuple(self._subscriptions.values()):

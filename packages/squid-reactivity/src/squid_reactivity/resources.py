@@ -1,13 +1,13 @@
-"""Make asynchronous data available to synchronous component renders.
+"""Cache asynchronous values and invalidate them when their reactive inputs change.
 
-A resource holds a loader and its current Pending, Ready, or Failed status.
-Rendering discovers the resource without starting I/O; the host runs pending
-loads in owned tasks, then renders again. A loader's reactive reads become its
-dependencies, so changed inputs cause a later read to request a new value.
+A resource exposes Pending, Ready, or Failed status synchronously. Reading status
+never starts I/O; await the resource or call resolve() to load it. Reads performed
+by the loader become dependencies, so changed inputs make a later read request
+a new value.
 
-Each invalidation or replacement starts a new generation. A load belongs to the
-generation that started it and can install a result only while that generation
-is current, preventing an older request from overwriting newer data.
+Each invalidation or replacement starts a generation. Only a load for the current
+generation can install its result, preventing old requests from overwriting new data.
+UI integrations can discover resources during rendering and resolve them afterward.
 """
 
 import asyncio
@@ -64,7 +64,7 @@ class LoadScope(Protocol):
     """A cancellation scope entered in the task running one load.
 
     Cancel stops a superseded loader. Exiting the scope must suppress only
-    cancellation raised by that scope. Hosts can supply anyio.CancelScope
+    cancellation raised by that scope. Applications can supply anyio.CancelScope
     without making this package depend on anyio.
     """
 
@@ -110,11 +110,11 @@ _NO_LOAD_SCOPE_FACTORY = _NoAbandonment()
 _LOAD_SCOPE_FACTORY: ContextVar[Callable[[], LoadScope] | None] = ContextVar(
     "squid_reactivity_load_abandonment", default=None
 )
-"""Host cancellation policy inherited by nested resource awaits and child tasks.
+"""Cancellation-scope factory inherited by nested resource awaits and child tasks.
 
 The first caller that starts a load supplies the factory; the load retains the resulting
 scope until completion. Joiners do not replace it. Keep the factory scoped because a loader
-can await resources unknown to its host; passing policy only to the outer resolve would
+can await resources unknown to its caller; passing policy only to the outer resolve would
 leave those nested loads uncancellable. None preserves the dependency-free default.
 """
 
@@ -169,7 +169,7 @@ type AtomicResourceStatus[ValueT] = Ready[ValueT] | Failed[ValueT]
 
 
 class PendingMode(StrEnum):
-    """Whether pending is explicit in the render contract or settled atomically."""
+    """Choose whether synchronous status exposes Pending or requires a ready value."""
 
     EXPLICIT = "explicit"
     ATOMIC = "atomic"
@@ -180,7 +180,11 @@ class ResourceNotReadyError(ReactivityError, LookupError):
 
 
 class _AtomicResourcePending(ResourceNotReadyError):
-    """Abort a discovery render until an atomic resource has settled."""
+    """Request loading before a synchronous computation can continue.
+
+    UI integrations catch this internal ResourceNotReadyError subtype, resolve the
+    resource, and retry the computation.
+    """
 
     def __init__(self, resource: Resource[Any]) -> None:
         self.resource = resource
@@ -197,10 +201,10 @@ _MISSING = _Missing()
 
 
 class _Replacement(TransactionParticipant[dict[_ReactiveSource, int] | None]):
-    """One resource's replaced value, held until the action that made it commits.
+    """Stage one resource replacement as a transaction participant.
 
-    Keyed by the resource itself, so repeated `replace` calls in one action collapse into
-    the last one, exactly as repeated writes to a state cell do.
+    Repeated replace() calls in one transaction keep only the final value. Preparation
+    captures dependency versions; publication installs the replacement.
     """
 
     __slots__ = ("_resource", "value")
@@ -211,10 +215,10 @@ class _Replacement(TransactionParticipant[dict[_ReactiveSource, int] | None]):
 
     @override
     def prepare(self, view: TransactionView) -> dict[_ReactiveSource, int] | None:
-        """Settle dependencies before publication, while failure can still abort the action.
+        """Capture dependency versions before publishing a replacement.
 
-        Return None if no replacement was staged; otherwise return the dependency
-        versions that apply should retain.
+        Return None when no replacement was staged; otherwise apply() uses these versions
+        as the replacement's dependency baseline.
         """
         if isinstance(self.value, _Missing):
             return None
@@ -274,12 +278,14 @@ def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
 
 
 class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _SettlingNode, SubscriptionSource):
-    """An asynchronous value with a synchronous status for render code.
+    """A cached asynchronous value with tracked inputs and synchronous status access.
 
-    Reading status never starts a load. Await the resource to load it and get
-    its value, or let the host load pending resources discovered during render.
-    Loads track their dependencies. A later read notices changed versions and
-    marks the resource pending again. Concurrent waiters share the current load.
+    Reading status never starts a load. Await the resource to obtain its value, or call
+    resolve() to obtain its status. Concurrent callers share the current load. Changes
+    to inputs read by the loader make a later dependency check mark the resource pending.
+
+    Loaders may run again or have their results discarded. Use operations for explicitly
+    started effects that should not repeat merely because a dependency changed.
     """
 
     def __init__(
@@ -316,7 +322,7 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         }
         """State the last load read, and the version each held. Filled by tracking, not declared.
 
-        Seeded with everything the component declares, because a resource whose loader has not
+        Seeded with everything the model declares, because a resource whose loader has not
         run yet cannot say what it reads and may still be handed a value by `replace`.
         """
 
@@ -430,9 +436,9 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
     def replace(self, value: ValueT) -> None:
         """Supply a value and supersede any load in progress.
 
-        Inside an action, the replacement is staged: reads in that action see it,
-        other readers keep seeing the committed value, and rollback discards it.
-        Outside an action, the replacement is installed immediately.
+        Inside a transaction, its reads see the staged replacement while other readers
+        keep seeing the committed value. Rollback discards the replacement. Outside a
+        transaction, the value is installed immediately.
         """
         staged = enlist(self, lambda: _Replacement(self))
         if staged is None:
@@ -452,17 +458,16 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         self._notify()
 
     def _staged(self) -> ValueT | _Missing:
-        """This action's replacement for this resource, if it made one."""
+        """Return the active transaction's replacement for this resource, if present."""
         staged = transaction_participant(self)
         return staged.value if isinstance(staged, _Replacement) else _MISSING
 
     def __await__(self) -> Generator[Any, None, ValueT]:
-        """Load this resource if pending, then return its value or raise its error.
+        """Load the resource if needed, then return its value or raise its error.
 
-        A resource loader can use ``value = await self.other`` to wait for another
-        resource and track it as a dependency. Tracking happens after loading, so
-        the caller records the version of the value it actually receives.
-        Synchronous renders should inspect status or value instead.
+        A resource loader may await another resource and track it as a dependency. Tracking
+        happens after loading so the caller records the version it actually receives.
+        Synchronous consumers can inspect status or value instead.
         """
         return self._awaited().__await__()
 
@@ -597,11 +602,13 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
 
 
 class AtomicResource[ValueT](Resource[ValueT]):
-    """Expose a settled status during rendering, retaining the previous value while loading.
+    """Expose Ready or Failed status, using the last ready value while loading.
 
-    If no previous value exists, reading pending status raises
-    ResourceNotReadyError. The mount catches the internal subtype, loads the
-    resource, and retries the render.
+    When pending without a previous value, reading status raises ResourceNotReadyError.
+    The pending property still reports whether a load is needed, and resolve() can load it.
+
+    UI integrations catch the internal pending exception, resolve the resource, and retry
+    rendering. Other callers can await it directly.
     """
 
     @property
@@ -635,7 +642,7 @@ class AtomicResource[ValueT](Resource[ValueT]):
 
 
 class _ResourceDescriptor[OwnerT: ReactiveStateOwner, ValueT]:
-    """Bind one loader per component instance."""
+    """Bind a loader to a separate resource on each model instance."""
 
     _reactive_resource_descriptor = True
 
@@ -746,15 +753,16 @@ def resource(
     *,
     pending: PendingMode = PendingMode.EXPLICIT,
 ) -> Any:
-    """Declare an asynchronous value that render code can read synchronously.
+    """Declare a cached asynchronous value whose inputs are tracked automatically.
 
-    The loader's tracked reads become dependencies. When their versions change,
-    the next read marks the resource pending. Loaders may run repeatedly and
-    obsolete results may be discarded, so use operations for one-time effects.
+    The loader's reactive reads become dependencies. When their versions change, a later
+    read marks the resource pending. Await the bound resource to load its value, or call
+    resolve() to load and inspect its status. Loaders may repeat and obsolete results
+    may be discarded; use operations for explicitly started effects.
 
-    With the default EXPLICIT mode, status can be Pending, Ready, or Failed.
-    ATOMIC mode exposes the previous ready value while reloading, or asks the
-    host to load before rendering when no previous value exists.
+    EXPLICIT mode exposes Pending, Ready, or Failed status. ATOMIC mode uses the last ready
+    value while reloading and raises ResourceNotReadyError when no value is available.
+    UI integrations can use that exception to load required inputs before rendering.
     """
 
     def decorate(

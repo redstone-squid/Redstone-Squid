@@ -1,7 +1,7 @@
-"""Versioned cell storage and signals for immediate framework notifications.
+"""Store versioned field values and expose explicit invalidation signals.
 
-Cell reads combine transaction visibility with dependency capture. Signals publish
-changes directly for work such as operation progress and history bookkeeping.
+Cell reads combine the active transaction's staged values with dependency capture.
+Signals represent changes that have no stored value and notify subscribers directly.
 """
 
 import uuid
@@ -26,11 +26,13 @@ _MISSING: Final = _Missing.VALUE
 
 
 class _Cell[ValueT](_ReactiveSource):
-    """Store one field's value, version, and optional publication address.
+    """Store one field's value, version, identity, and optional notification address.
 
-    Reactive fields, including component fields, have CellAddress values. Topics
-    use cells with Topic addresses and no payload. Addressed reads can
-    be checked for conflicts and collected as render subscriptions.
+    Reads return the active transaction's pending value when present and otherwise
+    use committed storage. An unassigned cell contains _MISSING, distinct from None.
+    Addressed reads can become transaction preconditions and reactive dependencies.
+
+    Topic handles also use cells, solely to track a version without a value.
     """
 
     __slots__ = ("__weakref__", "_address", "identity", "value", "version")
@@ -67,7 +69,7 @@ class _Cell[ValueT](_ReactiveSource):
 
     @override
     def settle(self) -> int:
-        """Return the version a reader should compare against. A cell is always settled."""
+        """Return the staged version when present, otherwise the committed version."""
         current = _active()
         if current is not None:
             entry = current.staged(self)
@@ -108,15 +110,14 @@ class _Cell[ValueT](_ReactiveSource):
 
 
 class Signal(_ReactiveSource, SubscriptionSource):
-    """A reactive source with no value, for changes that publish outside transactions.
+    """A versioned notification source for state stored outside reactive fields.
 
-    Use one for state kept in ordinary attributes that readers should still follow, such
-    as operation progress or undo-history bookkeeping. Call `track` wherever that state is
-    read and `notify` after changing it. A computed value or render that tracked the
-    signal then refreshes like any other reader.
+    Call track() when a consumer reads the external state and notify() after it changes.
+    For example, operation progress and undo bookkeeping use signals to invalidate
+    dependent computations without moving their storage into state() fields.
 
-    `notify` publishes immediately, even inside a transaction, and a rollback does not
-    undo it. State that should commit and roll back with an action belongs in `state()`.
+    Notifications are immediate, even inside a transaction. Rollback cannot undo them;
+    use state() for values whose writes should be staged and discarded together.
     """
 
     def __init__(self) -> None:
@@ -130,7 +131,7 @@ class Signal(_ReactiveSource, SubscriptionSource):
         return self._address
 
     def track(self) -> None:
-        """Make the computation or render now running depend on this signal."""
+        """Record this signal as a dependency of the active computation."""
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = self.version

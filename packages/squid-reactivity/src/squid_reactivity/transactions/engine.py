@@ -1,7 +1,9 @@
-"""Stage writes, validate participants, publish changes, and deliver transaction outcomes.
+"""Validate and publish one transaction's staged changes, then deliver its outcome.
 
-Publication is the commit boundary. Preparation may abort; notification failures after
-publication are reported without undoing the committed changes.
+The engine keeps pending values separate from committed cells. It checks version
+conditions, prepares participants, publishes cells and participant changes, then
+notifies consumers. Before publication a failure discards staged work; afterward
+the result remains committed even if a notification fails.
 """
 
 import asyncio
@@ -100,10 +102,10 @@ class TransactionParticipant[PreparedT](Protocol):
     __slots__ = ()
 
     def prepare(self, view: TransactionView) -> PreparedT:
-        """Validate the staged writes and return what `apply` needs, publishing none of them.
+        """Validate pending work and return the data apply() needs.
 
-        Raise to abort the transaction: every participant is aborted, component state is
-        restored, and the error reaches whoever called the handler.
+        Raise to stop the transaction before publication. The engine aborts participants,
+        discards staged cell writes, and propagates the error to the transaction caller.
         """
         ...
 
@@ -139,11 +141,10 @@ class _Staged[ValueT]:
 
 
 def _write[ValueT](owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], value: ValueT | _Missing) -> None:
-    """Stage a write into the transaction in flight, or land it now if there is none.
+    """Stage a field write, or publish it immediately outside a transaction.
 
-    `enlist` already returns `None` when no transaction is open; this is the same
-    signal read directly. A component built during the transaction is not protected by it, so
-    its construction lands immediately too.
+    Writes to objects created inside the transaction also publish immediately: those
+    objects had no earlier state for the transaction to restore.
     """
     _check_write(owner, name)
     current = _current_transaction()
@@ -284,10 +285,10 @@ class _TransactionEngine:
         raise StaleReactiveContextError(message)
 
     def protects(self, owner: object) -> bool:
-        """Whether this transaction is responsible for the owner's state.
+        """Whether writes to this object belong in the transaction's overlay.
 
-        A transaction restores the view the transaction started from. An object created during the
-        transaction had no state then, so writing to it is construction, not mutation.
+        Objects created after the transaction began have no earlier state to restore.
+        Their initialization writes are applied immediately instead.
         """
         return id(owner) not in self.born
 
@@ -603,7 +604,11 @@ class _TransactionEngine:
 
 @dataclass(frozen=True, slots=True)
 class _FrozenTransactionView(TransactionView):
-    """The immutable overlay exposed only during participant preparation."""
+    """Expose staged and committed values while participant preparation freezes writes.
+
+    This is a read-only view of the engine's overlay, not a copy of cell values.
+    Participants should use it only during prepare().
+    """
 
     transaction: _TransactionEngine
 

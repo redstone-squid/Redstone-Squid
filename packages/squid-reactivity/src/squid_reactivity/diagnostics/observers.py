@@ -35,7 +35,7 @@ _log = logging.getLogger(__name__)
 
 
 class EventSink(Protocol):
-    """A synchronous consumer of retention-safe diagnostic events."""
+    """Accept diagnostic snapshots synchronously without retaining live reactive objects."""
 
     __slots__ = ()
 
@@ -78,7 +78,7 @@ _EVENT_OBSERVERS: ContextVar[tuple[_Observer, ...]] = ContextVar("squid_reactivi
 """Diagnostic registrations for this scope, inherited by spawned tasks.
 
 Each registration is disabled when its owning scope exits, including in child contexts.
-Hosts copying registrations into background work preserve that lifetime, not just the sink.
+Schedulers copying registrations into background work preserve that lifetime, not just the sink.
 """
 
 
@@ -106,10 +106,10 @@ def observe_events(
 
 
 def copy_event_observers(base: Context) -> Context:
-    """Copy a host context with the submitting scope's diagnostic registrations.
+    """Add current diagnostic registrations to a copy of another execution context.
 
-    Schedulers that discard caller-local state can use this for submitted work.
-    Registrations keep their original lifetimes; this does not extend a scope.
+    Schedulers can use this when starting work with a clean context. Registrations
+    still expire when their original observation scopes exit.
     """
     context = base.copy()
     inherited = context.get(_EVENT_OBSERVERS, ())
@@ -177,7 +177,7 @@ def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
 
 
 def emit_continuation_failure(result: TransactionResult, stage: str, callback: str, error: BaseException) -> None:
-    """Report a callback failure linked to its action."""
+    """Report a callback failure linked to its transaction outcome."""
     if not has_event_observers():
         return
     emit_causal_event(

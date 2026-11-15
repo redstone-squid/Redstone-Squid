@@ -20,9 +20,9 @@ if TYPE_CHECKING:
 
 
 class ReactiveStateOwner(SubscriptionSource, Protocol):
-    """A subscription source whose state participates in commit and rollback.
+    """A subscription source that receives commit and rollback notifications.
 
-    State descriptors also require an instance dictionary for cell storage.
+    State descriptors also require an instance dictionary for per-field storage.
     """
 
     __slots__ = ()
@@ -120,11 +120,10 @@ its caller's policy on exit; children inherit the policy present when spawned.
 
 @contextmanager
 def relaxed_read() -> Iterator[None]:
-    """Read reactive state without adding a commit-time consistency precondition.
+    """Read without adding transaction version conditions.
 
-    Only reads a precondition would otherwise cover are affected: a cell this action also
-    writes, and any read taken inside :func:`strong_read`. Unlike :func:`untracked`, this
-    does not change reactive dependency tracking.
+    This suppresses both strong-read conditions and ordinary read-and-write conditions
+    for reads inside the scope. It does not disable reactive dependency capture.
     """
     with _READ_CONSISTENCY.set(_ReadConsistency.RELAXED):
         yield
@@ -132,12 +131,15 @@ def relaxed_read() -> Iterator[None]:
 
 @contextmanager
 def strong_read() -> Iterator[None]:
-    """Require every reactive read taken inside to still hold its version at commit.
+    """Require versions read in this scope to remain unchanged when committing changes.
 
-    The upgrade an action opts into when it branches on reactive state it does not write --
-    read A, write B, and by default nothing says A was still true. Wrap the whole handler
-    body to make one action serializable over what it read; wrap one read to guard just that
-    one. Any enclosing or nested :func:`relaxed_read` opts reads back out.
+    Ordinary reads are checked only when the transaction also writes the same cell.
+    Use strong_read() when a decision reads one field and writes another: the first
+    field must still have the version that informed the decision. Transactions with
+    no writes or participants skip version validation.
+
+    An enclosing or nested relaxed_read() suppresses these conditions. Dependency
+    capture and subscriptions are unaffected.
     """
     policy = _READ_CONSISTENCY.get()
     if policy is not _ReadConsistency.RELAXED:
@@ -163,11 +165,14 @@ def _checkpoint(name: str) -> None:
 
 @contextmanager
 def block_writes(reason: str) -> Iterator[None]:
-    """Reject component-state writes for the duration of the block.
+    """Temporarily reject writes through the current transaction.
 
-    Narrower than `readonly_transaction`: the transaction stays open and keeps everything it
-    has recorded. For code that runs *inside* a transaction but must not touch the tree, such as
-    an undo entry's external inverse, whose writes a following restore would silently clobber.
+    The transaction retains its staged work and resumes normal writes when the scope
+    exits. With no transaction, this context does nothing. Unlike read_only(), it does
+    not establish a general restriction on reactive writes outside transactions.
+
+    Undo integrations use this while running external inverses, before restoring fields
+    whose values would otherwise overwrite additional staged changes.
     """
     current = _current_transaction()
     if current is None:
