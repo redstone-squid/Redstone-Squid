@@ -260,6 +260,9 @@ class FfmpegMediaNormalizer:
                     str(self._process_limits.threads),
                     "-preset",
                     "medium",
+                    # Bound queued frames so 4K clips fit the process memory limit.
+                    "-rc-lookahead",
+                    "8",
                     "-crf",
                     "20",
                     "-pix_fmt",

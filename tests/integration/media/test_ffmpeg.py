@@ -99,6 +99,59 @@ async def test_video_preserves_dimensions_and_fps_with_optional_audio_removal(
     assert b"private-marker" not in metadata
 
 
+async def test_4k_video_fits_the_default_process_memory_limit(tmp_path: Path) -> None:
+    assert FFMPEG is not None
+    source = tmp_path / "4k.mp4"
+    subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=blue:size=3840x2160:rate=24",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=48000",
+            "-t",
+            "3",
+            "-c:v",
+            "libx264",
+            "-threads",
+            "2",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    service = MediaNormalizationService(FfmpegMediaNormalizer())
+
+    result = await service.normalize(
+        MediaNormalizationRequest(
+            kind=MediaKind.VIDEO,
+            source_path=source,
+            output_path=tmp_path / "normalized.mp4",
+            poster_path=tmp_path / "poster.jpg",
+        )
+    )
+
+    probe = result.report.output_probe
+    assert (probe.width, probe.height) == (3840, 2160)
+    assert (probe.frame_rate_numerator, probe.frame_rate_denominator) == (24, 1)
+    assert probe.frame_count == 72
+    assert probe.duration_milliseconds == result.report.input_probe.duration_milliseconds
+    assert probe.has_audio
+    assert result.report.poster is not None
+
+
 async def test_variable_rate_video_preserves_closely_spaced_frame_timestamps(tmp_path: Path) -> None:
     source = tmp_path / "variable.mp4"
     _generate_video(source, variable_timestamps=True)
